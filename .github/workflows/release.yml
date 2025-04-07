@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+    - v[0-9]*.[0-9]*.[0-9]*
+
+jobs:
+  pypi-publish:
+    name: upload release to PyPI
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v5
+      with:
+        python-version: 3.11
+    - name: Install Dependencies
+      run: uv sync --all-extras
+    - name: Build package
+      run: make build
+    - name: Publish package distributions to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1.12
+
+  release_github:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v5
+      with:
+        python-version: 3.11
+    - name: Install Dependencies
+      run: uv sync --all-extras
+    - name: Publish Latest Draft
+      run: |
+        if gh release list | grep Draft; then
+            old_version="$(gh release list | grep Draft | head -1 | cut -f1)"
+            new_version="${{ github.ref_name }}"
+            body=$(gh release view "$old_version" --json body -q ".body" | sed "s/\.\.\.$old_version/...$new_version/g")
+            gh release delete "$old_version"
+            gh release create "$new_version" --title "${{ github.ref_name}}" --notes "$body";
+          else
+            gh release create "$new_version" --title "${{ github.ref_name}}";
+          fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-docs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v5
+      with:
+        python-version: 3.11
+    - name: Install Dependencies
+      run: uv sync --all-extras
+    - name: Build docs
+      run: make docs
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: ./site/
+
+  deploy-docs:
+    needs: build-docs
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
