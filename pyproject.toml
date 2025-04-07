@@ -1,0 +1,48 @@
+[project]
+name = "karva"
+version = "0.0.0"
+description = "A Python test framework, written in Rust."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+license = { file = "LICENSE" }
+
+[project.optional-dependencies]
+dev = ["mypy>=1.15.0", "pre-commit>=4.1.0", "ruff>=0.9.7", "tbump>=6.11.0"]
+docs = ["mkdocs", "mkdocs-material"]
+
+
+[project.urls]
+Documentation = "https://matthewmckee4.github.io/karva/"
+Homepage = "https://matthewmckee4.github.io/karva/"
+Issues = "https://github.com/MatthewMckee4/karva/issues"
+Repository = "https://github.com/MatthewMckee4/karva"
+
+[tool.ruff]
+fix = true
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["ALL"]
+
+[tool.setuptools.packages]
+find = {}
+
+[tool.tbump]
+
+[[tool.tbump.file]]
+src = "pyproject.toml"
+
+[tool.tbump.git]
+message_template = "Bump to v{new_version}"
+tag_template = "v{new_version}"
+
+[tool.tbump.version]
+current = "0.0.0"
+regex = '''
+  (?P<major>\d+)
+  \.
+  (?P<minor>\d+)
+  \.
+  (?P<patch>\d+)
+  '''

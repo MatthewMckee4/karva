@@ -1,0 +1,39 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: debug-statements
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: requirements-txt-fixer
+      - id: trailing-whitespace
+      - id: detect-private-key
+
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.24.1
+    hooks:
+      - id: validate-pyproject
+
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.31.1
+    hooks:
+      - id: typos
+
+  - repo: https://github.com/doublify/pre-commit-rust
+    rev: master
+    hooks:
+      - id: fmt
+      - id: cargo-check
+
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.5.3
+    hooks:
+      - id: prettier
+        types: [yaml, toml]

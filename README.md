@@ -1,2 +1,3 @@
-# karva
-A Python test framework, written in Rust. 
+# Karva
+
+A Python test framework, written in Rust.
