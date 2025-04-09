@@ -1,9 +1,21 @@
 [package]
 name = "karva"
 version = "0.0.0"
-edition = "2024"
+publish = true
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+readme = "../../README.md"
+default-run = "karva"
 
 [dependencies]
+karva_core = { workspace = true }
+
+clap = { workspace = true, features = ["wrap_help"] }
 anyhow = { workspace = true }
 argfile = { workspace = true }
 camino = { workspace = true }
