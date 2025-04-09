@@ -1,7 +1,33 @@
 [package]
 name = "karva"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2024"
+license = "MIT"
+authors = ["Matthew McKee <matthewmckee4@gmail.com>"]
+
+[[bin]]
+name = "karva"
+path = "src/karva/src/main.rs"
+
+[lib]
+name = "karva_core"
+path = "src/karva_core/src/lib.rs"
 
 [dependencies]
-clap = "4.5.35"
+anyhow = { version = "1.0.97" }
+clap = { version = "4.5.35", features = ["derive"] }
+camino = { version = "1.1.7" }
+chrono = { version = "0.4.35", default-features = false, features = ["clock"] }
+serde = { version = "1.0.219", features = ["derive"] }
+wild = { version = "2" }
+colored = { version = "3.0.0" }
+argfile = { version = "0.2.1" }
+tracing = { version = "0.1.41" }
+tracing-flame = { version = "0.2.0" }
+tracing-indicatif = { version = "0.3.6" }
+tracing-log = { version = "0.2.0" }
+tracing-subscriber = { version = "0.3.18", default-features = false, features = [
+    "env-filter",
+    "fmt",
+] }
+tracing-tree = { version = "0.4.0" }

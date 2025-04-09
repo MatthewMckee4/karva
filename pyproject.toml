@@ -33,6 +33,15 @@ find = {}
 [[tool.tbump.file]]
 src = "pyproject.toml"
 
+[[tool.tbump.file]]
+src = "Cargo.toml"
+
+[[tool.tbump.file]]
+src = "src/karva/Cargo.toml"
+
+[[tool.tbump.file]]
+src = "src/karva_core/Cargo.toml"
+
 [tool.tbump.git]
 message_template = "Bump to v{new_version}"
 tag_template = "v{new_version}"
