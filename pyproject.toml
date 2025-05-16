@@ -45,10 +45,10 @@ src = "pyproject.toml"
 src = "Cargo.toml"
 
 [[tool.tbump.file]]
-src = "src/karva_cli/Cargo.toml"
+src = "crates/karva_cli/Cargo.toml"
 
 [[tool.tbump.file]]
-src = "src/karva_core/Cargo.toml"
+src = "crates/karva_core/Cargo.toml"
 
 [tool.tbump.git]
 message_template = "Bump to v{new_version}"
