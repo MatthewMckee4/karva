@@ -6,75 +6,206 @@ on:
     - v[0-9]*.[0-9]*.[0-9]*
 
 jobs:
-  pypi-publish:
-    name: upload release to PyPI
-    runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write
-    steps:
-    - uses: actions/checkout@v4
-    - uses: astral-sh/setup-uv@v5
-      with:
-        python-version: 3.11
-    - name: Install Dependencies
-      run: uv sync --all-extras
-    - name: Build package
-      run: make build
-    - name: Publish package distributions to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1.12
+    linux:
+        runs-on: ${{ matrix.platform.runner }}
+        strategy:
+            matrix:
+                platform:
+                    - runner: ubuntu-latest
+                      target: x86_64
+                    - runner: ubuntu-latest
+                      target: x86
+                    - runner: ubuntu-latest
+                      target: aarch64
+                    - runner: ubuntu-latest
+                      target: armv7
+                    - runner: ubuntu-latest
+                      target: s390x
+                    - runner: ubuntu-latest
+                      target: ppc64le
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: 3.x
+            - name: Build wheels
+              uses: PyO3/maturin-action@v1
+              with:
+                  target: ${{ matrix.platform.target }}
+                  args: --release --out dist --find-interpreter
+                  sccache: "true"
+                  manylinux: auto
+            - name: Upload wheels
+              uses: actions/upload-artifact@v4
+              with:
+                  name: wheels-linux-${{ matrix.platform.target }}
+                  path: dist
 
-  release_github:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-    - uses: actions/checkout@v4
-    - uses: astral-sh/setup-uv@v5
-      with:
-        python-version: 3.11
-    - name: Install Dependencies
-      run: uv sync --all-extras
-    - name: Publish Latest Draft
-      run: |
-        if gh release list | grep Draft; then
-            old_version="$(gh release list | grep Draft | head -1 | cut -f1)"
-            new_version="${{ github.ref_name }}"
-            body=$(gh release view "$old_version" --json body -q ".body" | sed "s/\.\.\.$old_version/...$new_version/g")
-            gh release delete "$old_version"
-            gh release create "$new_version" --title "${{ github.ref_name}}" --notes "$body";
-          else
-            gh release create "$new_version" --title "${{ github.ref_name}}";
-          fi
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    musllinux:
+        runs-on: ${{ matrix.platform.runner }}
+        strategy:
+            matrix:
+                platform:
+                    - runner: ubuntu-latest
+                      target: x86_64
+                    - runner: ubuntu-latest
+                      target: x86
+                    - runner: ubuntu-latest
+                      target: aarch64
+                    - runner: ubuntu-latest
+                      target: armv7
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: 3.x
+            - name: Build wheels
+              uses: PyO3/maturin-action@v1
+              with:
+                  target: ${{ matrix.platform.target }}
+                  args: --release --out dist --find-interpreter
+                  sccache: "true"
+                  manylinux: musllinux_1_2
+            - name: Upload wheels
+              uses: actions/upload-artifact@v4
+              with:
+                  name: wheels-musllinux-${{ matrix.platform.target }}
+                  path: dist
 
-  build-docs:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - uses: astral-sh/setup-uv@v5
-      with:
-        python-version: 3.11
-    - name: Install Dependencies
-      run: uv sync --all-extras
-    - name: Build docs
-      run: make docs
-    - name: Upload artifact
-      uses: actions/upload-pages-artifact@v3
-      with:
-        path: ./site/
+    windows:
+        runs-on: ${{ matrix.platform.runner }}
+        strategy:
+            matrix:
+                platform:
+                    - runner: windows-latest
+                      target: x64
+                    - runner: windows-latest
+                      target: x86
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: 3.x
+                  architecture: ${{ matrix.platform.target }}
+            - name: Build wheels
+              uses: PyO3/maturin-action@v1
+              with:
+                  target: ${{ matrix.platform.target }}
+                  args: --release --out dist --find-interpreter
+                  sccache: "true"
+            - name: Upload wheels
+              uses: actions/upload-artifact@v4
+              with:
+                  name: wheels-windows-${{ matrix.platform.target }}
+                  path: dist
 
-  deploy-docs:
-    needs: build-docs
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    steps:
-    - name: Deploy to GitHub Pages
-      id: deployment
-      uses: actions/deploy-pages@v4
+    macos:
+        runs-on: ${{ matrix.platform.runner }}
+        strategy:
+            matrix:
+                platform:
+                    - runner: macos-12
+                      target: x86_64
+                    - runner: macos-14
+                      target: aarch64
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: 3.x
+            - name: Build wheels
+              uses: PyO3/maturin-action@v1
+              with:
+                  target: ${{ matrix.platform.target }}
+                  args: --release --out dist --find-interpreter
+                  sccache: "true"
+            - name: Upload wheels
+              uses: actions/upload-artifact@v4
+              with:
+                  name: wheels-macos-${{ matrix.platform.target }}
+                  path: dist
+
+    sdist:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - name: Build sdist
+              uses: PyO3/maturin-action@v1
+              with:
+                  command: sdist
+                  args: --out dist
+            - name: Upload sdist
+              uses: actions/upload-artifact@v4
+              with:
+                  name: wheels-sdist
+                  path: dist
+
+    release:
+        name: Release
+        runs-on: ubuntu-latest
+        if: startsWith(github.ref, 'refs/tags/')
+        needs: [linux, musllinux, windows, macos, sdist]
+        steps:
+            - uses: actions/download-artifact@v4
+            - name: Publish to PyPI
+              uses: PyO3/maturin-action@v1
+              env:
+                  MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+              with:
+                  command: upload
+                  args: --non-interactive --skip-existing wheels-*/*
+
+    release_github:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/checkout@v4
+            - uses: astral-sh/setup-uv@v5
+              with:
+                  python-version: 3.11
+            - name: Install Dependencies
+              run: uv sync --all-extras
+            - name: Publish Latest Draft
+              run: |
+                  if gh release list | grep Draft; then
+                      old_version="$(gh release list | grep Draft | head -1 | cut -f1)"
+                      new_version="${{ github.ref_name }}"
+                      body=$(gh release view "$old_version" --json body -q ".body" | sed "s/\.\.\.$old_version/...$new_version/g")
+                      gh release delete "$old_version"
+                      gh release create "$new_version" --title "${{ github.ref_name}}" --notes "$body";
+                  else
+                      gh release create "$new_version" --title "${{ github.ref_name}}";
+                  fi
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    build-docs:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: astral-sh/setup-uv@v5
+              with:
+                  python-version: 3.11
+            - name: Install Dependencies
+              run: uv sync --all-extras
+            - name: Build docs
+              run: make docs
+            - name: Upload artifact
+              uses: actions/upload-pages-artifact@v3
+              with:
+                  path: ./site/
+
+    deploy-docs:
+        needs: build-docs
+        permissions:
+            pages: write
+            id-token: write
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        runs-on: ubuntu-latest
+        steps:
+            - name: Deploy to GitHub Pages
+              id: deployment
+              uses: actions/deploy-pages@v4
