@@ -1,9 +1,9 @@
 [project]
 name = "karva"
-version = "0.0.1"
+version = "0.0.2"
 description = "A Python test framework, written in Rust."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = []
 license = { file = "LICENSE" }
 
@@ -52,7 +52,7 @@ message_template = "Bump to v{new_version}"
 tag_template = "v{new_version}"
 
 [tool.tbump.version]
-current = "0.0.1"
+current = "0.0.2"
 regex = '''
   (?P<major>\d+)
   \.
