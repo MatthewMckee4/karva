@@ -3,7 +3,7 @@ name = "karva"
 version = "0.0.0"
 description = "A Python test framework, written in Rust."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.9"
 dependencies = []
 license = { file = "LICENSE" }
 
@@ -11,12 +11,22 @@ license = { file = "LICENSE" }
 dev = ["mypy>=1.15.0", "pre-commit>=4.1.0", "ruff>=0.9.7", "tbump>=6.11.0"]
 docs = ["mkdocs", "mkdocs-material"]
 
-
 [project.urls]
 Documentation = "https://matthewmckee4.github.io/karva/"
 Homepage = "https://matthewmckee4.github.io/karva/"
 Issues = "https://github.com/MatthewMckee4/karva/issues"
 Repository = "https://github.com/MatthewMckee4/karva"
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+bindings = "bin"
+manifest-path = "crates/karva_cli/Cargo.toml"
+module-name = "karva"
+python-source = "python"
+strip = true
 
 [tool.ruff]
 fix = true
@@ -24,14 +34,21 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["ALL"]
-
-[tool.setuptools.packages]
-find = {}
+exclude = ["python/karva/__main__.py"]
 
 [tool.tbump]
 
 [[tool.tbump.file]]
 src = "pyproject.toml"
+
+[[tool.tbump.file]]
+src = "Cargo.toml"
+
+[[tool.tbump.file]]
+src = "src/karva/Cargo.toml"
+
+[[tool.tbump.file]]
+src = "src/karva_core/Cargo.toml"
 
 [tool.tbump.git]
 message_template = "Bump to v{new_version}"
