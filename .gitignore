@@ -194,3 +194,6 @@ target/
 # Added by cargo
 
 /target
+
+# uv
+uv.lock
