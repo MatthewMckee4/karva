@@ -51,6 +51,10 @@ src = "crates/karva/Cargo.toml"
 message_template = "Bump to v{new_version}"
 tag_template = "v{new_version}"
 
+[[tool.tbump.before_commit]]
+name = "Update Cargo.lock"
+cmd = "cargo update -p karva"
+
 [tool.tbump.version]
 current = "0.0.4"
 regex = '''
