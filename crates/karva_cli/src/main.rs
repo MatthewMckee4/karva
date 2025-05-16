@@ -2,7 +2,9 @@ use std::io::{self, BufWriter, Write};
 use std::process::{ExitCode, Termination};
 
 use anyhow::Result;
-use karva_core::db::path::{SystemPath, SystemPathBuf};
+use karva_core::path::{PythonTestPath, SystemPath, SystemPathBuf};
+use karva_core::project::Project;
+use karva_core::runner::Runner;
 
 use crate::args::{Args, Command, TestCommand};
 use crate::logging::setup_tracing;
@@ -42,7 +44,7 @@ fn run() -> anyhow::Result<ExitStatus> {
     let args = Args::parse_from(args);
 
     match args.command {
-        Command::Test(test_args) => run_test(&test_args).map(|()| ExitStatus::Success),
+        Command::Test(test_args) => test(&test_args),
         Command::Version => version().map(|()| ExitStatus::Success),
     }
 }
@@ -54,7 +56,7 @@ pub(crate) fn version() -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn run_test(args: &TestCommand) -> Result<()> {
+pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
     let verbosity = args.verbosity.level();
     let _guard = setup_tracing(verbosity)?;
 
@@ -69,18 +71,55 @@ pub(crate) fn run_test(args: &TestCommand) -> Result<()> {
             })?
     };
 
-    let mut check_paths: Vec<_> = args
+    let mut stdout = BufWriter::new(io::stdout().lock());
+
+    let mut paths: Vec<PythonTestPath> = args
         .paths
         .iter()
         .map(|path| SystemPath::absolute(path, &cwd))
+        .filter_map(|path| {
+            let path = PythonTestPath::new(&path);
+            match path {
+                Ok(path) => Some(path),
+                Err(e) => {
+                    writeln!(stdout, "{}", e.to_string().yellow()).unwrap();
+                    None
+                }
+            }
+        })
         .collect();
 
-    if check_paths.is_empty() {
-        tracing::debug!("No paths provided, using current working directory");
-        check_paths.push(cwd);
+    if args.paths.is_empty() {
+        tracing::debug!("No paths provided, trying to resolve current working directory");
+        if let Ok(path) = PythonTestPath::new(&cwd) {
+            paths.push(path);
+        }
     }
 
-    Ok(())
+    if paths.is_empty() {
+        writeln!(
+            stdout,
+            "{}",
+            "No paths provided and could not resolve current working directory"
+                .red()
+                .bold()
+        )
+        .unwrap();
+        return Ok(ExitStatus::Error);
+    }
+
+    let project = Project::new(paths, args.test_prefix.clone());
+
+    let runner = Runner::new(project);
+    let runner_result = runner.run();
+
+    if runner_result.passed() {
+        writeln!(stdout, "All tests passed")?;
+        Ok(ExitStatus::Success)
+    } else {
+        writeln!(stdout, "Some tests failed")?;
+        Ok(ExitStatus::Failure)
+    }
 }
 
 #[derive(Copy, Clone)]

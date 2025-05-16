@@ -36,14 +36,14 @@ impl Verbosity {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub(crate) enum VerbosityLevel {
-    /// Default output level. Only shows Ruff and Karva events up to the [`WARN`](tracing::Level::WARN).
+    /// Default output level. Only shows Karva events up to the [`WARN`](tracing::Level::WARN).
     Default,
 
-    /// Enables verbose output. Emits Ruff and Karva events up to the [`INFO`](tracing::Level::INFO).
+    /// Enables verbose output. Emits Karva events up to the [`INFO`](tracing::Level::INFO).
     /// Corresponds to `-v`.
     Verbose,
 
-    /// Enables a more verbose tracing format and emits Ruff and Karva events up to [`DEBUG`](tracing::Level::DEBUG).
+    /// Enables a more verbose tracing format and emits Karva events up to [`DEBUG`](tracing::Level::DEBUG).
     /// Corresponds to `-vv`
     ExtraVerbose,
 
@@ -85,7 +85,7 @@ pub(crate) fn setup_tracing(level: VerbosityLevel) -> anyhow::Result<TracingGuar
             );
 
             filter.add_directive(
-                format!("ruff={level_filter}")
+                format!("karva={level_filter}")
                     .parse()
                     .expect("Hardcoded directive to be valid"),
             )
@@ -188,18 +188,16 @@ where
 
         if self.display_level {
             let level = meta.level();
-            // Same colors as tracing
             if ansi {
-                let formatted_level = level.to_string();
-                match *level {
-                    tracing::Level::TRACE => {
-                        write!(writer, "{} ", formatted_level.purple().bold())?;
-                    }
-                    tracing::Level::DEBUG => write!(writer, "{} ", formatted_level.blue().bold())?,
-                    tracing::Level::INFO => write!(writer, "{} ", formatted_level.green().bold())?,
-                    tracing::Level::WARN => write!(writer, "{} ", formatted_level.yellow().bold())?,
-                    tracing::Level::ERROR => write!(writer, "{} ", level.to_string().red().bold())?,
-                }
+                let formatted_level = level.to_string().bold();
+                let coloured_level = match *level {
+                    tracing::Level::TRACE => formatted_level.purple(),
+                    tracing::Level::DEBUG => formatted_level.blue(),
+                    tracing::Level::INFO => formatted_level.green(),
+                    tracing::Level::WARN => formatted_level.yellow(),
+                    tracing::Level::ERROR => formatted_level.red(),
+                };
+                write!(writer, "{} ", coloured_level)?;
             } else {
                 write!(writer, "{level} ")?;
             }

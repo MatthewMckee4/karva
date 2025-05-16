@@ -1,5 +1,5 @@
 [package]
-name = "karva"
+name = "karva_cli"
 version = "0.0.0"
 publish = true
 authors = { workspace = true }
@@ -10,7 +10,7 @@ documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
 readme = "../../README.md"
-default-run = "karva"
+default-run = "karva_cli"
 
 [dependencies]
 karva_core = { workspace = true }
