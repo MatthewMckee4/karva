@@ -42,13 +42,10 @@ exclude = ["python/karva/__main__.py"]
 src = "pyproject.toml"
 
 [[tool.tbump.file]]
-src = "Cargo.toml"
+src = "README.md"
 
 [[tool.tbump.file]]
 src = "crates/karva_cli/Cargo.toml"
-
-[[tool.tbump.file]]
-src = "crates/karva_core/Cargo.toml"
 
 [tool.tbump.git]
 message_template = "Bump to v{new_version}"
