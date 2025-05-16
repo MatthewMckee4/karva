@@ -45,7 +45,7 @@ src = "pyproject.toml"
 src = "Cargo.toml"
 
 [[tool.tbump.file]]
-src = "src/karva/Cargo.toml"
+src = "src/karva_cli/Cargo.toml"
 
 [[tool.tbump.file]]
 src = "src/karva_core/Cargo.toml"
