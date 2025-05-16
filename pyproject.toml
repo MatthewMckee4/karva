@@ -23,7 +23,7 @@ build-backend = "maturin"
 
 [tool.maturin]
 bindings = "bin"
-manifest-path = "crates/karva/Cargo.toml"
+manifest-path = "crates/karva_cli/Cargo.toml"
 module-name = "karva"
 python-source = "python"
 strip = true
