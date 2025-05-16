@@ -23,7 +23,7 @@ build-backend = "maturin"
 
 [tool.maturin]
 bindings = "bin"
-manifest-path = "crates/karva_cli/Cargo.toml"
+manifest-path = "crates/karva/Cargo.toml"
 module-name = "karva"
 python-source = "python"
 strip = true
@@ -45,7 +45,7 @@ src = "pyproject.toml"
 src = "README.md"
 
 [[tool.tbump.file]]
-src = "crates/karva_cli/Cargo.toml"
+src = "crates/karva/Cargo.toml"
 
 [tool.tbump.git]
 message_template = "Bump to v{new_version}"

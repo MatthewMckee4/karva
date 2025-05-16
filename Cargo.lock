@@ -301,7 +301,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "karva_cli"
+name = "karva"
 version = "0.0.1"
 dependencies = [
  "anyhow",
