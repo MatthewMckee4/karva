@@ -3,9 +3,14 @@ name = "karva_core"
 version = "0.0.0"
 edition = "2024"
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [dependencies]
 camino = { workspace = true }
-pyo3 = { version = "0.25.0", features = ["extension-module"] }
+colored = { workspace = true }
+pyo3 = { version = "0.25.0", features = ["auto-initialize"] }
+rustpython-parser = { version = "0.4.0" }
 serde = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }

@@ -2,6 +2,7 @@ use std::io::{self, BufWriter, Write};
 use std::process::{ExitCode, Termination};
 
 use anyhow::Result;
+use karva_core::diagnostics::StdoutDiagnosticWriter;
 use karva_core::path::{PythonTestPath, SystemPath, SystemPathBuf};
 use karva_core::project::Project;
 use karva_core::runner::Runner;
@@ -71,7 +72,8 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
             })?
     };
 
-    let mut stdout = BufWriter::new(io::stdout().lock());
+    let buffer = Vec::new();
+    let diagnostics = Box::new(StdoutDiagnosticWriter::new(buffer));
 
     let mut paths: Vec<PythonTestPath> = args
         .paths
@@ -82,7 +84,7 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
             match path {
                 Ok(path) => Some(path),
                 Err(e) => {
-                    writeln!(stdout, "{}", e.to_string().yellow()).unwrap();
+                    eprintln!("{}", e.to_string().yellow());
                     None
                 }
             }
@@ -97,27 +99,24 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
     }
 
     if paths.is_empty() {
-        writeln!(
-            stdout,
+        eprintln!(
             "{}",
             "No paths provided and could not resolve current working directory"
                 .red()
                 .bold()
-        )
-        .unwrap();
+        );
         return Ok(ExitStatus::Error);
     }
 
-    let project = Project::new(paths, args.test_prefix.clone());
-
-    let runner = Runner::new(project);
+    let project = Project::new(cwd, paths, args.test_prefix.clone());
+    let mut runner = Runner::new(&project, diagnostics);
     let runner_result = runner.run();
 
+    runner.diagnostics().flush()?;
+
     if runner_result.passed() {
-        writeln!(stdout, "All tests passed")?;
         Ok(ExitStatus::Success)
     } else {
-        writeln!(stdout, "Some tests failed")?;
         Ok(ExitStatus::Failure)
     }
 }

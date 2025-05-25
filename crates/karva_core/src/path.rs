@@ -4,6 +4,8 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::path::{Path, PathBuf, StripPrefixError};
 
+use crate::utils::is_python_file;
+
 #[derive(Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct SystemPath(Utf8Path);
 
@@ -333,7 +335,7 @@ pub enum PythonTestPath {
 impl PythonTestPath {
     pub fn new(value: &SystemPathBuf) -> Result<Self, PythonTestPathError> {
         if value.is_file() {
-            if value.extension() == Some("py") {
+            if is_python_file(value) {
                 Ok(PythonTestPath::File(value.clone()))
             } else {
                 Err(PythonTestPathError::WrongFileExtension(value.clone()))
@@ -351,7 +353,7 @@ impl PythonTestPath {
                     }
 
                     if file.is_file() {
-                        if file.extension() == Some("py") {
+                        if is_python_file(&file) {
                             Ok(PythonTestPath::Function(file, function.to_string()))
                         } else {
                             Err(PythonTestPathError::WrongFileExtension(file))

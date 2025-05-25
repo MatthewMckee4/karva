@@ -18,7 +18,7 @@ Issues = "https://github.com/MatthewMckee4/karva/issues"
 Repository = "https://github.com/MatthewMckee4/karva"
 
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
+requires = ["maturin>=1.7,<2.0"]
 build-backend = "maturin"
 
 [tool.maturin]
