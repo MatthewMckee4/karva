@@ -37,6 +37,11 @@ jobs:
         with:
           command: build
           args: --release --target-dir dist
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.platform.target }}
+          path: dist
 
   musllinux:
     runs-on: ${{ matrix.platform.runner }}
@@ -57,10 +62,13 @@ jobs:
         with:
           toolchain: stable
           override: true
-
       - name: Run cargo build
         run: cargo build --release --target-dir dist
-
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-musllinux-${{ matrix.platform.target }}
+          path: dist
   windows:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
@@ -76,10 +84,13 @@ jobs:
         with:
           toolchain: stable
           override: true
-
       - name: Run cargo build
         run: cargo build --release --target-dir dist
-
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-${{ matrix.platform.target }}
+          path: dist
   macos:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
@@ -95,9 +106,13 @@ jobs:
         with:
           toolchain: stable
           override: true
-
       - name: Run cargo build
         run: cargo build --release --target-dir dist
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-${{ matrix.platform.target }}
+          path: dist
 
   sdist:
     runs-on: ubuntu-latest
