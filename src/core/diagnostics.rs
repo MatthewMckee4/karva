@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::runner::RunnerResult;
+use crate::core::runner::RunnerResult;
 
 pub trait DiagnosticWriter: Send + Sync {
     /// Called when a test starts running
