@@ -27,7 +27,7 @@ uv tool install karva@latest
 uv add --dev karva
 
 # With pip.
-pip install ruff
+pip install karva
 ```
 
 ### Usage
