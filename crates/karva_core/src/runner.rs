@@ -26,6 +26,7 @@ impl<'a> Runner<'a> {
     }
 
     pub fn run(&mut self) -> RunnerResult {
+        pyo3::prepare_freethreaded_python();
         self.diagnostic_writer.discovery_started();
         let discovered_tests = Discoverer::new(self.project).discover();
         self.diagnostic_writer
