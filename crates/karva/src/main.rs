@@ -72,8 +72,7 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
             })?
     };
 
-    let buffer = Vec::new();
-    let diagnostics = Box::new(StdoutDiagnosticWriter::new(buffer));
+    let diagnostics = Box::new(StdoutDiagnosticWriter::default());
 
     let mut paths: Vec<PythonTestPath> = args
         .paths
@@ -111,8 +110,6 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
     let project = Project::new(cwd, paths, args.test_prefix.clone());
     let mut runner = Runner::new(&project, diagnostics);
     let runner_result = runner.run();
-
-    runner.diagnostics().flush()?;
 
     if runner_result.passed() {
         Ok(ExitStatus::Success)

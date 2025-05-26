@@ -2,86 +2,117 @@ use colored::Colorize;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 
+use crate::runner::RunnerResult;
+
 pub trait DiagnosticWriter: Send + Sync {
     /// Called when a test starts running
-    fn test_started(&mut self, test_name: &str, file_path: &str) -> io::Result<()>;
+    fn test_started(&self, test_name: &str, file_path: &str);
 
     /// Called when a test completes
-    fn test_completed(&mut self, test_name: &str, file_path: &str, passed: bool) -> io::Result<()>;
+    fn test_completed(&self, test_name: &str, file_path: &str, passed: bool);
 
     /// Called when a test fails with an error message
-    fn test_error(&mut self, test_name: &str, file_path: &str, error: &str) -> io::Result<()>;
+    fn test_error(&self, test_name: &str, file_path: &str, error: &str);
 
     /// Called when test discovery starts
-    fn discovery_started(&mut self) -> io::Result<()>;
+    fn discovery_started(&self);
 
     /// Called when test discovery completes
-    fn discovery_completed(&mut self, count: usize) -> io::Result<()>;
+    fn discovery_completed(&self, count: usize);
 
     /// Flush all output to stdout
-    fn flush(&mut self) -> io::Result<()>;
+    fn finish(&self, runner_result: &RunnerResult);
 }
 
 pub struct StdoutDiagnosticWriter {
-    buffer: Arc<Mutex<Vec<u8>>>,
+    stdout: Arc<Mutex<Box<dyn Write + Send>>>,
+}
+
+impl Default for StdoutDiagnosticWriter {
+    fn default() -> Self {
+        Self::new(io::stdout())
+    }
 }
 
 impl StdoutDiagnosticWriter {
-    pub fn new(buffer: Vec<u8>) -> Self {
+    pub fn new(out: impl Write + Send + 'static) -> Self {
         Self {
-            buffer: Arc::new(Mutex::new(buffer)),
+            stdout: Arc::new(Mutex::new(Box::new(out))),
         }
+    }
+
+    fn acquire_stdout(&self) -> std::sync::MutexGuard<'_, Box<dyn Write + Send>> {
+        self.stdout.lock().unwrap()
+    }
+
+    fn flush_stdout(&self, stdout: &mut std::sync::MutexGuard<'_, Box<dyn Write + Send>>) {
+        let _ = stdout.flush();
     }
 }
 
 impl DiagnosticWriter for StdoutDiagnosticWriter {
-    fn test_started(&mut self, test_name: &str, file_path: &str) -> io::Result<()> {
+    fn test_started(&self, test_name: &str, file_path: &str) {
         tracing::debug!("{} {} in {}", "Running".blue(), test_name, file_path);
-        Ok(())
     }
 
-    fn test_completed(&mut self, test_name: &str, file_path: &str, passed: bool) -> io::Result<()> {
-        let mut buffer = self.buffer.lock().unwrap();
+    fn test_completed(&self, test_name: &str, file_path: &str, passed: bool) {
+        let mut stdout = self.acquire_stdout();
         if passed {
             tracing::debug!("{} {} in {}", "Passed".green(), test_name, file_path);
-            write!(buffer, "{}", ".".green())
+            let _ = write!(stdout, "{}", ".".green());
         } else {
             tracing::debug!("{} {} in {}", "Failed".red(), test_name, file_path);
-            write!(buffer, "{}", ".".red())
+            let _ = write!(stdout, "{}", ".".red());
         }
+        self.flush_stdout(&mut stdout);
     }
 
-    fn test_error(&mut self, test_name: &str, file_path: &str, error: &str) -> io::Result<()> {
-        let mut buffer = self.buffer.lock().unwrap();
-        writeln!(
-            buffer,
+    fn test_error(&self, test_name: &str, file_path: &str, error: &str) {
+        let mut stdout = self.acquire_stdout();
+        let _ = writeln!(
+            stdout,
             "{} {} in {}: {}",
             "Error".red().bold(),
             test_name,
             file_path,
             error
-        )
+        );
+        self.flush_stdout(&mut stdout);
     }
 
-    fn discovery_started(&mut self) -> io::Result<()> {
+    fn discovery_started(&self) {
         tracing::debug!("{}", "Discovering tests...".blue());
-        Ok(())
     }
 
-    fn discovery_completed(&mut self, count: usize) -> io::Result<()> {
-        let mut buffer = self.buffer.lock().unwrap();
-        writeln!(
-            buffer,
+    fn discovery_completed(&self, count: usize) {
+        let mut stdout = self.acquire_stdout();
+        let _ = writeln!(
+            stdout,
             "{} {} {}",
             "Discovered".blue(),
             count,
             "tests".blue()
-        )
+        );
+        self.flush_stdout(&mut stdout);
     }
 
-    fn flush(&mut self) -> io::Result<()> {
-        let buffer = self.buffer.lock().unwrap();
-        io::stdout().write_all(&buffer)?;
-        io::stdout().flush()
+    fn finish(&self, runner_result: &RunnerResult) {
+        let mut stdout = self.acquire_stdout();
+        let stats = runner_result.stats();
+        let _ = writeln!(stdout);
+        let _ = writeln!(
+            stdout,
+            "{} {}",
+            "Passed tests:".green(),
+            stats.passed_tests()
+        );
+        let _ = writeln!(stdout, "{} {}", "Failed tests:".red(), stats.failed_tests());
+        let _ = writeln!(
+            stdout,
+            "{} {}",
+            "Error tests:".yellow(),
+            stats.error_tests()
+        );
+        self.flush_stdout(&mut stdout);
     }
 }

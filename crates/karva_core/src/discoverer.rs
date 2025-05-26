@@ -36,35 +36,29 @@ impl<'a> Discoverer<'a> {
                     },
                 ));
             }
-            PythonTestPath::Directory(path) => {
-                println!("Walking directory: {:?}", path.as_std_path());
-                let walker = WalkBuilder::new(path.as_std_path())
+            PythonTestPath::Directory(dir_path) => {
+                let dir_path = dir_path.as_std_path().to_path_buf();
+                let walker = WalkBuilder::new(self.project.cwd().as_std_path())
                     .standard_filters(true)
+                    .require_git(false)
+                    .parents(false)
+                    .filter_entry(move |entry| entry.path().starts_with(&dir_path))
                     .build();
 
-                for result in walker {
-                    match result {
-                        Ok(entry) => {
-                            println!("Found file: {:?}", entry.path());
-                            let path = SystemPathBuf::from(entry.path());
-                            if is_python_file(&path) {
-                                discovered_tests.extend(
-                                    self.test_functions_in_file(&path).into_iter().map(
-                                        |function_name| {
-                                            DiscoveredTest::new(
-                                                module_name(self.project.cwd(), &path),
-                                                function_name,
-                                            )
-                                        },
-                                    ),
-                                );
-                            }
-                        }
-                        Err(e) => {
-                            println!("Error walking directory: {:?}", e);
-                            continue;
-                        }
+                for entry in walker.flatten() {
+                    let entry_path = entry.path();
+                    let path = SystemPathBuf::from(entry_path);
+                    if !is_python_file(&path) {
+                        continue;
                     }
+                    discovered_tests.extend(self.test_functions_in_file(&path).into_iter().map(
+                        |function_name| {
+                            DiscoveredTest::new(
+                                module_name(self.project.cwd(), &path),
+                                function_name,
+                            )
+                        },
+                    ));
                 }
             }
             PythonTestPath::Function(path, function_name) => {
@@ -146,7 +140,7 @@ mod tests {
             }
         }
 
-        fn create_test_file(&self, name: &str, content: &str) -> std::io::Result<SystemPathBuf> {
+        fn create_file(&self, name: &str, content: &str) -> std::io::Result<SystemPathBuf> {
             let path = self.temp_dir.path().join(name);
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent)?;
@@ -155,7 +149,7 @@ mod tests {
             Ok(SystemPathBuf::from(path))
         }
 
-        fn create_test_dir(&self, name: &str) -> std::io::Result<SystemPathBuf> {
+        fn create_dir(&self, name: &str) -> std::io::Result<SystemPathBuf> {
             let path = self.temp_dir.path().join(name);
             fs::create_dir_all(&path)?;
             Ok(SystemPathBuf::from(path))
@@ -166,7 +160,7 @@ mod tests {
     fn test_discover_files() {
         let env = TestEnv::new();
         let path = env
-            .create_test_file("test.py", "def test_function(): pass")
+            .create_file("test.py", "def test_function(): pass")
             .unwrap();
         let project = Project::new(
             SystemPathBuf::from(env.temp_dir.path()),
@@ -179,18 +173,18 @@ mod tests {
         assert!(
             discovered_tests[0]
                 .to_string()
-                .ends_with("test.py::test_function")
+                .ends_with("test::test_function")
         );
     }
 
     #[test]
     fn test_discover_files_with_directory() {
         let env = TestEnv::new();
-        let path = env.create_test_dir("test_dir").unwrap();
+        let path = env.create_dir("test_dir").unwrap();
 
-        env.create_test_file("test_dir/test_file1.py", "def test_function1(): pass")
+        env.create_file("test_dir/test_file1.py", "def test_function1(): pass")
             .unwrap();
-        env.create_test_file("test_dir/test_file2.py", "def function2(): pass")
+        env.create_file("test_dir/test_file2.py", "def function2(): pass")
             .unwrap();
 
         let project = Project::new(
@@ -205,21 +199,21 @@ mod tests {
         assert!(
             discovered_tests[0]
                 .to_string()
-                .ends_with("test_file1.py::test_function1")
+                .ends_with("test_dir.test_file1::test_function1")
         );
     }
 
     #[test]
     fn test_discover_files_with_gitignore() {
         let env = TestEnv::new();
-        let path = env.create_test_dir("tests").unwrap();
+        let path = env.create_dir("tests").unwrap();
 
-        env.create_test_file(".gitignore", "test_file2.py\n")
+        env.create_file(".gitignore", "tests/test_file2.py\n")
             .unwrap();
 
-        env.create_test_file("tests/test_file1.py", "def test_function1(): pass")
+        env.create_file("tests/test_file1.py", "def test_function1(): pass")
             .unwrap();
-        env.create_test_file("tests/test_file2.py", "def test_function2(): pass")
+        env.create_file("tests/test_file2.py", "def test_function2(): pass")
             .unwrap();
 
         let project = Project::new(
@@ -234,7 +228,211 @@ mod tests {
         assert!(
             discovered_tests[0]
                 .to_string()
-                .ends_with("test_file1.py::test_function1")
+                .ends_with("tests.test_file1::test_function1")
         );
+    }
+
+    #[test]
+    fn test_discover_files_with_nested_directories() {
+        let env = TestEnv::new();
+        let path = env.create_dir("tests").unwrap();
+        env.create_dir("tests/nested").unwrap();
+        env.create_dir("tests/nested/deeper").unwrap();
+
+        env.create_file("tests/test_file1.py", "def test_function1(): pass")
+            .unwrap();
+        env.create_file("tests/nested/test_file2.py", "def test_function2(): pass")
+            .unwrap();
+        env.create_file(
+            "tests/nested/deeper/test_file3.py",
+            "def test_function3(): pass",
+        )
+        .unwrap();
+
+        let project = Project::new(
+            SystemPathBuf::from(env.temp_dir.path()),
+            vec![PythonTestPath::Directory(path)],
+            "test".to_string(),
+        );
+        let discoverer = Discoverer::new(&project);
+        let discovered_tests = discoverer.discover();
+
+        assert_eq!(discovered_tests.len(), 3);
+        let test_strings: Vec<String> = discovered_tests.iter().map(|t| t.to_string()).collect();
+        assert!(
+            test_strings
+                .iter()
+                .any(|s| s.ends_with("tests.test_file1::test_function1"))
+        );
+        assert!(
+            test_strings
+                .iter()
+                .any(|s| s.ends_with("tests.nested.test_file2::test_function2"))
+        );
+        assert!(
+            test_strings
+                .iter()
+                .any(|s| s.ends_with("tests.nested.deeper.test_file3::test_function3"))
+        );
+    }
+
+    #[test]
+    fn test_discover_files_with_multiple_test_functions() {
+        let env = TestEnv::new();
+        let path = env
+            .create_file(
+                "test_file.py",
+                r#"
+def test_function1(): pass
+def test_function2(): pass
+def test_function3(): pass
+def not_a_test(): pass
+"#,
+            )
+            .unwrap();
+
+        let project = Project::new(
+            SystemPathBuf::from(env.temp_dir.path()),
+            vec![PythonTestPath::File(path)],
+            "test".to_string(),
+        );
+        let discoverer = Discoverer::new(&project);
+        let discovered_tests = discoverer.discover();
+
+        assert_eq!(discovered_tests.len(), 3);
+        let test_strings: Vec<String> = discovered_tests.iter().map(|t| t.to_string()).collect();
+        assert!(test_strings.iter().any(|s| s.ends_with("test_function1")));
+        assert!(test_strings.iter().any(|s| s.ends_with("test_function2")));
+        assert!(test_strings.iter().any(|s| s.ends_with("test_function3")));
+    }
+
+    #[test]
+    fn test_discover_files_with_specific_function() {
+        let env = TestEnv::new();
+        let path = env
+            .create_file(
+                "test_file.py",
+                r#"
+def test_function1(): pass
+def test_function2(): pass
+"#,
+            )
+            .unwrap();
+
+        let project = Project::new(
+            SystemPathBuf::from(env.temp_dir.path()),
+            vec![PythonTestPath::Function(
+                path.clone(),
+                "test_function1".to_string(),
+            )],
+            "test".to_string(),
+        );
+        let discoverer = Discoverer::new(&project);
+        let discovered_tests = discoverer.discover();
+
+        assert_eq!(discovered_tests.len(), 1);
+        assert!(discovered_tests[0].to_string().ends_with("test_function1"));
+    }
+
+    #[test]
+    fn test_discover_files_with_nonexistent_function() {
+        let env = TestEnv::new();
+        let path = env
+            .create_file("test_file.py", "def test_function1(): pass")
+            .unwrap();
+
+        let project = Project::new(
+            SystemPathBuf::from(env.temp_dir.path()),
+            vec![PythonTestPath::Function(
+                path,
+                "nonexistent_function".to_string(),
+            )],
+            "test".to_string(),
+        );
+        let discoverer = Discoverer::new(&project);
+        let discovered_tests = discoverer.discover();
+
+        assert_eq!(discovered_tests.len(), 0);
+    }
+
+    #[test]
+    fn test_discover_files_with_invalid_python() {
+        let env = TestEnv::new();
+        let path = env
+            .create_file(
+                "test_file.py",
+                "def test_function1(): pass\ninvalid python syntax",
+            )
+            .unwrap();
+
+        let project = Project::new(
+            SystemPathBuf::from(env.temp_dir.path()),
+            vec![PythonTestPath::File(path)],
+            "test".to_string(),
+        );
+        let discoverer = Discoverer::new(&project);
+        let discovered_tests = discoverer.discover();
+
+        assert_eq!(discovered_tests.len(), 0);
+    }
+
+    #[test]
+    fn test_discover_files_with_custom_test_prefix() {
+        let env = TestEnv::new();
+        let path = env
+            .create_file(
+                "test_file.py",
+                r#"
+def check_function1(): pass
+def check_function2(): pass
+def test_function(): pass
+"#,
+            )
+            .unwrap();
+
+        let project = Project::new(
+            SystemPathBuf::from(env.temp_dir.path()),
+            vec![PythonTestPath::File(path)],
+            "check".to_string(),
+        );
+        let discoverer = Discoverer::new(&project);
+        let discovered_tests = discoverer.discover();
+
+        assert_eq!(discovered_tests.len(), 2);
+        let test_strings: Vec<String> = discovered_tests.iter().map(|t| t.to_string()).collect();
+        assert!(test_strings.iter().any(|s| s.ends_with("check_function1")));
+        assert!(test_strings.iter().any(|s| s.ends_with("check_function2")));
+    }
+
+    #[test]
+    fn test_discover_files_with_multiple_paths() {
+        let env = TestEnv::new();
+        let file1 = env
+            .create_file("test1.py", "def test_function1(): pass")
+            .unwrap();
+        let file2 = env
+            .create_file("test2.py", "def test_function2(): pass")
+            .unwrap();
+        let dir = env.create_dir("tests").unwrap();
+        env.create_file("tests/test3.py", "def test_function3(): pass")
+            .unwrap();
+
+        let project = Project::new(
+            SystemPathBuf::from(env.temp_dir.path()),
+            vec![
+                PythonTestPath::File(file1),
+                PythonTestPath::File(file2),
+                PythonTestPath::Directory(dir),
+            ],
+            "test".to_string(),
+        );
+        let discoverer = Discoverer::new(&project);
+        let discovered_tests = discoverer.discover();
+
+        assert_eq!(discovered_tests.len(), 3);
+        let test_strings: Vec<String> = discovered_tests.iter().map(|t| t.to_string()).collect();
+        assert!(test_strings.iter().any(|s| s.ends_with("test_function1")));
+        assert!(test_strings.iter().any(|s| s.ends_with("test_function2")));
+        assert!(test_strings.iter().any(|s| s.ends_with("test_function3")));
     }
 }
