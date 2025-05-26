@@ -1,0 +1,7 @@
+[project]
+name = "benchmark"
+version = "0.1.0"
+description = "Benchmark script for comparing karva and pytest performance"
+readme = "README.md"
+requires-python = "==3.11.*"
+dependencies = ["matplotlib", "numpy", "pytest"]

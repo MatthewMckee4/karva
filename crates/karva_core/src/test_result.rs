@@ -1,25 +1,79 @@
 use super::discoverer::DiscoveredTest;
 
-pub struct TestResult {
-    discovered_test: DiscoveredTest,
-    result: TestResultType,
+#[derive(Debug, Clone)]
+pub struct TestResultPass {
+    test: DiscoveredTest,
+}
+
+#[derive(Debug, Clone)]
+pub struct TestResultFail {
+    test: DiscoveredTest,
+    message: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct TestResultError {
+    test: DiscoveredTest,
+    message: String,
+    traceback: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum TestResult {
+    Pass(TestResultPass),
+    Fail(TestResultFail),
+    Error(TestResultError),
 }
 
 impl TestResult {
-    pub fn new(discovered_test: DiscoveredTest, result: TestResultType) -> Self {
-        Self {
-            discovered_test,
-            result,
+    pub fn new_pass(test: DiscoveredTest) -> Self {
+        Self::Pass(TestResultPass { test })
+    }
+
+    pub fn new_fail(test: DiscoveredTest, message: String) -> Self {
+        Self::Fail(TestResultFail { test, message })
+    }
+
+    pub fn new_error(test: DiscoveredTest, message: String, traceback: String) -> Self {
+        Self::Error(TestResultError {
+            test,
+            message,
+            traceback,
+        })
+    }
+
+    pub fn test(&self) -> &DiscoveredTest {
+        match self {
+            Self::Pass(TestResultPass { test }) => test,
+            Self::Fail(TestResultFail { test, .. }) => test,
+            Self::Error(TestResultError { test, .. }) => test,
         }
     }
 
-    pub fn result(&self) -> &TestResultType {
-        &self.result
+    pub fn is_pass(&self) -> bool {
+        matches!(self, Self::Pass(_))
     }
-}
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum TestResultType {
-    Pass,
-    Fail,
+    pub fn is_fail(&self) -> bool {
+        matches!(self, Self::Fail(_))
+    }
+
+    pub fn is_error(&self) -> bool {
+        matches!(self, Self::Error(_))
+    }
+
+    pub fn message(&self) -> Option<&str> {
+        match self {
+            Self::Pass(_) => None,
+            Self::Fail(TestResultFail { message, .. }) => Some(message),
+            Self::Error(TestResultError { message, .. }) => Some(message),
+        }
+    }
+
+    pub fn traceback(&self) -> Option<&str> {
+        match self {
+            Self::Pass(_) | Self::Fail(_) => None,
+            Self::Error(TestResultError { traceback, .. }) => Some(traceback),
+        }
+    }
 }

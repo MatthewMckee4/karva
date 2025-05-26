@@ -3,11 +3,11 @@ use std::fmt;
 use std::fs::File;
 use std::io::BufWriter;
 use tracing::{Event, Subscriber};
-use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields};
 use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::EnvFilter;
 
 /// Logging flags to `#[command(flatten)]` into your CLI
 #[derive(clap::Args, Debug, Clone, Default)]
@@ -172,17 +172,11 @@ where
         let ansi = writer.has_ansi_escapes();
 
         if self.display_timestamp {
-            let timestamp = chrono::Local::now()
-                .format("%Y-%m-%d %H:%M:%S.%f")
-                .to_string();
+            let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
             if ansi {
                 write!(writer, "{} ", timestamp.dimmed())?;
             } else {
-                write!(
-                    writer,
-                    "{} ",
-                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S.%f")
-                )?;
+                write!(writer, "{} ", timestamp)?;
             }
         }
 
