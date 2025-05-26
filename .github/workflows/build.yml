@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: ${{ !contains(github.event.pull_request.labels.*.name, 'CI-no-fail-fast') }}
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
         platform:
           [
             {
@@ -41,14 +41,6 @@ jobs:
             },
           ]
         include:
-          # ubuntu-24.04 does not support 3.7
-          - python-version: 3.7
-            platform:
-              {
-                os: "ubuntu-22.04",
-                python-architecture: "x64",
-                rust-target: "x86_64-unknown-linux-gnu",
-              }
           # Older versions of CPython are not available for AArch64.
           - python-version: 3.12
             platform:
@@ -56,29 +48,6 @@ jobs:
                 os: "macOS-latest",
                 python-architecture: "arm64",
                 rust-target: "aarch64-apple-darwin",
-              }
-        exclude:
-          # ubuntu-24.04 does not support 3.7
-          - python-version: 3.7
-            platform:
-              {
-                os: "ubuntu-latest",
-                python-architecture: "x64",
-                rust-target: "x86_64-unknown-linux-gnu",
-              }
-          - python-version: pypy-3.9
-            platform:
-              {
-                os: "windows-latest",
-                python-architecture: "x86",
-                rust-target: "i686-pc-windows-msvc",
-              }
-          - python-version: pypy-3.10
-            platform:
-              {
-                os: "windows-latest",
-                python-architecture: "x86",
-                rust-target: "i686-pc-windows-msvc",
               }
     steps:
       - uses: actions/checkout@v4
