@@ -485,6 +485,7 @@ dependencies = [
  "colored",
  "ignore",
  "pyo3",
+ "regex",
  "rustpython-parser",
  "serde",
  "tempfile",
