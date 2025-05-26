@@ -9,7 +9,7 @@ use karva_core::runner::Runner;
 
 use crate::args::{Args, Command, TestCommand};
 use crate::logging::setup_tracing;
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use clap::Parser;
 use colored::Colorize;
 

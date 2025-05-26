@@ -36,22 +36,18 @@ impl StdoutDiagnosticWriter {
 
 impl DiagnosticWriter for StdoutDiagnosticWriter {
     fn test_started(&mut self, test_name: &str, file_path: &str) -> io::Result<()> {
-        let mut buffer = self.buffer.lock().unwrap();
-        writeln!(
-            buffer,
-            "{} {} in {}",
-            "Running".blue(),
-            test_name,
-            file_path
-        )
+        tracing::debug!("{} {} in {}", "Running".blue(), test_name, file_path);
+        Ok(())
     }
 
     fn test_completed(&mut self, test_name: &str, file_path: &str, passed: bool) -> io::Result<()> {
         let mut buffer = self.buffer.lock().unwrap();
         if passed {
-            writeln!(buffer, "{} {} in {}", "✓".green(), test_name, file_path)
+            tracing::debug!("{} {} in {}", "Passed".green(), test_name, file_path);
+            write!(buffer, "{}", ".".green())
         } else {
-            writeln!(buffer, "{} {} in {}", "✗".red(), test_name, file_path)
+            tracing::debug!("{} {} in {}", "Failed".red(), test_name, file_path);
+            write!(buffer, "{}", ".".red())
         }
     }
 
@@ -68,8 +64,8 @@ impl DiagnosticWriter for StdoutDiagnosticWriter {
     }
 
     fn discovery_started(&mut self) -> io::Result<()> {
-        let mut buffer = self.buffer.lock().unwrap();
-        writeln!(buffer, "{}", "Discovering tests...".blue())
+        tracing::debug!("{}", "Discovering tests...".blue());
+        Ok(())
     }
 
     fn discovery_completed(&mut self, count: usize) -> io::Result<()> {

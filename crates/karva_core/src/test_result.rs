@@ -23,4 +23,5 @@ impl TestResult {
 pub enum TestResultType {
     Pass,
     Fail,
+    Error,
 }

@@ -15,6 +15,7 @@ serde = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
 tracing-tree = { workspace = true, optional = true }
+ignore = "0.4.23"
 
 [dev-dependencies]
 tempfile = "3.8"

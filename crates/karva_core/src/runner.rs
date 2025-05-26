@@ -34,25 +34,27 @@ impl<'a> Runner<'a> {
         let mut test_results = Vec::new();
         for test in discovered_tests {
             let test_name = test.function_name().as_str();
-            let file_path = test.path().as_str();
+            let module = test.module();
 
             self.diagnostics
-                .test_started(test_name, file_path)
+                .test_started(test_name, module)
                 .unwrap_or_default();
+
             let test_result = self.run_test(&test);
 
             match test_result {
                 Ok(test_result) => {
                     let passed = test_result.result() == &TestResultType::Pass;
                     self.diagnostics
-                        .test_completed(test_name, file_path, passed)
+                        .test_completed(test_name, module, passed)
                         .unwrap_or_default();
                     test_results.push(test_result);
                 }
                 Err(e) => {
                     self.diagnostics
-                        .test_error(test_name, file_path, &e.to_string())
+                        .test_error(test_name, module, &e.to_string())
                         .unwrap_or_default();
+                    test_results.push(TestResult::new(test.clone(), TestResultType::Error));
                 }
             }
         }
@@ -62,34 +64,33 @@ impl<'a> Runner<'a> {
 
     fn run_test(&self, test: &DiscoveredTest) -> PyResult<TestResult> {
         Python::with_gil(|py| {
-            let sys_path = py.import("sys")?;
-            let path = sys_path.getattr("path")?;
-            path.call_method1("append", (self.project.cwd().as_str(),))?;
+            self.add_cwd_to_sys_path(&py)?;
 
-            if let Some(file_name) = test.path().file_name() {
-                let module_name = file_name.replace(".py", "");
+            let imported_module = PyModule::import(py, test.module())?;
 
-                let my_module = PyModule::import(py, module_name)?;
+            let function = imported_module.getattr(test.function_name())?;
 
-                let function = my_module.getattr(test.function_name())?;
+            let result = function.call((), None);
 
-                let result = function.call((), None);
-
-                match result {
-                    Ok(_) => Ok(TestResult::new(test.clone(), TestResultType::Pass)),
-                    Err(err) => {
-                        let err_value = err.value(py);
-                        if err_value.is_instance_of::<PyAssertionError>() {
-                            Ok(TestResult::new(test.clone(), TestResultType::Fail))
-                        } else {
-                            Err(err)
-                        }
+            match result {
+                Ok(_) => Ok(TestResult::new(test.clone(), TestResultType::Pass)),
+                Err(err) => {
+                    let err_value = err.value(py);
+                    if err_value.is_instance_of::<PyAssertionError>() {
+                        Ok(TestResult::new(test.clone(), TestResultType::Fail))
+                    } else {
+                        Err(err)
                     }
                 }
-            } else {
-                Ok(TestResult::new(test.clone(), TestResultType::Fail))
             }
         })
+    }
+
+    fn add_cwd_to_sys_path(&self, py: &Python) -> PyResult<()> {
+        let sys_path = py.import("sys")?;
+        let path = sys_path.getattr("path")?;
+        path.call_method1("append", (self.project.cwd().as_str(),))?;
+        Ok(())
     }
 }
 
