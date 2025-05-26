@@ -33,7 +33,8 @@ jobs:
           args: --all-features
 
   cargo-build:
-    runs-on: ${{ matrix.platform.runner }}
+    runs-on: ${{ (matrix.os == 'linux' && 'ubuntu') || matrix.os }}-latest
+
     strategy:
       fail-fast: false
       matrix:
@@ -106,9 +107,12 @@ jobs:
             target: aarch64
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+
+      - name: set up python
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.11
+          python-version: "3.13"
+          architecture: ${{ matrix.python-architecture || 'x64' }}
       - name: build wheels
         uses: PyO3/maturin-action@v1
         with:
