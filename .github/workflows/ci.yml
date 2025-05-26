@@ -32,102 +32,93 @@ jobs:
           command: test
           args: --no-default-features
 
-  build:
-    name: build on ${{ matrix.os }} (${{ matrix.target }} - ${{ matrix.interpreter || 'all' }}${{ matrix.os == 'linux' && format(' - {0}', matrix.manylinux == 'auto' && 'manylinux' || matrix.manylinux) || '' }})
+  linux:
+    runs-on: ${{ matrix.platform.runner }}
     strategy:
-      fail-fast: false
       matrix:
-        os: [linux, macos, windows]
-        target: [x86_64, aarch64]
-        manylinux: [auto]
-        include:
-          # manylinux for various platforms, plus x86_64 pypy
-          - os: linux
-            manylinux: auto
-            target: i686
-          - os: linux
-            manylinux: auto
+        platform:
+          - runner: ubuntu-latest
+            target: x86_64
+          - runner: ubuntu-latest
+            target: x86
+          - runner: ubuntu-latest
             target: aarch64
-          - os: linux
-            manylinux: auto
+          - runner: ubuntu-latest
             target: armv7
-            interpreter: 3.9 3.10 3.11 3.12 3.13
-          - os: linux
-            manylinux: auto
-            target: ppc64le
-            interpreter: 3.9 3.10 3.11 3.12 3.13
-          - os: linux
-            manylinux: auto
+          - runner: ubuntu-latest
             target: s390x
-            interpreter: 3.9 3.10 3.11 3.12 3.13
-          - os: linux
-            manylinux: auto
-            target: x86_64
-            interpreter: pypy3.9 pypy3.10 pypy3.11
-
-          # musllinux
-          - os: linux
-            manylinux: musllinux_1_1
-            target: x86_64
-          - os: linux
-            manylinux: musllinux_1_1
-            target: aarch64
-          - os: linux
-            manylinux: musllinux_1_1
-            target: armv7
-
-          # macos;
-          # all versions x86_64
-          # arm pypy and older pythons which can't be run on the arm hardware for PGO
-          - os: macos
-            target: x86_64
-          - os: macos
-            target: aarch64
-            interpreter: 3.9 pypy3.9 pypy3.10 pypy3.11
-
-          # windows;
-          # x86_64 pypy builds are not PGO optimized
-          # i686 not supported by pypy
-          # aarch64 only 3.11 and up, also not PGO optimized
-          - os: windows
-            target: x86_64
-            interpreter: pypy3.9 pypy3.10 pypy3.11
-          - os: windows
-            target: i686
-            python-architecture: x86
-            interpreter: 3.9 3.10 3.11 3.12 3.13
-          - os: windows
-            target: aarch64
-            interpreter: 3.11 3.12 3.13
-
-        exclude:
-          # See above; disabled for now.
-          - os: windows
-            target: aarch64
-
-    runs-on: ${{ (matrix.os == 'linux' && 'ubuntu') || matrix.os }}-latest
+          - runner: ubuntu-latest
+            target: ppc64le
     steps:
       - uses: actions/checkout@v4
-
-      - name: set up python
-        uses: actions/setup-python@v5
+      - uses: actions-rs/toolchain@v1
         with:
-          python-version: "3.13"
-          architecture: ${{ matrix.python-architecture || 'x64' }}
+          toolchain: stable
+          override: true
 
-      - name: build wheels
-        uses: PyO3/maturin-action@v1
+      - name: Run cargo build
+        run: cargo build --release --target ${{ matrix.platform.target }}
+
+  musllinux:
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      matrix:
+        platform:
+          - runner: ubuntu-latest
+            target: x86_64
+          - runner: ubuntu-latest
+            target: x86
+          - runner: ubuntu-latest
+            target: aarch64
+          - runner: ubuntu-latest
+            target: armv7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
         with:
-          target: ${{ matrix.target }}
-          manylinux: ${{ matrix.manylinux }}
-          args: --release --out dist --interpreter ${{ matrix.interpreter || '3.9 3.10 3.11 3.12 3.13 pypy3.9 pypy3.10 pypy3.11' }}
-          rust-toolchain: stable
-          docker-options: -e CI
+          toolchain: stable
+          override: true
 
-    #   - uses: actions/upload-artifact@v4
-    #     with:
-    #       name: pypi_files_${{ matrix.os }}_${{ matrix.target }}_${{ matrix.interpreter || 'all' }}_${{ matrix.manylinux }}
-    #       path: dist
+      - name: Run cargo build
+        run: cargo build --release --target ${{ matrix.platform.target }}
+
+  windows:
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      matrix:
+        platform:
+          - runner: windows-latest
+            target: x64
+          - runner: windows-latest
+            target: x86
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Run cargo build
+        run: cargo build --release --target ${{ matrix.platform.target }}
+
+  macos:
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      matrix:
+        platform:
+          - runner: macos-14
+            target: x86_64
+          - runner: macos-14
+            target: aarch64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Run cargo build
+        run: cargo build --release --target ${{ matrix.platform.target }}
 
   build-docs:
     runs-on: ${{ matrix.os }}
