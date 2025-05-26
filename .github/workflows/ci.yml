@@ -6,9 +6,6 @@ on:
     branches:
       - main
 
-env:
-  PYTHON_VERSION: "3.13"
-
 jobs:
   pre-commit:
     runs-on: ubuntu-latest
@@ -35,104 +32,97 @@ jobs:
           command: test
           args: --no-default-features
 
-  linux:
-    runs-on: ${{ matrix.platform.runner }}
+  build:
+    name: python${{ matrix.python-version }}-${{ matrix.platform.python-architecture }} ${{ matrix.platform.os }} ${{ matrix.msrv }}
+    runs-on: ${{ matrix.platform.os }}
     strategy:
+      fail-fast: false # If one platform fails, allow the rest to keep testing.
       matrix:
+        rust: [stable]
+        python-version:
+          [
+            "3.9",
+            "3.10",
+            "3.11",
+            "3.12",
+            "3.13",
+            "3.13t",
+            "pypy-3.9",
+            "pypy-3.10",
+          ]
         platform:
-          - runner: ubuntu-latest
-            target: x86_64
-          - runner: ubuntu-latest
-            target: x86
-          - runner: ubuntu-latest
-            target: aarch64
-          - runner: ubuntu-latest
-            target: armv7
-          - runner: ubuntu-latest
-            target: s390x
-          - runner: ubuntu-latest
-            target: ppc64le
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Build wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
-          sccache: "true"
-          manylinux: auto
+          [
+            {
+              os: "macos-latest",
+              python-architecture: "arm64",
+              rust-target: "aarch64-apple-darwin",
+            },
+            {
+              os: "ubuntu-latest",
+              python-architecture: "x64",
+              rust-target: "x86_64-unknown-linux-gnu",
+            },
+            {
+              os: "windows-latest",
+              python-architecture: "x64",
+              rust-target: "x86_64-pc-windows-msvc",
+            },
+          ]
+        exclude:
+          # PyPy doesn't release 32-bit Windows builds any more
+          - python-version: pypy-3.9
+            platform: { os: "windows-latest", python-architecture: "x86" }
+        include:
+          # Test minimal supported Rust version
+          - rust: 1.63.0
+            python-version: "3.13"
+            platform:
+              {
+                os: "ubuntu-latest",
+                python-architecture: "x64",
+                rust-target: "x86_64-unknown-linux-gnu",
+              }
+            msrv: "MSRV"
 
-  musllinux:
-    runs-on: ${{ matrix.platform.runner }}
-    strategy:
-      matrix:
-        platform:
-          - runner: ubuntu-latest
-            target: x86_64
-          - runner: ubuntu-latest
-            target: x86
-          - runner: ubuntu-latest
-            target: aarch64
-          - runner: ubuntu-latest
-            target: armv7
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Build wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
-          sccache: "true"
-          manylinux: musllinux_1_2
+          # Test the `nightly` feature
+          - rust: nightly
+            python-version: "3.13"
+            platform:
+              {
+                os: "ubuntu-latest",
+                python-architecture: "x64",
+                rust-target: "x86_64-unknown-linux-gnu",
+              }
+            msrv: "nightly"
+            extra_features: "nightly"
 
-  windows:
-    runs-on: ${{ matrix.platform.runner }}
-    strategy:
-      matrix:
-        platform:
-          - runner: windows-latest
-            target: x64
-          - runner: windows-latest
-            target: x86
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          architecture: ${{ matrix.platform.target }}
-      - name: Build wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
-          sccache: "true"
+          # Test 32-bit windows just on latest Python
+          - rust: stable
+            python-version: "3.13"
+            platform:
+              {
+                os: "windows-latest",
+                python-architecture: "x86",
+                rust-target: "i686-pc-windows-msvc",
+              }
 
-  macos:
-    runs-on: ${{ matrix.platform.runner }}
-    strategy:
-      matrix:
-        platform:
-          - runner: macos-14
-            target: x86_64
-          - runner: macos-14
-            target: aarch64
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Build wheels
-        uses: PyO3/maturin-action@v1
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.platform.python-architecture }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
-          sccache: "true"
+          toolchain: ${{ matrix.rust }}
+          target: ${{ matrix.platform.rust-target }}
+
+      - name: Build
+        run: cargo build  --verbose --target ${{ matrix.platform.rust-target }}
 
   build-docs:
     runs-on: ${{ matrix.os }}
