@@ -1,4 +1,4 @@
-use crate::logging::Verbosity;
+use crate::cli::logging::Verbosity;
 use clap::Parser;
 
 #[derive(Debug, Parser)]

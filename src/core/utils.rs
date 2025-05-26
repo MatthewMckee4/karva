@@ -1,4 +1,4 @@
-use crate::path::SystemPathBuf;
+use crate::core::path::SystemPathBuf;
 use std::path::MAIN_SEPARATOR;
 
 pub fn is_python_file(path: &SystemPathBuf) -> bool {
@@ -16,7 +16,7 @@ pub fn module_name(cwd: &SystemPathBuf, path: &SystemPathBuf) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::path::SystemPathBuf;
+    use crate::core::path::SystemPathBuf;
 
     #[cfg(unix)]
     #[test]

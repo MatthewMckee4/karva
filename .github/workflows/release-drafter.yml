@@ -2,7 +2,7 @@ name: Release Drafter and Labels
 on:
   push:
     branches:
-    - main
+      - main
   pull_request:
     types: [edited, opened, reopened, synchronize, unlabeled, labeled]
 permissions:
@@ -14,9 +14,9 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
-    - uses: release-drafter/release-drafter@v6
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: release-drafter/release-drafter@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   require_label:
     if: github.event.pull_request
     needs: update_release_draft
@@ -25,9 +25,9 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-    - uses: mheap/github-action-required-labels@v5
-      with:
-        mode: minimum
-        count: 1
-        labels: breaking, bug, github_actions, documentation, dependencies, enhancement, feature, maintenance, security
-        add_comment: true
+      - uses: mheap/github-action-required-labels@v5
+        with:
+          mode: minimum
+          count: 1
+          labels: breaking, bug, github_actions, documentation, dependencies, enhancement, feature, maintenance, security
+          add_comment: true
