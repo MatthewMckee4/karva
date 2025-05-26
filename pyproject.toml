@@ -27,6 +27,7 @@ manifest-path = "crates/karva/Cargo.toml"
 module-name = "karva"
 python-source = "python"
 strip = true
+features = ["pyo3/extension-module"]
 
 [tool.ruff]
 fix = true
