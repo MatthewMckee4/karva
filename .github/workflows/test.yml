@@ -108,28 +108,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install Python
         if: matrix.os == 'macos'
         run: |
-          brew install gettext
-          brew link gettext --force
           brew install python@3.9
           brew link python@3.9 --force
 
-      - name: set up python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.13"
           architecture: ${{ matrix.python-architecture || 'x64' }}
-
-      - name: Install Python development headers
-        if: matrix.os == 'macos'
-        run: |
-          echo "PYTHON_SYS_EXECUTABLE=$(which python3.9)" >> $GITHUB_ENV
-          echo "PYTHON_LIBRARY=$(brew --prefix python@3.9)/lib/libpython3.9.dylib" >> $GITHUB_ENV
       - name: build wheels
         uses: PyO3/maturin-action@v1
         with:
+          command: build
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux }}
           args: --release --out dist --interpreter ${{ matrix.interpreter || '3.9 3.10 3.11 3.12 3.13 pypy3.9 pypy3.10 pypy3.11' }}
