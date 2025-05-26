@@ -9,7 +9,10 @@ crate-type = ["rlib", "cdylib"]
 [dependencies]
 camino = { workspace = true }
 colored = { workspace = true }
-pyo3 = { version = "0.25.0", features = ["generate-import-lib"] }
+pyo3 = { version = "0.25.0", features = [
+    "generate-import-lib",
+    "auto-initialize",
+] }
 rustpython-parser = { version = "0.4.0" }
 serde = { workspace = true }
 tracing = { workspace = true }
@@ -20,9 +23,3 @@ ignore = "0.4.23"
 [dev-dependencies]
 tempfile = "3.8"
 regex = "1"
-
-[target.x86_64-apple-darwin]
-rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
-
-[target.aarch64-apple-darwin]
-rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
