@@ -1,6 +1,7 @@
 use colored::Colorize;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use crate::runner::RunnerResult;
 
@@ -9,7 +10,13 @@ pub trait DiagnosticWriter: Send + Sync {
     fn test_started(&self, test_name: &str, file_path: &str);
 
     /// Called when a test completes
-    fn test_completed(&self, test_name: &str, file_path: &str, passed: bool);
+    fn test_completed(
+        &self,
+        test_name: &str,
+        file_path: &str,
+        passed: bool,
+        duration: std::time::Duration,
+    );
 
     /// Called when a test fails with an error message
     fn test_error(&self, test_name: &str, file_path: &str, error: &str);
@@ -26,6 +33,7 @@ pub trait DiagnosticWriter: Send + Sync {
 
 pub struct StdoutDiagnosticWriter {
     stdout: Arc<Mutex<Box<dyn Write + Send>>>,
+    start_time: Instant,
 }
 
 impl Default for StdoutDiagnosticWriter {
@@ -38,6 +46,7 @@ impl StdoutDiagnosticWriter {
     pub fn new(out: impl Write + Send + 'static) -> Self {
         Self {
             stdout: Arc::new(Mutex::new(Box::new(out))),
+            start_time: Instant::now(),
         }
     }
 
@@ -55,14 +64,32 @@ impl DiagnosticWriter for StdoutDiagnosticWriter {
         tracing::debug!("{} {} in {}", "Running".blue(), test_name, file_path);
     }
 
-    fn test_completed(&self, test_name: &str, file_path: &str, passed: bool) {
+    fn test_completed(
+        &self,
+        test_name: &str,
+        file_path: &str,
+        passed: bool,
+        duration: std::time::Duration,
+    ) {
         let mut stdout = self.acquire_stdout();
         if passed {
             tracing::debug!("{} {} in {}", "Passed".green(), test_name, file_path);
-            let _ = write!(stdout, "{}", ".".green());
+            let _ = writeln!(
+                stdout,
+                "{} {} ({}us)",
+                "✓".green(),
+                test_name,
+                duration.as_micros()
+            );
         } else {
             tracing::debug!("{} {} in {}", "Failed".red(), test_name, file_path);
-            let _ = write!(stdout, "{}", ".".red());
+            let _ = writeln!(
+                stdout,
+                "{} {} ({}us)",
+                "✗".red(),
+                test_name,
+                duration.as_micros()
+            );
         }
         self.flush_stdout(&mut stdout);
     }
@@ -99,7 +126,11 @@ impl DiagnosticWriter for StdoutDiagnosticWriter {
     fn finish(&self, runner_result: &RunnerResult) {
         let mut stdout = self.acquire_stdout();
         let stats = runner_result.stats();
+        let total_duration = self.start_time.elapsed();
+
         let _ = writeln!(stdout);
+        let _ = writeln!(stdout, "{}", "Test Results:".bold());
+        let _ = writeln!(stdout, "{}", "─────────────".bold());
         let _ = writeln!(
             stdout,
             "{} {}",
@@ -107,11 +138,15 @@ impl DiagnosticWriter for StdoutDiagnosticWriter {
             stats.passed_tests()
         );
         let _ = writeln!(stdout, "{} {}", "Failed tests:".red(), stats.failed_tests());
+        let error_tests = stats.error_tests();
+        if error_tests > 0 {
+            let _ = writeln!(stdout, "{} {}", "Error tests:".yellow(), error_tests);
+        }
         let _ = writeln!(
             stdout,
-            "{} {}",
-            "Error tests:".yellow(),
-            stats.error_tests()
+            "{} {}ms",
+            "Total duration:".blue(),
+            total_duration.as_millis()
         );
         self.flush_stdout(&mut stdout);
     }

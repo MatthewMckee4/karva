@@ -1,4 +1,5 @@
 use pyo3::{exceptions::PyAssertionError, prelude::*};
+use std::time::Instant;
 
 use crate::{
     diagnostics::DiagnosticWriter,
@@ -37,13 +38,15 @@ impl<'a> Runner<'a> {
 
             self.diagnostic_writer.test_started(test_name, module);
 
+            let start_time = Instant::now();
             let test_result = self.run_test(&test);
+            let duration = start_time.elapsed();
 
             match test_result {
                 Ok(test_result) => {
                     let passed = test_result.is_pass();
                     self.diagnostic_writer
-                        .test_completed(test_name, module, passed);
+                        .test_completed(test_name, module, passed, duration);
                     test_results.push(test_result);
                 }
                 Err(error_msg) => {
@@ -168,6 +171,7 @@ mod tests {
     use super::*;
     use crate::project::Project;
     use std::path::PathBuf;
+    use std::time::Duration;
 
     struct MockDiagnostics;
 
@@ -178,7 +182,7 @@ mod tests {
 
         fn test_started(&self, _name: &str, _module: &str) {}
 
-        fn test_completed(&self, _name: &str, _module: &str, _passed: bool) {}
+        fn test_completed(&self, _name: &str, _module: &str, _passed: bool, _duration: Duration) {}
 
         fn test_error(&self, _name: &str, _module: &str, _error: &str) {}
 
