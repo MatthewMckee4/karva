@@ -198,7 +198,6 @@ mod tests {
             true,
             std::time::Duration::from_micros(100),
         );
-        writer.finish(&RunnerResult::new(vec![]));
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         assert!(output.contains("\u{1b}[32m.\u{1b}[0m"));
     }
@@ -212,7 +211,6 @@ mod tests {
             false,
             std::time::Duration::from_micros(100),
         );
-        writer.finish(&RunnerResult::new(vec![]));
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         assert!(output.contains("\u{1b}[31m.\u{1b}[0m"));
     }
@@ -278,7 +276,6 @@ mod tests {
             handle.join().unwrap();
         }
 
-        writer.finish(&RunnerResult::new(vec![]));
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         assert_eq!(output.matches("\u{1b}[32m.\u{1b}[0m").count(), 10);
     }
