@@ -39,7 +39,7 @@ select = ["ALL"]
 [tool.tbump]
 
 [[tool.tbump.before_commit]]
-cmd = "cargo update -p karva"
+cmd = "cargo update"
 name = "Update Cargo.lock"
 
 [[tool.tbump.file]]
@@ -49,7 +49,7 @@ src = "pyproject.toml"
 src = "README.md"
 
 [[tool.tbump.file]]
-src = "crates/karva/Cargo.toml"
+src = "/Cargo.toml"
 
 [tool.tbump.git]
 message_template = "Bump to v{new_version}"
