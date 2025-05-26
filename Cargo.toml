@@ -1,4 +1,7 @@
-[workspace.package]
+[package]
+name = "karva"
+version = "0.0.8"
+publish = true
 edition = "2021"
 rust-version = "1.84"
 homepage = "https://github.com/MatthewMckee4/karva"
@@ -6,24 +9,18 @@ documentation = "https://github.com/MatthewMckee4/karva"
 repository = "https://github.com/MatthewMckee4/karva"
 authors = ["Matthew McKee <matthewmckee4@gmail.com>"]
 license = "MIT"
+default-run = "karva"
 
-[workspace]
-members = ["crates/*"]
-resolver = "2"
-
-[workspace.dependencies]
-karva = { path = "crates/karva" }
-karva_core = { path = "crates/karva_core" }
-
+[dependencies]
 anyhow = { version = "1.0.97" }
-clap = { version = "4.5.35", features = ["derive"] }
+clap = { version = "4.5.35", features = ["derive", "wrap_help"] }
 camino = { version = "1.1.7" }
 chrono = { version = "0.4.35", default-features = false, features = ["clock"] }
 serde = { version = "1.0.219", features = ["derive"] }
 wild = { version = "2" }
 colored = { version = "3.0.0" }
 argfile = { version = "0.2.1" }
-tracing = { version = "0.1.41" }
+tracing = { version = "0.1.41", features = ["release_max_level_debug"] }
 tracing-flame = { version = "0.2.0" }
 tracing-indicatif = { version = "0.3.6" }
 tracing-log = { version = "0.2.0" }
@@ -32,3 +29,10 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
     "fmt",
 ] }
 tracing-tree = { version = "0.4.0" }
+rustpython-parser = { version = "0.4.0" }
+pyo3 = { version = "0.25.0", features = ["auto-initialize"] }
+ignore = "0.4.23"
+
+[dev-dependencies]
+tempfile = "3.8"
+regex = "1"

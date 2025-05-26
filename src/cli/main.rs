@@ -1,21 +1,17 @@
 use std::io::{self, BufWriter, Write};
 use std::process::{ExitCode, Termination};
 
+use crate::core::diagnostics::StdoutDiagnosticWriter;
+use crate::core::path::{PythonTestPath, SystemPath, SystemPathBuf};
+use crate::core::project::Project;
+use crate::core::runner::Runner;
 use anyhow::Result;
-use karva_core::diagnostics::StdoutDiagnosticWriter;
-use karva_core::path::{PythonTestPath, SystemPath, SystemPathBuf};
-use karva_core::project::Project;
-use karva_core::runner::Runner;
 
-use crate::args::{Args, Command, TestCommand};
-use crate::logging::setup_tracing;
+use crate::cli::args::{Args, Command, TestCommand};
+use crate::cli::logging::setup_tracing;
 use anyhow::{anyhow, Context};
 use clap::Parser;
 use colored::Colorize;
-
-mod args;
-mod logging;
-mod version;
 
 pub fn main() -> ExitStatus {
     run().unwrap_or_else(|error| {
@@ -52,7 +48,7 @@ fn run() -> anyhow::Result<ExitStatus> {
 
 pub(crate) fn version() -> Result<()> {
     let mut stdout = BufWriter::new(io::stdout().lock());
-    let version_info = crate::version::version();
+    let version_info = crate::cli::version::version();
     writeln!(stdout, "karva {}", &version_info)?;
     Ok(())
 }
