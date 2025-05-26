@@ -61,7 +61,13 @@ impl StdoutDiagnosticWriter {
 
 impl DiagnosticWriter for StdoutDiagnosticWriter {
     fn test_started(&self, test_name: &str, file_path: &str) {
-        tracing::debug!("{} {} in {}", "Running".blue(), test_name, file_path);
+        tracing::debug!(
+            "{} {} in {} at {}ms",
+            "Running".blue(),
+            test_name,
+            file_path,
+            self.start_time.elapsed().as_millis()
+        );
     }
 
     fn test_completed(
@@ -73,23 +79,23 @@ impl DiagnosticWriter for StdoutDiagnosticWriter {
     ) {
         let mut stdout = self.acquire_stdout();
         if passed {
-            tracing::debug!("{} {} in {}", "Passed".green(), test_name, file_path);
-            let _ = writeln!(
-                stdout,
-                "{} {} ({}us)",
-                "✓".green(),
+            tracing::debug!(
+                "{} {} in {} at {}us",
+                "Passed".green(),
                 test_name,
+                file_path,
                 duration.as_micros()
             );
+            let _ = write!(stdout, "{}", ".".green());
         } else {
-            tracing::debug!("{} {} in {}", "Failed".red(), test_name, file_path);
-            let _ = writeln!(
-                stdout,
-                "{} {} ({}us)",
-                "✗".red(),
+            tracing::debug!(
+                "{} {} in {} at {}us",
+                "Failed".red(),
                 test_name,
+                file_path,
                 duration.as_micros()
             );
+            let _ = write!(stdout, "{}", ".".red());
         }
         self.flush_stdout(&mut stdout);
     }
@@ -129,7 +135,6 @@ impl DiagnosticWriter for StdoutDiagnosticWriter {
         let total_duration = self.start_time.elapsed();
 
         let _ = writeln!(stdout);
-        let _ = writeln!(stdout, "{}", "Test Results:".bold());
         let _ = writeln!(stdout, "{}", "─────────────".bold());
         let _ = writeln!(
             stdout,
