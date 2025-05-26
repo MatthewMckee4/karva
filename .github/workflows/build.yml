@@ -16,19 +16,7 @@ jobs:
     strategy:
       fail-fast: ${{ !contains(github.event.pull_request.labels.*.name, 'CI-no-fail-fast') }}
       matrix:
-        python-version:
-          [
-            "3.7",
-            "3.8",
-            "3.9",
-            "3.10",
-            "3.11",
-            "3.12",
-            "3.13",
-            "3.13t",
-            "pypy-3.9",
-            "pypy-3.10",
-          ]
+        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
         platform:
           [
             {
@@ -109,7 +97,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.platform.os }}-${{ matrix.platform.python-architecture }}-${{ matrix.platform.rust-target }}
+          name: wheels-${{ matrix.platform.os }}-${{ matrix.platform.python-architecture }}-${{ matrix.platform.rust-target }}-${{ matrix.python-version }}
           path: dist
 
   sdist:
