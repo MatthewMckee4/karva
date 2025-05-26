@@ -64,10 +64,19 @@ def create_benchmark_graph(
     ax.xaxis.set_ticks_position("bottom")
     ax.xaxis.set_label_position("bottom")
 
+    # Set fewer x-axis ticks
+    max_time = np.ceil(max(means))
+    linspace = np.linspace(0, max_time, 5)
+    ax.set_xticks(linspace)  # Show only 3 ticks
+    ax.set_xticklabels(
+        [f"{x:.2f}s" for x in linspace],
+        color="white",
+    )
+
     bars = ax.barh(y_pos, means, color=["#4ECDC4", "#4ECDC4"], height=0.5)
 
     ax.set_yticks(y_pos)
-    ax.set_yticklabels(labels, fontsize=16, fontweight="bold")
+    ax.set_yticklabels(labels, fontsize=16)
 
     for bar in bars:
         width = bar.get_width()
@@ -79,8 +88,7 @@ def create_benchmark_graph(
             ha="left",
             va="center",
             color="white",
-            fontsize=12,
-            fontweight="bold",
+            fontsize=10,
         )
 
     plt.title(
@@ -88,11 +96,20 @@ def create_benchmark_graph(
         fontsize=18,
         pad=20,
         color="white",
-        fontweight="bold",
         y=-0.6,
     )
 
-    plt.savefig("benchmark_results.png", dpi=300, bbox_inches="tight", transparent=True)
+    for path in [
+        "../../assets/benchmark_results.svg",
+        "../../docs/assets/benchmark_results.svg",
+    ]:
+        plt.savefig(
+            path,
+            dpi=600,
+            bbox_inches="tight",
+            transparent=True,
+        )
+
     plt.close()
 
 
