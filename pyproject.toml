@@ -5,10 +5,10 @@ requires = ["maturin>=1.7,<2.0"]
 [project]
 dependencies = []
 description = "A Python test framework, written in Rust."
-license = {file = "LICENSE"}
+license = { file = "LICENSE" }
 name = "karva"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.8"
 version = "0.0.8"
 
 [project.optional-dependencies]
