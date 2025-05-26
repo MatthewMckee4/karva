@@ -1,11 +1,15 @@
+[build-system]
+build-backend = "maturin"
+requires = ["maturin>=1.7,<2.0"]
+
 [project]
-name = "karva"
-version = "0.0.8"
+dependencies = []
 description = "A Python test framework, written in Rust."
+license = {file = "LICENSE"}
+name = "karva"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
-license = { file = "LICENSE" }
+version = "0.0.8"
 
 [project.optional-dependencies]
 dev = ["mypy>=1.15.0", "pre-commit>=4.1.0", "ruff>=0.9.7", "tbump>=6.11.0"]
@@ -16,10 +20,6 @@ Documentation = "https://matthewmckee4.github.io/karva/"
 Homepage = "https://matthewmckee4.github.io/karva/"
 Issues = "https://github.com/MatthewMckee4/karva/issues"
 Repository = "https://github.com/MatthewMckee4/karva"
-
-[build-system]
-requires = ["maturin>=1.7,<2.0"]
-build-backend = "maturin"
 
 [tool.maturin]
 bindings = "bin"
@@ -33,10 +33,14 @@ fix = true
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["ALL"]
 exclude = ["python/karva/__main__.py"]
+select = ["ALL"]
 
 [tool.tbump]
+
+[[tool.tbump.before_commit]]
+cmd = "cargo update -p karva"
+name = "Update Cargo.lock"
 
 [[tool.tbump.file]]
 src = "pyproject.toml"
@@ -50,10 +54,6 @@ src = "crates/karva/Cargo.toml"
 [tool.tbump.git]
 message_template = "Bump to v{new_version}"
 tag_template = "v{new_version}"
-
-[[tool.tbump.before_commit]]
-name = "Update Cargo.lock"
-cmd = "cargo update -p karva"
 
 [tool.tbump.version]
 current = "0.0.8"
