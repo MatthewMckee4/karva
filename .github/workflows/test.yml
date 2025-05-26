@@ -111,8 +111,14 @@ jobs:
       - name: set up python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.9"
           architecture: ${{ matrix.python-architecture || 'x64' }}
+      - name: Install Python development headers
+        if: matrix.os == 'macos'
+        run: |
+          brew install python@3.9
+          echo "PYTHON_SYS_EXECUTABLE=$(which python3.9)" >> $GITHUB_ENV
+          echo "PYTHON_LIBRARY=$(brew --prefix python@3.9)/lib/libpython3.9.dylib" >> $GITHUB_ENV
       - name: build wheels
         uses: PyO3/maturin-action@v1
         with:
