@@ -61,7 +61,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist
+          args: --release --out dist --find-interpreter
           sccache: "true"
           manylinux: auto
 
@@ -87,7 +87,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist
+          args: --release --out dist --find-interpreter
           sccache: "true"
           manylinux: musllinux_1_2
 
@@ -110,7 +110,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist
+          args: --release --out dist --find-interpreter
           sccache: "true"
 
   macos:
@@ -131,7 +131,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist
+          args: --release --out dist --find-interpreter
           sccache: "true"
 
   build-docs:
