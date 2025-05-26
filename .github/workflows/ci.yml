@@ -33,96 +33,103 @@ jobs:
           args: --no-default-features
 
   build:
-    name: python${{ matrix.python-version }}-${{ matrix.platform.python-architecture }} ${{ matrix.platform.os }} ${{ matrix.msrv }}
-    runs-on: ${{ matrix.platform.os }}
+    name: build on ${{ matrix.os }} (${{ matrix.target }} - ${{ matrix.interpreter || 'all' }}${{ matrix.os == 'linux' && format(' - {0}', matrix.manylinux == 'auto' && 'manylinux' || matrix.manylinux) || '' }})
+    # only run on push to main and on release
+    if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'Full Build')
     strategy:
-      fail-fast: false # If one platform fails, allow the rest to keep testing.
+      fail-fast: false
       matrix:
-        rust: [stable]
-        python-version:
-          [
-            "3.9",
-            "3.10",
-            "3.11",
-            "3.12",
-            "3.13",
-            "3.13t",
-            "pypy-3.9",
-            "pypy-3.10",
-          ]
-        platform:
-          [
-            {
-              os: "macos-latest",
-              python-architecture: "arm64",
-              rust-target: "aarch64-apple-darwin",
-            },
-            {
-              os: "ubuntu-latest",
-              python-architecture: "x64",
-              rust-target: "x86_64-unknown-linux-gnu",
-            },
-            {
-              os: "windows-latest",
-              python-architecture: "x64",
-              rust-target: "x86_64-pc-windows-msvc",
-            },
-          ]
-        exclude:
-          # PyPy doesn't release 32-bit Windows builds any more
-          - python-version: pypy-3.9
-            platform: { os: "windows-latest", python-architecture: "x86" }
+        os: [linux, macos, windows]
+        target: [x86_64, aarch64]
+        manylinux: [auto]
         include:
-          # Test minimal supported Rust version
-          - rust: 1.63.0
-            python-version: "3.13"
-            platform:
-              {
-                os: "ubuntu-latest",
-                python-architecture: "x64",
-                rust-target: "x86_64-unknown-linux-gnu",
-              }
-            msrv: "MSRV"
+          # manylinux for various platforms, plus x86_64 pypy
+          - os: linux
+            manylinux: auto
+            target: i686
+          - os: linux
+            manylinux: auto
+            target: aarch64
+          - os: linux
+            manylinux: auto
+            target: armv7
+            interpreter: 3.9 3.10 3.11 3.12 3.13
+          - os: linux
+            manylinux: auto
+            target: ppc64le
+            interpreter: 3.9 3.10 3.11 3.12 3.13
+          - os: linux
+            manylinux: auto
+            target: s390x
+            interpreter: 3.9 3.10 3.11 3.12 3.13
+          - os: linux
+            manylinux: auto
+            target: x86_64
+            interpreter: pypy3.9 pypy3.10 pypy3.11
 
-          # Test the `nightly` feature
-          - rust: nightly
-            python-version: "3.13"
-            platform:
-              {
-                os: "ubuntu-latest",
-                python-architecture: "x64",
-                rust-target: "x86_64-unknown-linux-gnu",
-              }
-            msrv: "nightly"
-            extra_features: "nightly"
+          # musllinux
+          - os: linux
+            manylinux: musllinux_1_1
+            target: x86_64
+          - os: linux
+            manylinux: musllinux_1_1
+            target: aarch64
+          - os: linux
+            manylinux: musllinux_1_1
+            target: armv7
 
-          # Test 32-bit windows just on latest Python
-          - rust: stable
-            python-version: "3.13"
-            platform:
-              {
-                os: "windows-latest",
-                python-architecture: "x86",
-                rust-target: "i686-pc-windows-msvc",
-              }
+          # macos;
+          # all versions x86_64
+          # arm pypy and older pythons which can't be run on the arm hardware for PGO
+          - os: macos
+            target: x86_64
+          - os: macos
+            target: aarch64
+            interpreter: 3.9 pypy3.9 pypy3.10 pypy3.11
 
+          # windows;
+          # x86_64 pypy builds are not PGO optimized
+          # i686 not supported by pypy
+          # aarch64 only 3.11 and up, also not PGO optimized
+          - os: windows
+            target: x86_64
+            interpreter: pypy3.9 pypy3.10 pypy3.11
+          - os: windows
+            target: i686
+            python-architecture: x86
+            interpreter: 3.9 3.10 3.11 3.12 3.13
+          - os: windows
+            target: aarch64
+            interpreter: 3.11 3.12 3.13
+
+        exclude:
+          # See above; disabled for now.
+          - os: windows
+            target: aarch64
+
+    runs-on: ${{ (matrix.os == 'linux' && 'ubuntu') || matrix.os }}-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: set up python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-          architecture: ${{ matrix.platform.python-architecture }}
+          python-version: "3.13"
+          architecture: ${{ matrix.python-architecture || 'x64' }}
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: build wheels
+        uses: PyO3/maturin-action@v1
         with:
-          toolchain: ${{ matrix.rust }}
-          target: ${{ matrix.platform.rust-target }}
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --out dist --interpreter ${{ matrix.interpreter || '3.9 3.10 3.11 3.12 3.13 pypy3.9 pypy3.10 pypy3.11' }}
+          rust-toolchain: stable
+          docker-options: -e CI
 
-      - name: Build
-        run: cargo build  --verbose --target ${{ matrix.platform.rust-target }}
+    #   - uses: actions/upload-artifact@v4
+    #     with:
+    #       name: pypi_files_${{ matrix.os }}_${{ matrix.target }}_${{ matrix.interpreter || 'all' }}_${{ matrix.manylinux }}
+    #       path: dist
 
   build-docs:
     runs-on: ${{ matrix.os }}
