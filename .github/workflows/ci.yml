@@ -58,7 +58,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --target ${{ matrix.platform.target }}
+          args: --release
 
   musllinux:
     runs-on: ${{ matrix.platform.runner }}
@@ -81,7 +81,7 @@ jobs:
           override: true
 
       - name: Run cargo build
-        run: cargo build --release --target ${{ matrix.platform.target }}
+        run: cargo build --release
 
   windows:
     runs-on: ${{ matrix.platform.runner }}
@@ -100,7 +100,7 @@ jobs:
           override: true
 
       - name: Run cargo build
-        run: cargo build --release --target ${{ matrix.platform.target }}
+        run: cargo build --release
 
   macos:
     runs-on: ${{ matrix.platform.runner }}
@@ -119,7 +119,7 @@ jobs:
           override: true
 
       - name: Run cargo build
-        run: cargo build --release --target ${{ matrix.platform.target }}
+        run: cargo build --release
 
   build-docs:
     runs-on: ${{ matrix.os }}
