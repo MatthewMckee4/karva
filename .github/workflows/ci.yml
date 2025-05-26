@@ -22,7 +22,10 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
       - name: Run Cargo Tests
         uses: actions-rs/cargo@v1
         with:
@@ -48,10 +51,14 @@ jobs:
             target: ppc64le
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-
-      - name: Run cargo build
-        run: cargo build --release --target ${{ matrix.platform.target }}
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --target ${{ matrix.platform.target }}
 
   musllinux:
     runs-on: ${{ matrix.platform.runner }}
@@ -68,7 +75,10 @@ jobs:
             target: armv7
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
 
       - name: Run cargo build
         run: cargo build --release --target ${{ matrix.platform.target }}
@@ -84,7 +94,10 @@ jobs:
             target: x86
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
 
       - name: Run cargo build
         run: cargo build --release --target ${{ matrix.platform.target }}
@@ -100,7 +113,10 @@ jobs:
             target: aarch64
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
 
       - name: Run cargo build
         run: cargo build --release --target ${{ matrix.platform.target }}
