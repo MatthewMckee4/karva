@@ -55,7 +55,6 @@ def create_benchmark_graph(
     fig.patch.set_facecolor("black")
     ax.set_facecolor("black")
 
-    # Move axes to bottom
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.spines["left"].set_visible(False)
@@ -64,10 +63,9 @@ def create_benchmark_graph(
     ax.xaxis.set_ticks_position("bottom")
     ax.xaxis.set_label_position("bottom")
 
-    # Set fewer x-axis ticks
     max_time = np.ceil(max(means))
     linspace = np.linspace(0, max_time, 5)
-    ax.set_xticks(linspace)  # Show only 3 ticks
+    ax.set_xticks(linspace)
     ax.set_xticklabels(
         [f"{x:.2f}s" for x in linspace],
         color="white",
