@@ -334,22 +334,20 @@ pub enum PythonTestPath {
 
 impl PythonTestPath {
     pub fn new(value: &SystemPathBuf) -> Result<Self, PythonTestPathError> {
-        if value.is_file() {
-            if is_python_file(value) {
-                Ok(PythonTestPath::File(value.clone()))
-            } else {
-                Err(PythonTestPathError::WrongFileExtension(value.clone()))
-            }
-        } else if value.is_dir() {
-            Ok(PythonTestPath::Directory(value.clone()))
-        } else {
+        if value.to_string().contains("::") {
             let parts: Vec<String> = value.as_str().split("::").map(|s| s.to_string()).collect();
+            println!("parts: {:?}", parts);
             match parts.as_slice() {
                 [file, function] => {
-                    let file = SystemPathBuf::from(file.clone());
+                    let mut file = SystemPathBuf::from(file.clone());
 
                     if !file.exists() {
-                        return Err(PythonTestPathError::NotFound(file));
+                        let file_with_py = file.with_extension("py");
+                        if file_with_py.exists() {
+                            file = file_with_py;
+                        } else {
+                            return Err(PythonTestPathError::NotFound(file));
+                        }
                     }
 
                     if file.is_file() {
@@ -370,6 +368,16 @@ impl PythonTestPath {
                     }
                 }
             }
+        } else if value.is_file() {
+            if is_python_file(value) {
+                Ok(PythonTestPath::File(value.clone()))
+            } else {
+                Err(PythonTestPathError::WrongFileExtension(value.clone()))
+            }
+        } else if value.is_dir() {
+            Ok(PythonTestPath::Directory(value.clone()))
+        } else {
+            Err(PythonTestPathError::InvalidPath(value.clone()))
         }
     }
 }

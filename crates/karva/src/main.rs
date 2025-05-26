@@ -90,21 +90,24 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
         })
         .collect();
 
+    if paths.is_empty() {
+        eprintln!("{}", "Could not resolve provided paths".red().bold());
+        return Ok(ExitStatus::Error);
+    }
+
     if args.paths.is_empty() {
         tracing::debug!("No paths provided, trying to resolve current working directory");
         if let Ok(path) = PythonTestPath::new(&cwd) {
             paths.push(path);
+        } else {
+            eprintln!(
+                "{}",
+                "Could not resolve current working directory, try providing a path"
+                    .red()
+                    .bold()
+            );
+            return Ok(ExitStatus::Error);
         }
-    }
-
-    if paths.is_empty() {
-        eprintln!(
-            "{}",
-            "No paths provided and could not resolve current working directory"
-                .red()
-                .bold()
-        );
-        return Ok(ExitStatus::Error);
     }
 
     let project = Project::new(cwd, paths, args.test_prefix.clone());
