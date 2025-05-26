@@ -23,11 +23,10 @@ Repository = "https://github.com/MatthewMckee4/karva"
 
 [tool.maturin]
 bindings = "bin"
-manifest-path = "crates/karva/Cargo.toml"
+manifest-path = "Cargo.toml"
 module-name = "karva"
 python-source = "python"
 strip = true
-features = ["pyo3/extension-module"]
 
 [tool.ruff]
 fix = true
