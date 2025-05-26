@@ -199,7 +199,7 @@ mod tests {
             std::time::Duration::from_micros(100),
         );
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-        assert!(output.contains("\u{1b}[32m.\u{1b}[0m"));
+        assert_eq!(output, ".".green().to_string());
     }
 
     #[test]
@@ -212,7 +212,7 @@ mod tests {
             std::time::Duration::from_micros(100),
         );
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-        assert!(output.contains("\u{1b}[31m.\u{1b}[0m"));
+        assert_eq!(output, ".".red().to_string());
     }
 
     #[test]
@@ -277,6 +277,6 @@ mod tests {
         }
 
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-        assert_eq!(output.matches("\u{1b}[32m.\u{1b}[0m").count(), 10);
+        assert_eq!(output.matches(".").count(), 10);
     }
 }
