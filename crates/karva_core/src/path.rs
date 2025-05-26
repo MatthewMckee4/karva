@@ -336,7 +336,6 @@ impl PythonTestPath {
     pub fn new(value: &SystemPathBuf) -> Result<Self, PythonTestPathError> {
         if value.to_string().contains("::") {
             let parts: Vec<String> = value.as_str().split("::").map(|s| s.to_string()).collect();
-            println!("parts: {:?}", parts);
             match parts.as_slice() {
                 [file, function] => {
                     let mut file = SystemPathBuf::from(file.clone());
@@ -376,8 +375,10 @@ impl PythonTestPath {
             }
         } else if value.is_dir() {
             Ok(PythonTestPath::Directory(value.clone()))
-        } else {
+        } else if value.exists() {
             Err(PythonTestPathError::InvalidPath(value.clone()))
+        } else {
+            Err(PythonTestPathError::NotFound(value.clone()))
         }
     }
 }
@@ -479,12 +480,36 @@ mod tests {
     }
 
     #[test]
-    fn test_function_path_creation() -> std::io::Result<()> {
+    fn test_function_path_creation_py_extension() -> std::io::Result<()> {
         let env = TestEnv::new();
         let file_path =
             env.create_test_file("function_test.py", "def test_function(): assert True")?;
 
         let func_path = format!("{}::test_function", file_path.as_str());
+        let path = SystemPathBuf::from(func_path);
+        let test_path = PythonTestPath::new(&path);
+
+        match test_path {
+            Ok(PythonTestPath::Function(file, func)) => {
+                assert!(file.as_str().ends_with("function_test.py"));
+                assert_eq!(func, "test_function");
+            }
+            _ => panic!("Expected Function variant"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_function_path_creation_no_extension() -> std::io::Result<()> {
+        let env = TestEnv::new();
+
+        env.create_test_file("function_test.py", "def test_function(): assert True")?;
+
+        let path_without_py = env.temp_dir.path().join("function_test");
+
+        let func_path = format!("{}::test_function", path_without_py.display());
+
         let path = SystemPathBuf::from(func_path);
         let test_path = PythonTestPath::new(&path);
 
@@ -507,10 +532,9 @@ mod tests {
 
         assert!(!path.exists());
 
-        assert!(matches!(
-            PythonTestPath::new(&path),
-            Err(PythonTestPathError::NotFound(_))
-        ));
+        let res = PythonTestPath::new(&path);
+
+        assert!(matches!(res, Err(PythonTestPathError::NotFound(_))));
 
         let non_existent_func = format!("{}::function", path.as_str());
         let func_path = SystemPathBuf::from(non_existent_func);
