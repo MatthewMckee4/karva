@@ -32,6 +32,8 @@ pip install karva
 
 ### Usage
 
+By default, Karva will respect your `.gitignore` files.
+
 To run your tests, try any of the following:
 
 ```bash
