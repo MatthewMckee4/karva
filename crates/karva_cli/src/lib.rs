@@ -56,11 +56,13 @@ fn run() -> anyhow::Result<ExitStatus> {
 // Sometimes random args are passed at the start of the args list, so we try to parse args by removing the first arg until we can parse them.
 fn try_parse_args(mut args: Vec<OsString>) -> Args {
     loop {
-        match Args::try_parse_from(args.clone()) {
-            Ok(args) => break args,
-            Err(e) => {
+        match std::panic::catch_unwind(|| Args::parse_from(args.clone())) {
+            Ok(args) => {
+                break args;
+            }
+            Err(_) => {
                 if args.is_empty() {
-                    e.exit()
+                    std::process::exit(1);
                 }
                 args.remove(0);
             }
