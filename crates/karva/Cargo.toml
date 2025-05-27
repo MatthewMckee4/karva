@@ -1,7 +1,6 @@
 [package]
 name = "karva"
 version = "0.0.12"
-publish = true
 edition = { workspace = true }
 rust-version = { workspace = true }
 homepage = { workspace = true }

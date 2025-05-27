@@ -13,6 +13,7 @@ license = "MIT"
 
 [workspace.dependencies]
 karva_core = { path = "crates/karva_core" }
+# karva_python = { path = "crates/karva_python" }
 
 anyhow = { version = "1.0.97" }
 clap = { version = "4.5.35", features = ["derive", "wrap_help"] }
