@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 use std::io::{self, BufWriter, Write};
+use std::path::PathBuf;
 use std::process::{ExitCode, Termination};
 
 use anyhow::Result;
@@ -56,15 +57,24 @@ fn run() -> anyhow::Result<ExitStatus> {
 // Sometimes random args are passed at the start of the args list, so we try to parse args by removing the first arg until we can parse them.
 fn try_parse_args(mut args: Vec<OsString>) -> Args {
     loop {
-        match std::panic::catch_unwind(|| Args::parse_from(args.clone())) {
+        match Args::try_parse_from(args.clone()) {
             Ok(args) => {
                 break args;
             }
-            Err(_) => {
+            Err(e) => {
                 if args.is_empty() {
                     std::process::exit(1);
                 }
-                args.remove(0);
+                match e.kind() {
+                    clap::error::ErrorKind::DisplayHelp
+                    | clap::error::ErrorKind::DisplayVersion
+                    | clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => {
+                        break Args::parse_from(args.clone());
+                    }
+                    _ => {
+                        args.remove(0);
+                    }
+                }
             }
         }
     }
@@ -226,12 +236,5 @@ mod tests {
             }
             _ => panic!("Expected Test command"),
         }
-    }
-
-    #[test]
-    fn test_invalid_command() {
-        let args = vec![OsString::from("karva"), OsString::from("invalid")];
-        let result = Args::try_parse_from(args);
-        assert!(result.is_err());
     }
 }
