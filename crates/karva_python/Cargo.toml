@@ -18,4 +18,4 @@ crate-type = ["cdylib"]
 [dependencies]
 karva_core = { workspace = true }
 
-pyo3 = { workspace = true }
+pyo3 = { workspace = true, features = ["extension-module"] }
