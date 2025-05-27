@@ -1,17 +1,19 @@
-[package]
-name = "karva"
-version = "0.0.12"
-publish = true
-edition = "2021"
-rust-version = "1.84"
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
 homepage = "https://github.com/MatthewMckee4/karva"
 documentation = "https://github.com/MatthewMckee4/karva"
 repository = "https://github.com/MatthewMckee4/karva"
 authors = ["Matthew McKee <matthewmckee4@gmail.com>"]
 license = "MIT"
-default-run = "karva"
 
-[dependencies]
+[workspace.dependencies]
+karva_core = { path = "crates/karva_core" }
+
 anyhow = { version = "1.0.97" }
 clap = { version = "4.5.35", features = ["derive", "wrap_help"] }
 camino = { version = "1.1.7" }
@@ -32,7 +34,3 @@ tracing-tree = { version = "0.4.0" }
 rustpython-parser = { version = "0.4.0" }
 pyo3 = { version = "0.25.0", features = ["auto-initialize"] }
 ignore = "0.4.23"
-
-[dev-dependencies]
-tempfile = "3.8"
-regex = "1"
