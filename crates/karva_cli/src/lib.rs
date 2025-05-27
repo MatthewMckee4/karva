@@ -1,6 +1,5 @@
 use std::ffi::OsString;
 use std::io::{self, BufWriter, Write};
-use std::path::PathBuf;
 use std::process::{ExitCode, Termination};
 
 use anyhow::Result;
