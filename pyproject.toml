@@ -25,7 +25,7 @@ Issues = "https://github.com/MatthewMckee4/karva/issues"
 Repository = "https://github.com/MatthewMckee4/karva"
 
 [tool.maturin]
-manifest-path = "crates/karva_python/Cargo.toml"
+manifest-path = "crates/karva/Cargo.toml"
 module-name = "karva._karva"
 python-source = "python"
 

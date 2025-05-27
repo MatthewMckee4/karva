@@ -1,0 +1,26 @@
+[package]
+name = "karva_cli"
+version = "0.0.0"
+
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+karva_core = { workspace = true }
+
+clap = { workspace = true, features = ["wrap_help"] }
+anyhow = { workspace = true }
+argfile = { workspace = true }
+camino = { workspace = true }
+chrono = { workspace = true }
+colored = { workspace = true }
+tracing = { workspace = true, features = ["release_max_level_debug"] }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+tracing-flame = { workspace = true }
+tracing-tree = { workspace = true }
+wild = { workspace = true }

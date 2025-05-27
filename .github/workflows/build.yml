@@ -60,16 +60,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform.rust-target }}
-      #   - name: Build binary
-      #     run: cargo build -p karva --bin karva --release --target ${{ matrix.platform.rust-target }}
-      #   - name: Run on macOS
-      #     if: runner.os != 'Windows'
-      #     run: cp target/${{ matrix.platform.rust-target }}/release/karva python/karva
-
-      #   - name: Run on Windows
-      #     if: runner.os == 'Windows'
-      #     run: cp target/${{ matrix.platform.rust-target }}/release/karva.exe python/karva.exe
-
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:

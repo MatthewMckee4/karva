@@ -463,6 +463,14 @@ dependencies = [
 name = "karva"
 version = "0.0.12"
 dependencies = [
+ "karva_cli",
+ "pyo3",
+]
+
+[[package]]
+name = "karva_cli"
+version = "0.0.0"
+dependencies = [
  "anyhow",
  "argfile",
  "camino",
@@ -479,7 +487,7 @@ dependencies = [
 
 [[package]]
 name = "karva_core"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "camino",
  "colored",
@@ -492,14 +500,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-tree",
-]
-
-[[package]]
-name = "karva_python"
-version = "0.0.1"
-dependencies = [
- "karva",
- "pyo3",
 ]
 
 [[package]]
