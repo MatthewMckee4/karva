@@ -62,15 +62,14 @@ jobs:
           targets: ${{ matrix.platform.rust-target }}
       - name: Build binary
         run: cargo build -p karva --bin karva --release --target ${{ matrix.platform.rust-target }}
-      - name: Create binary directory
-        run: mkdir -p python/karva/bin
-      - name: Copy binary
-        run: |
-          if [ "${{ matrix.platform.os }}" = "windows-latest" ]; then
-            cp target/${{ matrix.platform.rust-target }}/release/karva.exe python/karva/bin/karva.exe
-          else
-            cp target/${{ matrix.platform.rust-target }}/release/karva python/karva/bin/karva
-          fi
+      - name: Run on macOS
+        if: runner.os != 'macOS'
+        run: cp target/${{ matrix.platform.rust-target }}/release/karva python/karva/bin/karva
+
+      - name: Run on Windows
+        if: runner.os == 'Windows'
+        run: cp target/${{ matrix.platform.rust-target }}/release/karva.exe python/karva/bin/karva.exe
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
