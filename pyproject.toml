@@ -28,6 +28,9 @@ module-name = "karva._karva"
 python-source = "python"
 # strip = true
 
+[tool.maturin.package-data]
+"karva/bin/*" = { include = true }
+
 [tool.ruff]
 fix = true
 target-version = "py311"
