@@ -5,3 +5,7 @@ description = "Benchmark script for comparing karva and pytest performance"
 readme = "README.md"
 requires-python = "==3.11.*"
 dependencies = ["matplotlib", "numpy", "pytest"]
+
+
+[tool.ruff.lint]
+ignore = ["INP001", "D100"]
