@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-use karva_cli::main as karva_main;
+use karva_cli::karva_main;
 
 #[pyfunction]
 pub fn karva_run() -> i32 {

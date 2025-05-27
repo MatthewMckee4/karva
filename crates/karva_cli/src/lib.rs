@@ -18,7 +18,7 @@ mod args;
 mod logging;
 mod version;
 
-pub fn main() -> ExitStatus {
+pub fn karva_main() -> ExitStatus {
     run().unwrap_or_else(|error| {
         use std::io::Write;
 
@@ -108,13 +108,10 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
         })
         .collect();
 
-    if paths.is_empty() {
-        eprintln!("{}", "Could not resolve provided paths".red().bold());
-        return Ok(ExitStatus::Error);
-    }
-
     if args.paths.is_empty() {
-        tracing::debug!("No paths provided, trying to resolve current working directory");
+        tracing::debug!(
+            "Could not resolve provided paths, trying to resolve current working directory"
+        );
         if let Ok(path) = PythonTestPath::new(&cwd) {
             paths.push(path);
         } else {
@@ -160,5 +157,79 @@ impl Termination for ExitStatus {
 impl ExitStatus {
     pub fn to_i32(self) -> i32 {
         self as i32
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_version_command() {
+        let args = vec![OsString::from("karva"), OsString::from("version")];
+        let args = try_parse_args(args);
+        assert!(matches!(args.command, Command::Version));
+    }
+
+    #[test]
+    fn test_test_command_with_path() {
+        let args = vec![
+            OsString::from("karva"),
+            OsString::from("test"),
+            OsString::from("test_file.py"),
+        ];
+        let args = try_parse_args(args);
+        match args.command {
+            Command::Test(test_args) => {
+                assert_eq!(test_args.paths.len(), 1);
+                assert_eq!(test_args.paths[0], "test_file.py");
+            }
+            _ => panic!("Expected Test command"),
+        }
+    }
+
+    #[test]
+    fn test_test_command_with_multiple_paths() {
+        let args = vec![
+            OsString::from("karva"),
+            OsString::from("test"),
+            OsString::from("test_file1.py"),
+            OsString::from("test_file2.py"),
+        ];
+        let args = try_parse_args(args);
+        match args.command {
+            Command::Test(test_args) => {
+                assert_eq!(test_args.paths.len(), 2);
+                assert_eq!(test_args.paths[0], "test_file1.py");
+                assert_eq!(test_args.paths[1], "test_file2.py");
+            }
+            _ => panic!("Expected Test command"),
+        }
+    }
+
+    #[test]
+    fn test_test_command_with_verbosity() {
+        let args = vec![
+            OsString::from("karva"),
+            OsString::from("test"),
+            OsString::from("-v"),
+            OsString::from("test_file.py"),
+        ];
+        let args = try_parse_args(args);
+        match args.command {
+            Command::Test(test_args) => {
+                assert_eq!(test_args.paths.len(), 1);
+                assert_eq!(test_args.paths[0], "test_file.py");
+                assert!(test_args.verbosity > 0);
+            }
+            _ => panic!("Expected Test command"),
+        }
+    }
+
+    #[test]
+    fn test_invalid_command() {
+        let args = vec![OsString::from("karva"), OsString::from("invalid")];
+        let result = Args::try_parse_from(args);
+        assert!(result.is_err());
     }
 }

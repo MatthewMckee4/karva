@@ -1,7 +1,5 @@
 dev:
-	uv sync --all-extras
 	uv run pre-commit install
-	uv pip install -e .
 
 docs:
 	uv run mkdocs build

@@ -10,7 +10,7 @@ use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields};
 use tracing_subscriber::registry::LookupSpan;
 
 /// Logging flags to `#[command(flatten)]` into your CLI
-#[derive(clap::Args, Debug, Clone, Default)]
+#[derive(clap::Args, Debug, Clone, Default, PartialEq)]
 #[command(about = None, long_about = None)]
 pub(crate) struct Verbosity {
     #[arg(
@@ -31,6 +31,18 @@ impl Verbosity {
             2 => VerbosityLevel::ExtraVerbose,
             _ => VerbosityLevel::Trace,
         }
+    }
+}
+
+impl PartialEq<u8> for Verbosity {
+    fn eq(&self, other: &u8) -> bool {
+        self.verbose == *other
+    }
+}
+
+impl PartialOrd<u8> for Verbosity {
+    fn partial_cmp(&self, other: &u8) -> Option<std::cmp::Ordering> {
+        Some(self.verbose.cmp(other))
     }
 }
 

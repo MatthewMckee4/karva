@@ -403,11 +403,11 @@ pub enum PythonTestPathError {
 impl std::fmt::Display for PythonTestPathError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NotFound(path) => write!(f, "path `{}` could not be found", path),
+            Self::NotFound(path) => write!(f, "Path `{}` could not be found", path),
             Self::WrongFileExtension(path) => {
-                write!(f, "path `{}` has a wrong file extension", path)
+                write!(f, "Path `{}` has a wrong file extension", path)
             }
-            Self::InvalidPath(path) => write!(f, "path `{}` is not a valid path", path),
+            Self::InvalidPath(path) => write!(f, "Path `{}` is not a valid path", path),
         }
     }
 }

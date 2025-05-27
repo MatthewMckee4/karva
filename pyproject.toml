@@ -28,6 +28,7 @@ Repository = "https://github.com/MatthewMckee4/karva"
 manifest-path = "crates/karva/Cargo.toml"
 module-name = "karva._karva"
 python-source = "python"
+features = ["extension-module"]
 
 [tool.ruff]
 fix = true
