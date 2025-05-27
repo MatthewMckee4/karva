@@ -8,7 +8,6 @@ documentation = { workspace = true }
 repository = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
-default-run = "karva"
 
 [dependencies]
 karva_core = { workspace = true }

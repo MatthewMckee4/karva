@@ -11,11 +11,7 @@ repository = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
 
-[lib]
-name = "_karva"
-crate-type = ["cdylib"]
-
 [dependencies]
-karva_core = { workspace = true }
+karva = { workspace = true }
 
 pyo3 = { workspace = true, features = ["extension-module"] }

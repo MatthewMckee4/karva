@@ -11,6 +11,9 @@ readme = "README.md"
 requires-python = ">=3.9"
 version = "0.0.12"
 
+[project.scripts]
+karva = "karva._karva:karva_run"
+
 [project.optional-dependencies]
 dev = ["mypy>=1.15.0", "pre-commit>=4.1.0", "ruff>=0.9.7", "tbump>=6.11.0"]
 docs = ["mkdocs", "mkdocs-material"]
@@ -27,9 +30,6 @@ manifest-path = "crates/karva_python/Cargo.toml"
 module-name = "karva._karva"
 python-source = "python"
 # strip = true
-
-[tool.maturin.package-data]
-"karva/bin/*" = { include = true }
 
 [tool.ruff]
 fix = true

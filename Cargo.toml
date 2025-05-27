@@ -13,6 +13,7 @@ license = "MIT"
 
 [workspace.dependencies]
 karva_core = { path = "crates/karva_core" }
+karva = { path = "crates/karva" }
 # karva_python = { path = "crates/karva_python" }
 
 anyhow = { version = "1.0.97" }
