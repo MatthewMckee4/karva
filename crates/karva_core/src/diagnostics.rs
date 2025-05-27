@@ -1,4 +1,4 @@
-use colored::Colorize;
+use colored::{Color, Colorize};
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -56,6 +56,23 @@ impl StdoutDiagnosticWriter {
 
     fn flush_stdout(&self, stdout: &mut std::sync::MutexGuard<'_, Box<dyn Write + Send>>) {
         let _ = stdout.flush();
+    }
+
+    fn maybe_log_test_count(
+        &self,
+        stdout: &mut std::sync::MutexGuard<'_, Box<dyn Write + Send>>,
+        label: &str,
+        count: usize,
+        color: Color,
+    ) {
+        if count > 0 {
+            let _ = writeln!(
+                stdout,
+                "{} {}",
+                label.color(color),
+                count.to_string().color(color)
+            );
+        }
     }
 }
 
@@ -142,11 +159,18 @@ impl DiagnosticWriter for StdoutDiagnosticWriter {
             "Passed tests:".green(),
             stats.passed_tests()
         );
-        let _ = writeln!(stdout, "{} {}", "Failed tests:".red(), stats.failed_tests());
-        let error_tests = stats.error_tests();
-        if error_tests > 0 {
-            let _ = writeln!(stdout, "{} {}", "Error tests:".yellow(), error_tests);
-        }
+        self.maybe_log_test_count(
+            &mut stdout,
+            "Failed tests:",
+            stats.failed_tests(),
+            Color::Red,
+        );
+        self.maybe_log_test_count(
+            &mut stdout,
+            "Error tests:",
+            stats.error_tests(),
+            Color::Yellow,
+        );
         let _ = writeln!(
             stdout,
             "{} {}ms",
@@ -248,7 +272,6 @@ mod tests {
         let output = strip_ansi_codes(&output);
         assert!(output.contains("─────────────"));
         assert!(output.contains("Passed tests: 0"));
-        assert!(output.contains("Failed tests: 0"));
         assert!(output.contains("Total duration:"));
     }
 

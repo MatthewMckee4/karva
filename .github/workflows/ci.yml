@@ -30,7 +30,6 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features
 
   build-docs:
     runs-on: ${{ matrix.os }}

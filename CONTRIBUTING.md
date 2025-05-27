@@ -34,7 +34,7 @@ cargo run test tests/test_add.py
 ### Running the tests
 
 ```bash
-cargo test --no-default-features
+cargo test
 ```
 
 ### Documentation
