@@ -25,11 +25,9 @@ Issues = "https://github.com/MatthewMckee4/karva/issues"
 Repository = "https://github.com/MatthewMckee4/karva"
 
 [tool.maturin]
-# bindings = "bin"
 manifest-path = "crates/karva_python/Cargo.toml"
 module-name = "karva._karva"
 python-source = "python"
-# strip = true
 
 [tool.ruff]
 fix = true

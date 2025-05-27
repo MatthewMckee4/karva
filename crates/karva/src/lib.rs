@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::io::{self, BufWriter, Write};
 use std::process::{ExitCode, Termination};
 
@@ -40,13 +41,30 @@ pub fn main() -> ExitStatus {
 
 fn run() -> anyhow::Result<ExitStatus> {
     let args = wild::args_os();
+
     let args = argfile::expand_args_from(args, argfile::parse_fromfile, argfile::PREFIX)
         .context("Failed to read CLI arguments from file")?;
-    let args = Args::parse_from(args);
+
+    let args = try_parse_args(args);
 
     match args.command {
         Command::Test(test_args) => test(&test_args),
         Command::Version => version().map(|()| ExitStatus::Success),
+    }
+}
+
+// Sometimes random args are passed at the start of the args list, so we try to parse args by removing the first arg until we can parse them.
+fn try_parse_args(mut args: Vec<OsString>) -> Args {
+    loop {
+        match Args::try_parse_from(args.clone()) {
+            Ok(args) => break args,
+            Err(e) => {
+                if args.is_empty() {
+                    e.exit()
+                }
+                args.remove(0);
+            }
+        }
     }
 }
 
@@ -136,5 +154,11 @@ pub enum ExitStatus {
 impl Termination for ExitStatus {
     fn report(self) -> ExitCode {
         ExitCode::from(self as u8)
+    }
+}
+
+impl ExitStatus {
+    pub fn to_i32(self) -> i32 {
+        self as i32
     }
 }

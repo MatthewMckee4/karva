@@ -1,6 +1,9 @@
 {
     "cSpell.words": [
         "getattr",
-        "karva"
+        "karva",
+        "pyfunction",
+        "pymodule",
+        "tbump"
     ]
 }
