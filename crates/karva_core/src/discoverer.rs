@@ -1,10 +1,10 @@
 use ignore::WalkBuilder;
 use std::fmt::{self, Display};
 
-use crate::core::path::{PythonTestPath, SystemPathBuf};
-use crate::core::project::Project;
-use crate::core::utils::{is_python_file, module_name};
-use rustpython_parser::{ast, Parse};
+use crate::path::{PythonTestPath, SystemPathBuf};
+use crate::project::Project;
+use crate::utils::{is_python_file, module_name};
+use rustpython_parser::{Parse, ast};
 
 pub struct Discoverer<'a> {
     project: &'a Project,
@@ -170,9 +170,11 @@ mod tests {
         let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
         assert_eq!(discovered_tests.len(), 1);
-        assert!(discovered_tests[0]
-            .to_string()
-            .ends_with("test::test_function"));
+        assert!(
+            discovered_tests[0]
+                .to_string()
+                .ends_with("test::test_function")
+        );
     }
 
     #[test]
@@ -194,9 +196,11 @@ mod tests {
         let discovered_tests = discoverer.discover();
 
         assert_eq!(discovered_tests.len(), 1);
-        assert!(discovered_tests[0]
-            .to_string()
-            .ends_with("test_dir.test_file1::test_function1"));
+        assert!(
+            discovered_tests[0]
+                .to_string()
+                .ends_with("test_dir.test_file1::test_function1")
+        );
     }
 
     #[test]
@@ -221,9 +225,11 @@ mod tests {
         let discovered_tests = discoverer.discover();
 
         assert_eq!(discovered_tests.len(), 1);
-        assert!(discovered_tests[0]
-            .to_string()
-            .ends_with("tests.test_file1::test_function1"));
+        assert!(
+            discovered_tests[0]
+                .to_string()
+                .ends_with("tests.test_file1::test_function1")
+        );
     }
 
     #[test]
@@ -253,15 +259,21 @@ mod tests {
 
         assert_eq!(discovered_tests.len(), 3);
         let test_strings: Vec<String> = discovered_tests.iter().map(|t| t.to_string()).collect();
-        assert!(test_strings
-            .iter()
-            .any(|s| s.ends_with("tests.test_file1::test_function1")));
-        assert!(test_strings
-            .iter()
-            .any(|s| s.ends_with("tests.nested.test_file2::test_function2")));
-        assert!(test_strings
-            .iter()
-            .any(|s| s.ends_with("tests.nested.deeper.test_file3::test_function3")));
+        assert!(
+            test_strings
+                .iter()
+                .any(|s| s.ends_with("tests.test_file1::test_function1"))
+        );
+        assert!(
+            test_strings
+                .iter()
+                .any(|s| s.ends_with("tests.nested.test_file2::test_function2"))
+        );
+        assert!(
+            test_strings
+                .iter()
+                .any(|s| s.ends_with("tests.nested.deeper.test_file3::test_function3"))
+        );
     }
 
     #[test]

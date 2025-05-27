@@ -1,4 +1,4 @@
-use crate::core::path::{PythonTestPath, SystemPathBuf};
+use crate::path::{PythonTestPath, SystemPathBuf};
 
 pub struct Project {
     cwd: SystemPathBuf,

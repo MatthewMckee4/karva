@@ -1,7 +1,7 @@
 use pyo3::{exceptions::PyAssertionError, prelude::*};
 use std::time::Instant;
 
-use crate::core::{
+use crate::{
     diagnostics::DiagnosticWriter,
     discoverer::{DiscoveredTest, Discoverer},
     project::Project,
@@ -169,7 +169,7 @@ impl RunnerStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::project::Project;
+    use crate::project::Project;
     use std::path::PathBuf;
     use std::time::Duration;
 

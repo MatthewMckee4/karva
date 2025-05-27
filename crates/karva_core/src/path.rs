@@ -4,7 +4,7 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::path::{Path, PathBuf, StripPrefixError};
 
-use crate::core::utils::is_python_file;
+use crate::utils::is_python_file;
 
 #[derive(Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct SystemPath(Utf8Path);
