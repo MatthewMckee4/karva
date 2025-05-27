@@ -5,7 +5,7 @@ use crate::{
     diagnostics::DiagnosticWriter,
     discoverer::{DiscoveredTest, Discoverer},
     project::Project,
-    test_result::TestResult,
+    test_result::{TestResult, TestResultError},
 };
 
 pub struct Runner<'a> {
@@ -51,15 +51,27 @@ impl<'a> Runner<'a> {
 
                     match test_result {
                         Ok(test_result) => {
-                            let passed = test_result.is_pass();
-                            self.diagnostic_writer
-                                .test_completed(test_name, module, passed, duration);
+                            match &test_result {
+                                TestResult::Pass(test_result) => {
+                                    self.diagnostic_writer.test_passed(test_result, duration);
+                                }
+                                TestResult::Fail(test_result) => {
+                                    self.diagnostic_writer.test_failed(test_result, duration);
+                                }
+                                TestResult::Error(test_result) => {
+                                    self.diagnostic_writer.test_error(test_result, duration);
+                                }
+                            }
                             test_result
                         }
                         Err(error_msg) => {
-                            self.diagnostic_writer
-                                .test_error(test_name, module, &error_msg);
-                            TestResult::new_error(test.clone(), error_msg.clone(), error_msg)
+                            let test_result = TestResultError {
+                                test: test.clone(),
+                                message: error_msg.clone(),
+                                traceback: error_msg.clone(),
+                            };
+                            self.diagnostic_writer.test_error(&test_result, duration);
+                            TestResult::Error(test_result)
                         }
                     }
                 })
@@ -128,6 +140,7 @@ impl RunnerResult {
     pub fn stats(&self) -> RunnerStats {
         let mut stats = RunnerStats::default();
         for test_result in &self.test_results {
+            stats.total_tests += 1;
             match test_result {
                 TestResult::Pass(_) => stats.passed_tests += 1,
                 TestResult::Fail(_) => stats.failed_tests += 1,
@@ -168,10 +181,12 @@ impl RunnerStats {
 mod tests {
     use super::*;
     use crate::project::Project;
-    use std::path::PathBuf;
-    use std::time::Duration;
+    use std::sync::{Arc, Mutex};
+    use std::{io::Write, path::PathBuf};
 
-    struct MockDiagnostics;
+    struct MockDiagnostics {
+        stdout: Arc<Mutex<Box<dyn Write + Send>>>,
+    }
 
     impl DiagnosticWriter for MockDiagnostics {
         fn discovery_started(&self) {}
@@ -180,17 +195,23 @@ mod tests {
 
         fn test_started(&self, _name: &str, _module: &str) {}
 
-        fn test_completed(&self, _name: &str, _module: &str, _passed: bool, _duration: Duration) {}
-
-        fn test_error(&self, _name: &str, _module: &str, _error: &str) {}
-
         fn finish(&self, _runner_result: &RunnerResult) {}
+
+        fn acquire_stdout(&self) -> std::sync::MutexGuard<'_, Box<dyn Write + Send>> {
+            self.stdout.lock().unwrap()
+        }
+
+        fn flush_stdout(&self, stdout: &mut std::sync::MutexGuard<'_, Box<dyn Write + Send>>) {
+            let _ = stdout.flush();
+        }
     }
 
     #[test]
     fn test_runner_result_passed() {
         let project = Project::new(PathBuf::from(".").into(), vec![], "test".to_string());
-        let diagnostics = Box::new(MockDiagnostics);
+        let diagnostics = Box::new(MockDiagnostics {
+            stdout: Arc::new(Mutex::new(Box::new(Vec::new()))),
+        });
         let mut runner = Runner::new(&project, diagnostics);
         let result = runner.run();
         assert!(result.passed());

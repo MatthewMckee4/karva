@@ -2,20 +2,20 @@ use super::discoverer::DiscoveredTest;
 
 #[derive(Debug, Clone)]
 pub struct TestResultPass {
-    test: DiscoveredTest,
+    pub test: DiscoveredTest,
 }
 
 #[derive(Debug, Clone)]
 pub struct TestResultFail {
-    test: DiscoveredTest,
-    message: String,
+    pub test: DiscoveredTest,
+    pub message: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct TestResultError {
-    test: DiscoveredTest,
-    message: String,
-    traceback: String,
+    pub test: DiscoveredTest,
+    pub message: String,
+    pub traceback: String,
 }
 
 #[derive(Debug, Clone)]

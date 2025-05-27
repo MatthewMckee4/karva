@@ -20,10 +20,10 @@ pub(crate) enum Command {
 
 #[derive(Debug, Parser)]
 pub(crate) struct TestCommand {
-    /// List of files or directories to check.
+    /// List of files or directories to test.
     #[clap(
-        help = "List of files, directories, or test functions to check [default: the project root]",
-        value_name = "PATHS"
+        help = "List of files, directories, or test functions to test [default: the project root]",
+        value_name = "PATH"
     )]
     pub paths: Vec<String>,
 

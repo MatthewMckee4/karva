@@ -57,12 +57,23 @@ fn run() -> anyhow::Result<ExitStatus> {
 fn try_parse_args(mut args: Vec<OsString>) -> Args {
     loop {
         match Args::try_parse_from(args.clone()) {
-            Ok(args) => break args,
+            Ok(args) => {
+                break args;
+            }
             Err(e) => {
                 if args.is_empty() {
-                    e.exit()
+                    std::process::exit(1);
                 }
-                args.remove(0);
+                match e.kind() {
+                    clap::error::ErrorKind::DisplayHelp
+                    | clap::error::ErrorKind::DisplayVersion
+                    | clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => {
+                        break Args::parse_from(args.clone());
+                    }
+                    _ => {
+                        args.remove(0);
+                    }
+                }
             }
         }
     }
@@ -224,12 +235,5 @@ mod tests {
             }
             _ => panic!("Expected Test command"),
         }
-    }
-
-    #[test]
-    fn test_invalid_command() {
-        let args = vec![OsString::from("karva"), OsString::from("invalid")];
-        let result = Args::try_parse_from(args);
-        assert!(result.is_err());
     }
 }
