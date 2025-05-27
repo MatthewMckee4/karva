@@ -29,5 +29,5 @@ jobs:
         with:
           mode: minimum
           count: 1
-          labels: breaking, bug, github_actions, documentation, dependencies, enhancement, feature, maintenance, security
+          labels: breaking, bug, github_actions, documentation, dependencies, enhancement, feature, maintenance, security, performance
           add_comment: true
