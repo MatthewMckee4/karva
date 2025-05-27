@@ -1,5 +1,9 @@
 dev:
-	uv run pre-commit install
+	pre-commit install
+
+build:
+	uv venv
+	cargo build
 
 docs:
 	uv run mkdocs build
@@ -10,4 +14,10 @@ docs-serve: dev
 clean:
 	git clean -xdf
 
-.PHONY: dev pre-commit build clean docs
+ITERATIONS ?= 1
+NUM_TESTS ?= 10000
+
+benchmark: build
+	cd scripts/benchmark && uv sync --all-extras && uv run main.py --iterations $(ITERATIONS) --num-tests $(NUM_TESTS)
+
+.PHONY: dev pre-commit build clean docs benchmark build
