@@ -1,3 +1,4 @@
+import argparse
 import subprocess
 import time
 from dataclasses import dataclass
@@ -16,13 +17,16 @@ class Benchmark:
         return run_benchmark(self.command, iterations)
 
 
-def generate_test_file(num_tests: int = 10000) -> Path:
+def generate_test_file(num_tests: int = 10000, num_asserts: int = 1) -> Path:
     """Generate a test file with the specified number of individual test functions."""
     test_file = Path("test_many_assertions.py")
     with test_file.open("w") as f:
         f.write("def test_0():\n    assert True\n\n")
         for i in range(1, num_tests):
-            f.write(f"def test_{i}():\n    assert True\n\n")
+            f.write(f"def test_{i}():\n")
+            for _ in range(num_asserts):
+                f.write("    assert True\n")
+            f.write("\n")
     return test_file
 
 
@@ -113,8 +117,22 @@ def create_benchmark_graph(
 
 def main() -> None:
     """Run the complete benchmark process."""
-    num_tests = 10000
-    test_file = generate_test_file(num_tests)
+    parser = argparse.ArgumentParser(description="Run benchmark tests")
+    parser.add_argument(
+        "--num-tests",
+        type=int,
+        default=10000,
+        help="Number of tests to generate (default: 10000)",
+    )
+    parser.add_argument(
+        "--iterations",
+        type=int,
+        default=1,
+        help="Number of benchmark iterations to run (default: 1)",
+    )
+    args = parser.parse_args()
+
+    test_file = generate_test_file(args.num_tests)
 
     benchmarks: list[Benchmark] = [
         Benchmark(
@@ -127,9 +145,13 @@ def main() -> None:
         ),
     ]
 
-    create_benchmark_graph(benchmarks, iterations=1, num_tests=num_tests)
+    create_benchmark_graph(
+        benchmarks,
+        iterations=args.iterations,
+        num_tests=args.num_tests,
+    )
 
-    test_file.unlink()
+    # test_file.unlink()
 
 
 if __name__ == "__main__":

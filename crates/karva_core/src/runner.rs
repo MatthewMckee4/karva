@@ -31,72 +31,70 @@ impl<'a> Runner<'a> {
         self.diagnostic_writer
             .discovery_completed(discovered_tests.len());
 
-        let mut test_results = Vec::new();
-        for test in discovered_tests {
-            let test_name = test.function_name().as_str();
-            let module = test.module();
+        let test_results = Python::with_gil(|py| {
+            let add_cwd_to_sys_path_result = self.add_cwd_to_sys_path(&py);
 
-            self.diagnostic_writer.test_started(test_name, module);
-
-            let start_time = Instant::now();
-            let test_result = self.run_test(&test);
-            let duration = start_time.elapsed();
-
-            match test_result {
-                Ok(test_result) => {
-                    let passed = test_result.is_pass();
-                    self.diagnostic_writer
-                        .test_completed(test_name, module, passed, duration);
-                    test_results.push(test_result);
-                }
-                Err(error_msg) => {
-                    self.diagnostic_writer
-                        .test_error(test_name, module, &error_msg);
-                    test_results.push(TestResult::new_error(
-                        test.clone(),
-                        error_msg.clone(),
-                        error_msg,
-                    ));
-                }
+            if add_cwd_to_sys_path_result.is_err() {
+                return Err("Failed to add cwd to sys.path".to_string());
             }
-        }
+            Ok(discovered_tests
+                .iter()
+                .map(|test| {
+                    let test_name = test.function_name().as_str();
+                    let module = test.module();
+
+                    self.diagnostic_writer.test_started(test_name, module);
+
+                    let start_time = Instant::now();
+                    let test_result = self.run_test(&py, test);
+                    let duration = start_time.elapsed();
+
+                    match test_result {
+                        Ok(test_result) => {
+                            let passed = test_result.is_pass();
+                            self.diagnostic_writer
+                                .test_completed(test_name, module, passed, duration);
+                            test_result
+                        }
+                        Err(error_msg) => {
+                            self.diagnostic_writer
+                                .test_error(test_name, module, &error_msg);
+                            TestResult::new_error(test.clone(), error_msg.clone(), error_msg)
+                        }
+                    }
+                })
+                .collect())
+        })
+        .unwrap_or_default();
 
         let runner_result = RunnerResult::new(test_results);
         self.diagnostic_writer.finish(&runner_result);
         runner_result
     }
 
-    fn run_test(&self, test: &DiscoveredTest) -> Result<TestResult, String> {
-        Python::with_gil(|py| {
-            let add_cwd_to_sys_path_result = self.add_cwd_to_sys_path(&py);
+    fn run_test(&self, py: &Python, test: &DiscoveredTest) -> Result<TestResult, String> {
+        let imported_module = PyModule::import(*py, test.module()).map_err(|e| e.to_string())?;
+        let function = imported_module
+            .getattr(test.function_name())
+            .map_err(|e| e.to_string())?;
 
-            if add_cwd_to_sys_path_result.is_err() {
-                return Err("Failed to add cwd to sys.path".to_string());
-            }
-
-            let imported_module = PyModule::import(py, test.module()).map_err(|e| e.to_string())?;
-            let function = imported_module
-                .getattr(test.function_name())
-                .map_err(|e| e.to_string())?;
-
-            match function.call((), None) {
-                Ok(_) => Ok(TestResult::new_pass(test.clone())),
-                Err(err) => {
-                    let err_value = err.value(py);
-                    if err_value.is_instance_of::<PyAssertionError>() {
-                        let message = err_value.to_string();
-                        Ok(TestResult::new_fail(test.clone(), message))
-                    } else {
-                        let message = err_value.to_string();
-                        let traceback = err
-                            .traceback(py)
-                            .map(|tb| tb.format().unwrap_or_default())
-                            .unwrap_or_default();
-                        Ok(TestResult::new_error(test.clone(), message, traceback))
-                    }
+        match function.call((), None) {
+            Ok(_) => Ok(TestResult::new_pass(test.clone())),
+            Err(err) => {
+                let err_value = err.value(*py);
+                if err_value.is_instance_of::<PyAssertionError>() {
+                    let message = err_value.to_string();
+                    Ok(TestResult::new_fail(test.clone(), message))
+                } else {
+                    let message = err_value.to_string();
+                    let traceback = err
+                        .traceback(*py)
+                        .map(|tb| tb.format().unwrap_or_default())
+                        .unwrap_or_default();
+                    Ok(TestResult::new_error(test.clone(), message, traceback))
                 }
             }
-        })
+        }
     }
 
     fn add_cwd_to_sys_path(&self, py: &Python) -> PyResult<()> {
