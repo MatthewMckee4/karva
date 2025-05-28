@@ -1,4 +1,4 @@
-use super::discoverer::DiscoveredTest;
+use super::discovery::DiscoveredTest;
 
 #[derive(Debug, Clone)]
 pub struct TestResultPass {

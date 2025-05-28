@@ -150,13 +150,16 @@ impl DiagnosticWriter {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::discoverer::DiscoveredTest;
-    use crate::runner::RunnerResult;
-    use crate::test_result::TestResult;
     use regex::Regex;
     use std::io::{self, Write};
     use std::sync::{Arc, Mutex};
+
+    use super::*;
+    use crate::discovery::DiscoveredTest;
+    use crate::path::SystemPathBuf;
+    use crate::project::Project;
+    use crate::runner::RunnerResult;
+    use crate::test_result::TestResult;
 
     #[derive(Clone, Debug)]
     struct SharedBufferWriter(Arc<Mutex<Vec<u8>>>);
@@ -183,8 +186,22 @@ mod tests {
         (writer, buffer)
     }
 
+    fn get_project() -> Project {
+        Project::new(SystemPathBuf::from("tests/"), vec![], "test".to_string())
+    }
+
     fn get_discovered_test() -> DiscoveredTest {
-        DiscoveredTest::new("test.py".to_string(), "test_name".to_string())
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("test.py");
+        std::fs::write(&file_path, "def test_name():\n    assert True\n").unwrap();
+
+        let function_def =
+            crate::discovery::visitor::function_definitions(file_path.into(), &get_project())
+                .into_iter()
+                .next()
+                .unwrap();
+
+        DiscoveredTest::new("test.py".to_string(), function_def)
     }
 
     fn get_test_result_pass() -> TestResult {

@@ -33,6 +33,9 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
     "fmt",
 ] }
 tracing-tree = { version = "0.4.0" }
-rustpython-parser = { version = "0.4.0" }
+ruff_python_ast = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
+ruff_python_parser = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
+ruff_source_file = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
+ruff_text_size = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 pyo3 = { version = "0.25.0", features = ["auto-initialize"] }
 ignore = "0.4.23"

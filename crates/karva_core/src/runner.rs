@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use crate::{
     diagnostics::DiagnosticWriter,
-    discoverer::{DiscoveredTest, Discoverer},
+    discovery::{DiscoveredTest, Discoverer},
     project::Project,
     test_result::{TestResult, TestResultError},
 };
@@ -40,10 +40,10 @@ impl<'a> Runner<'a> {
             Ok(discovered_tests
                 .iter()
                 .map(|test| {
-                    let test_name = test.function_name().as_str();
+                    let test_name = test.function_definition().name.to_string();
                     let module = test.module();
 
-                    self.diagnostic_writer.test_started(test_name, module);
+                    self.diagnostic_writer.test_started(&test_name, module);
 
                     let test_result = self.run_test(&py, test);
 
@@ -77,14 +77,13 @@ impl<'a> Runner<'a> {
                 traceback: e.to_string(),
                 duration: start_time.elapsed(),
             })?;
-        let function =
-            imported_module
-                .getattr(test.function_name())
-                .map_err(|e| TestResultError {
-                    test: test.clone(),
-                    traceback: e.to_string(),
-                    duration: start_time.elapsed(),
-                })?;
+        let function = imported_module
+            .getattr(test.function_definition().name.to_string())
+            .map_err(|e| TestResultError {
+                test: test.clone(),
+                traceback: e.to_string(),
+                duration: start_time.elapsed(),
+            })?;
 
         let result = function.call0();
         let duration = start_time.elapsed();
