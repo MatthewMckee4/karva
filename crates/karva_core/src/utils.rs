@@ -12,6 +12,7 @@ pub fn module_name(cwd: &SystemPathBuf, path: &SystemPathBuf) -> String {
         .collect();
     components.join(".").trim_end_matches(".py").to_string()
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
