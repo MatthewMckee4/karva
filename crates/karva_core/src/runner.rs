@@ -1,12 +1,7 @@
-use std::time::Instant;
-
-use pyo3::{exceptions::PyAssertionError, prelude::*};
+use pyo3::prelude::*;
 
 use crate::{
-    diagnostics::DiagnosticWriter,
-    discovery::{DiscoveredTest, Discoverer},
-    project::Project,
-    test_result::TestResult,
+    diagnostics::DiagnosticWriter, discovery::Discoverer, project::Project, test_result::TestResult,
 };
 
 pub struct Runner<'a> {
@@ -46,7 +41,7 @@ impl<'a> Runner<'a> {
 
                     self.diagnostic_writer.test_started(&test_name, module);
 
-                    let test_result = self.run_test(&py, test);
+                    let test_result = test.run_test(&py);
 
                     self.diagnostic_writer.test_completed(&test_result);
 
@@ -61,73 +56,12 @@ impl<'a> Runner<'a> {
         runner_result
     }
 
-    fn run_test(&self, py: &Python, test: &DiscoveredTest) -> TestResult {
-        let start_time = Instant::now();
-
-        let imported_module = match PyModule::import(*py, test.module()) {
-            Ok(module) => module,
-            Err(e) => {
-                return TestResult::new_error(test.clone(), e.to_string(), start_time.elapsed());
-            }
-        };
-
-        let function = match imported_module.getattr(test.function_definition().name.to_string()) {
-            Ok(function) => function,
-            Err(e) => {
-                return TestResult::new_error(test.clone(), e.to_string(), start_time.elapsed());
-            }
-        };
-
-        let result = function.call0();
-        let duration = start_time.elapsed();
-
-        match result {
-            Ok(_) => TestResult::new_pass(test.clone(), duration),
-            Err(err) => {
-                let err_value = err.value(*py);
-                if err_value.is_instance_of::<PyAssertionError>() {
-                    let traceback = err
-                        .traceback(*py)
-                        .map(|traceback| filter_traceback(&traceback.format().unwrap_or_default()));
-                    TestResult::new_fail(test.clone(), traceback, duration)
-                } else {
-                    let traceback = err
-                        .traceback(*py)
-                        .map(|traceback| filter_traceback(&traceback.format().unwrap_or_default()))
-                        .unwrap_or_default();
-                    TestResult::new_error(test.clone(), traceback, duration)
-                }
-            }
-        }
-    }
-
     fn add_cwd_to_sys_path(&self, py: &Python) -> PyResult<()> {
         let sys_path = py.import("sys")?;
         let path = sys_path.getattr("path")?;
         path.call_method1("append", (self.project.cwd().as_str(),))?;
         Ok(())
     }
-}
-
-fn filter_traceback(traceback: &str) -> String {
-    let lines: Vec<&str> = traceback.lines().collect();
-    let mut filtered = String::new();
-
-    for (i, line) in lines.iter().enumerate() {
-        if i == 0 && line.contains("Traceback (most recent call last):") {
-            continue;
-        }
-        if line.starts_with("  ") {
-            if let Some(stripped) = line.strip_prefix("  ") {
-                filtered.push_str(stripped);
-            }
-        } else {
-            filtered.push_str(line);
-        }
-        filtered.push('\n');
-    }
-
-    filtered.trim_end().to_string()
 }
 
 #[derive(Debug)]

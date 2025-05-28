@@ -1,21 +1,21 @@
-use super::discovery::DiscoveredTest;
+use super::discovery::TestCase;
 
 #[derive(Debug, Clone)]
 pub struct TestResultPass {
-    pub test: DiscoveredTest,
+    pub test: TestCase,
     pub duration: std::time::Duration,
 }
 
 #[derive(Debug, Clone)]
 pub struct TestResultFail {
-    pub test: DiscoveredTest,
+    pub test: TestCase,
     pub traceback: Option<String>,
     pub duration: std::time::Duration,
 }
 
 #[derive(Debug, Clone)]
 pub struct TestResultError {
-    pub test: DiscoveredTest,
+    pub test: TestCase,
     pub traceback: String,
     pub duration: std::time::Duration,
 }
@@ -28,12 +28,12 @@ pub enum TestResult {
 }
 
 impl TestResult {
-    pub fn new_pass(test: DiscoveredTest, duration: std::time::Duration) -> Self {
+    pub fn new_pass(test: TestCase, duration: std::time::Duration) -> Self {
         Self::Pass(TestResultPass { test, duration })
     }
 
     pub fn new_fail(
-        test: DiscoveredTest,
+        test: TestCase,
         traceback: Option<String>,
         duration: std::time::Duration,
     ) -> Self {
@@ -44,11 +44,7 @@ impl TestResult {
         })
     }
 
-    pub fn new_error(
-        test: DiscoveredTest,
-        traceback: String,
-        duration: std::time::Duration,
-    ) -> Self {
+    pub fn new_error(test: TestCase, traceback: String, duration: std::time::Duration) -> Self {
         Self::Error(TestResultError {
             test,
             traceback,
