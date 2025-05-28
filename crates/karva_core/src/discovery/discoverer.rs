@@ -1,10 +1,11 @@
 use ignore::WalkBuilder;
 use std::fmt::{self, Display};
 
+use crate::discovery::visitor::function_definitions;
 use crate::path::{PythonTestPath, SystemPathBuf};
 use crate::project::Project;
 use crate::utils::{is_python_file, module_name};
-use rustpython_parser::{Parse, ast};
+use ruff_python_ast::StmtFunctionDef;
 
 pub struct Discoverer<'a> {
     project: &'a Project,
@@ -31,8 +32,8 @@ impl<'a> Discoverer<'a> {
         match path {
             PythonTestPath::File(path) => {
                 discovered_tests.extend(self.test_functions_in_file(path).into_iter().map(
-                    |function_name| {
-                        DiscoveredTest::new(module_name(self.project.cwd(), path), function_name)
+                    |function_def| {
+                        DiscoveredTest::new(module_name(self.project.cwd(), path), function_def)
                     },
                 ));
             }
@@ -63,28 +64,13 @@ impl<'a> Discoverer<'a> {
             }
             PythonTestPath::Function(path, function_name) => {
                 let discovered_tests_for_file = self.test_functions_in_file(path);
-                if discovered_tests_for_file.contains(function_name) {
-                    discovered_tests.push(DiscoveredTest::new(
-                        module_name(self.project.cwd(), path),
-                        function_name.clone(),
-                    ));
-                }
-            }
-        }
-
-        discovered_tests
-    }
-
-    fn test_functions_in_file(&self, path: &SystemPathBuf) -> Vec<String> {
-        let mut discovered_tests = Vec::new();
-        let source = std::fs::read_to_string(path.as_std_path()).unwrap();
-        let program = ast::Suite::parse(&source, "<embedded>");
-
-        if let Ok(program) = program {
-            for stmt in program {
-                if let ast::Stmt::FunctionDef(ast::StmtFunctionDef { name, .. }) = stmt {
-                    if name.to_string().starts_with(self.project.test_prefix()) {
-                        discovered_tests.push(name.to_string());
+                for function_def in discovered_tests_for_file {
+                    if function_def.name == *function_name {
+                        discovered_tests.push(DiscoveredTest::new(
+                            module_name(self.project.cwd(), path),
+                            function_def,
+                        ));
+                        break;
                     }
                 }
             }
@@ -92,19 +78,23 @@ impl<'a> Discoverer<'a> {
 
         discovered_tests
     }
+
+    fn test_functions_in_file(&self, path: &SystemPathBuf) -> Vec<StmtFunctionDef> {
+        function_definitions(path.clone(), self.project)
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct DiscoveredTest {
     module: String,
-    function_name: String,
+    function_definition: StmtFunctionDef,
 }
 
 impl DiscoveredTest {
-    pub fn new(module: String, function_name: String) -> Self {
+    pub fn new(module: String, function_definition: StmtFunctionDef) -> Self {
         Self {
             module,
-            function_name,
+            function_definition,
         }
     }
 
@@ -112,14 +102,14 @@ impl DiscoveredTest {
         &self.module
     }
 
-    pub fn function_name(&self) -> &String {
-        &self.function_name
+    pub fn function_definition(&self) -> &StmtFunctionDef {
+        &self.function_definition
     }
 }
 
 impl Display for DiscoveredTest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}::{}", self.module, self.function_name)
+        write!(f, "{}::{}", self.module, self.function_definition.name)
     }
 }
 
@@ -359,10 +349,7 @@ def test_function2(): pass
     fn test_discover_files_with_invalid_python() {
         let env = TestEnv::new();
         let path = env
-            .create_file(
-                "test_file.py",
-                "def test_function1(): pass\ninvalid python syntax",
-            )
+            .create_file("test_file.py", "test_function1 = None")
             .unwrap();
 
         let project = Project::new(

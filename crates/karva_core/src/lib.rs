@@ -1,5 +1,5 @@
 pub mod diagnostics;
-pub mod discoverer;
+pub mod discovery;
 pub mod path;
 pub mod project;
 pub mod runner;

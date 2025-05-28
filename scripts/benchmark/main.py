@@ -151,7 +151,7 @@ def main() -> None:
         num_tests=args.num_tests,
     )
 
-    # test_file.unlink()
+    test_file.unlink()
 
 
 if __name__ == "__main__":
