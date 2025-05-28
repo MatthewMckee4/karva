@@ -80,11 +80,11 @@ Provides the following output:
 Discovered 3 tests
 ...
 Failed tests:
-test::test_fail
+tests.test::test_fail
 File "/tests/test.py", line 6, in test_fail
   assert False, "This test should fail"
 Error tests:
-test::test_error
+tests.test::test_error
 File "/tests/test.py", line 10, in test_error
   raise ValueError("This is an error")
 ─────────────
