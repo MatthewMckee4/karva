@@ -1,5 +1,3 @@
-use std::path::MAIN_SEPARATOR;
-
 use crate::path::SystemPathBuf;
 
 pub fn is_python_file(path: &SystemPathBuf) -> bool {
@@ -8,10 +6,11 @@ pub fn is_python_file(path: &SystemPathBuf) -> bool {
 
 pub fn module_name(cwd: &SystemPathBuf, path: &SystemPathBuf) -> String {
     let relative_path = path.strip_prefix(cwd).unwrap();
-    let path_str = relative_path.to_string();
-    path_str
-        .trim_end_matches(".py")
-        .replace(MAIN_SEPARATOR, ".")
+    let components: Vec<_> = relative_path
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().to_string())
+        .collect();
+    components.join(".").trim_end_matches(".py").to_string()
 }
 
 #[cfg(test)]
