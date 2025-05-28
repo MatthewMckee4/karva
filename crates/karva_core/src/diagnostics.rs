@@ -184,7 +184,7 @@ mod tests {
     }
 
     fn get_discovered_test() -> DiscoveredTest {
-        DiscoveredTest::new("test.rs".to_string(), "test_name".to_string())
+        DiscoveredTest::new("test.py".to_string(), "test_name".to_string())
     }
 
     fn get_test_result_pass() -> TestResult {
@@ -194,7 +194,10 @@ mod tests {
     fn get_test_result_fail() -> TestResult {
         TestResult::new_fail(
             get_discovered_test(),
-            Some("Traceback".to_string()),
+            Some(
+                "File \"test.py\", line 3, in test_name\n  assert False, \"This test should fail\""
+                    .to_string(),
+            ),
             std::time::Duration::from_micros(100),
         )
     }
@@ -202,7 +205,8 @@ mod tests {
     fn get_test_result_error() -> TestResult {
         TestResult::new_error(
             get_discovered_test(),
-            "Error traceback".to_string(),
+            "File \"test.py\", line 3, in test_name\n  raise ValueError(\"This is an error\")"
+                .to_string(),
             std::time::Duration::from_micros(100),
         )
     }
@@ -238,42 +242,68 @@ mod tests {
         writer.discovery_completed(5);
         writer.finish(&RunnerResult::new(vec![]));
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-        assert!(output.contains("Discovered"));
-        assert!(output.contains("5"));
-        assert!(output.contains("tests"));
+        let output = strip_ansi_codes(&output);
+        let expected = "Discovered 5 tests\n";
+        assert_eq!(output, expected);
     }
 
     #[test]
     fn test_finish_with_mixed_results() {
-        let (writer, buffer) = create_test_writer();
+        let (mut writer, buffer) = create_test_writer();
         let test_results = vec![
             get_test_result_pass(),
             get_test_result_fail(),
             get_test_result_pass(),
         ];
+        for test in &test_results {
+            writer.test_completed(test);
+        }
         let runner_result = RunnerResult::new(test_results);
         writer.finish(&runner_result);
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         let output = strip_ansi_codes(&output);
-        assert!(output.contains("Passed tests: 2"));
-        assert!(output.contains("Failed tests: 1"));
+        let expected = r#"...
+Failed tests:
+test.py::test_name
+File "test.py", line 3, in test_name
+  assert False, "This test should fail"
+─────────────
+Passed tests: 2
+Failed tests: 1
+"#;
+        assert_eq!(output, expected);
     }
 
     #[test]
     fn test_finish_with_errors() {
-        let (writer, buffer) = create_test_writer();
+        let (mut writer, buffer) = create_test_writer();
         let test_results = vec![
             get_test_result_pass(),
             get_test_result_error(),
             get_test_result_fail(),
         ];
+        for test in &test_results {
+            writer.test_completed(test);
+        }
         let runner_result = RunnerResult::new(test_results);
         writer.finish(&runner_result);
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         let output = strip_ansi_codes(&output);
-        assert!(output.contains("Passed tests: 1"));
-        assert!(output.contains("Failed tests: 1"));
-        assert!(output.contains("Error tests: 1"));
+        let expected = r#"...
+Failed tests:
+test.py::test_name
+File "test.py", line 3, in test_name
+  assert False, "This test should fail"
+Error tests:
+test.py::test_name
+File "test.py", line 3, in test_name
+  raise ValueError("This is an error")
+─────────────
+Passed tests: 1
+Failed tests: 1
+Error tests: 1
+"#;
+        assert_eq!(output, expected);
     }
 
     #[test]
@@ -287,34 +317,69 @@ mod tests {
 
     #[test]
     fn test_finish_with_all_failed() {
-        let (writer, buffer) = create_test_writer();
+        let (mut writer, buffer) = create_test_writer();
         let test_results = vec![get_test_result_fail(), get_test_result_fail()];
+        for test in &test_results {
+            writer.test_completed(test);
+        }
         let runner_result = RunnerResult::new(test_results);
         writer.finish(&runner_result);
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         let output = strip_ansi_codes(&output);
-        assert!(output.contains("Failed tests: 2"));
+        let expected = r#"..
+Failed tests:
+test.py::test_name
+File "test.py", line 3, in test_name
+  assert False, "This test should fail"
+test.py::test_name
+File "test.py", line 3, in test_name
+  assert False, "This test should fail"
+─────────────
+Failed tests: 2
+"#;
+        assert_eq!(output, expected);
     }
 
     #[test]
     fn test_finish_with_all_passed() {
-        let (writer, buffer) = create_test_writer();
+        let (mut writer, buffer) = create_test_writer();
         let test_results = vec![get_test_result_pass(), get_test_result_pass()];
+        for test in &test_results {
+            writer.test_completed(test);
+        }
         let runner_result = RunnerResult::new(test_results);
         writer.finish(&runner_result);
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         let output = strip_ansi_codes(&output);
-        assert!(output.contains("Passed tests: 2"));
+        let expected = r#"..
+─────────────
+Passed tests: 2
+"#;
+        assert_eq!(output, expected);
     }
 
     #[test]
     fn test_finish_with_all_error() {
-        let (writer, buffer) = create_test_writer();
+        let (mut writer, buffer) = create_test_writer();
         let test_results = vec![get_test_result_error(), get_test_result_error()];
+        for test in &test_results {
+            writer.test_completed(test);
+        }
         let runner_result = RunnerResult::new(test_results);
         writer.finish(&runner_result);
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         let output = strip_ansi_codes(&output);
-        assert!(output.contains("Error tests: 2"));
+        let expected = r#"..
+Error tests:
+test.py::test_name
+File "test.py", line 3, in test_name
+  raise ValueError("This is an error")
+test.py::test_name
+File "test.py", line 3, in test_name
+  raise ValueError("This is an error")
+─────────────
+Error tests: 2
+"#;
+        assert_eq!(output, expected);
     }
 }

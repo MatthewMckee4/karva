@@ -202,11 +202,8 @@ impl RunnerStats {
 mod tests {
     use super::*;
     use crate::path::{PythonTestPath, SystemPathBuf};
-    use regex::Regex;
-    use std::{
-        io::{self, Write},
-        sync::{Arc, Mutex},
-    };
+    use std::io::{self, Write};
+    use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
 
     #[derive(Clone, Debug)]
@@ -221,6 +218,11 @@ mod tests {
         fn flush(&mut self) -> io::Result<()> {
             Ok(())
         }
+    }
+
+    fn create_test_writer() -> DiagnosticWriter {
+        let buffer = Arc::new(Mutex::new(Vec::new()));
+        DiagnosticWriter::new(SharedBufferWriter(buffer.clone()))
     }
 
     struct TestEnv {
@@ -244,28 +246,6 @@ mod tests {
             let path = self.temp_dir.path().join(filename);
             PythonTestPath::new(&SystemPathBuf::from(path)).unwrap()
         }
-
-        fn temp_dir_path(&self) -> &std::path::Path {
-            self.temp_dir.path()
-        }
-    }
-
-    fn create_test_writer() -> (DiagnosticWriter, Arc<Mutex<Vec<u8>>>) {
-        let buffer = Arc::new(Mutex::new(Vec::new()));
-        let writer = DiagnosticWriter::new(SharedBufferWriter(buffer.clone()));
-        (writer, buffer)
-    }
-
-    fn strip_ansi_codes(s: &str) -> String {
-        let re = Regex::new(r"\x1b\[[0-9;]*m").unwrap();
-        re.replace_all(s, "").to_string()
-    }
-
-    // Replace temporary directory paths with a placeholder
-    fn normalize_output(output: &str, temp_dir: &std::path::Path) -> String {
-        let temp_dir_str = temp_dir.to_string_lossy();
-        let re = Regex::new(&format!("{}/", regex::escape(&temp_dir_str))).unwrap();
-        re.replace_all(output, "/PLACEHOLDER/").to_string()
     }
 
     #[test]
@@ -284,20 +264,14 @@ def test_simple_pass():
             vec![env.create_python_test_path("test_pass.py")],
             "test".to_string(),
         );
-        let (diagnostic_writer, buffer) = create_test_writer();
-        let mut runner = Runner::new(&project, diagnostic_writer);
+        let mut runner = Runner::new(&project, create_test_writer());
 
-        runner.run();
+        let result = runner.run();
 
-        let output = buffer.lock().unwrap();
-        let stdout = strip_ansi_codes(&String::from_utf8(output.clone()).unwrap());
-        let normalized_output = normalize_output(&stdout, env.temp_dir_path());
-        let expected_output = r#"Discovered 1 tests
-.
-─────────────
-Passed tests: 1
-"#;
-        assert_eq!(normalized_output, expected_output);
+        assert_eq!(result.stats().total_tests(), 1);
+        assert_eq!(result.stats().passed_tests(), 1);
+        assert_eq!(result.stats().failed_tests(), 0);
+        assert_eq!(result.stats().error_tests(), 0);
     }
 
     #[test]
@@ -316,24 +290,14 @@ def test_simple_fail():
             vec![env.create_python_test_path("test_fail.py")],
             "test".to_string(),
         );
-        let (diagnostic_writer, buffer) = create_test_writer();
-        let mut runner = Runner::new(&project, diagnostic_writer);
+        let mut runner = Runner::new(&project, create_test_writer());
 
-        runner.run();
+        let result = runner.run();
 
-        let output = buffer.lock().unwrap();
-        let stdout = strip_ansi_codes(&String::from_utf8(output.clone()).unwrap());
-        let normalized_output = normalize_output(&stdout, env.temp_dir_path());
-        let expected_output = r#"Discovered 1 tests
-.
-Failed tests:
-test_fail::test_simple_fail
-File "/PLACEHOLDER/test_fail.py", line 3, in test_simple_fail
-  assert False, "This test should fail"
-─────────────
-Failed tests: 1
-"#;
-        assert_eq!(normalized_output, expected_output);
+        assert_eq!(result.stats().total_tests(), 1);
+        assert_eq!(result.stats().passed_tests(), 0);
+        assert_eq!(result.stats().failed_tests(), 1);
+        assert_eq!(result.stats().error_tests(), 0);
     }
 
     #[test]
@@ -352,24 +316,14 @@ def test_simple_error():
             vec![env.create_python_test_path("test_error.py")],
             "test".to_string(),
         );
-        let (diagnostic_writer, buffer) = create_test_writer();
-        let mut runner = Runner::new(&project, diagnostic_writer);
+        let mut runner = Runner::new(&project, create_test_writer());
 
-        runner.run();
+        let result = runner.run();
 
-        let output = buffer.lock().unwrap();
-        let stdout = strip_ansi_codes(&String::from_utf8(output.clone()).unwrap());
-        let normalized_output = normalize_output(&stdout, env.temp_dir_path());
-        let expected_output = r#"Discovered 1 tests
-.
-Error tests:
-test_error::test_simple_error
-File "/PLACEHOLDER/test_error.py", line 3, in test_simple_error
-  raise ValueError("This is an error")
-─────────────
-Error tests: 1
-"#;
-        assert_eq!(normalized_output, expected_output);
+        assert_eq!(result.stats().total_tests(), 1);
+        assert_eq!(result.stats().passed_tests(), 0);
+        assert_eq!(result.stats().failed_tests(), 0);
+        assert_eq!(result.stats().error_tests(), 1);
     }
 
     #[test]
@@ -393,65 +347,13 @@ def test_error():
             vec![env.create_python_test_path("test_mixed.py")],
             "test".to_string(),
         );
-        let (diagnostic_writer, buffer) = create_test_writer();
-        let mut runner = Runner::new(&project, diagnostic_writer);
+        let mut runner = Runner::new(&project, create_test_writer());
 
-        runner.run();
+        let result = runner.run();
 
-        let output = buffer.lock().unwrap();
-        let stdout = strip_ansi_codes(&String::from_utf8(output.clone()).unwrap());
-        let normalized_output = normalize_output(&stdout, env.temp_dir_path());
-        let expected_output = r#"Discovered 3 tests
-...
-Failed tests:
-test_mixed::test_fail
-File "/PLACEHOLDER/test_mixed.py", line 5, in test_fail
-  assert False, "This test should fail"
-Error tests:
-test_mixed::test_error
-File "/PLACEHOLDER/test_mixed.py", line 8, in test_error
-  raise ValueError("This is an error")
-─────────────
-Passed tests: 1
-Failed tests: 1
-Error tests: 1
-"#;
-        assert_eq!(normalized_output, expected_output);
-    }
-
-    #[test]
-    fn test_runner_with_invalid_module() {
-        let env = TestEnv::new();
-        env.create_test_file(
-            "invalid.py",
-            r#"
-def test_invalid():
-    this_is_not_defined
-"#,
-        );
-
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![env.create_python_test_path("invalid.py")],
-            "test".to_string(),
-        );
-        let (diagnostic_writer, buffer) = create_test_writer();
-        let mut runner = Runner::new(&project, diagnostic_writer);
-
-        runner.run();
-
-        let output = buffer.lock().unwrap();
-        let stdout = strip_ansi_codes(&String::from_utf8(output.clone()).unwrap());
-        let normalized_output = normalize_output(&stdout, env.temp_dir_path());
-        let expected_output = r#"Discovered 1 tests
-.
-Error tests:
-invalid::test_invalid
-File "/PLACEHOLDER/invalid.py", line 3, in test_invalid
-  this_is_not_defined
-─────────────
-Error tests: 1
-"#;
-        assert_eq!(normalized_output, expected_output);
+        assert_eq!(result.stats().total_tests(), 3);
+        assert_eq!(result.stats().passed_tests(), 1);
+        assert_eq!(result.stats().failed_tests(), 1);
+        assert_eq!(result.stats().error_tests(), 1);
     }
 }
