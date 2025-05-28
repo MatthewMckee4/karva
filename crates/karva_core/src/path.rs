@@ -1,8 +1,11 @@
+use std::{
+    borrow::Borrow,
+    fmt::Formatter,
+    ops::Deref,
+    path::{Path, PathBuf, StripPrefixError},
+};
+
 use camino::{Utf8Path, Utf8PathBuf};
-use std::borrow::Borrow;
-use std::fmt::Formatter;
-use std::ops::Deref;
-use std::path::{Path, PathBuf, StripPrefixError};
 
 use crate::utils::is_python_file;
 
@@ -414,9 +417,11 @@ impl std::fmt::Display for PythonTestPathError {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
+
     use tempfile::TempDir;
+
+    use super::*;
 
     struct TestEnv {
         temp_dir: TempDir,

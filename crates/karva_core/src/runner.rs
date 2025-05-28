@@ -1,5 +1,6 @@
-use pyo3::{exceptions::PyAssertionError, prelude::*};
 use std::time::Instant;
+
+use pyo3::{exceptions::PyAssertionError, prelude::*};
 
 use crate::{
     diagnostics::DiagnosticWriter,
@@ -199,11 +200,15 @@ impl RunnerStats {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        io::{self, Write},
+        sync::{Arc, Mutex},
+    };
+
+    use tempfile::TempDir;
+
     use super::*;
     use crate::path::{PythonTestPath, SystemPathBuf};
-    use std::io::{self, Write};
-    use std::sync::{Arc, Mutex};
-    use tempfile::TempDir;
 
     #[derive(Clone, Debug)]
     struct SharedBufferWriter(Arc<Mutex<Vec<u8>>>);

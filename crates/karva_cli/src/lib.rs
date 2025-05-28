@@ -1,18 +1,23 @@
-use std::ffi::OsString;
-use std::io::{self, BufWriter, Write};
-use std::process::{ExitCode, Termination};
+use std::{
+    ffi::OsString,
+    io::{self, BufWriter, Write},
+    process::{ExitCode, Termination},
+};
 
-use anyhow::Result;
-use karva_core::diagnostics::DiagnosticWriter;
-use karva_core::path::{PythonTestPath, SystemPath, SystemPathBuf};
-use karva_core::project::Project;
-use karva_core::runner::Runner;
-
-use crate::args::{Args, Command, TestCommand};
-use crate::logging::setup_tracing;
-use anyhow::{Context, anyhow};
+use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use colored::Colorize;
+use karva_core::{
+    diagnostics::DiagnosticWriter,
+    path::{PythonTestPath, SystemPath, SystemPathBuf},
+    project::Project,
+    runner::Runner,
+};
+
+use crate::{
+    args::{Args, Command, TestCommand},
+    logging::setup_tracing,
+};
 
 mod args;
 mod logging;
