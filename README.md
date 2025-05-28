@@ -54,7 +54,7 @@ karva test tests/test_example(.py)::test_example
 
 Here is a small example usage
 
-*test/test.py*
+**test/test.py**
 ```py
 def test_pass():
     assert True
@@ -68,9 +68,13 @@ def test_error():
     raise ValueError("This is an error")
 ```
 
+Running karva:
+
 ```bash
 karva test test/test.py
 ```
+
+Provides the following output:
 
 ```bash
 Discovered 3 tests
