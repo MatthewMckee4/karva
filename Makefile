@@ -16,6 +16,9 @@ docs-serve: dev
 clean:
 	git clean -xdf
 
+format:
+	cargo +nightly fmt
+
 ITERATIONS ?= 1
 NUM_TESTS ?= 10000
 

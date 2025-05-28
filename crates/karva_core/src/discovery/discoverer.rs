@@ -1,10 +1,10 @@
-use std::fmt::{self, Display};
+use std::collections::HashSet;
 
 use ignore::WalkBuilder;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
-    discovery::function_definitions,
+    discovery::{TestCase, function_definitions},
     path::{PythonTestPath, SystemPathBuf},
     project::Project,
     utils::{is_python_file, module_name},
@@ -19,100 +19,78 @@ impl<'a> Discoverer<'a> {
         Self { project }
     }
 
-    pub fn discover(&self) -> Vec<DiscoveredTest> {
-        let mut discovered_tests = Vec::new();
+    pub fn discover(&self) -> Vec<TestCase> {
+        #[allow(clippy::mutable_key_type)]
+        let mut discovered_tests = HashSet::new();
 
         for path in self.project.paths() {
             discovered_tests.extend(self.discover_files(path));
         }
 
-        discovered_tests
+        discovered_tests.into_iter().collect()
     }
 
-    fn discover_files(&self, path: &PythonTestPath) -> Vec<DiscoveredTest> {
-        let mut discovered_tests = Vec::new();
-
+    fn discover_files(&self, path: &PythonTestPath) -> Vec<TestCase> {
         match path {
-            PythonTestPath::File(path) => {
-                discovered_tests.extend(self.test_functions_in_file(path).into_iter().map(
-                    |function_def| {
-                        DiscoveredTest::new(module_name(self.project.cwd(), path), function_def)
-                    },
-                ));
-            }
-            PythonTestPath::Directory(dir_path) => {
-                let dir_path = dir_path.as_std_path().to_path_buf();
-                let walker = WalkBuilder::new(self.project.cwd().as_std_path())
-                    .standard_filters(true)
-                    .require_git(false)
-                    .parents(false)
-                    .filter_entry(move |entry| entry.path().starts_with(&dir_path))
-                    .build();
-
-                for entry in walker.flatten() {
-                    let entry_path = entry.path();
-                    let path = SystemPathBuf::from(entry_path);
-                    if !is_python_file(&path) {
-                        continue;
-                    }
-                    discovered_tests.extend(self.test_functions_in_file(&path).into_iter().map(
-                        |function_name| {
-                            DiscoveredTest::new(
-                                module_name(self.project.cwd(), &path),
-                                function_name,
-                            )
-                        },
-                    ));
-                }
-            }
+            PythonTestPath::File(path) => self.discover_file(path),
+            PythonTestPath::Directory(dir_path) => self.discover_directory(dir_path),
             PythonTestPath::Function(path, function_name) => {
-                let discovered_tests_for_file = self.test_functions_in_file(path);
-                for function_def in discovered_tests_for_file {
-                    if function_def.name == *function_name {
-                        discovered_tests.push(DiscoveredTest::new(
-                            module_name(self.project.cwd(), path),
-                            function_def,
-                        ));
-                        break;
-                    }
+                if let Some(test_case) = self.discover_function(path, function_name) {
+                    vec![test_case]
+                } else {
+                    vec![]
                 }
             }
         }
+    }
 
-        discovered_tests
+    fn discover_file(&self, path: &SystemPathBuf) -> Vec<TestCase> {
+        self.test_functions_in_file(path)
+            .into_iter()
+            .map(|function_name| {
+                TestCase::new(module_name(self.project.cwd(), path), function_name)
+            })
+            .collect()
+    }
+
+    fn discover_directory(&self, path: &SystemPathBuf) -> Vec<TestCase> {
+        let dir_path = path.as_std_path().to_path_buf();
+        let walker = WalkBuilder::new(self.project.cwd().as_std_path())
+            .standard_filters(true)
+            .require_git(false)
+            .parents(false)
+            .filter_entry(move |entry| entry.path().starts_with(&dir_path))
+            .build();
+
+        walker
+            .flatten()
+            .filter_map(|entry| {
+                let entry_path = entry.path();
+                let path = SystemPathBuf::from(entry_path);
+                if !is_python_file(&path) {
+                    return None;
+                }
+                Some(self.discover_file(&path))
+            })
+            .flatten()
+            .collect()
+    }
+
+    fn discover_function(&self, path: &SystemPathBuf, function_name: &str) -> Option<TestCase> {
+        let discovered_tests_for_file = self.test_functions_in_file(path);
+        for function_def in discovered_tests_for_file {
+            if function_def.name == *function_name {
+                return Some(TestCase::new(
+                    module_name(self.project.cwd(), path),
+                    function_def,
+                ));
+            }
+        }
+        None
     }
 
     fn test_functions_in_file(&self, path: &SystemPathBuf) -> Vec<StmtFunctionDef> {
         function_definitions(path.clone(), self.project)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct DiscoveredTest {
-    module: String,
-    function_definition: StmtFunctionDef,
-}
-
-impl DiscoveredTest {
-    pub fn new(module: String, function_definition: StmtFunctionDef) -> Self {
-        Self {
-            module,
-            function_definition,
-        }
-    }
-
-    pub fn module(&self) -> &String {
-        &self.module
-    }
-
-    pub fn function_definition(&self) -> &StmtFunctionDef {
-        &self.function_definition
-    }
-}
-
-impl Display for DiscoveredTest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}::{}", self.module, self.function_definition.name)
     }
 }
 
@@ -148,6 +126,10 @@ mod tests {
             let path = self.temp_dir.path().join(name);
             fs::create_dir_all(&path)?;
             Ok(SystemPathBuf::from(path))
+        }
+
+        fn cwd(&self) -> SystemPathBuf {
+            SystemPathBuf::from(self.temp_dir.path())
         }
     }
 
@@ -426,5 +408,50 @@ def test_function(): pass
         assert!(test_strings.iter().any(|s| s.ends_with("test_function1")));
         assert!(test_strings.iter().any(|s| s.ends_with("test_function2")));
         assert!(test_strings.iter().any(|s| s.ends_with("test_function3")));
+    }
+
+    #[test]
+    fn test_tests_same_name_same_module_are_not_discovered_more_than_once() {
+        let env = TestEnv::new();
+        let path = env
+            .create_file("tests/test_file.py", "def test_function(): pass")
+            .unwrap();
+
+        let project = Project::new(
+            SystemPathBuf::from(env.temp_dir.path()),
+            vec![
+                PythonTestPath::Directory(env.cwd().join("tests")),
+                PythonTestPath::File(path.clone()),
+                PythonTestPath::File(path.clone()),
+                PythonTestPath::Function(path.clone(), "test_function".to_string()),
+            ],
+            "test".to_string(),
+        );
+        let discoverer = Discoverer::new(&project);
+        let discovered_tests = discoverer.discover();
+        assert_eq!(discovered_tests.len(), 1);
+    }
+
+    #[test]
+    fn test_tests_same_name_different_module_are_discovered() {
+        let env = TestEnv::new();
+        let path = env
+            .create_file("tests/test_file.py", "def test_function(): pass")
+            .unwrap();
+        let path2 = env
+            .create_file("tests/test_file2.py", "def test_function(): pass")
+            .unwrap();
+
+        let project = Project::new(
+            SystemPathBuf::from(env.temp_dir.path()),
+            vec![
+                PythonTestPath::File(path.clone()),
+                PythonTestPath::File(path2.clone()),
+            ],
+            "test".to_string(),
+        );
+        let discoverer = Discoverer::new(&project);
+        let discovered_tests = discoverer.discover();
+        assert_eq!(discovered_tests.len(), 2);
     }
 }

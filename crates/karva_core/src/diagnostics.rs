@@ -164,7 +164,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        discovery::{DiscoveredTest, function_definitions},
+        discovery::{TestCase, function_definitions},
         path::SystemPathBuf,
         project::Project,
         runner::RunnerResult,
@@ -200,7 +200,7 @@ mod tests {
         Project::new(SystemPathBuf::from("tests/"), vec![], "test".to_string())
     }
 
-    fn get_discovered_test() -> DiscoveredTest {
+    fn get_discovered_test() -> TestCase {
         let temp_dir = tempfile::tempdir().unwrap();
         let file_path = temp_dir.path().join("test.py");
         std::fs::write(&file_path, "def test_name():\n    assert True\n").unwrap();
@@ -210,7 +210,7 @@ mod tests {
             .next()
             .unwrap();
 
-        DiscoveredTest::new("test.py".to_string(), function_def)
+        TestCase::new("test.py".to_string(), function_def)
     }
 
     fn get_test_result_pass() -> TestResult {
