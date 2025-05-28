@@ -50,6 +50,45 @@ karva test tests/test_example.py
 karva test tests/test_example(.py)::test_example
 ```
 
+#### Example
+
+Here is a small example usage
+
+*test/test.py*
+```py
+def test_pass():
+    assert True
+
+
+def test_fail():
+    assert False, "This test should fail"
+
+
+def test_error():
+    raise ValueError("This is an error")
+```
+
+```bash
+karva test test/test.py
+```
+
+```bash
+Discovered 3 tests
+...
+Failed tests:
+test::test_fail
+File "/tests/test.py", line 6, in test_fail
+  assert False, "This test should fail"
+Error tests:
+test::test_error
+File "/tests/test.py", line 10, in test_error
+  raise ValueError("This is an error")
+─────────────
+Passed tests: 1
+Failed tests: 1
+Error tests: 1
+```
+
 ## Contributing
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for more information.
