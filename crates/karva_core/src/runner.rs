@@ -244,6 +244,10 @@ mod tests {
             let path = self.temp_dir.path().join(filename);
             PythonTestPath::new(&SystemPathBuf::from(path)).unwrap()
         }
+
+        fn temp_dir_path(&self) -> &std::path::Path {
+            self.temp_dir.path()
+        }
     }
 
     fn create_test_writer() -> (DiagnosticWriter, Arc<Mutex<Vec<u8>>>) {
@@ -258,9 +262,10 @@ mod tests {
     }
 
     // Replace temporary directory paths with a placeholder
-    fn normalize_output(output: &str) -> String {
-        let re = Regex::new(r"/tmp/\.tmp[^/]+/").unwrap();
-        re.replace_all(output, "/tmp/PLACEHOLDER/").to_string()
+    fn normalize_output(output: &str, temp_dir: &std::path::Path) -> String {
+        let temp_dir_str = temp_dir.to_string_lossy();
+        let re = Regex::new(&format!("{}/", regex::escape(&temp_dir_str))).unwrap();
+        re.replace_all(output, "/PLACEHOLDER/").to_string()
     }
 
     #[test]
@@ -286,7 +291,7 @@ def test_simple_pass():
 
         let output = buffer.lock().unwrap();
         let stdout = strip_ansi_codes(&String::from_utf8(output.clone()).unwrap());
-        let normalized_output = normalize_output(&stdout);
+        let normalized_output = normalize_output(&stdout, env.temp_dir_path());
         let expected_output = r#"Discovered 1 tests
 .
 ─────────────
@@ -318,12 +323,12 @@ def test_simple_fail():
 
         let output = buffer.lock().unwrap();
         let stdout = strip_ansi_codes(&String::from_utf8(output.clone()).unwrap());
-        let normalized_output = normalize_output(&stdout);
+        let normalized_output = normalize_output(&stdout, env.temp_dir_path());
         let expected_output = r#"Discovered 1 tests
 .
 Failed tests:
 test_fail::test_simple_fail
-File "/tmp/PLACEHOLDER/test_fail.py", line 3, in test_simple_fail
+File "/PLACEHOLDER/test_fail.py", line 3, in test_simple_fail
   assert False, "This test should fail"
 ─────────────
 Failed tests: 1
@@ -354,12 +359,12 @@ def test_simple_error():
 
         let output = buffer.lock().unwrap();
         let stdout = strip_ansi_codes(&String::from_utf8(output.clone()).unwrap());
-        let normalized_output = normalize_output(&stdout);
+        let normalized_output = normalize_output(&stdout, env.temp_dir_path());
         let expected_output = r#"Discovered 1 tests
 .
 Error tests:
 test_error::test_simple_error
-File "/tmp/PLACEHOLDER/test_error.py", line 3, in test_simple_error
+File "/PLACEHOLDER/test_error.py", line 3, in test_simple_error
   raise ValueError("This is an error")
 ─────────────
 Error tests: 1
@@ -395,16 +400,16 @@ def test_error():
 
         let output = buffer.lock().unwrap();
         let stdout = strip_ansi_codes(&String::from_utf8(output.clone()).unwrap());
-        let normalized_output = normalize_output(&stdout);
+        let normalized_output = normalize_output(&stdout, env.temp_dir_path());
         let expected_output = r#"Discovered 3 tests
 ...
 Failed tests:
 test_mixed::test_fail
-File "/tmp/PLACEHOLDER/test_mixed.py", line 5, in test_fail
+File "/PLACEHOLDER/test_mixed.py", line 5, in test_fail
   assert False, "This test should fail"
 Error tests:
 test_mixed::test_error
-File "/tmp/PLACEHOLDER/test_mixed.py", line 8, in test_error
+File "/PLACEHOLDER/test_mixed.py", line 8, in test_error
   raise ValueError("This is an error")
 ─────────────
 Passed tests: 1
@@ -437,12 +442,12 @@ def test_invalid():
 
         let output = buffer.lock().unwrap();
         let stdout = strip_ansi_codes(&String::from_utf8(output.clone()).unwrap());
-        let normalized_output = normalize_output(&stdout);
+        let normalized_output = normalize_output(&stdout, env.temp_dir_path());
         let expected_output = r#"Discovered 1 tests
 .
 Error tests:
 invalid::test_invalid
-File "/tmp/PLACEHOLDER/invalid.py", line 3, in test_invalid
+File "/PLACEHOLDER/invalid.py", line 3, in test_invalid
   this_is_not_defined
 ─────────────
 Error tests: 1
