@@ -2,6 +2,6 @@
 
 from karva._karva import karva_run
 
-__version__ = "0.0.12"
+__version__ = "0.0.14"
 
 __all__ = ["karva_run"]
