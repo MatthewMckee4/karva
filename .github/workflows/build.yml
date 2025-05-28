@@ -2,6 +2,14 @@ name: Build / Release PyPI
 
 on:
   pull_request:
+    paths:
+      - "crates/**/*"
+      - "scripts/**/*"
+      - "python/**/*"
+      - ".github/workflows/build.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "pyproject.toml"
   push:
     tags:
       - v[0-9]*.[0-9]*.[0-9]*
