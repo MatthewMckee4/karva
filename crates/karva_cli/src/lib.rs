@@ -3,7 +3,7 @@ use std::io::{self, BufWriter, Write};
 use std::process::{ExitCode, Termination};
 
 use anyhow::Result;
-use karva_core::diagnostics::StdoutDiagnosticWriter;
+use karva_core::diagnostics::DiagnosticWriter;
 use karva_core::path::{PythonTestPath, SystemPath, SystemPathBuf};
 use karva_core::project::Project;
 use karva_core::runner::Runner;
@@ -101,7 +101,7 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
             })?
     };
 
-    let diagnostics = Box::new(StdoutDiagnosticWriter::default());
+    let diagnostics = DiagnosticWriter::default();
 
     let mut paths: Vec<PythonTestPath> = args
         .paths
