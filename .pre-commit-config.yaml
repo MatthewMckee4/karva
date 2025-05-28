@@ -29,12 +29,15 @@ repos:
     rev: v1.0
     hooks:
       - id: cargo-check
+        args: ["--all-targets", "--all-features"]
+      - id: clippy
+        args: ["--all-targets", "--all-features", "--", "-D", "warnings"]
 
   - repo: local
     hooks:
       - id: cargo-fmt
         name: cargo fmt
-        entry: cargo fmt --
+        entry: cargo +nightly fmt --
         language: system
         types: [rust]
         pass_filenames: false

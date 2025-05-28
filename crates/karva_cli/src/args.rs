@@ -1,5 +1,6 @@
-use crate::logging::Verbosity;
 use clap::Parser;
+
+use crate::logging::Verbosity;
 
 #[derive(Debug, Parser)]
 #[command(author, name = "karva", about = "A Python test runner.")]

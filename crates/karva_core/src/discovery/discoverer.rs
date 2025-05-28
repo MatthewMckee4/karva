@@ -1,11 +1,14 @@
-use ignore::WalkBuilder;
 use std::fmt::{self, Display};
 
-use crate::discovery::visitor::function_definitions;
-use crate::path::{PythonTestPath, SystemPathBuf};
-use crate::project::Project;
-use crate::utils::{is_python_file, module_name};
+use ignore::WalkBuilder;
 use ruff_python_ast::StmtFunctionDef;
+
+use crate::{
+    discovery::function_definitions,
+    path::{PythonTestPath, SystemPathBuf},
+    project::Project,
+    utils::{is_python_file, module_name},
+};
 
 pub struct Discoverer<'a> {
     project: &'a Project,
@@ -115,9 +118,11 @@ impl Display for DiscoveredTest {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
+
     use tempfile::TempDir;
+
+    use super::*;
 
     struct TestEnv {
         temp_dir: TempDir,

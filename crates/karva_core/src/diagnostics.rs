@@ -1,10 +1,15 @@
-use colored::{Color, Colorize};
-use std::io::{self, Write};
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::{
+    io::{self, Write},
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
-use crate::runner::RunnerResult;
-use crate::test_result::{TestResult, TestResultError, TestResultFail, TestResultPass};
+use colored::{Color, Colorize};
+
+use crate::{
+    runner::RunnerResult,
+    test_result::{TestResult, TestResultError, TestResultFail, TestResultPass},
+};
 
 pub struct DiagnosticWriter {
     stdout: Arc<Mutex<Box<dyn Write + Send>>>,
@@ -150,16 +155,21 @@ impl DiagnosticWriter {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        io::{self, Write},
+        sync::{Arc, Mutex},
+    };
+
     use regex::Regex;
-    use std::io::{self, Write};
-    use std::sync::{Arc, Mutex};
 
     use super::*;
-    use crate::discovery::DiscoveredTest;
-    use crate::path::SystemPathBuf;
-    use crate::project::Project;
-    use crate::runner::RunnerResult;
-    use crate::test_result::TestResult;
+    use crate::{
+        discovery::{DiscoveredTest, function_definitions},
+        path::SystemPathBuf,
+        project::Project,
+        runner::RunnerResult,
+        test_result::TestResult,
+    };
 
     #[derive(Clone, Debug)]
     struct SharedBufferWriter(Arc<Mutex<Vec<u8>>>);
@@ -195,11 +205,10 @@ mod tests {
         let file_path = temp_dir.path().join("test.py");
         std::fs::write(&file_path, "def test_name():\n    assert True\n").unwrap();
 
-        let function_def =
-            crate::discovery::visitor::function_definitions(file_path.into(), &get_project())
-                .into_iter()
-                .next()
-                .unwrap();
+        let function_def = function_definitions(file_path.into(), &get_project())
+            .into_iter()
+            .next()
+            .unwrap();
 
         DiscoveredTest::new("test.py".to_string(), function_def)
     }
