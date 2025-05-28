@@ -26,6 +26,7 @@ categories:
   - title: Dependency Updates
     label: dependencies
     collapse-after: 5
+
 version-resolver:
   major:
     labels:
@@ -45,11 +46,14 @@ version-resolver:
       - dependencies
       - security
   default: patch
+
 exclude-labels:
   - skip-changelog
 autolabeler:
   - label: documentation
     files:
+      - "docs/**/*"
+      - "mkdocs.yml"
       - "*.md"
     branch:
       - /docs-.+/
@@ -64,3 +68,12 @@ autolabeler:
       - /add-.+/
     title:
       - /^add\s/i
+  - label: refactor
+    title:
+      - /refactor/i
+  - label: cli
+    files:
+      - crates/karva_cli/
+  - label: diagnostic
+    files:
+      - crates/karva_core/src/diagnostics.rs
