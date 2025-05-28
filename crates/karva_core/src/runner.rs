@@ -6,7 +6,7 @@ use crate::{
     diagnostics::DiagnosticWriter,
     discovery::{DiscoveredTest, Discoverer},
     project::Project,
-    test_result::{TestResult, TestResultError},
+    test_result::TestResult,
 };
 
 pub struct Runner<'a> {
@@ -48,17 +48,9 @@ impl<'a> Runner<'a> {
 
                     let test_result = self.run_test(&py, test);
 
-                    match test_result {
-                        Ok(test_result) => {
-                            self.diagnostic_writer.test_completed(&test_result);
-                            test_result
-                        }
-                        Err(error) => {
-                            let error = TestResult::Error(error);
-                            self.diagnostic_writer.test_completed(&error);
-                            error
-                        }
-                    }
+                    self.diagnostic_writer.test_completed(&test_result);
+
+                    test_result
                 })
                 .collect())
         })
@@ -69,41 +61,41 @@ impl<'a> Runner<'a> {
         runner_result
     }
 
-    fn run_test(&self, py: &Python, test: &DiscoveredTest) -> Result<TestResult, TestResultError> {
+    fn run_test(&self, py: &Python, test: &DiscoveredTest) -> TestResult {
         let start_time = Instant::now();
 
-        let imported_module =
-            PyModule::import(*py, test.module()).map_err(|e| TestResultError {
-                test: test.clone(),
-                traceback: e.to_string(),
-                duration: start_time.elapsed(),
-            })?;
-        let function = imported_module
-            .getattr(test.function_definition().name.to_string())
-            .map_err(|e| TestResultError {
-                test: test.clone(),
-                traceback: e.to_string(),
-                duration: start_time.elapsed(),
-            })?;
+        let imported_module = match PyModule::import(*py, test.module()) {
+            Ok(module) => module,
+            Err(e) => {
+                return TestResult::new_error(test.clone(), e.to_string(), start_time.elapsed());
+            }
+        };
+
+        let function = match imported_module.getattr(test.function_definition().name.to_string()) {
+            Ok(function) => function,
+            Err(e) => {
+                return TestResult::new_error(test.clone(), e.to_string(), start_time.elapsed());
+            }
+        };
 
         let result = function.call0();
         let duration = start_time.elapsed();
 
         match result {
-            Ok(_) => Ok(TestResult::new_pass(test.clone(), duration)),
+            Ok(_) => TestResult::new_pass(test.clone(), duration),
             Err(err) => {
                 let err_value = err.value(*py);
                 if err_value.is_instance_of::<PyAssertionError>() {
                     let traceback = err
                         .traceback(*py)
                         .map(|traceback| filter_traceback(&traceback.format().unwrap_or_default()));
-                    Ok(TestResult::new_fail(test.clone(), traceback, duration))
+                    TestResult::new_fail(test.clone(), traceback, duration)
                 } else {
                     let traceback = err
                         .traceback(*py)
                         .map(|traceback| filter_traceback(&traceback.format().unwrap_or_default()))
                         .unwrap_or_default();
-                    Ok(TestResult::new_error(test.clone(), traceback, duration))
+                    TestResult::new_error(test.clone(), traceback, duration)
                 }
             }
         }
