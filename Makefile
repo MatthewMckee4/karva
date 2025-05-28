@@ -1,5 +1,7 @@
 dev:
 	pre-commit install
+	uv venv
+	uv pip install tbump
 
 build:
 	uv venv
