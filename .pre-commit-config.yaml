@@ -29,9 +29,9 @@ repos:
     rev: v1.0
     hooks:
       - id: cargo-check
-        args: ["--workspace"]
+        args: ["--all-targets", "--all-features"]
       - id: clippy
-        args: ["--", "-D", "warnings"]
+        args: ["--all-targets", "--all-features", "--", "-D", "warnings"]
 
   - repo: local
     hooks:
