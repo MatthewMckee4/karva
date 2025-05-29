@@ -46,3 +46,7 @@ ignore = "0.4.23"
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(codspeed)"] }
+
+[workspace.lints.clippy]
+print_stdout = "warn"
+print_stderr = "warn"
