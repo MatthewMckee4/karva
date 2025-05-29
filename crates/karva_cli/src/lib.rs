@@ -23,6 +23,7 @@ mod args;
 mod logging;
 mod version;
 
+#[must_use]
 pub fn karva_main() -> ExitStatus {
     run().unwrap_or_else(|error| {
         use std::io::Write;
@@ -173,7 +174,8 @@ impl Termination for ExitStatus {
 }
 
 impl ExitStatus {
-    pub fn to_i32(self) -> i32 {
+    #[must_use]
+    pub const fn to_i32(self) -> i32 {
         self as i32
     }
 }

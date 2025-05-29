@@ -10,14 +10,14 @@ pub struct Runner<'a> {
 }
 
 impl<'a> Runner<'a> {
-    pub fn new(project: &'a Project, diagnostics: DiagnosticWriter) -> Self {
+    pub const fn new(project: &'a Project, diagnostics: DiagnosticWriter) -> Self {
         Self {
             project,
             diagnostic_writer: diagnostics,
         }
     }
 
-    pub fn diagnostic_writer(&self) -> &DiagnosticWriter {
+    pub const fn diagnostic_writer(&self) -> &DiagnosticWriter {
         &self.diagnostic_writer
     }
 
@@ -87,18 +87,22 @@ pub struct RunnerResult {
 }
 
 impl RunnerResult {
-    pub fn new(test_results: Vec<TestResult>) -> Self {
+    #[must_use]
+    pub const fn new(test_results: Vec<TestResult>) -> Self {
         Self { test_results }
     }
 
+    #[must_use]
     pub fn passed(&self) -> bool {
         self.test_results.iter().all(TestResult::is_pass)
     }
 
+    #[must_use]
     pub fn test_results(&self) -> &[TestResult] {
         &self.test_results
     }
 
+    #[must_use]
     pub fn stats(&self) -> RunnerStats {
         let mut stats = RunnerStats::default();
         for test_result in &self.test_results {
@@ -122,19 +126,23 @@ pub struct RunnerStats {
 }
 
 impl RunnerStats {
-    pub fn total_tests(&self) -> usize {
+    #[must_use]
+    pub const fn total_tests(&self) -> usize {
         self.total_tests
     }
 
-    pub fn passed_tests(&self) -> usize {
+    #[must_use]
+    pub const fn passed_tests(&self) -> usize {
         self.passed_tests
     }
 
-    pub fn failed_tests(&self) -> usize {
+    #[must_use]
+    pub const fn failed_tests(&self) -> usize {
         self.failed_tests
     }
 
-    pub fn error_tests(&self) -> usize {
+    #[must_use]
+    pub const fn error_tests(&self) -> usize {
         self.error_tests
     }
 }
@@ -156,8 +164,8 @@ mod tests {
 
     impl Write for SharedBufferWriter {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            let mut inner = self.0.lock().unwrap();
-            inner.extend_from_slice(buf);
+            self.0.lock().unwrap().extend_from_slice(buf);
+
             Ok(buf.len())
         }
         fn flush(&mut self) -> io::Result<()> {

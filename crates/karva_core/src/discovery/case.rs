@@ -17,21 +17,25 @@ pub struct TestCase {
 }
 
 impl TestCase {
-    pub fn new(module: String, function_definition: StmtFunctionDef) -> Self {
+    #[must_use]
+    pub const fn new(module: String, function_definition: StmtFunctionDef) -> Self {
         Self {
             module,
             function_definition,
         }
     }
 
-    pub fn module(&self) -> &String {
+    #[must_use]
+    pub const fn module(&self) -> &String {
         &self.module
     }
 
-    pub fn function_definition(&self) -> &StmtFunctionDef {
+    #[must_use]
+    pub const fn function_definition(&self) -> &StmtFunctionDef {
         &self.function_definition
     }
 
+    #[must_use]
     pub fn run_test(&self, py: Python, imported_module: &Bound<'_, PyModule>) -> TestResult {
         let start_time = Instant::now();
 

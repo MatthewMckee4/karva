@@ -20,7 +20,7 @@ check:
 	cargo check --all-targets --all-features
 
 lint:
-	cargo clippy --all-targets --all-features --fix -- -D warnings --allow-dirty
+	cargo clippy --all-targets --all-features -- -D warnings
 
 format:
 	cargo +nightly fmt

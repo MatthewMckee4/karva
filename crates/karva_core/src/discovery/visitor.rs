@@ -14,13 +14,15 @@ pub struct FunctionDefinitionVisitor<'a> {
 }
 
 impl<'a> FunctionDefinitionVisitor<'a> {
-    pub fn new(project: &'a Project) -> Self {
+    #[must_use]
+    pub const fn new(project: &'a Project) -> Self {
         Self {
             discovered_functions: Vec::new(),
             project,
         }
     }
 
+    #[must_use]
     pub fn discovered_functions(&self) -> &[StmtFunctionDef] {
         &self.discovered_functions
     }
@@ -42,6 +44,7 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
     }
 }
 
+#[must_use]
 pub fn function_definitions(path: &SystemPathBuf, project: &Project) -> Vec<StmtFunctionDef> {
     let mut visitor = FunctionDefinitionVisitor::new(project);
 

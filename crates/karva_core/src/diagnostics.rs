@@ -8,14 +8,14 @@ use colored::{Color, Colorize};
 
 use crate::{
     runner::RunnerResult,
-    test_result::{TestResult, TestResultError, TestResultFail, TestResultPass},
+    test_result::{Error, Fail, Pass, TestResult},
 };
 
 pub struct DiagnosticWriter {
     stdout: Mutex<Box<dyn Write>>,
     start_time: Instant,
-    failed_tests: Vec<TestResultFail>,
-    error_tests: Vec<TestResultError>,
+    failed_tests: Vec<Fail>,
+    error_tests: Vec<Error>,
 }
 
 impl Default for DiagnosticWriter {
@@ -50,16 +50,16 @@ impl DiagnosticWriter {
         }
     }
 
-    fn test_passed(&self, _test: &TestResultPass) {
+    fn test_passed(&self, _test: &Pass) {
         self.log_test_result(Color::Green);
     }
 
-    fn test_failed(&mut self, test: &TestResultFail) {
+    fn test_failed(&mut self, test: &Fail) {
         self.log_test_result(Color::Red);
         self.failed_tests.push(test.clone());
     }
 
-    fn test_error(&mut self, test: &TestResultError) {
+    fn test_error(&mut self, test: &Error) {
         self.log_test_result(Color::Yellow);
         self.error_tests.push(test.clone());
     }
@@ -143,7 +143,7 @@ impl DiagnosticWriter {
                 ("Failed tests:", stats.failed_tests(), Color::Red),
                 ("Error tests:", stats.error_tests(), Color::Yellow),
             ] {
-                DiagnosticWriter::log_test_count(&mut stdout, label, num, color);
+                Self::log_test_count(&mut stdout, label, num, color);
             }
             tracing::info!(
                 "{} {}ms",
@@ -178,8 +178,8 @@ mod tests {
 
     impl Write for SharedBufferWriter {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            let mut inner = self.0.lock().unwrap();
-            inner.extend_from_slice(buf);
+            self.0.lock().unwrap().extend_from_slice(buf);
+
             Ok(buf.len())
         }
         fn flush(&mut self) -> io::Result<()> {

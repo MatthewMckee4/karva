@@ -7,7 +7,8 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn new(cwd: SystemPathBuf, paths: Vec<PythonTestPath>, test_prefix: String) -> Self {
+    #[must_use]
+    pub const fn new(cwd: SystemPathBuf, paths: Vec<PythonTestPath>, test_prefix: String) -> Self {
         Self {
             cwd,
             paths,
@@ -15,14 +16,17 @@ impl Project {
         }
     }
 
-    pub fn cwd(&self) -> &SystemPathBuf {
+    #[must_use]
+    pub const fn cwd(&self) -> &SystemPathBuf {
         &self.cwd
     }
 
+    #[must_use]
     pub fn paths(&self) -> &[PythonTestPath] {
         &self.paths
     }
 
+    #[must_use]
     pub fn test_prefix(&self) -> &str {
         &self.test_prefix
     }
