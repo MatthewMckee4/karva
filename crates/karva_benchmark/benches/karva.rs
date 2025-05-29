@@ -21,8 +21,8 @@ fn create_test_cases() -> Vec<TestCase> {
     ]
 }
 
-fn benchmark_test_runner(criterion: &mut Criterion) {
-    let mut group = criterion.benchmark_group("test_runner");
+fn benchmark_karva(criterion: &mut Criterion) {
+    let mut group = criterion.benchmark_group("karva");
 
     let cwd = {
         let env_cwd = std::env::current_dir()
@@ -68,5 +68,5 @@ fn benchmark_test_runner(criterion: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(test_runner, benchmark_test_runner);
-criterion_main!(test_runner);
+criterion_group!(karva, benchmark_karva);
+criterion_main!(karva);
