@@ -62,8 +62,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - name: Generate benchmarks resources
-        run: uv run crates/karva_benchmark/resources/generate.py
+        run: python3 crates/karva_benchmark/resources/generate.py
       - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
       - name: "Install codspeed"
         uses: taiki-e/install-action@v2.52.2
         with:
