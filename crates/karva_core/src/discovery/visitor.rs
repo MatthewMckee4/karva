@@ -64,6 +64,7 @@ fn parsed_module(path: SystemPathBuf) -> Parsed<ModModule> {
 }
 
 fn source_text(path: SystemPathBuf) -> String {
+    println!("path: {:?}", path.as_std_path());
     std::fs::read_to_string(path.as_std_path()).unwrap()
 }
 
