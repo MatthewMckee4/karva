@@ -65,7 +65,8 @@ def generate_test_file(
             f.write("\n")
 
 
-NUM_TESTS = 100000
+NUM_TESTS = 5000
+NUM_ASSERT_PER_FUNCTION = 10
 
 OUTPUT_RESOURCES = [
     (RESOURCES_PATH / "test_true_assertions.py", NUM_TESTS, 1, add_true_assertions),

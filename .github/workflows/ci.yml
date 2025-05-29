@@ -60,9 +60,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - name: Generate benchmarks resources
-        run: python3 crates/karva_benchmark/resources/generate.py
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable

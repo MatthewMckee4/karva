@@ -35,7 +35,10 @@ fix = true
 target-version = "py311"
 
 [tool.ruff.lint]
-exclude = ["python/karva/__main__.py"]
+exclude = [
+    "python/karva/__main__.py",
+    "crates/karva_benchmark/resources/test_*.py",
+]
 select = ["ALL"]
 
 [tool.tbump]
