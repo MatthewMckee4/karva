@@ -1,0 +1,28 @@
+name: Bug report
+description: Report an error or unexpected behavior
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report an issue! We're glad to have you involved with Karva.
+
+        **Before reporting, please make sure to search through [existing issues](https://github.com/MatthewMckee4/karva/issues?q=is:issue+is:open+label:bug) (including [closed](https://github.com/MatthewMckee4/karva/issues?q=is:issue%20state:closed%20label:bug)).**
+
+  - type: textarea
+    attributes:
+      label: Summary
+      description: |
+        A clear and concise description of the bug, including a minimal reproducible example.
+
+        Be sure to include the command you invoked (e.g., `karva test /path/to/file.py`)
+
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Version
+      description: What version of Karva are you using? (see `karva --version`)
+      placeholder: e.g., Karva 0.1.0
+    validations:
+      required: false
