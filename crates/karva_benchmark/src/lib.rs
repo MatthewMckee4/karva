@@ -1,24 +1,25 @@
 use std::path::PathBuf;
 
 pub static TRUE_ASSERTIONS: TestFile = TestFile::new(
-    "true_assertions.py",
+    "test_true_assertions.py",
     include_str!("../resources/test_true_assertions.py"),
 );
 
-pub static MATH: TestFile = TestFile::new("math.py", include_str!("../resources/test_math.py"));
+pub static MATH: TestFile =
+    TestFile::new("test_math.py", include_str!("../resources/test_math.py"));
 
 pub static STRING_CONCATENATION: TestFile = TestFile::new(
-    "string_concatenation.py",
+    "test_string_concatenation.py",
     include_str!("../resources/test_string_concatenation.py"),
 );
 
 pub static LARGE_SUMMATION: TestFile = TestFile::new(
-    "large_summation.py",
+    "test_large_summation.py",
     include_str!("../resources/test_large_summation.py"),
 );
 
 pub static LARGE_LIST_COMPREHENSION: TestFile = TestFile::new(
-    "large_list_comprehension.py",
+    "test_large_list_comprehension.py",
     include_str!("../resources/test_large_list_comprehension.py"),
 );
 

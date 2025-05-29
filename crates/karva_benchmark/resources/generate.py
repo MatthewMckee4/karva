@@ -34,7 +34,7 @@ def add_string_concatenation(f: TextIOWrapper, num_asserts: int) -> None:
 
 def add_large_summation(f: TextIOWrapper, num_asserts: int) -> None:
     """Add a large summation to a test function."""
-    number = 1000000
+    number = 10_000
     for _ in range(num_asserts):
         f.write(
             f"    assert sum(range({number})) == {number * (number - 1) // 2}\n",
@@ -43,7 +43,7 @@ def add_large_summation(f: TextIOWrapper, num_asserts: int) -> None:
 
 def add_large_list_comprehension(f: TextIOWrapper, num_asserts: int) -> None:
     """Add a large list comprehension to a test function."""
-    number = 1000000
+    number = 10_000
     for _ in range(num_asserts):
         f.write(
             f"    assert [i for i in range({number})] == list(range({number}))\n",
@@ -65,8 +65,8 @@ def generate_test_file(
             f.write("\n")
 
 
-NUM_TESTS = 5000
-NUM_ASSERT_PER_FUNCTION = 10
+NUM_TESTS = 10000
+NUM_ASSERT_PER_FUNCTION = 2
 
 OUTPUT_RESOURCES = [
     (RESOURCES_PATH / "test_true_assertions.py", NUM_TESTS, 1, add_true_assertions),

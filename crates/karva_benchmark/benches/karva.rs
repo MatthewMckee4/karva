@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-
+use anyhow::{Context, anyhow};
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use karva_benchmark::{
     LARGE_LIST_COMPREHENSION, LARGE_SUMMATION, MATH, STRING_CONCATENATION, TRUE_ASSERTIONS,
@@ -7,7 +6,7 @@ use karva_benchmark::{
 };
 use karva_core::{
     diagnostics::DiagnosticWriter,
-    path::{PythonTestPath, SystemPathBuf},
+    path::{PythonTestPath, SystemPath, SystemPathBuf},
     project::Project,
     runner::Runner,
 };
@@ -25,15 +24,19 @@ fn create_test_cases() -> Vec<TestCase> {
 fn benchmark_test_runner(criterion: &mut Criterion) {
     let mut group = criterion.benchmark_group("test_runner");
 
-    let cwd = SystemPathBuf::from_path_buf(
-        PathBuf::from(file!())
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join("resources"),
-    )
-    .unwrap();
+    let cwd = {
+        let env_cwd = std::env::current_dir()
+            .context("Failed to get the current working directory")
+            .unwrap();
+        let cwd = env_cwd.parent().unwrap().parent().unwrap();
+        SystemPathBuf::from_path_buf(cwd.to_path_buf())
+            .map_err(|path| {
+                anyhow!(
+                    "The current working directory `{}` contains non-Unicode characters. Karva only supports Unicode paths.",
+                    path.display()
+                )
+            }).unwrap()
+    };
 
     for case in create_test_cases() {
         group.throughput(Throughput::Bytes(case.code().len() as u64));
@@ -46,9 +49,11 @@ fn benchmark_test_runner(criterion: &mut Criterion) {
                     let diagnostics = DiagnosticWriter::default();
                     let project = Project::new(
                         cwd.clone(),
-                        [PythonTestPath::File(
+                        [PythonTestPath::new(&SystemPath::absolute(
                             SystemPathBuf::from_path_buf(case.path()).unwrap(),
-                        )]
+                            &cwd,
+                        ))
+                        .unwrap()]
                         .into(),
                         "test".to_string(),
                     );
