@@ -35,18 +35,31 @@ impl<'a> Runner<'a> {
             }
             Ok(discovered_tests
                 .iter()
-                .map(|test| {
-                    let test_name = test.function_definition().name.to_string();
-                    let module = test.module();
+                .filter_map(|(module_name, test_cases)| {
+                    let imported_module = match PyModule::import(py, module_name) {
+                        Ok(module) => module,
+                        Err(e) => {
+                            self.diagnostic_writer
+                                .error(&format!("Failed to import module {}: {}", module_name, e));
+                            return None;
+                        }
+                    };
+                    let mut test_results = Vec::new();
+                    for test_case in test_cases.iter() {
+                        let test_name = test_case.function_definition().name.to_string();
+                        let module = test_case.module();
 
-                    self.diagnostic_writer.test_started(&test_name, module);
+                        self.diagnostic_writer.test_started(&test_name, module);
 
-                    let test_result = test.run_test(&py);
+                        let test_result = test_case.run_test(&py, &imported_module);
 
-                    self.diagnostic_writer.test_completed(&test_result);
+                        self.diagnostic_writer.test_completed(&test_result);
 
-                    test_result
+                        test_results.push(test_result);
+                    }
+                    Some(test_results)
                 })
+                .flatten()
                 .collect())
         })
         .unwrap_or_default();

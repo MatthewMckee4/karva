@@ -14,6 +14,7 @@ class Benchmark:
     command: str
 
     def run_benchmark(self, iterations: int = 5) -> float:
+        print(f"Running {self.name} benchmark {iterations} times")
         return run_benchmark(self.command, iterations)
 
 
@@ -33,12 +34,13 @@ def generate_test_file(num_tests: int = 10000, num_asserts: int = 1) -> Path:
 def run_benchmark(command: str, iterations: int = 5) -> float:
     """Run a benchmark command multiple times and return mean and standard deviation."""
     times: list[float] = []
-    for _ in range(iterations):
+    for _ in range(iterations + 1):
         start = time.time()
         subprocess.run(command, shell=True, capture_output=True, check=False)  # noqa: S602
-        end = time.time()
-        times.append(end - start)
-    return float(np.mean(times))
+        time_taken = time.time() - start
+        print(f"Time taken: {time_taken:.4f}s")
+        times.append(time_taken)
+    return float(np.mean(times[1:]))
 
 
 def create_benchmark_graph(
@@ -130,6 +132,18 @@ def main() -> None:
         default=1,
         help="Number of benchmark iterations to run (default: 1)",
     )
+    parser.add_argument(
+        "--keep-test-file",
+        action="store_true",
+        default=False,
+        help="Keep the test file after running the benchmark",
+    )
+    parser.add_argument(
+        "--run-test",
+        action="store_true",
+        default=False,
+        help="Run the benchmark with flamegraph",
+    )
     args = parser.parse_args()
 
     test_file = generate_test_file(args.num_tests)
@@ -144,14 +158,15 @@ def main() -> None:
             command=f"../../target/debug/karva test {test_file}",
         ),
     ]
+    if args.run_test:
+        create_benchmark_graph(
+            benchmarks,
+            iterations=args.iterations,
+            num_tests=args.num_tests,
+        )
 
-    create_benchmark_graph(
-        benchmarks,
-        iterations=args.iterations,
-        num_tests=args.num_tests,
-    )
-
-    test_file.unlink()
+    if not args.keep_test_file:
+        test_file.unlink()
 
 
 if __name__ == "__main__":

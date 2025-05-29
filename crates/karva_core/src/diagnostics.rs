@@ -74,6 +74,12 @@ impl DiagnosticWriter {
         self.flush_stdout(&mut stdout);
     }
 
+    pub fn error(&self, error: &str) {
+        let mut stdout = self.acquire_stdout();
+        let _ = writeln!(stdout, "{}", error.red());
+        self.flush_stdout(&mut stdout);
+    }
+
     pub fn discovery_started(&self) {
         tracing::info!("{}", "Discovering tests...".blue());
     }
