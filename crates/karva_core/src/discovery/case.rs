@@ -32,15 +32,8 @@ impl TestCase {
         &self.function_definition
     }
 
-    pub fn run_test(&self, py: &Python) -> TestResult {
+    pub fn run_test(&self, py: &Python, imported_module: &Bound<'_, PyModule>) -> TestResult {
         let start_time = Instant::now();
-
-        let imported_module = match PyModule::import(*py, self.module()) {
-            Ok(module) => module,
-            Err(e) => {
-                return TestResult::new_error(self.clone(), e.to_string(), start_time.elapsed());
-            }
-        };
 
         let function = match imported_module.getattr(self.function_definition().name.to_string()) {
             Ok(function) => function,

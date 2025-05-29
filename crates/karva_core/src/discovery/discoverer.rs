@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use ignore::WalkBuilder;
 use ruff_python_ast::StmtFunctionDef;
@@ -19,41 +19,45 @@ impl<'a> Discoverer<'a> {
         Self { project }
     }
 
-    pub fn discover(&self) -> Vec<TestCase> {
+    pub fn discover(&self) -> HashMap<String, HashSet<TestCase>> {
         #[allow(clippy::mutable_key_type)]
-        let mut discovered_tests = HashSet::new();
+        let mut discovered_tests: HashMap<String, HashSet<TestCase>> = HashMap::new();
 
         for path in self.project.paths() {
             discovered_tests.extend(self.discover_files(path));
         }
 
-        discovered_tests.into_iter().collect()
+        discovered_tests
     }
 
-    fn discover_files(&self, path: &PythonTestPath) -> Vec<TestCase> {
+    fn discover_files(&self, path: &PythonTestPath) -> HashMap<String, HashSet<TestCase>> {
         match path {
             PythonTestPath::File(path) => self.discover_file(path),
             PythonTestPath::Directory(dir_path) => self.discover_directory(dir_path),
             PythonTestPath::Function(path, function_name) => {
                 if let Some(test_case) = self.discover_function(path, function_name) {
-                    vec![test_case]
+                    HashMap::from([(test_case.module().to_string(), HashSet::from([test_case]))])
                 } else {
-                    vec![]
+                    HashMap::new() // TODO: should this be an error?
                 }
             }
         }
     }
 
-    fn discover_file(&self, path: &SystemPathBuf) -> Vec<TestCase> {
-        self.test_functions_in_file(path)
-            .into_iter()
-            .map(|function_name| {
-                TestCase::new(module_name(self.project.cwd(), path), function_name)
-            })
-            .collect()
+    fn discover_file(&self, path: &SystemPathBuf) -> HashMap<String, HashSet<TestCase>> {
+        let mut discovered_tests: HashMap<String, HashSet<TestCase>> = HashMap::new();
+        let module_name = module_name(self.project.cwd(), path);
+        for function_name in self.test_functions_in_file(path) {
+            let test_case = TestCase::new(module_name.clone(), function_name);
+            discovered_tests
+                .entry(module_name.clone())
+                .or_default()
+                .insert(test_case);
+        }
+        discovered_tests
     }
 
-    fn discover_directory(&self, path: &SystemPathBuf) -> Vec<TestCase> {
+    fn discover_directory(&self, path: &SystemPathBuf) -> HashMap<String, HashSet<TestCase>> {
         let dir_path = path.as_std_path().to_path_buf();
         let walker = WalkBuilder::new(self.project.cwd().as_std_path())
             .standard_filters(true)
@@ -62,18 +66,23 @@ impl<'a> Discoverer<'a> {
             .filter_entry(move |entry| entry.path().starts_with(&dir_path))
             .build();
 
-        walker
-            .flatten()
-            .filter_map(|entry| {
-                let entry_path = entry.path();
-                let path = SystemPathBuf::from(entry_path);
-                if !is_python_file(&path) {
-                    return None;
-                }
-                Some(self.discover_file(&path))
-            })
-            .flatten()
-            .collect()
+        let mut discovered_tests: HashMap<String, HashSet<TestCase>> = HashMap::new();
+        for entry in walker.flatten() {
+            let entry_path = entry.path();
+            let path = SystemPathBuf::from(entry_path);
+            if !is_python_file(&path) {
+                continue;
+            }
+            let discovered_tests_for_file = self.discover_file(&path);
+            for (module_name, test_cases) in discovered_tests_for_file {
+                discovered_tests
+                    .entry(module_name)
+                    .or_default()
+                    .extend(test_cases);
+            }
+        }
+
+        discovered_tests
     }
 
     fn discover_function(&self, path: &SystemPathBuf, function_name: &str) -> Option<TestCase> {
@@ -133,6 +142,19 @@ mod tests {
         }
     }
 
+    fn get_sorted_test_strings(
+        discovered_tests: &HashMap<String, HashSet<TestCase>>,
+    ) -> Vec<String> {
+        let test_strings: Vec<Vec<String>> = discovered_tests
+            .values()
+            .map(|t| t.iter().map(|t| t.to_string()).collect())
+            .collect();
+        let mut flattened_test_strings: Vec<String> =
+            test_strings.iter().flatten().cloned().collect();
+        flattened_test_strings.sort();
+        flattened_test_strings
+    }
+
     #[test]
     fn test_discover_files() {
         let env = TestEnv::new();
@@ -146,11 +168,9 @@ mod tests {
         );
         let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
-        assert_eq!(discovered_tests.len(), 1);
-        assert!(
-            discovered_tests[0]
-                .to_string()
-                .ends_with("test::test_function")
+        assert_eq!(
+            get_sorted_test_strings(&discovered_tests),
+            vec!["test::test_function"]
         );
     }
 
@@ -172,11 +192,9 @@ mod tests {
         let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
-        assert_eq!(discovered_tests.len(), 1);
-        assert!(
-            discovered_tests[0]
-                .to_string()
-                .ends_with("test_dir.test_file1::test_function1")
+        assert_eq!(
+            get_sorted_test_strings(&discovered_tests),
+            vec!["test_dir.test_file1::test_function1"]
         );
     }
 
@@ -201,11 +219,9 @@ mod tests {
         let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
-        assert_eq!(discovered_tests.len(), 1);
-        assert!(
-            discovered_tests[0]
-                .to_string()
-                .ends_with("tests.test_file1::test_function1")
+        assert_eq!(
+            get_sorted_test_strings(&discovered_tests),
+            vec!["tests.test_file1::test_function1"]
         );
     }
 
@@ -234,22 +250,13 @@ mod tests {
         let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
-        assert_eq!(discovered_tests.len(), 3);
-        let test_strings: Vec<String> = discovered_tests.iter().map(|t| t.to_string()).collect();
-        assert!(
-            test_strings
-                .iter()
-                .any(|s| s.ends_with("tests.test_file1::test_function1"))
-        );
-        assert!(
-            test_strings
-                .iter()
-                .any(|s| s.ends_with("tests.nested.test_file2::test_function2"))
-        );
-        assert!(
-            test_strings
-                .iter()
-                .any(|s| s.ends_with("tests.nested.deeper.test_file3::test_function3"))
+        assert_eq!(
+            get_sorted_test_strings(&discovered_tests),
+            vec![
+                "tests.nested.deeper.test_file3::test_function3",
+                "tests.nested.test_file2::test_function2",
+                "tests.test_file1::test_function1"
+            ]
         );
     }
 
@@ -276,11 +283,14 @@ def not_a_test(): pass
         let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
-        assert_eq!(discovered_tests.len(), 3);
-        let test_strings: Vec<String> = discovered_tests.iter().map(|t| t.to_string()).collect();
-        assert!(test_strings.iter().any(|s| s.ends_with("test_function1")));
-        assert!(test_strings.iter().any(|s| s.ends_with("test_function2")));
-        assert!(test_strings.iter().any(|s| s.ends_with("test_function3")));
+        assert_eq!(
+            get_sorted_test_strings(&discovered_tests),
+            vec![
+                "test_file::test_function1",
+                "test_file::test_function2",
+                "test_file::test_function3"
+            ]
+        );
     }
 
     #[test]
@@ -307,8 +317,10 @@ def test_function2(): pass
         let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
-        assert_eq!(discovered_tests.len(), 1);
-        assert!(discovered_tests[0].to_string().ends_with("test_function1"));
+        assert_eq!(
+            get_sorted_test_strings(&discovered_tests),
+            vec!["test_file::test_function1"]
+        );
     }
 
     #[test]
@@ -329,7 +341,7 @@ def test_function2(): pass
         let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
-        assert_eq!(discovered_tests.len(), 0);
+        assert!(get_sorted_test_strings(&discovered_tests).is_empty());
     }
 
     #[test]
@@ -347,7 +359,7 @@ def test_function2(): pass
         let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
-        assert_eq!(discovered_tests.len(), 0);
+        assert!(get_sorted_test_strings(&discovered_tests).is_empty());
     }
 
     #[test]
@@ -372,10 +384,10 @@ def test_function(): pass
         let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
-        assert_eq!(discovered_tests.len(), 2);
-        let test_strings: Vec<String> = discovered_tests.iter().map(|t| t.to_string()).collect();
-        assert!(test_strings.iter().any(|s| s.ends_with("check_function1")));
-        assert!(test_strings.iter().any(|s| s.ends_with("check_function2")));
+        assert_eq!(
+            get_sorted_test_strings(&discovered_tests),
+            vec!["test_file::check_function1", "test_file::check_function2",]
+        );
     }
 
     #[test]
@@ -403,11 +415,14 @@ def test_function(): pass
         let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
-        assert_eq!(discovered_tests.len(), 3);
-        let test_strings: Vec<String> = discovered_tests.iter().map(|t| t.to_string()).collect();
-        assert!(test_strings.iter().any(|s| s.ends_with("test_function1")));
-        assert!(test_strings.iter().any(|s| s.ends_with("test_function2")));
-        assert!(test_strings.iter().any(|s| s.ends_with("test_function3")));
+        assert_eq!(
+            get_sorted_test_strings(&discovered_tests),
+            vec![
+                "test1::test_function1",
+                "test2::test_function2",
+                "tests.test3::test_function3"
+            ]
+        );
     }
 
     #[test]
@@ -429,7 +444,10 @@ def test_function(): pass
         );
         let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
-        assert_eq!(discovered_tests.len(), 1);
+        assert_eq!(
+            get_sorted_test_strings(&discovered_tests),
+            vec!["tests.test_file::test_function"]
+        );
     }
 
     #[test]
@@ -452,6 +470,12 @@ def test_function(): pass
         );
         let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
-        assert_eq!(discovered_tests.len(), 2);
+        assert_eq!(
+            get_sorted_test_strings(&discovered_tests),
+            vec![
+                "tests.test_file2::test_function",
+                "tests.test_file::test_function"
+            ]
+        );
     }
 }
