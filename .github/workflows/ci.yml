@@ -54,3 +54,24 @@ jobs:
         run: uv sync --all-extras
       - name: Run Tests
         run: make docs
+
+  benchmarks:
+    name: Run benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Generate benchmarks resources
+        run: uv run crates/karva_benchmark/resources/generate.py
+      - uses: actions-rs/toolchain@v1
+      - name: "Install codspeed"
+        uses: taiki-e/install-action@v2.52.2
+        with:
+          tool: cargo-codspeed
+      - name: "Build benchmarks"
+        run: cargo codspeed build --features codspeed -p karva_benchmark
+      - name: Run benchmarks
+        uses: CodSpeedHQ/action@v3
+        with:
+          token: ${{ secrets.CODSPEED_TOKEN }}
+          run: cargo codspeed run
