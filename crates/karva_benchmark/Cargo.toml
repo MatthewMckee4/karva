@@ -23,5 +23,8 @@ criterion = { workspace = true, default-features = false }
 [dev-dependencies]
 karva_core = { workspace = true }
 
+[lints]
+workspace = true
+
 [features]
 codspeed = ["codspeed-criterion-compat"]

@@ -42,3 +42,7 @@ ruff_source_file = { git = "https://github.com/astral-sh/ruff/", branch = "main"
 ruff_text_size = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 pyo3 = { version = "0.25.0", features = ["auto-initialize"] }
 ignore = "0.4.23"
+
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(codspeed)"] }

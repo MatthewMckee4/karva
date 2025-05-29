@@ -1,8 +1,8 @@
 use anyhow::{Context, anyhow};
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use karva_benchmark::{
     LARGE_LIST_COMPREHENSION, LARGE_SUMMATION, MATH, STRING_CONCATENATION, TRUE_ASSERTIONS,
     TestCase,
+    criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main},
 };
 use karva_core::{
     diagnostics::DiagnosticWriter,
