@@ -1,0 +1,22 @@
+[package]
+name = "karva_benchmark"
+version = "0.0.0"
+description = "Karva Benchmarks"
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+codspeed-criterion-compat = { workspace = true, default-features = false, optional = true }
+criterion = { workspace = true, default-features = false }
+
+[dev-dependencies]
+karva_core = { workspace = true }
+
+[features]
+codspeed = ["codspeed-criterion-compat"]

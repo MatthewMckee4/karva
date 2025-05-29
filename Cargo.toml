@@ -15,8 +15,11 @@ license = "MIT"
 karva_core = { path = "crates/karva_core" }
 karva_cli = { path = "crates/karva_cli" }
 karva = { path = "crates/karva" }
+karva_benchmark = { path = "crates/karva_benchmark" }
 
 anyhow = { version = "1.0.97" }
+codspeed-criterion-compat = { version = "2.6.0", default-features = false }
+criterion = { version = "0.6.0", default-features = false }
 clap = { version = "4.5.35", features = ["derive", "wrap_help"] }
 camino = { version = "1.1.7" }
 chrono = { version = "0.4.35", default-features = false, features = ["clock"] }
