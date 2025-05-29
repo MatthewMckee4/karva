@@ -1,7 +1,6 @@
 //! This module re-exports the criterion API but picks the right backend depending on whether
 //! the benchmarks are built to run locally or with codspeed.
 //! The compat layer is required because codspeed doesn't support all platforms.
-//! See [#12662](https://github.com/astral-sh/ruff/issues/12662)
 
 #[cfg(not(codspeed))]
 pub use criterion::*;
