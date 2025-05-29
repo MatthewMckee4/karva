@@ -65,23 +65,38 @@ def generate_test_file(
             f.write("\n")
 
 
-NUM_TESTS = 10000
-NUM_ASSERT_PER_FUNCTION = 2
+NUM_TESTS = 100
+NUM_ASSERT_PER_FUNCTION = 5
 
 OUTPUT_RESOURCES = [
-    (RESOURCES_PATH / "test_true_assertions.py", NUM_TESTS, 1, add_true_assertions),
-    (RESOURCES_PATH / "test_math.py", NUM_TESTS, 1, add_math),
+    (
+        RESOURCES_PATH / "test_true_assertions.py",
+        NUM_TESTS,
+        NUM_ASSERT_PER_FUNCTION,
+        add_true_assertions,
+    ),
+    (
+        RESOURCES_PATH / "test_math.py",
+        NUM_TESTS,
+        NUM_ASSERT_PER_FUNCTION,
+        add_math,
+    ),
     (
         RESOURCES_PATH / "test_string_concatenation.py",
         NUM_TESTS,
-        1,
+        NUM_ASSERT_PER_FUNCTION,
         add_string_concatenation,
     ),
-    (RESOURCES_PATH / "test_large_summation.py", NUM_TESTS, 1, add_large_summation),
+    (
+        RESOURCES_PATH / "test_large_summation.py",
+        NUM_TESTS,
+        NUM_ASSERT_PER_FUNCTION,
+        add_large_summation,
+    ),
     (
         RESOURCES_PATH / "test_large_list_comprehension.py",
         NUM_TESTS,
-        1,
+        NUM_ASSERT_PER_FUNCTION,
         add_large_list_comprehension,
     ),
 ]

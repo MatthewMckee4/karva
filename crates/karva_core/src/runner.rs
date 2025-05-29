@@ -25,7 +25,7 @@ impl<'a> Runner<'a> {
         self.diagnostic_writer.discovery_started();
         let discovered_tests = Discoverer::new(self.project).discover();
         self.diagnostic_writer
-            .discovery_completed(discovered_tests.len());
+            .discovery_completed(discovered_tests.values().map(|tests| tests.len()).sum());
 
         let test_results = Python::with_gil(|py| {
             let add_cwd_to_sys_path_result = self.add_cwd_to_sys_path(&py);

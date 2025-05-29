@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+pub mod criterion;
+
 pub static TRUE_ASSERTIONS: TestFile = TestFile::new(
     "test_true_assertions.py",
     include_str!("../resources/test_true_assertions.py"),
