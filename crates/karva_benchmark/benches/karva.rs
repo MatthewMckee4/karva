@@ -68,5 +68,5 @@ fn benchmark_test_runner(criterion: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(test_runner, benchmark_test_runner);
-criterion_main!(test_runner);
+criterion_group!(karva, benchmark_test_runner);
+criterion_main!(karva);
