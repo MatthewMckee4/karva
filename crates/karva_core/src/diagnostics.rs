@@ -134,14 +134,14 @@ impl DiagnosticWriter {
         let stats = runner_result.stats();
         let total_duration = self.start_time.elapsed();
 
-        if stats.total_tests() > 0 {
+        if stats.total() > 0 {
             let _ = writeln!(stdout);
             self.display_test_results(&mut stdout);
             let _ = writeln!(stdout, "{}", "─────────────".bold());
             for (label, num, color) in [
-                ("Passed tests:", stats.passed_tests(), Color::Green),
-                ("Failed tests:", stats.failed_tests(), Color::Red),
-                ("Error tests:", stats.error_tests(), Color::Yellow),
+                ("Passed tests:", stats.passed(), Color::Green),
+                ("Failed tests:", stats.failed(), Color::Red),
+                ("Error tests:", stats.error(), Color::Yellow),
             ] {
                 Self::log_test_count(&mut stdout, label, num, color);
             }

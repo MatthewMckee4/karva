@@ -103,14 +103,14 @@ impl RunnerResult {
     }
 
     #[must_use]
-    pub fn stats(&self) -> RunnerStats {
-        let mut stats = RunnerStats::default();
+    pub fn stats(&self) -> RunStats {
+        let mut stats = RunStats::default();
         for test_result in &self.test_results {
-            stats.total_tests += 1;
+            stats.total += 1;
             match test_result {
-                TestResult::Pass(_) => stats.passed_tests += 1,
-                TestResult::Fail(_) => stats.failed_tests += 1,
-                TestResult::Error(_) => stats.error_tests += 1,
+                TestResult::Pass(_) => stats.passed += 1,
+                TestResult::Fail(_) => stats.failed += 1,
+                TestResult::Error(_) => stats.error += 1,
             }
         }
         stats
@@ -118,32 +118,32 @@ impl RunnerResult {
 }
 
 #[derive(Debug, Default)]
-pub struct RunnerStats {
-    total_tests: usize,
-    passed_tests: usize,
-    failed_tests: usize,
-    error_tests: usize,
+pub struct RunStats {
+    total: usize,
+    passed: usize,
+    failed: usize,
+    error: usize,
 }
 
-impl RunnerStats {
+impl RunStats {
     #[must_use]
-    pub const fn total_tests(&self) -> usize {
-        self.total_tests
+    pub const fn total(&self) -> usize {
+        self.total
     }
 
     #[must_use]
-    pub const fn passed_tests(&self) -> usize {
-        self.passed_tests
+    pub const fn passed(&self) -> usize {
+        self.passed
     }
 
     #[must_use]
-    pub const fn failed_tests(&self) -> usize {
-        self.failed_tests
+    pub const fn failed(&self) -> usize {
+        self.failed
     }
 
     #[must_use]
-    pub const fn error_tests(&self) -> usize {
-        self.error_tests
+    pub const fn error(&self) -> usize {
+        self.error
     }
 }
 
@@ -221,10 +221,10 @@ def test_simple_pass():
 
         let result = runner.run();
 
-        assert_eq!(result.stats().total_tests(), 1);
-        assert_eq!(result.stats().passed_tests(), 1);
-        assert_eq!(result.stats().failed_tests(), 0);
-        assert_eq!(result.stats().error_tests(), 0);
+        assert_eq!(result.stats().total(), 1);
+        assert_eq!(result.stats().passed(), 1);
+        assert_eq!(result.stats().failed(), 0);
+        assert_eq!(result.stats().error(), 0);
     }
 
     #[test]
@@ -247,10 +247,10 @@ def test_simple_fail():
 
         let result = runner.run();
 
-        assert_eq!(result.stats().total_tests(), 1);
-        assert_eq!(result.stats().passed_tests(), 0);
-        assert_eq!(result.stats().failed_tests(), 1);
-        assert_eq!(result.stats().error_tests(), 0);
+        assert_eq!(result.stats().total(), 1);
+        assert_eq!(result.stats().passed(), 0);
+        assert_eq!(result.stats().failed(), 1);
+        assert_eq!(result.stats().error(), 0);
     }
 
     #[test]
@@ -273,10 +273,10 @@ def test_simple_error():
 
         let result = runner.run();
 
-        assert_eq!(result.stats().total_tests(), 1);
-        assert_eq!(result.stats().passed_tests(), 0);
-        assert_eq!(result.stats().failed_tests(), 0);
-        assert_eq!(result.stats().error_tests(), 1);
+        assert_eq!(result.stats().total(), 1);
+        assert_eq!(result.stats().passed(), 0);
+        assert_eq!(result.stats().failed(), 0);
+        assert_eq!(result.stats().error(), 1);
     }
 
     #[test]
@@ -304,9 +304,9 @@ def test_error():
 
         let result = runner.run();
 
-        assert_eq!(result.stats().total_tests(), 3);
-        assert_eq!(result.stats().passed_tests(), 1);
-        assert_eq!(result.stats().failed_tests(), 1);
-        assert_eq!(result.stats().error_tests(), 1);
+        assert_eq!(result.stats().total(), 3);
+        assert_eq!(result.stats().passed(), 1);
+        assert_eq!(result.stats().failed(), 1);
+        assert_eq!(result.stats().error(), 1);
     }
 }
