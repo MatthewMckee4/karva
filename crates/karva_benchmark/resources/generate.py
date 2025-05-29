@@ -65,8 +65,8 @@ def generate_test_file(
             f.write("\n")
 
 
-NUM_TESTS = 1000
-NUM_ASSERT_PER_FUNCTION = 3
+NUM_TESTS = 100
+NUM_ASSERT_PER_FUNCTION = 5
 
 OUTPUT_RESOURCES = [
     (

@@ -60,6 +60,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v3
+      - name: Generate resources
+        run: python crates/karva_benchmark/resources/generate.py
       - name: Setup rust toolchain, cache and cargo-codspeed binary
         uses: moonrepo/setup-rust@v1
         with:
