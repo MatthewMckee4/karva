@@ -78,6 +78,11 @@ impl TestCase {
         self.speed
     }
 
+    /// Returns the path of this [`TestCase`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the path cannot be constructed.
     pub fn path(&self) -> PathBuf {
         PathBuf::from(file!())
             .parent()
@@ -100,10 +105,12 @@ impl TestFile {
         Self { name, code }
     }
 
+    #[must_use]
     pub fn code(&self) -> &str {
         self.code
     }
 
+    #[must_use]
     pub fn name(&self) -> &str {
         self.name
     }

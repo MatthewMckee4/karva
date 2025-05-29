@@ -32,7 +32,7 @@ impl TestCase {
         &self.function_definition
     }
 
-    pub fn run_test(&self, py: &Python, imported_module: &Bound<'_, PyModule>) -> TestResult {
+    pub fn run_test(&self, py: Python, imported_module: &Bound<'_, PyModule>) -> TestResult {
         let start_time = Instant::now();
 
         let function = match imported_module.getattr(self.function_definition().name.to_string()) {
@@ -47,20 +47,20 @@ impl TestCase {
 
         match result {
             Ok(_) => TestResult::new_pass(self.clone(), duration),
-            Err(err) => self.handle_run_error(py, err, duration),
+            Err(err) => self.handle_run_error(py, &err, duration),
         }
     }
 
-    fn handle_run_error(&self, py: &Python, error: PyErr, duration: Duration) -> TestResult {
-        let err_value = error.value(*py);
+    fn handle_run_error(&self, py: Python, error: &PyErr, duration: Duration) -> TestResult {
+        let err_value = error.value(py);
         if err_value.is_instance_of::<PyAssertionError>() {
             let traceback = error
-                .traceback(*py)
+                .traceback(py)
                 .map(|traceback| filter_traceback(&traceback.format().unwrap_or_default()));
             TestResult::new_fail(self.clone(), traceback, duration)
         } else {
             let traceback = error
-                .traceback(*py)
+                .traceback(py)
                 .map(|traceback| filter_traceback(&traceback.format().unwrap_or_default()))
                 .unwrap_or_default();
             TestResult::new_error(self.clone(), traceback, duration)

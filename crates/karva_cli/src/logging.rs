@@ -82,7 +82,7 @@ impl VerbosityLevel {
     }
 }
 
-pub(crate) fn setup_tracing(level: VerbosityLevel) -> anyhow::Result<TracingGuard> {
+pub(crate) fn setup_tracing(level: VerbosityLevel) -> TracingGuard {
     use tracing_subscriber::prelude::*;
 
     let filter = match level {
@@ -137,9 +137,9 @@ pub(crate) fn setup_tracing(level: VerbosityLevel) -> anyhow::Result<TracingGuar
         subscriber.init();
     }
 
-    Ok(TracingGuard {
+    TracingGuard {
         _flame_guard: guard,
-    })
+    }
 }
 
 #[allow(clippy::type_complexity)]
@@ -188,7 +188,7 @@ where
             if ansi {
                 write!(writer, "{} ", timestamp.dimmed())?;
             } else {
-                write!(writer, "{} ", timestamp)?;
+                write!(writer, "{timestamp} ")?;
             }
         }
 
@@ -203,7 +203,7 @@ where
                     tracing::Level::WARN => formatted_level.yellow(),
                     tracing::Level::ERROR => formatted_level.red(),
                 };
-                write!(writer, "{} ", coloured_level)?;
+                write!(writer, "{coloured_level} ")?;
             } else {
                 write!(writer, "{level} ")?;
             }

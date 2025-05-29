@@ -15,7 +15,7 @@ pub struct SystemPath(Utf8Path);
 impl SystemPath {
     pub fn new(path: &(impl AsRef<Utf8Path> + ?Sized)) -> &Self {
         let path = path.as_ref();
-        unsafe { &*(path as *const Utf8Path as *const SystemPath) }
+        unsafe { &*(std::ptr::from_ref::<Utf8Path>(path) as *const SystemPath) }
     }
 
     #[inline]
@@ -64,6 +64,11 @@ impl SystemPath {
         self.0.file_stem()
     }
 
+    /// Strips the prefix from the path.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the path is not a valid UTF-8 path.
     #[inline]
     pub fn strip_prefix(
         &self,
@@ -113,7 +118,7 @@ impl SystemPath {
             let mut components = path.components().peekable();
             let mut ret = if let Some(
                 c @ (camino::Utf8Component::Prefix(..) | camino::Utf8Component::RootDir),
-            ) = components.peek().cloned()
+            ) = components.peek().copied()
             {
                 components.next();
                 Utf8PathBuf::from(c.as_str())
@@ -172,6 +177,11 @@ impl SystemPathBuf {
         Self(path)
     }
 
+    /// Creates a new [`SystemPathBuf`] from a [`PathBuf`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the path is not a valid UTF-8 path.
     pub fn from_path_buf(
         path: std::path::PathBuf,
     ) -> std::result::Result<Self, std::path::PathBuf> {
@@ -336,9 +346,18 @@ pub enum PythonTestPath {
 }
 
 impl PythonTestPath {
+    /// Creates a new [`PythonTestPath`] from a [`SystemPathBuf`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the path is not a valid Python test path.
     pub fn new(value: &SystemPathBuf) -> Result<Self, PythonTestPathError> {
         if value.to_string().contains("::") {
-            let parts: Vec<String> = value.as_str().split("::").map(|s| s.to_string()).collect();
+            let parts: Vec<String> = value
+                .as_str()
+                .split("::")
+                .map(ToString::to_string)
+                .collect();
             match parts.as_slice() {
                 [file, function] => {
                     let mut file = SystemPathBuf::from(file.clone());
@@ -363,10 +382,10 @@ impl PythonTestPath {
                     }
                 }
                 _ => {
-                    if !value.exists() {
-                        Err(PythonTestPathError::NotFound(value.clone()))
-                    } else {
+                    if value.exists() {
                         Err(PythonTestPathError::InvalidPath(value.clone()))
+                    } else {
+                        Err(PythonTestPathError::NotFound(value.clone()))
                     }
                 }
             }
@@ -389,9 +408,9 @@ impl PythonTestPath {
 impl std::fmt::Debug for PythonTestPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::File(path) => write!(f, "File: {}", path),
-            Self::Directory(path) => write!(f, "Directory: {}", path),
-            Self::Function(path, function) => write!(f, "Function: {}::{}", path, function),
+            Self::File(path) => write!(f, "File: {path}"),
+            Self::Directory(path) => write!(f, "Directory: {path}"),
+            Self::Function(path, function) => write!(f, "Function: {path}::{function}"),
         }
     }
 }
@@ -406,11 +425,11 @@ pub enum PythonTestPathError {
 impl std::fmt::Display for PythonTestPathError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NotFound(path) => write!(f, "Path `{}` could not be found", path),
+            Self::NotFound(path) => write!(f, "Path `{path}` could not be found"),
             Self::WrongFileExtension(path) => {
-                write!(f, "Path `{}` has a wrong file extension", path)
+                write!(f, "Path `{path}` has a wrong file extension")
             }
-            Self::InvalidPath(path) => write!(f, "Path `{}` is not a valid path", path),
+            Self::InvalidPath(path) => write!(f, "Path `{path}` is not a valid path"),
         }
     }
 }

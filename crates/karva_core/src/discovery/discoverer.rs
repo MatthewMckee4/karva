@@ -99,7 +99,7 @@ impl<'a> Discoverer<'a> {
     }
 
     fn test_functions_in_file(&self, path: &SystemPathBuf) -> Vec<StmtFunctionDef> {
-        function_definitions(path.clone(), self.project)
+        function_definitions(path, self.project)
     }
 }
 
@@ -147,7 +147,7 @@ mod tests {
     ) -> Vec<String> {
         let test_strings: Vec<Vec<String>> = discovered_tests
             .values()
-            .map(|t| t.iter().map(|t| t.to_string()).collect())
+            .map(|t| t.iter().map(ToString::to_string).collect())
             .collect();
         let mut flattened_test_strings: Vec<String> =
             test_strings.iter().flatten().cloned().collect();
@@ -308,10 +308,7 @@ def test_function2(): pass
 
         let project = Project::new(
             SystemPathBuf::from(env.temp_dir.path()),
-            vec![PythonTestPath::Function(
-                path.clone(),
-                "test_function1".to_string(),
-            )],
+            vec![PythonTestPath::Function(path, "test_function1".to_string())],
             "test".to_string(),
         );
         let discoverer = Discoverer::new(&project);
@@ -438,7 +435,7 @@ def test_function(): pass
                 PythonTestPath::Directory(env.cwd().join("tests")),
                 PythonTestPath::File(path.clone()),
                 PythonTestPath::File(path.clone()),
-                PythonTestPath::Function(path.clone(), "test_function".to_string()),
+                PythonTestPath::Function(path, "test_function".to_string()),
             ],
             "test".to_string(),
         );
@@ -462,10 +459,7 @@ def test_function(): pass
 
         let project = Project::new(
             SystemPathBuf::from(env.temp_dir.path()),
-            vec![
-                PythonTestPath::File(path.clone()),
-                PythonTestPath::File(path2.clone()),
-            ],
+            vec![PythonTestPath::File(path), PythonTestPath::File(path2)],
             "test".to_string(),
         );
         let discoverer = Discoverer::new(&project);

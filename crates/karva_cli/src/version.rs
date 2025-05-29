@@ -14,7 +14,7 @@ impl fmt::Display for VersionInfo {
 
 pub(crate) fn version() -> VersionInfo {
     let version = option_env!("CARGO_PKG_VERSION")
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .unwrap();
 
     VersionInfo { version }

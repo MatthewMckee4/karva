@@ -24,11 +24,15 @@ impl<'a> Runner<'a> {
     pub fn run(&mut self) -> RunnerResult {
         self.diagnostic_writer.discovery_started();
         let discovered_tests = Discoverer::new(self.project).discover();
-        self.diagnostic_writer
-            .discovery_completed(discovered_tests.values().map(|tests| tests.len()).sum());
+        self.diagnostic_writer.discovery_completed(
+            discovered_tests
+                .values()
+                .map(std::collections::HashSet::len)
+                .sum(),
+        );
 
         let test_results = Python::with_gil(|py| {
-            let add_cwd_to_sys_path_result = self.add_cwd_to_sys_path(&py);
+            let add_cwd_to_sys_path_result = self.add_cwd_to_sys_path(py);
 
             if add_cwd_to_sys_path_result.is_err() {
                 return Err("Failed to add cwd to sys.path".to_string());
@@ -40,18 +44,18 @@ impl<'a> Runner<'a> {
                         Ok(module) => module,
                         Err(e) => {
                             self.diagnostic_writer
-                                .error(&format!("Failed to import module {}: {}", module_name, e));
+                                .error(&format!("Failed to import module {module_name}: {e}"));
                             return None;
                         }
                     };
                     let mut test_results = Vec::new();
-                    for test_case in test_cases.iter() {
+                    for test_case in test_cases {
                         let test_name = test_case.function_definition().name.to_string();
                         let module = test_case.module();
 
                         self.diagnostic_writer.test_started(&test_name, module);
 
-                        let test_result = test_case.run_test(&py, &imported_module);
+                        let test_result = test_case.run_test(py, &imported_module);
 
                         self.diagnostic_writer.test_completed(&test_result);
 
@@ -69,7 +73,7 @@ impl<'a> Runner<'a> {
         runner_result
     }
 
-    fn add_cwd_to_sys_path(&self, py: &Python) -> PyResult<()> {
+    fn add_cwd_to_sys_path(&self, py: Python) -> PyResult<()> {
         let sys_path = py.import("sys")?;
         let path = sys_path.getattr("path")?;
         path.call_method1("append", (self.project.cwd().as_str(),))?;
@@ -88,9 +92,7 @@ impl RunnerResult {
     }
 
     pub fn passed(&self) -> bool {
-        self.test_results
-            .iter()
-            .all(|test_result| test_result.is_pass())
+        self.test_results.iter().all(TestResult::is_pass)
     }
 
     pub fn test_results(&self) -> &[TestResult] {
@@ -165,7 +167,7 @@ mod tests {
 
     fn create_test_writer() -> DiagnosticWriter {
         let buffer = Arc::new(Mutex::new(Vec::new()));
-        DiagnosticWriter::new(SharedBufferWriter(buffer.clone()))
+        DiagnosticWriter::new(SharedBufferWriter(buffer))
     }
 
     struct TestEnv {
@@ -196,10 +198,10 @@ mod tests {
         let env = TestEnv::new();
         env.create_test_file(
             "test_pass.py",
-            r#"
+            r"
 def test_simple_pass():
     assert True
-"#,
+",
         );
 
         let project = Project::new(

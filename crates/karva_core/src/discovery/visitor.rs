@@ -42,7 +42,7 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
     }
 }
 
-pub fn function_definitions(path: SystemPathBuf, project: &Project) -> Vec<StmtFunctionDef> {
+pub fn function_definitions(path: &SystemPathBuf, project: &Project) -> Vec<StmtFunctionDef> {
     let mut visitor = FunctionDefinitionVisitor::new(project);
 
     let parsed = parsed_module(path);
@@ -52,7 +52,7 @@ pub fn function_definitions(path: SystemPathBuf, project: &Project) -> Vec<StmtF
     visitor.discovered_functions().to_vec()
 }
 
-fn parsed_module(path: SystemPathBuf) -> Parsed<ModModule> {
+fn parsed_module(path: &SystemPathBuf) -> Parsed<ModModule> {
     let python_version = current_python_version();
     let mode = Mode::Module;
     let options = ParseOptions::from(mode).with_target_version(python_version);
@@ -63,7 +63,7 @@ fn parsed_module(path: SystemPathBuf) -> Parsed<ModModule> {
         .expect("PySourceType always parses into a module")
 }
 
-fn source_text(path: SystemPathBuf) -> String {
+fn source_text(path: &SystemPathBuf) -> String {
     std::fs::read_to_string(path.as_std_path()).unwrap()
 }
 
