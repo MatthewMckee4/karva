@@ -1,9 +1,16 @@
 use crate::path::SystemPathBuf;
 
+#[must_use]
 pub fn is_python_file(path: &SystemPathBuf) -> bool {
     path.extension() == Some("py")
 }
 
+/// Gets the module name from a path.
+///
+/// # Panics
+///
+/// Panics if the path is not a valid UTF-8 path.
+#[must_use]
 pub fn module_name(cwd: &SystemPathBuf, path: &SystemPathBuf) -> String {
     let relative_path = path.strip_prefix(cwd).unwrap();
     let components: Vec<_> = relative_path

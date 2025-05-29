@@ -16,6 +16,12 @@ docs-serve: dev
 clean:
 	git clean -xdf
 
+check:
+	cargo check --all-targets --all-features
+
+lint:
+	cargo clippy --all-targets --all-features -- -D warnings
+
 format:
 	cargo +nightly fmt
 

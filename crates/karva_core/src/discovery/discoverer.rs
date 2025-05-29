@@ -15,10 +15,12 @@ pub struct Discoverer<'a> {
 }
 
 impl<'a> Discoverer<'a> {
-    pub fn new(project: &'a Project) -> Self {
+    #[must_use]
+    pub const fn new(project: &'a Project) -> Self {
         Self { project }
     }
 
+    #[must_use]
     pub fn discover(&self) -> HashMap<String, HashSet<TestCase>> {
         #[allow(clippy::mutable_key_type)]
         let mut discovered_tests: HashMap<String, HashSet<TestCase>> = HashMap::new();
@@ -34,13 +36,11 @@ impl<'a> Discoverer<'a> {
         match path {
             PythonTestPath::File(path) => self.discover_file(path),
             PythonTestPath::Directory(dir_path) => self.discover_directory(dir_path),
-            PythonTestPath::Function(path, function_name) => {
-                if let Some(test_case) = self.discover_function(path, function_name) {
+            PythonTestPath::Function(path, function_name) => self
+                .discover_function(path, function_name)
+                .map_or_else(HashMap::new, |test_case| {
                     HashMap::from([(test_case.module().to_string(), HashSet::from([test_case]))])
-                } else {
-                    HashMap::new() // TODO: should this be an error?
-                }
-            }
+                }),
         }
     }
 
@@ -99,7 +99,7 @@ impl<'a> Discoverer<'a> {
     }
 
     fn test_functions_in_file(&self, path: &SystemPathBuf) -> Vec<StmtFunctionDef> {
-        function_definitions(path.clone(), self.project)
+        function_definitions(path, self.project)
     }
 }
 
@@ -147,7 +147,7 @@ mod tests {
     ) -> Vec<String> {
         let test_strings: Vec<Vec<String>> = discovered_tests
             .values()
-            .map(|t| t.iter().map(|t| t.to_string()).collect())
+            .map(|t| t.iter().map(ToString::to_string).collect())
             .collect();
         let mut flattened_test_strings: Vec<String> =
             test_strings.iter().flatten().cloned().collect();
@@ -266,12 +266,12 @@ mod tests {
         let path = env
             .create_file(
                 "test_file.py",
-                r#"
+                r"
 def test_function1(): pass
 def test_function2(): pass
 def test_function3(): pass
 def not_a_test(): pass
-"#,
+",
             )
             .unwrap();
 
@@ -299,19 +299,16 @@ def not_a_test(): pass
         let path = env
             .create_file(
                 "test_file.py",
-                r#"
+                r"
 def test_function1(): pass
 def test_function2(): pass
-"#,
+",
             )
             .unwrap();
 
         let project = Project::new(
             SystemPathBuf::from(env.temp_dir.path()),
-            vec![PythonTestPath::Function(
-                path.clone(),
-                "test_function1".to_string(),
-            )],
+            vec![PythonTestPath::Function(path, "test_function1".to_string())],
             "test".to_string(),
         );
         let discoverer = Discoverer::new(&project);
@@ -368,11 +365,11 @@ def test_function2(): pass
         let path = env
             .create_file(
                 "test_file.py",
-                r#"
+                r"
 def check_function1(): pass
 def check_function2(): pass
 def test_function(): pass
-"#,
+",
             )
             .unwrap();
 
@@ -438,7 +435,7 @@ def test_function(): pass
                 PythonTestPath::Directory(env.cwd().join("tests")),
                 PythonTestPath::File(path.clone()),
                 PythonTestPath::File(path.clone()),
-                PythonTestPath::Function(path.clone(), "test_function".to_string()),
+                PythonTestPath::Function(path, "test_function".to_string()),
             ],
             "test".to_string(),
         );
@@ -462,10 +459,7 @@ def test_function(): pass
 
         let project = Project::new(
             SystemPathBuf::from(env.temp_dir.path()),
-            vec![
-                PythonTestPath::File(path.clone()),
-                PythonTestPath::File(path2.clone()),
-            ],
+            vec![PythonTestPath::File(path), PythonTestPath::File(path2)],
             "test".to_string(),
         );
         let discoverer = Discoverer::new(&project);

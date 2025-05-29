@@ -45,6 +45,7 @@ pub struct TestCase {
 }
 
 impl TestCase {
+    #[must_use]
     pub const fn fast(file: TestFile) -> Self {
         Self {
             file,
@@ -52,6 +53,7 @@ impl TestCase {
         }
     }
 
+    #[must_use]
     pub const fn normal(file: TestFile) -> Self {
         Self {
             file,
@@ -59,6 +61,7 @@ impl TestCase {
         }
     }
 
+    #[must_use]
     pub const fn slow(file: TestFile) -> Self {
         Self {
             file,
@@ -66,18 +69,27 @@ impl TestCase {
         }
     }
 
-    pub fn code(&self) -> &str {
+    #[must_use]
+    pub const fn code(&self) -> &str {
         self.file.code
     }
 
-    pub fn name(&self) -> &str {
+    #[must_use]
+    pub const fn name(&self) -> &str {
         self.file.name
     }
 
-    pub fn speed(&self) -> TestCaseSpeed {
+    #[must_use]
+    pub const fn speed(&self) -> TestCaseSpeed {
         self.speed
     }
 
+    /// Returns the path of this [`TestCase`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the path cannot be constructed.
+    #[must_use]
     pub fn path(&self) -> PathBuf {
         PathBuf::from(file!())
             .parent()
@@ -96,15 +108,18 @@ pub struct TestFile {
 }
 
 impl TestFile {
+    #[must_use]
     pub const fn new(name: &'static str, code: &'static str) -> Self {
         Self { name, code }
     }
 
-    pub fn code(&self) -> &str {
+    #[must_use]
+    pub const fn code(&self) -> &str {
         self.code
     }
 
-    pub fn name(&self) -> &str {
+    #[must_use]
+    pub const fn name(&self) -> &str {
         self.name
     }
 }

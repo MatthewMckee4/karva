@@ -10,9 +10,9 @@ use tracing_subscriber::{
 };
 
 /// Logging flags to `#[command(flatten)]` into your CLI
-#[derive(clap::Args, Debug, Clone, Default, PartialEq)]
+#[derive(clap::Args, Debug, Clone, Default, PartialEq, Eq)]
 #[command(about = None, long_about = None)]
-pub(crate) struct Verbosity {
+pub struct Verbosity {
     #[arg(
         long,
         short = 'v',
@@ -24,7 +24,7 @@ pub(crate) struct Verbosity {
 }
 
 impl Verbosity {
-    pub(crate) fn level(&self) -> VerbosityLevel {
+    pub(crate) const fn level(&self) -> VerbosityLevel {
         match self.verbose {
             0 => VerbosityLevel::Default,
             1 => VerbosityLevel::Verbose,
@@ -47,7 +47,7 @@ impl PartialOrd<u8> for Verbosity {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub(crate) enum VerbosityLevel {
+pub enum VerbosityLevel {
     /// Default output level. Only shows Karva events up to the [`WARN`](tracing::Level::WARN).
     Default,
 
@@ -66,23 +66,23 @@ pub(crate) enum VerbosityLevel {
 impl VerbosityLevel {
     const fn level_filter(self) -> LevelFilter {
         match self {
-            VerbosityLevel::Default => LevelFilter::WARN,
-            VerbosityLevel::Verbose => LevelFilter::INFO,
-            VerbosityLevel::ExtraVerbose => LevelFilter::DEBUG,
-            VerbosityLevel::Trace => LevelFilter::TRACE,
+            Self::Default => LevelFilter::WARN,
+            Self::Verbose => LevelFilter::INFO,
+            Self::ExtraVerbose => LevelFilter::DEBUG,
+            Self::Trace => LevelFilter::TRACE,
         }
     }
 
     pub(crate) const fn is_trace(self) -> bool {
-        matches!(self, VerbosityLevel::Trace)
+        matches!(self, Self::Trace)
     }
 
     pub(crate) const fn is_extra_verbose(self) -> bool {
-        matches!(self, VerbosityLevel::ExtraVerbose)
+        matches!(self, Self::ExtraVerbose)
     }
 }
 
-pub(crate) fn setup_tracing(level: VerbosityLevel) -> anyhow::Result<TracingGuard> {
+pub fn setup_tracing(level: VerbosityLevel) -> TracingGuard {
     use tracing_subscriber::prelude::*;
 
     let filter = match level {
@@ -137,9 +137,9 @@ pub(crate) fn setup_tracing(level: VerbosityLevel) -> anyhow::Result<TracingGuar
         subscriber.init();
     }
 
-    Ok(TracingGuard {
+    TracingGuard {
         _flame_guard: guard,
-    })
+    }
 }
 
 #[allow(clippy::type_complexity)]
@@ -159,7 +159,7 @@ where
     }
 }
 
-pub(crate) struct TracingGuard {
+pub struct TracingGuard {
     _flame_guard: Option<tracing_flame::FlushGuard<BufWriter<File>>>,
 }
 
@@ -188,7 +188,7 @@ where
             if ansi {
                 write!(writer, "{} ", timestamp.dimmed())?;
             } else {
-                write!(writer, "{} ", timestamp)?;
+                write!(writer, "{timestamp} ")?;
             }
         }
 
@@ -203,7 +203,7 @@ where
                     tracing::Level::WARN => formatted_level.yellow(),
                     tracing::Level::ERROR => formatted_level.red(),
                 };
-                write!(writer, "{} ", coloured_level)?;
+                write!(writer, "{coloured_level} ")?;
             } else {
                 write!(writer, "{level} ")?;
             }

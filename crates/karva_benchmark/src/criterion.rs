@@ -1,6 +1,6 @@
-//! This module re-exports the criterion API but picks the right backend depending on whether
-//! the benchmarks are built to run locally or with codspeed.
-//! The compat layer is required because codspeed doesn't support all platforms.
+// This module re-exports the criterion API but picks the right backend depending on whether
+// the benchmarks are built to run locally or with codspeed.
+// The compat layer is required because codspeed doesn't support all platforms.
 
 #[cfg(not(codspeed))]
 pub use criterion::*;

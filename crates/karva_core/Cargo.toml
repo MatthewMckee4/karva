@@ -27,7 +27,9 @@ tracing-subscriber = { workspace = true, optional = true }
 tracing-tree = { workspace = true, optional = true }
 ignore = { workspace = true }
 
-
 [dev-dependencies]
 tempfile = "3.8"
 regex = "1"
+
+[lints]
+workspace = true

@@ -23,6 +23,7 @@ mod args;
 mod logging;
 mod version;
 
+#[must_use]
 pub fn karva_main() -> ExitStatus {
     run().unwrap_or_else(|error| {
         use std::io::Write;
@@ -50,7 +51,7 @@ fn run() -> anyhow::Result<ExitStatus> {
     let args = argfile::expand_args_from(args, argfile::parse_fromfile, argfile::PREFIX)
         .context("Failed to read CLI arguments from file")?;
 
-    let args = try_parse_args(args);
+    let args = try_parse_args(args)?;
 
     match args.command {
         Command::Test(test_args) => test(&test_args),
@@ -59,21 +60,21 @@ fn run() -> anyhow::Result<ExitStatus> {
 }
 
 // Sometimes random args are passed at the start of the args list, so we try to parse args by removing the first arg until we can parse them.
-fn try_parse_args(mut args: Vec<OsString>) -> Args {
+fn try_parse_args(mut args: Vec<OsString>) -> Result<Args> {
     loop {
         match Args::try_parse_from(args.clone()) {
             Ok(args) => {
-                break args;
+                break Ok(args);
             }
             Err(e) => {
                 if args.is_empty() {
-                    std::process::exit(1);
+                    return Err(anyhow!("No arguments provided"));
                 }
                 match e.kind() {
                     clap::error::ErrorKind::DisplayHelp
                     | clap::error::ErrorKind::DisplayVersion
                     | clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => {
-                        break Args::parse_from(args.clone());
+                        break Ok(Args::parse_from(args.clone()));
                     }
                     _ => {
                         args.remove(0);
@@ -93,7 +94,7 @@ pub(crate) fn version() -> Result<()> {
 
 pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
     let verbosity = args.verbosity.level();
-    let _guard = setup_tracing(verbosity)?;
+    let _guard = setup_tracing(verbosity);
 
     let cwd = {
         let cwd = std::env::current_dir().context("Failed to get the current working directory")?;
@@ -106,7 +107,10 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
             })?
     };
 
-    let diagnostics = DiagnosticWriter::default();
+    let writer = Box::new(BufWriter::new(io::stdout()));
+    let mut stderr_writer = Box::new(BufWriter::new(io::stderr()));
+
+    let diagnostics = DiagnosticWriter::new(writer);
 
     let mut paths: Vec<PythonTestPath> = args
         .paths
@@ -117,7 +121,7 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
             match path {
                 Ok(path) => Some(path),
                 Err(e) => {
-                    eprintln!("{}", e.to_string().yellow());
+                    writeln!(stderr_writer, "{}", e.to_string().yellow()).ok();
                     None
                 }
             }
@@ -131,13 +135,12 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
         if let Ok(path) = PythonTestPath::new(&cwd) {
             paths.push(path);
         } else {
-            eprintln!(
+            return Err(anyhow!(
                 "{}",
                 "Could not resolve current working directory, try providing a path"
                     .red()
                     .bold()
-            );
-            return Ok(ExitStatus::Error);
+            ));
         }
     }
 
@@ -171,7 +174,8 @@ impl Termination for ExitStatus {
 }
 
 impl ExitStatus {
-    pub fn to_i32(self) -> i32 {
+    #[must_use]
+    pub const fn to_i32(self) -> i32 {
         self as i32
     }
 }
@@ -183,7 +187,7 @@ mod tests {
     #[test]
     fn test_version_command() {
         let args = vec![OsString::from("karva"), OsString::from("version")];
-        let args = try_parse_args(args);
+        let args = try_parse_args(args).unwrap();
         assert!(matches!(args.command, Command::Version));
     }
 
@@ -194,13 +198,13 @@ mod tests {
             OsString::from("test"),
             OsString::from("test_file.py"),
         ];
-        let args = try_parse_args(args);
+        let args = try_parse_args(args).unwrap();
         match args.command {
             Command::Test(test_args) => {
                 assert_eq!(test_args.paths.len(), 1);
                 assert_eq!(test_args.paths[0], "test_file.py");
             }
-            _ => panic!("Expected Test command"),
+            Command::Version => panic!("Expected Test command"),
         }
     }
 
@@ -212,14 +216,14 @@ mod tests {
             OsString::from("test_file1.py"),
             OsString::from("test_file2.py"),
         ];
-        let args = try_parse_args(args);
+        let args = try_parse_args(args).unwrap();
         match args.command {
             Command::Test(test_args) => {
                 assert_eq!(test_args.paths.len(), 2);
                 assert_eq!(test_args.paths[0], "test_file1.py");
                 assert_eq!(test_args.paths[1], "test_file2.py");
             }
-            _ => panic!("Expected Test command"),
+            Command::Version => panic!("Expected Test command"),
         }
     }
 
@@ -231,14 +235,14 @@ mod tests {
             OsString::from("-v"),
             OsString::from("test_file.py"),
         ];
-        let args = try_parse_args(args);
+        let args = try_parse_args(args).unwrap();
         match args.command {
             Command::Test(test_args) => {
                 assert_eq!(test_args.paths.len(), 1);
                 assert_eq!(test_args.paths[0], "test_file.py");
                 assert!(test_args.verbosity > 0);
             }
-            _ => panic!("Expected Test command"),
+            Command::Version => panic!("Expected Test command"),
         }
     }
 }

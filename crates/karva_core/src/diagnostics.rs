@@ -1,6 +1,6 @@
 use std::{
     io::{self, Write},
-    sync::{Arc, Mutex},
+    sync::Mutex,
     time::Instant,
 };
 
@@ -8,14 +8,14 @@ use colored::{Color, Colorize};
 
 use crate::{
     runner::RunnerResult,
-    test_result::{TestResult, TestResultError, TestResultFail, TestResultPass},
+    test_result::{Error, Fail, Pass, TestResult},
 };
 
 pub struct DiagnosticWriter {
-    stdout: Arc<Mutex<Box<dyn Write + Send>>>,
+    stdout: Mutex<Box<dyn Write>>,
     start_time: Instant,
-    failed_tests: Vec<TestResultFail>,
-    error_tests: Vec<TestResultError>,
+    failed_tests: Vec<Fail>,
+    error_tests: Vec<Error>,
 }
 
 impl Default for DiagnosticWriter {
@@ -25,21 +25,17 @@ impl Default for DiagnosticWriter {
 }
 
 impl DiagnosticWriter {
-    pub fn new(out: impl Write + Send + 'static) -> Self {
+    pub fn new(out: impl Write + 'static) -> Self {
         Self {
-            stdout: Arc::new(Mutex::new(Box::new(out))),
+            stdout: Mutex::new(Box::new(out)),
             start_time: Instant::now(),
             failed_tests: vec![],
             error_tests: vec![],
         }
     }
 
-    fn acquire_stdout(&self) -> std::sync::MutexGuard<'_, Box<dyn Write + Send>> {
+    fn acquire_stdout(&self) -> std::sync::MutexGuard<'_, Box<dyn Write>> {
         self.stdout.lock().unwrap()
-    }
-
-    fn flush_stdout(&self, stdout: &mut std::sync::MutexGuard<'_, Box<dyn Write + Send>>) {
-        let _ = stdout.flush();
     }
 
     pub fn test_started(&self, test_name: &str, file_path: &str) {
@@ -54,16 +50,16 @@ impl DiagnosticWriter {
         }
     }
 
-    fn test_passed(&self, _test: &TestResultPass) {
+    fn test_passed(&self, _test: &Pass) {
         self.log_test_result(Color::Green);
     }
 
-    fn test_failed(&mut self, test: &TestResultFail) {
+    fn test_failed(&mut self, test: &Fail) {
         self.log_test_result(Color::Red);
         self.failed_tests.push(test.clone());
     }
 
-    fn test_error(&mut self, test: &TestResultError) {
+    fn test_error(&mut self, test: &Error) {
         self.log_test_result(Color::Yellow);
         self.error_tests.push(test.clone());
     }
@@ -71,13 +67,13 @@ impl DiagnosticWriter {
     fn log_test_result(&self, color: Color) {
         let mut stdout = self.acquire_stdout();
         let _ = write!(stdout, "{}", ".".color(color));
-        self.flush_stdout(&mut stdout);
+        let _ = stdout.flush();
     }
 
     pub fn error(&self, error: &str) {
         let mut stdout = self.acquire_stdout();
         let _ = writeln!(stdout, "{}", error.red());
-        self.flush_stdout(&mut stdout);
+        let _ = stdout.flush();
     }
 
     pub fn discovery_started(&self) {
@@ -93,27 +89,43 @@ impl DiagnosticWriter {
             count,
             "tests".blue()
         );
-        self.flush_stdout(&mut stdout);
+        let _ = stdout.flush();
     }
 
-    fn display_test_results(&self, stdout: &mut std::sync::MutexGuard<'_, Box<dyn Write + Send>>) {
+    fn display_test_results(&self, stdout: &mut std::sync::MutexGuard<'_, Box<dyn Write>>) {
         if !self.failed_tests.is_empty() {
             let _ = writeln!(stdout, "{}", "Failed tests:".red().bold());
 
-            for test in self.failed_tests.iter() {
+            for test in &self.failed_tests {
                 let _ = writeln!(stdout, "{}", test.test.to_string().bold());
                 if let Some(traceback) = &test.traceback {
-                    let _ = writeln!(stdout, "{}", traceback);
+                    let _ = writeln!(stdout, "{traceback}");
                 }
             }
         }
         if !self.error_tests.is_empty() {
             let _ = writeln!(stdout, "{}", "Error tests:".yellow().bold());
 
-            for test in self.error_tests.iter() {
+            for test in &self.error_tests {
                 let _ = writeln!(stdout, "{}", test.test.to_string().bold());
                 let _ = writeln!(stdout, "{}", test.traceback);
             }
+        }
+    }
+
+    fn log_test_count(
+        stdout: &mut std::sync::MutexGuard<'_, Box<dyn Write>>,
+        label: &str,
+        count: usize,
+        color: Color,
+    ) {
+        if count > 0 {
+            let _ = writeln!(
+                stdout,
+                "{} {}",
+                label.color(color),
+                count.to_string().color(color)
+            );
         }
     }
 
@@ -122,32 +134,16 @@ impl DiagnosticWriter {
         let stats = runner_result.stats();
         let total_duration = self.start_time.elapsed();
 
-        fn maybe_log_test_count(
-            stdout: &mut std::sync::MutexGuard<'_, Box<dyn Write + Send>>,
-            label: &str,
-            count: usize,
-            color: Color,
-        ) {
-            if count > 0 {
-                let _ = writeln!(
-                    stdout,
-                    "{} {}",
-                    label.color(color),
-                    count.to_string().color(color)
-                );
-            }
-        }
-
-        if stats.total_tests() > 0 {
+        if stats.total() > 0 {
             let _ = writeln!(stdout);
             self.display_test_results(&mut stdout);
             let _ = writeln!(stdout, "{}", "─────────────".bold());
             for (label, num, color) in [
-                ("Passed tests:", stats.passed_tests(), Color::Green),
-                ("Failed tests:", stats.failed_tests(), Color::Red),
-                ("Error tests:", stats.error_tests(), Color::Yellow),
+                ("Passed tests:", stats.passed(), Color::Green),
+                ("Failed tests:", stats.failed(), Color::Red),
+                ("Error tests:", stats.error(), Color::Yellow),
             ] {
-                maybe_log_test_count(&mut stdout, label, num, color);
+                Self::log_test_count(&mut stdout, label, num, color);
             }
             tracing::info!(
                 "{} {}ms",
@@ -155,7 +151,7 @@ impl DiagnosticWriter {
                 total_duration.as_millis()
             );
         }
-        self.flush_stdout(&mut stdout);
+        let _ = stdout.flush();
     }
 }
 
@@ -182,8 +178,8 @@ mod tests {
 
     impl Write for SharedBufferWriter {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            let mut inner = self.0.lock().unwrap();
-            inner.extend_from_slice(buf);
+            self.0.lock().unwrap().extend_from_slice(buf);
+
             Ok(buf.len())
         }
         fn flush(&mut self) -> io::Result<()> {
@@ -211,7 +207,7 @@ mod tests {
         let file_path = temp_dir.path().join("test.py");
         std::fs::write(&file_path, "def test_name():\n    assert True\n").unwrap();
 
-        let function_def = function_definitions(file_path.into(), &get_project())
+        let function_def = function_definitions(&SystemPathBuf::from(file_path), &get_project())
             .into_iter()
             .next()
             .unwrap();
@@ -383,10 +379,10 @@ Failed tests: 2
         writer.finish(&runner_result);
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         let output = strip_ansi_codes(&output);
-        let expected = r#"..
+        let expected = r"..
 ─────────────
 Passed tests: 2
-"#;
+";
         assert_eq!(output, expected);
     }
 

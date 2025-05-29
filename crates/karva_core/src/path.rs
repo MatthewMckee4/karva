@@ -15,7 +15,7 @@ pub struct SystemPath(Utf8Path);
 impl SystemPath {
     pub fn new(path: &(impl AsRef<Utf8Path> + ?Sized)) -> &Self {
         let path = path.as_ref();
-        unsafe { &*(path as *const Utf8Path as *const SystemPath) }
+        unsafe { &*(std::ptr::from_ref::<Utf8Path>(path) as *const Self) }
     }
 
     #[inline]
@@ -26,25 +26,25 @@ impl SystemPath {
 
     #[inline]
     #[must_use]
-    pub fn starts_with(&self, base: impl AsRef<SystemPath>) -> bool {
+    pub fn starts_with(&self, base: impl AsRef<Self>) -> bool {
         self.0.starts_with(base.as_ref())
     }
 
     #[inline]
     #[must_use]
-    pub fn ends_with(&self, child: impl AsRef<SystemPath>) -> bool {
+    pub fn ends_with(&self, child: impl AsRef<Self>) -> bool {
         self.0.ends_with(child.as_ref())
     }
 
     #[inline]
     #[must_use]
-    pub fn parent(&self) -> Option<&SystemPath> {
-        self.0.parent().map(SystemPath::new)
+    pub fn parent(&self) -> Option<&Self> {
+        self.0.parent().map(Self::new)
     }
 
     #[inline]
-    pub fn ancestors(&self) -> impl Iterator<Item = &SystemPath> {
-        self.0.ancestors().map(SystemPath::new)
+    pub fn ancestors(&self) -> impl Iterator<Item = &Self> {
+        self.0.ancestors().map(Self::new)
     }
 
     #[inline]
@@ -64,56 +64,67 @@ impl SystemPath {
         self.0.file_stem()
     }
 
+    /// Strips the prefix from the path.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the path is not a valid UTF-8 path.
     #[inline]
     pub fn strip_prefix(
         &self,
-        base: impl AsRef<SystemPath>,
-    ) -> std::result::Result<&SystemPath, StripPrefixError> {
-        self.0.strip_prefix(base.as_ref()).map(SystemPath::new)
+        base: impl AsRef<Self>,
+    ) -> std::result::Result<&Self, StripPrefixError> {
+        self.0.strip_prefix(base.as_ref()).map(Self::new)
     }
 
     #[inline]
     #[must_use]
-    pub fn join(&self, path: impl AsRef<SystemPath>) -> SystemPathBuf {
+    pub fn join(&self, path: impl AsRef<Self>) -> SystemPathBuf {
         SystemPathBuf::from_utf8_path_buf(self.0.join(&path.as_ref().0))
     }
 
     #[inline]
+    #[must_use]
     pub fn with_extension(&self, extension: &str) -> SystemPathBuf {
         SystemPathBuf::from_utf8_path_buf(self.0.with_extension(extension))
     }
 
+    #[must_use]
     pub fn to_path_buf(&self) -> SystemPathBuf {
         SystemPathBuf(self.0.to_path_buf())
     }
 
     #[inline]
+    #[must_use]
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
 
     #[inline]
+    #[must_use]
     pub fn as_std_path(&self) -> &Path {
         self.0.as_std_path()
     }
 
     #[inline]
-    pub fn as_utf8_path(&self) -> &Utf8Path {
+    #[must_use]
+    pub const fn as_utf8_path(&self) -> &Utf8Path {
         &self.0
     }
 
-    pub fn from_std_path(path: &Path) -> Option<&SystemPath> {
-        Some(SystemPath::new(Utf8Path::from_path(path)?))
+    #[must_use]
+    pub fn from_std_path(path: &Path) -> Option<&Self> {
+        Some(Self::new(Utf8Path::from_path(path)?))
     }
 
-    pub fn absolute(path: impl AsRef<SystemPath>, cwd: impl AsRef<SystemPath>) -> SystemPathBuf {
+    pub fn absolute(path: impl AsRef<Self>, cwd: impl AsRef<Self>) -> SystemPathBuf {
         fn absolute(path: &SystemPath, cwd: &SystemPath) -> SystemPathBuf {
             let path = &path.0;
 
             let mut components = path.components().peekable();
             let mut ret = if let Some(
                 c @ (camino::Utf8Component::Prefix(..) | camino::Utf8Component::RootDir),
-            ) = components.peek().cloned()
+            ) = components.peek().copied()
             {
                 components.next();
                 Utf8PathBuf::from(c.as_str())
@@ -143,10 +154,12 @@ impl SystemPath {
         absolute(path.as_ref(), cwd.as_ref())
     }
 
+    #[must_use]
     pub fn is_file(&self) -> bool {
         self.0.is_file()
     }
 
+    #[must_use]
     pub fn is_dir(&self) -> bool {
         self.0.is_dir()
     }
@@ -164,14 +177,21 @@ impl ToOwned for SystemPath {
 pub struct SystemPathBuf(Utf8PathBuf);
 
 impl SystemPathBuf {
+    #[must_use]
     pub fn new() -> Self {
         Self(Utf8PathBuf::new())
     }
 
-    pub fn from_utf8_path_buf(path: Utf8PathBuf) -> Self {
+    #[must_use]
+    pub const fn from_utf8_path_buf(path: Utf8PathBuf) -> Self {
         Self(path)
     }
 
+    /// Creates a new [`SystemPathBuf`] from a [`PathBuf`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the path is not a valid UTF-8 path.
     pub fn from_path_buf(
         path: std::path::PathBuf,
     ) -> std::result::Result<Self, std::path::PathBuf> {
@@ -182,27 +202,33 @@ impl SystemPathBuf {
         self.0.push(&path.as_ref().0);
     }
 
+    #[must_use]
     pub fn into_utf8_path_buf(self) -> Utf8PathBuf {
         self.0
     }
 
+    #[must_use]
     pub fn into_std_path_buf(self) -> PathBuf {
         self.0.into_std_path_buf()
     }
 
     #[inline]
+    #[must_use]
     pub fn as_path(&self) -> &SystemPath {
         SystemPath::new(&self.0)
     }
 
+    #[must_use]
     pub fn is_file(&self) -> bool {
         self.0.is_file()
     }
 
+    #[must_use]
     pub fn is_dir(&self) -> bool {
         self.0.is_dir()
     }
 
+    #[must_use]
     pub fn exists(&self) -> bool {
         self.0.exists()
     }
@@ -216,13 +242,13 @@ impl Borrow<SystemPath> for SystemPathBuf {
 
 impl From<&str> for SystemPathBuf {
     fn from(value: &str) -> Self {
-        SystemPathBuf::from_utf8_path_buf(Utf8PathBuf::from(value))
+        Self::from_utf8_path_buf(Utf8PathBuf::from(value))
     }
 }
 
 impl From<String> for SystemPathBuf {
     fn from(value: String) -> Self {
-        SystemPathBuf::from_utf8_path_buf(Utf8PathBuf::from(value))
+        Self::from_utf8_path_buf(Utf8PathBuf::from(value))
     }
 }
 
@@ -239,9 +265,9 @@ impl AsRef<SystemPath> for SystemPathBuf {
     }
 }
 
-impl AsRef<SystemPath> for SystemPath {
+impl AsRef<Self> for SystemPath {
     #[inline]
-    fn as_ref(&self) -> &SystemPath {
+    fn as_ref(&self) -> &Self {
         self
     }
 }
@@ -316,7 +342,7 @@ impl std::fmt::Display for SystemPathBuf {
 
 impl From<&Path> for SystemPathBuf {
     fn from(value: &Path) -> Self {
-        SystemPathBuf::from_utf8_path_buf(
+        Self::from_utf8_path_buf(
             Utf8PathBuf::from_path_buf(value.to_path_buf()).unwrap_or_default(),
         )
     }
@@ -324,7 +350,7 @@ impl From<&Path> for SystemPathBuf {
 
 impl From<PathBuf> for SystemPathBuf {
     fn from(value: PathBuf) -> Self {
-        SystemPathBuf::from_utf8_path_buf(Utf8PathBuf::from_path_buf(value).unwrap_or_default())
+        Self::from_utf8_path_buf(Utf8PathBuf::from_path_buf(value).unwrap_or_default())
     }
 }
 
@@ -336,9 +362,18 @@ pub enum PythonTestPath {
 }
 
 impl PythonTestPath {
+    /// Creates a new [`PythonTestPath`] from a [`SystemPathBuf`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the path is not a valid Python test path.
     pub fn new(value: &SystemPathBuf) -> Result<Self, PythonTestPathError> {
         if value.to_string().contains("::") {
-            let parts: Vec<String> = value.as_str().split("::").map(|s| s.to_string()).collect();
+            let parts: Vec<String> = value
+                .as_str()
+                .split("::")
+                .map(ToString::to_string)
+                .collect();
             match parts.as_slice() {
                 [file, function] => {
                     let mut file = SystemPathBuf::from(file.clone());
@@ -354,7 +389,7 @@ impl PythonTestPath {
 
                     if file.is_file() {
                         if is_python_file(&file) {
-                            Ok(PythonTestPath::Function(file, function.to_string()))
+                            Ok(Self::Function(file, function.to_string()))
                         } else {
                             Err(PythonTestPathError::WrongFileExtension(file))
                         }
@@ -363,21 +398,21 @@ impl PythonTestPath {
                     }
                 }
                 _ => {
-                    if !value.exists() {
-                        Err(PythonTestPathError::NotFound(value.clone()))
-                    } else {
+                    if value.exists() {
                         Err(PythonTestPathError::InvalidPath(value.clone()))
+                    } else {
+                        Err(PythonTestPathError::NotFound(value.clone()))
                     }
                 }
             }
         } else if value.is_file() {
             if is_python_file(value) {
-                Ok(PythonTestPath::File(value.clone()))
+                Ok(Self::File(value.clone()))
             } else {
                 Err(PythonTestPathError::WrongFileExtension(value.clone()))
             }
         } else if value.is_dir() {
-            Ok(PythonTestPath::Directory(value.clone()))
+            Ok(Self::Directory(value.clone()))
         } else if value.exists() {
             Err(PythonTestPathError::InvalidPath(value.clone()))
         } else {
@@ -389,9 +424,9 @@ impl PythonTestPath {
 impl std::fmt::Debug for PythonTestPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::File(path) => write!(f, "File: {}", path),
-            Self::Directory(path) => write!(f, "Directory: {}", path),
-            Self::Function(path, function) => write!(f, "Function: {}::{}", path, function),
+            Self::File(path) => write!(f, "File: {path}"),
+            Self::Directory(path) => write!(f, "Directory: {path}"),
+            Self::Function(path, function) => write!(f, "Function: {path}::{function}"),
         }
     }
 }
@@ -406,11 +441,11 @@ pub enum PythonTestPathError {
 impl std::fmt::Display for PythonTestPathError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NotFound(path) => write!(f, "Path `{}` could not be found", path),
+            Self::NotFound(path) => write!(f, "Path `{path}` could not be found"),
             Self::WrongFileExtension(path) => {
-                write!(f, "Path `{}` has a wrong file extension", path)
+                write!(f, "Path `{path}` has a wrong file extension")
             }
-            Self::InvalidPath(path) => write!(f, "Path `{}` is not a valid path", path),
+            Self::InvalidPath(path) => write!(f, "Path `{path}` is not a valid path"),
         }
     }
 }

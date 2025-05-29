@@ -5,13 +5,13 @@ use crate::logging::Verbosity;
 #[derive(Debug, Parser)]
 #[command(author, name = "karva", about = "A Python test runner.")]
 #[command(version)]
-pub(crate) struct Args {
+pub struct Args {
     #[command(subcommand)]
-    pub(crate) command: Command,
+    pub command: Command,
 }
 
 #[derive(Debug, clap::Subcommand)]
-pub(crate) enum Command {
+pub enum Command {
     /// Run tests.
     Test(TestCommand),
 
@@ -20,7 +20,7 @@ pub(crate) enum Command {
 }
 
 #[derive(Debug, Parser)]
-pub(crate) struct TestCommand {
+pub struct TestCommand {
     /// List of files or directories to test.
     #[clap(
         help = "List of files, directories, or test functions to test [default: the project root]",

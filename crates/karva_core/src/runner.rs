@@ -10,25 +10,29 @@ pub struct Runner<'a> {
 }
 
 impl<'a> Runner<'a> {
-    pub fn new(project: &'a Project, diagnostics: DiagnosticWriter) -> Self {
+    pub const fn new(project: &'a Project, diagnostics: DiagnosticWriter) -> Self {
         Self {
             project,
             diagnostic_writer: diagnostics,
         }
     }
 
-    pub fn diagnostic_writer(&self) -> &DiagnosticWriter {
+    pub const fn diagnostic_writer(&self) -> &DiagnosticWriter {
         &self.diagnostic_writer
     }
 
     pub fn run(&mut self) -> RunnerResult {
         self.diagnostic_writer.discovery_started();
         let discovered_tests = Discoverer::new(self.project).discover();
-        self.diagnostic_writer
-            .discovery_completed(discovered_tests.values().map(|tests| tests.len()).sum());
+        self.diagnostic_writer.discovery_completed(
+            discovered_tests
+                .values()
+                .map(std::collections::HashSet::len)
+                .sum(),
+        );
 
         let test_results = Python::with_gil(|py| {
-            let add_cwd_to_sys_path_result = self.add_cwd_to_sys_path(&py);
+            let add_cwd_to_sys_path_result = self.add_cwd_to_sys_path(py);
 
             if add_cwd_to_sys_path_result.is_err() {
                 return Err("Failed to add cwd to sys.path".to_string());
@@ -40,18 +44,18 @@ impl<'a> Runner<'a> {
                         Ok(module) => module,
                         Err(e) => {
                             self.diagnostic_writer
-                                .error(&format!("Failed to import module {}: {}", module_name, e));
+                                .error(&format!("Failed to import module {module_name}: {e}"));
                             return None;
                         }
                     };
                     let mut test_results = Vec::new();
-                    for test_case in test_cases.iter() {
+                    for test_case in test_cases {
                         let test_name = test_case.function_definition().name.to_string();
                         let module = test_case.module();
 
                         self.diagnostic_writer.test_started(&test_name, module);
 
-                        let test_result = test_case.run_test(&py, &imported_module);
+                        let test_result = test_case.run_test(py, &imported_module);
 
                         self.diagnostic_writer.test_completed(&test_result);
 
@@ -69,7 +73,7 @@ impl<'a> Runner<'a> {
         runner_result
     }
 
-    fn add_cwd_to_sys_path(&self, py: &Python) -> PyResult<()> {
+    fn add_cwd_to_sys_path(&self, py: Python) -> PyResult<()> {
         let sys_path = py.import("sys")?;
         let path = sys_path.getattr("path")?;
         path.call_method1("append", (self.project.cwd().as_str(),))?;
@@ -83,28 +87,30 @@ pub struct RunnerResult {
 }
 
 impl RunnerResult {
-    pub fn new(test_results: Vec<TestResult>) -> Self {
+    #[must_use]
+    pub const fn new(test_results: Vec<TestResult>) -> Self {
         Self { test_results }
     }
 
+    #[must_use]
     pub fn passed(&self) -> bool {
-        self.test_results
-            .iter()
-            .all(|test_result| test_result.is_pass())
+        self.test_results.iter().all(TestResult::is_pass)
     }
 
+    #[must_use]
     pub fn test_results(&self) -> &[TestResult] {
         &self.test_results
     }
 
-    pub fn stats(&self) -> RunnerStats {
-        let mut stats = RunnerStats::default();
+    #[must_use]
+    pub fn stats(&self) -> RunStats {
+        let mut stats = RunStats::default();
         for test_result in &self.test_results {
-            stats.total_tests += 1;
+            stats.total += 1;
             match test_result {
-                TestResult::Pass(_) => stats.passed_tests += 1,
-                TestResult::Fail(_) => stats.failed_tests += 1,
-                TestResult::Error(_) => stats.error_tests += 1,
+                TestResult::Pass(_) => stats.passed += 1,
+                TestResult::Fail(_) => stats.failed += 1,
+                TestResult::Error(_) => stats.error += 1,
             }
         }
         stats
@@ -112,28 +118,32 @@ impl RunnerResult {
 }
 
 #[derive(Debug, Default)]
-pub struct RunnerStats {
-    total_tests: usize,
-    passed_tests: usize,
-    failed_tests: usize,
-    error_tests: usize,
+pub struct RunStats {
+    total: usize,
+    passed: usize,
+    failed: usize,
+    error: usize,
 }
 
-impl RunnerStats {
-    pub fn total_tests(&self) -> usize {
-        self.total_tests
+impl RunStats {
+    #[must_use]
+    pub const fn total(&self) -> usize {
+        self.total
     }
 
-    pub fn passed_tests(&self) -> usize {
-        self.passed_tests
+    #[must_use]
+    pub const fn passed(&self) -> usize {
+        self.passed
     }
 
-    pub fn failed_tests(&self) -> usize {
-        self.failed_tests
+    #[must_use]
+    pub const fn failed(&self) -> usize {
+        self.failed
     }
 
-    pub fn error_tests(&self) -> usize {
-        self.error_tests
+    #[must_use]
+    pub const fn error(&self) -> usize {
+        self.error
     }
 }
 
@@ -154,8 +164,8 @@ mod tests {
 
     impl Write for SharedBufferWriter {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            let mut inner = self.0.lock().unwrap();
-            inner.extend_from_slice(buf);
+            self.0.lock().unwrap().extend_from_slice(buf);
+
             Ok(buf.len())
         }
         fn flush(&mut self) -> io::Result<()> {
@@ -165,7 +175,7 @@ mod tests {
 
     fn create_test_writer() -> DiagnosticWriter {
         let buffer = Arc::new(Mutex::new(Vec::new()));
-        DiagnosticWriter::new(SharedBufferWriter(buffer.clone()))
+        DiagnosticWriter::new(SharedBufferWriter(buffer))
     }
 
     struct TestEnv {
@@ -196,10 +206,10 @@ mod tests {
         let env = TestEnv::new();
         env.create_test_file(
             "test_pass.py",
-            r#"
+            r"
 def test_simple_pass():
     assert True
-"#,
+",
         );
 
         let project = Project::new(
@@ -211,10 +221,10 @@ def test_simple_pass():
 
         let result = runner.run();
 
-        assert_eq!(result.stats().total_tests(), 1);
-        assert_eq!(result.stats().passed_tests(), 1);
-        assert_eq!(result.stats().failed_tests(), 0);
-        assert_eq!(result.stats().error_tests(), 0);
+        assert_eq!(result.stats().total(), 1);
+        assert_eq!(result.stats().passed(), 1);
+        assert_eq!(result.stats().failed(), 0);
+        assert_eq!(result.stats().error(), 0);
     }
 
     #[test]
@@ -237,10 +247,10 @@ def test_simple_fail():
 
         let result = runner.run();
 
-        assert_eq!(result.stats().total_tests(), 1);
-        assert_eq!(result.stats().passed_tests(), 0);
-        assert_eq!(result.stats().failed_tests(), 1);
-        assert_eq!(result.stats().error_tests(), 0);
+        assert_eq!(result.stats().total(), 1);
+        assert_eq!(result.stats().passed(), 0);
+        assert_eq!(result.stats().failed(), 1);
+        assert_eq!(result.stats().error(), 0);
     }
 
     #[test]
@@ -263,10 +273,10 @@ def test_simple_error():
 
         let result = runner.run();
 
-        assert_eq!(result.stats().total_tests(), 1);
-        assert_eq!(result.stats().passed_tests(), 0);
-        assert_eq!(result.stats().failed_tests(), 0);
-        assert_eq!(result.stats().error_tests(), 1);
+        assert_eq!(result.stats().total(), 1);
+        assert_eq!(result.stats().passed(), 0);
+        assert_eq!(result.stats().failed(), 0);
+        assert_eq!(result.stats().error(), 1);
     }
 
     #[test]
@@ -294,9 +304,9 @@ def test_error():
 
         let result = runner.run();
 
-        assert_eq!(result.stats().total_tests(), 3);
-        assert_eq!(result.stats().passed_tests(), 1);
-        assert_eq!(result.stats().failed_tests(), 1);
-        assert_eq!(result.stats().error_tests(), 1);
+        assert_eq!(result.stats().total(), 3);
+        assert_eq!(result.stats().passed(), 1);
+        assert_eq!(result.stats().failed(), 1);
+        assert_eq!(result.stats().error(), 1);
     }
 }
