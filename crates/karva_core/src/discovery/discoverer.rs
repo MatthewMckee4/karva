@@ -3,27 +3,32 @@ use std::collections::{HashMap, HashSet};
 use ignore::WalkBuilder;
 use ruff_python_ast::StmtFunctionDef;
 
+use super::visitor::ParsedModule;
 use crate::{
-    discovery::{TestCase, function_definitions},
+    discovery::TestCase,
     path::{PythonTestPath, SystemPathBuf},
     project::Project,
     utils::{is_python_file, module_name},
 };
 
-pub struct Discoverer<'a> {
-    project: &'a Project,
+pub struct Discoverer<'proj> {
+    project: &'proj Project,
+    discovered_modules: HashMap<SystemPathBuf, ParsedModule<'proj>>,
 }
 
-impl<'a> Discoverer<'a> {
+impl<'proj> Discoverer<'proj> {
     #[must_use]
-    pub const fn new(project: &'a Project) -> Self {
-        Self { project }
+    pub fn new(project: &'proj Project) -> Self {
+        Self {
+            project,
+            discovered_modules: HashMap::new(),
+        }
     }
 
     #[must_use]
-    pub fn discover(&self) -> HashMap<String, HashSet<TestCase>> {
+    pub fn discover(&self) -> HashMap<String, HashSet<TestCase<'proj>>> {
         #[allow(clippy::mutable_key_type)]
-        let mut discovered_tests: HashMap<String, HashSet<TestCase>> = HashMap::new();
+        let mut discovered_tests: HashMap<String, HashSet<TestCase<'proj>>> = HashMap::new();
 
         for path in self.project.paths() {
             discovered_tests.extend(self.discover_files(path));
@@ -32,20 +37,20 @@ impl<'a> Discoverer<'a> {
         discovered_tests
     }
 
-    fn discover_files(&self, path: &PythonTestPath) -> HashMap<String, HashSet<TestCase>> {
+    fn discover_files(&self, path: &PythonTestPath) -> HashMap<String, HashSet<TestCase<'proj>>> {
         match path {
             PythonTestPath::File(path) => self.discover_file(path),
             PythonTestPath::Directory(dir_path) => self.discover_directory(dir_path),
             PythonTestPath::Function(path, function_name) => self
                 .discover_function(path, function_name)
                 .map_or_else(HashMap::new, |test_case| {
-                    HashMap::from([(test_case.module().to_string(), HashSet::from([test_case]))])
+                    HashMap::from([(test_case.module().clone(), HashSet::from([test_case]))])
                 }),
         }
     }
 
-    fn discover_file(&self, path: &SystemPathBuf) -> HashMap<String, HashSet<TestCase>> {
-        let mut discovered_tests: HashMap<String, HashSet<TestCase>> = HashMap::new();
+    fn discover_file(&self, path: &SystemPathBuf) -> HashMap<String, HashSet<TestCase<'proj>>> {
+        let mut discovered_tests: HashMap<String, HashSet<TestCase<'proj>>> = HashMap::new();
         let module_name = module_name(self.project.cwd(), path);
         for function_name in self.test_functions_in_file(path) {
             let test_case = TestCase::new(module_name.clone(), function_name);
@@ -57,7 +62,10 @@ impl<'a> Discoverer<'a> {
         discovered_tests
     }
 
-    fn discover_directory(&self, path: &SystemPathBuf) -> HashMap<String, HashSet<TestCase>> {
+    fn discover_directory(
+        &self,
+        path: &SystemPathBuf,
+    ) -> HashMap<String, HashSet<TestCase<'proj>>> {
         let dir_path = path.as_std_path().to_path_buf();
         let walker = WalkBuilder::new(self.project.cwd().as_std_path())
             .standard_filters(true)
@@ -66,7 +74,7 @@ impl<'a> Discoverer<'a> {
             .filter_entry(move |entry| entry.path().starts_with(&dir_path))
             .build();
 
-        let mut discovered_tests: HashMap<String, HashSet<TestCase>> = HashMap::new();
+        let mut discovered_tests: HashMap<String, HashSet<TestCase<'proj>>> = HashMap::new();
         for entry in walker.flatten() {
             let entry_path = entry.path();
             let path = SystemPathBuf::from(entry_path);
@@ -76,7 +84,7 @@ impl<'a> Discoverer<'a> {
             let discovered_tests_for_file = self.discover_file(&path);
             for (module_name, test_cases) in discovered_tests_for_file {
                 discovered_tests
-                    .entry(module_name)
+                    .entry(module_name.clone())
                     .or_default()
                     .extend(test_cases);
             }
@@ -85,21 +93,32 @@ impl<'a> Discoverer<'a> {
         discovered_tests
     }
 
-    fn discover_function(&self, path: &SystemPathBuf, function_name: &str) -> Option<TestCase> {
+    fn discover_function(
+        &mut self,
+        path: &SystemPathBuf,
+        function_name: &str,
+    ) -> Option<TestCase<'proj>> {
         let discovered_tests_for_file = self.test_functions_in_file(path);
         for function_def in discovered_tests_for_file {
             if function_def.name == *function_name {
                 return Some(TestCase::new(
                     module_name(self.project.cwd(), path),
-                    function_def,
+                    &function_def,
                 ));
             }
         }
         None
     }
 
-    fn test_functions_in_file(&self, path: &SystemPathBuf) -> Vec<StmtFunctionDef> {
-        function_definitions(path, self.project)
+    fn test_functions_in_file(&mut self, path: &SystemPathBuf) -> Vec<&'proj StmtFunctionDef> {
+        let parsed_module = ParsedModule::new(path, self.project.cwd());
+        let functions = parsed_module
+            .discover_functions(self.project)
+            .discovered_functions()
+            .to_vec();
+        self.discovered_modules
+            .insert(path.clone(), parsed_module.clone());
+        functions
     }
 }
 

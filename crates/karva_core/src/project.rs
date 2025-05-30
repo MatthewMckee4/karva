@@ -8,7 +8,7 @@ pub struct Project {
 
 impl Project {
     #[must_use]
-    pub const fn new(cwd: SystemPathBuf, paths: Vec<PythonTestPath>, test_prefix: String) -> Self {
+    pub fn new(cwd: SystemPathBuf, paths: Vec<PythonTestPath>, test_prefix: String) -> Self {
         Self {
             cwd,
             paths,

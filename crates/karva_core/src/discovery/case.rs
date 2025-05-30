@@ -11,14 +11,14 @@ use ruff_python_ast::StmtFunctionDef;
 use crate::test_result::TestResult;
 
 #[derive(Debug, Clone)]
-pub struct TestCase {
+pub struct TestCase<'proj> {
     module: String,
-    function_definition: StmtFunctionDef,
+    function_definition: &'proj StmtFunctionDef,
 }
 
-impl TestCase {
+impl<'proj> TestCase<'proj> {
     #[must_use]
-    pub const fn new(module: String, function_definition: StmtFunctionDef) -> Self {
+    pub const fn new(module: String, function_definition: &'proj StmtFunctionDef) -> Self {
         Self {
             module,
             function_definition,
@@ -72,27 +72,27 @@ impl TestCase {
     }
 }
 
-impl Display for TestCase {
+impl<'proj> Display for TestCase<'proj> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}::{}", self.module, self.function_definition.name)
     }
 }
 
-impl Hash for TestCase {
+impl<'proj> Hash for TestCase<'proj> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.module.hash(state);
         self.function_definition.name.hash(state);
     }
 }
 
-impl PartialEq for TestCase {
+impl<'proj> PartialEq for TestCase<'proj> {
     fn eq(&self, other: &Self) -> bool {
         self.module == other.module
             && self.function_definition.name == other.function_definition.name
     }
 }
 
-impl Eq for TestCase {}
+impl<'proj> Eq for TestCase<'proj> {}
 
 fn filter_traceback(traceback: &str) -> String {
     let lines: Vec<&str> = traceback.lines().collect();

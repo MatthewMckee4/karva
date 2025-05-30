@@ -7,7 +7,7 @@ use std::{
 
 use camino::{Utf8Path, Utf8PathBuf};
 
-use crate::utils::is_python_file;
+use crate::utils::{is_python_file, module_name};
 
 #[derive(Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct SystemPath(Utf8Path);
@@ -417,6 +417,14 @@ impl PythonTestPath {
             Err(PythonTestPathError::InvalidPath(value.clone()))
         } else {
             Err(PythonTestPathError::NotFound(value.clone()))
+        }
+    }
+
+    pub fn module_name(&self, cwd: &SystemPathBuf) -> String {
+        match self {
+            Self::File(path) => module_name(cwd, path),
+            Self::Directory(path) => module_name(cwd, path),
+            Self::Function(path, _) => module_name(cwd, path),
         }
     }
 }

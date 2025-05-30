@@ -1,3 +1,5 @@
+use std::hash::{Hash, Hasher};
+
 use pyo3::Python;
 use ruff_python_ast::{
     ModModule, PythonVersion, Stmt, StmtFunctionDef,
@@ -5,17 +7,71 @@ use ruff_python_ast::{
 };
 use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
-use crate::{path::SystemPathBuf, project::Project};
+use crate::{path::SystemPathBuf, project::Project, utils::module_name};
 
 #[derive(Clone)]
-pub struct FunctionDefinitionVisitor<'a> {
-    discovered_functions: Vec<StmtFunctionDef>,
-    project: &'a Project,
+pub struct ParsedModule<'proj> {
+    path: SystemPathBuf,
+    name: String,
+    parsed: &'proj Parsed<ModModule>,
 }
 
-impl<'a> FunctionDefinitionVisitor<'a> {
+impl<'proj> ParsedModule<'proj> {
+    pub fn new(path: &SystemPathBuf, cwd: &SystemPathBuf) -> Self {
+        let parsed = parsed_module(path);
+        let name = module_name(cwd, path);
+        Self {
+            path: path.clone(),
+            name,
+            parsed: &parsed,
+        }
+    }
+
+    pub fn syntax(&self) -> &ModModule {
+        self.parsed.syntax()
+    }
+
+    pub fn discover_functions<'proj>(
+        &'proj self,
+        project: &'proj Project,
+    ) -> FunctionDefinitions<'proj> {
+        let mut visitor = FunctionDefinitionVisitor::new(project);
+        visitor.visit_body(&self.syntax().body);
+
+        FunctionDefinitions {
+            module: self,
+            discovered_functions: visitor.discovered_functions().to_vec(),
+        }
+    }
+}
+
+impl Hash for ParsedModule {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.path.hash(state);
+        self.name.hash(state);
+    }
+}
+
+pub struct FunctionDefinitions<'proj> {
+    module: &'proj ParsedModule,
+    discovered_functions: Vec<&'proj StmtFunctionDef>,
+}
+
+impl<'proj> FunctionDefinitions<'proj> {
+    pub fn discovered_functions(&self) -> &[&'proj StmtFunctionDef] {
+        &self.discovered_functions
+    }
+}
+
+#[derive(Clone)]
+pub struct FunctionDefinitionVisitor<'proj> {
+    discovered_functions: Vec<&'proj StmtFunctionDef>,
+    project: &'proj Project,
+}
+
+impl<'proj> FunctionDefinitionVisitor<'proj> {
     #[must_use]
-    pub const fn new(project: &'a Project) -> Self {
+    pub const fn new(project: &'proj Project) -> Self {
         Self {
             discovered_functions: Vec::new(),
             project,
@@ -23,36 +79,25 @@ impl<'a> FunctionDefinitionVisitor<'a> {
     }
 
     #[must_use]
-    pub fn discovered_functions(&self) -> &[StmtFunctionDef] {
+    pub fn discovered_functions(&self) -> &[&'proj StmtFunctionDef] {
         &self.discovered_functions
     }
 }
 
-impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
-    fn visit_stmt(&mut self, stmt: &'a Stmt) {
+impl<'proj> SourceOrderVisitor<'proj> for FunctionDefinitionVisitor<'proj> {
+    fn visit_stmt(&mut self, stmt: &'proj Stmt) {
         if let Stmt::FunctionDef(function_def) = stmt {
             if function_def
                 .name
                 .to_string()
                 .starts_with(self.project.test_prefix())
             {
-                self.discovered_functions.push(function_def.clone());
+                self.discovered_functions.push(&function_def);
             }
         }
 
         source_order::walk_stmt(self, stmt);
     }
-}
-
-#[must_use]
-pub fn function_definitions(path: &SystemPathBuf, project: &Project) -> Vec<StmtFunctionDef> {
-    let mut visitor = FunctionDefinitionVisitor::new(project);
-
-    let parsed = parsed_module(path);
-
-    visitor.visit_body(&parsed.syntax().body);
-
-    visitor.discovered_functions().to_vec()
 }
 
 fn parsed_module(path: &SystemPathBuf) -> Parsed<ModModule> {

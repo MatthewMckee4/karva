@@ -4,13 +4,13 @@ use crate::{
     diagnostics::DiagnosticWriter, discovery::Discoverer, project::Project, test_result::TestResult,
 };
 
-pub struct Runner<'a> {
-    project: &'a Project,
+pub struct Runner<'proj> {
+    project: &'proj Project,
     diagnostic_writer: DiagnosticWriter,
 }
 
-impl<'a> Runner<'a> {
-    pub const fn new(project: &'a Project, diagnostics: DiagnosticWriter) -> Self {
+impl<'proj> Runner<'proj> {
+    pub const fn new(project: &'proj Project, diagnostics: DiagnosticWriter) -> Self {
         Self {
             project,
             diagnostic_writer: diagnostics,
