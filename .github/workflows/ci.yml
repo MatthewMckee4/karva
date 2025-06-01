@@ -63,11 +63,11 @@ jobs:
       - uses: actions/setup-python@v3
       - name: Generate resources
         run: python crates/karva_benchmark/resources/generate.py
-      - uses: actions-rs/toolchain@v1
+      - uses: moonrepo/setup-rust@v1
         with:
-          toolchain: stable
-          override: true
-          components: cargo-codspeed
+          channel: stable
+          cache-target: release
+          bins: cargo-codspeed
       - name: "Build benchmarks"
         run: cargo codspeed build --features codspeed -p karva_benchmark
       - name: Run benchmarks
@@ -80,11 +80,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: moonrepo/setup-rust@v1
         with:
-          toolchain: stable
-          override: true
-          components: cargo-tarpaulin
+          channel: stable
+          cache-target: release
+          bins: cargo-tarpaulin
       - name: Generate code coverage
         run: |
           cargo +nightly tarpaulin --verbose --all-features --workspace --timeout 120 --out Xml
