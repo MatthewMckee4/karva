@@ -166,7 +166,7 @@ mod tests {
     use super::*;
 
     struct TestEnv {
-        temp_dir: TempDir,
+        pub temp_dir: TempDir,
     }
 
     impl TestEnv {
