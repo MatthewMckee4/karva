@@ -421,19 +421,14 @@ def test_function(): pass
     #[test]
     fn test_paths_shadowed_by_other_paths_are_not_discovered_twice() {
         let env = TestEnv::new();
-        let path = env
-            .create_file(
-                "tests/test_file.py",
-                "def test_function(): pass\ndef test_function2(): pass",
-            )
-            .unwrap();
+        let path = env.create_file(
+            "tests/test_file.py",
+            "def test_function(): pass\ndef test_function2(): pass",
+        );
 
         let project = Project::new(
             SystemPathBuf::from(env.temp_dir.path()),
-            vec![
-                PythonTestPath::Function(path.clone(), "test_function".to_string()),
-                PythonTestPath::File(path),
-            ],
+            vec![format!("{path}::test_function"), path],
             "test".to_string(),
         );
         let discoverer = Discoverer::new(&project);
