@@ -4,6 +4,7 @@ use pyo3::prelude::*;
 #[pyfunction]
 #[must_use]
 pub fn karva_run() -> i32 {
+    eprintln!("{:?}", std::env::args().collect::<Vec<_>>());
     karva_main().to_i32()
 }
 
