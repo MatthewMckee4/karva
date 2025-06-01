@@ -1,6 +1,7 @@
-use crate::{diagnostic::DiagnosticWriter, discovery::Discoverer, test_result::TestResult};
 use karva_project::project::Project;
 use pyo3::prelude::*;
+
+use crate::{diagnostic::DiagnosticWriter, discovery::Discoverer, test_result::TestResult};
 
 pub struct Runner<'a> {
     project: &'a Project,
@@ -152,10 +153,10 @@ mod tests {
         sync::{Arc, Mutex},
     };
 
+    use karva_project::path::SystemPathBuf;
     use tempfile::TempDir;
 
     use super::*;
-    use karva_project::path::SystemPathBuf;
 
     #[derive(Clone, Debug)]
     struct SharedBufferWriter(Arc<Mutex<Vec<u8>>>);

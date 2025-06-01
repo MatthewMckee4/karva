@@ -1,11 +1,10 @@
+use karva_project::{path::SystemPathBuf, project::Project};
 use pyo3::Python;
 use ruff_python_ast::{
     ModModule, PythonVersion, Stmt, StmtFunctionDef,
     visitor::source_order::{self, SourceOrderVisitor},
 };
 use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
-
-use karva_project::{path::SystemPathBuf, project::Project};
 
 #[derive(Clone)]
 pub struct FunctionDefinitionVisitor<'a> {

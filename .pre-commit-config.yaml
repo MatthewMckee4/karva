@@ -54,3 +54,8 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
+
+  - repo: https://github.com/DevinR528/cargo-sort
+    rev: v2.0.1
+    hooks:
+      - id: cargo-sort

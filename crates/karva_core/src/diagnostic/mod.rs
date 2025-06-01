@@ -11,8 +11,6 @@ use crate::{
     test_result::{Error, Fail, Pass, TestResult},
 };
 
-mod render;
-
 pub struct DiagnosticWriter {
     stdout: Mutex<Box<dyn Write>>,
     start_time: Instant,
@@ -164,9 +162,8 @@ mod tests {
         sync::{Arc, Mutex},
     };
 
-    use regex::Regex;
-
     use karva_project::{path::SystemPathBuf, project::Project};
+    use regex::Regex;
 
     use super::*;
     use crate::{

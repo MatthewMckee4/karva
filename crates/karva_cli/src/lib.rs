@@ -1,5 +1,3 @@
-use crossbeam::channel as crossbeam_channel;
-use notify::Watcher as _;
 use std::{
     ffi::OsString,
     io::{self, BufWriter, Write},
@@ -10,6 +8,7 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use colored::Colorize;
+use crossbeam::channel as crossbeam_channel;
 use karva_core::{
     diagnostic::DiagnosticWriter,
     runner::{Runner, RunnerResult},
@@ -18,6 +17,7 @@ use karva_project::{
     path::{SystemPath, SystemPathBuf, deduplicate_nested_paths},
     project::Project,
 };
+use notify::Watcher as _;
 
 use crate::{
     args::{Args, Command, TestCommand},

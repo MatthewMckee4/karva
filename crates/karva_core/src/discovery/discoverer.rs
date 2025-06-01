@@ -1,13 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
 use ignore::WalkBuilder;
-use ruff_python_ast::StmtFunctionDef;
-
 use karva_project::{
     path::{PythonTestPath, SystemPathBuf},
     project::Project,
     utils::{is_python_file, module_name},
 };
+use ruff_python_ast::StmtFunctionDef;
 
 use crate::discovery::{TestCase, function_definitions};
 
