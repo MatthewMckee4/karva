@@ -63,10 +63,9 @@ jobs:
       - uses: actions/setup-python@v3
       - name: Generate resources
         run: python crates/karva_benchmark/resources/generate.py
-      - name: Setup rust toolchain, cache and cargo-codspeed binary
-        uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: stable
           override: true
           components: cargo-codspeed
       - name: "Build benchmarks"
@@ -81,6 +80,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: cargo-tarpaulin
       - name: Generate code coverage
         run: |
           cargo +nightly tarpaulin --verbose --all-features --workspace --timeout 120 --out Xml
