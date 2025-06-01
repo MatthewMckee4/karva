@@ -1,34 +1,35 @@
 use karva_project::project::Project;
 use pyo3::prelude::*;
 
-use crate::{diagnostic::DiagnosticWriter, discovery::Discoverer, test_result::TestResult};
+use crate::{
+    diagnostic::{MainDiagnosticWriter, TestCaseDiagnosticWriter},
+    discovery::Discoverer,
+    test_result::TestResult,
+};
 
 pub struct Runner<'a> {
     project: &'a Project,
-    diagnostic_writer: DiagnosticWriter,
+    diagnostic_writer: &'a mut MainDiagnosticWriter,
 }
 
 impl<'a> Runner<'a> {
-    pub const fn new(project: &'a Project, diagnostics: DiagnosticWriter) -> Self {
+    pub const fn new(
+        project: &'a Project,
+        diagnostic_writer: &'a mut MainDiagnosticWriter,
+    ) -> Self {
         Self {
             project,
-            diagnostic_writer: diagnostics,
+            diagnostic_writer,
         }
     }
 
-    pub const fn diagnostic_writer(&self) -> &DiagnosticWriter {
-        &self.diagnostic_writer
+    #[must_use]
+    pub const fn diagnostic_writer(&self) -> &MainDiagnosticWriter {
+        self.diagnostic_writer
     }
 
-    pub fn run(&mut self) -> RunnerResult {
-        self.diagnostic_writer.discovery_started();
-        let discovered_tests = Discoverer::new(self.project).discover();
-        self.diagnostic_writer.discovery_completed(
-            discovered_tests
-                .values()
-                .map(std::collections::HashSet::len)
-                .sum(),
-        );
+    pub fn run(&mut self) -> RunDiagnostics {
+        let discovered_tests = Discoverer::new(self.project, self.diagnostic_writer).discover();
 
         let test_results = Python::with_gil(|py| {
             let add_cwd_to_sys_path_result = self.add_cwd_to_sys_path(py);
@@ -36,6 +37,7 @@ impl<'a> Runner<'a> {
             if add_cwd_to_sys_path_result.is_err() {
                 return Err("Failed to add cwd to sys.path".to_string());
             }
+
             Ok(discovered_tests
                 .iter()
                 .filter_map(|(module_name, test_cases)| {
@@ -67,9 +69,9 @@ impl<'a> Runner<'a> {
         })
         .unwrap_or_default();
 
-        let runner_result = RunnerResult::new(test_results);
-        self.diagnostic_writer.finish(&runner_result);
-        runner_result
+        let run_diagnostics = RunDiagnostics::new(test_results);
+        self.diagnostic_writer.display_diagnostics(&run_diagnostics);
+        run_diagnostics
     }
 
     fn add_cwd_to_sys_path(&self, py: Python) -> PyResult<()> {
@@ -81,11 +83,11 @@ impl<'a> Runner<'a> {
 }
 
 #[derive(Debug)]
-pub struct RunnerResult {
+pub struct RunDiagnostics {
     test_results: Vec<TestResult>,
 }
 
-impl RunnerResult {
+impl RunDiagnostics {
     #[must_use]
     pub const fn new(test_results: Vec<TestResult>) -> Self {
         Self { test_results }
@@ -172,9 +174,9 @@ mod tests {
         }
     }
 
-    fn create_test_writer() -> DiagnosticWriter {
+    fn create_test_writer() -> MainDiagnosticWriter {
         let buffer = Arc::new(Mutex::new(Vec::new()));
-        DiagnosticWriter::new(SharedBufferWriter(buffer))
+        MainDiagnosticWriter::new(SharedBufferWriter(buffer))
     }
 
     struct TestEnv {
@@ -216,7 +218,8 @@ def test_simple_pass():
             vec![env.create_python_test_path("test_pass.py")],
             "test".to_string(),
         );
-        let mut runner = Runner::new(&project, create_test_writer());
+        let mut diagnostic_writer = create_test_writer();
+        let mut runner = Runner::new(&project, &mut diagnostic_writer);
 
         let result = runner.run();
 
@@ -242,7 +245,8 @@ def test_simple_fail():
             vec![env.create_python_test_path("test_fail.py")],
             "test".to_string(),
         );
-        let mut runner = Runner::new(&project, create_test_writer());
+        let mut diagnostic_writer = create_test_writer();
+        let mut runner = Runner::new(&project, &mut diagnostic_writer);
 
         let result = runner.run();
 
@@ -268,7 +272,8 @@ def test_simple_error():
             vec![env.create_python_test_path("test_error.py")],
             "test".to_string(),
         );
-        let mut runner = Runner::new(&project, create_test_writer());
+        let mut diagnostic_writer = create_test_writer();
+        let mut runner = Runner::new(&project, &mut diagnostic_writer);
 
         let result = runner.run();
 
@@ -299,7 +304,8 @@ def test_error():
             vec![env.create_python_test_path("test_mixed.py")],
             "test".to_string(),
         );
-        let mut runner = Runner::new(&project, create_test_writer());
+        let mut diagnostic_writer = create_test_writer();
+        let mut runner = Runner::new(&project, &mut diagnostic_writer);
 
         let result = runner.run();
 

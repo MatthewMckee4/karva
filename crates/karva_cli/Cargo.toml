@@ -33,6 +33,7 @@ tracing-flame = { workspace = true }
 tracing-tree = { workspace = true }
 wild = { workspace = true }
 notify = { workspace = true }
+pyo3 = { workspace = true }
 
 [lints]
 workspace = true

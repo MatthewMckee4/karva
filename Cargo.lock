@@ -749,6 +749,7 @@ dependencies = [
  "karva_core",
  "karva_project",
  "notify",
+ "pyo3",
  "tracing",
  "tracing-flame",
  "tracing-subscriber",

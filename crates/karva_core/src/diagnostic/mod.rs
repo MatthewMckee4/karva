@@ -7,24 +7,94 @@ use std::{
 use colored::{Color, Colorize};
 
 use crate::{
-    runner::RunnerResult,
+    runner::RunDiagnostics,
     test_result::{Error, Fail, Pass, TestResult},
 };
+pub trait TestCaseDiagnosticWriter {
+    fn test_started(&self, test_name: &str, file_path: &str);
+    fn test_completed(&mut self, test: &TestResult);
+    fn error(&self, error: &str);
+    fn display_diagnostics(&self, run_diagnostics: &RunDiagnostics);
+}
 
-pub struct DiagnosticWriter {
+pub trait DiscoveryDiagnosticWriter {
+    fn discovery_started(&self);
+    fn discovery_completed(&self, count: usize);
+}
+
+pub trait DiagnosticWriter: TestCaseDiagnosticWriter + DiscoveryDiagnosticWriter {}
+
+pub struct MainDiagnosticWriter {
     stdout: Mutex<Box<dyn Write>>,
     start_time: Instant,
     failed_tests: Vec<Fail>,
     error_tests: Vec<Error>,
 }
 
-impl Default for DiagnosticWriter {
+impl Default for MainDiagnosticWriter {
     fn default() -> Self {
         Self::new(io::stdout())
     }
 }
 
-impl DiagnosticWriter {
+impl TestCaseDiagnosticWriter for MainDiagnosticWriter {
+    fn test_started(&self, test_name: &str, file_path: &str) {
+        tracing::info!("{} {} in {}", "Running".blue(), test_name, file_path,);
+    }
+
+    fn test_completed(&mut self, test: &TestResult) {
+        match test {
+            TestResult::Pass(test) => self.test_passed(test),
+            TestResult::Fail(test) => self.test_failed(test),
+            TestResult::Error(test) => self.test_error(test),
+        }
+    }
+
+    fn error(&self, error: &str) {
+        let mut stdout = self.acquire_stdout();
+        let _ = writeln!(stdout, "{}", error.red());
+        let _ = stdout.flush();
+    }
+
+    fn display_diagnostics(&self, run_diagnostics: &RunDiagnostics) {
+        let mut stdout = self.acquire_stdout();
+        let stats = run_diagnostics.stats();
+        let total_duration = self.start_time.elapsed();
+
+        if stats.total() > 0 {
+            let _ = writeln!(stdout);
+            self.display_test_results(&mut stdout);
+            let _ = writeln!(stdout, "{}", "─────────────".bold());
+            for (label, num, color) in [
+                ("Passed tests:", stats.passed(), Color::Green),
+                ("Failed tests:", stats.failed(), Color::Red),
+                ("Error tests:", stats.error(), Color::Yellow),
+            ] {
+                Self::log_test_count(&mut stdout, label, num, color);
+            }
+            tracing::info!(
+                "{} {}ms",
+                "Total duration:".blue(),
+                total_duration.as_millis()
+            );
+        }
+        let _ = stdout.flush();
+    }
+}
+
+impl DiscoveryDiagnosticWriter for MainDiagnosticWriter {
+    fn discovery_started(&self) {
+        tracing::info!("{}", "Discovering tests...".blue());
+    }
+
+    fn discovery_completed(&self, count: usize) {
+        tracing::info!("{} {} {}", "Discovered".blue(), count, "tests".blue());
+    }
+}
+
+impl DiagnosticWriter for MainDiagnosticWriter {}
+
+impl MainDiagnosticWriter {
     pub fn new(out: impl Write + 'static) -> Self {
         Self {
             stdout: Mutex::new(Box::new(out)),
@@ -36,18 +106,6 @@ impl DiagnosticWriter {
 
     fn acquire_stdout(&self) -> std::sync::MutexGuard<'_, Box<dyn Write>> {
         self.stdout.lock().unwrap()
-    }
-
-    pub fn test_started(&self, test_name: &str, file_path: &str) {
-        tracing::info!("{} {} in {}", "Running".blue(), test_name, file_path,);
-    }
-
-    pub fn test_completed(&mut self, test: &TestResult) {
-        match test {
-            TestResult::Pass(test) => self.test_passed(test),
-            TestResult::Fail(test) => self.test_failed(test),
-            TestResult::Error(test) => self.test_error(test),
-        }
     }
 
     fn test_passed(&self, _test: &Pass) {
@@ -67,12 +125,6 @@ impl DiagnosticWriter {
     fn log_test_result(&self, color: Color) {
         let mut stdout = self.acquire_stdout();
         let _ = write!(stdout, "{}", ".".color(color));
-        let _ = stdout.flush();
-    }
-
-    pub fn error(&self, error: &str) {
-        let mut stdout = self.acquire_stdout();
-        let _ = writeln!(stdout, "{}", error.red());
         let _ = stdout.flush();
     }
 
@@ -128,31 +180,6 @@ impl DiagnosticWriter {
             );
         }
     }
-
-    pub fn finish(&self, runner_result: &RunnerResult) {
-        let mut stdout = self.acquire_stdout();
-        let stats = runner_result.stats();
-        let total_duration = self.start_time.elapsed();
-
-        if stats.total() > 0 {
-            let _ = writeln!(stdout);
-            self.display_test_results(&mut stdout);
-            let _ = writeln!(stdout, "{}", "─────────────".bold());
-            for (label, num, color) in [
-                ("Passed tests:", stats.passed(), Color::Green),
-                ("Failed tests:", stats.failed(), Color::Red),
-                ("Error tests:", stats.error(), Color::Yellow),
-            ] {
-                Self::log_test_count(&mut stdout, label, num, color);
-            }
-            tracing::info!(
-                "{} {}ms",
-                "Total duration:".blue(),
-                total_duration.as_millis()
-            );
-        }
-        let _ = stdout.flush();
-    }
 }
 
 #[cfg(test)]
@@ -168,7 +195,7 @@ mod tests {
     use super::*;
     use crate::{
         discovery::{TestCase, function_definitions},
-        runner::RunnerResult,
+        runner::RunDiagnostics,
         test_result::TestResult,
     };
 
@@ -191,9 +218,9 @@ mod tests {
         re.replace_all(s, "").to_string()
     }
 
-    fn create_test_writer() -> (DiagnosticWriter, Arc<Mutex<Vec<u8>>>) {
+    fn create_test_writer() -> (MainDiagnosticWriter, Arc<Mutex<Vec<u8>>>) {
         let buffer = Arc::new(Mutex::new(Vec::new()));
-        let writer = DiagnosticWriter::new(SharedBufferWriter(buffer.clone()));
+        let writer = MainDiagnosticWriter::new(SharedBufferWriter(buffer.clone()));
         (writer, buffer)
     }
 
@@ -267,7 +294,7 @@ mod tests {
         let (writer, buffer) = create_test_writer();
         writer.discovery_started();
         writer.discovery_completed(5);
-        writer.finish(&RunnerResult::new(vec![]));
+        writer.display_diagnostics(&RunDiagnostics::new(vec![]));
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         let output = strip_ansi_codes(&output);
         let expected = "Discovered 5 tests\n";
@@ -285,8 +312,8 @@ mod tests {
         for test in &test_results {
             writer.test_completed(test);
         }
-        let runner_result = RunnerResult::new(test_results);
-        writer.finish(&runner_result);
+        let runner_result = RunDiagnostics::new(test_results);
+        writer.display_diagnostics(&runner_result);
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         let output = strip_ansi_codes(&output);
         let expected = r#"...
@@ -312,8 +339,8 @@ Failed tests: 1
         for test in &test_results {
             writer.test_completed(test);
         }
-        let runner_result = RunnerResult::new(test_results);
-        writer.finish(&runner_result);
+        let runner_result = RunDiagnostics::new(test_results);
+        writer.display_diagnostics(&runner_result);
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         let output = strip_ansi_codes(&output);
         let expected = r#"...
@@ -336,8 +363,8 @@ Error tests: 1
     #[test]
     fn test_finish_with_zero_tests() {
         let (writer, buffer) = create_test_writer();
-        let runner_result = RunnerResult::new(vec![]);
-        writer.finish(&runner_result);
+        let runner_result = RunDiagnostics::new(vec![]);
+        writer.display_diagnostics(&runner_result);
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         assert_eq!(output, "");
     }
@@ -349,8 +376,8 @@ Error tests: 1
         for test in &test_results {
             writer.test_completed(test);
         }
-        let runner_result = RunnerResult::new(test_results);
-        writer.finish(&runner_result);
+        let runner_result = RunDiagnostics::new(test_results);
+        writer.display_diagnostics(&runner_result);
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         let output = strip_ansi_codes(&output);
         let expected = r#"..
@@ -374,8 +401,8 @@ Failed tests: 2
         for test in &test_results {
             writer.test_completed(test);
         }
-        let runner_result = RunnerResult::new(test_results);
-        writer.finish(&runner_result);
+        let runner_result = RunDiagnostics::new(test_results);
+        writer.display_diagnostics(&runner_result);
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         let output = strip_ansi_codes(&output);
         let expected = r"..
@@ -392,8 +419,8 @@ Passed tests: 2
         for test in &test_results {
             writer.test_completed(test);
         }
-        let runner_result = RunnerResult::new(test_results);
-        writer.finish(&runner_result);
+        let runner_result = RunDiagnostics::new(test_results);
+        writer.display_diagnostics(&runner_result);
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         let output = strip_ansi_codes(&output);
         let expected = r#"..
