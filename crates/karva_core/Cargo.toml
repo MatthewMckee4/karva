@@ -29,8 +29,8 @@ tracing-tree = { workspace = true, optional = true }
 ignore = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.8"
-regex = "1"
+tempfile = { workspace = true }
+regex = { workspace = true }
 
 [lints]
 workspace = true

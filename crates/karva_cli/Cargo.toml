@@ -33,7 +33,15 @@ tracing-flame = { workspace = true }
 tracing-tree = { workspace = true }
 wild = { workspace = true }
 notify = { workspace = true }
-pyo3 = { workspace = true }
+indicatif = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true, features = ["filters"] }
+insta-cmd = { workspace = true }
+tempfile = { workspace = true }
+dunce = { workspace = true }
+regex = { workspace = true }
+ruff_python_trivia = { workspace = true }
 
 [lints]
 workspace = true

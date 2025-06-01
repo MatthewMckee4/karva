@@ -22,7 +22,11 @@ codspeed-criterion-compat = { version = "2.6.0", default-features = false }
 colored = { version = "3.0.0" }
 criterion = { version = "0.6.0", default-features = false }
 crossbeam = { version = "0.8.4" }
+dunce = { version = "1.0.5" }
 ignore = { version = "0.4.23" }
+indicatif = { version = "0.17.8" }
+insta = { version = "1.35.1" }
+insta-cmd = { version = "0.6.0" }
 karva = { path = "crates/karva" }
 karva_benchmark = { path = "crates/karva_benchmark" }
 karva_cli = { path = "crates/karva_cli" }
@@ -30,11 +34,14 @@ karva_core = { path = "crates/karva_core" }
 karva_project = { path = "crates/karva_project" }
 notify = { version = "8.0.0" }
 pyo3 = { version = "0.25.0", features = ["auto-initialize"] }
+regex = "1"
 ruff_python_ast = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_python_parser = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
+ruff_python_trivia = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_source_file = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_text_size = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 serde = { version = "1.0.219", features = ["derive"] }
+tempfile = "3.8"
 tracing = { version = "0.1.41", features = ["release_max_level_debug"] }
 tracing-flame = { version = "0.2.0" }
 tracing-indicatif = { version = "0.3.6" }
@@ -58,3 +65,4 @@ missing_errors_doc = "allow"
 print_stdout = "warn"
 missing_panics_doc = "allow"
 too_many_lines = "allow"
+significant_drop_tightening = "allow"

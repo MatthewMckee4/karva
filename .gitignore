@@ -5,3 +5,6 @@ __pycache__/
 
 karva.egg-info/
 uv.lock
+
+# insta
+*.rs.pending-snap

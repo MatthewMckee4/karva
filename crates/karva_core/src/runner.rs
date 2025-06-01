@@ -1,35 +1,38 @@
+use std::io::Write;
+
+use colored::{Color, Colorize};
 use karva_project::project::Project;
 use pyo3::prelude::*;
 
 use crate::{
-    diagnostic::{MainDiagnosticWriter, TestCaseDiagnosticWriter},
+    diagnostic::reporter::{DummyReporter, Reporter},
     discovery::Discoverer,
     test_result::TestResult,
 };
 
-pub struct Runner<'a> {
+pub struct TestRunner<'a> {
     project: &'a Project,
-    diagnostic_writer: &'a mut MainDiagnosticWriter,
 }
 
-impl<'a> Runner<'a> {
-    pub const fn new(
-        project: &'a Project,
-        diagnostic_writer: &'a mut MainDiagnosticWriter,
-    ) -> Self {
-        Self {
-            project,
-            diagnostic_writer,
-        }
+impl<'a> TestRunner<'a> {
+    #[must_use]
+    pub const fn new(project: &'a Project) -> Self {
+        Self { project }
+    }
+
+    pub fn run(&self) -> RunDiagnostics {
+        self.run_impl(&mut DummyReporter)
+    }
+
+    pub fn run_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
+        self.run_impl(reporter)
     }
 
     #[must_use]
-    pub const fn diagnostic_writer(&self) -> &MainDiagnosticWriter {
-        self.diagnostic_writer
-    }
+    fn run_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
+        let discovered_tests = Discoverer::new(self.project).discover();
 
-    pub fn run(&mut self) -> RunDiagnostics {
-        let discovered_tests = Discoverer::new(self.project, self.diagnostic_writer).discover();
+        reporter.set_files(discovered_tests.count);
 
         let test_results = Python::with_gil(|py| {
             let add_cwd_to_sys_path_result = self.add_cwd_to_sys_path(py);
@@ -39,39 +42,34 @@ impl<'a> Runner<'a> {
             }
 
             Ok(discovered_tests
+                .tests
                 .iter()
                 .filter_map(|(module_name, test_cases)| {
-                    let imported_module = match PyModule::import(py, module_name) {
-                        Ok(module) => module,
-                        Err(e) => {
-                            self.diagnostic_writer
-                                .error(&format!("Failed to import module {module_name}: {e}"));
-                            return None;
-                        }
+                    let res = {
+                        let imported_module = match PyModule::import(py, module_name) {
+                            Ok(module) => module,
+                            Err(e) => {
+                                tracing::error!("Failed to import module {module_name}: {e}");
+                                return None;
+                            }
+                        };
+
+                        Some(
+                            test_cases
+                                .iter()
+                                .map(|test_case| test_case.run_test(py, &imported_module))
+                                .collect::<Vec<_>>(),
+                        )
                     };
-                    let mut test_results = Vec::new();
-                    for test_case in test_cases {
-                        let test_name = test_case.function_definition().name.to_string();
-                        let module = test_case.module();
-
-                        self.diagnostic_writer.test_started(&test_name, module);
-
-                        let test_result = test_case.run_test(py, &imported_module);
-
-                        self.diagnostic_writer.test_completed(&test_result);
-
-                        test_results.push(test_result);
-                    }
-                    Some(test_results)
+                    reporter.report_file(module_name);
+                    res
                 })
                 .flatten()
                 .collect())
         })
         .unwrap_or_default();
 
-        let run_diagnostics = RunDiagnostics::new(test_results);
-        self.diagnostic_writer.display_diagnostics(&run_diagnostics);
-        run_diagnostics
+        RunDiagnostics::new(test_results)
     }
 
     fn add_cwd_to_sys_path(&self, py: Python) -> PyResult<()> {
@@ -116,6 +114,34 @@ impl RunDiagnostics {
         }
         stats
     }
+
+    fn log_test_count(writer: &mut dyn Write, label: &str, count: usize, color: Color) {
+        if count > 0 {
+            let _ = writeln!(
+                writer,
+                "{} {}",
+                label.color(color),
+                count.to_string().color(color)
+            );
+        }
+    }
+
+    pub fn display(&self, writer: &mut dyn Write) {
+        let stats = self.stats();
+
+        if stats.total() > 0 {
+            let _ = writeln!(writer);
+            // self.display_test_results(&mut writer);
+            let _ = writeln!(writer, "{}", "─────────────".bold());
+            for (label, num, color) in [
+                ("Passed tests:", stats.passed(), Color::Green),
+                ("Failed tests:", stats.failed(), Color::Red),
+                ("Error tests:", stats.error(), Color::Yellow),
+            ] {
+                Self::log_test_count(writer, label, num, color);
+            }
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -150,34 +176,11 @@ impl RunStats {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        io::{self, Write},
-        sync::{Arc, Mutex},
-    };
 
     use karva_project::path::SystemPathBuf;
     use tempfile::TempDir;
 
     use super::*;
-
-    #[derive(Clone, Debug)]
-    struct SharedBufferWriter(Arc<Mutex<Vec<u8>>>);
-
-    impl Write for SharedBufferWriter {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(buf);
-
-            Ok(buf.len())
-        }
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
-    fn create_test_writer() -> MainDiagnosticWriter {
-        let buffer = Arc::new(Mutex::new(Vec::new()));
-        MainDiagnosticWriter::new(SharedBufferWriter(buffer))
-    }
 
     struct TestEnv {
         temp_dir: TempDir,
@@ -217,8 +220,7 @@ def test_simple_pass():
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_pass.py")],
         );
-        let mut diagnostic_writer = create_test_writer();
-        let mut runner = Runner::new(&project, &mut diagnostic_writer);
+        let runner = TestRunner::new(&project);
 
         let result = runner.run();
 
@@ -243,8 +245,7 @@ def test_simple_fail():
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_fail.py")],
         );
-        let mut diagnostic_writer = create_test_writer();
-        let mut runner = Runner::new(&project, &mut diagnostic_writer);
+        let runner = TestRunner::new(&project);
 
         let result = runner.run();
 
@@ -269,8 +270,7 @@ def test_simple_error():
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_error.py")],
         );
-        let mut diagnostic_writer = create_test_writer();
-        let mut runner = Runner::new(&project, &mut diagnostic_writer);
+        let runner = TestRunner::new(&project);
 
         let result = runner.run();
 
@@ -300,8 +300,7 @@ def test_error():
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_mixed.py")],
         );
-        let mut diagnostic_writer = create_test_writer();
-        let mut runner = Runner::new(&project, &mut diagnostic_writer);
+        let runner = TestRunner::new(&project);
 
         let result = runner.run();
 

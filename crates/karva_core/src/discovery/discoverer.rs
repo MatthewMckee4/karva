@@ -8,47 +8,40 @@ use karva_project::{
 };
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::{
-    diagnostic::DiscoveryDiagnosticWriter,
-    discovery::{TestCase, function_definitions},
-};
+use crate::discovery::{TestCase, function_definitions};
 
 pub struct Discoverer<'a> {
     project: &'a Project,
-    diagnostic_writer: &'a dyn DiscoveryDiagnosticWriter,
 }
 
 impl<'a> Discoverer<'a> {
     #[must_use]
-    pub const fn new(
-        project: &'a Project,
-        diagnostic_writer: &'a dyn DiscoveryDiagnosticWriter,
-    ) -> Self {
-        Self {
-            project,
-            diagnostic_writer,
-        }
+    pub const fn new(project: &'a Project) -> Self {
+        Self { project }
     }
 
     #[must_use]
-    pub fn discover(&self) -> HashMap<String, HashSet<TestCase>> {
+    pub fn discover(&self) -> DiscoveredTests {
         #[allow(clippy::mutable_key_type)]
         let mut discovered_tests: HashMap<String, HashSet<TestCase>> = HashMap::new();
 
-        self.diagnostic_writer.discovery_started();
+        tracing::info!("Discovering tests...");
 
         for path in self.project.python_test_paths() {
             discovered_tests.extend(self.discover_files(&path.unwrap()));
         }
 
-        self.diagnostic_writer.discovery_completed(
-            discovered_tests
-                .values()
-                .map(std::collections::HashSet::len)
-                .sum(),
-        );
+        let count: usize = discovered_tests
+            .values()
+            .map(std::collections::HashSet::len)
+            .sum();
 
-        discovered_tests
+        tracing::info!("Discovered {} tests", count);
+
+        DiscoveredTests {
+            tests: discovered_tests,
+            count,
+        }
     }
 
     fn discover_files(&self, path: &PythonTestPath) -> HashMap<String, HashSet<TestCase>> {
@@ -127,6 +120,11 @@ impl<'a> Discoverer<'a> {
     }
 }
 
+pub struct DiscoveredTests {
+    pub tests: HashMap<String, HashSet<TestCase>>,
+    pub count: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -180,50 +178,16 @@ mod tests {
         flattened_test_strings
     }
 
-    struct TestDiagnosticWriter {}
-
-    impl crate::diagnostic::TestCaseDiagnosticWriter for TestDiagnosticWriter {
-        fn test_started(&self, _test_name: &str, _file_path: &str) {
-            // No-op for tests
-        }
-
-        fn test_completed(&mut self, _test: &crate::test_result::TestResult) {
-            // No-op for tests
-        }
-
-        fn error(&self, _error: &str) {
-            // No-op for tests
-        }
-
-        fn display_diagnostics(&self, _run_diagnostics: &crate::runner::RunDiagnostics) {
-            // No-op for tests
-        }
-    }
-
-    impl DiscoveryDiagnosticWriter for TestDiagnosticWriter {
-        fn discovery_started(&self) {
-            // No-op for tests
-        }
-
-        fn discovery_completed(&self, _count: usize) {
-            // No-op for tests
-        }
-    }
-
-    fn get_test_diagnostic_writer() -> &'static dyn DiscoveryDiagnosticWriter {
-        &TestDiagnosticWriter {}
-    }
-
     #[test]
     fn test_discover_files() {
         let env = TestEnv::new();
         let path = env.create_file("test.py", "def test_function(): pass");
 
         let project = Project::new(SystemPathBuf::from(env.temp_dir.path()), vec![path]);
-        let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
+        let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests),
+            get_sorted_test_strings(&discovered_tests.tests),
             vec!["test::test_function"]
         );
     }
@@ -237,11 +201,11 @@ mod tests {
         env.create_file("test_dir/test_file2.py", "def function2(): pass");
 
         let project = Project::new(SystemPathBuf::from(env.temp_dir.path()), vec![path]);
-        let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
+        let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests),
+            get_sorted_test_strings(&discovered_tests.tests),
             vec!["test_dir.test_file1::test_function1"]
         );
     }
@@ -256,11 +220,11 @@ mod tests {
         env.create_file("tests/test_file2.py", "def test_function2(): pass");
 
         let project = Project::new(SystemPathBuf::from(env.temp_dir.path()), vec![path]);
-        let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
+        let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests),
+            get_sorted_test_strings(&discovered_tests.tests),
             vec!["tests.test_file1::test_function1"]
         );
     }
@@ -280,11 +244,11 @@ mod tests {
         );
 
         let project = Project::new(SystemPathBuf::from(env.temp_dir.path()), vec![path]);
-        let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
+        let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests),
+            get_sorted_test_strings(&discovered_tests.tests),
             vec![
                 "tests.nested.deeper.test_file3::test_function3",
                 "tests.nested.test_file2::test_function2",
@@ -307,11 +271,11 @@ def not_a_test(): pass
         );
 
         let project = Project::new(SystemPathBuf::from(env.temp_dir.path()), vec![path]);
-        let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
+        let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests),
+            get_sorted_test_strings(&discovered_tests.tests),
             vec![
                 "test_file::test_function1",
                 "test_file::test_function2",
@@ -335,11 +299,11 @@ def test_function2(): pass
             SystemPathBuf::from(env.temp_dir.path()),
             vec![format!("{path}::test_function1")],
         );
-        let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
+        let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests),
+            get_sorted_test_strings(&discovered_tests.tests),
             vec!["test_file::test_function1"]
         );
     }
@@ -353,10 +317,10 @@ def test_function2(): pass
             SystemPathBuf::from(env.temp_dir.path()),
             vec![format!("{path}::nonexistent_function")],
         );
-        let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
+        let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
-        assert!(get_sorted_test_strings(&discovered_tests).is_empty());
+        assert!(get_sorted_test_strings(&discovered_tests.tests).is_empty());
     }
 
     #[test]
@@ -365,10 +329,10 @@ def test_function2(): pass
         let path = env.create_file("test_file.py", "test_function1 = None");
 
         let project = Project::new(SystemPathBuf::from(env.temp_dir.path()), vec![path]);
-        let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
+        let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
-        assert!(get_sorted_test_strings(&discovered_tests).is_empty());
+        assert!(get_sorted_test_strings(&discovered_tests.tests).is_empty());
     }
 
     #[test]
@@ -388,11 +352,11 @@ def test_function(): pass
                 test_prefix: "check".to_string(),
                 watch: false,
             });
-        let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
+        let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests),
+            get_sorted_test_strings(&discovered_tests.tests),
             vec!["test_file::check_function1", "test_file::check_function2",]
         );
     }
@@ -409,11 +373,11 @@ def test_function(): pass
             SystemPathBuf::from(env.temp_dir.path()),
             vec![file1, file2, dir],
         );
-        let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
+        let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests),
+            get_sorted_test_strings(&discovered_tests.tests),
             vec![
                 "test1::test_function1",
                 "test2::test_function2",
@@ -436,10 +400,10 @@ def test_function(): pass
                 format!("{path}::test_function"),
             ],
         );
-        let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
+        let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests),
+            get_sorted_test_strings(&discovered_tests.tests),
             vec!["tests.test_file::test_function"]
         );
     }
@@ -456,10 +420,10 @@ def test_function(): pass
             SystemPathBuf::from(env.temp_dir.path()),
             vec![format!("{path}::test_function"), path],
         );
-        let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
+        let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests),
+            get_sorted_test_strings(&discovered_tests.tests),
             vec![
                 "tests.test_file::test_function",
                 "tests.test_file::test_function2"
@@ -474,10 +438,10 @@ def test_function(): pass
         let path2 = env.create_file("tests/test_file2.py", "def test_function(): pass");
 
         let project = Project::new(SystemPathBuf::from(env.temp_dir.path()), vec![path, path2]);
-        let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
+        let discoverer = Discoverer::new(&project);
         let discovered_tests = discoverer.discover();
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests),
+            get_sorted_test_strings(&discovered_tests.tests),
             vec![
                 "tests.test_file2::test_function",
                 "tests.test_file::test_function"
