@@ -87,7 +87,7 @@ jobs:
           bins: cargo-tarpaulin
       - name: Generate code coverage
         run: |
-          cargo +nightly tarpaulin --verbose --all-features --workspace --timeout 120 --out Xml
+          cargo +nightly tarpaulin --out Xml
       - name: Upload to Codecov
         uses: codecov/codecov-action@v5
         with:
