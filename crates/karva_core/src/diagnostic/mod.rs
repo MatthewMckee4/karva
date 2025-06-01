@@ -162,13 +162,12 @@ mod tests {
         sync::{Arc, Mutex},
     };
 
+    use karva_project::{path::SystemPathBuf, project::Project};
     use regex::Regex;
 
     use super::*;
     use crate::{
         discovery::{TestCase, function_definitions},
-        path::SystemPathBuf,
-        project::Project,
         runner::RunnerResult,
         test_result::TestResult,
     };

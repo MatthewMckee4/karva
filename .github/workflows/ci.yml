@@ -63,8 +63,7 @@ jobs:
       - uses: actions/setup-python@v3
       - name: Generate resources
         run: python crates/karva_benchmark/resources/generate.py
-      - name: Setup rust toolchain, cache and cargo-codspeed binary
-        uses: moonrepo/setup-rust@v1
+      - uses: moonrepo/setup-rust@v1
         with:
           channel: stable
           cache-target: release
@@ -76,3 +75,20 @@ jobs:
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
           run: cargo codspeed run
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: moonrepo/setup-rust@v1
+        with:
+          channel: stable
+          cache-target: release
+          bins: cargo-tarpaulin
+      - name: Generate code coverage
+        run: |
+          cargo +nightly tarpaulin --out Xml
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}

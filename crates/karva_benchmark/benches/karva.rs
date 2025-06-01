@@ -4,11 +4,10 @@ use karva_benchmark::{
     TestCase,
     criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main},
 };
-use karva_core::{
-    diagnostics::DiagnosticWriter,
-    path::{PythonTestPath, SystemPath, SystemPathBuf},
+use karva_core::{diagnostic::DiagnosticWriter, runner::Runner};
+use karva_project::{
+    path::{SystemPath, SystemPathBuf},
     project::Project,
-    runner::Runner,
 };
 
 fn create_test_cases() -> Vec<TestCase> {
@@ -49,12 +48,13 @@ fn benchmark_karva(criterion: &mut Criterion) {
                     let diagnostics = DiagnosticWriter::default();
                     let project = Project::new(
                         cwd.clone(),
-                        [PythonTestPath::new(&SystemPath::absolute(
+                        [SystemPath::absolute(
                             SystemPathBuf::from_path_buf(case.path()).unwrap(),
                             &cwd,
-                        ))
-                        .unwrap()]
-                        .into(),
+                        )
+                        .as_str()
+                        .to_string()]
+                        .to_vec(),
                         "test".to_string(),
                     );
                     let mut runner = Runner::new(&project, diagnostics);

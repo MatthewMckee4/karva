@@ -1,0 +1,21 @@
+[package]
+name = "karva_project"
+version = "0.0.0"
+
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+camino = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.8"
+
+[lints]
+workspace = true

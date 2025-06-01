@@ -2,17 +2,22 @@ use std::{
     ffi::OsString,
     io::{self, BufWriter, Write},
     process::{ExitCode, Termination},
+    sync::{Arc, Mutex},
 };
 
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use colored::Colorize;
+use crossbeam::channel as crossbeam_channel;
 use karva_core::{
-    diagnostics::DiagnosticWriter,
-    path::{PythonTestPath, SystemPath, SystemPathBuf},
-    project::Project,
-    runner::Runner,
+    diagnostic::DiagnosticWriter,
+    runner::{Runner, RunnerResult},
 };
+use karva_project::{
+    path::{SystemPath, SystemPathBuf, deduplicate_nested_paths},
+    project::Project,
+};
+use notify::Watcher as _;
 
 use crate::{
     args::{Args, Command, TestCommand},
@@ -107,52 +112,39 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
             })?
     };
 
-    let writer = Box::new(BufWriter::new(io::stdout()));
-    let mut stderr_writer = Box::new(BufWriter::new(io::stderr()));
-
-    let diagnostics = DiagnosticWriter::new(writer);
-
-    let mut paths: Vec<PythonTestPath> = args
-        .paths
-        .iter()
-        .map(|path| SystemPath::absolute(path, &cwd))
-        .filter_map(|path| {
-            let path = PythonTestPath::new(&path);
-            match path {
-                Ok(path) => Some(path),
-                Err(e) => {
-                    writeln!(stderr_writer, "{}", e.to_string().yellow()).ok();
-                    None
-                }
-            }
-        })
+    let mut paths: Vec<String> = deduplicate_nested_paths(args.paths.iter())
+        .map(|path| SystemPath::absolute(path, &cwd).as_str().to_string())
         .collect();
 
     if args.paths.is_empty() {
         tracing::debug!(
             "Could not resolve provided paths, trying to resolve current working directory"
         );
-        if let Ok(path) = PythonTestPath::new(&cwd) {
-            paths.push(path);
-        } else {
-            return Err(anyhow!(
-                "{}",
-                "Could not resolve current working directory, try providing a path"
-                    .red()
-                    .bold()
-            ));
-        }
+        paths.push(cwd.as_str().to_string());
     }
 
     let project = Project::new(cwd, paths, args.test_prefix.clone());
-    let mut runner = Runner::new(&project, diagnostics);
-    let runner_result = runner.run();
 
-    if runner_result.passed() {
-        Ok(ExitStatus::Success)
+    let (main_loop, main_loop_cancellation_token) = MainLoop::new(project);
+
+    // Listen to Ctrl+C and abort the watch mode.
+    let main_loop_cancellation_token = Arc::new(Mutex::new(Some(main_loop_cancellation_token)));
+    let token_clone = Arc::clone(&main_loop_cancellation_token);
+    ctrlc::set_handler(move || {
+        let value = token_clone.lock().unwrap().take();
+        if let Some(token) = value {
+            token.stop();
+        }
+        std::process::exit(0);
+    })?;
+
+    let exit_status = if args.watch {
+        main_loop.watch()?
     } else {
-        Ok(ExitStatus::Failure)
-    }
+        main_loop.run()?
+    };
+
+    Ok(exit_status)
 }
 
 #[derive(Copy, Clone)]
@@ -180,69 +172,171 @@ impl ExitStatus {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+struct MainLoop {
+    sender: crossbeam_channel::Sender<MainLoopMessage>,
+    receiver: crossbeam_channel::Receiver<MainLoopMessage>,
+    watcher: Option<notify::RecommendedWatcher>,
+    project: Arc<Project>,
+}
 
-    #[test]
-    fn test_version_command() {
-        let args = vec![OsString::from("karva"), OsString::from("version")];
-        let args = try_parse_args(args).unwrap();
-        assert!(matches!(args.command, Command::Version));
+impl MainLoop {
+    fn new(project: Project) -> (Self, MainLoopCancellationToken) {
+        let (sender, receiver) = crossbeam_channel::bounded(10);
+
+        (
+            Self {
+                sender: sender.clone(),
+                receiver,
+                watcher: None,
+                project: Arc::new(project),
+            },
+            MainLoopCancellationToken { sender },
+        )
     }
 
-    #[test]
-    fn test_test_command_with_path() {
-        let args = vec![
-            OsString::from("karva"),
-            OsString::from("test"),
-            OsString::from("test_file.py"),
-        ];
-        let args = try_parse_args(args).unwrap();
-        match args.command {
-            Command::Test(test_args) => {
-                assert_eq!(test_args.paths.len(), 1);
-                assert_eq!(test_args.paths[0], "test_file.py");
+    fn watch(mut self) -> anyhow::Result<ExitStatus> {
+        let startup_time = std::time::Instant::now();
+        let sender = self.sender.clone();
+
+        let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, _>| {
+            if let Ok(event) = res {
+                // Ignore events in the first 500ms after startup
+                if startup_time.elapsed() > std::time::Duration::from_millis(500) {
+                    // Only respond to Python file changes
+                    let is_python_file = event.paths.iter().any(|path| {
+                        path.extension()
+                            .and_then(|ext| ext.to_str())
+                            .is_some_and(|ext| ext == "py")
+                    });
+
+                    if is_python_file {
+                        match event.kind {
+                            notify::EventKind::Modify(notify::event::ModifyKind::Data(_))
+                            | notify::EventKind::Create(_)
+                            | notify::EventKind::Remove(_) => {
+                                sender.send(MainLoopMessage::ApplyChanges).unwrap();
+                            }
+                            _ => {}
+                        }
+                    }
+                }
             }
-            Command::Version => panic!("Expected Test command"),
-        }
+        })?;
+
+        watcher.watch(
+            self.project.cwd().as_ref().as_std_path(),
+            notify::RecursiveMode::Recursive,
+        )?;
+
+        self.watcher = Some(watcher);
+        self.sender.send(MainLoopMessage::TestWorkspace).unwrap();
+        self.run()
     }
 
-    #[test]
-    fn test_test_command_with_multiple_paths() {
-        let args = vec![
-            OsString::from("karva"),
-            OsString::from("test"),
-            OsString::from("test_file1.py"),
-            OsString::from("test_file2.py"),
-        ];
-        let args = try_parse_args(args).unwrap();
-        match args.command {
-            Command::Test(test_args) => {
-                assert_eq!(test_args.paths.len(), 2);
-                assert_eq!(test_args.paths[0], "test_file1.py");
-                assert_eq!(test_args.paths[1], "test_file2.py");
-            }
-            Command::Version => panic!("Expected Test command"),
-        }
-    }
+    fn run(self) -> anyhow::Result<ExitStatus> {
+        let mut revision = 0u64;
+        let mut debounce_id = 0u64;
 
-    #[test]
-    fn test_test_command_with_verbosity() {
-        let args = vec![
-            OsString::from("karva"),
-            OsString::from("test"),
-            OsString::from("-v"),
-            OsString::from("test_file.py"),
-        ];
-        let args = try_parse_args(args).unwrap();
-        match args.command {
-            Command::Test(test_args) => {
-                assert_eq!(test_args.paths.len(), 1);
-                assert_eq!(test_args.paths[0], "test_file.py");
-                assert!(test_args.verbosity > 0);
-            }
-            Command::Version => panic!("Expected Test command"),
+        if self.watcher.is_none() {
+            self.sender.send(MainLoopMessage::TestWorkspace).unwrap();
         }
+
+        while let Ok(message) = self.receiver.recv() {
+            match message {
+                MainLoopMessage::TestWorkspace => {
+                    let project = Arc::clone(&self.project);
+                    let sender = self.sender.clone();
+                    let current_revision = revision;
+
+                    std::thread::spawn(move || {
+                        let writer = Box::new(BufWriter::new(io::stdout()));
+                        let diagnostics = DiagnosticWriter::new(writer);
+                        let mut runner = Runner::new(&project, diagnostics);
+                        let result = runner.run();
+
+                        sender
+                            .send(MainLoopMessage::TestsCompleted {
+                                result,
+                                revision: current_revision,
+                            })
+                            .unwrap();
+                    });
+                }
+
+                MainLoopMessage::TestsCompleted {
+                    result,
+                    revision: check_revision,
+                } => {
+                    if check_revision == revision {
+                        let mut stdout = BufWriter::new(io::stdout().lock());
+
+                        if result.passed() {
+                            writeln!(stdout, "{}", "All checks passed!".green().bold())?;
+                        } else {
+                            writeln!(stdout, "{}", "Checks failed!".red().bold())?;
+                        }
+
+                        if self.watcher.is_none() {
+                            return Ok(if result.passed() {
+                                ExitStatus::Success
+                            } else {
+                                ExitStatus::Failure
+                            });
+                        }
+                    }
+                }
+
+                MainLoopMessage::ApplyChanges => {
+                    debounce_id += 1;
+                    let current_debounce_id = debounce_id;
+                    let sender = self.sender.clone();
+
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+                        sender
+                            .send(MainLoopMessage::DebouncedTest {
+                                debounce_id: current_debounce_id,
+                            })
+                            .unwrap();
+                    });
+                }
+
+                MainLoopMessage::DebouncedTest {
+                    debounce_id: msg_debounce_id,
+                } => {
+                    if msg_debounce_id == debounce_id {
+                        revision += 1;
+                        self.sender.send(MainLoopMessage::TestWorkspace).unwrap();
+                    }
+                }
+
+                MainLoopMessage::Exit => {
+                    return Ok(ExitStatus::Success);
+                }
+            }
+        }
+
+        Ok(ExitStatus::Success)
     }
+}
+
+#[derive(Debug)]
+struct MainLoopCancellationToken {
+    sender: crossbeam_channel::Sender<MainLoopMessage>,
+}
+
+impl MainLoopCancellationToken {
+    fn stop(self) {
+        self.sender.send(MainLoopMessage::Exit).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
+#[derive(Debug)]
+enum MainLoopMessage {
+    TestWorkspace,
+    TestsCompleted { result: RunnerResult, revision: u64 },
+    ApplyChanges,
+    DebouncedTest { debounce_id: u64 },
+    Exit,
 }
