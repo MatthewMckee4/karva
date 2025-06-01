@@ -32,7 +32,7 @@ benchmark: build
 	cd scripts/benchmark && uv sync --all-extras && uv run main.py --iterations $(ITERATIONS) --num-tests $(NUM_TESTS) --run-test
 
 flame:
-	cd scripts/benchmark && uv sync --all-extras && uv run main.py --keep-test-file --num-tests 10000 && cd ../..
+	cd scripts/benchmark && uv sync --all-extras && uv run main.py --keep-test-file --num-tests 1000 && cd ../..
 	sudo sysctl kernel.perf_event_paranoid=-1
 	cargo flamegraph -- test scripts/benchmark/test_many_assertions.py
 

@@ -354,6 +354,81 @@ impl From<PathBuf> for SystemPathBuf {
     }
 }
 
+pub fn deduplicate_nested_paths<P, I>(paths: I) -> DeduplicatedNestedPathsIter<P>
+where
+    I: IntoIterator<Item = P>,
+    P: AsRef<str>,
+{
+    DeduplicatedNestedPathsIter::new(paths)
+}
+
+pub struct DeduplicatedNestedPathsIter<P> {
+    inner: std::vec::IntoIter<P>,
+    next: Option<P>,
+}
+
+impl<P> DeduplicatedNestedPathsIter<P>
+where
+    P: AsRef<str>,
+{
+    fn new<I>(paths: I) -> Self
+    where
+        I: IntoIterator<Item = P>,
+    {
+        let mut paths = paths.into_iter().collect::<Vec<_>>();
+
+        // Sort the path to ensure that e.g. `/a/b/c`, comes right after `/a/b`.
+        paths.sort_unstable_by(|left, right| left.as_ref().cmp(right.as_ref()));
+
+        let mut iter = paths.into_iter();
+
+        Self {
+            next: iter.next(),
+            inner: iter,
+        }
+    }
+}
+
+impl<P> Iterator for DeduplicatedNestedPathsIter<P>
+where
+    P: AsRef<str>,
+{
+    type Item = P;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let current = self.next.take()?;
+
+        for next in self.inner.by_ref() {
+            // Skip all paths that have the same prefix as the current path
+            if !next.as_ref().starts_with(current.as_ref()) {
+                self.next = Some(next);
+                break;
+            }
+        }
+
+        Some(current)
+    }
+}
+
+fn try_convert_to_py_path(path: &str) -> Result<SystemPathBuf, PythonTestPathError> {
+    let file_path = SystemPathBuf::from(path);
+    if file_path.exists() {
+        return Ok(file_path);
+    }
+
+    let path_with_py = SystemPathBuf::from(format!("{path}.py"));
+    if path_with_py.exists() {
+        return Ok(path_with_py);
+    }
+
+    let path_with_slash = SystemPathBuf::from(format!("{}.py", path.replace('.', "/")));
+    if path_with_slash.exists() {
+        return Ok(path_with_slash);
+    }
+
+    Err(PythonTestPathError::NotFound(file_path.to_string()))
+}
+
 #[derive(Eq, PartialEq, Clone, Hash, PartialOrd, Ord)]
 pub enum PythonTestPath {
     File(SystemPathBuf),
@@ -367,56 +442,40 @@ impl PythonTestPath {
     /// # Errors
     ///
     /// This function will return an error if the path is not a valid Python test path.
-    pub fn new(value: &SystemPathBuf) -> Result<Self, PythonTestPathError> {
-        if value.to_string().contains("::") {
-            let parts: Vec<String> = value
-                .as_str()
-                .split("::")
-                .map(ToString::to_string)
-                .collect();
+    pub fn new(value: impl AsRef<str>) -> Result<Self, PythonTestPathError> {
+        let value = value.as_ref();
+        if value.contains("::") {
+            let parts: Vec<String> = value.split("::").map(ToString::to_string).collect();
             match parts.as_slice() {
                 [file, function] => {
-                    let mut file = SystemPathBuf::from(file.clone());
+                    let file_path = try_convert_to_py_path(file.as_str())?;
 
-                    if !file.exists() {
-                        let file_with_py = file.with_extension("py");
-                        if file_with_py.exists() {
-                            file = file_with_py;
+                    if file_path.is_file() {
+                        if is_python_file(&file_path) {
+                            Ok(Self::Function(file_path, function.to_string()))
                         } else {
-                            return Err(PythonTestPathError::NotFound(file));
-                        }
-                    }
-
-                    if file.is_file() {
-                        if is_python_file(&file) {
-                            Ok(Self::Function(file, function.to_string()))
-                        } else {
-                            Err(PythonTestPathError::WrongFileExtension(file))
+                            Err(PythonTestPathError::WrongFileExtension(file.clone()))
                         }
                     } else {
-                        Err(PythonTestPathError::InvalidPath(file))
+                        Err(PythonTestPathError::InvalidPath(file.clone()))
                     }
                 }
-                _ => {
-                    if value.exists() {
-                        Err(PythonTestPathError::InvalidPath(value.clone()))
-                    } else {
-                        Err(PythonTestPathError::NotFound(value.clone()))
-                    }
-                }
+                _ => Err(PythonTestPathError::InvalidPath(value.to_string())),
             }
-        } else if value.is_file() {
-            if is_python_file(value) {
-                Ok(Self::File(value.clone()))
-            } else {
-                Err(PythonTestPathError::WrongFileExtension(value.clone()))
-            }
-        } else if value.is_dir() {
-            Ok(Self::Directory(value.clone()))
-        } else if value.exists() {
-            Err(PythonTestPathError::InvalidPath(value.clone()))
         } else {
-            Err(PythonTestPathError::NotFound(value.clone()))
+            let path = try_convert_to_py_path(value)?;
+
+            if path.is_file() {
+                if is_python_file(&path) {
+                    Ok(Self::File(path))
+                } else {
+                    Err(PythonTestPathError::WrongFileExtension(path.to_string()))
+                }
+            } else if path.is_dir() {
+                Ok(Self::Directory(path))
+            } else {
+                Err(PythonTestPathError::InvalidPath(path.to_string()))
+            }
         }
     }
 }
@@ -433,9 +492,9 @@ impl std::fmt::Debug for PythonTestPath {
 
 #[derive(Debug)]
 pub enum PythonTestPathError {
-    NotFound(SystemPathBuf),
-    WrongFileExtension(SystemPathBuf),
-    InvalidPath(SystemPathBuf),
+    NotFound(String),
+    WrongFileExtension(String),
+    InvalidPath(String),
 }
 
 impl std::fmt::Display for PythonTestPathError {
@@ -469,19 +528,19 @@ mod tests {
             }
         }
 
-        fn create_test_file(&self, name: &str, content: &str) -> std::io::Result<SystemPathBuf> {
+        fn create_test_file(&self, name: &str, content: &str) -> std::io::Result<String> {
             let path = self.temp_dir.path().join(name);
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent)?;
             }
             fs::write(&path, content)?;
-            Ok(SystemPathBuf::from(path))
+            Ok(path.display().to_string())
         }
 
-        fn create_test_dir(&self, name: &str) -> std::io::Result<SystemPathBuf> {
+        fn create_test_dir(&self, name: &str) -> std::io::Result<String> {
             let path = self.temp_dir.path().join(name);
             fs::create_dir_all(&path)?;
-            Ok(SystemPathBuf::from(path))
+            Ok(path.display().to_string())
         }
     }
 
@@ -490,7 +549,7 @@ mod tests {
         let env = TestEnv::new();
         let path = env.create_test_file("test_file.py", "def test_function(): assert(True)")?;
 
-        let test_path = PythonTestPath::new(&path).expect("Failed to create file path");
+        let test_path = PythonTestPath::new(path).expect("Failed to create file path");
 
         match test_path {
             PythonTestPath::File(file) => {
@@ -525,9 +584,7 @@ mod tests {
         let file_path =
             env.create_test_file("function_test.py", "def test_function(): assert True")?;
 
-        let func_path = format!("{}::test_function", file_path.as_str());
-        let path = SystemPathBuf::from(func_path);
-        let test_path = PythonTestPath::new(&path);
+        let test_path = PythonTestPath::new(format!("{file_path}::test_function"));
 
         match test_path {
             Ok(PythonTestPath::Function(file, func)) => {
@@ -549,9 +606,7 @@ mod tests {
         let path_without_py = env.temp_dir.path().join("function_test");
 
         let func_path = format!("{}::test_function", path_without_py.display());
-
-        let path = SystemPathBuf::from(func_path);
-        let test_path = PythonTestPath::new(&path);
+        let test_path = PythonTestPath::new(&func_path);
 
         match test_path {
             Ok(PythonTestPath::Function(file, func)) => {
@@ -568,19 +623,15 @@ mod tests {
     fn test_invalid_paths() {
         let env = TestEnv::new();
         let non_existent_path = env.temp_dir.path().join("non_existent.py");
-        let path = SystemPathBuf::from(non_existent_path);
 
-        assert!(!path.exists());
+        assert!(!non_existent_path.exists());
 
-        let res = PythonTestPath::new(&path);
+        let res = PythonTestPath::new(non_existent_path.display().to_string());
 
         assert!(matches!(res, Err(PythonTestPathError::NotFound(_))));
 
-        let non_existent_func = format!("{}::function", path.as_str());
-        let func_path = SystemPathBuf::from(non_existent_func);
-
         assert!(matches!(
-            PythonTestPath::new(&func_path),
+            PythonTestPath::new(format!("{}::function", non_existent_path.display())),
             Err(PythonTestPathError::NotFound(_))
         ));
     }
@@ -595,14 +646,34 @@ mod tests {
             Err(PythonTestPathError::WrongFileExtension(_))
         ));
 
-        let func_path = format!("{}::test_function", path.as_str());
-        let func_path = SystemPathBuf::from(func_path);
-
         assert!(matches!(
-            PythonTestPath::new(&func_path),
+            PythonTestPath::new(format!("{}::test_function", path.as_str())),
             Err(PythonTestPathError::WrongFileExtension(_))
         ));
 
         Ok(())
+    }
+
+    #[test]
+    fn test_deduplicate_nested_paths() {
+        let dirs = [
+            "/a",
+            "/a/bar",
+            "/b/bar",
+            "/b/bar::test_function",
+            "/c/bar",
+            "/c/bar::test_function",
+            "/d/bar",
+            "/d/bar::test_function",
+            "/e/bar::test_function",
+            "/e/bar",
+        ];
+
+        let deduped_dirs = deduplicate_nested_paths(dirs);
+
+        assert_eq!(
+            deduped_dirs.into_iter().collect::<Vec<_>>(),
+            vec!["/a", "/b/bar", "/c/bar", "/d/bar", "/e/bar"]
+        );
     }
 }

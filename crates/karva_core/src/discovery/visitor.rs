@@ -5,7 +5,7 @@ use ruff_python_ast::{
 };
 use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
-use crate::{path::SystemPathBuf, project::Project};
+use karva_project::{path::SystemPathBuf, project::Project};
 
 #[derive(Clone)]
 pub struct FunctionDefinitionVisitor<'a> {

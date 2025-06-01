@@ -12,19 +12,22 @@ authors = ["Matthew McKee <matthewmckee4@gmail.com>"]
 license = "MIT"
 
 [workspace.dependencies]
-karva_core = { path = "crates/karva_core" }
-karva_cli = { path = "crates/karva_cli" }
 karva = { path = "crates/karva" }
 karva_benchmark = { path = "crates/karva_benchmark" }
+karva_cli = { path = "crates/karva_cli" }
+karva_core = { path = "crates/karva_core" }
+karva_project = { path = "crates/karva_project" }
 
 anyhow = { version = "1.0.97" }
 codspeed-criterion-compat = { version = "2.6.0", default-features = false }
 criterion = { version = "0.6.0", default-features = false }
+crossbeam = { version = "0.8.4" }
 clap = { version = "4.5.35", features = ["derive", "wrap_help"] }
 camino = { version = "1.1.7" }
 chrono = { version = "0.4.35", default-features = false, features = ["clock"] }
 serde = { version = "1.0.219", features = ["derive"] }
 wild = { version = "2" }
+notify = { version = "8.0.0" }
 colored = { version = "3.0.0" }
 argfile = { version = "0.2.1" }
 tracing = { version = "0.1.41", features = ["release_max_level_debug"] }
@@ -41,8 +44,7 @@ ruff_python_parser = { git = "https://github.com/astral-sh/ruff/", branch = "mai
 ruff_source_file = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_text_size = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 pyo3 = { version = "0.25.0", features = ["auto-initialize"] }
-ignore = "0.4.23"
-
+ignore = { version = "0.4.23" }
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(codspeed)"] }
@@ -53,3 +55,6 @@ pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
 
 missing_errors_doc = "allow"
+print_stdout = "warn"
+missing_panics_doc = "allow"
+too_many_lines = "allow"

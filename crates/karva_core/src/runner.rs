@@ -1,8 +1,6 @@
+use crate::{diagnostic::DiagnosticWriter, discovery::Discoverer, test_result::TestResult};
+use karva_project::project::Project;
 use pyo3::prelude::*;
-
-use crate::{
-    diagnostics::DiagnosticWriter, discovery::Discoverer, project::Project, test_result::TestResult,
-};
 
 pub struct Runner<'a> {
     project: &'a Project,
@@ -157,7 +155,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::path::{PythonTestPath, SystemPathBuf};
+    use karva_project::path::SystemPathBuf;
 
     #[derive(Clone, Debug)]
     struct SharedBufferWriter(Arc<Mutex<Vec<u8>>>);
@@ -189,15 +187,15 @@ mod tests {
             }
         }
 
-        fn create_test_file(&self, filename: &str, content: &str) -> SystemPathBuf {
+        fn create_test_file(&self, filename: &str, content: &str) -> String {
             let path = self.temp_dir.path().join(filename);
             std::fs::write(&path, content).unwrap();
-            SystemPathBuf::from(path)
+            path.display().to_string()
         }
 
-        fn create_python_test_path(&self, filename: &str) -> PythonTestPath {
+        fn create_python_test_path(&self, filename: &str) -> String {
             let path = self.temp_dir.path().join(filename);
-            PythonTestPath::new(&SystemPathBuf::from(path)).unwrap()
+            path.display().to_string()
         }
     }
 
