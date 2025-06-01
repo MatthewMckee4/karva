@@ -91,7 +91,6 @@ impl PythonTestPath {
             let parts: Vec<String> = value.split("::").map(ToString::to_string).collect();
             match parts.as_slice() {
                 [file, function] => {
-                    // Validate that both file and function parts are non-empty
                     if file.is_empty() || function.is_empty() {
                         return Err(PythonTestPathError::InvalidPath(value.to_string()));
                     }
@@ -122,18 +121,8 @@ impl PythonTestPath {
             } else if path.is_dir() {
                 Ok(Self::Directory(path))
             } else {
-                Err(PythonTestPathError::InvalidPath(path.to_string()))
+                unreachable!("Path `{path}` is neither a file nor a directory")
             }
-        }
-    }
-}
-
-impl std::fmt::Debug for PythonTestPath {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::File(path) => write!(f, "File: {path}"),
-            Self::Directory(path) => write!(f, "Directory: {path}"),
-            Self::Function(path, function) => write!(f, "Function: {path}::{function}"),
         }
     }
 }
@@ -405,19 +394,13 @@ mod tests {
     #[test]
     fn test_nested_directory_structure() -> std::io::Result<()> {
         let env = TestEnv::new();
-        env.create_test_file("a/b/c/test.py", "def test(): pass")?;
+        let file_path = env.create_test_file("a/b/c/test.py", "def test_func(): pass")?;
 
-        let temp_dir = env.temp_dir.path();
-        let original_dir = std::env::current_dir()?;
-        std::env::set_current_dir(temp_dir)?;
-
-        let result = PythonTestPath::new("a.b.c.test::test_func");
-
-        std::env::set_current_dir(original_dir)?;
+        let result = PythonTestPath::new(format!("{file_path}::test_func"));
 
         match result {
             Ok(PythonTestPath::Function(file, func)) => {
-                assert!(file.as_str().contains("a/b/c/test.py"));
+                assert!(file.as_str().ends_with("a/b/c/test.py"));
                 assert_eq!(func, "test_func");
             }
             _ => panic!("Expected Function variant"),
