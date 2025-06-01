@@ -76,3 +76,21 @@ jobs:
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
           run: cargo codspeed run
+
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Run tests
+        run: cargo test
+      - name: rust-grcov
+        uses: actions-rs/grcov@v0.1
+      - name: Codecov
+        uses: codecov/codecov-action@v5
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

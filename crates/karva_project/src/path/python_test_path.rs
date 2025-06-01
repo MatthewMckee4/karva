@@ -85,17 +85,17 @@ pub enum PythonTestPath {
 }
 
 impl PythonTestPath {
-    /// Creates a new [`PythonTestPath`] from a [`SystemPathBuf`].
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the path is not a valid Python test path.
     pub fn new(value: impl AsRef<str>) -> Result<Self, PythonTestPathError> {
         let value = value.as_ref();
         if value.contains("::") {
             let parts: Vec<String> = value.split("::").map(ToString::to_string).collect();
             match parts.as_slice() {
                 [file, function] => {
+                    // Validate that both file and function parts are non-empty
+                    if file.is_empty() || function.is_empty() {
+                        return Err(PythonTestPathError::InvalidPath(value.to_string()));
+                    }
+
                     let file_path = try_convert_to_py_path(file.as_str())?;
 
                     if file_path.is_file() {
@@ -190,115 +190,280 @@ mod tests {
             fs::create_dir_all(&path)?;
             Ok(path.display().to_string())
         }
+
+        fn temp_path(&self, name: &str) -> String {
+            self.temp_dir.path().join(name).display().to_string()
+        }
     }
 
     #[test]
-    fn test_file_path_creation() -> std::io::Result<()> {
+    fn test_python_file_exact_path() -> std::io::Result<()> {
         let env = TestEnv::new();
-        let path = env.create_test_file("test_file.py", "def test_function(): assert(True)")?;
+        let path = env.create_test_file("test.py", "def test(): pass")?;
 
-        let test_path = PythonTestPath::new(path).expect("Failed to create file path");
-
-        match test_path {
-            PythonTestPath::File(file) => {
-                assert!(file.as_str().ends_with("test_file.py"));
-            }
-            _ => panic!("Expected File variant"),
-        }
-
+        let result = PythonTestPath::new(path);
+        assert!(matches!(result, Ok(PythonTestPath::File(_))));
         Ok(())
     }
 
     #[test]
-    fn test_directory_path_creation() -> std::io::Result<()> {
+    fn test_python_file_auto_extension() -> std::io::Result<()> {
+        let env = TestEnv::new();
+        env.create_test_file("test.py", "def test(): pass")?;
+        let path_without_ext = env.temp_path("test");
+
+        let result = PythonTestPath::new(path_without_ext);
+        assert!(matches!(result, Ok(PythonTestPath::File(_))));
+        Ok(())
+    }
+
+    #[test]
+    fn test_python_file_dotted_path() -> std::io::Result<()> {
+        let env = TestEnv::new();
+        env.create_test_file("module/submodule.py", "def test(): pass")?;
+
+        let temp_dir = env.temp_dir.path();
+        let original_dir = std::env::current_dir()?;
+        std::env::set_current_dir(temp_dir)?;
+
+        let result = PythonTestPath::new("module.submodule");
+
+        std::env::set_current_dir(original_dir)?;
+
+        assert!(matches!(result, Ok(PythonTestPath::File(_))));
+        Ok(())
+    }
+
+    #[test]
+    fn test_directory_path() -> std::io::Result<()> {
         let env = TestEnv::new();
         let path = env.create_test_dir("test_dir")?;
 
-        let test_path = PythonTestPath::new(&path).expect("Failed to create directory path");
-
-        match test_path {
-            PythonTestPath::Directory(dir) => {
-                assert!(dir.as_str().ends_with("test_dir"));
-            }
-            _ => panic!("Expected Directory variant"),
-        }
-
+        let result = PythonTestPath::new(path);
+        assert!(matches!(result, Ok(PythonTestPath::Directory(_))));
         Ok(())
     }
 
     #[test]
-    fn test_function_path_creation_py_extension() -> std::io::Result<()> {
+    fn test_function_with_exact_file_path() -> std::io::Result<()> {
         let env = TestEnv::new();
-        let file_path =
-            env.create_test_file("function_test.py", "def test_function(): assert True")?;
+        let file_path = env.create_test_file("test.py", "def test_func(): pass")?;
 
-        let test_path = PythonTestPath::new(format!("{file_path}::test_function"));
-
-        match test_path {
+        let result = PythonTestPath::new(format!("{file_path}::test_func"));
+        match result {
             Ok(PythonTestPath::Function(file, func)) => {
-                assert!(file.as_str().ends_with("function_test.py"));
-                assert_eq!(func, "test_function");
+                assert!(file.as_str().ends_with("test.py"));
+                assert_eq!(func, "test_func");
             }
             _ => panic!("Expected Function variant"),
         }
-
         Ok(())
     }
 
     #[test]
-    fn test_function_path_creation_no_extension() -> std::io::Result<()> {
+    fn test_function_with_auto_extension() -> std::io::Result<()> {
         let env = TestEnv::new();
+        env.create_test_file("test.py", "def test_func(): pass")?;
+        let path_without_ext = env.temp_path("test");
 
-        env.create_test_file("function_test.py", "def test_function(): assert True")?;
-
-        let path_without_py = env.temp_dir.path().join("function_test");
-
-        let func_path = format!("{}::test_function", path_without_py.display());
-        let test_path = PythonTestPath::new(&func_path);
-
-        match test_path {
+        let result = PythonTestPath::new(format!("{path_without_ext}::test_func"));
+        match result {
             Ok(PythonTestPath::Function(file, func)) => {
-                assert!(file.as_str().ends_with("function_test.py"));
-                assert_eq!(func, "test_function");
+                assert!(file.as_str().ends_with("test.py"));
+                assert_eq!(func, "test_func");
             }
             _ => panic!("Expected Function variant"),
         }
-
         Ok(())
     }
 
     #[test]
-    fn test_invalid_paths() {
+    fn test_function_with_dotted_path() -> std::io::Result<()> {
         let env = TestEnv::new();
-        let non_existent_path = env.temp_dir.path().join("non_existent.py");
+        env.create_test_file("module/submodule.py", "def test_func(): pass")?;
 
-        assert!(!non_existent_path.exists());
+        let temp_dir = env.temp_dir.path();
+        let original_dir = std::env::current_dir()?;
+        std::env::set_current_dir(temp_dir)?;
 
-        let res = PythonTestPath::new(non_existent_path.display().to_string());
+        let result = PythonTestPath::new("module.submodule::test_func");
 
-        assert!(matches!(res, Err(PythonTestPathError::NotFound(_))));
+        std::env::set_current_dir(original_dir)?;
 
-        assert!(matches!(
-            PythonTestPath::new(format!("{}::function", non_existent_path.display())),
-            Err(PythonTestPathError::NotFound(_))
-        ));
+        match result {
+            Ok(PythonTestPath::Function(file, func)) => {
+                assert!(file.as_str().ends_with("module/submodule.py"));
+                assert_eq!(func, "test_func");
+            }
+            _ => panic!("Expected Function variant"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_not_found_exact_path() {
+        let env = TestEnv::new();
+        let non_existent_path = env.temp_path("non_existent.py");
+
+        let result = PythonTestPath::new(non_existent_path);
+        assert!(matches!(result, Err(PythonTestPathError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_file_not_found_auto_extension() {
+        let env = TestEnv::new();
+        let non_existent_path = env.temp_path("non_existent");
+
+        let result = PythonTestPath::new(non_existent_path);
+        assert!(matches!(result, Err(PythonTestPathError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_file_not_found_dotted_path() {
+        let result = PythonTestPath::new("non_existent.module");
+        assert!(matches!(result, Err(PythonTestPathError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_function_file_not_found() {
+        let env = TestEnv::new();
+        let non_existent_path = env.temp_path("non_existent");
+
+        let result = PythonTestPath::new(format!("{non_existent_path}::test_func"));
+        assert!(matches!(result, Err(PythonTestPathError::NotFound(_))));
     }
 
     #[test]
     fn test_wrong_file_extension() -> std::io::Result<()> {
         let env = TestEnv::new();
-        let path = env.create_test_file("wrong_ext.rs", "fn test_function() { assert!(true); }")?;
+        let path = env.create_test_file("test.rs", "fn test() {}")?;
 
+        let result = PythonTestPath::new(path);
         assert!(matches!(
-            PythonTestPath::new(&path),
+            result,
             Err(PythonTestPathError::WrongFileExtension(_))
         ));
+        Ok(())
+    }
 
+    #[test]
+    fn test_function_wrong_file_extension() -> std::io::Result<()> {
+        let env = TestEnv::new();
+        let path = env.create_test_file("test.rs", "fn test() {}")?;
+
+        let result = PythonTestPath::new(format!("{path}::test_func"));
         assert!(matches!(
-            PythonTestPath::new(format!("{}::test_function", path.as_str())),
+            result,
             Err(PythonTestPathError::WrongFileExtension(_))
         ));
+        Ok(())
+    }
 
+    #[test]
+    fn test_function_path_is_directory() -> std::io::Result<()> {
+        let env = TestEnv::new();
+        let dir_path = env.create_test_dir("test_dir")?;
+
+        let result = PythonTestPath::new(format!("{dir_path}::test_func"));
+        assert!(matches!(result, Err(PythonTestPathError::InvalidPath(_))));
+        Ok(())
+    }
+
+    #[test]
+    fn test_invalid_function_syntax_empty_function() {
+        let result = PythonTestPath::new("test.py::");
+        assert!(matches!(result, Err(PythonTestPathError::InvalidPath(_))));
+    }
+
+    #[test]
+    fn test_invalid_function_syntax_empty_file() {
+        let result = PythonTestPath::new("::test_func");
+        assert!(matches!(result, Err(PythonTestPathError::InvalidPath(_))));
+    }
+
+    #[test]
+    fn test_invalid_function_syntax_multiple_colons() {
+        let result = PythonTestPath::new("test.py::func::extra");
+        assert!(matches!(result, Err(PythonTestPathError::InvalidPath(_))));
+    }
+
+    #[test]
+    fn test_invalid_function_syntax_no_parts() {
+        let result = PythonTestPath::new("::");
+        assert!(matches!(result, Err(PythonTestPathError::InvalidPath(_))));
+    }
+
+    #[test]
+    fn test_path_that_exists_but_is_neither_file_nor_directory() {
+        let env = TestEnv::new();
+        let non_existent_path = env.temp_path("neither_file_nor_dir");
+
+        let result = PythonTestPath::new(non_existent_path);
+        assert!(matches!(result, Err(PythonTestPathError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_nested_directory_structure() -> std::io::Result<()> {
+        let env = TestEnv::new();
+        env.create_test_file("a/b/c/test.py", "def test(): pass")?;
+
+        let temp_dir = env.temp_dir.path();
+        let original_dir = std::env::current_dir()?;
+        std::env::set_current_dir(temp_dir)?;
+
+        let result = PythonTestPath::new("a.b.c.test::test_func");
+
+        std::env::set_current_dir(original_dir)?;
+
+        match result {
+            Ok(PythonTestPath::Function(file, func)) => {
+                assert!(file.as_str().contains("a/b/c/test.py"));
+                assert_eq!(func, "test_func");
+            }
+            _ => panic!("Expected Function variant"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_and_auto_extension_both_exist() -> std::io::Result<()> {
+        let env = TestEnv::new();
+        env.create_test_file("test", "not python")?;
+        env.create_test_file("test.py", "def test(): pass")?;
+        let base_path = env.temp_path("test");
+
+        let result = PythonTestPath::new(base_path);
+        assert!(matches!(
+            result,
+            Err(PythonTestPathError::WrongFileExtension(_))
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn test_complex_function_names() -> std::io::Result<()> {
+        let env = TestEnv::new();
+        let file_path = env.create_test_file("test.py", "def test(): pass")?;
+
+        let test_cases = [
+            "test_function",
+            "TestClass",
+            "test_with_underscores",
+            "TestClass::test_method",
+        ];
+
+        for (i, func_name) in test_cases.iter().enumerate() {
+            let result = PythonTestPath::new(format!("{file_path}::{func_name}"));
+            if i == 3 {
+                // The multiple :: case
+                assert!(matches!(result, Err(PythonTestPathError::InvalidPath(_))));
+            } else {
+                match result {
+                    Ok(PythonTestPath::Function(_, f)) => assert_eq!(f, *func_name),
+                    _ => panic!("Expected Function variant for {func_name}"),
+                }
+            }
+        }
         Ok(())
     }
 
