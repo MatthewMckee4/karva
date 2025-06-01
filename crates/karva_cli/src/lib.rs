@@ -10,12 +10,13 @@ use clap::Parser;
 use colored::Colorize;
 use crossbeam::channel as crossbeam_channel;
 use karva_core::{
-    diagnostic::DiagnosticWriter,
-    runner::{Runner, RunnerResult},
+    diagnostic::MainDiagnosticWriter,
+    runner::{RunDiagnostics, Runner},
+    utils::current_python_version,
 };
 use karva_project::{
     path::{SystemPath, SystemPathBuf, deduplicate_nested_paths},
-    project::Project,
+    project::{Project, ProjectMetadata},
 };
 use notify::Watcher as _;
 
@@ -29,8 +30,8 @@ mod logging;
 mod version;
 
 #[must_use]
-pub fn karva_main() -> ExitStatus {
-    run().unwrap_or_else(|error| {
+pub fn karva_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> ExitStatus {
+    run(f).unwrap_or_else(|error| {
         use std::io::Write;
 
         let mut stderr = std::io::stderr().lock();
@@ -50,43 +51,19 @@ pub fn karva_main() -> ExitStatus {
     })
 }
 
-fn run() -> anyhow::Result<ExitStatus> {
+fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitStatus> {
     let args = wild::args_os();
 
-    let args = argfile::expand_args_from(args, argfile::parse_fromfile, argfile::PREFIX)
-        .context("Failed to read CLI arguments from file")?;
+    let args = f(
+        argfile::expand_args_from(args, argfile::parse_fromfile, argfile::PREFIX)
+            .context("Failed to read CLI arguments from file")?,
+    );
 
-    let args = try_parse_args(args)?;
+    let args = Args::parse_from(args);
 
     match args.command {
-        Command::Test(test_args) => test(&test_args),
+        Command::Test(test_args) => test(test_args),
         Command::Version => version().map(|()| ExitStatus::Success),
-    }
-}
-
-// Sometimes random args are passed at the start of the args list, so we try to parse args by removing the first arg until we can parse them.
-fn try_parse_args(mut args: Vec<OsString>) -> Result<Args> {
-    loop {
-        match Args::try_parse_from(args.clone()) {
-            Ok(args) => {
-                break Ok(args);
-            }
-            Err(e) => {
-                if args.is_empty() {
-                    return Err(anyhow!("No arguments provided"));
-                }
-                match e.kind() {
-                    clap::error::ErrorKind::DisplayHelp
-                    | clap::error::ErrorKind::DisplayVersion
-                    | clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => {
-                        break Ok(Args::parse_from(args.clone()));
-                    }
-                    _ => {
-                        args.remove(0);
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -97,7 +74,7 @@ pub(crate) fn version() -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
+pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let verbosity = args.verbosity.level();
     let _guard = setup_tracing(verbosity);
 
@@ -123,13 +100,21 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
         paths.push(cwd.as_str().to_string());
     }
 
-    let project = Project::new(cwd, paths, args.test_prefix.clone());
+    let watch = args.watch;
+
+    let options = args.into_options();
+
+    let project = Project::new(cwd, paths)
+        .with_metadata(ProjectMetadata {
+            python_version: current_python_version(),
+        })
+        .with_options(options);
 
     let (main_loop, main_loop_cancellation_token) = MainLoop::new(project);
 
-    // Listen to Ctrl+C and abort the watch mode.
     let main_loop_cancellation_token = Arc::new(Mutex::new(Some(main_loop_cancellation_token)));
     let token_clone = Arc::clone(&main_loop_cancellation_token);
+
     ctrlc::set_handler(move || {
         let value = token_clone.lock().unwrap().take();
         if let Some(token) = value {
@@ -138,7 +123,7 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
         std::process::exit(0);
     })?;
 
-    let exit_status = if args.watch {
+    let exit_status = if watch {
         main_loop.watch()?
     } else {
         main_loop.run()?
@@ -248,19 +233,17 @@ impl MainLoop {
                     let sender = self.sender.clone();
                     let current_revision = revision;
 
-                    std::thread::spawn(move || {
-                        let writer = Box::new(BufWriter::new(io::stdout()));
-                        let diagnostics = DiagnosticWriter::new(writer);
-                        let mut runner = Runner::new(&project, diagnostics);
-                        let result = runner.run();
+                    let writer = Box::new(BufWriter::new(io::stdout()));
+                    let mut diagnostics = MainDiagnosticWriter::new(writer);
+                    let mut runner = Runner::new(&project, &mut diagnostics);
+                    let result = runner.run();
 
-                        sender
-                            .send(MainLoopMessage::TestsCompleted {
-                                result,
-                                revision: current_revision,
-                            })
-                            .unwrap();
-                    });
+                    sender
+                        .send(MainLoopMessage::TestsCompleted {
+                            result,
+                            revision: current_revision,
+                        })
+                        .unwrap();
                 }
 
                 MainLoopMessage::TestsCompleted {
@@ -335,8 +318,13 @@ impl MainLoopCancellationToken {
 #[derive(Debug)]
 enum MainLoopMessage {
     TestWorkspace,
-    TestsCompleted { result: RunnerResult, revision: u64 },
+    TestsCompleted {
+        result: RunDiagnostics,
+        revision: u64,
+    },
     ApplyChanges,
-    DebouncedTest { debounce_id: u64 },
+    DebouncedTest {
+        debounce_id: u64,
+    },
     Exit,
 }

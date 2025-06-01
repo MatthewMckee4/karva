@@ -736,7 +736,7 @@ dependencies = [
 
 [[package]]
 name = "karva_cli"
-version = "0.0.0"
+version = "0.0.18"
 dependencies = [
  "anyhow",
  "argfile",
@@ -749,6 +749,7 @@ dependencies = [
  "karva_core",
  "karva_project",
  "notify",
+ "pyo3",
  "tracing",
  "tracing-flame",
  "tracing-subscriber",
@@ -781,6 +782,7 @@ name = "karva_project"
 version = "0.0.0"
 dependencies = [
  "camino",
+ "ruff_python_ast",
  "tempfile",
  "tracing",
 ]

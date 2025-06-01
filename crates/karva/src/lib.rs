@@ -4,7 +4,14 @@ use pyo3::prelude::*;
 #[pyfunction]
 #[must_use]
 pub fn karva_run() -> i32 {
-    karva_main().to_i32()
+    karva_main(|args| {
+        let mut args: Vec<_> = args.into_iter().skip(1).collect();
+        if !args.is_empty() && args[0].to_string_lossy() == "python" {
+            args.remove(0);
+        }
+        args
+    })
+    .to_i32()
 }
 
 #[pymodule]

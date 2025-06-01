@@ -57,6 +57,9 @@ src = "README.md"
 src = "crates/karva/Cargo.toml"
 
 [[tool.tbump.file]]
+src = "crates/karva_cli/Cargo.toml"
+
+[[tool.tbump.file]]
 src = "python/karva/__init__.py"
 
 [tool.tbump.git]

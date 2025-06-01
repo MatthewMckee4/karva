@@ -1,5 +1,4 @@
 use karva_project::{path::SystemPathBuf, project::Project};
-use pyo3::Python;
 use ruff_python_ast::{
     ModModule, PythonVersion, Stmt, StmtFunctionDef,
     visitor::source_order::{self, SourceOrderVisitor},
@@ -47,15 +46,14 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
 pub fn function_definitions(path: &SystemPathBuf, project: &Project) -> Vec<StmtFunctionDef> {
     let mut visitor = FunctionDefinitionVisitor::new(project);
 
-    let parsed = parsed_module(path);
+    let parsed = parsed_module(path, *project.python_version());
 
     visitor.visit_body(&parsed.syntax().body);
 
     visitor.discovered_functions().to_vec()
 }
 
-fn parsed_module(path: &SystemPathBuf) -> Parsed<ModModule> {
-    let python_version = current_python_version();
+fn parsed_module(path: &SystemPathBuf, python_version: PythonVersion) -> Parsed<ModModule> {
     let mode = Mode::Module;
     let options = ParseOptions::from(mode).with_target_version(python_version);
     let source = source_text(path);
@@ -67,11 +65,4 @@ fn parsed_module(path: &SystemPathBuf) -> Parsed<ModModule> {
 
 fn source_text(path: &SystemPathBuf) -> String {
     std::fs::read_to_string(path.as_std_path()).unwrap()
-}
-
-fn current_python_version() -> PythonVersion {
-    PythonVersion::from(Python::with_gil(|py| {
-        let inferred_python_version = py.version_info();
-        (inferred_python_version.major, inferred_python_version.minor)
-    }))
 }
