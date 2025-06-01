@@ -419,6 +419,35 @@ def test_function(): pass
     }
 
     #[test]
+    fn test_paths_shadowed_by_other_paths_are_not_discovered_twice() {
+        let env = TestEnv::new();
+        let path = env
+            .create_file(
+                "tests/test_file.py",
+                "def test_function(): pass\ndef test_function2(): pass",
+            )
+            .unwrap();
+
+        let project = Project::new(
+            SystemPathBuf::from(env.temp_dir.path()),
+            vec![
+                PythonTestPath::Function(path.clone(), "test_function".to_string()),
+                PythonTestPath::File(path),
+            ],
+            "test".to_string(),
+        );
+        let discoverer = Discoverer::new(&project);
+        let discovered_tests = discoverer.discover();
+        assert_eq!(
+            get_sorted_test_strings(&discovered_tests),
+            vec![
+                "tests.test_file::test_function",
+                "tests.test_file::test_function2"
+            ]
+        );
+    }
+
+    #[test]
     fn test_tests_same_name_different_module_are_discovered() {
         let env = TestEnv::new();
         let path = env.create_file("tests/test_file.py", "def test_function(): pass");
