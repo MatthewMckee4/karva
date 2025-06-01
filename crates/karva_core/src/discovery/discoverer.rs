@@ -67,8 +67,6 @@ impl<'a> Discoverer<'a> {
         let mut discovered_tests: HashMap<String, HashSet<TestCase>> = HashMap::new();
         let module_name = module_name(self.project.cwd(), path);
 
-        tracing::debug!("Discovering file: {}", path.as_std_path().display());
-
         for function_name in self.test_functions_in_file(path) {
             let test_case = TestCase::new(module_name.clone(), function_name);
             discovered_tests
@@ -81,8 +79,6 @@ impl<'a> Discoverer<'a> {
 
     fn discover_directory(&self, path: &SystemPathBuf) -> HashMap<String, HashSet<TestCase>> {
         let dir_path = path.as_std_path().to_path_buf();
-
-        tracing::debug!("Discovering directory: {}", dir_path.display());
 
         let walker = WalkBuilder::new(self.project.cwd().as_std_path())
             .standard_filters(true)
@@ -135,6 +131,7 @@ impl<'a> Discoverer<'a> {
 mod tests {
     use std::fs;
 
+    use karva_project::project::ProjectOptions;
     use tempfile::TempDir;
 
     use super::*;
@@ -222,11 +219,7 @@ mod tests {
         let env = TestEnv::new();
         let path = env.create_file("test.py", "def test_function(): pass");
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![path],
-            "test".to_string(),
-        );
+        let project = Project::new(SystemPathBuf::from(env.temp_dir.path()), vec![path]);
         let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
         let discovered_tests = discoverer.discover();
         assert_eq!(
@@ -243,11 +236,7 @@ mod tests {
         env.create_file("test_dir/test_file1.py", "def test_function1(): pass");
         env.create_file("test_dir/test_file2.py", "def function2(): pass");
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![path],
-            "test".to_string(),
-        );
+        let project = Project::new(SystemPathBuf::from(env.temp_dir.path()), vec![path]);
         let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
         let discovered_tests = discoverer.discover();
 
@@ -266,11 +255,7 @@ mod tests {
         env.create_file("tests/test_file1.py", "def test_function1(): pass");
         env.create_file("tests/test_file2.py", "def test_function2(): pass");
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![path],
-            "test".to_string(),
-        );
+        let project = Project::new(SystemPathBuf::from(env.temp_dir.path()), vec![path]);
         let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
         let discovered_tests = discoverer.discover();
 
@@ -294,11 +279,7 @@ mod tests {
             "def test_function3(): pass",
         );
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![path],
-            "test".to_string(),
-        );
+        let project = Project::new(SystemPathBuf::from(env.temp_dir.path()), vec![path]);
         let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
         let discovered_tests = discoverer.discover();
 
@@ -325,11 +306,7 @@ def not_a_test(): pass
 ",
         );
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![path],
-            "test".to_string(),
-        );
+        let project = Project::new(SystemPathBuf::from(env.temp_dir.path()), vec![path]);
         let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
         let discovered_tests = discoverer.discover();
 
@@ -357,7 +334,6 @@ def test_function2(): pass
         let project = Project::new(
             SystemPathBuf::from(env.temp_dir.path()),
             vec![format!("{path}::test_function1")],
-            "test".to_string(),
         );
         let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
         let discovered_tests = discoverer.discover();
@@ -376,7 +352,6 @@ def test_function2(): pass
         let project = Project::new(
             SystemPathBuf::from(env.temp_dir.path()),
             vec![format!("{path}::nonexistent_function")],
-            "test".to_string(),
         );
         let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
         let discovered_tests = discoverer.discover();
@@ -389,11 +364,7 @@ def test_function2(): pass
         let env = TestEnv::new();
         let path = env.create_file("test_file.py", "test_function1 = None");
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![path],
-            "test".to_string(),
-        );
+        let project = Project::new(SystemPathBuf::from(env.temp_dir.path()), vec![path]);
         let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
         let discovered_tests = discoverer.discover();
 
@@ -412,11 +383,11 @@ def test_function(): pass
 ",
         );
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![path],
-            "check".to_string(),
-        );
+        let project = Project::new(SystemPathBuf::from(env.temp_dir.path()), vec![path])
+            .with_options(ProjectOptions {
+                test_prefix: "check".to_string(),
+                watch: false,
+            });
         let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
         let discovered_tests = discoverer.discover();
 
@@ -437,7 +408,6 @@ def test_function(): pass
         let project = Project::new(
             SystemPathBuf::from(env.temp_dir.path()),
             vec![file1, file2, dir],
-            "test".to_string(),
         );
         let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
         let discovered_tests = discoverer.discover();
@@ -465,7 +435,6 @@ def test_function(): pass
                 path.clone(),
                 format!("{path}::test_function"),
             ],
-            "test".to_string(),
         );
         let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
         let discovered_tests = discoverer.discover();
@@ -486,7 +455,6 @@ def test_function(): pass
         let project = Project::new(
             SystemPathBuf::from(env.temp_dir.path()),
             vec![format!("{path}::test_function"), path],
-            "test".to_string(),
         );
         let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
         let discovered_tests = discoverer.discover();
@@ -505,11 +473,7 @@ def test_function(): pass
         let path = env.create_file("tests/test_file.py", "def test_function(): pass");
         let path2 = env.create_file("tests/test_file2.py", "def test_function(): pass");
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![path, path2],
-            "test".to_string(),
-        );
+        let project = Project::new(SystemPathBuf::from(env.temp_dir.path()), vec![path, path2]);
         let discoverer = Discoverer::new(&project, get_test_diagnostic_writer());
         let discovered_tests = discoverer.discover();
         assert_eq!(

@@ -216,7 +216,6 @@ def test_simple_pass():
         let project = Project::new(
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_pass.py")],
-            "test".to_string(),
         );
         let mut diagnostic_writer = create_test_writer();
         let mut runner = Runner::new(&project, &mut diagnostic_writer);
@@ -243,7 +242,6 @@ def test_simple_fail():
         let project = Project::new(
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_fail.py")],
-            "test".to_string(),
         );
         let mut diagnostic_writer = create_test_writer();
         let mut runner = Runner::new(&project, &mut diagnostic_writer);
@@ -270,7 +268,6 @@ def test_simple_error():
         let project = Project::new(
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_error.py")],
-            "test".to_string(),
         );
         let mut diagnostic_writer = create_test_writer();
         let mut runner = Runner::new(&project, &mut diagnostic_writer);
@@ -302,7 +299,6 @@ def test_error():
         let project = Project::new(
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_mixed.py")],
-            "test".to_string(),
         );
         let mut diagnostic_writer = create_test_writer();
         let mut runner = Runner::new(&project, &mut diagnostic_writer);

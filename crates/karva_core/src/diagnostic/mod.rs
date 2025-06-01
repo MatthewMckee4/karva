@@ -84,11 +84,21 @@ impl TestCaseDiagnosticWriter for MainDiagnosticWriter {
 
 impl DiscoveryDiagnosticWriter for MainDiagnosticWriter {
     fn discovery_started(&self) {
-        tracing::info!("{}", "Discovering tests...".blue());
+        let mut stdout = self.acquire_stdout();
+        let _ = writeln!(stdout, "{}", "Discovering tests...".blue());
+        let _ = stdout.flush();
     }
 
     fn discovery_completed(&self, count: usize) {
-        tracing::info!("{} {} {}", "Discovered".blue(), count, "tests".blue());
+        let mut stdout = self.acquire_stdout();
+        let _ = writeln!(
+            stdout,
+            "{} {} {}",
+            "Discovered".blue(),
+            count,
+            "tests".blue()
+        );
+        let _ = stdout.flush();
     }
 }
 
@@ -125,22 +135,6 @@ impl MainDiagnosticWriter {
     fn log_test_result(&self, color: Color) {
         let mut stdout = self.acquire_stdout();
         let _ = write!(stdout, "{}", ".".color(color));
-        let _ = stdout.flush();
-    }
-
-    pub fn discovery_started(&self) {
-        tracing::info!("{}", "Discovering tests...".blue());
-    }
-
-    pub fn discovery_completed(&self, count: usize) {
-        let mut stdout = self.acquire_stdout();
-        let _ = writeln!(
-            stdout,
-            "{} {} {}",
-            "Discovered".blue(),
-            count,
-            "tests".blue()
-        );
         let _ = stdout.flush();
     }
 
@@ -225,7 +219,7 @@ mod tests {
     }
 
     fn get_project() -> Project {
-        Project::new(SystemPathBuf::from("tests/"), vec![], "test".to_string())
+        Project::new(SystemPathBuf::from("tests/"), vec![])
     }
 
     fn get_discovered_test() -> TestCase {
@@ -297,7 +291,7 @@ mod tests {
         writer.display_diagnostics(&RunDiagnostics::new(vec![]));
         let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
         let output = strip_ansi_codes(&output);
-        let expected = "Discovered 5 tests\n";
+        let expected = "Discovering tests...\nDiscovered 5 tests\n";
         assert_eq!(output, expected);
     }
 

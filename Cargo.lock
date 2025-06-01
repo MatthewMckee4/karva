@@ -782,6 +782,7 @@ name = "karva_project"
 version = "0.0.0"
 dependencies = [
  "camino",
+ "ruff_python_ast",
  "tempfile",
  "tracing",
 ]

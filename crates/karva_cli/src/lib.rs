@@ -12,10 +12,11 @@ use crossbeam::channel as crossbeam_channel;
 use karva_core::{
     diagnostic::MainDiagnosticWriter,
     runner::{RunDiagnostics, Runner},
+    utils::current_python_version,
 };
 use karva_project::{
     path::{SystemPath, SystemPathBuf, deduplicate_nested_paths},
-    project::Project,
+    project::{Project, ProjectMetadata},
 };
 use notify::Watcher as _;
 
@@ -61,7 +62,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     let args = Args::parse_from(args);
 
     match args.command {
-        Command::Test(test_args) => test(&test_args),
+        Command::Test(test_args) => test(test_args),
         Command::Version => version().map(|()| ExitStatus::Success),
     }
 }
@@ -73,7 +74,7 @@ pub(crate) fn version() -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
+pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let verbosity = args.verbosity.level();
     let _guard = setup_tracing(verbosity);
 
@@ -99,7 +100,15 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
         paths.push(cwd.as_str().to_string());
     }
 
-    let project = Project::new(cwd, paths, args.test_prefix.clone());
+    let watch = args.watch;
+
+    let options = args.into_options();
+
+    let project = Project::new(cwd, paths)
+        .with_metadata(ProjectMetadata {
+            python_version: current_python_version(),
+        })
+        .with_options(options);
 
     let (main_loop, main_loop_cancellation_token) = MainLoop::new(project);
 
@@ -114,7 +123,7 @@ pub(crate) fn test(args: &TestCommand) -> Result<ExitStatus> {
         std::process::exit(0);
     })?;
 
-    let exit_status = if args.watch {
+    let exit_status = if watch {
         main_loop.watch()?
     } else {
         main_loop.run()?

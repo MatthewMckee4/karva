@@ -55,7 +55,6 @@ fn benchmark_karva(criterion: &mut Criterion) {
                         .as_str()
                         .to_string()]
                         .to_vec(),
-                        "test".to_string(),
                     );
                     let mut runner = Runner::new(&project, &mut diagnostics);
                     let runner_result = runner.run();

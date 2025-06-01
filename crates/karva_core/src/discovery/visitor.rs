@@ -1,5 +1,4 @@
 use karva_project::{path::SystemPathBuf, project::Project};
-use pyo3::Python;
 use ruff_python_ast::{
     ModModule, PythonVersion, Stmt, StmtFunctionDef,
     visitor::source_order::{self, SourceOrderVisitor},
@@ -46,31 +45,18 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
 #[must_use]
 pub fn function_definitions(path: &SystemPathBuf, project: &Project) -> Vec<StmtFunctionDef> {
     let mut visitor = FunctionDefinitionVisitor::new(project);
-    tracing::debug!(
-        "Discovering functions in file: {}",
-        path.as_std_path().display()
-    );
 
-    let parsed = parsed_module(path);
-    tracing::debug!("Parsed module: {:?}", parsed);
+    let parsed = parsed_module(path, *project.python_version());
 
     visitor.visit_body(&parsed.syntax().body);
-
-    tracing::debug!("Discovered functions: {:?}", visitor.discovered_functions());
 
     visitor.discovered_functions().to_vec()
 }
 
-fn parsed_module(path: &SystemPathBuf) -> Parsed<ModModule> {
-    tracing::debug!("Parsing module: {}", path.as_std_path().display());
-    let python_version = current_python_version();
-    tracing::debug!("Python version: {:?}", python_version);
+fn parsed_module(path: &SystemPathBuf, python_version: PythonVersion) -> Parsed<ModModule> {
     let mode = Mode::Module;
-    tracing::debug!("Mode: {:?}", mode);
     let options = ParseOptions::from(mode).with_target_version(python_version);
-    tracing::debug!("Options: {:?}", options);
     let source = source_text(path);
-    tracing::debug!("Source: {:?}", source);
 
     parse_unchecked(&source, options)
         .try_into_module()
@@ -79,12 +65,4 @@ fn parsed_module(path: &SystemPathBuf) -> Parsed<ModModule> {
 
 fn source_text(path: &SystemPathBuf) -> String {
     std::fs::read_to_string(path.as_std_path()).unwrap()
-}
-
-fn current_python_version() -> PythonVersion {
-    PythonVersion::from(Python::with_gil(|py| {
-        let inferred_python_version = py.version_info();
-        tracing::debug!("Inferred Python version: {:?}", inferred_python_version);
-        (inferred_python_version.major, inferred_python_version.minor)
-    }))
 }
