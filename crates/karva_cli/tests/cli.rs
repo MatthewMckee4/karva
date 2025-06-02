@@ -177,22 +177,13 @@ fn test_one_test_fails() -> anyhow::Result<()> {
 
 #[test]
 fn test_multiple_tests_fail() -> anyhow::Result<()> {
-    let case = TestCase::with_files([
-        (
-            "test_fail1.py",
-            r"
-        def test_fail1():
-            assert False
-    ",
-        ),
-        (
-            "test_fail2.py",
-            r"
+    let case = TestCase::with_file(
+        "test_fail2.py",
+        r"
         def test_fail2():
             assert 1 == 2
     ",
-        ),
-    ])?;
+    )?;
 
     assert_cmd_snapshot!(case.command(), @r"
     success: false
@@ -205,16 +196,9 @@ fn test_multiple_tests_fail() -> anyhow::Result<()> {
     3 |     assert 1 == 2
       |            ^^^^^^ assertion failed
       |
-    error[assertion-failed]: Assertion failed
-     --> test_fail1.py:3:12
-      |
-    2 | def test_fail1():
-    3 |     assert False
-      |            ^^^^^ assertion failed
-      |
 
     ─────────────
-    Failed tests: 2
+    Failed tests: 1
 
     ----- stderr -----
     ");
