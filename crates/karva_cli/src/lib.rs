@@ -240,10 +240,6 @@ impl MainLoop {
         let mut revision = 0u64;
         let mut debounce_id = 0u64;
 
-        if self.watcher.is_none() {
-            self.sender.send(MainLoopMessage::TestWorkspace).unwrap();
-        }
-
         while let Ok(message) = self.receiver.recv() {
             match message {
                 MainLoopMessage::TestWorkspace => {
@@ -266,19 +262,19 @@ impl MainLoop {
                     if check_revision == revision {
                         let mut stdout = BufWriter::new(io::stdout().lock());
 
-                        if result.passed() {
+                        if result.is_empty() {
                             writeln!(stdout, "{}", "All checks passed!".green().bold())?;
-                        } else {
-                            writeln!(stdout, "{}", "Checks failed!".red().bold())?;
+
+                            return Ok(ExitStatus::Success);
                         }
 
-                        if self.watcher.is_none() {
-                            return Ok(if result.passed() {
-                                ExitStatus::Success
-                            } else {
-                                ExitStatus::Failure
-                            });
+                        for diagnostic in result.iter() {
+                            write!(stdout, "{}", diagnostic.display())?;
                         }
+
+                        result.display(&mut stdout);
+
+                        return Ok(ExitStatus::Failure);
                     }
                 }
 
@@ -328,7 +324,6 @@ impl MainLoopCancellationToken {
     }
 }
 
-#[derive(Debug)]
 enum MainLoopMessage {
     TestWorkspace,
     TestsCompleted {
@@ -355,12 +350,12 @@ impl karva_core::diagnostic::reporter::Reporter for IndicatifReporter {
             .unwrap()
             .progress_chars("--"),
         );
-        progress.set_message("Checking");
+        progress.set_message("Testing");
 
         self.0 = Some(progress);
     }
 
-    fn report_file(&self, _file_name: &str) {
+    fn report_test(&self, _file_name: &str) {
         if let Some(ref progress_bar) = self.0 {
             progress_bar.inc(1);
         }

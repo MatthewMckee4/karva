@@ -104,11 +104,6 @@ fn test_one_test_passes() -> anyhow::Result<()> {
     success: true
     exit_code: 0
     ----- stdout -----
-    Discovering tests...
-    Discovered 1 test
-    .
-    ─────────────
-    Passed tests: 1
     All checks passed!
 
     ----- stderr -----
@@ -141,11 +136,6 @@ fn test_two_tests_pass() -> anyhow::Result<()> {
     success: true
     exit_code: 0
     ----- stdout -----
-    Discovering tests...
-    Discovered 2 tests
-    ..
-    ─────────────
-    Passed tests: 2
     All checks passed!
 
     ----- stderr -----
@@ -168,13 +158,200 @@ fn test_one_test_fails() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    Discovering tests...
-    Discovered 1 test
-    .
+    error[assertion-failed]: Assertion failed
+     --> test_fail.py:3:12
+      |
+    2 | def test_fail():
+    3 |     assert False
+      |            ^^^^^ assertion failed
+      |
+
     ─────────────
-    Passed tests: 0
     Failed tests: 1
-    All checks passed!
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[test]
+fn test_multiple_tests_fail() -> anyhow::Result<()> {
+    let case = TestCase::with_files([
+        (
+            "test_fail1.py",
+            r"
+        def test_fail1():
+            assert False
+    ",
+        ),
+        (
+            "test_fail2.py",
+            r"
+        def test_fail2():
+            assert 1 == 2
+    ",
+        ),
+    ])?;
+
+    assert_cmd_snapshot!(case.command(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    error[assertion-failed]: Assertion failed
+     --> test_fail2.py:3:12
+      |
+    2 | def test_fail2():
+    3 |     assert 1 == 2
+      |            ^^^^^^ assertion failed
+      |
+    error[assertion-failed]: Assertion failed
+     --> test_fail1.py:3:12
+      |
+    2 | def test_fail1():
+    3 |     assert False
+      |            ^^^^^ assertion failed
+      |
+
+    ─────────────
+    Failed tests: 2
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[test]
+fn test_mixed_pass_and_fail() -> anyhow::Result<()> {
+    let case = TestCase::with_files([
+        (
+            "test_pass.py",
+            r"
+        def test_pass():
+            assert True
+    ",
+        ),
+        (
+            "test_fail.py",
+            r"
+        def test_fail():
+            assert False
+    ",
+        ),
+    ])?;
+
+    assert_cmd_snapshot!(case.command(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    error[assertion-failed]: Assertion failed
+     --> test_fail.py:3:12
+      |
+    2 | def test_fail():
+    3 |     assert False
+      |            ^^^^^ assertion failed
+      |
+
+    ─────────────
+    Passed tests: 1
+    Failed tests: 1
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[test]
+fn test_assertion_with_message() -> anyhow::Result<()> {
+    let case = TestCase::with_file(
+        "test_fail_with_msg.py",
+        r#"
+        def test_fail_with_message():
+            assert False, "This should not happen"
+    "#,
+    )?;
+
+    assert_cmd_snapshot!(case.command(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    error[assertion-failed]: Assertion failed
+     --> test_fail_with_msg.py:3:12
+      |
+    2 | def test_fail_with_message():
+    3 |     assert False, "This should not happen"
+      |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ assertion failed
+      |
+
+    ─────────────
+    Failed tests: 1
+
+    ----- stderr -----
+    "#);
+
+    Ok(())
+}
+
+#[test]
+fn test_equality_assertion_fail() -> anyhow::Result<()> {
+    let case = TestCase::with_file(
+        "test_equality.py",
+        r"
+        def test_equality():
+            x = 5
+            y = 10
+            assert x == y
+    ",
+    )?;
+
+    assert_cmd_snapshot!(case.command(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    error[assertion-failed]: Assertion failed
+     --> test_equality.py:5:12
+      |
+    4 |     y = 10
+    5 |     assert x == y
+      |            ^^^^^^ assertion failed
+      |
+
+    ─────────────
+    Failed tests: 1
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[test]
+fn test_complex_assertion_fail() -> anyhow::Result<()> {
+    let case = TestCase::with_file(
+        "test_complex.py",
+        r"
+        def test_complex():
+            items = [1, 2, 3]
+            assert len(items) > 5
+    ",
+    )?;
+
+    assert_cmd_snapshot!(case.command(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    error[assertion-failed]: Assertion failed
+     --> test_complex.py:4:12
+      |
+    3 |     items = [1, 2, 3]
+    4 |     assert len(items) > 5
+      |            ^^^^^^^^^^^^^^ assertion failed
+      |
+
+    ─────────────
+    Failed tests: 1
 
     ----- stderr -----
     ");

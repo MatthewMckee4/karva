@@ -36,4 +36,14 @@ flame:
 	sudo sysctl kernel.perf_event_paranoid=-1
 	cargo flamegraph -- test scripts/benchmark/test_many_assertions.py
 
+N ?= 1000
+
+temp-test-dir:
+	rm -rf temp_test_dir
+	mkdir -p temp_test_dir
+	for i in $$(seq 1 $(N)); do \
+		printf "def test_pass_%d():\n    assert False\n" $$i > temp_test_dir/test_$$i.py; \
+	done
+
+
 .PHONY: dev pre-commit build clean docs benchmark build

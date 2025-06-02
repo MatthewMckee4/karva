@@ -5,9 +5,11 @@ use karva_project::project::Project;
 use pyo3::prelude::*;
 
 use crate::{
-    diagnostic::reporter::{DummyReporter, Reporter},
+    diagnostic::{
+        Diagnostic, DiagnosticType,
+        reporter::{DummyReporter, Reporter},
+    },
     discovery::Discoverer,
-    test_result::TestResult,
 };
 
 pub struct TestRunner<'a> {
@@ -38,38 +40,44 @@ impl<'a> TestRunner<'a> {
             let add_cwd_to_sys_path_result = self.add_cwd_to_sys_path(py);
 
             if add_cwd_to_sys_path_result.is_err() {
-                return Err("Failed to add cwd to sys.path".to_string());
+                tracing::error!("Failed to add cwd to sys.path");
+                return None;
             }
 
-            Ok(discovered_tests
-                .tests
-                .iter()
-                .filter_map(|(module_name, test_cases)| {
-                    let res = {
-                        let imported_module = match PyModule::import(py, module_name) {
-                            Ok(module) => module,
-                            Err(e) => {
-                                tracing::error!("Failed to import module {module_name}: {e}");
-                                return None;
-                            }
-                        };
+            Some(
+                discovered_tests
+                    .tests
+                    .iter()
+                    .filter_map(|(module_name, test_cases)| {
+                        let res = {
+                            let imported_module = match PyModule::import(py, module_name) {
+                                Ok(module) => module,
+                                Err(e) => {
+                                    tracing::error!("Failed to import module {module_name}: {e}");
+                                    return None;
+                                }
+                            };
 
-                        Some(
-                            test_cases
-                                .iter()
-                                .map(|test_case| test_case.run_test(py, &imported_module))
-                                .collect::<Vec<_>>(),
-                        )
-                    };
-                    reporter.report_file(module_name);
-                    res
-                })
-                .flatten()
-                .collect())
+                            Some(
+                                test_cases
+                                    .iter()
+                                    .filter_map(|test_case| {
+                                        let result = test_case.run_test(py, &imported_module);
+                                        reporter.report_test(&test_case.to_string());
+                                        result
+                                    })
+                                    .collect::<Vec<_>>(),
+                            )
+                        };
+                        res
+                    })
+                    .flatten()
+                    .collect(),
+            )
         })
         .unwrap_or_default();
 
-        RunDiagnostics::new(test_results)
+        RunDiagnostics::new(test_results, discovered_tests.count)
     }
 
     fn add_cwd_to_sys_path(&self, py: Python) -> PyResult<()> {
@@ -80,36 +88,44 @@ impl<'a> TestRunner<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct RunDiagnostics {
-    test_results: Vec<TestResult>,
+    diagnostics: Vec<Diagnostic>,
+    total_tests: usize,
 }
 
 impl RunDiagnostics {
     #[must_use]
-    pub const fn new(test_results: Vec<TestResult>) -> Self {
-        Self { test_results }
+    pub const fn new(test_results: Vec<Diagnostic>, total_tests: usize) -> Self {
+        Self {
+            diagnostics: test_results,
+            total_tests,
+        }
     }
 
     #[must_use]
-    pub fn passed(&self) -> bool {
-        self.test_results.iter().all(TestResult::is_pass)
+    pub fn is_empty(&self) -> bool {
+        self.diagnostics.is_empty()
     }
 
     #[must_use]
-    pub fn test_results(&self) -> &[TestResult] {
-        &self.test_results
+    pub fn test_results(&self) -> &[Diagnostic] {
+        &self.diagnostics
     }
 
     #[must_use]
-    pub fn stats(&self) -> RunStats {
-        let mut stats = RunStats::default();
-        for test_result in &self.test_results {
-            stats.total += 1;
-            match test_result {
-                TestResult::Pass(_) => stats.passed += 1,
-                TestResult::Fail(_) => stats.failed += 1,
-                TestResult::Error(_) => stats.error += 1,
+    pub fn len(&self) -> usize {
+        self.diagnostics.len()
+    }
+
+    #[must_use]
+    pub fn stats(&self) -> DiagnosticStats {
+        let mut stats = DiagnosticStats::new(self.total_tests);
+        for diagnostic in &self.diagnostics {
+            stats.passed -= 1;
+            match diagnostic.diagnostic_type() {
+                DiagnosticType::Fail => stats.failed += 1,
+                DiagnosticType::Error => stats.error += 1,
             }
         }
         stats
@@ -142,17 +158,29 @@ impl RunDiagnostics {
             }
         }
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.diagnostics.iter()
+    }
 }
 
-#[derive(Debug, Default)]
-pub struct RunStats {
+#[derive(Debug)]
+pub struct DiagnosticStats {
     total: usize,
     passed: usize,
     failed: usize,
     error: usize,
 }
 
-impl RunStats {
+impl DiagnosticStats {
+    const fn new(total: usize) -> Self {
+        Self {
+            total,
+            passed: total,
+            failed: 0,
+            error: 0,
+        }
+    }
     #[must_use]
     pub const fn total(&self) -> usize {
         self.total

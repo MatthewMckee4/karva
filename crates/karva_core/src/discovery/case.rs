@@ -2,13 +2,12 @@ use std::{
     cmp::{Eq, PartialEq},
     fmt::{self, Display},
     hash::{Hash, Hasher},
-    time::{Duration, Instant},
 };
 
-use pyo3::{exceptions::PyAssertionError, prelude::*};
+use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::test_result::TestResult;
+use crate::diagnostic::Diagnostic;
 
 #[derive(Debug, Clone)]
 pub struct TestCase {
@@ -36,38 +35,27 @@ impl TestCase {
     }
 
     #[must_use]
-    pub fn run_test(&self, py: Python, imported_module: &Bound<'_, PyModule>) -> TestResult {
-        let start_time = Instant::now();
-
+    pub fn run_test(
+        &self,
+        py: Python,
+        imported_module: &Bound<'_, PyModule>,
+    ) -> Option<Diagnostic> {
         let function = match imported_module.getattr(self.function_definition().name.to_string()) {
             Ok(function) => function,
-            Err(e) => {
-                return TestResult::new_error(self.clone(), e.to_string(), start_time.elapsed());
+            Err(err) => {
+                return Some(Diagnostic::from_py_err(&err));
             }
         };
 
         let result = function.call0();
-        let duration = start_time.elapsed();
 
         match result {
-            Ok(_) => TestResult::new_pass(self.clone(), duration),
-            Err(err) => self.handle_run_error(py, &err, duration),
-        }
-    }
-
-    fn handle_run_error(&self, py: Python, error: &PyErr, duration: Duration) -> TestResult {
-        let err_value = error.value(py);
-        if err_value.is_instance_of::<PyAssertionError>() {
-            let traceback = error
-                .traceback(py)
-                .map(|traceback| filter_traceback(&traceback.format().unwrap_or_default()));
-            TestResult::new_fail(self.clone(), traceback, duration)
-        } else {
-            let traceback = error
-                .traceback(py)
-                .map(|traceback| filter_traceback(&traceback.format().unwrap_or_default()))
-                .unwrap_or_default();
-            TestResult::new_error(self.clone(), traceback, duration)
+            Ok(_) => None,
+            Err(err) => Some(Diagnostic::from_fail(
+                py,
+                self.function_definition.clone(),
+                &err,
+            )),
         }
     }
 }
@@ -93,24 +81,3 @@ impl PartialEq for TestCase {
 }
 
 impl Eq for TestCase {}
-
-fn filter_traceback(traceback: &str) -> String {
-    let lines: Vec<&str> = traceback.lines().collect();
-    let mut filtered = String::new();
-
-    for (i, line) in lines.iter().enumerate() {
-        if i == 0 && line.contains("Traceback (most recent call last):") {
-            continue;
-        }
-        if line.starts_with("  ") {
-            if let Some(stripped) = line.strip_prefix("  ") {
-                filtered.push_str(stripped);
-            }
-        } else {
-            filtered.push_str(line);
-        }
-        filtered.push('\n');
-    }
-
-    filtered.trim_end().to_string()
-}

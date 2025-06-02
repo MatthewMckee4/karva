@@ -28,7 +28,14 @@ impl<'a> Discoverer<'a> {
         tracing::info!("Discovering tests...");
 
         for path in self.project.python_test_paths() {
-            discovered_tests.extend(self.discover_files(&path.unwrap()));
+            match path {
+                Ok(path) => {
+                    discovered_tests.extend(self.discover_files(&path));
+                }
+                Err(e) => {
+                    tracing::warn!("Error discovering tests: {}", e);
+                }
+            }
         }
 
         let count: usize = discovered_tests
