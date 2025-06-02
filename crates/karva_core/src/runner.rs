@@ -49,25 +49,22 @@ impl<'a> TestRunner<'a> {
                     .tests
                     .iter()
                     .filter_map(|(module_name, test_cases)| {
-                        let res = {
-                            match PyModule::import(py, module_name) {
-                                Ok(module) => Some(
-                                    test_cases
-                                        .iter()
-                                        .filter_map(|test_case| {
-                                            let result = test_case.run_test(py, &module);
-                                            reporter.report_test(&test_case.to_string());
-                                            result
-                                        })
-                                        .collect::<Vec<_>>(),
-                                ),
-                                Err(e) => {
-                                    tracing::error!("Failed to import module {module_name}: {e}");
-                                    return None;
-                                }
+                        match PyModule::import(py, module_name) {
+                            Ok(module) => Some(
+                                test_cases
+                                    .iter()
+                                    .filter_map(|test_case| {
+                                        let result = test_case.run_test(py, &module);
+                                        reporter.report_test(&test_case.to_string());
+                                        result
+                                    })
+                                    .collect::<Vec<_>>(),
+                            ),
+                            Err(e) => {
+                                tracing::error!("Failed to import module {module_name}: {e}");
+                                None
                             }
-                        };
-                        res
+                        }
                     })
                     .flatten()
                     .collect(),
