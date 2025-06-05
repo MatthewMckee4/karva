@@ -10,7 +10,7 @@ build:
 docs:
 	uv run mkdocs build
 
-docs-serve: dev
+docs-serve:
 	uv run mkdocs serve
 
 clean:
@@ -24,6 +24,7 @@ lint:
 
 format:
 	cargo +nightly fmt
+	cargo sort
 
 ITERATIONS ?= 1
 NUM_TESTS ?= 10000

@@ -1,0 +1,20 @@
+[package]
+name = "karva_dev"
+version = "0.0.0"
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+karva_cli = { workspace = true }
+
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["wrap_help", "env"] }
+itertools = { workspace = true }
+pretty_assertions = { workspace = true }
+markdown = { workspace = true }

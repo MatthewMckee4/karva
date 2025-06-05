@@ -65,22 +65,30 @@ def create_benchmark_graph(
     ax.spines["right"].set_visible(False)
     ax.spines["left"].set_visible(False)
     ax.spines["bottom"].set_visible(True)
-    ax.tick_params(axis="x", which="both", bottom=True, top=False, labelbottom=True)
+    ax.tick_params(
+        axis="both",  # Changed from "x" to "both" to affect both axes
+        which="both",
+        bottom=True,
+        top=False,
+        labelbottom=True,
+        colors="grey",
+    )
     ax.xaxis.set_ticks_position("bottom")
     ax.xaxis.set_label_position("bottom")
+    ax.spines["bottom"].set_color("grey")
 
     max_time = np.ceil(max(means))
     linspace = np.linspace(0, max_time, 5)
     ax.set_xticks(linspace)
     ax.set_xticklabels(
         [f"{x:.2f}s" for x in linspace],
-        color="white",
+        color="grey",
     )
 
-    bars = ax.barh(y_pos, means, color=["#4ECDC4", "#4ECDC4"], height=0.5)
+    bars = ax.barh(y_pos, means, color=["#6CAE75", "#6CAE75"], height=0.5)
 
     ax.set_yticks(y_pos)
-    ax.set_yticklabels(labels, fontsize=16)
+    ax.set_yticklabels(labels, fontsize=16, color="grey")
 
     for bar in bars:
         width = bar.get_width()
@@ -91,7 +99,7 @@ def create_benchmark_graph(
             f"{width:.2f}s",
             ha="left",
             va="center",
-            color="white",
+            color="grey",
             fontsize=10,
         )
 
@@ -99,7 +107,7 @@ def create_benchmark_graph(
         f"Running on a file with {num_tests:,} tests",
         fontsize=18,
         pad=20,
-        color="white",
+        color="grey",
         y=-0.6,
     )
 

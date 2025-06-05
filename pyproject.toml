@@ -15,8 +15,8 @@ version = "0.0.18"
 karva = "karva._karva:karva_run"
 
 [project.optional-dependencies]
-dev = ["mypy>=1.15.0", "pre-commit>=4.1.0", "ruff>=0.9.7", "tbump>=6.11.0"]
-docs = ["mkdocs", "mkdocs-material"]
+dev = ["mypy", "pre-commit", "ruff", "tbump"]
+docs = ["mkdocs", "mkdocs-material", "pymdown-extensions"]
 
 [project.urls]
 Documentation = "https://matthewmckee4.github.io/karva/"
