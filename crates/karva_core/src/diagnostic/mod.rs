@@ -70,6 +70,7 @@ fn get_type_name(py: Python<'_>, error: &PyErr) -> String {
         .unwrap_or_else(|_| PyString::new(py, "Unknown"))
         .to_string()
 }
+
 // Simplified traceback filtering that removes unnecessary traceback headers
 fn filter_traceback(traceback: &str) -> String {
     let lines: Vec<&str> = traceback.lines().collect();
@@ -88,6 +89,7 @@ fn filter_traceback(traceback: &str) -> String {
         }
         filtered.push('\n');
     }
+    filtered = filtered.trim_end_matches('\n').to_string();
 
     filtered.trim_end().to_string()
 }
