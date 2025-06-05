@@ -9,7 +9,7 @@ license = { file = "LICENSE" }
 name = "karva"
 readme = "README.md"
 requires-python = ">=3.9"
-version = "0.0.18"
+version = "0.0.19"
 
 [project.scripts]
 karva = "karva._karva:karva_run"
@@ -67,7 +67,7 @@ message_template = "Bump to v{new_version}"
 tag_template = "v{new_version}"
 
 [tool.tbump.version]
-current = "0.0.18"
+current = "0.0.19"
 regex = '''
   (?P<major>\d+)
   \.
