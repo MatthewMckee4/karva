@@ -26,6 +26,7 @@ lint:
 
 format:
 	cargo +nightly fmt
+	cargo sort
 
 ITERATIONS ?= 1
 NUM_TESTS ?= 10000

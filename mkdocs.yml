@@ -4,6 +4,7 @@ repo_url: https://github.com/MatthewMckee4/karva
 nav:
   - Home: index.md
   - Installation: installation.md
+  - Tutorial: tutorial.md
   - CLI: cli.md
 
 theme:
@@ -31,6 +32,28 @@ theme:
     - content.tabs.link
   icon:
     repo: fontawesome/brands/github
+
+markdown_extensions:
+  - pymdownx.details
+  - toc:
+      anchorlink: true
+      anchorlink_class: "toclink"
+  - pymdownx.snippets:
+  - pymdownx.magiclink:
+  - attr_list:
+  - md_in_html:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite:
+  - pymdownx.superfences:
+  - markdown.extensions.attr_list:
+  - pymdownx.keys:
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
 
 plugins:
   - search
