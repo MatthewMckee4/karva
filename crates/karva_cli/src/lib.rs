@@ -21,13 +21,15 @@ use karva_project::{
 use notify::Watcher as _;
 
 use crate::{
-    args::{Args, Command, TestCommand},
+    args::{Command, TestCommand},
     logging::setup_tracing,
 };
 
 mod args;
 mod logging;
 mod version;
+
+pub use args::Args;
 
 #[must_use]
 pub fn karva_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> ExitStatus {

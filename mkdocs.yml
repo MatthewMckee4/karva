@@ -3,17 +3,29 @@ repo_url: https://github.com/MatthewMckee4/karva
 
 nav:
   - Home: index.md
+  - Installation: installation.md
+  - CLI: cli.md
 
 theme:
   name: material
   locale: en
   palette:
-    scheme: slate
-    primary: cyan
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
 
   features:
     - navigation.instant
-    - navigation.tabs
     - navigation.footer
     - navigation.indexes
     - content.tabs.link
@@ -22,3 +34,6 @@ theme:
 
 plugins:
   - search
+
+extra_css:
+  - stylesheets/extra.css
