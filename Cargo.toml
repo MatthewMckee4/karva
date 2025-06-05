@@ -24,6 +24,7 @@ criterion = { version = "0.6.0", default-features = false }
 crossbeam = { version = "0.8.4" }
 dunce = { version = "1.0.5" }
 ignore = { version = "0.4.23" }
+indexmap = { version = "2.7.0" }
 indicatif = { version = "0.17.8" }
 insta = { version = "1.35.1" }
 insta-cmd = { version = "0.6.0" }
@@ -67,3 +68,4 @@ missing_panics_doc = "allow"
 too_many_lines = "allow"
 significant_drop_tightening = "allow"
 format_push_string = "allow"
+mutable_key_type = "allow"

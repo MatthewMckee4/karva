@@ -12,26 +12,23 @@ use crate::{
     discovery::Discoverer,
 };
 
-pub struct TestRunner<'a> {
+pub trait TestRunner {
+    fn test(&self) -> RunDiagnostics;
+    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics;
+}
+
+pub struct StandardTestRunner<'a> {
     project: &'a Project,
 }
 
-impl<'a> TestRunner<'a> {
+impl<'a> StandardTestRunner<'a> {
     #[must_use]
     pub const fn new(project: &'a Project) -> Self {
         Self { project }
     }
 
-    pub fn run(&self) -> RunDiagnostics {
-        self.run_impl(&mut DummyReporter)
-    }
-
-    pub fn run_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
-        self.run_impl(reporter)
-    }
-
     #[must_use]
-    fn run_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
+    fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
         let discovered_tests = Discoverer::new(self.project).discover();
 
         reporter.set_files(discovered_tests.count);
@@ -40,7 +37,7 @@ impl<'a> TestRunner<'a> {
             let add_cwd_to_sys_path_result = self.add_cwd_to_sys_path(py);
 
             if add_cwd_to_sys_path_result.is_err() {
-                tracing::error!("Failed to add cwd to sys.path");
+                tracing::error!("Failed to add {cwd} to sys.path", cwd = self.project.cwd());
                 return None;
             }
 
@@ -48,23 +45,25 @@ impl<'a> TestRunner<'a> {
                 discovered_tests
                     .tests
                     .iter()
-                    .filter_map(|(module_name, test_cases)| {
-                        match PyModule::import(py, module_name) {
-                            Ok(module) => Some(
-                                test_cases
-                                    .iter()
-                                    .filter_map(|test_case| {
-                                        let result = test_case.run_test(py, &module);
-                                        reporter.report_test(&test_case.to_string());
-                                        result
-                                    })
-                                    .collect::<Vec<_>>(),
-                            ),
-                            Err(e) => {
-                                tracing::error!("Failed to import module {module_name}: {e}");
+                    .filter_map(|(module, test_cases)| {
+                        PyModule::import(py, module.name()).map_or_else(
+                            |_| {
+                                tracing::error!("Failed to import module {}", module.name());
                                 None
-                            }
-                        }
+                            },
+                            |py_module| {
+                                Some(
+                                    test_cases
+                                        .iter()
+                                        .filter_map(|test_case| {
+                                            let result = test_case.run_test(py, &py_module);
+                                            reporter.report_test(&test_case.to_string());
+                                            result
+                                        })
+                                        .collect::<Vec<_>>(),
+                                )
+                            },
+                        )
                     })
                     .flatten()
                     .collect(),
@@ -80,6 +79,26 @@ impl<'a> TestRunner<'a> {
         let path = sys_path.getattr("path")?;
         path.call_method1("append", (self.project.cwd().as_str(),))?;
         Ok(())
+    }
+}
+
+impl TestRunner for StandardTestRunner<'_> {
+    fn test(&self) -> RunDiagnostics {
+        self.test_impl(&mut DummyReporter)
+    }
+
+    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
+        self.test_impl(reporter)
+    }
+}
+
+impl TestRunner for Project {
+    fn test(&self) -> RunDiagnostics {
+        StandardTestRunner::new(self).test()
+    }
+
+    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
+        StandardTestRunner::new(self).test_with_reporter(reporter)
     }
 }
 
@@ -243,9 +262,9 @@ def test_simple_pass():
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_pass.py")],
         );
-        let runner = TestRunner::new(&project);
+        let runner = StandardTestRunner::new(&project);
 
-        let result = runner.run();
+        let result = runner.test();
 
         assert_eq!(result.stats().total(), 1);
         assert_eq!(result.stats().passed(), 1);
@@ -268,9 +287,9 @@ def test_simple_fail():
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_fail.py")],
         );
-        let runner = TestRunner::new(&project);
+        let runner = StandardTestRunner::new(&project);
 
-        let result = runner.run();
+        let result = runner.test();
 
         assert_eq!(result.stats().total(), 1);
         assert_eq!(result.stats().passed(), 0);
@@ -293,9 +312,9 @@ def test_simple_error():
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_error.py")],
         );
-        let runner = TestRunner::new(&project);
+        let runner = StandardTestRunner::new(&project);
 
-        let result = runner.run();
+        let result = runner.test();
 
         assert_eq!(result.stats().total(), 1);
         assert_eq!(result.stats().passed(), 0);
@@ -323,9 +342,9 @@ def test_error():
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_mixed.py")],
         );
-        let runner = TestRunner::new(&project);
+        let runner = StandardTestRunner::new(&project);
 
-        let result = runner.run();
+        let result = runner.test();
 
         assert_eq!(result.stats().total(), 3);
         assert_eq!(result.stats().passed(), 1);

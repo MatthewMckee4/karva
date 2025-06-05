@@ -1,5 +1,6 @@
 pub mod case;
 pub mod discoverer;
+pub mod module;
 pub mod visitor;
 
 pub use case::TestCase;

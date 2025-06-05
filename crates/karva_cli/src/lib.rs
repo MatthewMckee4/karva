@@ -15,7 +15,7 @@ use karva_core::{
     utils::current_python_version,
 };
 use karva_project::{
-    path::{SystemPath, SystemPathBuf, deduplicate_nested_paths},
+    path::{SystemPath, SystemPathBuf},
     project::{Project, ProjectMetadata},
 };
 use notify::Watcher as _;
@@ -89,7 +89,9 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
             })?
     };
 
-    let mut paths: Vec<String> = deduplicate_nested_paths(args.paths.iter())
+    let mut paths: Vec<String> = args
+        .paths
+        .iter()
         .map(|path| SystemPath::absolute(path, &cwd).as_str().to_string())
         .collect();
 
@@ -247,8 +249,7 @@ impl MainLoop {
 
                     let mut reporter = R::default();
 
-                    let runner = TestRunner::new(project);
-                    let result = runner.run_with_reporter(&mut reporter);
+                    let result = project.test_with_reporter(&mut reporter);
 
                     sender
                         .send(MainLoopMessage::TestsCompleted { result, revision })

@@ -1,12 +1,17 @@
-use std::fs;
-
 use pyo3::{exceptions::PyAssertionError, prelude::*};
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::diagnostic::render::DisplayDiagnostic;
+use crate::{
+    diagnostic::render::{DisplayAssertionDiagnostic, DisplayDiagnostic},
+    discovery::module::Module,
+};
 
 pub mod render;
 pub mod reporter;
+
+// Type aliases for cleaner function signatures
+type AssertionLineInfo = (usize, usize, String); // (line_number, column, source_line)
+type ContextLines = Vec<(usize, String)>; // Vec<(line_number, line_content)>
 
 // Public exports
 
@@ -24,18 +29,28 @@ impl Diagnostic {
         }
     }
 
-    pub fn from_fail(py: Python, _function_definition: StmtFunctionDef, error: &PyErr) -> Self {
+    pub fn from_fail(
+        py: Python,
+        module: &Module,
+        function_definition: &StmtFunctionDef,
+        error: &PyErr,
+    ) -> Self {
         let err_value = error.value(py);
         if err_value.is_instance_of::<PyAssertionError>() {
-            // Try to create a formatted assertion diagnostic
-            if let Some(assertion_diag) = AssertionDiagnostic::from_assertion_error(py, error) {
+            if let Some(assertion_diagnostic) =
+                AssertionDiagnostic::from_assertion_error_with_module(
+                    py,
+                    error,
+                    module,
+                    function_definition,
+                )
+            {
                 return Self {
                     diagnostic_type: DiagnosticType::Fail,
-                    info: assertion_diag.display_formatted(),
+                    info: assertion_diagnostic.display().to_string(),
                 };
             }
 
-            // Fallback to original behavior
             let traceback = error
                 .traceback(py)
                 .map(|traceback| filter_traceback(&traceback.format().unwrap_or_default()));
@@ -71,63 +86,72 @@ pub struct AssertionDiagnostic {
     line_number: usize,
     column: usize,
     source_line: String,
+    context_lines: Vec<(usize, String)>, // (line_number, line_content) pairs for context
+    function_name: String,
 }
 
 impl AssertionDiagnostic {
-    /// Creates a new `AssertionDiagnostic` from a Python `AssertionError`.
-    /// Returns None if the error is not an `AssertionError` or if parsing fails.
-    pub fn from_assertion_error(py: Python, error: &PyErr) -> Option<Self> {
+    // Creates a new AssertionDiagnostic using Module's position tracking capabilities
+    // This leverages the Module's to_column_row method for accurate position information
+    pub fn from_assertion_error_with_module(
+        py: Python,
+        error: &PyErr,
+        module: &Module,
+        function_def: &StmtFunctionDef,
+    ) -> Option<Self> {
         let err_value = error.value(py);
         if !err_value.is_instance_of::<PyAssertionError>() {
             return None;
         }
 
+        // Get the traceback to find the exact file and line where the assertion failed
         let traceback = error.traceback(py)?;
         let traceback_str = traceback.format().ok()?;
+        let (failed_file_path, failed_line_number) =
+            Self::extract_file_and_line_from_traceback(&traceback_str)?;
 
-        // Parse the traceback to extract file, line, and column info
-        if let Some((file_path, line_number, source_line)) = Self::parse_traceback(&traceback_str) {
-            // Find the column position after "assert " (including space)
-            let column = source_line.find("assert ").map_or_else(
-                || source_line.find("assert").unwrap_or(0),
-                |assert_pos| assert_pos + "assert ".len(),
-            );
+        // Determine if the assertion failed in the same file as the test function
+        let module_file_path = module.file().as_std_path().to_string_lossy().to_string();
+        let module_file_name = std::path::Path::new(&module_file_path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(&module_file_path);
+        let failed_file_name = std::path::Path::new(&failed_file_path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(&failed_file_path);
 
-            Some(Self {
-                file_path,
-                line_number,
-                column,
-                source_line,
-            })
+        let (source_content, display_file_path) = if module_file_name == failed_file_name {
+            // Assertion failed in the same file as the test function
+            (module.source_text(), module_file_path)
         } else {
-            None
-        }
+            // Assertion failed in a different file - read that file
+            std::fs::read_to_string(&failed_file_path).map_or_else(
+                |_| (module.source_text(), module_file_path),
+                |content| (content, failed_file_path),
+            )
+        };
+
+        let (assertion_line_info, context_lines) =
+            Self::get_assertion_line_info_with_context(&source_content, failed_line_number)?;
+
+        Some(Self {
+            file_path: display_file_path,
+            line_number: assertion_line_info.0,
+            column: assertion_line_info.1,
+            source_line: assertion_line_info.2,
+            context_lines,
+            function_name: function_def.name.to_string(),
+        })
     }
 
-    /// Creates a new `AssertionDiagnostic` with explicit values.
-    /// Useful for testing or when you have the information already parsed.
-    #[must_use]
-    pub const fn new(
-        file_path: String,
-        line_number: usize,
-        column: usize,
-        source_line: String,
-    ) -> Self {
-        Self {
-            file_path,
-            line_number,
-            column,
-            source_line,
-        }
-    }
+    // Extract both the file path and line number from Python traceback
+    // Returns the deepest call stack entry where the assertion actually failed
+    fn extract_file_and_line_from_traceback(traceback: &str) -> Option<(String, usize)> {
+        let mut last_file_info = None;
 
-    fn parse_traceback(traceback: &str) -> Option<(String, usize, String)> {
-        let lines: Vec<&str> = traceback.lines().collect();
-
-        // Find the file line (starts with "  File ")
-        for (i, line) in lines.iter().enumerate() {
+        for line in traceback.lines() {
             if line.trim().starts_with("File \"") && line.contains(", line ") {
-                // Extract file path and line number
                 let parts: Vec<&str> = line.split(", line ").collect();
                 if parts.len() >= 2 {
                     let file_part = parts[0].trim();
@@ -137,113 +161,96 @@ impl AssertionDiagnostic {
                         .unwrap_or("");
 
                     let line_num_part = parts[1].split(',').next().unwrap_or("0");
-                    let line_number: usize = line_num_part.trim().parse().unwrap_or(0);
-
-                    // The next line should contain the actual source code
-                    // Keep original whitespace, don't trim
-                    if i + 1 < lines.len() {
-                        let source_line = lines[i + 1].to_string();
-                        return Some((file_path.to_string(), line_number, source_line));
+                    if let Ok(line_number) = line_num_part.trim().parse::<usize>() {
+                        last_file_info = Some((file_path.to_string(), line_number));
                     }
                 }
             }
         }
-        None
+
+        last_file_info
     }
 
-    #[must_use]
-    pub fn display_formatted(&self) -> String {
-        let file_name = std::path::Path::new(&self.file_path)
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or(&self.file_path);
+    // Get the assertion line information with up to 5 lines of context above it
+    // Only includes lines that are within the function body
+    fn get_assertion_line_info_with_context(
+        source_content: &str,
+        line_number: usize,
+    ) -> Option<(AssertionLineInfo, ContextLines)> {
+        let lines: Vec<&str> = source_content.lines().collect();
+        let assertion_line_idx = line_number.saturating_sub(1); // Convert to 0-indexed
 
-        // Try to read the source file to get context lines
-        let context_lines = self
-            .get_context_lines()
-            .unwrap_or_else(|| vec![self.source_line.clone()]);
-
-        let mut output = String::new();
-        output.push_str("error[assertion-failed]: Assertion failed\n");
-        output.push_str(&format!(
-            " --> {}:{}:{}\n",
-            file_name,
-            self.line_number,
-            self.column + 1
-        ));
-        output.push_str("  |\n");
-
-        // Display context lines
-        let start_line = if self.line_number > 1 {
-            self.line_number - 1
-        } else {
-            1
-        };
-        for (i, line) in context_lines.iter().enumerate() {
-            let current_line_num = start_line + i;
-            output.push_str(&format!("{current_line_num} | {line}\n"));
-            if current_line_num == self.line_number {
-                let line_num_width = current_line_num.to_string().len();
-                let prefix_spaces = " ".repeat(line_num_width + 1);
-                let caret_spaces = " ".repeat(self.column);
-
-                // Calculate the length of the assertion statement after "assert"
-                let assertion_length = Self::calculate_assertion_length(line);
-                let carets = "^".repeat(assertion_length);
-
-                output.push_str(&format!(
-                    "{prefix_spaces}| {caret_spaces}{carets} assertion failed\n"
-                ));
-            }
-        }
-        output.push_str("  |\n");
-
-        output
-    }
-
-    /// Calculate the length of the assertion statement after "assert"
-    fn calculate_assertion_length(source_line: &str) -> usize {
-        // Find the start of the assertion statement (after "assert ")
-        let assert_start = if let Some(pos) = source_line.find("assert ") {
-            pos + "assert ".len()
-        } else if let Some(pos) = source_line.find("assert") {
-            pos + "assert".len()
-        } else {
-            return 1; // Fallback to single caret
-        };
-
-        // Find the end of the assertion statement
-        // This could be end of line, or before a comment
-        let remaining = &source_line[assert_start..];
-        let end_pos = remaining
-            .find('#') // Stop at comment
-            .unwrap_or(remaining.len()); // Or end of line
-
-        // Trim whitespace from the end to get actual assertion length
-        remaining[..end_pos].trim_end().len().max(1) // At least 1 caret
-    }
-
-    fn get_context_lines(&self) -> Option<Vec<String>> {
-        let content = fs::read_to_string(&self.file_path).ok()?;
-        let lines: Vec<&str> = content.lines().collect();
-
-        if self.line_number == 0 || self.line_number > lines.len() {
+        if assertion_line_idx >= lines.len() {
             return None;
         }
 
-        let start = if self.line_number > 1 {
-            self.line_number - 2
+        let assertion_line = lines[assertion_line_idx];
+
+        // Find the column position of the assertion
+        let column = assertion_line.find("assert ").map_or_else(
+            || assertion_line.find("assert").unwrap_or(0),
+            |assert_pos| assert_pos + "assert ".len(),
+        );
+
+        // Find context lines - up to 5 lines above, but start from function definition
+        let mut context_lines = Vec::new();
+        let start_idx = if assertion_line_idx >= 5 {
+            assertion_line_idx - 5
         } else {
             0
         };
-        let end = std::cmp::min(self.line_number, lines.len());
 
-        Some(
-            lines[start..end]
-                .iter()
-                .map(std::string::ToString::to_string)
-                .collect(),
-        )
+        for (i, line) in lines
+            .iter()
+            .enumerate()
+            .take(assertion_line_idx)
+            .skip(start_idx)
+        {
+            let line_num = i + 1;
+
+            // If we hit a function definition, clear previous context and start fresh
+            if line.trim_start().starts_with("def ") {
+                context_lines.clear(); // Clear previous context
+            }
+
+            // Include all lines after we start collecting (including the function def)
+            context_lines.push((line_num, (*line).to_string()));
+        }
+
+        // Limit to last 5 context lines to keep output manageable
+        if context_lines.len() > 5 {
+            let start_idx = context_lines.len() - 5;
+            context_lines.drain(0..start_idx);
+        }
+
+        Some((
+            (line_number, column, assertion_line.to_string()),
+            context_lines,
+        ))
+    }
+
+    // Legacy method for creating diagnostics (for tests)
+    #[must_use]
+    pub const fn new(
+        file_path: String,
+        line_number: usize,
+        column: usize,
+        source_line: String,
+        function_name: String,
+    ) -> Self {
+        Self {
+            file_path,
+            line_number,
+            column,
+            source_line,
+            context_lines: Vec::new(), // No context for manually created diagnostics
+            function_name,
+        }
+    }
+
+    #[must_use]
+    pub const fn display(&self) -> DisplayAssertionDiagnostic {
+        DisplayAssertionDiagnostic::new(self)
     }
 }
 
@@ -253,6 +260,7 @@ pub enum DiagnosticType {
     Error,
 }
 
+// Simplified traceback filtering that removes unnecessary traceback headers
 fn filter_traceback(traceback: &str) -> String {
     let lines: Vec<&str> = traceback.lines().collect();
     let mut filtered = String::new();
@@ -272,4 +280,64 @@ fn filter_traceback(traceback: &str) -> String {
     }
 
     filtered.trim_end().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_display_formatted() {
+        let diagnostic = AssertionDiagnostic::new(
+            "/path/to/test.py".to_string(),
+            42,
+            11,
+            "    assert x == y".to_string(),
+            "test_equality".to_string(),
+        );
+
+        let output = diagnostic.display().to_string();
+        assert!(output.contains("error[assertion-failed]: Assertion failed"));
+        assert!(output.contains("test.py:42:12 in function 'test_equality'"));
+        assert!(output.contains("42 |     assert x == y"));
+        assert!(output.contains("   |            ^^^^^^ assertion failed"));
+    }
+
+    #[test]
+    fn test_filter_traceback() {
+        let traceback = r#"Traceback (most recent call last):
+  File "test.py", line 3, in test_func
+    assert False
+AssertionError"#;
+
+        let filtered = filter_traceback(traceback);
+        let expected = r#"File "test.py", line 3, in test_func
+  assert False
+AssertionError"#;
+        assert_eq!(filtered, expected);
+    }
+
+    #[test]
+    fn test_extract_file_and_line_from_traceback() {
+        let traceback = r#"Traceback (most recent call last):
+  File "/path/to/test.py", line 25, in test_function
+    helper_function()
+  File "/path/to/helper.py", line 10, in helper_function
+    assert x == y
+AssertionError"#;
+
+        let result = AssertionDiagnostic::extract_file_and_line_from_traceback(traceback);
+        assert_eq!(result, Some(("/path/to/helper.py".to_string(), 10)));
+    }
+
+    #[test]
+    fn test_extract_file_and_line_single_file() {
+        let traceback = r#"Traceback (most recent call last):
+  File "/path/to/test.py", line 42, in test_function
+    assert False
+AssertionError"#;
+
+        let result = AssertionDiagnostic::extract_file_and_line_from_traceback(traceback);
+        assert_eq!(result, Some(("/path/to/test.py".to_string(), 42)));
+    }
 }

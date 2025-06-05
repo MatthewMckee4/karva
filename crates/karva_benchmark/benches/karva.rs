@@ -55,8 +55,7 @@ fn benchmark_karva(criterion: &mut Criterion) {
                         .to_string()]
                         .to_vec(),
                     );
-                    let runner = TestRunner::new(&project);
-                    let runner_result = runner.run_with_reporter(&mut DummyReporter);
+                    let runner_result = project.test_with_reporter(&mut DummyReporter);
                     assert!(runner_result.is_empty());
                 });
             },

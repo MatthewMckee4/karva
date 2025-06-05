@@ -45,9 +45,6 @@ karva test tests/
 
 # Run tests in a specific file.
 karva test tests/test_example.py
-
-# Run a specific test.
-karva test tests/test_example(.py)::test_example
 ```
 
 #### Example
