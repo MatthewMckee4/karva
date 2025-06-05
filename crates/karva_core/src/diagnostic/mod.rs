@@ -3,13 +3,12 @@ use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
     diagnostic::render::{DisplayAssertionDiagnostic, DisplayDiagnostic},
-    discovery::module::Module,
+    discovery::Module,
 };
 
 pub mod render;
 pub mod reporter;
 
-// Type aliases for cleaner function signatures
 type AssertionLineInfo = (usize, usize, String); // (line_number, column, source_line)
 type ContextLines = Vec<(usize, String)>; // Vec<(line_number, line_content)>
 
@@ -194,11 +193,7 @@ impl AssertionDiagnostic {
 
         // Find context lines - up to 5 lines above, but start from function definition
         let mut context_lines = Vec::new();
-        let start_idx = if assertion_line_idx >= 5 {
-            assertion_line_idx - 5
-        } else {
-            0
-        };
+        let start_idx = assertion_line_idx.saturating_sub(5);
 
         for (i, line) in lines
             .iter()
@@ -243,7 +238,7 @@ impl AssertionDiagnostic {
             line_number,
             column,
             source_line,
-            context_lines: Vec::new(), // No context for manually created diagnostics
+            context_lines: Vec::new(),
             function_name,
         }
     }
@@ -287,6 +282,51 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_diagnostic_from_py_err() {
+        // This test would require Python context, so we'll test the structure
+        let diagnostic = Diagnostic {
+            diagnostic_type: DiagnosticType::Error,
+            info: "Test error".to_string(),
+        };
+
+        assert!(matches!(
+            diagnostic.diagnostic_type(),
+            DiagnosticType::Error
+        ));
+        assert_eq!(diagnostic.info, "Test error");
+    }
+
+    #[test]
+    fn test_diagnostic_display() {
+        let diagnostic = Diagnostic {
+            diagnostic_type: DiagnosticType::Fail,
+            info: "Test failure".to_string(),
+        };
+
+        let display = diagnostic.display();
+        // Just ensure display can be created without panicking
+        assert!(!display.to_string().is_empty());
+    }
+
+    #[test]
+    fn test_assertion_diagnostic_new() {
+        let diagnostic = AssertionDiagnostic::new(
+            "/path/to/test.py".to_string(),
+            42,
+            11,
+            "    assert x == y".to_string(),
+            "test_equality".to_string(),
+        );
+
+        assert_eq!(diagnostic.file_path, "/path/to/test.py");
+        assert_eq!(diagnostic.line_number, 42);
+        assert_eq!(diagnostic.column, 11);
+        assert_eq!(diagnostic.source_line, "    assert x == y");
+        assert_eq!(diagnostic.function_name, "test_equality");
+        assert!(diagnostic.context_lines.is_empty());
+    }
+
+    #[test]
     fn test_display_formatted() {
         let diagnostic = AssertionDiagnostic::new(
             "/path/to/test.py".to_string(),
@@ -318,6 +358,26 @@ AssertionError"#;
     }
 
     #[test]
+    fn test_filter_traceback_no_header() {
+        let traceback = r#"  File "test.py", line 3, in test_func
+    assert False
+AssertionError"#;
+
+        let filtered = filter_traceback(traceback);
+        let expected = r#"File "test.py", line 3, in test_func
+  assert False
+AssertionError"#;
+        assert_eq!(filtered, expected);
+    }
+
+    #[test]
+    fn test_filter_traceback_empty() {
+        let traceback = "";
+        let filtered = filter_traceback(traceback);
+        assert_eq!(filtered, "");
+    }
+
+    #[test]
     fn test_extract_file_and_line_from_traceback() {
         let traceback = r#"Traceback (most recent call last):
   File "/path/to/test.py", line 25, in test_function
@@ -339,5 +399,124 @@ AssertionError"#;
 
         let result = AssertionDiagnostic::extract_file_and_line_from_traceback(traceback);
         assert_eq!(result, Some(("/path/to/test.py".to_string(), 42)));
+    }
+
+    #[test]
+    fn test_extract_file_and_line_no_match() {
+        let traceback = "Some random error without file info";
+        let result = AssertionDiagnostic::extract_file_and_line_from_traceback(traceback);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_extract_file_and_line_malformed() {
+        let traceback = r#"File "/path/to/test.py", line not_a_number, in test_function"#;
+        let result = AssertionDiagnostic::extract_file_and_line_from_traceback(traceback);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_get_assertion_line_info_with_context_basic() {
+        let source = r"def test_function():
+    x = 5
+    y = 10
+    assert x == y
+";
+
+        let result = AssertionDiagnostic::get_assertion_line_info_with_context(source, 4);
+        assert!(result.is_some());
+
+        let (assertion_info, context_lines) = result.unwrap();
+        assert_eq!(assertion_info.0, 4); // line number
+        assert_eq!(assertion_info.2, "    assert x == y"); // source line
+        assert_eq!(context_lines.len(), 3); // def, x=5, y=10
+        assert_eq!(context_lines[0].0, 1); // First context line number
+        assert!(context_lines[0].1.contains("def test_function"));
+    }
+
+    #[test]
+    fn test_get_assertion_line_info_with_context_no_function() {
+        let source = r"x = 5
+y = 10
+assert x == y
+";
+
+        let result = AssertionDiagnostic::get_assertion_line_info_with_context(source, 3);
+        assert!(result.is_some());
+
+        let (assertion_info, context_lines) = result.unwrap();
+        assert_eq!(assertion_info.0, 3); // line number
+        assert_eq!(context_lines.len(), 2); // x=5, y=10
+    }
+
+    #[test]
+    fn test_get_assertion_line_info_with_context_out_of_bounds() {
+        let source = "single line";
+        let result = AssertionDiagnostic::get_assertion_line_info_with_context(source, 5);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_get_assertion_line_info_with_context_long_context() {
+        let source = r"def test_function():
+    line1 = 1
+    line2 = 2
+    line3 = 3
+    line4 = 4
+    line5 = 5
+    line6 = 6
+    line7 = 7
+    assert False
+";
+
+        let result = AssertionDiagnostic::get_assertion_line_info_with_context(source, 9);
+        assert!(result.is_some());
+
+        let (_, context_lines) = result.unwrap();
+        // Should limit to 5 context lines
+        assert_eq!(context_lines.len(), 5);
+        assert!(context_lines[0].1.contains("line3 = 3"));
+    }
+
+    #[test]
+    fn test_get_assertion_line_info_column_detection() {
+        let source = "    assert x == y";
+        let result = AssertionDiagnostic::get_assertion_line_info_with_context(source, 1);
+        assert!(result.is_some());
+
+        let (assertion_info, _) = result.unwrap();
+        assert_eq!(assertion_info.1, 11); // Column after "assert "
+    }
+
+    #[test]
+    fn test_get_assertion_line_info_column_detection_no_space() {
+        let source = "    assert(x == y)";
+        let result = AssertionDiagnostic::get_assertion_line_info_with_context(source, 1);
+        assert!(result.is_some());
+
+        let (assertion_info, _) = result.unwrap();
+        assert_eq!(assertion_info.1, 4); // Column at "assert"
+    }
+
+    #[test]
+    fn test_diagnostic_type_matching() {
+        let fail_diagnostic = Diagnostic {
+            diagnostic_type: DiagnosticType::Fail,
+            info: "Test".to_string(),
+        };
+
+        let error_diagnostic = Diagnostic {
+            diagnostic_type: DiagnosticType::Error,
+            info: "Test".to_string(),
+        };
+
+        assert!(matches!(
+            fail_diagnostic.diagnostic_type(),
+            DiagnosticType::Fail
+        ));
+        assert!(matches!(
+            error_diagnostic.diagnostic_type(),
+            DiagnosticType::Error
+        ));
     }
 }

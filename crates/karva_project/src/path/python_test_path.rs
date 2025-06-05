@@ -42,7 +42,7 @@ impl PythonTestPath {
         } else if path.is_dir() {
             Ok(Self::Directory(path))
         } else {
-            unreachable!("Path `{path}` is neither a file nor a directory")
+            unreachable!("Path `{}` is neither a file nor a directory", path)
         }
     }
 }
