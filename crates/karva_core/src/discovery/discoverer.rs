@@ -321,7 +321,7 @@ def test_function(): pass
 
         assert_eq!(
             get_sorted_test_strings(&discovered_tests.tests),
-            vec!["test_file::check_function1", "test_file::check_function2",]
+            ["test_file::check_function1", "test_file::check_function2"]
         );
     }
 
