@@ -8,11 +8,9 @@ build:
 	cargo build
 
 docs:
-	uv sync --all-extras
 	uv run mkdocs build
 
 docs-serve:
-	uv sync --all-extras
 	uv run mkdocs serve
 
 clean:
