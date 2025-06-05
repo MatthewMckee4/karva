@@ -31,7 +31,6 @@ impl std::fmt::Display for DisplayDiagnostic<'_> {
         for line in self.diagnostic.message.lines() {
             writeln!(f, " | {line}")?;
         }
-        // writeln!(f)?;
 
         Ok(())
     }

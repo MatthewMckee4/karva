@@ -91,5 +91,7 @@ fn filter_traceback(traceback: &str) -> String {
     }
     filtered = filtered.trim_end_matches('\n').to_string();
 
+    filtered = filtered.trim_end_matches('^').to_string();
+
     filtered.trim_end().to_string()
 }
