@@ -53,7 +53,7 @@ jobs:
       - name: Install Dependencies
         run: uv sync --extra docs --no-install-project
       - name: Run Tests
-        run: make docs
+        run: uv run mkdocs build --no-project
 
   benchmarks:
     name: Run benchmarks
