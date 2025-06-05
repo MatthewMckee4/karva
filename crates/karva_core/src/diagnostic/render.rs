@@ -428,7 +428,7 @@ mod tests {
         );
         assert_eq!(calculate_assertion_length("assert x == y, 'error'"), 15);
         assert_eq!(
-            calculate_assertion_length("assert condition, f'Value: {{value}}'"),
+            calculate_assertion_length("assert condition, f'Value: {value}'"),
             28
         );
     }
@@ -502,7 +502,7 @@ mod tests {
             "/home/user/projects/my_project/tests/test_calculations.py",
             21,
             11,
-            "    assert sum(data) == expected, f'Expected {{expected}}, got {{sum(data)}}'",
+            "    assert sum(data) == expected, f'Expected {expected}, got {sum(data)}'",
             "test_complex_scenario",
             context_lines,
         );
@@ -520,9 +520,8 @@ mod tests {
         assert!(output.contains("20 |     # Perform calculation"));
 
         assert!(output.contains(
-            "21 |     assert sum(data) == expected, f'Expected {{expected}}, got {{sum(data)}}'"
+            "21 |     assert sum(data) == expected, f'Expected {expected}, got {sum(data)}'"
         ));
-
         assert!(output.contains("   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ assertion failed"));
 
         assert!(!output.contains(" 15 |"));
