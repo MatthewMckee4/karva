@@ -4,29 +4,41 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+use karva_project::{path::SystemPathBuf, utils::module_name};
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::{diagnostic::Diagnostic, discovery::module::Module};
+use crate::diagnostic::Diagnostic;
 
 #[derive(Debug, Clone)]
-pub struct TestCase<'proj> {
-    module: Module<'proj>,
+pub struct TestCase {
+    file: SystemPathBuf,
+    cwd: SystemPathBuf,
     function_definition: StmtFunctionDef,
 }
 
-impl<'proj> TestCase<'proj> {
+impl TestCase {
     #[must_use]
-    pub const fn new(module: Module<'proj>, function_definition: StmtFunctionDef) -> Self {
+    pub fn new(
+        cwd: &SystemPathBuf,
+        file: SystemPathBuf,
+        function_definition: StmtFunctionDef,
+    ) -> Self {
         Self {
-            module,
+            file,
+            cwd: cwd.clone(),
             function_definition,
         }
     }
 
     #[must_use]
-    pub const fn module(&self) -> &Module<'proj> {
-        &self.module
+    pub const fn file(&self) -> &SystemPathBuf {
+        &self.file
+    }
+
+    #[must_use]
+    pub const fn cwd(&self) -> &SystemPathBuf {
+        &self.cwd
     }
 
     #[must_use]
@@ -35,45 +47,46 @@ impl<'proj> TestCase<'proj> {
     }
 
     #[must_use]
-    pub fn run_test(&self, py: Python, module: &Bound<'_, PyModule>) -> Option<Diagnostic> {
+    pub fn run_test(&self, py: &Python, module: &Bound<'_, PyModule>) -> Option<Diagnostic> {
         let result = {
             let name: &str = &self.function_definition().name;
             let function = match module.getattr(name) {
                 Ok(function) => function,
-                Err(err) => return Some(Diagnostic::from_py_err(&err)),
+                Err(err) => {
+                    return Some(Diagnostic::from_py_err(py, &err));
+                }
             };
             function.call0()
         };
         match result {
             Ok(_) => None,
-            Err(err) => Some(Diagnostic::from_fail(
-                py,
-                &self.module,
-                &self.function_definition,
-                &err,
-            )),
+            Err(err) => Some(Diagnostic::from_py_fail(py, &err)),
         }
     }
 }
 
-impl Display for TestCase<'_> {
+impl Display for TestCase {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}::{}", self.module, self.function_definition.name)
+        write!(
+            f,
+            "{}::{}",
+            module_name(&self.cwd, &self.file),
+            self.function_definition.name
+        )
     }
 }
 
-impl Hash for TestCase<'_> {
+impl Hash for TestCase {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.module.hash(state);
+        self.file.hash(state);
         self.function_definition.name.hash(state);
     }
 }
 
-impl PartialEq for TestCase<'_> {
+impl PartialEq for TestCase {
     fn eq(&self, other: &Self) -> bool {
-        self.module == other.module
-            && self.function_definition.name == other.function_definition.name
+        self.file == other.file && self.function_definition.name == other.function_definition.name
     }
 }
 
-impl Eq for TestCase<'_> {}
+impl Eq for TestCase {}

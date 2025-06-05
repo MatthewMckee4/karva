@@ -22,8 +22,7 @@ impl<'proj> Discoverer<'proj> {
 
     #[must_use]
     pub fn discover(self) -> DiscoveredTests<'proj> {
-        let mut all_discovered_tests: HashMap<Module<'proj>, IndexSet<TestCase<'proj>>> =
-            HashMap::new();
+        let mut all_discovered_tests: HashMap<Module<'proj>, IndexSet<TestCase>> = HashMap::new();
 
         tracing::info!("Discovering tests...");
 
@@ -31,7 +30,8 @@ impl<'proj> Discoverer<'proj> {
             match path {
                 Ok(path) => match path {
                     PythonTestPath::File(path) => {
-                        self.discover_file(&path, &mut all_discovered_tests);
+                        let test_cases = self.discover_file(&path);
+                        all_discovered_tests.insert(Module::new(&path, self.project), test_cases);
                     }
                     PythonTestPath::Directory(dir_path) => {
                         self.discover_directory(&dir_path, &mut all_discovered_tests);
@@ -56,34 +56,26 @@ impl<'proj> Discoverer<'proj> {
         }
     }
 
-    fn discover_file(
-        &self,
-        path: &SystemPathBuf,
-        all_discovered_tests: &mut HashMap<Module<'proj>, IndexSet<TestCase<'proj>>>,
-    ) {
+    fn discover_file(&self, path: &SystemPathBuf) -> IndexSet<TestCase> {
         let function_defs = function_definitions(path, self.project);
         if function_defs.is_empty() {
-            return;
+            return IndexSet::new();
         }
 
-        let module = Module::new(path, self.project);
         let mut test_cases = IndexSet::new();
 
         for function_def in function_defs {
-            // Clone the module for TestCase creation since TestCase takes it by value
-            let test_case = TestCase::new(module.clone(), function_def);
+            let test_case = TestCase::new(self.project.cwd(), path.clone(), function_def);
             test_cases.insert(test_case);
         }
 
-        if !test_cases.is_empty() {
-            all_discovered_tests.insert(module, test_cases);
-        }
+        test_cases
     }
 
     fn discover_directory(
         &self,
         path: &SystemPathBuf,
-        all_discovered_tests: &mut HashMap<Module<'proj>, IndexSet<TestCase<'proj>>>,
+        all_discovered_tests: &mut HashMap<Module<'proj>, IndexSet<TestCase>>,
     ) {
         let dir_path = path.as_std_path().to_path_buf();
 
@@ -103,13 +95,14 @@ impl<'proj> Discoverer<'proj> {
                 continue;
             }
             tracing::debug!("Discovering file: {}", entry.path().display());
-            self.discover_file(&path, all_discovered_tests);
+            let test_cases = self.discover_file(&path);
+            all_discovered_tests.insert(Module::new(&path, self.project), test_cases);
         }
     }
 }
 
 pub struct DiscoveredTests<'proj> {
-    pub tests: HashMap<Module<'proj>, IndexSet<TestCase<'proj>>>,
+    pub tests: HashMap<Module<'proj>, IndexSet<TestCase>>,
     pub count: usize,
 }
 
