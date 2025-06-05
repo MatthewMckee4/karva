@@ -68,21 +68,20 @@ def test_error():
 Running karva:
 
 ```bash
-karva test tests/test.py
+uv run karva test tests/test.py
 ```
 
 Provides the following output:
 
 ```bash
-Discovered 3 tests
-...
-Failed tests:
-tests.test::test_fail
-File "/tests/test.py", line 6, in test_fail
-  assert False, "This test should fail"
-Error tests:
-tests.test::test_error
-File "/tests/test.py", line 10, in test_error
+error[assertion-failed]: Assertion failed
+ --> test.py:6:12 in function 'test_fail'
+  |
+5 | def test_fail():
+6 |     assert False, "This test should fail"
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ assertion failed
+  |
+File "/tmp/ty-test/tests/test.py", line 10, in test_error
   raise ValueError("This is an error")
 ─────────────
 Passed tests: 1
