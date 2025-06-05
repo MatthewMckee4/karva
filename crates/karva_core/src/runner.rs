@@ -9,7 +9,7 @@ use crate::{
         Diagnostic, DiagnosticType,
         reporter::{DummyReporter, Reporter},
     },
-    discovery::Discoverer,
+    discovery::{Discoverer, discoverer::DiscoveredTests},
 };
 
 pub trait TestRunner {
@@ -17,61 +17,61 @@ pub trait TestRunner {
     fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics;
 }
 
-pub struct StandardTestRunner<'a> {
-    project: &'a Project,
+pub struct StandardTestRunner<'proj> {
+    project: &'proj Project,
 }
 
-impl<'a> StandardTestRunner<'a> {
+impl<'proj> StandardTestRunner<'proj> {
     #[must_use]
-    pub const fn new(project: &'a Project) -> Self {
+    pub const fn new(project: &'proj Project) -> Self {
         Self { project }
     }
 
     #[must_use]
     fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
-        let discovered_tests = Discoverer::new(self.project).discover();
+        let discovered_tests: DiscoveredTests<'proj> = Discoverer::new(self.project).discover();
+        let total_tests = discovered_tests.count;
 
-        reporter.set_files(discovered_tests.count);
+        reporter.set_files(total_tests);
 
-        let test_results = Python::with_gil(|py| {
+        let test_results: Vec<Diagnostic> = Python::with_gil(|py| {
             let add_cwd_to_sys_path_result = self.add_cwd_to_sys_path(py);
 
             if add_cwd_to_sys_path_result.is_err() {
                 tracing::error!("Failed to add {cwd} to sys.path", cwd = self.project.cwd());
-                return None;
+                return Vec::new();
             }
 
-            Some(
-                discovered_tests
-                    .tests
-                    .iter()
-                    .filter_map(|(module, test_cases)| {
-                        PyModule::import(py, module.name()).map_or_else(
-                            |_| {
-                                tracing::error!("Failed to import module {}", module.name());
-                                None
-                            },
-                            |py_module| {
-                                Some(
-                                    test_cases
-                                        .iter()
-                                        .filter_map(|test_case| {
-                                            let result = test_case.run_test(py, &py_module);
-                                            reporter.report_test(&test_case.to_string());
-                                            result
-                                        })
-                                        .collect::<Vec<_>>(),
-                                )
-                            },
-                        )
-                    })
-                    .flatten()
-                    .collect(),
-            )
-        })
-        .unwrap_or_default();
+            discovered_tests
+                .tests
+                .into_iter()
+                .filter_map(|(module, test_cases)| {
+                    PyModule::import(py, module.name()).map_or_else(
+                        |err| {
+                            tracing::error!("Failed to import module {}", module.name());
+                            tracing::debug!("{:?}", err);
+                            None
+                        },
+                        |py_module| {
+                            Some(
+                                test_cases
+                                    .into_iter()
+                                    .filter_map(|test_case| {
+                                        let test_name = test_case.to_string();
+                                        let result = test_case.run_test(&py, &py_module);
+                                        reporter.report_test(&test_name);
+                                        result
+                                    })
+                                    .collect::<Vec<_>>(),
+                            )
+                        },
+                    )
+                })
+                .flatten()
+                .collect()
+        });
 
-        RunDiagnostics::new(test_results, discovered_tests.count)
+        RunDiagnostics::new(test_results, total_tests)
     }
 
     fn add_cwd_to_sys_path(&self, py: Python) -> PyResult<()> {
@@ -94,11 +94,13 @@ impl TestRunner for StandardTestRunner<'_> {
 
 impl TestRunner for Project {
     fn test(&self) -> RunDiagnostics {
-        StandardTestRunner::new(self).test()
+        let test_runner = StandardTestRunner::new(self);
+        test_runner.test()
     }
 
     fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
-        StandardTestRunner::new(self).test_with_reporter(reporter)
+        let test_runner = StandardTestRunner::new(self);
+        test_runner.test_with_reporter(reporter)
     }
 }
 
@@ -139,7 +141,7 @@ impl RunDiagnostics {
             stats.passed -= 1;
             match diagnostic.diagnostic_type() {
                 DiagnosticType::Fail => stats.failed += 1,
-                DiagnosticType::Error => stats.error += 1,
+                DiagnosticType::Error(_) => stats.error += 1,
             }
         }
         stats
@@ -160,8 +162,6 @@ impl RunDiagnostics {
         let stats = self.stats();
 
         if stats.total() > 0 {
-            let _ = writeln!(writer);
-            // self.display_test_results(&mut writer);
             let _ = writeln!(writer, "{}", "─────────────".bold());
             for (label, num, color) in [
                 ("Passed tests:", stats.passed(), Color::Green),
