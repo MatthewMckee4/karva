@@ -1,433 +1,522 @@
-use std::{
-    io::{self, Write},
-    sync::Mutex,
-    time::Instant,
-};
-
-use colored::{Color, Colorize};
+use pyo3::{exceptions::PyAssertionError, prelude::*};
+use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
-    runner::RunDiagnostics,
-    test_result::{Error, Fail, Pass, TestResult},
+    diagnostic::render::{DisplayAssertionDiagnostic, DisplayDiagnostic},
+    discovery::Module,
 };
-pub trait TestCaseDiagnosticWriter {
-    fn test_started(&self, test_name: &str, file_path: &str);
-    fn test_completed(&mut self, test: &TestResult);
-    fn error(&self, error: &str);
-    fn display_diagnostics(&self, run_diagnostics: &RunDiagnostics);
+
+pub mod render;
+pub mod reporter;
+
+type AssertionLineInfo = (usize, usize, String); // (line_number, column, source_line)
+type ContextLines = Vec<(usize, String)>; // Vec<(line_number, line_content)>
+
+// Public exports
+
+#[derive(Clone)]
+pub struct Diagnostic {
+    diagnostic_type: DiagnosticType,
+    info: String,
 }
 
-pub trait DiscoveryDiagnosticWriter {
-    fn discovery_started(&self);
-    fn discovery_completed(&self, count: usize);
-}
-
-pub trait DiagnosticWriter: TestCaseDiagnosticWriter + DiscoveryDiagnosticWriter {}
-
-pub struct MainDiagnosticWriter {
-    stdout: Mutex<Box<dyn Write>>,
-    start_time: Instant,
-    failed_tests: Vec<Fail>,
-    error_tests: Vec<Error>,
-}
-
-impl Default for MainDiagnosticWriter {
-    fn default() -> Self {
-        Self::new(io::stdout())
-    }
-}
-
-impl TestCaseDiagnosticWriter for MainDiagnosticWriter {
-    fn test_started(&self, test_name: &str, file_path: &str) {
-        tracing::info!("{} {} in {}", "Running".blue(), test_name, file_path,);
-    }
-
-    fn test_completed(&mut self, test: &TestResult) {
-        match test {
-            TestResult::Pass(test) => self.test_passed(test),
-            TestResult::Fail(test) => self.test_failed(test),
-            TestResult::Error(test) => self.test_error(test),
-        }
-    }
-
-    fn error(&self, error: &str) {
-        let mut stdout = self.acquire_stdout();
-        let _ = writeln!(stdout, "{}", error.red());
-        let _ = stdout.flush();
-    }
-
-    fn display_diagnostics(&self, run_diagnostics: &RunDiagnostics) {
-        let mut stdout = self.acquire_stdout();
-        let stats = run_diagnostics.stats();
-        let total_duration = self.start_time.elapsed();
-
-        if stats.total() > 0 {
-            let _ = writeln!(stdout);
-            self.display_test_results(&mut stdout);
-            let _ = writeln!(stdout, "{}", "─────────────".bold());
-            for (label, num, color) in [
-                ("Passed tests:", stats.passed(), Color::Green),
-                ("Failed tests:", stats.failed(), Color::Red),
-                ("Error tests:", stats.error(), Color::Yellow),
-            ] {
-                Self::log_test_count(&mut stdout, label, num, color);
-            }
-            tracing::info!(
-                "{} {}ms",
-                "Total duration:".blue(),
-                total_duration.as_millis()
-            );
-        }
-        let _ = stdout.flush();
-    }
-}
-
-impl DiscoveryDiagnosticWriter for MainDiagnosticWriter {
-    fn discovery_started(&self) {
-        let mut stdout = self.acquire_stdout();
-        let _ = writeln!(stdout, "{}", "Discovering tests...".blue());
-        let _ = stdout.flush();
-    }
-
-    fn discovery_completed(&self, count: usize) {
-        let mut stdout = self.acquire_stdout();
-        let _ = writeln!(
-            stdout,
-            "{} {} {}",
-            "Discovered".blue(),
-            count,
-            "tests".blue()
-        );
-        let _ = stdout.flush();
-    }
-}
-
-impl DiagnosticWriter for MainDiagnosticWriter {}
-
-impl MainDiagnosticWriter {
-    pub fn new(out: impl Write + 'static) -> Self {
+impl Diagnostic {
+    pub fn from_py_err(error: &PyErr) -> Self {
         Self {
-            stdout: Mutex::new(Box::new(out)),
-            start_time: Instant::now(),
-            failed_tests: vec![],
-            error_tests: vec![],
+            diagnostic_type: DiagnosticType::Error,
+            info: error.to_string(),
         }
     }
 
-    fn acquire_stdout(&self) -> std::sync::MutexGuard<'_, Box<dyn Write>> {
-        self.stdout.lock().unwrap()
+    pub fn from_fail(
+        py: Python,
+        module: &Module,
+        function_definition: &StmtFunctionDef,
+        error: &PyErr,
+    ) -> Self {
+        let err_value = error.value(py);
+        if err_value.is_instance_of::<PyAssertionError>() {
+            if let Some(assertion_diagnostic) =
+                AssertionDiagnostic::from_assertion_error_with_module(
+                    py,
+                    error,
+                    module,
+                    function_definition,
+                )
+            {
+                return Self {
+                    diagnostic_type: DiagnosticType::Fail,
+                    info: assertion_diagnostic.display().to_string(),
+                };
+            }
+
+            let traceback = error
+                .traceback(py)
+                .map(|traceback| filter_traceback(&traceback.format().unwrap_or_default()));
+            Self {
+                diagnostic_type: DiagnosticType::Fail,
+                info: traceback.unwrap_or_default(),
+            }
+        } else {
+            let traceback = error
+                .traceback(py)
+                .map(|traceback| filter_traceback(&traceback.format().unwrap_or_default()))
+                .unwrap_or_default();
+            Self {
+                diagnostic_type: DiagnosticType::Error,
+                info: traceback,
+            }
+        }
     }
 
-    fn test_passed(&self, _test: &Pass) {
-        self.log_test_result(Color::Green);
+    #[must_use]
+    pub const fn diagnostic_type(&self) -> &DiagnosticType {
+        &self.diagnostic_type
     }
 
-    fn test_failed(&mut self, test: &Fail) {
-        self.log_test_result(Color::Red);
-        self.failed_tests.push(test.clone());
+    #[must_use]
+    pub const fn display(&self) -> DisplayDiagnostic {
+        DisplayDiagnostic::new(self)
+    }
+}
+
+pub struct AssertionDiagnostic {
+    file_path: String,
+    line_number: usize,
+    column: usize,
+    source_line: String,
+    context_lines: Vec<(usize, String)>, // (line_number, line_content) pairs for context
+    function_name: String,
+}
+
+impl AssertionDiagnostic {
+    // Creates a new AssertionDiagnostic using Module's position tracking capabilities
+    // This leverages the Module's to_column_row method for accurate position information
+    pub fn from_assertion_error_with_module(
+        py: Python,
+        error: &PyErr,
+        module: &Module,
+        function_def: &StmtFunctionDef,
+    ) -> Option<Self> {
+        let err_value = error.value(py);
+        if !err_value.is_instance_of::<PyAssertionError>() {
+            return None;
+        }
+
+        // Get the traceback to find the exact file and line where the assertion failed
+        let traceback = error.traceback(py)?;
+        let traceback_str = traceback.format().ok()?;
+        let (failed_file_path, failed_line_number) =
+            Self::extract_file_and_line_from_traceback(&traceback_str)?;
+
+        // Determine if the assertion failed in the same file as the test function
+        let module_file_path = module.file().as_std_path().to_string_lossy().to_string();
+        let module_file_name = std::path::Path::new(&module_file_path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(&module_file_path);
+        let failed_file_name = std::path::Path::new(&failed_file_path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(&failed_file_path);
+
+        let (source_content, display_file_path) = if module_file_name == failed_file_name {
+            // Assertion failed in the same file as the test function
+            (module.source_text(), module_file_path)
+        } else {
+            // Assertion failed in a different file - read that file
+            std::fs::read_to_string(&failed_file_path).map_or_else(
+                |_| (module.source_text(), module_file_path),
+                |content| (content, failed_file_path),
+            )
+        };
+
+        let (assertion_line_info, context_lines) =
+            Self::get_assertion_line_info_with_context(&source_content, failed_line_number)?;
+
+        Some(Self {
+            file_path: display_file_path,
+            line_number: assertion_line_info.0,
+            column: assertion_line_info.1,
+            source_line: assertion_line_info.2,
+            context_lines,
+            function_name: function_def.name.to_string(),
+        })
     }
 
-    fn test_error(&mut self, test: &Error) {
-        self.log_test_result(Color::Yellow);
-        self.error_tests.push(test.clone());
-    }
+    // Extract both the file path and line number from Python traceback
+    // Returns the deepest call stack entry where the assertion actually failed
+    fn extract_file_and_line_from_traceback(traceback: &str) -> Option<(String, usize)> {
+        let mut last_file_info = None;
 
-    fn log_test_result(&self, color: Color) {
-        let mut stdout = self.acquire_stdout();
-        let _ = write!(stdout, "{}", ".".color(color));
-        let _ = stdout.flush();
-    }
+        for line in traceback.lines() {
+            if line.trim().starts_with("File \"") && line.contains(", line ") {
+                let parts: Vec<&str> = line.split(", line ").collect();
+                if parts.len() >= 2 {
+                    let file_part = parts[0].trim();
+                    let file_path = file_part
+                        .strip_prefix("File \"")
+                        .and_then(|s| s.strip_suffix("\""))
+                        .unwrap_or("");
 
-    fn display_test_results(&self, stdout: &mut std::sync::MutexGuard<'_, Box<dyn Write>>) {
-        if !self.failed_tests.is_empty() {
-            let _ = writeln!(stdout, "{}", "Failed tests:".red().bold());
-
-            for test in &self.failed_tests {
-                let _ = writeln!(stdout, "{}", test.test.to_string().bold());
-                if let Some(traceback) = &test.traceback {
-                    let _ = writeln!(stdout, "{traceback}");
+                    let line_num_part = parts[1].split(',').next().unwrap_or("0");
+                    if let Ok(line_number) = line_num_part.trim().parse::<usize>() {
+                        last_file_info = Some((file_path.to_string(), line_number));
+                    }
                 }
             }
         }
-        if !self.error_tests.is_empty() {
-            let _ = writeln!(stdout, "{}", "Error tests:".yellow().bold());
 
-            for test in &self.error_tests {
-                let _ = writeln!(stdout, "{}", test.test.to_string().bold());
-                let _ = writeln!(stdout, "{}", test.traceback);
+        last_file_info
+    }
+
+    // Get the assertion line information with up to 5 lines of context above it
+    // Only includes lines that are within the function body
+    fn get_assertion_line_info_with_context(
+        source_content: &str,
+        line_number: usize,
+    ) -> Option<(AssertionLineInfo, ContextLines)> {
+        let lines: Vec<&str> = source_content.lines().collect();
+        let assertion_line_idx = line_number.saturating_sub(1); // Convert to 0-indexed
+
+        if assertion_line_idx >= lines.len() {
+            return None;
+        }
+
+        let assertion_line = lines[assertion_line_idx];
+
+        // Find the column position of the assertion
+        let column = assertion_line.find("assert ").map_or_else(
+            || assertion_line.find("assert").unwrap_or(0),
+            |assert_pos| assert_pos + "assert ".len(),
+        );
+
+        // Find context lines - up to 5 lines above, but start from function definition
+        let mut context_lines = Vec::new();
+        let start_idx = assertion_line_idx.saturating_sub(5);
+
+        for (i, line) in lines
+            .iter()
+            .enumerate()
+            .take(assertion_line_idx)
+            .skip(start_idx)
+        {
+            let line_num = i + 1;
+
+            // If we hit a function definition, clear previous context and start fresh
+            if line.trim_start().starts_with("def ") {
+                context_lines.clear(); // Clear previous context
             }
+
+            // Include all lines after we start collecting (including the function def)
+            context_lines.push((line_num, (*line).to_string()));
+        }
+
+        // Limit to last 5 context lines to keep output manageable
+        if context_lines.len() > 5 {
+            let start_idx = context_lines.len() - 5;
+            context_lines.drain(0..start_idx);
+        }
+
+        Some((
+            (line_number, column, assertion_line.to_string()),
+            context_lines,
+        ))
+    }
+
+    // Legacy method for creating diagnostics (for tests)
+    #[must_use]
+    pub const fn new(
+        file_path: String,
+        line_number: usize,
+        column: usize,
+        source_line: String,
+        function_name: String,
+    ) -> Self {
+        Self {
+            file_path,
+            line_number,
+            column,
+            source_line,
+            context_lines: Vec::new(),
+            function_name,
         }
     }
 
-    fn log_test_count(
-        stdout: &mut std::sync::MutexGuard<'_, Box<dyn Write>>,
-        label: &str,
-        count: usize,
-        color: Color,
-    ) {
-        if count > 0 {
-            let _ = writeln!(
-                stdout,
-                "{} {}",
-                label.color(color),
-                count.to_string().color(color)
-            );
-        }
+    #[must_use]
+    pub const fn display(&self) -> DisplayAssertionDiagnostic {
+        DisplayAssertionDiagnostic::new(self)
     }
+}
+
+#[derive(Clone)]
+pub enum DiagnosticType {
+    Fail,
+    Error,
+}
+
+// Simplified traceback filtering that removes unnecessary traceback headers
+fn filter_traceback(traceback: &str) -> String {
+    let lines: Vec<&str> = traceback.lines().collect();
+    let mut filtered = String::new();
+
+    for (i, line) in lines.iter().enumerate() {
+        if i == 0 && line.contains("Traceback (most recent call last):") {
+            continue;
+        }
+        if line.starts_with("  ") {
+            if let Some(stripped) = line.strip_prefix("  ") {
+                filtered.push_str(stripped);
+            }
+        } else {
+            filtered.push_str(line);
+        }
+        filtered.push('\n');
+    }
+
+    filtered.trim_end().to_string()
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        io::{self, Write},
-        sync::{Arc, Mutex},
-    };
-
-    use karva_project::{path::SystemPathBuf, project::Project};
-    use regex::Regex;
-
     use super::*;
-    use crate::{
-        discovery::{TestCase, function_definitions},
-        runner::RunDiagnostics,
-        test_result::TestResult,
-    };
 
-    #[derive(Clone, Debug)]
-    struct SharedBufferWriter(Arc<Mutex<Vec<u8>>>);
+    #[test]
+    fn test_diagnostic_from_py_err() {
+        // This test would require Python context, so we'll test the structure
+        let diagnostic = Diagnostic {
+            diagnostic_type: DiagnosticType::Error,
+            info: "Test error".to_string(),
+        };
 
-    impl Write for SharedBufferWriter {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(buf);
-
-            Ok(buf.len())
-        }
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
-    fn strip_ansi_codes(s: &str) -> String {
-        let re = Regex::new(r"\x1b\[[0-9;]*m").unwrap();
-        re.replace_all(s, "").to_string()
-    }
-
-    fn create_test_writer() -> (MainDiagnosticWriter, Arc<Mutex<Vec<u8>>>) {
-        let buffer = Arc::new(Mutex::new(Vec::new()));
-        let writer = MainDiagnosticWriter::new(SharedBufferWriter(buffer.clone()));
-        (writer, buffer)
-    }
-
-    fn get_project() -> Project {
-        Project::new(SystemPathBuf::from("tests/"), vec![])
-    }
-
-    fn get_discovered_test() -> TestCase {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let file_path = temp_dir.path().join("test.py");
-        std::fs::write(&file_path, "def test_name():\n    assert True\n").unwrap();
-
-        let function_def = function_definitions(&SystemPathBuf::from(file_path), &get_project())
-            .into_iter()
-            .next()
-            .unwrap();
-
-        TestCase::new("test.py".to_string(), function_def)
-    }
-
-    fn get_test_result_pass() -> TestResult {
-        TestResult::new_pass(get_discovered_test(), std::time::Duration::from_micros(100))
-    }
-
-    fn get_test_result_fail() -> TestResult {
-        TestResult::new_fail(
-            get_discovered_test(),
-            Some(
-                "File \"test.py\", line 3, in test_name\n  assert False, \"This test should fail\""
-                    .to_string(),
-            ),
-            std::time::Duration::from_micros(100),
-        )
-    }
-
-    fn get_test_result_error() -> TestResult {
-        TestResult::new_error(
-            get_discovered_test(),
-            "File \"test.py\", line 3, in test_name\n  raise ValueError(\"This is an error\")"
-                .to_string(),
-            std::time::Duration::from_micros(100),
-        )
+        assert!(matches!(
+            diagnostic.diagnostic_type(),
+            DiagnosticType::Error
+        ));
+        assert_eq!(diagnostic.info, "Test error");
     }
 
     #[test]
-    fn test_test_passed() {
-        let (mut writer, buffer) = create_test_writer();
-        writer.test_completed(&get_test_result_pass());
-        let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-        assert_eq!(output, ".".green().to_string());
+    fn test_diagnostic_display() {
+        let diagnostic = Diagnostic {
+            diagnostic_type: DiagnosticType::Fail,
+            info: "Test failure".to_string(),
+        };
+
+        let display = diagnostic.display();
+        // Just ensure display can be created without panicking
+        assert!(!display.to_string().is_empty());
     }
 
     #[test]
-    fn test_test_failed() {
-        let (mut writer, buffer) = create_test_writer();
-        writer.test_completed(&get_test_result_fail());
-        let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-        assert_eq!(output, ".".red().to_string());
+    fn test_assertion_diagnostic_new() {
+        let diagnostic = AssertionDiagnostic::new(
+            "/path/to/test.py".to_string(),
+            42,
+            11,
+            "    assert x == y".to_string(),
+            "test_equality".to_string(),
+        );
+
+        assert_eq!(diagnostic.file_path, "/path/to/test.py");
+        assert_eq!(diagnostic.line_number, 42);
+        assert_eq!(diagnostic.column, 11);
+        assert_eq!(diagnostic.source_line, "    assert x == y");
+        assert_eq!(diagnostic.function_name, "test_equality");
+        assert!(diagnostic.context_lines.is_empty());
     }
 
     #[test]
-    fn test_test_error() {
-        let (mut writer, buffer) = create_test_writer();
-        writer.test_completed(&get_test_result_error());
-        let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-        assert_eq!(output, ".".yellow().to_string());
+    fn test_display_formatted() {
+        let diagnostic = AssertionDiagnostic::new(
+            "/path/to/test.py".to_string(),
+            42,
+            11,
+            "    assert x == y".to_string(),
+            "test_equality".to_string(),
+        );
+
+        let output = diagnostic.display().to_string();
+        assert!(output.contains("error[assertion-failed]: Assertion failed"));
+        assert!(output.contains("test.py:42:12 in function 'test_equality'"));
+        assert!(output.contains("42 |     assert x == y"));
+        assert!(output.contains("   |            ^^^^^^ assertion failed"));
     }
 
     #[test]
-    fn test_discovery() {
-        let (writer, buffer) = create_test_writer();
-        writer.discovery_started();
-        writer.discovery_completed(5);
-        writer.display_diagnostics(&RunDiagnostics::new(vec![]));
-        let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-        let output = strip_ansi_codes(&output);
-        let expected = "Discovering tests...\nDiscovered 5 tests\n";
-        assert_eq!(output, expected);
+    fn test_filter_traceback() {
+        let traceback = r#"Traceback (most recent call last):
+  File "test.py", line 3, in test_func
+    assert False
+AssertionError"#;
+
+        let filtered = filter_traceback(traceback);
+        let expected = r#"File "test.py", line 3, in test_func
+  assert False
+AssertionError"#;
+        assert_eq!(filtered, expected);
     }
 
     #[test]
-    fn test_finish_with_mixed_results() {
-        let (mut writer, buffer) = create_test_writer();
-        let test_results = vec![
-            get_test_result_pass(),
-            get_test_result_fail(),
-            get_test_result_pass(),
-        ];
-        for test in &test_results {
-            writer.test_completed(test);
-        }
-        let runner_result = RunDiagnostics::new(test_results);
-        writer.display_diagnostics(&runner_result);
-        let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-        let output = strip_ansi_codes(&output);
-        let expected = r#"...
-Failed tests:
-test.py::test_name
-File "test.py", line 3, in test_name
-  assert False, "This test should fail"
-─────────────
-Passed tests: 2
-Failed tests: 1
-"#;
-        assert_eq!(output, expected);
+    fn test_filter_traceback_no_header() {
+        let traceback = r#"  File "test.py", line 3, in test_func
+    assert False
+AssertionError"#;
+
+        let filtered = filter_traceback(traceback);
+        let expected = r#"File "test.py", line 3, in test_func
+  assert False
+AssertionError"#;
+        assert_eq!(filtered, expected);
     }
 
     #[test]
-    fn test_finish_with_errors() {
-        let (mut writer, buffer) = create_test_writer();
-        let test_results = vec![
-            get_test_result_pass(),
-            get_test_result_error(),
-            get_test_result_fail(),
-        ];
-        for test in &test_results {
-            writer.test_completed(test);
-        }
-        let runner_result = RunDiagnostics::new(test_results);
-        writer.display_diagnostics(&runner_result);
-        let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-        let output = strip_ansi_codes(&output);
-        let expected = r#"...
-Failed tests:
-test.py::test_name
-File "test.py", line 3, in test_name
-  assert False, "This test should fail"
-Error tests:
-test.py::test_name
-File "test.py", line 3, in test_name
-  raise ValueError("This is an error")
-─────────────
-Passed tests: 1
-Failed tests: 1
-Error tests: 1
-"#;
-        assert_eq!(output, expected);
+    fn test_filter_traceback_empty() {
+        let traceback = "";
+        let filtered = filter_traceback(traceback);
+        assert_eq!(filtered, "");
     }
 
     #[test]
-    fn test_finish_with_zero_tests() {
-        let (writer, buffer) = create_test_writer();
-        let runner_result = RunDiagnostics::new(vec![]);
-        writer.display_diagnostics(&runner_result);
-        let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-        assert_eq!(output, "");
+    fn test_extract_file_and_line_from_traceback() {
+        let traceback = r#"Traceback (most recent call last):
+  File "/path/to/test.py", line 25, in test_function
+    helper_function()
+  File "/path/to/helper.py", line 10, in helper_function
+    assert x == y
+AssertionError"#;
+
+        let result = AssertionDiagnostic::extract_file_and_line_from_traceback(traceback);
+        assert_eq!(result, Some(("/path/to/helper.py".to_string(), 10)));
     }
 
     #[test]
-    fn test_finish_with_all_failed() {
-        let (mut writer, buffer) = create_test_writer();
-        let test_results = vec![get_test_result_fail(), get_test_result_fail()];
-        for test in &test_results {
-            writer.test_completed(test);
-        }
-        let runner_result = RunDiagnostics::new(test_results);
-        writer.display_diagnostics(&runner_result);
-        let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-        let output = strip_ansi_codes(&output);
-        let expected = r#"..
-Failed tests:
-test.py::test_name
-File "test.py", line 3, in test_name
-  assert False, "This test should fail"
-test.py::test_name
-File "test.py", line 3, in test_name
-  assert False, "This test should fail"
-─────────────
-Failed tests: 2
-"#;
-        assert_eq!(output, expected);
+    fn test_extract_file_and_line_single_file() {
+        let traceback = r#"Traceback (most recent call last):
+  File "/path/to/test.py", line 42, in test_function
+    assert False
+AssertionError"#;
+
+        let result = AssertionDiagnostic::extract_file_and_line_from_traceback(traceback);
+        assert_eq!(result, Some(("/path/to/test.py".to_string(), 42)));
     }
 
     #[test]
-    fn test_finish_with_all_passed() {
-        let (mut writer, buffer) = create_test_writer();
-        let test_results = vec![get_test_result_pass(), get_test_result_pass()];
-        for test in &test_results {
-            writer.test_completed(test);
-        }
-        let runner_result = RunDiagnostics::new(test_results);
-        writer.display_diagnostics(&runner_result);
-        let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-        let output = strip_ansi_codes(&output);
-        let expected = r"..
-─────────────
-Passed tests: 2
+    fn test_extract_file_and_line_no_match() {
+        let traceback = "Some random error without file info";
+        let result = AssertionDiagnostic::extract_file_and_line_from_traceback(traceback);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_extract_file_and_line_malformed() {
+        let traceback = r#"File "/path/to/test.py", line not_a_number, in test_function"#;
+        let result = AssertionDiagnostic::extract_file_and_line_from_traceback(traceback);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_get_assertion_line_info_with_context_basic() {
+        let source = r"def test_function():
+    x = 5
+    y = 10
+    assert x == y
 ";
-        assert_eq!(output, expected);
+
+        let result = AssertionDiagnostic::get_assertion_line_info_with_context(source, 4);
+        assert!(result.is_some());
+
+        let (assertion_info, context_lines) = result.unwrap();
+        assert_eq!(assertion_info.0, 4); // line number
+        assert_eq!(assertion_info.2, "    assert x == y"); // source line
+        assert_eq!(context_lines.len(), 3); // def, x=5, y=10
+        assert_eq!(context_lines[0].0, 1); // First context line number
+        assert!(context_lines[0].1.contains("def test_function"));
     }
 
     #[test]
-    fn test_finish_with_all_error() {
-        let (mut writer, buffer) = create_test_writer();
-        let test_results = vec![get_test_result_error(), get_test_result_error()];
-        for test in &test_results {
-            writer.test_completed(test);
-        }
-        let runner_result = RunDiagnostics::new(test_results);
-        writer.display_diagnostics(&runner_result);
-        let output = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-        let output = strip_ansi_codes(&output);
-        let expected = r#"..
-Error tests:
-test.py::test_name
-File "test.py", line 3, in test_name
-  raise ValueError("This is an error")
-test.py::test_name
-File "test.py", line 3, in test_name
-  raise ValueError("This is an error")
-─────────────
-Error tests: 2
-"#;
-        assert_eq!(output, expected);
+    fn test_get_assertion_line_info_with_context_no_function() {
+        let source = r"x = 5
+y = 10
+assert x == y
+";
+
+        let result = AssertionDiagnostic::get_assertion_line_info_with_context(source, 3);
+        assert!(result.is_some());
+
+        let (assertion_info, context_lines) = result.unwrap();
+        assert_eq!(assertion_info.0, 3); // line number
+        assert_eq!(context_lines.len(), 2); // x=5, y=10
+    }
+
+    #[test]
+    fn test_get_assertion_line_info_with_context_out_of_bounds() {
+        let source = "single line";
+        let result = AssertionDiagnostic::get_assertion_line_info_with_context(source, 5);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_get_assertion_line_info_with_context_long_context() {
+        let source = r"def test_function():
+    line1 = 1
+    line2 = 2
+    line3 = 3
+    line4 = 4
+    line5 = 5
+    line6 = 6
+    line7 = 7
+    assert False
+";
+
+        let result = AssertionDiagnostic::get_assertion_line_info_with_context(source, 9);
+        assert!(result.is_some());
+
+        let (_, context_lines) = result.unwrap();
+        // Should limit to 5 context lines
+        assert_eq!(context_lines.len(), 5);
+        assert!(context_lines[0].1.contains("line3 = 3"));
+    }
+
+    #[test]
+    fn test_get_assertion_line_info_column_detection() {
+        let source = "    assert x == y";
+        let result = AssertionDiagnostic::get_assertion_line_info_with_context(source, 1);
+        assert!(result.is_some());
+
+        let (assertion_info, _) = result.unwrap();
+        assert_eq!(assertion_info.1, 11); // Column after "assert "
+    }
+
+    #[test]
+    fn test_get_assertion_line_info_column_detection_no_space() {
+        let source = "    assert(x == y)";
+        let result = AssertionDiagnostic::get_assertion_line_info_with_context(source, 1);
+        assert!(result.is_some());
+
+        let (assertion_info, _) = result.unwrap();
+        assert_eq!(assertion_info.1, 4); // Column at "assert"
+    }
+
+    #[test]
+    fn test_diagnostic_type_matching() {
+        let fail_diagnostic = Diagnostic {
+            diagnostic_type: DiagnosticType::Fail,
+            info: "Test".to_string(),
+        };
+
+        let error_diagnostic = Diagnostic {
+            diagnostic_type: DiagnosticType::Error,
+            info: "Test".to_string(),
+        };
+
+        assert!(matches!(
+            fail_diagnostic.diagnostic_type(),
+            DiagnosticType::Fail
+        ));
+        assert!(matches!(
+            error_diagnostic.diagnostic_type(),
+            DiagnosticType::Error
+        ));
     }
 }

@@ -4,7 +4,7 @@ use karva_benchmark::{
     TestCase,
     criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main},
 };
-use karva_core::{diagnostic::MainDiagnosticWriter, runner::Runner};
+use karva_core::{diagnostic::reporter::DummyReporter, runner::TestRunner};
 use karva_project::{
     path::{SystemPath, SystemPathBuf},
     project::Project,
@@ -45,7 +45,6 @@ fn benchmark_karva(criterion: &mut Criterion) {
             &case,
             |b, case| {
                 b.iter(|| {
-                    let mut diagnostics = MainDiagnosticWriter::default();
                     let project = Project::new(
                         cwd.clone(),
                         [SystemPath::absolute(
@@ -56,9 +55,8 @@ fn benchmark_karva(criterion: &mut Criterion) {
                         .to_string()]
                         .to_vec(),
                     );
-                    let mut runner = Runner::new(&project, &mut diagnostics);
-                    let runner_result = runner.run();
-                    assert!(runner_result.passed());
+                    let runner_result = project.test_with_reporter(&mut DummyReporter);
+                    assert!(runner_result.is_empty());
                 });
             },
         );

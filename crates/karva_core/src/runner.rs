@@ -1,77 +1,77 @@
+use std::io::Write;
+
+use colored::{Color, Colorize};
 use karva_project::project::Project;
 use pyo3::prelude::*;
 
 use crate::{
-    diagnostic::{MainDiagnosticWriter, TestCaseDiagnosticWriter},
+    diagnostic::{
+        Diagnostic, DiagnosticType,
+        reporter::{DummyReporter, Reporter},
+    },
     discovery::Discoverer,
-    test_result::TestResult,
 };
 
-pub struct Runner<'a> {
-    project: &'a Project,
-    diagnostic_writer: &'a mut MainDiagnosticWriter,
+pub trait TestRunner {
+    fn test(&self) -> RunDiagnostics;
+    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics;
 }
 
-impl<'a> Runner<'a> {
-    pub const fn new(
-        project: &'a Project,
-        diagnostic_writer: &'a mut MainDiagnosticWriter,
-    ) -> Self {
-        Self {
-            project,
-            diagnostic_writer,
-        }
+pub struct StandardTestRunner<'a> {
+    project: &'a Project,
+}
+
+impl<'a> StandardTestRunner<'a> {
+    #[must_use]
+    pub const fn new(project: &'a Project) -> Self {
+        Self { project }
     }
 
     #[must_use]
-    pub const fn diagnostic_writer(&self) -> &MainDiagnosticWriter {
-        self.diagnostic_writer
-    }
+    fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
+        let discovered_tests = Discoverer::new(self.project).discover();
 
-    pub fn run(&mut self) -> RunDiagnostics {
-        let discovered_tests = Discoverer::new(self.project, self.diagnostic_writer).discover();
+        reporter.set_files(discovered_tests.count);
 
         let test_results = Python::with_gil(|py| {
             let add_cwd_to_sys_path_result = self.add_cwd_to_sys_path(py);
 
             if add_cwd_to_sys_path_result.is_err() {
-                return Err("Failed to add cwd to sys.path".to_string());
+                tracing::error!("Failed to add {cwd} to sys.path", cwd = self.project.cwd());
+                return None;
             }
 
-            Ok(discovered_tests
-                .iter()
-                .filter_map(|(module_name, test_cases)| {
-                    let imported_module = match PyModule::import(py, module_name) {
-                        Ok(module) => module,
-                        Err(e) => {
-                            self.diagnostic_writer
-                                .error(&format!("Failed to import module {module_name}: {e}"));
-                            return None;
-                        }
-                    };
-                    let mut test_results = Vec::new();
-                    for test_case in test_cases {
-                        let test_name = test_case.function_definition().name.to_string();
-                        let module = test_case.module();
-
-                        self.diagnostic_writer.test_started(&test_name, module);
-
-                        let test_result = test_case.run_test(py, &imported_module);
-
-                        self.diagnostic_writer.test_completed(&test_result);
-
-                        test_results.push(test_result);
-                    }
-                    Some(test_results)
-                })
-                .flatten()
-                .collect())
+            Some(
+                discovered_tests
+                    .tests
+                    .iter()
+                    .filter_map(|(module, test_cases)| {
+                        PyModule::import(py, module.name()).map_or_else(
+                            |_| {
+                                tracing::error!("Failed to import module {}", module.name());
+                                None
+                            },
+                            |py_module| {
+                                Some(
+                                    test_cases
+                                        .iter()
+                                        .filter_map(|test_case| {
+                                            let result = test_case.run_test(py, &py_module);
+                                            reporter.report_test(&test_case.to_string());
+                                            result
+                                        })
+                                        .collect::<Vec<_>>(),
+                                )
+                            },
+                        )
+                    })
+                    .flatten()
+                    .collect(),
+            )
         })
         .unwrap_or_default();
 
-        let run_diagnostics = RunDiagnostics::new(test_results);
-        self.diagnostic_writer.display_diagnostics(&run_diagnostics);
-        run_diagnostics
+        RunDiagnostics::new(test_results, discovered_tests.count)
     }
 
     fn add_cwd_to_sys_path(&self, py: Python) -> PyResult<()> {
@@ -82,51 +82,119 @@ impl<'a> Runner<'a> {
     }
 }
 
-#[derive(Debug)]
+impl TestRunner for StandardTestRunner<'_> {
+    fn test(&self) -> RunDiagnostics {
+        self.test_impl(&mut DummyReporter)
+    }
+
+    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
+        self.test_impl(reporter)
+    }
+}
+
+impl TestRunner for Project {
+    fn test(&self) -> RunDiagnostics {
+        StandardTestRunner::new(self).test()
+    }
+
+    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
+        StandardTestRunner::new(self).test_with_reporter(reporter)
+    }
+}
+
+#[derive(Clone)]
 pub struct RunDiagnostics {
-    test_results: Vec<TestResult>,
+    diagnostics: Vec<Diagnostic>,
+    total_tests: usize,
 }
 
 impl RunDiagnostics {
     #[must_use]
-    pub const fn new(test_results: Vec<TestResult>) -> Self {
-        Self { test_results }
+    pub const fn new(test_results: Vec<Diagnostic>, total_tests: usize) -> Self {
+        Self {
+            diagnostics: test_results,
+            total_tests,
+        }
     }
 
     #[must_use]
-    pub fn passed(&self) -> bool {
-        self.test_results.iter().all(TestResult::is_pass)
+    pub fn is_empty(&self) -> bool {
+        self.diagnostics.is_empty()
     }
 
     #[must_use]
-    pub fn test_results(&self) -> &[TestResult] {
-        &self.test_results
+    pub fn test_results(&self) -> &[Diagnostic] {
+        &self.diagnostics
     }
 
     #[must_use]
-    pub fn stats(&self) -> RunStats {
-        let mut stats = RunStats::default();
-        for test_result in &self.test_results {
-            stats.total += 1;
-            match test_result {
-                TestResult::Pass(_) => stats.passed += 1,
-                TestResult::Fail(_) => stats.failed += 1,
-                TestResult::Error(_) => stats.error += 1,
+    pub fn len(&self) -> usize {
+        self.diagnostics.len()
+    }
+
+    #[must_use]
+    pub fn stats(&self) -> DiagnosticStats {
+        let mut stats = DiagnosticStats::new(self.total_tests);
+        for diagnostic in &self.diagnostics {
+            stats.passed -= 1;
+            match diagnostic.diagnostic_type() {
+                DiagnosticType::Fail => stats.failed += 1,
+                DiagnosticType::Error => stats.error += 1,
             }
         }
         stats
     }
+
+    fn log_test_count(writer: &mut dyn Write, label: &str, count: usize, color: Color) {
+        if count > 0 {
+            let _ = writeln!(
+                writer,
+                "{} {}",
+                label.color(color),
+                count.to_string().color(color)
+            );
+        }
+    }
+
+    pub fn display(&self, writer: &mut dyn Write) {
+        let stats = self.stats();
+
+        if stats.total() > 0 {
+            let _ = writeln!(writer);
+            // self.display_test_results(&mut writer);
+            let _ = writeln!(writer, "{}", "─────────────".bold());
+            for (label, num, color) in [
+                ("Passed tests:", stats.passed(), Color::Green),
+                ("Failed tests:", stats.failed(), Color::Red),
+                ("Error tests:", stats.error(), Color::Yellow),
+            ] {
+                Self::log_test_count(writer, label, num, color);
+            }
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.diagnostics.iter()
+    }
 }
 
-#[derive(Debug, Default)]
-pub struct RunStats {
+#[derive(Debug)]
+pub struct DiagnosticStats {
     total: usize,
     passed: usize,
     failed: usize,
     error: usize,
 }
 
-impl RunStats {
+impl DiagnosticStats {
+    const fn new(total: usize) -> Self {
+        Self {
+            total,
+            passed: total,
+            failed: 0,
+            error: 0,
+        }
+    }
     #[must_use]
     pub const fn total(&self) -> usize {
         self.total
@@ -150,34 +218,11 @@ impl RunStats {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        io::{self, Write},
-        sync::{Arc, Mutex},
-    };
 
     use karva_project::path::SystemPathBuf;
     use tempfile::TempDir;
 
     use super::*;
-
-    #[derive(Clone, Debug)]
-    struct SharedBufferWriter(Arc<Mutex<Vec<u8>>>);
-
-    impl Write for SharedBufferWriter {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(buf);
-
-            Ok(buf.len())
-        }
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
-    fn create_test_writer() -> MainDiagnosticWriter {
-        let buffer = Arc::new(Mutex::new(Vec::new()));
-        MainDiagnosticWriter::new(SharedBufferWriter(buffer))
-    }
 
     struct TestEnv {
         temp_dir: TempDir,
@@ -217,10 +262,9 @@ def test_simple_pass():
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_pass.py")],
         );
-        let mut diagnostic_writer = create_test_writer();
-        let mut runner = Runner::new(&project, &mut diagnostic_writer);
+        let runner = StandardTestRunner::new(&project);
 
-        let result = runner.run();
+        let result = runner.test();
 
         assert_eq!(result.stats().total(), 1);
         assert_eq!(result.stats().passed(), 1);
@@ -243,10 +287,9 @@ def test_simple_fail():
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_fail.py")],
         );
-        let mut diagnostic_writer = create_test_writer();
-        let mut runner = Runner::new(&project, &mut diagnostic_writer);
+        let runner = StandardTestRunner::new(&project);
 
-        let result = runner.run();
+        let result = runner.test();
 
         assert_eq!(result.stats().total(), 1);
         assert_eq!(result.stats().passed(), 0);
@@ -269,10 +312,9 @@ def test_simple_error():
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_error.py")],
         );
-        let mut diagnostic_writer = create_test_writer();
-        let mut runner = Runner::new(&project, &mut diagnostic_writer);
+        let runner = StandardTestRunner::new(&project);
 
-        let result = runner.run();
+        let result = runner.test();
 
         assert_eq!(result.stats().total(), 1);
         assert_eq!(result.stats().passed(), 0);
@@ -300,10 +342,9 @@ def test_error():
             SystemPathBuf::from(env.temp_dir.path()),
             vec![env.create_python_test_path("test_mixed.py")],
         );
-        let mut diagnostic_writer = create_test_writer();
-        let mut runner = Runner::new(&project, &mut diagnostic_writer);
+        let runner = StandardTestRunner::new(&project);
 
-        let result = runner.run();
+        let result = runner.test();
 
         assert_eq!(result.stats().total(), 3);
         assert_eq!(result.stats().passed(), 1);

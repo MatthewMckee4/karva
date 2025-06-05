@@ -10,12 +10,12 @@ use clap::Parser;
 use colored::Colorize;
 use crossbeam::channel as crossbeam_channel;
 use karva_core::{
-    diagnostic::MainDiagnosticWriter,
-    runner::{RunDiagnostics, Runner},
+    diagnostic::reporter::{DummyReporter, Reporter},
+    runner::{RunDiagnostics, TestRunner},
     utils::current_python_version,
 };
 use karva_project::{
-    path::{SystemPath, SystemPathBuf, deduplicate_nested_paths},
+    path::{SystemPath, SystemPathBuf},
     project::{Project, ProjectMetadata},
 };
 use notify::Watcher as _;
@@ -89,7 +89,9 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
             })?
     };
 
-    let mut paths: Vec<String> = deduplicate_nested_paths(args.paths.iter())
+    let mut paths: Vec<String> = args
+        .paths
+        .iter()
         .map(|path| SystemPath::absolute(path, &cwd).as_str().to_string())
         .collect();
 
@@ -110,7 +112,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         })
         .with_options(options);
 
-    let (main_loop, main_loop_cancellation_token) = MainLoop::new(project);
+    let (main_loop, main_loop_cancellation_token) = MainLoop::new();
 
     let main_loop_cancellation_token = Arc::new(Mutex::new(Some(main_loop_cancellation_token)));
     let token_clone = Arc::clone(&main_loop_cancellation_token);
@@ -124,9 +126,9 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     })?;
 
     let exit_status = if watch {
-        main_loop.watch()?
+        main_loop.watch(&project)?
     } else {
-        main_loop.run()?
+        main_loop.run(&project)?
     };
 
     Ok(exit_status)
@@ -161,11 +163,10 @@ struct MainLoop {
     sender: crossbeam_channel::Sender<MainLoopMessage>,
     receiver: crossbeam_channel::Receiver<MainLoopMessage>,
     watcher: Option<notify::RecommendedWatcher>,
-    project: Arc<Project>,
 }
 
 impl MainLoop {
-    fn new(project: Project) -> (Self, MainLoopCancellationToken) {
+    fn new() -> (Self, MainLoopCancellationToken) {
         let (sender, receiver) = crossbeam_channel::bounded(10);
 
         (
@@ -173,13 +174,12 @@ impl MainLoop {
                 sender: sender.clone(),
                 receiver,
                 watcher: None,
-                project: Arc::new(project),
             },
             MainLoopCancellationToken { sender },
         )
     }
 
-    fn watch(mut self) -> anyhow::Result<ExitStatus> {
+    fn watch(mut self, project: &Project) -> anyhow::Result<ExitStatus> {
         let startup_time = std::time::Instant::now();
         let sender = self.sender.clone();
 
@@ -209,40 +209,50 @@ impl MainLoop {
         })?;
 
         watcher.watch(
-            self.project.cwd().as_ref().as_std_path(),
+            project.cwd().as_ref().as_std_path(),
             notify::RecursiveMode::Recursive,
         )?;
 
         self.watcher = Some(watcher);
         self.sender.send(MainLoopMessage::TestWorkspace).unwrap();
-        self.run()
+        self.main_loop::<DummyReporter>(project)
     }
 
-    fn run(self) -> anyhow::Result<ExitStatus> {
+    fn run(self, project: &Project) -> Result<ExitStatus> {
+        self.run_with_progress::<IndicatifReporter>(project)
+    }
+
+    fn run_with_progress<R>(self, project: &Project) -> Result<ExitStatus>
+    where
+        R: Reporter + Default + 'static,
+    {
+        self.sender.send(MainLoopMessage::TestWorkspace).unwrap();
+
+        let result = self.main_loop::<R>(project);
+
+        tracing::debug!("Exiting main loop");
+
+        result
+    }
+
+    fn main_loop<R>(self, project: &Project) -> anyhow::Result<ExitStatus>
+    where
+        R: Reporter + Default + 'static,
+    {
         let mut revision = 0u64;
         let mut debounce_id = 0u64;
-
-        if self.watcher.is_none() {
-            self.sender.send(MainLoopMessage::TestWorkspace).unwrap();
-        }
 
         while let Ok(message) = self.receiver.recv() {
             match message {
                 MainLoopMessage::TestWorkspace => {
-                    let project = Arc::clone(&self.project);
                     let sender = self.sender.clone();
-                    let current_revision = revision;
 
-                    let writer = Box::new(BufWriter::new(io::stdout()));
-                    let mut diagnostics = MainDiagnosticWriter::new(writer);
-                    let mut runner = Runner::new(&project, &mut diagnostics);
-                    let result = runner.run();
+                    let mut reporter = R::default();
+
+                    let result = project.test_with_reporter(&mut reporter);
 
                     sender
-                        .send(MainLoopMessage::TestsCompleted {
-                            result,
-                            revision: current_revision,
-                        })
+                        .send(MainLoopMessage::TestsCompleted { result, revision })
                         .unwrap();
                 }
 
@@ -253,19 +263,19 @@ impl MainLoop {
                     if check_revision == revision {
                         let mut stdout = BufWriter::new(io::stdout().lock());
 
-                        if result.passed() {
+                        if result.is_empty() {
                             writeln!(stdout, "{}", "All checks passed!".green().bold())?;
-                        } else {
-                            writeln!(stdout, "{}", "Checks failed!".red().bold())?;
+
+                            return Ok(ExitStatus::Success);
                         }
 
-                        if self.watcher.is_none() {
-                            return Ok(if result.passed() {
-                                ExitStatus::Success
-                            } else {
-                                ExitStatus::Failure
-                            });
+                        for diagnostic in result.iter() {
+                            write!(stdout, "{}", diagnostic.display())?;
                         }
+
+                        result.display(&mut stdout);
+
+                        return Ok(ExitStatus::Failure);
                     }
                 }
 
@@ -315,7 +325,6 @@ impl MainLoopCancellationToken {
     }
 }
 
-#[derive(Debug)]
 enum MainLoopMessage {
     TestWorkspace,
     TestsCompleted {
@@ -327,4 +336,29 @@ enum MainLoopMessage {
         debounce_id: u64,
     },
     Exit,
+}
+
+#[derive(Default)]
+struct IndicatifReporter(Option<indicatif::ProgressBar>);
+
+impl karva_core::diagnostic::reporter::Reporter for IndicatifReporter {
+    fn set_files(&mut self, files: usize) {
+        let progress = indicatif::ProgressBar::new(files as u64);
+        progress.set_style(
+            indicatif::ProgressStyle::with_template(
+                "{msg:8.dim} {bar:60.green/dim} {pos}/{len} files",
+            )
+            .unwrap()
+            .progress_chars("--"),
+        );
+        progress.set_message("Testing");
+
+        self.0 = Some(progress);
+    }
+
+    fn report_test(&self, _file_name: &str) {
+        if let Some(ref progress_bar) = self.0 {
+            progress_bar.inc(1);
+        }
+    }
 }

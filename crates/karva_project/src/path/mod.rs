@@ -9,7 +9,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 
 pub mod python_test_path;
 
-pub use python_test_path::{PythonTestPath, PythonTestPathError, deduplicate_nested_paths};
+pub use python_test_path::{PythonTestPath, PythonTestPathError};
 
 #[derive(Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct SystemPath(Utf8Path);

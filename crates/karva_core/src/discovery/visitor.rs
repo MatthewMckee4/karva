@@ -63,6 +63,7 @@ fn parsed_module(path: &SystemPathBuf, python_version: PythonVersion) -> Parsed<
         .expect("PySourceType always parses into a module")
 }
 
-fn source_text(path: &SystemPathBuf) -> String {
+#[must_use]
+pub fn source_text(path: &SystemPathBuf) -> String {
     std::fs::read_to_string(path.as_std_path()).unwrap()
 }
