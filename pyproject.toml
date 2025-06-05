@@ -40,6 +40,7 @@ exclude = [
     "crates/karva_benchmark/resources/test_*.py",
 ]
 select = ["ALL"]
+ignore = ["D"]
 
 [tool.tbump]
 

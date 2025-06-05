@@ -1,11 +1,12 @@
 use std::{
     cmp::{Eq, PartialEq},
+    collections::HashMap,
     fmt::{self, Display},
     hash::{Hash, Hasher},
 };
 
 use karva_project::{path::SystemPathBuf, utils::module_name};
-use pyo3::prelude::*;
+use pyo3::{prelude::*, types::PyTuple};
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::diagnostic::Diagnostic;
@@ -47,8 +48,26 @@ impl TestCase {
     }
 
     #[must_use]
-    pub fn run_test(&self, py: &Python, module: &Bound<'_, PyModule>) -> Option<Diagnostic> {
-        let result = {
+    pub fn get_required_fixtures(&self) -> Vec<String> {
+        let mut required_fixtures = Vec::new();
+        for parameter in self
+            .function_definition
+            .parameters
+            .iter_non_variadic_params()
+        {
+            required_fixtures.push(parameter.parameter.name.as_str().to_string());
+        }
+        required_fixtures
+    }
+
+    #[must_use]
+    pub fn run_test(
+        &self,
+        py: &Python,
+        module: &Bound<'_, PyModule>,
+        fixtures: &TestCaseFixtures<'_>,
+    ) -> Option<Diagnostic> {
+        let result: PyResult<Bound<'_, PyAny>> = {
             let name: &str = &self.function_definition().name;
             let function = match module.getattr(name) {
                 Ok(function) => function,
@@ -56,7 +75,20 @@ impl TestCase {
                     return Some(Diagnostic::from_py_err(py, &err));
                 }
             };
-            function.call0()
+            let required_fixture_names = self.get_required_fixtures();
+            if required_fixture_names.is_empty() {
+                function.call0()
+            } else {
+                let required_fixtures = required_fixture_names
+                    .iter()
+                    .filter_map(|fixture| fixtures.get_fixture(fixture))
+                    .collect::<Vec<_>>();
+                let args = PyTuple::new(*py, required_fixtures);
+                match args {
+                    Ok(args) => function.call(args, None),
+                    Err(err) => Err(err),
+                }
+            }
         };
         match result {
             Ok(_) => None,
@@ -90,3 +122,32 @@ impl PartialEq for TestCase {
 }
 
 impl Eq for TestCase {}
+
+pub struct TestCaseFixtures<'a> {
+    session_fixtures: &'a HashMap<String, Py<PyAny>>,
+    module_fixtures: &'a HashMap<String, Py<PyAny>>,
+    function_fixtures: &'a HashMap<String, Py<PyAny>>,
+}
+
+impl<'a> TestCaseFixtures<'a> {
+    #[must_use]
+    pub const fn new(
+        session_fixtures: &'a HashMap<String, Py<PyAny>>,
+        module_fixtures: &'a HashMap<String, Py<PyAny>>,
+        function_fixtures: &'a HashMap<String, Py<PyAny>>,
+    ) -> Self {
+        Self {
+            session_fixtures,
+            module_fixtures,
+            function_fixtures,
+        }
+    }
+
+    #[must_use]
+    pub fn get_fixture(&self, fixture_name: &str) -> Option<&Py<PyAny>> {
+        self.session_fixtures
+            .get(fixture_name)
+            .or_else(|| self.module_fixtures.get(fixture_name))
+            .or_else(|| self.function_fixtures.get(fixture_name))
+    }
+}

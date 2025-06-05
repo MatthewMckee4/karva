@@ -810,6 +810,7 @@ name = "karva"
 version = "0.0.19"
 dependencies = [
  "karva_cli",
+ "karva_core",
  "pyo3",
 ]
 

@@ -9,7 +9,9 @@ use crate::{
         Diagnostic, DiagnosticType,
         reporter::{DummyReporter, Reporter},
     },
-    discovery::{Discoverer, discoverer::DiscoveredTests},
+    discovery::{TestDiscoverer, case::TestCaseFixtures},
+    fixture::discoverer::FixtureDiscoverer,
+    utils::add_to_sys_path,
 };
 
 pub trait TestRunner {
@@ -29,13 +31,17 @@ impl<'proj> StandardTestRunner<'proj> {
 
     #[must_use]
     fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
-        let discovered_tests: DiscoveredTests<'proj> = Discoverer::new(self.project).discover();
+        let discovered_tests = TestDiscoverer::new(self.project).discover();
         let total_tests = discovered_tests.count;
+
+        let discovered_fixtures = FixtureDiscoverer::new(self.project).discover();
+
+        let session_fixtures = Python::with_gil(|py| discovered_fixtures.session_fixtures(py));
 
         reporter.set_files(total_tests);
 
         let test_results: Vec<Diagnostic> = Python::with_gil(|py| {
-            let add_cwd_to_sys_path_result = self.add_cwd_to_sys_path(py);
+            let add_cwd_to_sys_path_result = add_to_sys_path(&py, self.project.cwd());
 
             if add_cwd_to_sys_path_result.is_err() {
                 tracing::error!("Failed to add {cwd} to sys.path", cwd = self.project.cwd());
@@ -46,6 +52,9 @@ impl<'proj> StandardTestRunner<'proj> {
                 .tests
                 .into_iter()
                 .filter_map(|(module, test_cases)| {
+                    let module_fixtures =
+                        Python::with_gil(|py| discovered_fixtures.module_fixtures(py));
+
                     PyModule::import(py, module.name()).map_or_else(
                         |err| {
                             tracing::error!("Failed to import module {}", module.name());
@@ -57,8 +66,22 @@ impl<'proj> StandardTestRunner<'proj> {
                                 test_cases
                                     .into_iter()
                                     .filter_map(|test_case| {
+                                        let function_fixtures = Python::with_gil(|py| {
+                                            discovered_fixtures.function_fixtures(py)
+                                        });
+
+                                        let test_case_fixtures = TestCaseFixtures::new(
+                                            &session_fixtures,
+                                            &module_fixtures,
+                                            &function_fixtures,
+                                        );
+
                                         let test_name = test_case.to_string();
-                                        let result = test_case.run_test(&py, &py_module);
+                                        let result = test_case.run_test(
+                                            &py,
+                                            &py_module,
+                                            &test_case_fixtures,
+                                        );
                                         reporter.report_test(&test_name);
                                         result
                                     })
@@ -72,13 +95,6 @@ impl<'proj> StandardTestRunner<'proj> {
         });
 
         RunDiagnostics::new(test_results, total_tests)
-    }
-
-    fn add_cwd_to_sys_path(&self, py: Python) -> PyResult<()> {
-        let sys_path = py.import("sys")?;
-        let path = sys_path.getattr("path")?;
-        path.call_method1("append", (self.project.cwd().as_str(),))?;
-        Ok(())
     }
 }
 
