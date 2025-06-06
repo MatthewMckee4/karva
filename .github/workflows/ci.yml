@@ -113,7 +113,7 @@ jobs:
       - name: Run karva test
         run: |
           cd tests/integration
-          uv run karva test
+          uv run karva test -v
       - name: Run karva version
         run: |
           cd tests/integration
