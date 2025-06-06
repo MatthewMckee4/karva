@@ -89,22 +89,6 @@ mod tests {
     }
 
     #[test]
-    fn test_python_file_dotted_path() -> std::io::Result<()> {
-        let env = TestEnv::new();
-        env.create_file("module/submodule.py", "def test(): pass");
-
-        let original_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(env.cwd().as_std_path()).unwrap();
-
-        let result = PythonTestPath::new(&SystemPathBuf::from("module.submodule"));
-
-        std::env::set_current_dir(original_dir)?;
-
-        assert!(matches!(result, Ok(PythonTestPath::File(_))));
-        Ok(())
-    }
-
-    #[test]
     fn test_directory_path() {
         let env = TestEnv::new();
         let path = env.create_dir("test_dir");

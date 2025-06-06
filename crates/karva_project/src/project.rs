@@ -135,55 +135,20 @@ fn parent_of_all(paths: &[SystemPathBuf]) -> SystemPathBuf {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
-    use tempfile::TempDir;
-
     use super::*;
-
-    struct TestDir {
-        pub temp_dir: TempDir,
-    }
-
-    impl TestDir {
-        fn new() -> Self {
-            Self {
-                temp_dir: TempDir::new().expect("Failed to create temp directory"),
-            }
-        }
-
-        fn create_file(&self, path: &str, content: &str) -> std::io::Result<SystemPathBuf> {
-            let full_path = self.temp_dir.path().join(path);
-            if let Some(parent) = full_path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            fs::write(&full_path, content)?;
-            Ok(SystemPathBuf::from(full_path))
-        }
-
-        fn create_dir(&self, path: &str) -> std::io::Result<SystemPathBuf> {
-            let full_path = self.temp_dir.path().join(path);
-            fs::create_dir_all(&full_path)?;
-            Ok(SystemPathBuf::from(full_path))
-        }
-
-        fn path(&self, relative_path: &str) -> SystemPathBuf {
-            SystemPathBuf::from(self.temp_dir.path().join(relative_path))
-        }
-    }
+    use crate::tests::TestEnv;
 
     #[test]
-    fn test_parent_of_all() -> std::io::Result<()> {
-        let test_dir = TestDir::new();
-        let path1 = test_dir.create_dir("a/b/c")?;
-        let path2 = test_dir.create_dir("a/b/d")?;
+    fn test_parent_of_all() {
+        let test_env = TestEnv::new();
+        let path1 = test_env.create_dir("a/b/c");
+        let path2 = test_env.create_dir("a/b/d");
 
         let paths = vec![path1, path2];
         let parent = parent_of_all(&paths);
-        let expected = test_dir.path("a/b");
+        let expected = test_env.cwd().join("a/b");
 
         assert_eq!(parent, expected);
-        Ok(())
     }
 
     #[test]
@@ -194,83 +159,77 @@ mod tests {
     }
 
     #[test]
-    fn test_parent_of_all_with_one_path() -> std::io::Result<()> {
-        let test_dir = TestDir::new();
-        let path1 = test_dir.create_dir("a/b/c")?;
+    fn test_parent_of_all_with_one_path() {
+        let test_env = TestEnv::new();
+        let path1 = test_env.create_dir("a/b/c");
 
         let paths = vec![path1.clone()];
         let parent = parent_of_all(&paths);
 
         assert_eq!(parent, path1);
-        Ok(())
     }
 
     #[test]
-    fn test_parent_of_all_with_multiple_paths() -> std::io::Result<()> {
-        let test_dir = TestDir::new();
-        let path1 = test_dir.create_dir("a/b/c")?;
-        let path2 = test_dir.create_dir("a/b/d")?;
+    fn test_parent_of_all_with_multiple_paths() {
+        let test_env = TestEnv::new();
+        let path1 = test_env.create_dir("a/b/c");
+        let path2 = test_env.create_dir("a/b/d");
 
         let paths = vec![path1, path2];
         let parent = parent_of_all(&paths);
-        let expected = test_dir.path("a/b");
+        let expected = test_env.cwd().join("a/b");
 
         assert_eq!(parent, expected);
-        Ok(())
     }
 
     #[test]
-    fn test_parent_of_all_with_multiple_paths_and_different_depths() -> std::io::Result<()> {
-        let test_dir = TestDir::new();
-        let path1 = test_dir.create_dir("a/b/c")?;
-        let path2 = test_dir.create_dir("a/b/d/e")?;
+    fn test_parent_of_all_with_multiple_paths_and_different_depths() {
+        let test_env = TestEnv::new();
+        let path1 = test_env.create_dir("a/b/c");
+        let path2 = test_env.create_dir("a/b/d/e");
 
         let paths = vec![path1, path2];
         let parent = parent_of_all(&paths);
-        let expected = test_dir.path("a/b");
+        let expected = test_env.cwd().join("a/b");
 
         assert_eq!(parent, expected);
-        Ok(())
     }
 
     #[test]
-    fn test_parent_of_all_with_files() -> std::io::Result<()> {
-        let test_dir = TestDir::new();
-        let path1 = test_dir.create_file("a/b/c/test.py", "def test(): pass")?;
-        let path2 = test_dir.create_file("a/b/d/test.py", "def test(): pass")?;
+    fn test_parent_of_all_with_files() {
+        let test_env = TestEnv::new();
+        let path1 = test_env.create_file("a/b/c/test.py", "def test(): pass");
+        let path2 = test_env.create_file("a/b/d/test.py", "def test(): pass");
 
         let paths = vec![path1, path2];
         let parent = parent_of_all(&paths);
-        let expected = test_dir.path("a/b");
+        let expected = test_env.cwd().join("a/b");
 
         assert_eq!(parent, expected);
-        Ok(())
     }
 
     #[test]
-    fn test_parent_of_all_with_mixed_files_and_dirs() -> std::io::Result<()> {
-        let test_dir = TestDir::new();
-        let path1 = test_dir.create_file("a/b/c/test.py", "def test(): pass")?;
-        let path2 = test_dir.create_dir("a/b/d")?;
+    fn test_parent_of_all_with_mixed_files_and_dirs() {
+        let test_env = TestEnv::new();
+        let path1 = test_env.create_file("a/b/c/test.py", "def test(): pass");
+        let path2 = test_env.create_dir("a/b/d");
 
         let paths = vec![path1, path2];
         let parent = parent_of_all(&paths);
-        let expected = test_dir.path("a/b");
+        let expected = test_env.cwd().join("a/b");
 
         assert_eq!(parent, expected);
-        Ok(())
     }
 
     #[test]
-    fn test_parent_of_single_file() -> std::io::Result<()> {
-        let test_dir = TestDir::new();
-        let file_path = test_dir.create_file("a/b/c/test.py", "def test(): pass")?;
+    fn test_parent_of_single_file() {
+        let test_env = TestEnv::new();
+        let file_path = test_env.create_file("a/b/c/test.py", "def test(): pass");
 
         let paths = vec![file_path];
         let parent = parent_of_all(&paths);
-        let expected = test_dir.path("a/b/c");
+        let expected = test_env.cwd().join("a/b/c");
 
         assert_eq!(parent, expected);
-        Ok(())
     }
 }

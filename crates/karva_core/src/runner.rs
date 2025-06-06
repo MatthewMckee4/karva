@@ -229,39 +229,14 @@ impl DiagnosticStats {
 
 #[cfg(test)]
 mod tests {
-
-    use karva_project::path::SystemPathBuf;
-    use tempfile::TempDir;
+    use karva_project::tests::TestEnv;
 
     use super::*;
-
-    struct TestEnv {
-        temp_dir: TempDir,
-    }
-
-    impl TestEnv {
-        fn new() -> Self {
-            Self {
-                temp_dir: TempDir::new().unwrap(),
-            }
-        }
-
-        fn create_test_file(&self, filename: &str, content: &str) -> SystemPathBuf {
-            let path = self.temp_dir.path().join(filename);
-            std::fs::write(&path, content).unwrap();
-            SystemPathBuf::from(path)
-        }
-
-        fn create_python_test_path(&self, filename: &str) -> SystemPathBuf {
-            let path = self.temp_dir.path().join(filename);
-            SystemPathBuf::from(path)
-        }
-    }
 
     #[test]
     fn test_runner_with_passing_test() {
         let env = TestEnv::new();
-        env.create_test_file(
+        env.create_file(
             "test_pass.py",
             r"
 def test_simple_pass():
@@ -269,10 +244,7 @@ def test_simple_pass():
 ",
         );
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![env.create_python_test_path("test_pass.py")],
-        );
+        let project = Project::new(env.cwd(), vec![env.temp_path("test_pass.py")]);
         let runner = StandardTestRunner::new(&project);
 
         let result = runner.test();
@@ -286,7 +258,7 @@ def test_simple_pass():
     #[test]
     fn test_runner_with_failing_test() {
         let env = TestEnv::new();
-        env.create_test_file(
+        env.create_file(
             "test_fail.py",
             r#"
 def test_simple_fail():
@@ -294,10 +266,7 @@ def test_simple_fail():
 "#,
         );
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![env.create_python_test_path("test_fail.py")],
-        );
+        let project = Project::new(env.cwd(), vec![env.temp_path("test_fail.py")]);
         let runner = StandardTestRunner::new(&project);
 
         let result = runner.test();
@@ -311,7 +280,7 @@ def test_simple_fail():
     #[test]
     fn test_runner_with_error_test() {
         let env = TestEnv::new();
-        env.create_test_file(
+        env.create_file(
             "test_error.py",
             r#"
 def test_simple_error():
@@ -319,10 +288,7 @@ def test_simple_error():
 "#,
         );
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![env.create_python_test_path("test_error.py")],
-        );
+        let project = Project::new(env.cwd(), vec![env.temp_path("test_error.py")]);
         let runner = StandardTestRunner::new(&project);
 
         let result = runner.test();
@@ -336,7 +302,7 @@ def test_simple_error():
     #[test]
     fn test_runner_with_multiple_tests() {
         let env = TestEnv::new();
-        env.create_test_file(
+        env.create_file(
             "test_mixed.py",
             r#"def test_pass():
     assert True
@@ -349,10 +315,7 @@ def test_error():
 "#,
         );
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![env.create_python_test_path("test_mixed.py")],
-        );
+        let project = Project::new(env.cwd(), vec![env.temp_path("test_mixed.py")]);
         let runner = StandardTestRunner::new(&project);
 
         let result = runner.test();

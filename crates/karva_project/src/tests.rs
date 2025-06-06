@@ -26,7 +26,7 @@ impl TestEnv {
         SystemPathBuf::from(path)
     }
 
-    #[must_use]
+    #[allow(clippy::must_use_candidate)]
     pub fn create_dir(&self, name: &str) -> SystemPathBuf {
         let path = self.temp_dir.path().join(name);
         fs::create_dir_all(&path).unwrap();

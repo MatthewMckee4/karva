@@ -32,7 +32,6 @@ indexmap = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 regex = { workspace = true }
-karva_tests = { workspace = true }
 
 [lints]
 workspace = true

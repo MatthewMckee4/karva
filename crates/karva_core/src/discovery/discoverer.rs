@@ -112,8 +112,7 @@ pub struct DiscoveredTests<'proj> {
 #[cfg(test)]
 mod tests {
 
-    use karva_project::project::ProjectOptions;
-    use karva_tests::TestEnv;
+    use karva_project::{project::ProjectOptions, tests::TestEnv};
 
     use super::*;
 
