@@ -1,4 +1,7 @@
-use std::hash::{Hash, Hasher};
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+};
 
 use karva_project::{path::SystemPathBuf, utils::module_name};
 use pyo3::prelude::*;
@@ -126,5 +129,34 @@ fn is_fixture(decorator: &Decorator) -> bool {
             _ => false,
         },
         _ => false,
+    }
+}
+
+pub struct TestCaseFixtures<'a> {
+    session: &'a HashMap<String, Py<PyAny>>,
+    module: &'a HashMap<String, Py<PyAny>>,
+    function: &'a HashMap<String, Py<PyAny>>,
+}
+
+impl<'a> TestCaseFixtures<'a> {
+    #[must_use]
+    pub const fn new(
+        session: &'a HashMap<String, Py<PyAny>>,
+        module: &'a HashMap<String, Py<PyAny>>,
+        function: &'a HashMap<String, Py<PyAny>>,
+    ) -> Self {
+        Self {
+            session,
+            module,
+            function,
+        }
+    }
+
+    #[must_use]
+    pub fn get_fixture(&self, fixture_name: &str) -> Option<&Py<PyAny>> {
+        self.session
+            .get(fixture_name)
+            .or_else(|| self.module.get(fixture_name))
+            .or_else(|| self.function.get(fixture_name))
     }
 }

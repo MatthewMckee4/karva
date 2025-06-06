@@ -27,14 +27,13 @@ pub struct TestCommand {
         help = "List of files, directories, or test functions to test [default: the project root]",
         value_name = "PATH"
     )]
-    pub paths: Vec<SystemPathBuf>,
+    pub(crate) paths: Vec<SystemPathBuf>,
 
     #[clap(flatten)]
     pub(crate) verbosity: Verbosity,
 
     #[clap(
         long,
-        short = 'p',
         help = "The prefix of the test functions",
         default_value = "test"
     )]

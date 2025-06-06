@@ -9,8 +9,8 @@ use crate::{
         Diagnostic, DiagnosticType,
         reporter::{DummyReporter, Reporter},
     },
-    discovery::{TestDiscoverer, case::TestCaseFixtures},
-    fixture::discoverer::FixtureDiscoverer,
+    discovery::TestDiscoverer,
+    fixture::{TestCaseFixtures, discoverer::FixtureDiscoverer},
     utils::add_to_sys_path,
 };
 

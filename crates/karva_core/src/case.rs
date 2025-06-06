@@ -1,6 +1,5 @@
 use std::{
     cmp::{Eq, PartialEq},
-    collections::HashMap,
     fmt::{self, Display},
     hash::{Hash, Hasher},
 };
@@ -9,7 +8,7 @@ use karva_project::{path::SystemPathBuf, utils::module_name};
 use pyo3::{prelude::*, types::PyTuple};
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::diagnostic::Diagnostic;
+use crate::{diagnostic::Diagnostic, fixture::TestCaseFixtures};
 
 #[derive(Debug, Clone)]
 pub struct TestCase {
@@ -136,32 +135,3 @@ impl PartialEq for TestCase {
 }
 
 impl Eq for TestCase {}
-
-pub struct TestCaseFixtures<'a> {
-    session: &'a HashMap<String, Py<PyAny>>,
-    module: &'a HashMap<String, Py<PyAny>>,
-    function: &'a HashMap<String, Py<PyAny>>,
-}
-
-impl<'a> TestCaseFixtures<'a> {
-    #[must_use]
-    pub const fn new(
-        session: &'a HashMap<String, Py<PyAny>>,
-        module: &'a HashMap<String, Py<PyAny>>,
-        function: &'a HashMap<String, Py<PyAny>>,
-    ) -> Self {
-        Self {
-            session,
-            module,
-            function,
-        }
-    }
-
-    #[must_use]
-    pub fn get_fixture(&self, fixture_name: &str) -> Option<&Py<PyAny>> {
-        self.session
-            .get(fixture_name)
-            .or_else(|| self.module.get(fixture_name))
-            .or_else(|| self.function.get(fixture_name))
-    }
-}

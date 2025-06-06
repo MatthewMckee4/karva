@@ -8,7 +8,7 @@ use karva_project::{
     utils::is_python_file,
 };
 
-use crate::discovery::{TestCase, function_definitions, module::Module};
+use crate::{case::TestCase, discovery::function_definitions, module::Module};
 
 pub struct TestDiscoverer<'proj> {
     project: &'proj Project,
