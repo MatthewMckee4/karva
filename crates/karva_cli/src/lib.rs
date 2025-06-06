@@ -182,14 +182,13 @@ impl MainLoop {
     }
 
     fn watch(mut self, project: &Project) -> anyhow::Result<ExitStatus> {
-        let startup_time = std::time::Instant::now();
         let sender = self.sender.clone();
+
+        let startup_time = std::time::Instant::now();
 
         let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, _>| {
             if let Ok(event) = res {
-                // Ignore events in the first 500ms after startup
-                if startup_time.elapsed() > std::time::Duration::from_millis(500) {
-                    // Only respond to Python file changes
+                if startup_time.elapsed() > std::time::Duration::from_millis(100) {
                     let is_python_file = event.paths.iter().any(|path| {
                         path.extension()
                             .and_then(|ext| ext.to_str())
@@ -216,8 +215,10 @@ impl MainLoop {
         )?;
 
         self.watcher = Some(watcher);
-        self.sender.send(MainLoopMessage::TestWorkspace).unwrap();
-        self.main_loop::<DummyReporter>(project)
+
+        self.run_with_progress::<DummyReporter>(project)?;
+
+        Ok(ExitStatus::Success)
     }
 
     fn run(self, project: &Project) -> Result<ExitStatus> {
@@ -268,7 +269,9 @@ impl MainLoop {
                         if result.is_empty() {
                             writeln!(stdout, "{}", "All checks passed!".green().bold())?;
 
-                            return Ok(ExitStatus::Success);
+                            if self.watcher.is_none() {
+                                return Ok(ExitStatus::Success);
+                            }
                         }
 
                         for diagnostic in result.iter() {
@@ -277,7 +280,9 @@ impl MainLoop {
 
                         result.display(&mut stdout);
 
-                        return Ok(ExitStatus::Failure);
+                        if self.watcher.is_none() {
+                            return Ok(ExitStatus::Failure);
+                        }
                     }
                 }
 
