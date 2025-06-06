@@ -339,6 +339,7 @@ mod tests {
     use super::{Args, Mode, main};
 
     #[test]
+    #[cfg(unix)]
     fn karva_cli_reference_is_up_to_date() -> Result<()> {
         main(&Args { mode: Mode::Check })
     }

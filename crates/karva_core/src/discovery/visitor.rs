@@ -5,6 +5,8 @@ use ruff_python_ast::{
 };
 use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
+use crate::fixture::is_fixture_function;
+
 #[derive(Clone)]
 pub struct FunctionDefinitionVisitor<'a> {
     discovered_functions: Vec<StmtFunctionDef>,
@@ -19,11 +21,6 @@ impl<'a> FunctionDefinitionVisitor<'a> {
             project,
         }
     }
-
-    #[must_use]
-    pub fn discovered_functions(&self) -> &[StmtFunctionDef] {
-        &self.discovered_functions
-    }
 }
 
 impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
@@ -33,6 +30,7 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
                 .name
                 .to_string()
                 .starts_with(self.project.test_prefix())
+                && !is_fixture_function(function_def)
             {
                 self.discovered_functions.push(function_def.clone());
             }
@@ -50,10 +48,11 @@ pub fn function_definitions(path: &SystemPathBuf, project: &Project) -> Vec<Stmt
 
     visitor.visit_body(&parsed.syntax().body);
 
-    visitor.discovered_functions().to_vec()
+    visitor.discovered_functions
 }
 
-fn parsed_module(path: &SystemPathBuf, python_version: PythonVersion) -> Parsed<ModModule> {
+#[must_use]
+pub fn parsed_module(path: &SystemPathBuf, python_version: PythonVersion) -> Parsed<ModModule> {
     let mode = Mode::Module;
     let options = ParseOptions::from(mode).with_target_version(python_version);
     let source = source_text(path);

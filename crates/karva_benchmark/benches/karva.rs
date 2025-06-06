@@ -50,9 +50,7 @@ fn benchmark_karva(criterion: &mut Criterion) {
                         [SystemPath::absolute(
                             SystemPathBuf::from_path_buf(case.path()).unwrap(),
                             &cwd,
-                        )
-                        .as_str()
-                        .to_string()]
+                        )]
                         .to_vec(),
                     );
                     let runner_result = project.test_with_reporter(&mut DummyReporter);

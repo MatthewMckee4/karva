@@ -27,28 +27,23 @@ pub struct TestCommand {
         help = "List of files, directories, or test functions to test [default: the project root]",
         value_name = "PATH"
     )]
-    pub paths: Vec<SystemPathBuf>,
+    pub(crate) paths: Vec<SystemPathBuf>,
 
     #[clap(flatten)]
     pub(crate) verbosity: Verbosity,
 
     #[clap(
         long,
-        short = 'p',
         help = "The prefix of the test functions",
         default_value = "test"
     )]
     pub(crate) test_prefix: String,
-
-    #[clap(long, help = "Run in watch mode", default_value = "false")]
-    pub(crate) watch: bool,
 }
 
 impl TestCommand {
     pub fn into_options(self) -> ProjectOptions {
         ProjectOptions {
             test_prefix: self.test_prefix,
-            watch: self.watch,
         }
     }
 }

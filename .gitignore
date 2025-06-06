@@ -8,3 +8,6 @@ uv.lock
 
 # insta
 *.rs.pending-snap
+
+# Compiled Python files
+*.so

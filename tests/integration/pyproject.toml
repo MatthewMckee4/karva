@@ -1,0 +1,11 @@
+[project]
+name = "integration"
+version = "0.1.0"
+description = "Integration tests for the Karva CLI"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["D", "INP001", "PLR2004", "S101"]

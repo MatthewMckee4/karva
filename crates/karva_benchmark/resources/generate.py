@@ -1,4 +1,4 @@
-from io import TextIOWrapper  # noqa: D100, INP001
+from io import TextIOWrapper  # noqa: INP001
 from pathlib import Path
 from typing import Protocol
 
