@@ -91,17 +91,17 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
             })?
     };
 
-    let mut paths: Vec<String> = args
+    let mut paths: Vec<_> = args
         .paths
         .iter()
-        .map(|path| SystemPath::absolute(path, &cwd).as_str().to_string())
+        .map(|path| SystemPath::absolute(path, &cwd))
         .collect();
 
     if args.paths.is_empty() {
         tracing::debug!(
             "Could not resolve provided paths, trying to resolve current working directory"
         );
-        paths.push(cwd.as_str().to_string());
+        paths.push(cwd.clone());
     }
 
     let watch = args.watch;

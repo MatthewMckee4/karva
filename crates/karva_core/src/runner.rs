@@ -56,11 +56,7 @@ impl<'proj> StandardTestRunner<'proj> {
                         Python::with_gil(|py| discovered_fixtures.module_fixtures(py));
 
                     PyModule::import(py, module.name()).map_or_else(
-                        |err| {
-                            tracing::error!("Failed to import module {}", module.name());
-                            tracing::debug!("{:?}", err);
-                            None
-                        },
+                        |err| Some(vec![Diagnostic::from_py_err(&py, &err)]),
                         |py_module| {
                             Some(
                                 test_cases
@@ -85,6 +81,7 @@ impl<'proj> StandardTestRunner<'proj> {
                                         reporter.report_test(&test_name);
                                         result
                                     })
+                                    .flatten()
                                     .collect::<Vec<_>>(),
                             )
                         },
@@ -251,15 +248,15 @@ mod tests {
             }
         }
 
-        fn create_test_file(&self, filename: &str, content: &str) -> String {
+        fn create_test_file(&self, filename: &str, content: &str) -> SystemPathBuf {
             let path = self.temp_dir.path().join(filename);
             std::fs::write(&path, content).unwrap();
-            path.display().to_string()
+            SystemPathBuf::from(path)
         }
 
-        fn create_python_test_path(&self, filename: &str) -> String {
+        fn create_python_test_path(&self, filename: &str) -> SystemPathBuf {
             let path = self.temp_dir.path().join(filename);
-            path.display().to_string()
+            SystemPathBuf::from(path)
         }
     }
 

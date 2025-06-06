@@ -862,6 +862,7 @@ dependencies = [
  "ignore",
  "indexmap",
  "karva_project",
+ "karva_tests",
  "pyo3",
  "regex",
  "ruff_python_ast",
@@ -895,6 +896,15 @@ dependencies = [
  "ruff_python_ast",
  "tempfile",
  "tracing",
+]
+
+[[package]]
+name = "karva_tests"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "karva_project",
+ "tempfile",
 ]
 
 [[package]]

@@ -20,9 +20,11 @@ impl<'proj> FixtureDiscoverer<'proj> {
     pub fn discover(self) -> DiscoveredFixtures {
         let mut discovered_fixtures: HashSet<Fixture> = HashSet::new();
 
-        tracing::info!("Discovering fixtures...");
+        let parent_test_path = self.project.parent_test_path();
 
-        let walker = WalkBuilder::new(self.project.cwd().as_std_path())
+        tracing::info!("Discovering fixtures in {}", parent_test_path);
+
+        let walker = WalkBuilder::new(parent_test_path.as_std_path())
             .standard_filters(true)
             .require_git(false)
             .parents(false)
@@ -37,7 +39,8 @@ impl<'proj> FixtureDiscoverer<'proj> {
                     tracing::debug!("Skipping non-python file: {}", path);
                     continue;
                 }
-                tracing::debug!("Discovering file: {}", path);
+
+                tracing::debug!("Discovering fixtures in file: {}", path);
                 let fixtures = fixture_definitions(&py, &path, self.project);
                 for fixture in fixtures {
                     discovered_fixtures.insert(fixture);
@@ -61,10 +64,14 @@ impl DiscoveredFixtures {
     }
 
     #[must_use]
-    pub fn session_fixtures(&self, py: Python<'_>) -> HashMap<String, Py<PyAny>> {
+    fn get_fixtures_by_scope(
+        &self,
+        py: Python<'_>,
+        scope: &FixtureScope,
+    ) -> HashMap<String, Py<PyAny>> {
         self.fixtures
             .iter()
-            .filter(|fixture| fixture.scope == FixtureScope::Session)
+            .filter(|fixture| fixture.scope == *scope)
             .filter_map(|fixture| match fixture.call(py) {
                 Ok(fixture_return) => Some((fixture.name.clone(), fixture_return)),
                 Err(e) => {
@@ -73,35 +80,20 @@ impl DiscoveredFixtures {
                 }
             })
             .collect()
+    }
+
+    #[must_use]
+    pub fn session_fixtures(&self, py: Python<'_>) -> HashMap<String, Py<PyAny>> {
+        self.get_fixtures_by_scope(py, &FixtureScope::Session)
     }
 
     #[must_use]
     pub fn module_fixtures(&self, py: Python<'_>) -> HashMap<String, Py<PyAny>> {
-        self.fixtures
-            .iter()
-            .filter(|fixture| fixture.scope == FixtureScope::Module)
-            .filter_map(|fixture| match fixture.call(py) {
-                Ok(fixture_return) => Some((fixture.name.clone(), fixture_return)),
-                Err(e) => {
-                    tracing::error!("Failed to call fixture {}: {}", fixture.name, e);
-                    None
-                }
-            })
-            .collect()
+        self.get_fixtures_by_scope(py, &FixtureScope::Module)
     }
 
     #[must_use]
     pub fn function_fixtures(&self, py: Python<'_>) -> HashMap<String, Py<PyAny>> {
-        self.fixtures
-            .iter()
-            .filter(|fixture| fixture.scope == FixtureScope::Function)
-            .filter_map(|fixture| match fixture.call(py) {
-                Ok(fixture_return) => Some((fixture.name.clone(), fixture_return)),
-                Err(e) => {
-                    tracing::error!("Failed to call fixture {}: {}", fixture.name, e);
-                    None
-                }
-            })
-            .collect()
+        self.get_fixtures_by_scope(py, &FixtureScope::Function)
     }
 }

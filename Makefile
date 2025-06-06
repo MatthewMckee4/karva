@@ -35,7 +35,7 @@ benchmark: build
 flame:
 	$(MAKE) temp-test-dir N=10000
 	sudo sysctl kernel.perf_event_paranoid=-1
-	cargo flamegraph -- test temp_test_dir
+	cargo flamegraph --bin karva -- test temp_test_dir
 
 N ?= 1000
 

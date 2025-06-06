@@ -14,24 +14,21 @@ pub struct Diagnostic {
 impl Diagnostic {
     pub fn from_py_err(py: &Python, error: &PyErr) -> Self {
         Self {
-            diagnostic_type: DiagnosticType::Error(get_type_name(*py, error)),
-            message: error.to_string(),
+            diagnostic_type: DiagnosticType::Error(DiagnosticError::Error(get_type_name(
+                *py, error,
+            ))),
+            message: get_traceback(*py, error).unwrap_or_else(|| error.to_string()),
         }
     }
 
     pub fn from_py_fail(py: &Python, error: &PyErr) -> Self {
-        let default_error = |error: &PyErr| Self {
-            diagnostic_type: DiagnosticType::Error(get_type_name(*py, error)),
-            message: get_traceback(*py, error).unwrap_or_default(),
-        };
-
         if error.is_instance_of::<pyo3::exceptions::PyAssertionError>(*py) {
             return Self {
                 diagnostic_type: DiagnosticType::Fail,
                 message: get_traceback(*py, error).unwrap_or_default(),
             };
         }
-        default_error(error)
+        Self::from_py_err(py, error)
     }
 
     #[must_use]
@@ -40,15 +37,31 @@ impl Diagnostic {
     }
 
     #[must_use]
+    pub fn fixture_not_found(fixture_name: &str) -> Self {
+        Self {
+            diagnostic_type: DiagnosticType::Error(DiagnosticError::FixtureNotFound(
+                fixture_name.to_string(),
+            )),
+            message: format!("Fixture {fixture_name} not found"),
+        }
+    }
+
+    #[must_use]
     pub const fn display(&self) -> DisplayDiagnostic {
         DisplayDiagnostic::new(self)
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum DiagnosticType {
     Fail,
+    Error(DiagnosticError),
+}
+
+#[derive(Debug, Clone)]
+pub enum DiagnosticError {
     Error(String),
+    FixtureNotFound(String),
 }
 
 fn get_traceback(py: Python<'_>, error: &PyErr) -> Option<String> {

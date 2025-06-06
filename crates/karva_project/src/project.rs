@@ -1,6 +1,6 @@
 use ruff_python_ast::PythonVersion;
 
-use crate::path::{PythonTestPath, PythonTestPathError, SystemPathBuf};
+use crate::path::{PythonTestPath, PythonTestPathError, SystemPath, SystemPathBuf};
 
 #[derive(Default)]
 pub struct ProjectMetadata {
@@ -23,14 +23,14 @@ impl Default for ProjectOptions {
 
 pub struct Project {
     cwd: SystemPathBuf,
-    paths: Vec<String>,
+    paths: Vec<SystemPathBuf>,
     metadata: ProjectMetadata,
     options: ProjectOptions,
 }
 
 impl Project {
     #[must_use]
-    pub fn new(cwd: SystemPathBuf, paths: Vec<String>) -> Self {
+    pub fn new(cwd: SystemPathBuf, paths: Vec<SystemPathBuf>) -> Self {
         Self {
             cwd,
             paths,
@@ -57,13 +57,25 @@ impl Project {
     }
 
     #[must_use]
-    pub fn paths(&self) -> &[String] {
+    pub fn paths(&self) -> &[SystemPathBuf] {
         &self.paths
     }
 
     #[must_use]
     pub fn python_test_paths(&self) -> Vec<Result<PythonTestPath, PythonTestPathError>> {
         self.paths.iter().map(PythonTestPath::new).collect()
+    }
+
+    /// Get the common parent directory of the test paths.
+    ///
+    /// This is used to determine the highest common directory containing all test paths.
+    #[must_use]
+    pub fn parent_test_path(&self) -> SystemPathBuf {
+        if self.paths.is_empty() {
+            self.cwd.clone()
+        } else {
+            parent_of_all(&self.paths)
+        }
     }
 
     #[must_use]
@@ -74,5 +86,191 @@ impl Project {
     #[must_use]
     pub const fn python_version(&self) -> &PythonVersion {
         &self.metadata.python_version
+    }
+}
+
+/// Get the common parent directory of the test paths.
+///
+/// This is used to determine the highest common directory containing all test paths.
+#[must_use]
+fn parent_of_all(paths: &[SystemPathBuf]) -> SystemPathBuf {
+    if paths.is_empty() {
+        return SystemPathBuf::new();
+    }
+
+    // Normalize paths: if a path is a file, get its parent directory
+    let normalized_paths: Vec<SystemPathBuf> = paths
+        .iter()
+        .map(|path| {
+            if path.is_file() {
+                path.parent()
+                    .map_or_else(|| path.clone(), SystemPath::to_path_buf)
+            } else {
+                path.clone()
+            }
+        })
+        .collect();
+
+    let mut common_prefix = normalized_paths[0].clone();
+
+    for path in &normalized_paths[1..] {
+        let mut new_prefix = SystemPathBuf::new();
+        let mut common_components = common_prefix.components();
+        let mut path_components = path.components();
+
+        while let (Some(common_component), Some(path_component)) =
+            (common_components.next(), path_components.next())
+        {
+            if common_component == path_component {
+                new_prefix = new_prefix.join(common_component.as_str());
+            } else {
+                break;
+            }
+        }
+        common_prefix = new_prefix;
+    }
+
+    common_prefix
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::TempDir;
+
+    use super::*;
+
+    struct TestDir {
+        pub temp_dir: TempDir,
+    }
+
+    impl TestDir {
+        fn new() -> Self {
+            Self {
+                temp_dir: TempDir::new().expect("Failed to create temp directory"),
+            }
+        }
+
+        fn create_file(&self, path: &str, content: &str) -> std::io::Result<SystemPathBuf> {
+            let full_path = self.temp_dir.path().join(path);
+            if let Some(parent) = full_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::write(&full_path, content)?;
+            Ok(SystemPathBuf::from(full_path))
+        }
+
+        fn create_dir(&self, path: &str) -> std::io::Result<SystemPathBuf> {
+            let full_path = self.temp_dir.path().join(path);
+            fs::create_dir_all(&full_path)?;
+            Ok(SystemPathBuf::from(full_path))
+        }
+
+        fn path(&self, relative_path: &str) -> SystemPathBuf {
+            SystemPathBuf::from(self.temp_dir.path().join(relative_path))
+        }
+    }
+
+    #[test]
+    fn test_parent_of_all() -> std::io::Result<()> {
+        let test_dir = TestDir::new();
+        let path1 = test_dir.create_dir("a/b/c")?;
+        let path2 = test_dir.create_dir("a/b/d")?;
+
+        let paths = vec![path1, path2];
+        let parent = parent_of_all(&paths);
+        let expected = test_dir.path("a/b");
+
+        assert_eq!(parent, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parent_of_all_with_empty_paths() {
+        let paths = vec![];
+        let parent = parent_of_all(&paths);
+        assert_eq!(parent, SystemPathBuf::new());
+    }
+
+    #[test]
+    fn test_parent_of_all_with_one_path() -> std::io::Result<()> {
+        let test_dir = TestDir::new();
+        let path1 = test_dir.create_dir("a/b/c")?;
+
+        let paths = vec![path1.clone()];
+        let parent = parent_of_all(&paths);
+
+        assert_eq!(parent, path1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parent_of_all_with_multiple_paths() -> std::io::Result<()> {
+        let test_dir = TestDir::new();
+        let path1 = test_dir.create_dir("a/b/c")?;
+        let path2 = test_dir.create_dir("a/b/d")?;
+
+        let paths = vec![path1, path2];
+        let parent = parent_of_all(&paths);
+        let expected = test_dir.path("a/b");
+
+        assert_eq!(parent, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parent_of_all_with_multiple_paths_and_different_depths() -> std::io::Result<()> {
+        let test_dir = TestDir::new();
+        let path1 = test_dir.create_dir("a/b/c")?;
+        let path2 = test_dir.create_dir("a/b/d/e")?;
+
+        let paths = vec![path1, path2];
+        let parent = parent_of_all(&paths);
+        let expected = test_dir.path("a/b");
+
+        assert_eq!(parent, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parent_of_all_with_files() -> std::io::Result<()> {
+        let test_dir = TestDir::new();
+        let path1 = test_dir.create_file("a/b/c/test.py", "def test(): pass")?;
+        let path2 = test_dir.create_file("a/b/d/test.py", "def test(): pass")?;
+
+        let paths = vec![path1, path2];
+        let parent = parent_of_all(&paths);
+        let expected = test_dir.path("a/b");
+
+        assert_eq!(parent, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parent_of_all_with_mixed_files_and_dirs() -> std::io::Result<()> {
+        let test_dir = TestDir::new();
+        let path1 = test_dir.create_file("a/b/c/test.py", "def test(): pass")?;
+        let path2 = test_dir.create_dir("a/b/d")?;
+
+        let paths = vec![path1, path2];
+        let parent = parent_of_all(&paths);
+        let expected = test_dir.path("a/b");
+
+        assert_eq!(parent, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parent_of_single_file() -> std::io::Result<()> {
+        let test_dir = TestDir::new();
+        let file_path = test_dir.create_file("a/b/c/test.py", "def test(): pass")?;
+
+        let paths = vec![file_path];
+        let parent = parent_of_all(&paths);
+        let expected = test_dir.path("a/b/c");
+
+        assert_eq!(parent, expected);
+        Ok(())
     }
 }

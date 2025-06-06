@@ -66,23 +66,37 @@ impl TestCase {
         py: &Python,
         module: &Bound<'_, PyModule>,
         fixtures: &TestCaseFixtures<'_>,
-    ) -> Option<Diagnostic> {
+    ) -> Option<Vec<Diagnostic>> {
         let result: PyResult<Bound<'_, PyAny>> = {
             let name: &str = &self.function_definition().name;
             let function = match module.getattr(name) {
                 Ok(function) => function,
                 Err(err) => {
-                    return Some(Diagnostic::from_py_err(py, &err));
+                    return Some(vec![Diagnostic::from_py_err(py, &err)]);
                 }
             };
             let required_fixture_names = self.get_required_fixtures();
             if required_fixture_names.is_empty() {
                 function.call0()
             } else {
+                let mut diagnostics = Vec::new();
                 let required_fixtures = required_fixture_names
                     .iter()
-                    .filter_map(|fixture| fixtures.get_fixture(fixture))
+                    .filter_map(|fixture| {
+                        fixtures.get_fixture(fixture).map_or_else(
+                            || {
+                                diagnostics.push(Diagnostic::fixture_not_found(fixture));
+                                None
+                            },
+                            Some,
+                        )
+                    })
                     .collect::<Vec<_>>();
+
+                if !diagnostics.is_empty() {
+                    return Some(diagnostics);
+                }
+
                 let args = PyTuple::new(*py, required_fixtures);
                 match args {
                     Ok(args) => function.call(args, None),
@@ -92,7 +106,7 @@ impl TestCase {
         };
         match result {
             Ok(_) => None,
-            Err(err) => Some(Diagnostic::from_py_fail(py, &err)),
+            Err(err) => Some(vec![Diagnostic::from_py_fail(py, &err)]),
         }
     }
 }

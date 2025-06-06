@@ -1,20 +1,20 @@
 [package]
-name = "karva_project"
+name = "karva_tests"
 version = "0.0.0"
-
+publish = false
+authors = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
 homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
-authors = { workspace = true }
 license = { workspace = true }
 
-[dependencies]
-camino = { workspace = true }
-tracing = { workspace = true }
-ruff_python_ast = { workspace = true }
-tempfile = "3.8"
+[lib]
+name = "karva_tests"
 
-[lints]
-workspace = true
+[dependencies]
+karva_project = { workspace = true }
+tempfile = { workspace = true }
+
+anyhow = { workspace = true }

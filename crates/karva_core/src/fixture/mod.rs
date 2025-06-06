@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 
 use karva_project::{path::SystemPathBuf, utils::module_name};
 use pyo3::prelude::*;
-use ruff_python_ast::{Expr, StmtFunctionDef};
+use ruff_python_ast::{Decorator, Expr, StmtFunctionDef};
 
 use crate::{fixture::python::FixtureFunctionDefinition, utils::recursive_add_to_sys_path};
 
@@ -66,22 +66,10 @@ impl Fixture {
         path: &SystemPathBuf,
         cwd: &SystemPathBuf,
     ) -> Result<Self, String> {
-        if !val
-            .decorator_list
-            .iter()
-            .any(|decorator| match &decorator.expression {
-                Expr::Name(name) => name.id == "fixture",
-                Expr::Attribute(attr) => attr.attr.id == "fixture",
-                Expr::Call(call) => match call.func.as_ref() {
-                    Expr::Name(name) => name.id == "fixture",
-                    Expr::Attribute(attr) => attr.attr.id == "fixture",
-                    _ => false,
-                },
-                _ => false,
-            })
-        {
+        if !is_fixture_function(val) {
             return Err(format!("Function {} is not a fixture", val.name));
         }
+
         recursive_add_to_sys_path(py, path, cwd).map_err(|e| e.to_string())?;
 
         let module = module_name(cwd, path);
@@ -123,3 +111,20 @@ impl PartialEq for Fixture {
 }
 
 impl Eq for Fixture {}
+
+pub fn is_fixture_function(val: &StmtFunctionDef) -> bool {
+    val.decorator_list.iter().any(is_fixture)
+}
+
+fn is_fixture(decorator: &Decorator) -> bool {
+    match &decorator.expression {
+        Expr::Name(name) => name.id == "fixture",
+        Expr::Attribute(attr) => attr.attr.id == "fixture",
+        Expr::Call(call) => match call.func.as_ref() {
+            Expr::Name(name) => name.id == "fixture",
+            Expr::Attribute(attr) => attr.attr.id == "fixture",
+            _ => false,
+        },
+        _ => false,
+    }
+}

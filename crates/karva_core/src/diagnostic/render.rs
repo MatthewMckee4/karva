@@ -1,6 +1,6 @@
 use colored::Colorize;
 
-use crate::diagnostic::{Diagnostic, DiagnosticType};
+use crate::diagnostic::{Diagnostic, DiagnosticError, DiagnosticType};
 
 pub struct DisplayDiagnostic<'a> {
     diagnostic: &'a Diagnostic,
@@ -19,12 +19,15 @@ impl std::fmt::Display for DisplayDiagnostic<'_> {
             DiagnosticType::Fail => {
                 writeln!(f, "{}", "fail[assertion-failed]".red())?;
             }
-            DiagnosticType::Error(type_name) => {
+            DiagnosticType::Error(DiagnosticError::Error(type_name)) => {
                 writeln!(
                     f,
                     "{}",
                     format!("error[{}]", to_kebab_case(type_name)).yellow()
                 )?;
+            }
+            DiagnosticType::Error(DiagnosticError::FixtureNotFound(_)) => {
+                writeln!(f, "{}", "error[fixture-not-found]".to_string().yellow())?;
             }
         }
 

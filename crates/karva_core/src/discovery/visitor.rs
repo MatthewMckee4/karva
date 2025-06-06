@@ -5,6 +5,8 @@ use ruff_python_ast::{
 };
 use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
+use crate::fixture::is_fixture_function;
+
 #[derive(Clone)]
 pub struct FunctionDefinitionVisitor<'a> {
     discovered_functions: Vec<StmtFunctionDef>,
@@ -28,6 +30,7 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
                 .name
                 .to_string()
                 .starts_with(self.project.test_prefix())
+                && !is_fixture_function(function_def)
             {
                 self.discovered_functions.push(function_def.clone());
             }
