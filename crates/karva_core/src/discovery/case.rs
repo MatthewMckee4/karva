@@ -124,30 +124,30 @@ impl PartialEq for TestCase {
 impl Eq for TestCase {}
 
 pub struct TestCaseFixtures<'a> {
-    session_fixtures: &'a HashMap<String, Py<PyAny>>,
-    module_fixtures: &'a HashMap<String, Py<PyAny>>,
-    function_fixtures: &'a HashMap<String, Py<PyAny>>,
+    session: &'a HashMap<String, Py<PyAny>>,
+    module: &'a HashMap<String, Py<PyAny>>,
+    function: &'a HashMap<String, Py<PyAny>>,
 }
 
 impl<'a> TestCaseFixtures<'a> {
     #[must_use]
     pub const fn new(
-        session_fixtures: &'a HashMap<String, Py<PyAny>>,
-        module_fixtures: &'a HashMap<String, Py<PyAny>>,
-        function_fixtures: &'a HashMap<String, Py<PyAny>>,
+        session: &'a HashMap<String, Py<PyAny>>,
+        module: &'a HashMap<String, Py<PyAny>>,
+        function: &'a HashMap<String, Py<PyAny>>,
     ) -> Self {
         Self {
-            session_fixtures,
-            module_fixtures,
-            function_fixtures,
+            session,
+            module,
+            function,
         }
     }
 
     #[must_use]
     pub fn get_fixture(&self, fixture_name: &str) -> Option<&Py<PyAny>> {
-        self.session_fixtures
+        self.session
             .get(fixture_name)
-            .or_else(|| self.module_fixtures.get(fixture_name))
-            .or_else(|| self.function_fixtures.get(fixture_name))
+            .or_else(|| self.module.get(fixture_name))
+            .or_else(|| self.function.get(fixture_name))
     }
 }
