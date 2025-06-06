@@ -52,8 +52,7 @@ impl<'proj> StandardTestRunner<'proj> {
                 .tests
                 .into_iter()
                 .filter_map(|(module, test_cases)| {
-                    let module_fixtures =
-                        Python::with_gil(|py| discovered_fixtures.module_fixtures(py));
+                    let module_fixtures = discovered_fixtures.module_fixtures(py);
 
                     PyModule::import(py, module.name()).map_or_else(
                         |err| Some(vec![Diagnostic::from_py_err(&py, &err)]),
@@ -62,9 +61,8 @@ impl<'proj> StandardTestRunner<'proj> {
                                 test_cases
                                     .into_iter()
                                     .filter_map(|test_case| {
-                                        let function_fixtures = Python::with_gil(|py| {
-                                            discovered_fixtures.function_fixtures(py)
-                                        });
+                                        let function_fixtures =
+                                            discovered_fixtures.function_fixtures(py);
 
                                         let test_case_fixtures = TestCaseFixtures::new(
                                             &session_fixtures,
