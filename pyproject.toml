@@ -76,3 +76,8 @@ regex = '''
   \.
   (?P<patch>\d+)
   '''
+
+[tool.uv.workspace]
+members = [
+    "tests/integration",
+]

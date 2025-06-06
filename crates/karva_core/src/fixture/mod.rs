@@ -91,14 +91,17 @@ impl Fixture {
             .map_err(|e| e.to_string())?
             .getattr(val.name.to_string())
             .map_err(|e| e.to_string())?;
+
         let py_function = function
-            .downcast::<FixtureFunctionDefinition>()
+            .downcast_into::<FixtureFunctionDefinition>()
             .map_err(|e| e.to_string())?;
+
+        let scope = py_function.borrow_mut().scope.clone();
 
         Ok(Self::new(
             val.name.to_string(),
-            FixtureScope::from(py_function.borrow_mut().scope.clone()),
-            py_function.clone().unbind(),
+            FixtureScope::from(scope),
+            py_function.into(),
         ))
     }
 

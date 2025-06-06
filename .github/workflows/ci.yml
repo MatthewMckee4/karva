@@ -105,9 +105,16 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install karva
-        run: uv pip install -e .
+      - name: Setup integration test environment
+        run: |
+          cd tests/integration
+          uv venv
+          uv pip install -e ../../
       - name: Run karva test
-        run: uv run karva test
+        run: |
+          cd tests/integration
+          uv run karva test
       - name: Run karva version
-        run: uv run karva version
+        run: |
+          cd tests/integration
+          uv run karva version
