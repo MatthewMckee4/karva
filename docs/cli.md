@@ -39,7 +39,6 @@ karva test [OPTIONS] [PATH]...
 <dl class="cli-reference"><dt id="karva-test--help"><a href="#karva-test--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
 </dd><dt id="karva-test--test-prefix"><a href="#karva-test--test-prefix"><code>--test-prefix</code></a> <i>test-prefix</i></dt><dd><p>The prefix of the test functions</p>
 <p>[default: test]</p></dd><dt id="karva-test--verbose"><a href="#karva-test--verbose"><code>--verbose</code></a>, <code>-v</code></dt><dd><p>Use verbose output (or <code>-vv</code> and <code>-vvv</code> for more verbose output)</p>
-</dd><dt id="karva-test--watch"><a href="#karva-test--watch"><code>--watch</code></a></dt><dd><p>Run in watch mode</p>
 </dd></dl>
 
 ## karva version

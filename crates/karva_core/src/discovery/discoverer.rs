@@ -274,7 +274,6 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![path]).with_options(ProjectOptions {
             test_prefix: "check".to_string(),
-            watch: false,
         });
         let discoverer = TestDiscoverer::new(&project);
         let discovered_tests = discoverer.discover();

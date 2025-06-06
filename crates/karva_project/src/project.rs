@@ -2,25 +2,25 @@ use ruff_python_ast::PythonVersion;
 
 use crate::path::{PythonTestPath, PythonTestPathError, SystemPath, SystemPathBuf};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ProjectMetadata {
     pub python_version: PythonVersion,
 }
 
+#[derive(Clone)]
 pub struct ProjectOptions {
     pub test_prefix: String,
-    pub watch: bool,
 }
 
 impl Default for ProjectOptions {
     fn default() -> Self {
         Self {
             test_prefix: "test".to_string(),
-            watch: false,
         }
     }
 }
 
+#[derive(Clone)]
 pub struct Project {
     cwd: SystemPathBuf,
     paths: Vec<SystemPathBuf>,

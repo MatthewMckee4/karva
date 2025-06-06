@@ -38,16 +38,12 @@ pub struct TestCommand {
         default_value = "test"
     )]
     pub(crate) test_prefix: String,
-
-    #[clap(long, help = "Run in watch mode", default_value = "false")]
-    pub(crate) watch: bool,
 }
 
 impl TestCommand {
     pub fn into_options(self) -> ProjectOptions {
         ProjectOptions {
             test_prefix: self.test_prefix,
-            watch: self.watch,
         }
     }
 }
