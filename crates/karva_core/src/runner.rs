@@ -38,7 +38,7 @@ impl<'proj> StandardTestRunner<'proj> {
 
         let session_fixtures = Python::with_gil(|py| discovered_fixtures.session_fixtures(py));
 
-        reporter.set_files(total_tests);
+        reporter.set_tests(total_tests);
 
         let test_results: Vec<Diagnostic> = Python::with_gil(|py| {
             let add_cwd_to_sys_path_result = add_to_sys_path(&py, self.project.cwd());

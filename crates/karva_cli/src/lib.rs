@@ -159,7 +159,7 @@ impl ExitStatus {
 struct ProgressReporter(Option<indicatif::ProgressBar>);
 
 impl karva_core::diagnostic::reporter::Reporter for ProgressReporter {
-    fn set_files(&mut self, files: usize) {
+    fn set_tests(&mut self, files: usize) {
         let progress = indicatif::ProgressBar::new(files as u64);
         progress.set_style(
             indicatif::ProgressStyle::with_template(

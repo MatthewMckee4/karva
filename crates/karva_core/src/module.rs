@@ -4,73 +4,77 @@ use std::{
 };
 
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
-use ruff_python_ast::StmtFunctionDef;
 use ruff_text_size::TextSize;
 
-use crate::{
-    discovery::{function_definitions, visitor::source_text},
-    utils::from_text_size,
-};
+use crate::{case::TestCase, discovery::visitor::source_text, utils::from_text_size};
 
+/// A module represents a single python file.
 #[derive(Clone)]
 pub struct Module<'proj> {
-    file: SystemPathBuf,
+    path: SystemPathBuf,
     project: &'proj Project,
-    functions: Option<Vec<StmtFunctionDef>>,
+    test_cases: Vec<TestCase>,
 }
 
 impl<'proj> Module<'proj> {
     #[must_use]
-    pub fn new(path: &SystemPathBuf, project: &'proj Project) -> Self {
+    pub fn new(path: &SystemPathBuf, project: &'proj Project, test_cases: Vec<TestCase>) -> Self {
         Self {
-            file: path.clone(),
+            path: path.clone(),
             project,
-            functions: None,
+            test_cases,
         }
     }
 
     #[must_use]
-    pub const fn file(&self) -> &SystemPathBuf {
-        &self.file
+    pub const fn path(&self) -> &SystemPathBuf {
+        &self.path
     }
 
     #[must_use]
     pub fn name(&self) -> String {
-        module_name(self.project.cwd(), &self.file)
+        module_name(self.project.cwd(), &self.path)
     }
 
-    pub fn functions(&mut self) -> &[StmtFunctionDef] {
-        if self.functions.is_none() {
-            self.functions = Some(function_definitions(&self.file, self.project));
-        }
-        self.functions.as_ref().unwrap()
+    pub fn test_cases(&mut self) -> &[TestCase] {
+        &self.test_cases
+    }
+
+    pub fn total_test_cases(&self) -> usize {
+        self.test_cases.len()
     }
 
     #[must_use]
     pub fn to_column_row(&self, position: TextSize) -> (usize, usize) {
-        let source_text = source_text(&self.file);
+        let source_text = source_text(&self.path);
         from_text_size(position, &source_text)
     }
 
     #[must_use]
     pub fn source_text(&self) -> String {
-        source_text(&self.file)
+        source_text(&self.path)
     }
 
     // Optimized method that returns both position and source text in one operation
     #[must_use]
     pub fn to_column_row_with_source(&self, position: TextSize) -> ((usize, usize), String) {
-        let source_text = source_text(&self.file);
+        let source_text = source_text(&self.path);
         let position = from_text_size(position, &source_text);
         (position, source_text)
+    }
+
+    pub fn update(&mut self, module: Module<'proj>) {
+        if self.path == module.path {
+            self.test_cases.extend(module.test_cases);
+        }
     }
 }
 
 impl fmt::Debug for Module<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Module")
-            .field("file", &self.file)
-            .field("functions", &self.functions)
+            .field("file", &self.path)
+            .field("functions", &self.test_cases)
             .finish()
     }
 }
@@ -83,13 +87,13 @@ impl Display for Module<'_> {
 
 impl Hash for Module<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.file.hash(state);
+        self.path.hash(state);
     }
 }
 
 impl PartialEq for Module<'_> {
     fn eq(&self, other: &Self) -> bool {
-        self.file == other.file && self.name() == other.name()
+        self.path == other.path && self.name() == other.name()
     }
 }
 

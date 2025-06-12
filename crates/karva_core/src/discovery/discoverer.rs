@@ -1,14 +1,13 @@
 use std::collections::HashMap;
 
 use ignore::WalkBuilder;
-use indexmap::IndexSet;
 use karva_project::{
     path::{PythonTestPath, SystemPathBuf},
     project::Project,
     utils::is_python_file,
 };
 
-use crate::{case::TestCase, discovery::function_definitions, module::Module};
+use crate::{case::TestCase, discovery::function_definitions, module::Module, package::Package};
 
 pub struct TestDiscoverer<'proj> {
     project: &'proj Project,
@@ -22,7 +21,7 @@ impl<'proj> TestDiscoverer<'proj> {
 
     #[must_use]
     pub fn discover(self) -> DiscoveredTests<'proj> {
-        let mut all_discovered_tests: HashMap<Module<'proj>, IndexSet<TestCase>> = HashMap::new();
+        let mut all_discovered_tests: HashMap<SystemPathBuf, Package<'proj>> = HashMap::new();
 
         tracing::info!("Discovering tests...");
 
@@ -31,10 +30,20 @@ impl<'proj> TestDiscoverer<'proj> {
                 Ok(path) => match path {
                     PythonTestPath::File(path) => {
                         let test_cases = self.discover_file(&path);
-                        all_discovered_tests.insert(Module::new(&path, self.project), test_cases);
+                        let package_path = path.parent().unwrap().to_path_buf();
+                        let package = all_discovered_tests
+                            .entry(package_path.clone())
+                            .or_insert(Package::new(package_path, self.project));
+                        package.add_module(Module::new(&path, self.project, test_cases));
                     }
                     PythonTestPath::Directory(dir_path) => {
-                        self.discover_directory(&dir_path, &mut all_discovered_tests);
+                        let package = self.discover_directory(&dir_path);
+                        if let Some(existing_package) = all_discovered_tests.get_mut(package.path())
+                        {
+                            existing_package.update(package);
+                        } else {
+                            all_discovered_tests.insert(package.path().clone(), package);
+                        }
                     }
                 },
                 Err(e) => {
@@ -45,7 +54,7 @@ impl<'proj> TestDiscoverer<'proj> {
 
         let count: usize = all_discovered_tests
             .values()
-            .map(indexmap::IndexSet::len)
+            .map(Package::total_test_cases)
             .sum();
 
         tracing::info!("Discovered {} tests", count);
@@ -56,35 +65,33 @@ impl<'proj> TestDiscoverer<'proj> {
         }
     }
 
-    fn discover_file(&self, path: &SystemPathBuf) -> IndexSet<TestCase> {
+    fn discover_file(&self, path: &SystemPathBuf) -> Vec<TestCase> {
         let function_defs = function_definitions(path, self.project);
         if function_defs.is_empty() {
-            return IndexSet::new();
+            return Vec::new();
         }
 
-        let mut test_cases = IndexSet::new();
+        let mut test_cases = Vec::new();
 
         for function_def in function_defs {
             let test_case = TestCase::new(self.project.cwd(), path.clone(), function_def);
-            test_cases.insert(test_case);
+            test_cases.push(test_case);
         }
 
         test_cases
     }
 
-    fn discover_directory(
-        &self,
-        path: &SystemPathBuf,
-        all_discovered_tests: &mut HashMap<Module<'proj>, IndexSet<TestCase>>,
-    ) {
+    fn discover_directory(&self, path: &SystemPathBuf) -> Package<'proj> {
         let dir_path = path.as_std_path().to_path_buf();
 
         let walker = WalkBuilder::new(self.project.cwd().as_std_path())
             .standard_filters(true)
             .require_git(false)
             .parents(false)
-            .filter_entry(move |entry| entry.path().starts_with(&dir_path))
+            .filter_entry(move |entry| entry.path().starts_with(&dir_path.clone()))
             .build();
+
+        let mut package = Package::new(path.clone(), self.project);
 
         for entry in walker.flatten() {
             let entry_path = entry.path();
@@ -97,15 +104,17 @@ impl<'proj> TestDiscoverer<'proj> {
             tracing::debug!("Discovering file: {}", entry.path().display());
             let test_cases = self.discover_file(&path);
             if !test_cases.is_empty() {
-                all_discovered_tests.insert(Module::new(&path, self.project), test_cases);
+                package.add_module(Module::new(&path, self.project, test_cases));
             }
         }
+
+        package
     }
 }
 
 #[derive(Debug)]
 pub struct DiscoveredTests<'proj> {
-    pub tests: HashMap<Module<'proj>, IndexSet<TestCase>>,
+    pub tests: HashMap<SystemPathBuf, Package<'proj>>,
     pub count: usize,
 }
 
@@ -116,12 +125,10 @@ mod tests {
 
     use super::*;
 
-    fn get_sorted_test_strings(
-        discovered_tests: &HashMap<Module, IndexSet<TestCase>>,
-    ) -> Vec<String> {
+    fn get_sorted_test_strings(discovered_tests: &HashMap<SystemPathBuf, Package>) -> Vec<String> {
         let test_strings: Vec<Vec<String>> = discovered_tests
             .values()
-            .map(|t| t.iter().map(ToString::to_string).collect())
+            .map(|t| t.modules().values().map(|m| m.name()).collect())
             .collect();
         let mut flattened_test_strings: Vec<String> =
             test_strings.iter().flatten().cloned().collect();

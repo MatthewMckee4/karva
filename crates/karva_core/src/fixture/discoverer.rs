@@ -50,11 +50,48 @@ impl<'proj> FixtureDiscoverer<'proj> {
 
         DiscoveredFixtures::new(discovered_fixtures)
     }
+
+    fn discover_file(&self, py: &Python<'_>, path: &SystemPathBuf) -> Vec<Fixture> {
+        fixture_definitions(py, &path, self.project)
+    }
+
+    fn discover_directory(
+        &self,
+        path: &SystemPathBuf,
+        all_discovered_tests: &mut HashMap<Module<'proj>, IndexSet<TestCase>>,
+    ) {
+        let dir_path = path.as_std_path().to_path_buf();
+
+        let walker = WalkBuilder::new(self.project.cwd().as_std_path())
+            .standard_filters(true)
+            .require_git(false)
+            .parents(false)
+            .filter_entry(move |entry| entry.path().starts_with(&dir_path))
+            .build();
+
+        for entry in walker.flatten() {
+            let entry_path = entry.path();
+            let path = SystemPathBuf::from(entry_path);
+
+            if !is_python_file(&path) {
+                tracing::debug!("Skipping non-python file: {}", entry.path().display());
+                continue;
+            }
+            tracing::debug!("Discovering file: {}", entry.path().display());
+            let test_cases = self.discover_file(&path);
+            if !test_cases.is_empty() {
+                all_discovered_tests.insert(Module::new(&path, self.project), test_cases);
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct DiscoveredFixtures {
-    pub fixtures: HashSet<Fixture>,
+    pub session: HashMap<String, Fixture>,
+    pub package: HashMap<String, Fixture>,
+    pub module: HashMap<String, Fixture>,
+    pub function: HashMap<String, Fixture>,
 }
 
 impl DiscoveredFixtures {

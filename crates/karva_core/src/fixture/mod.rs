@@ -18,6 +18,7 @@ pub enum FixtureScope {
     #[default]
     Function,
     Module,
+    Package,
     Session,
 }
 
@@ -26,6 +27,7 @@ impl From<&str> for FixtureScope {
         match s {
             "module" => Self::Module,
             "session" => Self::Session,
+            "package" => Self::Package,
             _ => Self::Function,
         }
     }
@@ -39,7 +41,7 @@ impl From<String> for FixtureScope {
 
 #[must_use]
 pub fn check_valid_scope(scope: &str) -> bool {
-    matches!(scope, "module" | "session" | "function")
+    matches!(scope, "module" | "session" | "function" | "package")
 }
 
 #[derive(Debug)]

@@ -10,6 +10,7 @@ use ruff_python_ast::StmtFunctionDef;
 
 use crate::{diagnostic::Diagnostic, fixture::TestCaseFixtures};
 
+/// A test case represents a single test function.
 #[derive(Debug, Clone)]
 pub struct TestCase {
     file: SystemPathBuf,
