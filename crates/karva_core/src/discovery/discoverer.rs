@@ -159,11 +159,18 @@ mod tests {
     use super::*;
     fn get_sorted_test_strings(session: &Session<'_>) -> Vec<String> {
         let mut test_strings = session
-            .packages
+            .packages()
             .values()
             .flat_map(|package| package.test_cases())
             .map(ToString::to_string)
             .collect::<Vec<String>>();
+        test_strings.extend(
+            session
+                .modules()
+                .values()
+                .flat_map(|module| module.test_cases())
+                .map(ToString::to_string),
+        );
         test_strings.sort();
         test_strings
     }

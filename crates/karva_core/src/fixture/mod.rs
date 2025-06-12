@@ -136,8 +136,35 @@ fn is_fixture(decorator: &Decorator) -> bool {
     }
 }
 
+pub type CalledFixtures = HashMap<String, Py<PyAny>>;
+
+#[must_use]
+pub fn call_fixtures(fixtures: &[&Fixture], py: Python<'_>) -> CalledFixtures {
+    fixtures
+        .iter()
+        .filter_map(|fixture| match fixture.call(py) {
+            Ok(fixture_return) => Some((fixture.name.clone(), fixture_return)),
+            Err(e) => {
+                tracing::error!("Failed to call fixture {}: {}", fixture.name, e);
+                None
+            }
+        })
+        .collect()
+}
+
+pub trait HasFixtures {
+    fn fixtures(&self, scope: FixtureScope) -> Vec<&Fixture> {
+        self.all_fixtures()
+            .into_iter()
+            .filter(|fixture| fixture.scope == scope)
+            .collect()
+    }
+    fn all_fixtures(&self) -> Vec<&Fixture>;
+}
+
 pub struct TestCaseFixtures<'a> {
     session: &'a HashMap<String, Py<PyAny>>,
+    package: &'a HashMap<String, Py<PyAny>>,
     module: &'a HashMap<String, Py<PyAny>>,
     function: &'a HashMap<String, Py<PyAny>>,
 }
@@ -146,11 +173,13 @@ impl<'a> TestCaseFixtures<'a> {
     #[must_use]
     pub const fn new(
         session: &'a HashMap<String, Py<PyAny>>,
+        package: &'a HashMap<String, Py<PyAny>>,
         module: &'a HashMap<String, Py<PyAny>>,
         function: &'a HashMap<String, Py<PyAny>>,
     ) -> Self {
         Self {
             session,
+            package,
             module,
             function,
         }
@@ -160,6 +189,7 @@ impl<'a> TestCaseFixtures<'a> {
     pub fn get_fixture(&self, fixture_name: &str) -> Option<&Py<PyAny>> {
         self.session
             .get(fixture_name)
+            .or_else(|| self.package.get(fixture_name))
             .or_else(|| self.module.get(fixture_name))
             .or_else(|| self.function.get(fixture_name))
     }

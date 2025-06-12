@@ -68,7 +68,7 @@ impl TestCase {
     #[must_use]
     pub fn run_test(
         &self,
-        py: &Python,
+        py: Python<'_>,
         module: &Bound<'_, PyModule>,
         fixtures: &TestCaseFixtures<'_>,
     ) -> Option<Vec<Diagnostic>> {
@@ -102,7 +102,7 @@ impl TestCase {
                     return Some(diagnostics);
                 }
 
-                let args = PyTuple::new(*py, required_fixtures);
+                let args = PyTuple::new(py, required_fixtures);
                 match args {
                     Ok(args) => function.call(args, None),
                     Err(err) => Err(err),

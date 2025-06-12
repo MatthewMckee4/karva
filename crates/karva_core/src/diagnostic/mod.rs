@@ -12,20 +12,20 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    pub fn from_py_err(py: &Python, error: &PyErr) -> Self {
+    pub fn from_py_err(py: Python<'_>, error: &PyErr) -> Self {
         Self {
             diagnostic_type: DiagnosticType::Error(DiagnosticError::Error(get_type_name(
-                *py, error,
+                py, error,
             ))),
-            message: get_traceback(*py, error).unwrap_or_else(|| error.to_string()),
+            message: get_traceback(py, error).unwrap_or_else(|| error.to_string()),
         }
     }
 
-    pub fn from_py_fail(py: &Python, error: &PyErr) -> Self {
-        if error.is_instance_of::<pyo3::exceptions::PyAssertionError>(*py) {
+    pub fn from_py_fail(py: Python<'_>, error: &PyErr) -> Self {
+        if error.is_instance_of::<pyo3::exceptions::PyAssertionError>(py) {
             return Self {
                 diagnostic_type: DiagnosticType::Fail,
-                message: get_traceback(*py, error).unwrap_or_default(),
+                message: get_traceback(py, error).unwrap_or_default(),
             };
         }
         Self::from_py_err(py, error)

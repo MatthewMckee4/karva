@@ -7,7 +7,10 @@ use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 use ruff_text_size::TextSize;
 
 use crate::{
-    case::TestCase, discovery::visitor::source_text, fixture::Fixture, utils::from_text_size,
+    case::TestCase,
+    discovery::visitor::source_text,
+    fixture::{Fixture, HasFixtures},
+    utils::from_text_size,
 };
 
 /// The type of module.
@@ -67,6 +70,11 @@ impl<'proj> Module<'proj> {
     }
 
     #[must_use]
+    pub fn test_cases(&self) -> Vec<&TestCase> {
+        self.test_cases.iter().collect()
+    }
+
+    #[must_use]
     pub fn total_test_cases(&self) -> usize {
         self.test_cases.len()
     }
@@ -113,10 +121,11 @@ impl<'proj> Module<'proj> {
             }
         }
     }
+}
 
-    #[must_use]
-    pub const fn fixtures(&self) -> &Vec<Fixture> {
-        &self.fixtures
+impl HasFixtures for Module<'_> {
+    fn all_fixtures(&self) -> Vec<&Fixture> {
+        self.fixtures.iter().collect()
     }
 }
 
