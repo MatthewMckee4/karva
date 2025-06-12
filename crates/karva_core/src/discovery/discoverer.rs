@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use ignore::WalkBuilder;
 use karva_project::{
     path::{PythonTestPath, SystemPathBuf},
@@ -7,21 +5,26 @@ use karva_project::{
     utils::is_python_file,
 };
 
-use crate::{case::TestCase, discovery::function_definitions, module::Module, package::Package};
+use crate::{
+    discovery::discover,
+    module::{Module, ModuleType},
+    package::Package,
+    session::Session,
+};
 
-pub struct TestDiscoverer<'proj> {
+pub struct Discoverer<'proj> {
     project: &'proj Project,
 }
 
-impl<'proj> TestDiscoverer<'proj> {
+impl<'proj> Discoverer<'proj> {
     #[must_use]
     pub const fn new(project: &'proj Project) -> Self {
         Self { project }
     }
 
     #[must_use]
-    pub fn discover(self) -> DiscoveredTests<'proj> {
-        let mut all_discovered_tests: HashMap<SystemPathBuf, Package<'proj>> = HashMap::new();
+    pub fn discover(self) -> Session<'proj> {
+        let mut session = Session::new();
 
         tracing::info!("Discovering tests...");
 
@@ -29,93 +32,123 @@ impl<'proj> TestDiscoverer<'proj> {
             match path {
                 Ok(path) => match path {
                     PythonTestPath::File(path) => {
-                        let test_cases = self.discover_file(&path);
-                        let package_path = path.parent().unwrap().to_path_buf();
-                        let package = all_discovered_tests
-                            .entry(package_path.clone())
-                            .or_insert(Package::new(package_path, self.project));
-                        package.add_module(Module::new(&path, self.project, test_cases));
+                        let test_cases = self.discover_test_file(&path);
+                        if let Some(module) = test_cases {
+                            if path.parent().unwrap().as_std_path()
+                                == self.project.cwd().as_std_path()
+                            {
+                                session.add_module(module);
+                            } else {
+                                let package_path = path.parent().unwrap().to_path_buf();
+                                let mut package = Package::new(package_path);
+                                package.add_module(module);
+                                session.add_package(package);
+                            }
+                        }
                     }
                     PythonTestPath::Directory(dir_path) => {
                         let package = self.discover_directory(&dir_path);
-                        if let Some(existing_package) = all_discovered_tests.get_mut(package.path())
-                        {
-                            existing_package.update(package);
-                        } else {
-                            all_discovered_tests.insert(package.path().clone(), package);
-                        }
+                        session.add_package(package);
                     }
                 },
                 Err(e) => {
-                    tracing::warn!("Error discovering tests: {}", e);
+                    tracing::warn!("Error finding tests: {e}");
                 }
             }
         }
 
-        let count: usize = all_discovered_tests
-            .values()
-            .map(Package::total_test_cases)
-            .sum();
-
-        tracing::info!("Discovered {} tests", count);
-
-        DiscoveredTests {
-            tests: all_discovered_tests,
-            count,
-        }
+        session
     }
 
-    fn discover_file(&self, path: &SystemPathBuf) -> Vec<TestCase> {
-        let function_defs = function_definitions(path, self.project);
-        if function_defs.is_empty() {
-            return Vec::new();
+    // Parse and run discovery on a single file
+    fn discover_test_file(&self, path: &SystemPathBuf) -> Option<Module<'proj>> {
+        tracing::debug!("Discovering file: {}", path);
+
+        if !is_python_file(path) {
+            return None;
         }
 
-        let mut test_cases = Vec::new();
-
-        for function_def in function_defs {
-            let test_case = TestCase::new(self.project.cwd(), path.clone(), function_def);
-            test_cases.push(test_case);
+        let discovered = discover(path, self.project);
+        if discovered.is_empty() {
+            return None;
         }
 
-        test_cases
+        Some(Module::new(
+            self.project,
+            path,
+            discovered.functions,
+            discovered.fixtures,
+            ModuleType::Test,
+        ))
     }
 
+    fn discover_configuration_file(&self, path: &SystemPathBuf) -> Option<Module<'proj>> {
+        tracing::debug!("Discovering configuration file: {}", path);
+
+        if !is_python_file(path) {
+            return None;
+        }
+
+        let discovered = discover(path, self.project);
+
+        if !discovered.functions.is_empty() {
+            tracing::warn!("Found test functions in: {}", path);
+        }
+
+        Some(Module::new(
+            self.project,
+            path,
+            discovered.functions,
+            discovered.fixtures,
+            ModuleType::Configuration,
+        ))
+    }
+
+    // Parse and run discovery on a directory
     fn discover_directory(&self, path: &SystemPathBuf) -> Package<'proj> {
-        let dir_path = path.as_std_path().to_path_buf();
+        tracing::debug!("Discovering directory: {}", path);
 
-        let walker = WalkBuilder::new(self.project.cwd().as_std_path())
+        let mut package = Package::new(path.clone());
+
+        let walker = WalkBuilder::new(path.as_std_path())
+            .max_depth(Some(1))
             .standard_filters(true)
             .require_git(false)
-            .parents(false)
-            .filter_entry(move |entry| entry.path().starts_with(&dir_path.clone()))
+            .git_global(false)
+            .parents(true)
             .build();
 
-        let mut package = Package::new(path.clone(), self.project);
+        for entry in walker {
+            let Ok(entry) = entry else { continue };
 
-        for entry in walker.flatten() {
-            let entry_path = entry.path();
-            let path = SystemPathBuf::from(entry_path);
+            let current_path = SystemPathBuf::from(entry.path());
 
-            if !is_python_file(&path) {
-                tracing::debug!("Skipping non-python file: {}", entry.path().display());
+            if path == &current_path {
                 continue;
             }
-            tracing::debug!("Discovering file: {}", entry.path().display());
-            let test_cases = self.discover_file(&path);
-            if !test_cases.is_empty() {
-                package.add_module(Module::new(&path, self.project, test_cases));
+
+            match entry.file_type() {
+                Some(file_type) if file_type.is_dir() => {
+                    let subpackage = self.discover_directory(&current_path);
+                    package.add_sub_package(subpackage);
+                }
+                Some(file_type) if file_type.is_file() => {
+                    if let Some(module) =
+                        if ModuleType::from_path(&current_path) == ModuleType::Test {
+                            self.discover_test_file(&current_path)
+                        } else {
+                            self.discover_configuration_file(&current_path)
+                        }
+                    {
+                        package.add_module(module);
+                    }
+                }
+                _ => {}
             }
         }
 
         package
     }
-}
-
-#[derive(Debug)]
-pub struct DiscoveredTests<'proj> {
-    pub tests: HashMap<SystemPathBuf, Package<'proj>>,
-    pub count: usize,
 }
 
 #[cfg(test)]
@@ -124,16 +157,15 @@ mod tests {
     use karva_project::{project::ProjectOptions, tests::TestEnv};
 
     use super::*;
-
-    fn get_sorted_test_strings(discovered_tests: &HashMap<SystemPathBuf, Package>) -> Vec<String> {
-        let test_strings: Vec<Vec<String>> = discovered_tests
+    fn get_sorted_test_strings(session: &Session<'_>) -> Vec<String> {
+        let mut test_strings = session
+            .packages
             .values()
-            .map(|t| t.modules().values().map(|m| m.name()).collect())
-            .collect();
-        let mut flattened_test_strings: Vec<String> =
-            test_strings.iter().flatten().cloned().collect();
-        flattened_test_strings.sort();
-        flattened_test_strings
+            .flat_map(|package| package.test_cases())
+            .map(ToString::to_string)
+            .collect::<Vec<String>>();
+        test_strings.sort();
+        test_strings
     }
 
     #[test]
@@ -142,10 +174,10 @@ mod tests {
         let path = env.create_file("test.py", "def test_function(): pass");
 
         let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = TestDiscoverer::new(&project);
-        let discovered_tests = discoverer.discover();
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests.tests),
+            get_sorted_test_strings(&session),
             vec!["test::test_function"]
         );
     }
@@ -159,11 +191,11 @@ mod tests {
         env.create_file("test_dir/test_file2.py", "def function2(): pass");
 
         let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = TestDiscoverer::new(&project);
-        let discovered_tests = discoverer.discover();
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests.tests),
+            get_sorted_test_strings(&session),
             vec!["test_dir.test_file1::test_function1"]
         );
     }
@@ -178,11 +210,11 @@ mod tests {
         env.create_file("tests/test_file2.py", "def test_function2(): pass");
 
         let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = TestDiscoverer::new(&project);
-        let discovered_tests = discoverer.discover();
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests.tests),
+            get_sorted_test_strings(&session),
             vec!["tests.test_file1::test_function1"]
         );
     }
@@ -202,11 +234,11 @@ mod tests {
         );
 
         let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = TestDiscoverer::new(&project);
-        let discovered_tests = discoverer.discover();
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests.tests),
+            get_sorted_test_strings(&session),
             vec![
                 "tests.nested.deeper.test_file3::test_function3",
                 "tests.nested.test_file2::test_function2",
@@ -229,11 +261,11 @@ def not_a_test(): pass
         );
 
         let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = TestDiscoverer::new(&project);
-        let discovered_tests = discoverer.discover();
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests.tests),
+            get_sorted_test_strings(&session),
             vec![
                 "test_file::test_function1",
                 "test_file::test_function2",
@@ -248,10 +280,10 @@ def not_a_test(): pass
         let path = env.create_file("test_file.py", "def test_function1(): pass");
 
         let project = Project::new(env.cwd(), vec![path.join("nonexistent_function")]);
-        let discoverer = TestDiscoverer::new(&project);
-        let discovered_tests = discoverer.discover();
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
 
-        assert!(get_sorted_test_strings(&discovered_tests.tests).is_empty());
+        assert!(get_sorted_test_strings(&session).is_empty());
     }
 
     #[test]
@@ -260,10 +292,10 @@ def not_a_test(): pass
         let path = env.create_file("test_file.py", "test_function1 = None");
 
         let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = TestDiscoverer::new(&project);
-        let discovered_tests = discoverer.discover();
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
 
-        assert!(get_sorted_test_strings(&discovered_tests.tests).is_empty());
+        assert!(get_sorted_test_strings(&session).is_empty());
     }
 
     #[test]
@@ -281,11 +313,11 @@ def test_function(): pass
         let project = Project::new(env.cwd(), vec![path]).with_options(ProjectOptions {
             test_prefix: "check".to_string(),
         });
-        let discoverer = TestDiscoverer::new(&project);
-        let discovered_tests = discoverer.discover();
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests.tests),
+            get_sorted_test_strings(&session),
             ["test_file::check_function1", "test_file::check_function2"]
         );
     }
@@ -299,11 +331,11 @@ def test_function(): pass
         env.create_file("tests/test3.py", "def test_function3(): pass");
 
         let project = Project::new(env.cwd(), vec![file1, file2, dir]);
-        let discoverer = TestDiscoverer::new(&project);
-        let discovered_tests = discoverer.discover();
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests.tests),
+            get_sorted_test_strings(&session),
             vec![
                 "test1::test_function1",
                 "test2::test_function2",
@@ -318,10 +350,10 @@ def test_function(): pass
         let path = env.create_file("tests/test_file.py", "def test_function(): pass");
 
         let project = Project::new(env.cwd(), vec![env.cwd().join("tests"), path.clone(), path]);
-        let discoverer = TestDiscoverer::new(&project);
-        let discovered_tests = discoverer.discover();
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests.tests),
+            get_sorted_test_strings(&session),
             vec!["tests.test_file::test_function"]
         );
     }
@@ -335,10 +367,10 @@ def test_function(): pass
         );
 
         let project = Project::new(env.cwd(), vec![path.clone(), path]);
-        let discoverer = TestDiscoverer::new(&project);
-        let discovered_tests = discoverer.discover();
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests.tests),
+            get_sorted_test_strings(&session),
             vec![
                 "tests.test_file::test_function",
                 "tests.test_file::test_function2"
@@ -353,10 +385,10 @@ def test_function(): pass
         let path2 = env.create_file("tests/test_file2.py", "def test_function(): pass");
 
         let project = Project::new(env.cwd(), vec![path, path2]);
-        let discoverer = TestDiscoverer::new(&project);
-        let discovered_tests = discoverer.discover();
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
         assert_eq!(
-            get_sorted_test_strings(&discovered_tests.tests),
+            get_sorted_test_strings(&session),
             vec![
                 "tests.test_file2::test_function",
                 "tests.test_file::test_function"

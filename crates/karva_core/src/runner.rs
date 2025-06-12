@@ -9,8 +9,7 @@ use crate::{
         Diagnostic, DiagnosticType,
         reporter::{DummyReporter, Reporter},
     },
-    discovery::TestDiscoverer,
-    fixture::{TestCaseFixtures, discoverer::FixtureDiscoverer},
+    discovery::Discoverer,
     utils::add_to_sys_path,
 };
 
@@ -31,14 +30,12 @@ impl<'proj> StandardTestRunner<'proj> {
 
     #[must_use]
     fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
-        let discovered_tests = TestDiscoverer::new(self.project).discover();
-        let total_tests = discovered_tests.count;
+        let session = Discoverer::new(self.project).discover();
 
-        let discovered_fixtures = FixtureDiscoverer::new(self.project).discover();
 
-        let session_fixtures = Python::with_gil(|py| discovered_fixtures.session_fixtures(py));
+        let total_test_cases = session.total_test_cases();
 
-        reporter.set_tests(total_tests);
+        reporter.set_tests(total_test_cases);
 
         let test_results: Vec<Diagnostic> = Python::with_gil(|py| {
             let add_cwd_to_sys_path_result = add_to_sys_path(&py, self.project.cwd());
@@ -48,48 +45,55 @@ impl<'proj> StandardTestRunner<'proj> {
                 return Vec::new();
             }
 
-            discovered_tests
-                .tests
-                .into_iter()
-                .filter_map(|(module, test_cases)| {
-                    let module_fixtures = discovered_fixtures.module_fixtures(py);
+            let
 
-                    PyModule::import(py, module.name()).map_or_else(
-                        |err| Some(vec![Diagnostic::from_py_err(&py, &err)]),
-                        |py_module| {
-                            Some(
-                                test_cases
-                                    .into_iter()
-                                    .filter_map(|test_case| {
-                                        let function_fixtures =
-                                            discovered_fixtures.function_fixtures(py);
+            let diagnostics: Vec<Diagnostic> = Vec::new();
 
-                                        let test_case_fixtures = TestCaseFixtures::new(
-                                            &session_fixtures,
-                                            &module_fixtures,
-                                            &function_fixtures,
-                                        );
+            // for (package_path, package) in session.packages {
 
-                                        let test_name = test_case.to_string();
-                                        let result = test_case.run_test(
-                                            &py,
-                                            &py_module,
-                                            &test_case_fixtures,
-                                        );
-                                        reporter.report_test(&test_name);
-                                        result
-                                    })
-                                    .flatten()
-                                    .collect::<Vec<_>>(),
-                            )
-                        },
-                    )
-                })
-                .flatten()
-                .collect()
+            // discovered_tests
+            //     .discovered
+            //     .filter_map(|(module, package)| {
+            //         let module_fixtures = discovered_fixtures.module_fixtures(py);
+
+            //         PyModule::import(py, module.name()).map_or_else(
+            //             |err| Some(vec![Diagnostic::from_py_err(&py, &err)]),
+            //             |py_module| {
+            //                 Some(
+            //                     test_cases
+            //                         .into_iter()
+            //                         .filter_map(|test_case| {
+            //                             let function_fixtures =
+            //                                 discovered_fixtures.function_fixtures(py);
+
+            //                             let test_case_fixtures = TestCaseFixtures::new(
+            //                                 &session_fixtures,
+            //                                 &module_fixtures,
+            //                                 &function_fixtures,
+            //                             );
+
+            //                             let test_name = test_case.to_string();
+            //                             let result = test_case.run_test(
+            //                                 &py,
+            //                                 &py_module,
+            //                                 &test_case_fixtures,
+            //                             );
+            //                             reporter.report_test(&test_name);
+            //                             result
+            //                         })
+            //                         .flatten()
+            //                         .collect::<Vec<_>>(),
+            //                 )
+            //             },
+            //         )
+            //     })
+            //     .flatten()
+            //     .collect()
+
+            diagnostics
         });
 
-        RunDiagnostics::new(test_results, total_tests)
+        RunDiagnostics::new(test_results, total_test_cases)
     }
 }
 

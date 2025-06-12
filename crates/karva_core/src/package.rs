@@ -3,25 +3,33 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use karva_project::{path::SystemPathBuf, project::Project};
+use karva_project::path::SystemPathBuf;
 
-use crate::module::Module;
+use crate::{
+    case::TestCase,
+    fixture::Fixture,
+    module::{Module, ModuleType},
+};
+
+pub trait HasFixtures {
+    fn fixtures(&self) -> Vec<Fixture>;
+}
 
 /// A package represents a single python directory.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Package<'proj> {
     path: SystemPathBuf,
-    project: &'proj Project,
     modules: HashMap<SystemPathBuf, Module<'proj>>,
+    sub_packages: HashMap<SystemPathBuf, Package<'proj>>,
 }
 
 impl<'proj> Package<'proj> {
     #[must_use]
-    pub fn new(path: SystemPathBuf, project: &'proj Project) -> Self {
+    pub fn new(path: SystemPathBuf) -> Self {
         Self {
             path,
-            project,
             modules: HashMap::new(),
+            sub_packages: HashMap::new(),
         }
     }
 
@@ -30,20 +38,75 @@ impl<'proj> Package<'proj> {
         &self.path
     }
 
-    pub fn modules(&self) -> &HashMap<SystemPathBuf, Module<'proj>> {
+    #[must_use]
+    pub const fn modules(&self) -> &HashMap<SystemPathBuf, Module<'proj>> {
         &self.modules
     }
 
+    #[must_use]
+    pub const fn sub_packages(&self) -> &HashMap<SystemPathBuf, Self> {
+        &self.sub_packages
+    }
+
     pub fn add_module(&mut self, module: Module<'proj>) {
-        self.modules.insert(module.path().clone(), module);
+        if !module.path().starts_with(self.path()) {
+            return;
+        }
+
+        if let Some(existing_module) = self.modules.get_mut(module.path()) {
+            existing_module.update(module);
+        } else {
+            self.modules.insert(module.path().clone(), module);
+        }
+    }
+
+    pub fn add_sub_package(&mut self, package: Self) {
+        if !package.path().starts_with(self.path()) {
+            return;
+        }
+        if let Some(existing_package) = self.sub_packages.get_mut(package.path()) {
+            existing_package.update(package);
+        } else {
+            self.sub_packages.insert(package.path().clone(), package);
+        }
     }
 
     pub fn total_test_cases(&self) -> usize {
         self.modules.values().map(Module::total_test_cases).sum()
     }
 
-    pub fn update(&mut self, module: Package<'proj>) {
-        self.modules.extend(module.modules);
+    pub fn update(&mut self, package: Self) {
+        self.modules.extend(package.modules);
+        self.sub_packages.extend(package.sub_packages);
+    }
+
+    #[must_use]
+    pub fn test_cases(&self) -> Vec<&TestCase> {
+        let mut cases = self
+            .modules
+            .values()
+            .flat_map(|m| &m.test_cases)
+            .collect::<Vec<_>>();
+        for sub_package in self.sub_packages.values() {
+            cases.extend(sub_package.test_cases());
+        }
+        cases
+    }
+
+    #[must_use]
+    pub fn configuration_modules(&self) -> Vec<&Module<'_>> {
+        self.modules
+            .values()
+            .filter(|m| m.module_type == ModuleType::Configuration)
+            .collect::<Vec<_>>()
+    }
+
+    #[must_use]
+    pub fn fixtures(&self) -> Vec<&Fixture> {
+        self.configuration_modules()
+            .iter()
+            .flat_map(|m| &m.fixtures)
+            .collect::<Vec<_>>()
     }
 }
 

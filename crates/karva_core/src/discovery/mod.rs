@@ -1,5 +1,5 @@
 pub mod discoverer;
 pub mod visitor;
 
-pub use discoverer::TestDiscoverer;
-pub use visitor::{FunctionDefinitionVisitor, function_definitions};
+pub use discoverer::Discoverer;
+pub use visitor::{FunctionDefinitionVisitor, discover};

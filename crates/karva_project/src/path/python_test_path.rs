@@ -20,7 +20,7 @@ fn try_convert_to_py_path(path: &SystemPathBuf) -> Result<SystemPathBuf, PythonT
     Err(PythonTestPathError::NotFound(path.to_string()))
 }
 
-#[derive(Eq, PartialEq, Clone, Hash, PartialOrd, Ord)]
+#[derive(Eq, PartialEq, Clone, Hash, PartialOrd, Ord, Debug)]
 pub enum PythonTestPath {
     File(SystemPathBuf),
     Directory(SystemPathBuf),
@@ -40,6 +40,15 @@ impl PythonTestPath {
             Ok(Self::Directory(path))
         } else {
             unreachable!("Path `{}` is neither a file nor a directory", path)
+        }
+    }
+}
+
+impl std::fmt::Display for PythonTestPath {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::File(path) => write!(f, "File: {path}"),
+            Self::Directory(path) => write!(f, "Directory: {path}"),
         }
     }
 }

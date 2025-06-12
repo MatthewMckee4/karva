@@ -9,9 +9,7 @@ use ruff_python_ast::{Decorator, Expr, StmtFunctionDef};
 
 use crate::{fixture::python::FixtureFunctionDefinition, utils::recursive_add_to_sys_path};
 
-pub mod discoverer;
 pub mod python;
-pub mod visitor;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum FixtureScope {
@@ -47,6 +45,7 @@ pub fn check_valid_scope(scope: &str) -> bool {
 #[derive(Debug)]
 pub struct Fixture {
     pub name: String,
+    pub function_def: StmtFunctionDef,
     pub scope: FixtureScope,
     pub function: Py<FixtureFunctionDefinition>,
 }
@@ -55,11 +54,13 @@ impl Fixture {
     #[must_use]
     pub const fn new(
         name: String,
+        function_def: StmtFunctionDef,
         scope: FixtureScope,
         function: Py<FixtureFunctionDefinition>,
     ) -> Self {
         Self {
             name,
+            function_def,
             scope,
             function,
         }
@@ -67,11 +68,11 @@ impl Fixture {
 
     pub fn from(
         py: &Python<'_>,
-        val: &StmtFunctionDef,
+        val: StmtFunctionDef,
         path: &SystemPathBuf,
         cwd: &SystemPathBuf,
     ) -> Result<Self, String> {
-        if !is_fixture_function(val) {
+        if !is_fixture_function(&val) {
             return Err(format!("Function {} is not a fixture", val.name));
         }
 
@@ -93,6 +94,7 @@ impl Fixture {
 
         Ok(Self::new(
             val.name.to_string(),
+            val,
             FixtureScope::from(scope),
             py_function.into(),
         ))

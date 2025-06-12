@@ -24,8 +24,8 @@ pub fn recursive_add_to_sys_path(
     path: &SystemPathBuf,
     cwd: &SystemPathBuf,
 ) -> PyResult<()> {
-    let sys_path = py.import("sys")?;
-    let sys_path = sys_path.getattr("path")?;
+    let sys = py.import("sys")?;
+    let sys_path = sys.getattr("path")?;
     let path = path.as_std_path();
     let cwd = cwd.as_std_path();
 

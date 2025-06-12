@@ -1,24 +1,31 @@
 use karva_project::{path::SystemPathBuf, project::Project};
+use pyo3::Python;
 use ruff_python_ast::{
-    ModModule, PythonVersion, Stmt, StmtFunctionDef,
+    ModModule, PythonVersion, Stmt,
     visitor::source_order::{self, SourceOrderVisitor},
 };
 use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
-use crate::fixture::is_fixture_function;
+use crate::{
+    case::TestCase,
+    fixture::{Fixture, is_fixture_function},
+};
 
-#[derive(Clone)]
 pub struct FunctionDefinitionVisitor<'a> {
-    discovered_functions: Vec<StmtFunctionDef>,
+    discovered_functions: Vec<TestCase>,
+    fixture_definitions: Vec<Fixture>,
     project: &'a Project,
+    path: &'a SystemPathBuf,
 }
 
 impl<'a> FunctionDefinitionVisitor<'a> {
     #[must_use]
-    pub const fn new(project: &'a Project) -> Self {
+    pub const fn new(project: &'a Project, path: &'a SystemPathBuf) -> Self {
         Self {
             discovered_functions: Vec::new(),
+            fixture_definitions: Vec::new(),
             project,
+            path,
         }
     }
 }
@@ -26,13 +33,24 @@ impl<'a> FunctionDefinitionVisitor<'a> {
 impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
     fn visit_stmt(&mut self, stmt: &'a Stmt) {
         if let Stmt::FunctionDef(function_def) = stmt {
+            if is_fixture_function(function_def) {
+                Python::with_gil(|py| {
+                    match Fixture::from(&py, function_def.clone(), self.path, self.project.cwd()) {
+                        Ok(fixture_def) => self.fixture_definitions.push(fixture_def),
+                        Err(e) => tracing::debug!("Skipping non-fixture function: {}", e),
+                    }
+                });
+            }
             if function_def
                 .name
                 .to_string()
                 .starts_with(self.project.test_prefix())
-                && !is_fixture_function(function_def)
             {
-                self.discovered_functions.push(function_def.clone());
+                self.discovered_functions.push(TestCase::new(
+                    self.project.cwd(),
+                    self.path.clone(),
+                    function_def.clone(),
+                ));
             }
         }
 
@@ -40,15 +58,30 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
     }
 }
 
+pub struct DiscoveredFunctions {
+    pub functions: Vec<TestCase>,
+    pub fixtures: Vec<Fixture>,
+}
+
+impl DiscoveredFunctions {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.functions.is_empty() && self.fixtures.is_empty()
+    }
+}
+
 #[must_use]
-pub fn function_definitions(path: &SystemPathBuf, project: &Project) -> Vec<StmtFunctionDef> {
-    let mut visitor = FunctionDefinitionVisitor::new(project);
+pub fn discover(path: &SystemPathBuf, project: &Project) -> DiscoveredFunctions {
+    let mut visitor = FunctionDefinitionVisitor::new(project, path);
 
     let parsed = parsed_module(path, *project.python_version());
 
     visitor.visit_body(&parsed.syntax().body);
 
-    visitor.discovered_functions
+    DiscoveredFunctions {
+        functions: visitor.discovered_functions,
+        fixtures: visitor.fixture_definitions,
+    }
 }
 
 #[must_use]

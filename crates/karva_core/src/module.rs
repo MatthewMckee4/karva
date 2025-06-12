@@ -6,23 +6,53 @@ use std::{
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 use ruff_text_size::TextSize;
 
-use crate::{case::TestCase, discovery::visitor::source_text, utils::from_text_size};
+use crate::{
+    case::TestCase, discovery::visitor::source_text, fixture::Fixture, utils::from_text_size,
+};
+
+/// The type of module.
+/// This is used to differentiation between files that contain only test functions and files that contain only configuration functions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModuleType {
+    Test,
+    Configuration,
+}
+
+impl ModuleType {
+    #[must_use]
+    pub fn from_path(path: &SystemPathBuf) -> Self {
+        if path.file_name() == Some("conftest.py") {
+            Self::Configuration
+        } else {
+            Self::Test
+        }
+    }
+}
 
 /// A module represents a single python file.
-#[derive(Clone)]
 pub struct Module<'proj> {
-    path: SystemPathBuf,
-    project: &'proj Project,
-    test_cases: Vec<TestCase>,
+    pub path: SystemPathBuf,
+    pub project: &'proj Project,
+    pub test_cases: Vec<TestCase>,
+    pub fixtures: Vec<Fixture>,
+    pub module_type: ModuleType,
 }
 
 impl<'proj> Module<'proj> {
     #[must_use]
-    pub fn new(path: &SystemPathBuf, project: &'proj Project, test_cases: Vec<TestCase>) -> Self {
+    pub fn new(
+        project: &'proj Project,
+        path: &SystemPathBuf,
+        test_cases: Vec<TestCase>,
+        fixtures: Vec<Fixture>,
+        module_type: ModuleType,
+    ) -> Self {
         Self {
             path: path.clone(),
             project,
             test_cases,
+            fixtures,
+            module_type,
         }
     }
 
@@ -36,10 +66,7 @@ impl<'proj> Module<'proj> {
         module_name(self.project.cwd(), &self.path)
     }
 
-    pub fn test_cases(&mut self) -> &[TestCase] {
-        &self.test_cases
-    }
-
+    #[must_use]
     pub fn total_test_cases(&self) -> usize {
         self.test_cases.len()
     }
@@ -63,10 +90,33 @@ impl<'proj> Module<'proj> {
         (position, source_text)
     }
 
-    pub fn update(&mut self, module: Module<'proj>) {
+    pub fn update(&mut self, module: Self) {
         if self.path == module.path {
-            self.test_cases.extend(module.test_cases);
+            for test_case in module.test_cases {
+                if !self
+                    .test_cases
+                    .iter()
+                    .any(|existing| existing.name() == test_case.name())
+                {
+                    self.test_cases.push(test_case);
+                }
+            }
+
+            for fixture in module.fixtures {
+                if !self
+                    .fixtures
+                    .iter()
+                    .any(|existing| existing.name == fixture.name)
+                {
+                    self.fixtures.push(fixture);
+                }
+            }
         }
+    }
+
+    #[must_use]
+    pub const fn fixtures(&self) -> &Vec<Fixture> {
+        &self.fixtures
     }
 }
 

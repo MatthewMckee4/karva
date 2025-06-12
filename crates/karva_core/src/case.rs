@@ -43,6 +43,11 @@ impl TestCase {
     }
 
     #[must_use]
+    pub fn name(&self) -> String {
+        self.function_definition.name.to_string()
+    }
+
+    #[must_use]
     pub const fn function_definition(&self) -> &StmtFunctionDef {
         &self.function_definition
     }
