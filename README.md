@@ -76,15 +76,12 @@ uv run karva test tests/test.py
 Provides the following output:
 
 ```bash
-error[assertion-failed]: Assertion failed
- --> test.py:6:12 in function 'test_fail'
-  |
-5 | def test_fail():
-6 |     assert False, "This test should fail"
-  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ assertion failed
-  |
-File "/tmp/ty-test/tests/test.py", line 10, in test_error
-  raise ValueError("This is an error")
+fail[assertion-failed]
+ | File "/home/matthew/Developer/karva/tests/test.py", line 6, in test_fail
+ |   assert False, "This test should fail"
+error[value-error]
+ | File "/home/matthew/Developer/karva/tests/test.py", line 10, in test_error
+ |   raise ValueError("This is an error")
 ─────────────
 Passed tests: 1
 Failed tests: 1
