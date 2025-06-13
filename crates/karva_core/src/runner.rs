@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{collections::HashMap, io::Write};
 
 use colored::{Color, Colorize};
 use karva_project::project::Project;
@@ -6,10 +6,14 @@ use pyo3::prelude::*;
 
 use crate::{
     diagnostic::{
-        Diagnostic, DiagnosticType,
+        Diagnostic, DiagnosticScope, SubDiagnosticType,
         reporter::{DummyReporter, Reporter},
     },
-    discovery::{Discoverer, discoverer::DiscoveredTests},
+    discovery::Discoverer,
+    fixture::{FixtureScope, HasFixtures, TestCaseFixtures},
+    module::Module,
+    package::Package,
+    utils::add_to_sys_path,
 };
 
 pub trait TestRunner {
@@ -29,56 +33,210 @@ impl<'proj> StandardTestRunner<'proj> {
 
     #[must_use]
     fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
-        let discovered_tests: DiscoveredTests<'proj> = Discoverer::new(self.project).discover();
-        let total_tests = discovered_tests.count;
+        let session = Discoverer::new(self.project).discover();
 
-        reporter.set_files(total_tests);
+        let total_files = session.total_test_modules();
+
+        let total_test_cases = session.total_test_cases();
+
+        tracing::info!(
+            "Discovered {} tests in {} files",
+            total_test_cases,
+            total_files
+        );
+
+        reporter.set(total_files);
 
         let test_results: Vec<Diagnostic> = Python::with_gil(|py| {
-            let add_cwd_to_sys_path_result = self.add_cwd_to_sys_path(py);
-
-            if add_cwd_to_sys_path_result.is_err() {
-                tracing::error!("Failed to add {cwd} to sys.path", cwd = self.project.cwd());
+            if add_to_sys_path(&py, self.project.cwd()).is_err() {
+                tracing::error!("Failed to add {} to sys.path", self.project.cwd());
                 return Vec::new();
             }
 
-            discovered_tests
-                .tests
-                .into_iter()
-                .filter_map(|(module, test_cases)| {
-                    PyModule::import(py, module.name()).map_or_else(
-                        |err| {
-                            tracing::error!("Failed to import module {}", module.name());
-                            tracing::debug!("{:?}", err);
-                            None
-                        },
-                        |py_module| {
-                            Some(
-                                test_cases
-                                    .into_iter()
-                                    .filter_map(|test_case| {
-                                        let test_name = test_case.to_string();
-                                        let result = test_case.run_test(&py, &py_module);
-                                        reporter.report_test(&test_name);
-                                        result
-                                    })
-                                    .collect::<Vec<_>>(),
-                            )
-                        },
-                    )
-                })
-                .flatten()
-                .collect()
+            let session_fixtures =
+                session.called_fixtures(py, &[FixtureScope::Session], &session.test_cases());
+
+            let mut diagnostics: Vec<Diagnostic> = Vec::new();
+
+            for package in session.packages().values() {
+                self.test_package(
+                    py,
+                    &session,
+                    package,
+                    &session_fixtures,
+                    &mut diagnostics,
+                    reporter,
+                );
+            }
+
+            for module in session.modules().values() {
+                self.test_module(
+                    py,
+                    module,
+                    None,
+                    &session,
+                    None,
+                    &session_fixtures,
+                    &mut diagnostics,
+                    reporter,
+                );
+            }
+
+            diagnostics
         });
 
-        RunDiagnostics::new(test_results, total_tests)
+        RunDiagnostics::new(test_results, total_test_cases)
     }
 
-    fn add_cwd_to_sys_path(&self, py: Python) -> PyResult<()> {
-        let sys_path = py.import("sys")?;
-        let path = sys_path.getattr("path")?;
-        path.call_method1("append", (self.project.cwd().as_str(),))?;
-        Ok(())
+    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::unused_self)]
+    fn test_module(
+        &self,
+        py: Python<'_>,
+        module: &Module,
+        package: Option<&Package>,
+        session: &Package,
+        package_fixtures: Option<&HashMap<String, PyObject>>,
+        session_fixtures: &HashMap<String, PyObject>,
+        diagnostics: &mut Vec<Diagnostic>,
+        reporter: &dyn Reporter,
+    ) {
+        if module.total_test_cases() == 0 {
+            return;
+        }
+
+        let mut module_fixtures = HashMap::new();
+
+        module_fixtures.extend(module.called_fixtures(
+            py,
+            &[
+                FixtureScope::Module,
+                FixtureScope::Package,
+                FixtureScope::Session,
+            ],
+            &module.test_cases(),
+        ));
+
+        if let Some(package) = package {
+            module_fixtures.extend(package.called_fixtures(
+                py,
+                &[FixtureScope::Module],
+                &module.test_cases(),
+            ));
+        }
+
+        module_fixtures.extend(session.called_fixtures(
+            py,
+            &[FixtureScope::Module],
+            &module.test_cases(),
+        ));
+
+        let py_module = match PyModule::import(py, module.name()) {
+            Ok(py_module) => py_module,
+            Err(err) => {
+                diagnostics.extend(vec![Diagnostic::from_py_err(
+                    py,
+                    &err,
+                    DiagnosticScope::Setup,
+                )]);
+                return;
+            }
+        };
+
+        for function in module.test_cases() {
+            let mut function_fixtures = HashMap::new();
+
+            function_fixtures.extend(module.called_fixtures(
+                py,
+                &[FixtureScope::Function],
+                &[function],
+            ));
+
+            if let Some(package) = package {
+                function_fixtures.extend(package.called_fixtures(
+                    py,
+                    &[FixtureScope::Function],
+                    &[function],
+                ));
+            }
+
+            function_fixtures.extend(session.called_fixtures(
+                py,
+                &[FixtureScope::Function],
+                &[function],
+            ));
+
+            let default_package_fixtures = HashMap::new();
+            let package_fixtures = package_fixtures.unwrap_or(&default_package_fixtures);
+
+            let test_case_fixtures = TestCaseFixtures::new(
+                session_fixtures,
+                package_fixtures,
+                &module_fixtures,
+                &function_fixtures,
+            );
+
+            let test_name = function.to_string();
+
+            tracing::info!("Running test: {}", test_name);
+
+            if let Some(result) = function.run_test(py, &py_module, &test_case_fixtures) {
+                diagnostics.push(result);
+            }
+        }
+
+        reporter.report();
+    }
+
+    fn test_package(
+        &self,
+        py: Python<'_>,
+        session: &Package,
+        package: &Package,
+        session_fixtures: &HashMap<String, PyObject>,
+        diagnostics: &mut Vec<Diagnostic>,
+        reporter: &dyn Reporter,
+    ) {
+        if package.total_test_cases() == 0 {
+            return;
+        }
+
+        let mut package_fixtures = HashMap::new();
+
+        package_fixtures.extend(package.called_fixtures(
+            py,
+            &[FixtureScope::Package, FixtureScope::Session],
+            &package.test_cases(),
+        ));
+        package_fixtures.extend(session.called_fixtures(
+            py,
+            &[FixtureScope::Package],
+            &package.test_cases(),
+        ));
+
+        for module in package.modules().values() {
+            self.test_module(
+                py,
+                module,
+                Some(package),
+                session,
+                Some(&package_fixtures),
+                session_fixtures,
+                diagnostics,
+                reporter,
+            );
+        }
+
+        for sub_package in package.packages().values() {
+            self.test_package(
+                py,
+                session,
+                sub_package,
+                session_fixtures,
+                diagnostics,
+                reporter,
+            );
+        }
     }
 }
 
@@ -138,10 +296,12 @@ impl RunDiagnostics {
     pub fn stats(&self) -> DiagnosticStats {
         let mut stats = DiagnosticStats::new(self.total_tests);
         for diagnostic in &self.diagnostics {
-            stats.passed -= 1;
-            match diagnostic.diagnostic_type() {
-                DiagnosticType::Fail => stats.failed += 1,
-                DiagnosticType::Error(_) => stats.error += 1,
+            if diagnostic.scope() == &DiagnosticScope::Test {
+                stats.passed -= 1;
+                match diagnostic.diagnostic_type() {
+                    SubDiagnosticType::Fail => stats.failed += 1,
+                    SubDiagnosticType::Error(_) => stats.error += 1,
+                }
             }
         }
         stats
@@ -218,39 +378,14 @@ impl DiagnosticStats {
 
 #[cfg(test)]
 mod tests {
-
-    use karva_project::path::SystemPathBuf;
-    use tempfile::TempDir;
+    use karva_project::tests::TestEnv;
 
     use super::*;
-
-    struct TestEnv {
-        temp_dir: TempDir,
-    }
-
-    impl TestEnv {
-        fn new() -> Self {
-            Self {
-                temp_dir: TempDir::new().unwrap(),
-            }
-        }
-
-        fn create_test_file(&self, filename: &str, content: &str) -> String {
-            let path = self.temp_dir.path().join(filename);
-            std::fs::write(&path, content).unwrap();
-            path.display().to_string()
-        }
-
-        fn create_python_test_path(&self, filename: &str) -> String {
-            let path = self.temp_dir.path().join(filename);
-            path.display().to_string()
-        }
-    }
 
     #[test]
     fn test_runner_with_passing_test() {
         let env = TestEnv::new();
-        env.create_test_file(
+        env.create_file(
             "test_pass.py",
             r"
 def test_simple_pass():
@@ -258,10 +393,7 @@ def test_simple_pass():
 ",
         );
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![env.create_python_test_path("test_pass.py")],
-        );
+        let project = Project::new(env.cwd(), vec![env.temp_path("test_pass.py")]);
         let runner = StandardTestRunner::new(&project);
 
         let result = runner.test();
@@ -275,7 +407,7 @@ def test_simple_pass():
     #[test]
     fn test_runner_with_failing_test() {
         let env = TestEnv::new();
-        env.create_test_file(
+        env.create_file(
             "test_fail.py",
             r#"
 def test_simple_fail():
@@ -283,10 +415,7 @@ def test_simple_fail():
 "#,
         );
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![env.create_python_test_path("test_fail.py")],
-        );
+        let project = Project::new(env.cwd(), vec![env.temp_path("test_fail.py")]);
         let runner = StandardTestRunner::new(&project);
 
         let result = runner.test();
@@ -300,7 +429,7 @@ def test_simple_fail():
     #[test]
     fn test_runner_with_error_test() {
         let env = TestEnv::new();
-        env.create_test_file(
+        env.create_file(
             "test_error.py",
             r#"
 def test_simple_error():
@@ -308,10 +437,7 @@ def test_simple_error():
 "#,
         );
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![env.create_python_test_path("test_error.py")],
-        );
+        let project = Project::new(env.cwd(), vec![env.temp_path("test_error.py")]);
         let runner = StandardTestRunner::new(&project);
 
         let result = runner.test();
@@ -325,7 +451,7 @@ def test_simple_error():
     #[test]
     fn test_runner_with_multiple_tests() {
         let env = TestEnv::new();
-        env.create_test_file(
+        env.create_file(
             "test_mixed.py",
             r#"def test_pass():
     assert True
@@ -338,10 +464,7 @@ def test_error():
 "#,
         );
 
-        let project = Project::new(
-            SystemPathBuf::from(env.temp_dir.path()),
-            vec![env.create_python_test_path("test_mixed.py")],
-        );
+        let project = Project::new(env.cwd(), vec![env.temp_path("test_mixed.py")]);
         let runner = StandardTestRunner::new(&project);
 
         let result = runner.test();

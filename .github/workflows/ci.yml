@@ -51,7 +51,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install Dependencies
-        run: uv sync --extra docs --no-install-project
+        run: uv sync --group docs --no-install-project
       - name: Build docs
         run: uv run --no-project mkdocs build
 
@@ -94,20 +94,24 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   python-test:
-    name: python${{ matrix.python-version }}-${{ matrix.os }}
+    name: python${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.folder }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         python-version: ["3.9", "3.13"]
+        folder: ["tests/integration", "tests/example"]
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install karva
-        run: uv pip install -e .
+      - name: Setup integration test environment
+        run: |
+          cd ${{ matrix.folder }}
+          uv venv
+          uv pip install -e ../../
       - name: Run karva test
-        run: uv run karva test
-      - name: Run karva version
-        run: uv run karva version
+        run: |
+          cd ${{ matrix.folder }}
+          uv run karva test -v

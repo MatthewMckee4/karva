@@ -18,16 +18,43 @@ class Benchmark:
         return run_benchmark(self.command, iterations)
 
 
-def generate_test_file(num_tests: int = 10000, num_asserts: int = 1) -> Path:
+def generate_test_file(
+    *,
+    num_tests: int = 10000,
+    num_asserts: int = 1,
+    import_name: str,
+    fail: bool = False,
+) -> Path:
     """Generate a test file with the specified number of individual test functions."""
-    test_file = Path("test_many_assertions.py")
+    test_file = Path(f"test_{import_name}_many_assertions.py")
+
+    fixture_lines = [
+        f"from {import_name} import fixture",
+        "@fixture",
+        "def value_one() -> int:",
+        "    return 1",
+    ]
+
     with test_file.open("w") as f:
-        f.write("def test_0():\n    assert True\n\n")
-        for i in range(1, num_tests):
-            f.write(f"def test_{i}():\n")
-            for _ in range(num_asserts):
-                f.write("    assert True\n")
-            f.write("\n")
+        f.write("\n".join(fixture_lines) + "\n")
+
+        def test_function(i: int) -> list[str]:
+            lines = [
+                f"def test_{i}(value_one):",
+            ]
+
+            lines.extend(
+                [
+                    f"    assert value_one {'==' if not fail else '!='} 1",
+                ]
+                * num_asserts,
+            )
+
+            return lines
+
+        for i in range(num_tests):
+            f.write("\n".join(test_function(i)) + "\n")
+
     return test_file
 
 
@@ -36,7 +63,9 @@ def run_benchmark(command: str, iterations: int = 5) -> float:
     times: list[float] = []
     for _ in range(iterations + 1):
         start = time.time()
-        subprocess.run(command, shell=True, capture_output=True, check=False)  # noqa: S602
+        result = subprocess.run(command, shell=True, capture_output=True, check=False)  # noqa: S602
+        print(result.stdout.decode("utf-8"))
+        print(result.stderr.decode("utf-8"))
         time_taken = time.time() - start
         print(f"Time taken: {time_taken:.4f}s")
         times.append(time_taken)
@@ -112,7 +141,6 @@ def create_benchmark_graph(
     )
 
     for path in [
-        "../../assets/benchmark_results.svg",
         "../../docs/assets/benchmark_results.svg",
     ]:
         plt.savefig(
@@ -141,6 +169,12 @@ def main() -> None:
         help="Number of benchmark iterations to run (default: 1)",
     )
     parser.add_argument(
+        "--num-asserts",
+        type=int,
+        default=1,
+        help="Number of assertions to generate (default: 1)",
+    )
+    parser.add_argument(
         "--keep-test-file",
         action="store_true",
         default=False,
@@ -152,18 +186,40 @@ def main() -> None:
         default=False,
         help="Run the benchmark with flamegraph",
     )
+    parser.add_argument(
+        "--fail",
+        action="store_true",
+        default=False,
+        help="Use failing tests",
+    )
     args = parser.parse_args()
 
-    test_file = generate_test_file(args.num_tests)
+    print(
+        f"Generating test files with {args.num_tests} tests and {args.num_asserts} assertions",
+    )
+
+    karva_test_file = generate_test_file(
+        num_tests=args.num_tests,
+        num_asserts=args.num_asserts,
+        import_name="karva",
+        fail=args.fail,
+    )
+
+    pytest_test_file = generate_test_file(
+        num_tests=args.num_tests,
+        num_asserts=args.num_asserts,
+        import_name="pytest",
+        fail=args.fail,
+    )
 
     benchmarks: list[Benchmark] = [
         Benchmark(
             name="pytest",
-            command=f"pytest {test_file}",
+            command=f"uv run pytest {pytest_test_file}",
         ),
         Benchmark(
             name="karva",
-            command=f"../../target/debug/karva test {test_file}",
+            command=f"uv run karva test {karva_test_file}",
         ),
     ]
     if args.run_test:
@@ -172,9 +228,6 @@ def main() -> None:
             iterations=args.iterations,
             num_tests=args.num_tests,
         )
-
-    if not args.keep_test_file:
-        test_file.unlink()
 
 
 if __name__ == "__main__":

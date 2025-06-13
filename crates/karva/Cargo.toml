@@ -12,6 +12,7 @@ license = { workspace = true }
 
 [dependencies]
 karva_cli = { workspace = true }
+karva_core = { workspace = true }
 
 pyo3 = { workspace = true }
 
