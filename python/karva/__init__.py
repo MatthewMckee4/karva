@@ -2,6 +2,6 @@
 
 from karva._karva import fixture, karva_run
 
-__version__ = "0.0.19"
+__version__ = "0.0.20"
 
 __all__ = ["fixture", "karva_run"]
