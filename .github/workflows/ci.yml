@@ -51,7 +51,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install Dependencies
-        run: uv sync --extra docs --no-install-project
+        run: uv sync --group docs --no-install-project
       - name: Build docs
         run: uv run --no-project mkdocs build
 

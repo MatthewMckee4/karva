@@ -14,7 +14,7 @@ version = "0.0.19"
 [project.scripts]
 karva = "karva._karva:karva_run"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = ["mypy", "pre-commit", "ruff", "tbump"]
 docs = ["mkdocs", "mkdocs-material", "pymdown-extensions"]
 
