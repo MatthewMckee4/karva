@@ -85,7 +85,7 @@ impl<'proj> StandardTestRunner<'proj> {
             diagnostics
         });
 
-        RunDiagnostics::new(test_results, total_files)
+        RunDiagnostics::new(test_results, total_test_cases)
     }
 
     #[allow(clippy::too_many_arguments)]
