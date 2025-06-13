@@ -1,6 +1,9 @@
 use pyo3::{prelude::*, types::PyString};
 
-use crate::diagnostic::render::{DisplayDiagnostic, SubDiagnosticDisplay};
+use crate::{
+    case::TestCase,
+    diagnostic::render::{DisplayDiagnostic, SubDiagnosticDisplay},
+};
 
 pub mod render;
 pub mod reporter;
@@ -29,39 +32,47 @@ impl Diagnostic {
         &self.scope
     }
 
-    pub fn from_py_err(py: Python<'_>, error: &PyErr, scope: DiagnosticScope) -> Self {
+    pub fn from_py_err(
+        py: Python<'_>,
+        error: &PyErr,
+        scope: DiagnosticScope,
+        location: &str,
+    ) -> Self {
         Self::new(
             vec![SubDiagnostic {
                 diagnostic_type: SubDiagnosticType::Error(DiagnosticError::Error(get_type_name(
                     py, error,
                 ))),
                 message: get_traceback(py, error),
+                location: location.to_string(),
             }],
             scope,
         )
     }
 
-    pub fn from_test_fail(py: Python<'_>, error: &PyErr) -> Self {
+    pub fn from_test_fail(py: Python<'_>, error: &PyErr, test_case: &TestCase) -> Self {
         if error.is_instance_of::<pyo3::exceptions::PyAssertionError>(py) {
             return Self::new(
                 vec![SubDiagnostic {
                     diagnostic_type: SubDiagnosticType::Fail,
                     message: get_traceback(py, error),
+                    location: test_case.full_name(),
                 }],
                 DiagnosticScope::Test,
             );
         }
-        Self::from_py_err(py, error, DiagnosticScope::Test)
+        Self::from_py_err(py, error, DiagnosticScope::Test, &test_case.full_name())
     }
 
     #[must_use]
-    pub fn fixture_not_found(fixture_name: &str) -> Self {
+    pub fn fixture_not_found(fixture_name: &str, test_case: &TestCase) -> Self {
         Self::new(
             vec![SubDiagnostic {
                 diagnostic_type: SubDiagnosticType::Error(DiagnosticError::FixtureNotFound(
                     fixture_name.to_string(),
                 )),
                 message: format!("Fixture {fixture_name} not found"),
+                location: test_case.full_name(),
             }],
             DiagnosticScope::Setup,
         )
@@ -107,14 +118,20 @@ impl Diagnostic {
 pub struct SubDiagnostic {
     diagnostic_type: SubDiagnosticType,
     message: String,
+    location: String,
 }
 
 impl SubDiagnostic {
     #[must_use]
-    pub const fn new(diagnostic_type: SubDiagnosticType, message: String) -> Self {
+    pub const fn new(
+        diagnostic_type: SubDiagnosticType,
+        message: String,
+        location: String,
+    ) -> Self {
         Self {
             diagnostic_type,
             message,
+            location,
         }
     }
     #[must_use]
@@ -130,6 +147,11 @@ impl SubDiagnostic {
     #[must_use]
     pub fn message(&self) -> &str {
         &self.message
+    }
+
+    #[must_use]
+    pub fn location(&self) -> &str {
+        &self.location
     }
 }
 

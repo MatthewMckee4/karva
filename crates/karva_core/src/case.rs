@@ -51,6 +51,11 @@ impl TestCase {
     }
 
     #[must_use]
+    pub fn full_name(&self) -> String {
+        format!("{}::{}", module_name(&self.cwd, &self.file), self.name())
+    }
+
+    #[must_use]
     pub const fn function_definition(&self) -> &StmtFunctionDef {
         &self.function_definition
     }
@@ -80,7 +85,12 @@ impl TestCase {
             let function = match module.getattr(name) {
                 Ok(function) => function,
                 Err(err) => {
-                    return Some(Diagnostic::from_py_err(py, &err, DiagnosticScope::Test));
+                    return Some(Diagnostic::from_py_err(
+                        py,
+                        &err,
+                        DiagnosticScope::Test,
+                        &self.name(),
+                    ));
                 }
             };
             let required_fixture_names = self.get_required_fixtures();
@@ -93,7 +103,7 @@ impl TestCase {
                     .filter_map(|fixture| {
                         fixtures.get_fixture(fixture).map_or_else(
                             || {
-                                diagnostics.push(Diagnostic::fixture_not_found(fixture));
+                                diagnostics.push(Diagnostic::fixture_not_found(fixture, self));
                                 None
                             },
                             Some,
@@ -114,7 +124,7 @@ impl TestCase {
         };
         match result {
             Ok(_) => None,
-            Err(err) => Some(Diagnostic::from_test_fail(py, &err)),
+            Err(err) => Some(Diagnostic::from_test_fail(py, &err, self)),
         }
     }
 

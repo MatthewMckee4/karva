@@ -35,21 +35,21 @@ impl<'a> SubDiagnosticDisplay<'a> {
 
 impl std::fmt::Display for SubDiagnosticDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.diagnostic.diagnostic_type() {
-            SubDiagnosticType::Fail => {
-                writeln!(f, "{}", "fail[assertion-failed]".red())?;
-            }
+        let diagnostic_type_str = match self.diagnostic.diagnostic_type() {
+            SubDiagnosticType::Fail => "fail[assertion-failed]".red(),
             SubDiagnosticType::Error(DiagnosticError::Error(type_name)) => {
-                writeln!(
-                    f,
-                    "{}",
-                    format!("error[{}]", to_kebab_case(type_name)).yellow()
-                )?;
+                format!("error[{}]", to_kebab_case(type_name)).yellow()
             }
             SubDiagnosticType::Error(DiagnosticError::FixtureNotFound(_)) => {
-                writeln!(f, "{}", "error[fixture-not-found]".to_string().yellow())?;
+                "error[fixture-not-found]".to_string().yellow()
             }
-        }
+        };
+        writeln!(
+            f,
+            "{} in {}",
+            diagnostic_type_str,
+            self.diagnostic.location()
+        )?;
 
         for line in self.diagnostic.message.lines() {
             writeln!(f, " | {line}")?;
