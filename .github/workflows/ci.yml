@@ -99,7 +99,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.9", "3.13"]
-        folder: ["tests/integration", "tests/unit"]
+        folder: ["tests/integration", "tests/example"]
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
