@@ -35,13 +35,13 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
         if let Stmt::FunctionDef(function_def) = stmt {
             if is_fixture_function(function_def) {
                 Python::with_gil(|py| {
-                    match Fixture::from(&py, function_def.clone(), self.path, self.project.cwd()) {
-                        Ok(fixture_def) => self.fixture_definitions.push(fixture_def),
-                        Err(e) => tracing::debug!("Skipping non-fixture function: {}", e),
+                    if let Ok(fixture_def) =
+                        Fixture::from(&py, function_def.clone(), self.path, self.project.cwd())
+                    {
+                        self.fixture_definitions.push(fixture_def);
                     }
                 });
-            }
-            if function_def
+            } else if function_def
                 .name
                 .to_string()
                 .starts_with(self.project.test_prefix())
@@ -58,6 +58,7 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct DiscoveredFunctions {
     pub functions: Vec<TestCase>,
     pub fixtures: Vec<Fixture>,

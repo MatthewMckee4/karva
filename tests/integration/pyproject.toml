@@ -6,6 +6,10 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []
 
+
+[tool.ruff]
+line-length = 120
+
 [tool.ruff.lint]
 select = ["ALL"]
-ignore = ["D", "INP001", "PLR2004", "S101"]
+ignore = ["D", "INP001", "PLR2004", "S101", "T201"]

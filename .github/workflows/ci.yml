@@ -94,11 +94,12 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   python-test:
-    name: python${{ matrix.python-version }}-${{ matrix.os }}
+    name: python${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.folder }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         python-version: ["3.9", "3.13"]
+        folder: ["tests/integration", "tests/unit"]
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
@@ -107,14 +108,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Setup integration test environment
         run: |
-          cd tests/integration
+          cd ${{ matrix.folder }}
           uv venv
           uv pip install -e ../../
       - name: Run karva test
         run: |
-          cd tests/integration
+          cd ${{ matrix.folder }}
           uv run karva test -v
-      - name: Run karva version
-        run: |
-          cd tests/integration
-          uv run karva version

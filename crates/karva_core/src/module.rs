@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fmt::{self, Display},
     hash::{Hash, Hasher},
 };
@@ -36,8 +37,8 @@ impl ModuleType {
 pub struct Module<'proj> {
     pub path: SystemPathBuf,
     pub project: &'proj Project,
-    pub test_cases: Vec<TestCase>,
-    pub fixtures: Vec<Fixture>,
+    test_cases: Vec<TestCase>,
+    fixtures: Vec<Fixture>,
     pub module_type: ModuleType,
 }
 
@@ -114,18 +115,31 @@ impl<'proj> Module<'proj> {
                 if !self
                     .fixtures
                     .iter()
-                    .any(|existing| existing.name == fixture.name)
+                    .any(|existing| existing.name() == fixture.name())
                 {
                     self.fixtures.push(fixture);
                 }
             }
         }
     }
+
+    #[must_use]
+    pub fn uses_fixture(&self, fixture_name: &str) -> bool {
+        self.test_cases
+            .iter()
+            .any(|tc| tc.uses_fixture(fixture_name))
+    }
 }
 
 impl HasFixtures for Module<'_> {
-    fn all_fixtures(&self) -> Vec<&Fixture> {
-        self.fixtures.iter().collect()
+    fn all_fixtures(&self, test_cases: Option<&[&TestCase]>) -> Vec<&Fixture> {
+        self.fixtures
+            .iter()
+            .filter(|f| {
+                test_cases
+                    .is_none_or(|test_cases| test_cases.iter().any(|tc| tc.uses_fixture(f.name())))
+            })
+            .collect()
     }
 }
 
@@ -157,3 +171,22 @@ impl PartialEq for Module<'_> {
 }
 
 impl Eq for Module<'_> {}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct StringModule {
+    pub test_cases: HashSet<String>,
+    pub fixtures: HashSet<(String, String)>,
+}
+
+impl From<&Module<'_>> for StringModule {
+    fn from(module: &Module<'_>) -> Self {
+        Self {
+            test_cases: module.test_cases().iter().map(|tc| tc.name()).collect(),
+            fixtures: module
+                .all_fixtures(None)
+                .iter()
+                .map(|f| (f.name().to_string(), f.scope().to_string()))
+                .collect(),
+        }
+    }
+}

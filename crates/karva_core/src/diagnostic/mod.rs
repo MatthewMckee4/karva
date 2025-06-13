@@ -1,49 +1,100 @@
 use pyo3::{prelude::*, types::PyString};
 
-use crate::diagnostic::render::DisplayDiagnostic;
+use crate::diagnostic::render::{DisplayDiagnostic, SubDiagnosticDisplay};
 
 pub mod render;
 pub mod reporter;
 
 #[derive(Clone)]
 pub struct Diagnostic {
-    diagnostic_type: DiagnosticType,
-    message: String,
+    sub_diagnostics: Vec<SubDiagnostic>,
+    scope: DiagnosticScope,
 }
 
 impl Diagnostic {
-    pub fn from_py_err(py: Python<'_>, error: &PyErr) -> Self {
+    const fn new(sub_diagnostics: Vec<SubDiagnostic>, scope: DiagnosticScope) -> Self {
         Self {
-            diagnostic_type: DiagnosticType::Error(DiagnosticError::Error(get_type_name(
-                py, error,
-            ))),
-            message: get_traceback(py, error).unwrap_or_else(|| error.to_string()),
+            sub_diagnostics,
+            scope,
         }
-    }
-
-    pub fn from_py_fail(py: Python<'_>, error: &PyErr) -> Self {
-        if error.is_instance_of::<pyo3::exceptions::PyAssertionError>(py) {
-            return Self {
-                diagnostic_type: DiagnosticType::Fail,
-                message: get_traceback(py, error).unwrap_or_default(),
-            };
-        }
-        Self::from_py_err(py, error)
     }
 
     #[must_use]
-    pub const fn diagnostic_type(&self) -> &DiagnosticType {
-        &self.diagnostic_type
+    pub fn sub_diagnostics(&self) -> &[SubDiagnostic] {
+        &self.sub_diagnostics
+    }
+
+    #[must_use]
+    pub const fn scope(&self) -> &DiagnosticScope {
+        &self.scope
+    }
+
+    pub fn from_py_err(py: Python<'_>, error: &PyErr, scope: DiagnosticScope) -> Self {
+        Self::new(
+            vec![SubDiagnostic {
+                diagnostic_type: SubDiagnosticType::Error(DiagnosticError::Error(get_type_name(
+                    py, error,
+                ))),
+                message: get_traceback(py, error),
+            }],
+            scope,
+        )
+    }
+
+    pub fn from_test_fail(py: Python<'_>, error: &PyErr) -> Self {
+        if error.is_instance_of::<pyo3::exceptions::PyAssertionError>(py) {
+            return Self::new(
+                vec![SubDiagnostic {
+                    diagnostic_type: SubDiagnosticType::Fail,
+                    message: get_traceback(py, error),
+                }],
+                DiagnosticScope::Test,
+            );
+        }
+        Self::from_py_err(py, error, DiagnosticScope::Test)
     }
 
     #[must_use]
     pub fn fixture_not_found(fixture_name: &str) -> Self {
-        Self {
-            diagnostic_type: DiagnosticType::Error(DiagnosticError::FixtureNotFound(
-                fixture_name.to_string(),
-            )),
-            message: format!("Fixture {fixture_name} not found"),
+        Self::new(
+            vec![SubDiagnostic {
+                diagnostic_type: SubDiagnosticType::Error(DiagnosticError::FixtureNotFound(
+                    fixture_name.to_string(),
+                )),
+                message: format!("Fixture {fixture_name} not found"),
+            }],
+            DiagnosticScope::Setup,
+        )
+    }
+
+    #[must_use]
+    pub const fn from_sub_diagnostics(
+        sub_diagnostics: Vec<SubDiagnostic>,
+        scope: DiagnosticScope,
+    ) -> Self {
+        Self::new(sub_diagnostics, scope)
+    }
+
+    #[must_use]
+    pub fn from_test_diagnostics(diagnostic: Vec<Self>) -> Self {
+        let mut sub_diagnostics = Vec::new();
+        for diagnostic in diagnostic {
+            sub_diagnostics.extend(diagnostic.sub_diagnostics);
         }
+        Self::new(sub_diagnostics, DiagnosticScope::Test)
+    }
+
+    pub fn add_sub_diagnostic(&mut self, sub_diagnostic: SubDiagnostic) {
+        self.sub_diagnostics.push(sub_diagnostic);
+    }
+
+    #[must_use]
+    pub fn diagnostic_type(&self) -> SubDiagnosticType {
+        self.sub_diagnostics
+            .iter()
+            .map(|sub_diagnostic| sub_diagnostic.diagnostic_type().clone())
+            .find(|diagnostic_type| matches!(diagnostic_type, SubDiagnosticType::Error(_)))
+            .unwrap_or(SubDiagnosticType::Fail)
     }
 
     #[must_use]
@@ -52,8 +103,45 @@ impl Diagnostic {
     }
 }
 
+#[derive(Clone)]
+pub struct SubDiagnostic {
+    diagnostic_type: SubDiagnosticType,
+    message: String,
+}
+
+impl SubDiagnostic {
+    #[must_use]
+    pub const fn new(diagnostic_type: SubDiagnosticType, message: String) -> Self {
+        Self {
+            diagnostic_type,
+            message,
+        }
+    }
+    #[must_use]
+    pub const fn display(&self) -> SubDiagnosticDisplay {
+        SubDiagnosticDisplay::new(self)
+    }
+
+    #[must_use]
+    pub const fn diagnostic_type(&self) -> &SubDiagnosticType {
+        &self.diagnostic_type
+    }
+
+    #[must_use]
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+// Where the diagnostic is coming from
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiagnosticScope {
+    Test,
+    Setup,
+}
+
 #[derive(Debug, Clone)]
-pub enum DiagnosticType {
+pub enum SubDiagnosticType {
     Fail,
     Error(DiagnosticError),
 }
@@ -64,15 +152,15 @@ pub enum DiagnosticError {
     FixtureNotFound(String),
 }
 
-fn get_traceback(py: Python<'_>, error: &PyErr) -> Option<String> {
+fn get_traceback(py: Python<'_>, error: &PyErr) -> String {
     if let Some(traceback) = error.traceback(py) {
         let traceback_str = traceback.format().unwrap_or_default();
         if traceback_str.is_empty() {
-            return None;
+            return error.to_string();
         }
-        Some(filter_traceback(&traceback_str))
+        filter_traceback(&traceback_str)
     } else {
-        None
+        error.to_string()
     }
 }
 

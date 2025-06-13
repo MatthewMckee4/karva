@@ -47,7 +47,11 @@ impl<'proj> Discoverer<'proj> {
                     }
                     PythonTestPath::Directory(dir_path) => {
                         let package = self.discover_directory(&dir_path);
-                        session_package.add_package(package);
+                        if dir_path.as_std_path() == self.project.cwd().as_std_path() {
+                            session_package.update(package);
+                        } else {
+                            session_package.add_package(package);
+                        }
                     }
                 },
                 Err(e) => {
@@ -97,7 +101,7 @@ impl<'proj> Discoverer<'proj> {
         Some(Module::new(
             self.project,
             path,
-            discovered.functions,
+            Vec::new(),
             discovered.fixtures,
             ModuleType::Configuration,
         ))
@@ -155,46 +159,10 @@ mod tests {
 
     use std::collections::{HashMap, HashSet};
 
-    use karva_project::{project::ProjectOptions, tests::TestEnv, utils::module_name};
+    use karva_project::{project::ProjectOptions, tests::TestEnv};
 
     use super::*;
-
-    #[derive(Debug)]
-    struct StringPackage {
-        pub modules: HashMap<String, HashSet<String>>,
-        pub packages: HashMap<String, StringPackage>,
-    }
-
-    impl PartialEq for StringPackage {
-        fn eq(&self, other: &Self) -> bool {
-            self.modules == other.modules && self.packages == other.packages
-        }
-    }
-
-    impl Eq for StringPackage {}
-
-    fn get_sorted_test_strings(package: &Package<'_>) -> StringPackage {
-        let mut modules = HashMap::new();
-        let mut packages = HashMap::new();
-
-        for module in package.modules().values() {
-            for test_case in module.test_cases() {
-                modules
-                    .entry(module_name(package.path(), module.path()))
-                    .or_insert_with(HashSet::new)
-                    .insert(test_case.function_definition().name.to_string());
-            }
-        }
-
-        for subpackage in package.packages().values() {
-            packages.insert(
-                module_name(package.path(), subpackage.path()),
-                get_sorted_test_strings(subpackage),
-            );
-        }
-
-        StringPackage { modules, packages }
-    }
+    use crate::{module::StringModule, package::StringPackage};
 
     #[test]
     fn test_discover_files() {
@@ -206,15 +174,19 @@ mod tests {
         let session = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&session),
+            Into::<StringPackage>::into(&session),
             StringPackage {
                 modules: HashMap::from([(
                     "test".to_string(),
-                    HashSet::from(["test_function".to_string()]),
+                    StringModule {
+                        test_cases: HashSet::from(["test_function".to_string()]),
+                        fixtures: HashSet::new(),
+                    },
                 )]),
                 packages: HashMap::new(),
             }
         );
+        assert_eq!(session.total_test_cases(), 1);
     }
 
     #[test]
@@ -230,7 +202,7 @@ mod tests {
         let session = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&session),
+            Into::<StringPackage>::into(&session),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
@@ -238,13 +210,17 @@ mod tests {
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file1".to_string(),
-                            HashSet::from(["test_function1".to_string(),])
+                            StringModule {
+                                test_cases: HashSet::from(["test_function1".to_string(),]),
+                                fixtures: HashSet::new(),
+                            },
                         )]),
                         packages: HashMap::new(),
                     }
                 )]),
             }
         );
+        assert_eq!(session.total_test_cases(), 1);
     }
 
     #[test]
@@ -261,7 +237,7 @@ mod tests {
         let session = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&session),
+            Into::<StringPackage>::into(&session),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
@@ -269,13 +245,17 @@ mod tests {
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file1".to_string(),
-                            HashSet::from(["test_function1".to_string()]),
+                            StringModule {
+                                test_cases: HashSet::from(["test_function1".to_string()]),
+                                fixtures: HashSet::new(),
+                            },
                         )]),
                         packages: HashMap::new(),
                     }
                 ),]),
             }
         );
+        assert_eq!(session.total_test_cases(), 1);
     }
 
     #[test]
@@ -297,7 +277,7 @@ mod tests {
         let session = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&session),
+            Into::<StringPackage>::into(&session),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
@@ -305,21 +285,32 @@ mod tests {
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file1".to_string(),
-                            HashSet::from(["test_function1".to_string(),])
+                            StringModule {
+                                test_cases: HashSet::from(["test_function1".to_string(),]),
+                                fixtures: HashSet::new(),
+                            },
                         )]),
                         packages: HashMap::from([(
                             "nested".to_string(),
                             StringPackage {
                                 modules: HashMap::from([(
                                     "test_file2".to_string(),
-                                    HashSet::from(["test_function2".to_string(),])
+                                    StringModule {
+                                        test_cases: HashSet::from(["test_function2".to_string(),]),
+                                        fixtures: HashSet::new(),
+                                    },
                                 )]),
                                 packages: HashMap::from([(
                                     "deeper".to_string(),
                                     StringPackage {
                                         modules: HashMap::from([(
                                             "test_file3".to_string(),
-                                            HashSet::from(["test_function3".to_string(),])
+                                            StringModule {
+                                                test_cases: HashSet::from([
+                                                    "test_function3".to_string(),
+                                                ]),
+                                                fixtures: HashSet::new(),
+                                            },
                                         )]),
                                         packages: HashMap::new(),
                                     }
@@ -330,6 +321,7 @@ mod tests {
                 )]),
             }
         );
+        assert_eq!(session.total_test_cases(), 3);
     }
 
     #[test]
@@ -350,19 +342,23 @@ def not_a_test(): pass
         let session = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&session),
+            Into::<StringPackage>::into(&session),
             StringPackage {
                 modules: HashMap::from([(
                     "test_file".to_string(),
-                    HashSet::from([
-                        "test_function1".to_string(),
-                        "test_function2".to_string(),
-                        "test_function3".to_string(),
-                    ])
+                    StringModule {
+                        test_cases: HashSet::from([
+                            "test_function1".to_string(),
+                            "test_function2".to_string(),
+                            "test_function3".to_string(),
+                        ]),
+                        fixtures: HashSet::new(),
+                    },
                 )]),
                 packages: HashMap::new(),
             }
         );
+        assert_eq!(session.total_test_cases(), 3);
     }
 
     #[test]
@@ -375,12 +371,13 @@ def not_a_test(): pass
         let session = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&session),
+            Into::<StringPackage>::into(&session),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::new(),
             }
         );
+        assert_eq!(session.total_test_cases(), 0);
     }
 
     #[test]
@@ -393,12 +390,13 @@ def not_a_test(): pass
         let session = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&session),
+            Into::<StringPackage>::into(&session),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::new(),
             }
         );
+        assert_eq!(session.total_test_cases(), 0);
     }
 
     #[test]
@@ -420,15 +418,22 @@ def test_function(): pass
         let session = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&session),
+            Into::<StringPackage>::into(&session),
             StringPackage {
                 modules: HashMap::from([(
                     "test_file".to_string(),
-                    HashSet::from(["check_function1".to_string(), "check_function2".to_string(),])
+                    StringModule {
+                        test_cases: HashSet::from([
+                            "check_function1".to_string(),
+                            "check_function2".to_string(),
+                        ]),
+                        fixtures: HashSet::new(),
+                    },
                 )]),
                 packages: HashMap::new(),
             }
         );
+        assert_eq!(session.total_test_cases(), 2);
     }
 
     #[test]
@@ -444,16 +449,22 @@ def test_function(): pass
         let session = discoverer.discover();
 
         assert_eq!(
-            get_sorted_test_strings(&session),
+            Into::<StringPackage>::into(&session),
             StringPackage {
                 modules: HashMap::from([
                     (
                         "test1".to_string(),
-                        HashSet::from(["test_function1".to_string(),])
+                        StringModule {
+                            test_cases: HashSet::from(["test_function1".to_string(),]),
+                            fixtures: HashSet::new(),
+                        },
                     ),
                     (
                         "test2".to_string(),
-                        HashSet::from(["test_function2".to_string(),])
+                        StringModule {
+                            test_cases: HashSet::from(["test_function2".to_string(),]),
+                            fixtures: HashSet::new(),
+                        },
                     )
                 ]),
                 packages: HashMap::from([(
@@ -461,13 +472,17 @@ def test_function(): pass
                     StringPackage {
                         modules: HashMap::from([(
                             "test3".to_string(),
-                            HashSet::from(["test_function3".to_string(),])
+                            StringModule {
+                                test_cases: HashSet::from(["test_function3".to_string(),]),
+                                fixtures: HashSet::new(),
+                            },
                         )]),
                         packages: HashMap::new(),
                     }
                 )]),
             }
         );
+        assert_eq!(session.total_test_cases(), 3);
     }
 
     #[test]
@@ -482,7 +497,7 @@ def test_function(): pass
         let discoverer = Discoverer::new(&project);
         let session = discoverer.discover();
         assert_eq!(
-            get_sorted_test_strings(&session),
+            Into::<StringPackage>::into(&session),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
@@ -490,16 +505,20 @@ def test_function(): pass
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file".to_string(),
-                            HashSet::from([
-                                "test_function".to_string(),
-                                "test_function2".to_string(),
-                            ])
+                            StringModule {
+                                test_cases: HashSet::from([
+                                    "test_function".to_string(),
+                                    "test_function2".to_string(),
+                                ]),
+                                fixtures: HashSet::new(),
+                            },
                         )]),
                         packages: HashMap::new(),
                     }
                 )]),
             }
         );
+        assert_eq!(session.total_test_cases(), 2);
     }
 
     #[test]
@@ -512,7 +531,7 @@ def test_function(): pass
         let discoverer = Discoverer::new(&project);
         let session = discoverer.discover();
         assert_eq!(
-            get_sorted_test_strings(&session),
+            Into::<StringPackage>::into(&session),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
@@ -521,11 +540,17 @@ def test_function(): pass
                         modules: HashMap::from([
                             (
                                 "test_file".to_string(),
-                                HashSet::from(["test_function".to_string(),])
+                                StringModule {
+                                    test_cases: HashSet::from(["test_function".to_string(),]),
+                                    fixtures: HashSet::new(),
+                                },
                             ),
                             (
                                 "test_file2".to_string(),
-                                HashSet::from(["test_function".to_string(),])
+                                StringModule {
+                                    test_cases: HashSet::from(["test_function".to_string(),]),
+                                    fixtures: HashSet::new(),
+                                },
                             )
                         ]),
                         packages: HashMap::new(),
@@ -533,5 +558,103 @@ def test_function(): pass
                 )]),
             }
         );
+        assert_eq!(session.total_test_cases(), 2);
+    }
+
+    #[test]
+    fn test_discover_files_with_conftest_explicit_path() {
+        let env = TestEnv::new();
+        let conftest_path = env.create_file("tests/conftest.py", "def test_function(): pass");
+        env.create_file("tests/test_file.py", "def test_function2(): pass");
+
+        let project = Project::new(env.cwd(), vec![conftest_path]);
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
+
+        assert_eq!(
+            Into::<StringPackage>::into(&session),
+            StringPackage {
+                modules: HashMap::new(),
+                packages: HashMap::from([(
+                    "tests".to_string(),
+                    StringPackage {
+                        modules: HashMap::from([(
+                            "conftest".to_string(),
+                            StringModule {
+                                test_cases: HashSet::from(["test_function".to_string(),]),
+                                fixtures: HashSet::new(),
+                            },
+                        )]),
+                        packages: HashMap::new(),
+                    }
+                )]),
+            }
+        );
+        assert_eq!(session.total_test_cases(), 1);
+    }
+
+    #[test]
+    fn test_discover_files_with_conftest_parent_path() {
+        let env = TestEnv::new();
+        let path = env.create_dir("tests");
+        env.create_file("tests/conftest.py", "def test_function(): pass");
+        env.create_file("tests/test_file.py", "def test_function2(): pass");
+
+        let project = Project::new(env.cwd(), vec![path]);
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
+
+        assert_eq!(
+            Into::<StringPackage>::into(&session),
+            StringPackage {
+                modules: HashMap::new(),
+                packages: HashMap::from([(
+                    "tests".to_string(),
+                    StringPackage {
+                        modules: HashMap::from([(
+                            "test_file".to_string(),
+                            StringModule {
+                                test_cases: HashSet::from(["test_function2".to_string(),]),
+                                fixtures: HashSet::new(),
+                            },
+                        )]),
+                        packages: HashMap::new(),
+                    }
+                )]),
+            }
+        );
+        assert_eq!(session.total_test_cases(), 1);
+    }
+
+    #[test]
+    fn test_discover_files_with_cwd_path() {
+        let env = TestEnv::new();
+        let path = env.cwd();
+        env.create_file("tests/test_file.py", "def test_function(): pass");
+
+        let project = Project::new(env.cwd(), vec![path]);
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
+
+        assert_eq!(
+            Into::<StringPackage>::into(&session),
+            StringPackage {
+                modules: HashMap::new(),
+                packages: HashMap::from([(
+                    "tests".to_string(),
+                    StringPackage {
+                        modules: HashMap::from([(
+                            "test_file".to_string(),
+                            StringModule {
+                                test_cases: HashSet::from(["test_function".to_string(),]),
+                                fixtures: HashSet::new(),
+                            },
+                        )]),
+                        packages: HashMap::new(),
+                    }
+                )]),
+            }
+        );
+        assert_eq!(session.total_test_cases(), 1);
     }
 }

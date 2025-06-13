@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    fmt::Display,
     hash::{Hash, Hasher},
 };
 
@@ -7,7 +8,9 @@ use karva_project::{path::SystemPathBuf, utils::module_name};
 use pyo3::prelude::*;
 use ruff_python_ast::{Decorator, Expr, StmtFunctionDef};
 
-use crate::{fixture::python::FixtureFunctionDefinition, utils::recursive_add_to_sys_path};
+use crate::{
+    case::TestCase, fixture::python::FixtureFunctionDefinition, utils::recursive_add_to_sys_path,
+};
 
 pub mod python;
 
@@ -37,6 +40,12 @@ impl From<String> for FixtureScope {
     }
 }
 
+impl Display for FixtureScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
 #[must_use]
 pub fn check_valid_scope(scope: &str) -> bool {
     matches!(scope, "module" | "session" | "function" | "package")
@@ -44,10 +53,10 @@ pub fn check_valid_scope(scope: &str) -> bool {
 
 #[derive(Debug)]
 pub struct Fixture {
-    pub name: String,
-    pub function_def: StmtFunctionDef,
-    pub scope: FixtureScope,
-    pub function: Py<FixtureFunctionDefinition>,
+    name: String,
+    function_def: StmtFunctionDef,
+    scope: FixtureScope,
+    function: Py<FixtureFunctionDefinition>,
 }
 
 impl Fixture {
@@ -66,16 +75,27 @@ impl Fixture {
         }
     }
 
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    #[must_use]
+    pub const fn function_def(&self) -> &StmtFunctionDef {
+        &self.function_def
+    }
+
+    #[must_use]
+    pub const fn scope(&self) -> &FixtureScope {
+        &self.scope
+    }
+
     pub fn from(
         py: &Python<'_>,
         val: StmtFunctionDef,
         path: &SystemPathBuf,
         cwd: &SystemPathBuf,
     ) -> Result<Self, String> {
-        if !is_fixture_function(&val) {
-            return Err(format!("Function {} is not a fixture", val.name));
-        }
-
         recursive_add_to_sys_path(py, path, cwd).map_err(|e| e.to_string())?;
 
         let module = module_name(cwd, path);
@@ -153,15 +173,26 @@ pub fn call_fixtures(fixtures: &[&Fixture], py: Python<'_>) -> CalledFixtures {
 }
 
 pub trait HasFixtures {
-    fn fixtures(&self, scope: FixtureScope) -> Vec<&Fixture> {
-        self.all_fixtures()
+    fn fixtures(&self, scope: &[FixtureScope], test_cases: Option<&[&TestCase]>) -> Vec<&Fixture> {
+        self.all_fixtures(test_cases)
             .into_iter()
-            .filter(|fixture| fixture.scope == scope)
+            .filter(|fixture| scope.contains(fixture.scope()))
             .collect()
     }
-    fn all_fixtures(&self) -> Vec<&Fixture>;
+
+    fn called_fixtures(
+        &self,
+        py: Python<'_>,
+        scope: &[FixtureScope],
+        test_cases: &[&TestCase],
+    ) -> CalledFixtures {
+        call_fixtures(&self.fixtures(scope, Some(test_cases)), py)
+    }
+
+    fn all_fixtures(&self, test_cases: Option<&[&TestCase]>) -> Vec<&Fixture>;
 }
 
+#[derive(Debug)]
 pub struct TestCaseFixtures<'a> {
     session: &'a HashMap<String, Py<PyAny>>,
     package: &'a HashMap<String, Py<PyAny>>,

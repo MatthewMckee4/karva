@@ -1,6 +1,6 @@
 use colored::Colorize;
 
-use crate::diagnostic::{Diagnostic, DiagnosticError, DiagnosticType};
+use crate::diagnostic::{Diagnostic, DiagnosticError, SubDiagnostic, SubDiagnosticType};
 
 pub struct DisplayDiagnostic<'a> {
     diagnostic: &'a Diagnostic,
@@ -15,18 +15,38 @@ impl<'a> DisplayDiagnostic<'a> {
 
 impl std::fmt::Display for DisplayDiagnostic<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for sub_diagnostic in self.diagnostic.sub_diagnostics() {
+            write!(f, "{}", sub_diagnostic.display())?;
+        }
+        Ok(())
+    }
+}
+
+pub struct SubDiagnosticDisplay<'a> {
+    diagnostic: &'a SubDiagnostic,
+}
+
+impl<'a> SubDiagnosticDisplay<'a> {
+    #[must_use]
+    pub const fn new(diagnostic: &'a SubDiagnostic) -> Self {
+        Self { diagnostic }
+    }
+}
+
+impl std::fmt::Display for SubDiagnosticDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.diagnostic.diagnostic_type() {
-            DiagnosticType::Fail => {
+            SubDiagnosticType::Fail => {
                 writeln!(f, "{}", "fail[assertion-failed]".red())?;
             }
-            DiagnosticType::Error(DiagnosticError::Error(type_name)) => {
+            SubDiagnosticType::Error(DiagnosticError::Error(type_name)) => {
                 writeln!(
                     f,
                     "{}",
                     format!("error[{}]", to_kebab_case(type_name)).yellow()
                 )?;
             }
-            DiagnosticType::Error(DiagnosticError::FixtureNotFound(_)) => {
+            SubDiagnosticType::Error(DiagnosticError::FixtureNotFound(_)) => {
                 writeln!(f, "{}", "error[fixture-not-found]".to_string().yellow())?;
             }
         }

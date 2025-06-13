@@ -6,11 +6,11 @@ use pyo3::prelude::*;
 
 use crate::{
     diagnostic::{
-        Diagnostic, DiagnosticType,
+        Diagnostic, DiagnosticScope, SubDiagnosticType,
         reporter::{DummyReporter, Reporter},
     },
     discovery::Discoverer,
-    fixture::{FixtureScope, HasFixtures, TestCaseFixtures, call_fixtures},
+    fixture::{FixtureScope, HasFixtures, TestCaseFixtures},
     module::Module,
     package::Package,
     utils::add_to_sys_path,
@@ -39,38 +39,79 @@ impl<'proj> StandardTestRunner<'proj> {
         module: &Module,
         package: Option<&Package>,
         session: &Package,
-        session_fixtures: &HashMap<String, PyObject>,
         package_fixtures: Option<&HashMap<String, PyObject>>,
+        session_fixtures: &HashMap<String, PyObject>,
         diagnostics: &mut Vec<Diagnostic>,
         reporter: &dyn Reporter,
     ) {
+        if module.total_test_cases() == 0 {
+            return;
+        }
+
         let mut module_fixtures = HashMap::new();
 
-        module_fixtures.extend(call_fixtures(&module.fixtures(FixtureScope::Module), py));
+        module_fixtures.extend(module.called_fixtures(
+            py,
+            &[
+                FixtureScope::Module,
+                FixtureScope::Package,
+                FixtureScope::Session,
+            ],
+            &module.test_cases(),
+        ));
+
         if let Some(package) = package {
-            module_fixtures.extend(call_fixtures(&package.fixtures(FixtureScope::Module), py));
+            module_fixtures.extend(package.called_fixtures(
+                py,
+                &[FixtureScope::Module],
+                &module.test_cases(),
+            ));
         }
-        module_fixtures.extend(call_fixtures(&session.fixtures(FixtureScope::Module), py));
+
+        module_fixtures.extend(session.called_fixtures(
+            py,
+            &[FixtureScope::Module],
+            &module.test_cases(),
+        ));
 
         let py_module = match PyModule::import(py, module.name()) {
             Ok(py_module) => py_module,
             Err(err) => {
-                diagnostics.extend(vec![Diagnostic::from_py_err(py, &err)]);
+                diagnostics.extend(vec![Diagnostic::from_py_err(
+                    py,
+                    &err,
+                    DiagnosticScope::Setup,
+                )]);
                 return;
             }
         };
 
-        let mut function_fixtures = HashMap::new();
-
         for function in module.test_cases() {
-            function_fixtures.extend(call_fixtures(&module.fixtures(FixtureScope::Function), py));
+            let mut function_fixtures = HashMap::new();
+
+            function_fixtures.extend(module.called_fixtures(
+                py,
+                &[FixtureScope::Function],
+                &[function],
+            ));
+
             if let Some(package) = package {
-                function_fixtures
-                    .extend(call_fixtures(&package.fixtures(FixtureScope::Function), py));
+                function_fixtures.extend(package.called_fixtures(
+                    py,
+                    &[FixtureScope::Function],
+                    &[function],
+                ));
             }
-            function_fixtures.extend(call_fixtures(&session.fixtures(FixtureScope::Function), py));
+
+            function_fixtures.extend(session.called_fixtures(
+                py,
+                &[FixtureScope::Function],
+                &[function],
+            ));
+
             let default_package_fixtures = HashMap::new();
             let package_fixtures = package_fixtures.unwrap_or(&default_package_fixtures);
+
             let test_case_fixtures = TestCaseFixtures::new(
                 session_fixtures,
                 package_fixtures,
@@ -82,7 +123,7 @@ impl<'proj> StandardTestRunner<'proj> {
             let result = function.run_test(py, &py_module, &test_case_fixtures);
             reporter.report_test(&test_name);
             if let Some(result) = result {
-                diagnostics.extend(result);
+                diagnostics.push(result);
             }
         }
     }
@@ -96,10 +137,22 @@ impl<'proj> StandardTestRunner<'proj> {
         diagnostics: &mut Vec<Diagnostic>,
         reporter: &dyn Reporter,
     ) {
+        if package.total_test_cases() == 0 {
+            return;
+        }
+
         let mut package_fixtures = HashMap::new();
 
-        package_fixtures.extend(call_fixtures(&package.fixtures(FixtureScope::Package), py));
-        package_fixtures.extend(call_fixtures(&session.fixtures(FixtureScope::Package), py));
+        package_fixtures.extend(package.called_fixtures(
+            py,
+            &[FixtureScope::Package, FixtureScope::Session],
+            &package.test_cases(),
+        ));
+        package_fixtures.extend(session.called_fixtures(
+            py,
+            &[FixtureScope::Package],
+            &package.test_cases(),
+        ));
 
         for module in package.modules().values() {
             self.test_module(
@@ -107,8 +160,8 @@ impl<'proj> StandardTestRunner<'proj> {
                 module,
                 Some(package),
                 session,
-                session_fixtures,
                 Some(&package_fixtures),
+                session_fixtures,
                 diagnostics,
                 reporter,
             );
@@ -129,7 +182,9 @@ impl<'proj> StandardTestRunner<'proj> {
     #[must_use]
     fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
         let session = Discoverer::new(self.project).discover();
+
         let total_test_cases = session.total_test_cases();
+
         reporter.set_tests(total_test_cases);
 
         let test_results: Vec<Diagnostic> = Python::with_gil(|py| {
@@ -138,7 +193,9 @@ impl<'proj> StandardTestRunner<'proj> {
                 return Vec::new();
             }
 
-            let session_fixtures = call_fixtures(&session.fixtures(FixtureScope::Session), py);
+            let session_fixtures =
+                session.called_fixtures(py, &[FixtureScope::Session], &session.test_cases());
+
             let mut diagnostics: Vec<Diagnostic> = Vec::new();
 
             for package in session.packages().values() {
@@ -158,8 +215,8 @@ impl<'proj> StandardTestRunner<'proj> {
                     module,
                     None,
                     &session,
-                    &session_fixtures,
                     None,
+                    &session_fixtures,
                     &mut diagnostics,
                     reporter,
                 );
@@ -228,10 +285,12 @@ impl RunDiagnostics {
     pub fn stats(&self) -> DiagnosticStats {
         let mut stats = DiagnosticStats::new(self.total_tests);
         for diagnostic in &self.diagnostics {
-            stats.passed -= 1;
-            match diagnostic.diagnostic_type() {
-                DiagnosticType::Fail => stats.failed += 1,
-                DiagnosticType::Error(_) => stats.error += 1,
+            if diagnostic.scope() == &DiagnosticScope::Test {
+                stats.passed -= 1;
+                match diagnostic.diagnostic_type() {
+                    SubDiagnosticType::Fail => stats.failed += 1,
+                    SubDiagnosticType::Error(_) => stats.error += 1,
+                }
             }
         }
         stats

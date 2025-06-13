@@ -1,8 +1,9 @@
-import karva
+from karva import fixture
 
-from src import Calculator
+from .test_env import TestEnv
 
 
-@karva.fixture
-def calculator() -> Calculator:
-    return Calculator()
+@fixture(scope="session")
+def test_env() -> TestEnv:
+    """Create a test environment for the entire test session."""
+    return TestEnv()

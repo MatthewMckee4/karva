@@ -8,7 +8,10 @@ use karva_project::{path::SystemPathBuf, utils::module_name};
 use pyo3::{prelude::*, types::PyTuple};
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::{diagnostic::Diagnostic, fixture::TestCaseFixtures};
+use crate::{
+    diagnostic::{Diagnostic, DiagnosticScope},
+    fixture::TestCaseFixtures,
+};
 
 /// A test case represents a single test function.
 #[derive(Debug, Clone)]
@@ -71,13 +74,13 @@ impl TestCase {
         py: Python<'_>,
         module: &Bound<'_, PyModule>,
         fixtures: &TestCaseFixtures<'_>,
-    ) -> Option<Vec<Diagnostic>> {
+    ) -> Option<Diagnostic> {
         let result: PyResult<Bound<'_, PyAny>> = {
             let name: &str = &self.function_definition().name;
             let function = match module.getattr(name) {
                 Ok(function) => function,
                 Err(err) => {
-                    return Some(vec![Diagnostic::from_py_err(py, &err)]);
+                    return Some(Diagnostic::from_py_err(py, &err, DiagnosticScope::Test));
                 }
             };
             let required_fixture_names = self.get_required_fixtures();
@@ -99,7 +102,7 @@ impl TestCase {
                     .collect::<Vec<_>>();
 
                 if !diagnostics.is_empty() {
-                    return Some(diagnostics);
+                    return Some(Diagnostic::from_test_diagnostics(diagnostics));
                 }
 
                 let args = PyTuple::new(py, required_fixtures);
@@ -111,8 +114,14 @@ impl TestCase {
         };
         match result {
             Ok(_) => None,
-            Err(err) => Some(vec![Diagnostic::from_py_fail(py, &err)]),
+            Err(err) => Some(Diagnostic::from_test_fail(py, &err)),
         }
+    }
+
+    #[must_use]
+    pub fn uses_fixture(&self, fixture_name: &str) -> bool {
+        self.get_required_fixtures()
+            .contains(&fixture_name.to_string())
     }
 }
 

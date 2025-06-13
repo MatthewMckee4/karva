@@ -8,11 +8,10 @@ use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 use crate::{
     case::TestCase,
     fixture::{Fixture, HasFixtures},
-    module::{Module, ModuleType},
+    module::{Module, ModuleType, StringModule},
 };
 
 /// A package represents a single python directory.
-#[derive(Debug)]
 pub struct Package<'proj> {
     path: SystemPathBuf,
     project: &'proj Project,
@@ -114,14 +113,16 @@ impl<'proj> Package<'proj> {
 
     #[must_use]
     pub fn test_cases(&self) -> Vec<&TestCase> {
-        let mut cases = self
-            .modules
-            .values()
-            .flat_map(|m| &m.test_cases)
-            .collect::<Vec<_>>();
+        let mut cases = Vec::new();
+
+        for module in self.modules.values() {
+            cases.extend(module.test_cases());
+        }
+
         for sub_package in self.packages.values() {
             cases.extend(sub_package.test_cases());
         }
+
         cases
     }
 
@@ -132,13 +133,19 @@ impl<'proj> Package<'proj> {
             .filter(|m| m.module_type == ModuleType::Configuration)
             .collect::<Vec<_>>()
     }
+
+    #[must_use]
+    pub fn uses_fixture(&self, fixture_name: &str) -> bool {
+        self.modules.values().any(|m| m.uses_fixture(fixture_name))
+            || self.packages.values().any(|p| p.uses_fixture(fixture_name))
+    }
 }
 
 impl HasFixtures for Package<'_> {
-    fn all_fixtures(&self) -> Vec<&Fixture> {
+    fn all_fixtures(&self, test_cases: Option<&[&TestCase]>) -> Vec<&Fixture> {
         self.configuration_modules()
             .iter()
-            .flat_map(|m| &m.fixtures)
+            .flat_map(|m| m.all_fixtures(test_cases))
             .collect::<Vec<_>>()
     }
 }
@@ -156,3 +163,44 @@ impl PartialEq for Package<'_> {
 }
 
 impl Eq for Package<'_> {}
+
+#[derive(Debug)]
+pub struct StringPackage {
+    pub modules: HashMap<String, StringModule>,
+    pub packages: HashMap<String, StringPackage>,
+}
+
+impl PartialEq for StringPackage {
+    fn eq(&self, other: &Self) -> bool {
+        self.modules == other.modules && self.packages == other.packages
+    }
+}
+
+impl Eq for StringPackage {}
+
+impl From<&Package<'_>> for StringPackage {
+    fn from(package: &Package<'_>) -> Self {
+        let mut modules = HashMap::new();
+        let mut packages = HashMap::new();
+
+        for module in package.modules().values() {
+            modules.insert(module_name(package.path(), module.path()), module.into());
+        }
+
+        for subpackage in package.packages().values() {
+            packages.insert(
+                module_name(package.path(), subpackage.path()),
+                subpackage.into(),
+            );
+        }
+
+        Self { modules, packages }
+    }
+}
+
+impl std::fmt::Debug for Package<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let string_package: StringPackage = self.into();
+        write!(f, "{string_package:?}")
+    }
+}
