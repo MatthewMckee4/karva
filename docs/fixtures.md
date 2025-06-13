@@ -4,6 +4,37 @@ We do not discover tests from a `conftest.py` unless it is explicitly specified.
 
 We do not support fixtures that require other fixtures (yet).
 
+## Fixture Types
+
+Karva supports different types of fixtures based on their scope:
+
+- **Function Scope**: The default scope. The fixture is created for each test function.
+- **Module Scope**: The fixture is created once per test module.
+- **Package Scope**: The fixture is created once per test package.
+- **Session Scope**: The fixture is created once per test session.
+
+Example of different scopes:
+
+```py
+from karva import fixture
+
+@fixture(scope="function")
+def function_fixture():
+    return "function"
+
+@fixture(scope="module")
+def module_fixture():
+    return "module"
+
+@fixture(scope="package")
+def package_fixture():
+    return "package"
+
+@fixture(scope="session")
+def session_fixture():
+    return "session"
+```
+
 ## Example
 
 ```bash

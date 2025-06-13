@@ -159,11 +159,12 @@ impl ExitStatus {
 struct ProgressReporter(Option<indicatif::ProgressBar>);
 
 impl karva_core::diagnostic::reporter::Reporter for ProgressReporter {
-    fn set_tests(&mut self, files: usize) {
-        let progress = indicatif::ProgressBar::new(files as u64);
+    fn set(&mut self, n: usize) {
+        let progress = indicatif::ProgressBar::new(n as u64);
+        #[allow(clippy::literal_string_with_formatting_args)]
         progress.set_style(
             indicatif::ProgressStyle::with_template(
-                "{msg:8.dim} {bar:60.green/dim} {pos}/{len} files",
+                r"[{elapsed_precise}] {msg:10.dim} {bar:60.green/dim} {pos}/{len} files",
             )
             .unwrap()
             .progress_chars("--"),
@@ -173,7 +174,7 @@ impl karva_core::diagnostic::reporter::Reporter for ProgressReporter {
         self.0 = Some(progress);
     }
 
-    fn report_test(&self, _file_name: &str) {
+    fn report(&self) {
         if let Some(ref progress_bar) = self.0 {
             progress_bar.inc(1);
         }

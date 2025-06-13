@@ -111,9 +111,10 @@ impl Fixture {
             .map_err(|e| e.to_string())?;
 
         let scope = py_function.borrow_mut().scope.clone();
+        let name = py_function.borrow_mut().name.clone();
 
         Ok(Self::new(
-            val.name.to_string(),
+            name,
             val,
             FixtureScope::from(scope),
             py_function.into(),

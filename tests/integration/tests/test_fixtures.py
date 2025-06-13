@@ -381,3 +381,41 @@ Function calculator initialized
 ----- stderr -----"""
     )
     test_env.cleanup()
+
+
+def test_named_fixtures(test_env: TestEnv) -> None:
+    test_env.write_files(
+        [
+            *get_source_code("print('Named calculator initialized')"),
+            (
+                "tests/conftest.py",
+                """
+                from karva import fixture
+                from src import Calculator
+
+                @fixture(name="named_calculator")
+                def calculator() -> Calculator:
+                    return Calculator()""",
+            ),
+            (
+                "tests/test_calculator.py",
+                """
+                from src import Calculator
+
+                def test_named_fixture(named_calculator: Calculator) -> None:
+                    assert named_calculator.add(1, 2) == 3""",
+            ),
+        ],
+    )
+
+    assert (
+        test_env.run_test()
+        == """success: true
+exit_code: 0
+----- stdout -----
+All checks passed!
+Named calculator initialized
+
+----- stderr -----"""
+    )
+    test_env.cleanup()

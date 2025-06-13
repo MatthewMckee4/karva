@@ -8,7 +8,7 @@ use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 use crate::{
     case::TestCase,
     fixture::{Fixture, HasFixtures},
-    module::{Module, ModuleType, StringModule},
+    module::{Module, StringModule},
 };
 
 /// A package represents a single python directory.
@@ -17,6 +17,7 @@ pub struct Package<'proj> {
     project: &'proj Project,
     modules: HashMap<SystemPathBuf, Module<'proj>>,
     packages: HashMap<SystemPathBuf, Package<'proj>>,
+    configuration_modules: Vec<SystemPathBuf>,
 }
 
 impl<'proj> Package<'proj> {
@@ -27,6 +28,7 @@ impl<'proj> Package<'proj> {
             project,
             modules: HashMap::new(),
             packages: HashMap::new(),
+            configuration_modules: Vec::new(),
         }
     }
 
@@ -65,6 +67,11 @@ impl<'proj> Package<'proj> {
         } else {
             self.modules.insert(module.path().clone(), module);
         }
+    }
+
+    pub fn add_configuration_module(&mut self, module: Module<'proj>) {
+        self.configuration_modules.push(module.path().clone());
+        self.add_module(module);
     }
 
     pub fn add_package(&mut self, package: Self) {
@@ -106,9 +113,23 @@ impl<'proj> Package<'proj> {
         total
     }
 
+    #[must_use]
+    pub fn total_modules(&self) -> usize {
+        self.modules.len()
+            + self
+                .packages
+                .values()
+                .map(Package::total_modules)
+                .sum::<usize>()
+    }
+
     pub fn update(&mut self, package: Self) {
-        self.modules.extend(package.modules);
-        self.packages.extend(package.packages);
+        for (_, module) in package.modules {
+            self.add_module(module);
+        }
+        for (_, package) in package.packages {
+            self.add_package(package);
+        }
     }
 
     #[must_use]
@@ -128,9 +149,9 @@ impl<'proj> Package<'proj> {
 
     #[must_use]
     pub fn configuration_modules(&self) -> Vec<&Module<'_>> {
-        self.modules
-            .values()
-            .filter(|m| m.module_type == ModuleType::Configuration)
+        self.configuration_modules
+            .iter()
+            .map(|path| self.modules.get(path).unwrap())
             .collect::<Vec<_>>()
     }
 

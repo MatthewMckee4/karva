@@ -31,6 +31,63 @@ impl<'proj> StandardTestRunner<'proj> {
         Self { project }
     }
 
+    #[must_use]
+    fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
+        let session = Discoverer::new(self.project).discover();
+
+        let total_files = session.total_modules();
+
+        let total_test_cases = session.total_test_cases();
+
+        tracing::info!(
+            "Discovered {} tests in {} files",
+            total_test_cases,
+            total_files
+        );
+
+        reporter.set(total_files);
+
+        let test_results: Vec<Diagnostic> = Python::with_gil(|py| {
+            if add_to_sys_path(&py, self.project.cwd()).is_err() {
+                tracing::error!("Failed to add {} to sys.path", self.project.cwd());
+                return Vec::new();
+            }
+
+            let session_fixtures =
+                session.called_fixtures(py, &[FixtureScope::Session], &session.test_cases());
+
+            let mut diagnostics: Vec<Diagnostic> = Vec::new();
+
+            for package in session.packages().values() {
+                self.test_package(
+                    py,
+                    &session,
+                    package,
+                    &session_fixtures,
+                    &mut diagnostics,
+                    reporter,
+                );
+            }
+
+            for module in session.modules().values() {
+                self.test_module(
+                    py,
+                    module,
+                    None,
+                    &session,
+                    None,
+                    &session_fixtures,
+                    &mut diagnostics,
+                    reporter,
+                );
+            }
+
+            diagnostics
+        });
+
+        RunDiagnostics::new(test_results, total_files)
+    }
+
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::unused_self)]
     fn test_module(
@@ -120,12 +177,15 @@ impl<'proj> StandardTestRunner<'proj> {
             );
 
             let test_name = function.to_string();
-            let result = function.run_test(py, &py_module, &test_case_fixtures);
-            reporter.report_test(&test_name);
-            if let Some(result) = result {
+
+            tracing::info!("Running test: {}", test_name);
+
+            if let Some(result) = function.run_test(py, &py_module, &test_case_fixtures) {
                 diagnostics.push(result);
             }
         }
+
+        reporter.report();
     }
 
     fn test_package(
@@ -177,55 +237,6 @@ impl<'proj> StandardTestRunner<'proj> {
                 reporter,
             );
         }
-    }
-
-    #[must_use]
-    fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
-        let session = Discoverer::new(self.project).discover();
-
-        let total_test_cases = session.total_test_cases();
-
-        reporter.set_tests(total_test_cases);
-
-        let test_results: Vec<Diagnostic> = Python::with_gil(|py| {
-            if add_to_sys_path(&py, self.project.cwd()).is_err() {
-                tracing::error!("Failed to add {} to sys.path", self.project.cwd());
-                return Vec::new();
-            }
-
-            let session_fixtures =
-                session.called_fixtures(py, &[FixtureScope::Session], &session.test_cases());
-
-            let mut diagnostics: Vec<Diagnostic> = Vec::new();
-
-            for package in session.packages().values() {
-                self.test_package(
-                    py,
-                    &session,
-                    package,
-                    &session_fixtures,
-                    &mut diagnostics,
-                    reporter,
-                );
-            }
-
-            for module in session.modules().values() {
-                self.test_module(
-                    py,
-                    module,
-                    None,
-                    &session,
-                    None,
-                    &session_fixtures,
-                    &mut diagnostics,
-                    reporter,
-                );
-            }
-
-            diagnostics
-        });
-
-        RunDiagnostics::new(test_results, total_test_cases)
     }
 }
 
