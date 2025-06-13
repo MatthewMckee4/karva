@@ -16,7 +16,7 @@ use crate::{
 /// A test case represents a single test function.
 #[derive(Debug, Clone)]
 pub struct TestCase {
-    file: SystemPathBuf,
+    path: SystemPathBuf,
     cwd: SystemPathBuf,
     function_definition: StmtFunctionDef,
 }
@@ -25,19 +25,19 @@ impl TestCase {
     #[must_use]
     pub fn new(
         cwd: &SystemPathBuf,
-        file: SystemPathBuf,
+        path: SystemPathBuf,
         function_definition: StmtFunctionDef,
     ) -> Self {
         Self {
-            file,
+            path,
             cwd: cwd.clone(),
             function_definition,
         }
     }
 
     #[must_use]
-    pub const fn file(&self) -> &SystemPathBuf {
-        &self.file
+    pub const fn path(&self) -> &SystemPathBuf {
+        &self.path
     }
 
     #[must_use]
@@ -80,7 +80,12 @@ impl TestCase {
             let function = match module.getattr(name) {
                 Ok(function) => function,
                 Err(err) => {
-                    return Some(Diagnostic::from_py_err(py, &err, DiagnosticScope::Test));
+                    return Some(Diagnostic::from_py_err(
+                        py,
+                        &err,
+                        DiagnosticScope::Test,
+                        &self.name(),
+                    ));
                 }
             };
             let required_fixture_names = self.get_required_fixtures();
@@ -93,7 +98,7 @@ impl TestCase {
                     .filter_map(|fixture| {
                         fixtures.get_fixture(fixture).map_or_else(
                             || {
-                                diagnostics.push(Diagnostic::fixture_not_found(fixture));
+                                diagnostics.push(Diagnostic::fixture_not_found(fixture, self));
                                 None
                             },
                             Some,
@@ -114,7 +119,7 @@ impl TestCase {
         };
         match result {
             Ok(_) => None,
-            Err(err) => Some(Diagnostic::from_test_fail(py, &err)),
+            Err(err) => Some(Diagnostic::from_test_fail(py, &err, self)),
         }
     }
 
@@ -130,7 +135,7 @@ impl Display for TestCase {
         write!(
             f,
             "{}::{}",
-            module_name(&self.cwd, &self.file),
+            module_name(&self.cwd, &self.path),
             self.function_definition.name
         )
     }
@@ -138,14 +143,14 @@ impl Display for TestCase {
 
 impl Hash for TestCase {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.file.hash(state);
+        self.path.hash(state);
         self.function_definition.name.hash(state);
     }
 }
 
 impl PartialEq for TestCase {
     fn eq(&self, other: &Self) -> bool {
-        self.file == other.file && self.function_definition.name == other.function_definition.name
+        self.path == other.path && self.function_definition.name == other.function_definition.name
     }
 }
 
@@ -171,7 +176,7 @@ mod tests {
 
         let test_case = session.test_cases()[0].clone();
 
-        assert_eq!(test_case.file(), &path);
+        assert_eq!(test_case.path(), &path);
         assert_eq!(test_case.cwd(), &env.cwd());
         assert_eq!(test_case.name(), "test_function");
     }
