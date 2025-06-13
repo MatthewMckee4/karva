@@ -30,7 +30,7 @@ ITERATIONS ?= 1
 NUM_TESTS ?= 10000
 
 benchmark: build
-	cd scripts/benchmark && uv sync --all-extras --no-install-project && uv run --no-project main.py --iterations $(ITERATIONS) --num-tests $(NUM_TESTS) --run-test
+	cd scripts/benchmark && uv sync --all-extras --no-install-project && uv run main.py --iterations $(ITERATIONS) --num-tests $(NUM_TESTS) --run-test
 
 flame:
 	$(MAKE) temp-test-dir N=10000

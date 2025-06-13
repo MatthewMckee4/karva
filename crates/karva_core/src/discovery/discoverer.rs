@@ -611,13 +611,22 @@ def test_function(): pass
                 packages: HashMap::from([(
                     "tests".to_string(),
                     StringPackage {
-                        modules: HashMap::from([(
-                            "test_file".to_string(),
-                            StringModule {
-                                test_cases: HashSet::from(["test_function2".to_string(),]),
-                                fixtures: HashSet::new(),
-                            },
-                        )]),
+                        modules: HashMap::from([
+                            (
+                                "test_file".to_string(),
+                                StringModule {
+                                    test_cases: HashSet::from(["test_function2".to_string(),]),
+                                    fixtures: HashSet::new(),
+                                },
+                            ),
+                            (
+                                "conftest".to_string(),
+                                StringModule {
+                                    test_cases: HashSet::new(),
+                                    fixtures: HashSet::new(),
+                                },
+                            )
+                        ]),
                         packages: HashMap::new(),
                     }
                 )]),
