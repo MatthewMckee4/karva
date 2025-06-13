@@ -287,7 +287,7 @@ mod tests {
         let env = TestEnv::new();
         let path = env.create_file(
             "test.py",
-            "def test_with_fixtures(fixture1, fixture2): \n\tassert fixture1 == 'value1' \n\tassert fixture2 == 'value2'",
+            "def test_with_fixtures(fixture1, fixture2): pass",
         );
 
         let project = Project::new(env.cwd(), vec![path.clone()]);
@@ -325,7 +325,7 @@ mod tests {
         let env = TestEnv::new();
         let path = env.create_file(
             "test.py",
-            "def test_with_fixtures(fixture1, fixture2): \n\tassert fixture1 == 'value1' \n\tassert fixture2 == 'value2'",
+            "def test_with_fixtures(fixture1, fixture2): pass",
         );
 
         let project = Project::new(env.cwd(), vec![path.clone()]);
