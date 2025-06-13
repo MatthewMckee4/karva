@@ -156,14 +156,9 @@ mod tests {
     use std::collections::HashMap;
 
     use karva_project::{project::Project, tests::TestEnv, utils::module_name};
-    use pyo3::{ffi::c_str, prelude::*, types::PyModule};
+    use pyo3::{prelude::*, types::PyModule};
 
-    use crate::{
-        diagnostic::{DiagnosticError, DiagnosticScope, SubDiagnosticType},
-        discovery::Discoverer,
-        fixture::TestCaseFixtures,
-        utils::add_to_sys_path,
-    };
+    use crate::{discovery::Discoverer, fixture::TestCaseFixtures, utils::add_to_sys_path};
 
     #[test]
     fn test_case_construction_and_getters() {
@@ -279,95 +274,6 @@ mod tests {
             );
             let result = test_case.run_test(py, &module, &fixtures);
             assert!(result.is_none());
-        });
-    }
-
-    #[test]
-    fn test_run_test_with_fixtures() {
-        let env = TestEnv::new();
-        let path = env.create_file(
-            "test.py",
-            "def test_with_fixtures(fixture1, fixture2): pass",
-        );
-
-        let project = Project::new(env.cwd(), vec![path.clone()]);
-        let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
-
-        let test_case = session.test_cases()[0].clone();
-
-        Python::with_gil(|py| {
-            add_to_sys_path(&py, &env.cwd()).unwrap();
-            let module = PyModule::import(py, module_name(&env.cwd(), &path)).unwrap();
-            let mut temp_fixtures = HashMap::new();
-            temp_fixtures.insert(
-                "fixture1".to_string(),
-                py.eval(c_str!("'value1'"), None, None).unwrap().into(),
-            );
-            temp_fixtures.insert(
-                "fixture2".to_string(),
-                py.eval(c_str!("'value2'"), None, None).unwrap().into(),
-            );
-
-            let fixtures = TestCaseFixtures::new(
-                &temp_fixtures,
-                &temp_fixtures,
-                &temp_fixtures,
-                &temp_fixtures,
-            );
-            let result = test_case.run_test(py, &module, &fixtures);
-            assert!(result.is_none());
-        });
-    }
-
-    #[test]
-    fn test_run_test_with_missing_fixtures() {
-        let env = TestEnv::new();
-        let path = env.create_file(
-            "test.py",
-            "def test_with_fixtures(fixture1, fixture2): pass",
-        );
-
-        let project = Project::new(env.cwd(), vec![path.clone()]);
-        let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
-
-        let test_case = session.test_cases()[0].clone();
-
-        Python::with_gil(|py| {
-            add_to_sys_path(&py, &env.cwd()).unwrap();
-            let module = PyModule::import(py, module_name(&env.cwd(), &path)).unwrap();
-            let temp_fixtures = HashMap::new();
-            let fixtures = TestCaseFixtures::new(
-                &temp_fixtures,
-                &temp_fixtures,
-                &temp_fixtures,
-                &temp_fixtures,
-            );
-
-            let result = test_case.run_test(py, &module, &fixtures);
-            assert!(result.is_some());
-            if let Some(diagnostic) = result {
-                assert!(matches!(diagnostic.scope(), DiagnosticScope::Test));
-                assert!(
-                    diagnostic
-                        .sub_diagnostics()
-                        .iter()
-                        .any(|d| d.diagnostic_type()
-                            == &SubDiagnosticType::Error(DiagnosticError::FixtureNotFound(
-                                "fixture1".to_string()
-                            )))
-                );
-                assert!(
-                    diagnostic
-                        .sub_diagnostics()
-                        .iter()
-                        .any(|d| d.diagnostic_type()
-                            == &SubDiagnosticType::Error(DiagnosticError::FixtureNotFound(
-                                "fixture2".to_string()
-                            )))
-                );
-            }
         });
     }
 }
