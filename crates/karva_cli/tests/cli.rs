@@ -154,18 +154,18 @@ fn test_one_test_fails() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_fail::test_fail
      | File "<temp_dir>/test_fail.py", line 3, in test_fail
      |   assert False
     ─────────────
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
@@ -180,18 +180,18 @@ fn test_multiple_tests_fail() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_fail2::test_fail2
      | File "<temp_dir>/test_fail2.py", line 3, in test_fail2
      |   assert 1 == 2
     ─────────────
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
@@ -215,11 +215,11 @@ fn test_mixed_pass_and_fail() -> anyhow::Result<()> {
         ),
     ])?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_fail::test_fail
      | File "<temp_dir>/test_fail.py", line 3, in test_fail
      |   assert False
     ─────────────
@@ -227,7 +227,7 @@ fn test_mixed_pass_and_fail() -> anyhow::Result<()> {
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
@@ -242,18 +242,18 @@ fn test_assertion_with_message() -> anyhow::Result<()> {
     "#,
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r####"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_fail_with_msg::test_fail_with_message
      | File "<temp_dir>/test_fail_with_msg.py", line 3, in test_fail_with_message
      |   assert False, "This should not happen"
     ─────────────
     Failed tests: 1
 
     ----- stderr -----
-    "####);
+    "#);
 
     Ok(())
 }
@@ -270,18 +270,18 @@ fn test_equality_assertion_fail() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_equality::test_equality
      | File "<temp_dir>/test_equality.py", line 5, in test_equality
      |   assert x == y
     ─────────────
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
@@ -297,18 +297,18 @@ fn test_complex_assertion_fail() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_complex::test_complex
      | File "<temp_dir>/test_complex.py", line 4, in test_complex
      |   assert len(data) > 5, 'Data should have more items'
     ─────────────
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
@@ -342,18 +342,18 @@ fn test_long_file() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_long::test_in_long_file
      | File "<temp_dir>/test_long.py", line 22, in test_in_long_file
      |   assert result == expected
     ─────────────
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
@@ -371,18 +371,18 @@ fn test_multiple_assertions_in_function() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_multiple_assertions::test_multiple_assertions
      | File "<temp_dir>/test_multiple_assertions.py", line 6, in test_multiple_assertions
      |   assert y == 3  # This fails
     ─────────────
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
@@ -401,18 +401,18 @@ fn test_assertion_in_nested_function() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_nested::test_with_nested_call
      | File "<temp_dir>/test_nested.py", line 7, in test_with_nested_call
      |   assert result == True
     ─────────────
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
@@ -428,18 +428,18 @@ fn test_assertion_with_complex_expression() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_complex_expr::test_complex_expression
      | File "<temp_dir>/test_complex_expr.py", line 4, in test_complex_expression
      |   assert len([x for x in items if x > 3]) == 5
     ─────────────
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
@@ -464,18 +464,18 @@ fn test_assertion_with_multiline_setup() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_multiline::test_multiline_setup
      | File "<temp_dir>/test_multiline.py", line 13, in test_multiline_setup
      |   assert result == expected
     ─────────────
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
@@ -490,18 +490,18 @@ fn test_assertion_with_very_long_line() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_very_long_line::test_very_long_line
      | File "<temp_dir>/test_very_long_line.py", line 3, in test_very_long_line
      |   assert 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16 + 17 + 18 + 19 + 20 == 1000
     ─────────────
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
@@ -514,18 +514,18 @@ fn test_assertion_on_line_1() -> anyhow::Result<()> {
     assert False",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_line_1::test_line_1
      | File "<temp_dir>/test_line_1.py", line 2, in test_line_1
      |   assert False
     ─────────────
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
@@ -553,11 +553,11 @@ fn test_multiple_files_with_cross_function_calls() -> anyhow::Result<()> {
         ),
     ])?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_cross_file::test_with_helper
      | File "<temp_dir>/test_cross_file.py", line 5, in test_with_helper
      |   validate_data([])
      | File "<temp_dir>/helper.py", line 4, in validate_data
@@ -566,7 +566,7 @@ fn test_multiple_files_with_cross_function_calls() -> anyhow::Result<()> {
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
@@ -590,11 +590,11 @@ fn test_nested_function_calls_deep_stack() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_deep_stack::test_deep_call_stack
      | File "<temp_dir>/test_deep_stack.py", line 12, in test_deep_call_stack
      |   level_1()
      | File "<temp_dir>/test_deep_stack.py", line 3, in level_1
@@ -607,7 +607,7 @@ fn test_nested_function_calls_deep_stack() -> anyhow::Result<()> {
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
@@ -631,11 +631,11 @@ fn test_assertion_in_class_method() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_class::test_calculator
      | File "<temp_dir>/test_class.py", line 12, in test_calculator
      |   calc.validate_result(result)
      | File "<temp_dir>/test_class.py", line 7, in validate_result
@@ -644,7 +644,7 @@ fn test_assertion_in_class_method() -> anyhow::Result<()> {
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
@@ -671,11 +671,11 @@ fn test_assertion_in_imported_function() -> anyhow::Result<()> {
         ),
     ])?;
 
-    assert_cmd_snapshot!(case.command(), @r###"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed] in test_import::test_imported_validation
      | File "<temp_dir>/test_import.py", line 5, in test_imported_validation
      |   is_positive(-10)
      | File "<temp_dir>/validators.py", line 3, in is_positive
@@ -684,7 +684,7 @@ fn test_assertion_in_imported_function() -> anyhow::Result<()> {
     Failed tests: 1
 
     ----- stderr -----
-    "###);
+    "#);
 
     Ok(())
 }
