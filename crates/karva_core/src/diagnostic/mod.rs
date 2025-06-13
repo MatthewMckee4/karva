@@ -56,12 +56,17 @@ impl Diagnostic {
                 vec![SubDiagnostic {
                     diagnostic_type: SubDiagnosticType::Fail,
                     message: get_traceback(py, error),
-                    location: test_case.full_name(),
+                    location: test_case.path().to_string(),
                 }],
                 DiagnosticScope::Test,
             );
         }
-        Self::from_py_err(py, error, DiagnosticScope::Test, &test_case.full_name())
+        Self::from_py_err(
+            py,
+            error,
+            DiagnosticScope::Test,
+            &test_case.path().to_string(),
+        )
     }
 
     #[must_use]
@@ -72,7 +77,7 @@ impl Diagnostic {
                     fixture_name.to_string(),
                 )),
                 message: format!("Fixture {fixture_name} not found"),
-                location: test_case.full_name(),
+                location: test_case.path().to_string(),
             }],
             DiagnosticScope::Setup,
         )

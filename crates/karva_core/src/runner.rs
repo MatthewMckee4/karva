@@ -138,7 +138,7 @@ impl<'proj> StandardTestRunner<'proj> {
                     py,
                     &err,
                     DiagnosticScope::Setup,
-                    &module.name(),
+                    &module.path().to_string(),
                 )]);
                 return;
             }

@@ -76,11 +76,11 @@ uv run karva test tests/test.py
 Provides the following output:
 
 ```bash
-fail[assertion-failed] in tests.test::test_fail
- | File "/home/matthew/Developer/karva/tests/test.py", line 6, in test_fail
+fail[assertion-failed] in tests/test.py
+ | File "tests/test.py", line 6, in test_fail
  |   assert False, "This test should fail"
-error[value-error] in tests.test::test_error
- | File "/home/matthew/Developer/karva/tests/test.py", line 10, in test_error
+error[value-error] in tests/test.py
+ | File "/tests/test.py", line 10, in test_error
  |   raise ValueError("This is an error")
 ─────────────
 Passed tests: 1
