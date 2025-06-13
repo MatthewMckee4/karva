@@ -13,7 +13,6 @@ use crate::{
     fixture::{FixtureScope, HasFixtures, TestCaseFixtures, call_fixtures},
     module::Module,
     package::Package,
-    session::Session,
     utils::add_to_sys_path,
 };
 
@@ -33,12 +32,13 @@ impl<'proj> StandardTestRunner<'proj> {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::unused_self)]
     fn test_module(
         &self,
         py: Python<'_>,
         module: &Module,
         package: Option<&Package>,
-        session: &Session,
+        session: &Package,
         session_fixtures: &HashMap<String, PyObject>,
         package_fixtures: Option<&HashMap<String, PyObject>>,
         diagnostics: &mut Vec<Diagnostic>,
@@ -90,7 +90,7 @@ impl<'proj> StandardTestRunner<'proj> {
     fn test_package(
         &self,
         py: Python<'_>,
-        session: &Session,
+        session: &Package,
         package: &Package,
         session_fixtures: &HashMap<String, PyObject>,
         diagnostics: &mut Vec<Diagnostic>,

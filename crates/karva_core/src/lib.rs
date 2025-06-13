@@ -6,5 +6,4 @@ pub mod fixture;
 pub mod module;
 pub mod package;
 pub mod runner;
-pub mod session;
 pub mod utils;

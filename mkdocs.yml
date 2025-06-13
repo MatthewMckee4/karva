@@ -5,6 +5,7 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Tutorial: tutorial.md
+  - Fixtures: fixtures.md
   - CLI: cli.md
 
 theme:

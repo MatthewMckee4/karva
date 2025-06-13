@@ -3,7 +3,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use karva_project::path::SystemPathBuf;
+use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 
 use crate::{
     case::TestCase,
@@ -15,15 +15,17 @@ use crate::{
 #[derive(Debug)]
 pub struct Package<'proj> {
     path: SystemPathBuf,
+    project: &'proj Project,
     modules: HashMap<SystemPathBuf, Module<'proj>>,
     packages: HashMap<SystemPathBuf, Package<'proj>>,
 }
 
 impl<'proj> Package<'proj> {
     #[must_use]
-    pub fn new(path: SystemPathBuf) -> Self {
+    pub fn new(path: SystemPathBuf, project: &'proj Project) -> Self {
         Self {
             path,
+            project,
             modules: HashMap::new(),
             packages: HashMap::new(),
         }
@@ -32,6 +34,16 @@ impl<'proj> Package<'proj> {
     #[must_use]
     pub const fn path(&self) -> &SystemPathBuf {
         &self.path
+    }
+
+    #[must_use]
+    pub fn name(&self) -> String {
+        module_name(self.project.cwd(), &self.path)
+    }
+
+    #[must_use]
+    pub const fn project(&self) -> &Project {
+        self.project
     }
 
     #[must_use]
@@ -56,19 +68,43 @@ impl<'proj> Package<'proj> {
         }
     }
 
-    pub fn add_sub_package(&mut self, package: Self) {
+    pub fn add_package(&mut self, package: Self) {
         if !package.path().starts_with(self.path()) {
             return;
         }
-        if let Some(existing_package) = self.packages.get_mut(package.path()) {
-            existing_package.update(package);
+
+        let relative_path = package.path().strip_prefix(self.path()).unwrap();
+        let components: Vec<_> = relative_path.components().collect();
+
+        if components.len() <= 1 {
+            if let Some(existing_package) = self.packages.get_mut(package.path()) {
+                existing_package.update(package);
+            } else {
+                self.packages.insert(package.path().clone(), package);
+            }
         } else {
-            self.packages.insert(package.path().clone(), package);
+            let first_component = components[0];
+            let intermediate_path = self.path().join(first_component.as_str());
+
+            let intermediate_package = self
+                .packages
+                .entry(intermediate_path.clone())
+                .or_insert_with(|| Package::new(intermediate_path, self.project));
+
+            intermediate_package.add_package(package);
         }
     }
 
+    #[must_use]
     pub fn total_test_cases(&self) -> usize {
-        self.modules.values().map(Module::total_test_cases).sum()
+        let mut total = 0;
+        for module in self.modules.values() {
+            total += module.total_test_cases();
+        }
+        for package in self.packages.values() {
+            total += package.total_test_cases();
+        }
+        total
     }
 
     pub fn update(&mut self, package: Self) {
