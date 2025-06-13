@@ -5,7 +5,7 @@ use crate::diagnostic::render::{DisplayDiagnostic, SubDiagnosticDisplay};
 pub mod render;
 pub mod reporter;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Diagnostic {
     sub_diagnostics: Vec<SubDiagnostic>,
     scope: DiagnosticScope,
@@ -103,7 +103,7 @@ impl Diagnostic {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SubDiagnostic {
     diagnostic_type: SubDiagnosticType,
     message: String,
@@ -140,13 +140,13 @@ pub enum DiagnosticScope {
     Setup,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SubDiagnosticType {
     Fail,
     Error(DiagnosticError),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiagnosticError {
     Error(String),
     FixtureNotFound(String),

@@ -60,6 +60,8 @@ impl<'proj> Discoverer<'proj> {
             }
         }
 
+        session_package.shrink();
+
         session_package
     }
 
@@ -136,12 +138,17 @@ impl<'proj> Discoverer<'proj> {
                     package.add_package(subpackage);
                 }
                 Some(file_type) if file_type.is_file() => {
-                    if ModuleType::from_path(&current_path) == ModuleType::Test {
-                        if let Some(module) = self.discover_test_file(&current_path) {
-                            package.add_module(module);
+                    match ModuleType::from_path(&current_path) {
+                        ModuleType::Test => {
+                            if let Some(module) = self.discover_test_file(&current_path) {
+                                package.add_module(module);
+                            }
                         }
-                    } else if let Some(module) = self.discover_configuration_file(&current_path) {
-                        package.add_configuration_module(module);
+                        ModuleType::Configuration => {
+                            if let Some(module) = self.discover_configuration_file(&current_path) {
+                                package.add_configuration_module(module);
+                            }
+                        }
                     }
                 }
                 _ => {}

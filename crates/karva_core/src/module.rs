@@ -129,6 +129,11 @@ impl<'proj> Module<'proj> {
             .iter()
             .any(|tc| tc.uses_fixture(fixture_name))
     }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.test_cases.is_empty() && self.fixtures.is_empty()
+    }
 }
 
 impl HasFixtures for Module<'_> {

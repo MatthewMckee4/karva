@@ -150,3 +150,224 @@ impl PartialEq for TestCase {
 }
 
 impl Eq for TestCase {}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use karva_project::{project::Project, tests::TestEnv, utils::module_name};
+    use pyo3::{ffi::c_str, prelude::*, types::PyModule};
+
+    use crate::{
+        diagnostic::{DiagnosticError, DiagnosticScope, SubDiagnosticType},
+        discovery::Discoverer,
+        fixture::TestCaseFixtures,
+        utils::add_to_sys_path,
+    };
+
+    #[test]
+    fn test_case_construction_and_getters() {
+        let env = TestEnv::new();
+        let path = env.create_file("test.py", "def test_function(): pass");
+
+        let project = Project::new(env.cwd(), vec![path.clone()]);
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
+
+        let test_case = session.test_cases()[0].clone();
+
+        assert_eq!(test_case.file(), &path);
+        assert_eq!(test_case.cwd(), &env.cwd());
+        assert_eq!(test_case.name(), "test_function");
+    }
+
+    #[test]
+    fn test_case_with_fixtures() {
+        let env = TestEnv::new();
+        let path = env.create_file(
+            "test.py",
+            "def test_with_fixtures(fixture1, fixture2): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![path]);
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
+
+        let test_case = session.test_cases()[0].clone();
+
+        let required_fixtures = test_case.get_required_fixtures();
+        assert_eq!(required_fixtures.len(), 2);
+        assert!(required_fixtures.contains(&"fixture1".to_string()));
+        assert!(required_fixtures.contains(&"fixture2".to_string()));
+
+        assert!(test_case.uses_fixture("fixture1"));
+        assert!(test_case.uses_fixture("fixture2"));
+        assert!(!test_case.uses_fixture("nonexistent"));
+    }
+
+    #[test]
+    fn test_case_display() {
+        let env = TestEnv::new();
+        let path = env.create_file("test.py", "def test_display(): pass");
+
+        let project = Project::new(env.cwd(), vec![path]);
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
+
+        let test_case = session.test_cases()[0].clone();
+
+        assert_eq!(test_case.to_string(), "test::test_display");
+    }
+
+    #[test]
+    fn test_case_equality() {
+        let env = TestEnv::new();
+        let path1 = env.create_file("test1.py", "def test_same(): pass");
+        let path2 = env.create_file("test2.py", "def test_different(): pass");
+
+        let project = Project::new(env.cwd(), vec![path1, path2]);
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
+
+        let test_case1 = session.test_cases()[0].clone();
+        let test_case2 = session.test_cases()[1].clone();
+
+        assert_eq!(test_case1, test_case1);
+        assert_ne!(test_case1, test_case2);
+    }
+
+    #[test]
+    fn test_case_hash() {
+        use std::collections::HashSet;
+
+        let env = TestEnv::new();
+        let path1 = env.create_file("test1.py", "def test_same(): pass");
+        let path2 = env.create_file("test2.py", "def test_different(): pass");
+
+        let project = Project::new(env.cwd(), vec![path1, path2]);
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
+
+        let test_case1 = session.test_cases()[0].clone();
+        let test_case2 = session.test_cases()[1].clone();
+
+        let mut set = HashSet::new();
+        set.insert(test_case1.clone());
+        assert!(!set.contains(&test_case2));
+        assert!(set.contains(&test_case1));
+    }
+
+    #[test]
+    fn test_run_test_without_fixtures() {
+        let env = TestEnv::new();
+        let path = env.create_file("tests/test.py", "def test_simple(): pass");
+
+        let project = Project::new(env.cwd(), vec![path.clone()]);
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
+
+        let test_case = session.test_cases()[0].clone();
+        Python::with_gil(|py| {
+            add_to_sys_path(&py, &env.cwd()).unwrap();
+            let module = PyModule::import(py, module_name(&env.cwd(), &path)).unwrap();
+            let temp_fixtures = HashMap::new();
+            let fixtures = TestCaseFixtures::new(
+                &temp_fixtures,
+                &temp_fixtures,
+                &temp_fixtures,
+                &temp_fixtures,
+            );
+            let result = test_case.run_test(py, &module, &fixtures);
+            assert!(result.is_none());
+        });
+    }
+
+    #[test]
+    fn test_run_test_with_fixtures() {
+        let env = TestEnv::new();
+        let path = env.create_file(
+            "test.py",
+            "def test_with_fixtures(fixture1, fixture2): \n    assert fixture1 == 'value1' \n    assert fixture2 == 'value2'",
+        );
+
+        let project = Project::new(env.cwd(), vec![path.clone()]);
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
+
+        let test_case = session.test_cases()[0].clone();
+
+        Python::with_gil(|py| {
+            add_to_sys_path(&py, &env.cwd()).unwrap();
+            let module = PyModule::import(py, module_name(&env.cwd(), &path)).unwrap();
+            let mut temp_fixtures = HashMap::new();
+            temp_fixtures.insert(
+                "fixture1".to_string(),
+                py.eval(c_str!("'value1'"), None, None).unwrap().into(),
+            );
+            temp_fixtures.insert(
+                "fixture2".to_string(),
+                py.eval(c_str!("'value2'"), None, None).unwrap().into(),
+            );
+
+            let fixtures = TestCaseFixtures::new(
+                &temp_fixtures,
+                &temp_fixtures,
+                &temp_fixtures,
+                &temp_fixtures,
+            );
+            let result = test_case.run_test(py, &module, &fixtures);
+            assert!(result.is_none());
+        });
+    }
+
+    #[test]
+    fn test_run_test_with_missing_fixtures() {
+        let env = TestEnv::new();
+        let path = env.create_file(
+            "test.py",
+            "def test_with_fixtures(fixture1, fixture2): \n    assert fixture1 == 'value1' \n    assert fixture2 == 'value2'",
+        );
+
+        let project = Project::new(env.cwd(), vec![path.clone()]);
+        let discoverer = Discoverer::new(&project);
+        let session = discoverer.discover();
+
+        let test_case = session.test_cases()[0].clone();
+
+        Python::with_gil(|py| {
+            add_to_sys_path(&py, &env.cwd()).unwrap();
+            let module = PyModule::import(py, module_name(&env.cwd(), &path)).unwrap();
+            let temp_fixtures = HashMap::new();
+            let fixtures = TestCaseFixtures::new(
+                &temp_fixtures,
+                &temp_fixtures,
+                &temp_fixtures,
+                &temp_fixtures,
+            );
+
+            let result = test_case.run_test(py, &module, &fixtures);
+            assert!(result.is_some());
+            if let Some(diagnostic) = result {
+                assert!(matches!(diagnostic.scope(), DiagnosticScope::Test));
+                assert!(
+                    diagnostic
+                        .sub_diagnostics()
+                        .iter()
+                        .any(|d| d.diagnostic_type()
+                            == &SubDiagnosticType::Error(DiagnosticError::FixtureNotFound(
+                                "fixture1".to_string()
+                            )))
+                );
+                assert!(
+                    diagnostic
+                        .sub_diagnostics()
+                        .iter()
+                        .any(|d| d.diagnostic_type()
+                            == &SubDiagnosticType::Error(DiagnosticError::FixtureNotFound(
+                                "fixture2".to_string()
+                            )))
+                );
+            }
+        });
+    }
+}

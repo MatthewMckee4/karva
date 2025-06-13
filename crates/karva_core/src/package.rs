@@ -8,7 +8,7 @@ use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 use crate::{
     case::TestCase,
     fixture::{Fixture, HasFixtures},
-    module::{Module, StringModule},
+    module::{Module, ModuleType, StringModule},
 };
 
 /// A package represents a single python directory.
@@ -114,13 +114,17 @@ impl<'proj> Package<'proj> {
     }
 
     #[must_use]
-    pub fn total_modules(&self) -> usize {
-        self.modules.len()
-            + self
-                .packages
-                .values()
-                .map(Package::total_modules)
-                .sum::<usize>()
+    pub fn total_test_modules(&self) -> usize {
+        let mut total = 0;
+        for module in self.modules.values() {
+            if module.module_type == ModuleType::Test {
+                total += 1;
+            }
+        }
+        for package in self.packages.values() {
+            total += package.total_test_modules();
+        }
+        total
     }
 
     pub fn update(&mut self, package: Self) {
@@ -129,6 +133,10 @@ impl<'proj> Package<'proj> {
         }
         for (_, package) in package.packages {
             self.add_package(package);
+        }
+
+        for module in package.configuration_modules {
+            self.configuration_modules.push(module);
         }
     }
 
@@ -152,13 +160,23 @@ impl<'proj> Package<'proj> {
         self.configuration_modules
             .iter()
             .map(|path| self.modules.get(path).unwrap())
-            .collect::<Vec<_>>()
+            .collect()
     }
 
     #[must_use]
     pub fn uses_fixture(&self, fixture_name: &str) -> bool {
         self.modules.values().any(|m| m.uses_fixture(fixture_name))
             || self.packages.values().any(|p| p.uses_fixture(fixture_name))
+    }
+
+    pub fn shrink(&mut self) {
+        self.modules.retain(|_, module| !module.is_empty());
+        self.packages.retain(|_, package| !package.is_empty());
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.modules.is_empty() && self.packages.is_empty()
     }
 }
 

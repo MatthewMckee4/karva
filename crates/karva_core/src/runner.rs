@@ -35,7 +35,7 @@ impl<'proj> StandardTestRunner<'proj> {
     fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
         let session = Discoverer::new(self.project).discover();
 
-        let total_files = session.total_modules();
+        let total_files = session.total_test_modules();
 
         let total_test_cases = session.total_test_cases();
 
