@@ -15,11 +15,6 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: 3.11
-      - name: Install Dependencies
-        run: uv sync --all-extras
       - name: Publish Latest Draft
         run: |
           if gh release list | grep Draft; then
@@ -47,9 +42,9 @@ jobs:
         with:
           python-version: 3.11
       - name: Install Dependencies
-        run: uv sync --all-extras
+        run: uv sync --group docs --no-install-project
       - name: Build docs
-        run: make docs
+        run: uv run --no-project mkdocs build
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v4
