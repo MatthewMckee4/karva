@@ -89,12 +89,14 @@ impl<'proj> Discoverer<'proj> {
             return None;
         }
 
+        let module_type = ModuleType::from_path(path);
+
         Some(Module::new(
             self.project,
             path,
             discovered.functions,
             discovered.fixtures,
-            ModuleType::Test,
+            module_type,
         ))
     }
 

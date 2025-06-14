@@ -161,9 +161,7 @@ impl<'proj> Package<'proj> {
         let mut cases = Vec::new();
 
         for module in self.modules.values() {
-            if module.module_type == ModuleType::Test {
-                cases.extend(module.test_cases());
-            }
+            cases.extend(module.test_cases());
         }
 
         cases
