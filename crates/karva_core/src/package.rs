@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::{Hash, Hasher},
 };
 
@@ -17,7 +17,7 @@ pub struct Package<'proj> {
     project: &'proj Project,
     modules: HashMap<SystemPathBuf, Module<'proj>>,
     packages: HashMap<SystemPathBuf, Package<'proj>>,
-    configuration_modules: Vec<SystemPathBuf>,
+    configuration_modules: HashSet<SystemPathBuf>,
 }
 
 impl<'proj> Package<'proj> {
@@ -28,7 +28,7 @@ impl<'proj> Package<'proj> {
             project,
             modules: HashMap::new(),
             packages: HashMap::new(),
-            configuration_modules: Vec::new(),
+            configuration_modules: HashSet::new(),
         }
     }
 
@@ -65,12 +65,15 @@ impl<'proj> Package<'proj> {
         if let Some(existing_module) = self.modules.get_mut(module.path()) {
             existing_module.update(module);
         } else {
+            if module.module_type == ModuleType::Configuration {
+                self.configuration_modules.insert(module.path().clone());
+            }
             self.modules.insert(module.path().clone(), module);
         }
     }
 
     pub fn add_configuration_module(&mut self, module: Module<'proj>) {
-        self.configuration_modules.push(module.path().clone());
+        self.configuration_modules.insert(module.path().clone());
         self.add_module(module);
     }
 
@@ -105,7 +108,9 @@ impl<'proj> Package<'proj> {
     pub fn total_test_cases(&self) -> usize {
         let mut total = 0;
         for module in self.modules.values() {
-            total += module.total_test_cases();
+            if module.module_type == ModuleType::Test {
+                total += module.total_test_cases();
+            }
         }
         for package in self.packages.values() {
             total += package.total_test_cases();
@@ -136,17 +141,13 @@ impl<'proj> Package<'proj> {
         }
 
         for module in package.configuration_modules {
-            self.configuration_modules.push(module);
+            self.configuration_modules.insert(module);
         }
     }
 
     #[must_use]
     pub fn test_cases(&self) -> Vec<&TestCase> {
-        let mut cases = Vec::new();
-
-        for module in self.modules.values() {
-            cases.extend(module.test_cases());
-        }
+        let mut cases = self.direct_test_cases();
 
         for sub_package in self.packages.values() {
             cases.extend(sub_package.test_cases());
@@ -156,21 +157,43 @@ impl<'proj> Package<'proj> {
     }
 
     #[must_use]
+    pub fn direct_test_cases(&self) -> Vec<&TestCase> {
+        let mut cases = Vec::new();
+
+        for module in self.modules.values() {
+            if module.module_type == ModuleType::Test {
+                cases.extend(module.test_cases());
+            }
+        }
+
+        cases
+    }
+
+    #[must_use]
     pub fn configuration_modules(&self) -> Vec<&Module<'_>> {
         self.configuration_modules
             .iter()
-            .map(|path| self.modules.get(path).unwrap())
+            .filter_map(|path| self.modules.get(path))
             .collect()
     }
 
     #[must_use]
     pub fn uses_fixture(&self, fixture_name: &str) -> bool {
-        self.modules.values().any(|m| m.uses_fixture(fixture_name))
+        self.direct_test_cases()
+            .iter()
+            .any(|m| m.uses_fixture(fixture_name))
             || self.packages.values().any(|p| p.uses_fixture(fixture_name))
     }
 
     pub fn shrink(&mut self) {
-        self.modules.retain(|_, module| !module.is_empty());
+        self.modules.retain(|path, module| {
+            if module.is_empty() {
+                self.configuration_modules.remove(path);
+                false
+            } else {
+                true
+            }
+        });
         self.packages.retain(|_, package| !package.is_empty());
     }
 
@@ -180,12 +203,17 @@ impl<'proj> Package<'proj> {
     }
 }
 
-impl HasFixtures for Package<'_> {
-    fn all_fixtures(&self, test_cases: Option<&[&TestCase]>) -> Vec<&Fixture> {
-        self.configuration_modules()
-            .iter()
-            .flat_map(|m| m.all_fixtures(test_cases))
-            .collect::<Vec<_>>()
+impl<'proj> HasFixtures<'proj> for Package<'proj> {
+    fn all_fixtures<'a: 'proj>(&'a self, test_cases: Option<&[&TestCase]>) -> Vec<&'proj Fixture> {
+        let mut fixtures: Vec<&'proj Fixture> = Vec::new();
+
+        fixtures.extend(
+            self.configuration_modules()
+                .iter()
+                .flat_map(|m| m.all_fixtures(test_cases)),
+        );
+
+        fixtures
     }
 }
 

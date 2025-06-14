@@ -34,9 +34,17 @@ impl From<&str> for FixtureScope {
     }
 }
 
-impl From<String> for FixtureScope {
-    fn from(s: String) -> Self {
-        Self::from(s.as_str())
+impl TryFrom<String> for FixtureScope {
+    type Error = String;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        match s.as_str() {
+            "module" => Ok(Self::Module),
+            "session" => Ok(Self::Session),
+            "package" => Ok(Self::Package),
+            "function" => Ok(Self::Function),
+            _ => Err(format!("Invalid fixture scope: {s}")),
+        }
     }
 }
 
@@ -116,13 +124,13 @@ impl Fixture {
         Ok(Self::new(
             name,
             val,
-            FixtureScope::from(scope),
+            FixtureScope::try_from(scope)?,
             py_function.into(),
         ))
     }
 
-    pub fn call(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        self.function.call(py, (), None)
+    pub fn call<'a>(&self, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
+        self.function.call(py, (), None).map(|r| r.into_bound(py))
     }
 }
 
@@ -157,14 +165,14 @@ fn is_fixture(decorator: &Decorator) -> bool {
     }
 }
 
-pub type CalledFixtures = HashMap<String, Py<PyAny>>;
+pub type CalledFixtures<'a> = HashMap<String, Bound<'a, PyAny>>;
 
 #[must_use]
-pub fn call_fixtures(fixtures: &[&Fixture], py: Python<'_>) -> CalledFixtures {
+pub fn call_fixtures<'a>(fixtures: &[&Fixture], py: Python<'a>) -> CalledFixtures<'a> {
     fixtures
         .iter()
         .filter_map(|fixture| match fixture.call(py) {
-            Ok(fixture_return) => Some((fixture.name.clone(), fixture_return)),
+            Ok(fixture_return) => Some((fixture.name().to_string(), fixture_return)),
             Err(e) => {
                 tracing::error!("Failed to call fixture {}: {}", fixture.name, e);
                 None
@@ -173,56 +181,43 @@ pub fn call_fixtures(fixtures: &[&Fixture], py: Python<'_>) -> CalledFixtures {
         .collect()
 }
 
-pub trait HasFixtures {
-    fn fixtures(&self, scope: &[FixtureScope], test_cases: Option<&[&TestCase]>) -> Vec<&Fixture> {
+pub trait HasFixtures<'proj> {
+    fn fixtures<'a: 'proj>(
+        &'a self,
+        scope: &[FixtureScope],
+        test_cases: Option<&[&TestCase]>,
+    ) -> Vec<&'proj Fixture> {
         self.all_fixtures(test_cases)
             .into_iter()
             .filter(|fixture| scope.contains(fixture.scope()))
             .collect()
     }
 
-    fn called_fixtures(
-        &self,
-        py: Python<'_>,
+    fn called_fixtures<'a: 'proj>(
+        &'a self,
+        py: Python<'proj>,
         scope: &[FixtureScope],
         test_cases: &[&TestCase],
-    ) -> CalledFixtures {
+    ) -> CalledFixtures<'proj> {
         call_fixtures(&self.fixtures(scope, Some(test_cases)), py)
     }
 
-    fn all_fixtures(&self, test_cases: Option<&[&TestCase]>) -> Vec<&Fixture>;
+    fn all_fixtures<'a: 'proj>(&'a self, test_cases: Option<&[&TestCase]>) -> Vec<&'proj Fixture>;
 }
 
 #[derive(Debug)]
 pub struct TestCaseFixtures<'a> {
-    session: &'a HashMap<String, Py<PyAny>>,
-    package: &'a HashMap<String, Py<PyAny>>,
-    module: &'a HashMap<String, Py<PyAny>>,
-    function: &'a HashMap<String, Py<PyAny>>,
+    fixtures: &'a CalledFixtures<'a>,
 }
 
 impl<'a> TestCaseFixtures<'a> {
     #[must_use]
-    pub const fn new(
-        session: &'a HashMap<String, Py<PyAny>>,
-        package: &'a HashMap<String, Py<PyAny>>,
-        module: &'a HashMap<String, Py<PyAny>>,
-        function: &'a HashMap<String, Py<PyAny>>,
-    ) -> Self {
-        Self {
-            session,
-            package,
-            module,
-            function,
-        }
+    pub const fn new(fixtures: &'a CalledFixtures<'a>) -> Self {
+        Self { fixtures }
     }
 
     #[must_use]
-    pub fn get_fixture(&self, fixture_name: &str) -> Option<&Py<PyAny>> {
-        self.session
-            .get(fixture_name)
-            .or_else(|| self.package.get(fixture_name))
-            .or_else(|| self.module.get(fixture_name))
-            .or_else(|| self.function.get(fixture_name))
+    pub fn get_fixture(&self, fixture_name: &str) -> Option<&Bound<'a, PyAny>> {
+        self.fixtures.get(fixture_name)
     }
 }

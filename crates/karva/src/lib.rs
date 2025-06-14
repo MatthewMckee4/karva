@@ -1,6 +1,5 @@
 use karva_cli::karva_main;
-use karva_core::fixture::check_valid_scope;
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 
 mod fixture;
 use fixture::{FixtureFunctionDefinition, FixtureFunctionMarker};
@@ -26,9 +25,6 @@ pub fn fixture_decorator(
     scope: &str,
     name: Option<&str>,
 ) -> PyResult<PyObject> {
-    if !check_valid_scope(scope) {
-        return Err(PyValueError::new_err("Invalid scope"));
-    }
     let marker = FixtureFunctionMarker::new(scope.to_string(), name.map(String::from));
     if let Some(f) = func {
         let fixture_def = marker.call_with_function(py, f)?;

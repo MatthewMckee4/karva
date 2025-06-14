@@ -84,6 +84,20 @@ impl Diagnostic {
     }
 
     #[must_use]
+    pub fn invalid_fixture(message: &str, location: &str) -> Self {
+        Self::new(
+            vec![SubDiagnostic {
+                diagnostic_type: SubDiagnosticType::Error(DiagnosticError::InvalidFixture(
+                    message.to_string(),
+                )),
+                message: message.to_string(),
+                location: location.to_string(),
+            }],
+            DiagnosticScope::Setup,
+        )
+    }
+
+    #[must_use]
     pub const fn from_sub_diagnostics(
         sub_diagnostics: Vec<SubDiagnostic>,
         scope: DiagnosticScope,
@@ -177,6 +191,7 @@ pub enum SubDiagnosticType {
 pub enum DiagnosticError {
     Error(String),
     FixtureNotFound(String),
+    InvalidFixture(String),
 }
 
 fn get_traceback(py: Python<'_>, error: &PyErr) -> String {

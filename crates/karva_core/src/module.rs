@@ -136,8 +136,8 @@ impl<'proj> Module<'proj> {
     }
 }
 
-impl HasFixtures for Module<'_> {
-    fn all_fixtures(&self, test_cases: Option<&[&TestCase]>) -> Vec<&Fixture> {
+impl<'proj> HasFixtures<'proj> for Module<'proj> {
+    fn all_fixtures<'a: 'proj>(&'a self, test_cases: Option<&[&TestCase]>) -> Vec<&'proj Fixture> {
         self.fixtures
             .iter()
             .filter(|f| {

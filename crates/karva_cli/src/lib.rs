@@ -161,10 +161,9 @@ struct ProgressReporter(Option<indicatif::ProgressBar>);
 impl karva_core::diagnostic::reporter::Reporter for ProgressReporter {
     fn set(&mut self, n: usize) {
         let progress = indicatif::ProgressBar::new(n as u64);
-        #[allow(clippy::literal_string_with_formatting_args)]
         progress.set_style(
             indicatif::ProgressStyle::with_template(
-                r"[{elapsed_precise}] {msg:10.dim} {bar:60.green/dim} {pos}/{len} files",
+                r"{msg:10.dim} {bar:60.green/dim} {pos}/{len} files",
             )
             .unwrap()
             .progress_chars("--"),

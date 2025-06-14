@@ -8,6 +8,7 @@ use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
 use crate::{
     case::TestCase,
+    diagnostic::Diagnostic,
     fixture::{Fixture, is_fixture_function},
 };
 
@@ -16,6 +17,7 @@ pub struct FunctionDefinitionVisitor<'a> {
     fixture_definitions: Vec<Fixture>,
     project: &'a Project,
     path: &'a SystemPathBuf,
+    diagnostics: Vec<Diagnostic>,
 }
 
 impl<'a> FunctionDefinitionVisitor<'a> {
@@ -26,6 +28,7 @@ impl<'a> FunctionDefinitionVisitor<'a> {
             fixture_definitions: Vec::new(),
             project,
             path,
+            diagnostics: Vec::new(),
         }
     }
 }
@@ -35,10 +38,12 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
         if let Stmt::FunctionDef(function_def) = stmt {
             if is_fixture_function(function_def) {
                 Python::with_gil(|py| {
-                    if let Ok(fixture_def) =
-                        Fixture::from(&py, function_def.clone(), self.path, self.project.cwd())
-                    {
-                        self.fixture_definitions.push(fixture_def);
+                    match Fixture::from(&py, function_def.clone(), self.path, self.project.cwd()) {
+                        Ok(fixture_def) => self.fixture_definitions.push(fixture_def),
+                        Err(e) => {
+                            self.diagnostics
+                                .push(Diagnostic::invalid_fixture(&e, &self.path.to_string()));
+                        }
                     }
                 });
             } else if function_def
@@ -72,17 +77,20 @@ impl DiscoveredFunctions {
 }
 
 #[must_use]
-pub fn discover(path: &SystemPathBuf, project: &Project) -> DiscoveredFunctions {
+pub fn discover(path: &SystemPathBuf, project: &Project) -> (DiscoveredFunctions, Vec<Diagnostic>) {
     let mut visitor = FunctionDefinitionVisitor::new(project, path);
 
     let parsed = parsed_module(path, *project.python_version());
 
     visitor.visit_body(&parsed.syntax().body);
 
-    DiscoveredFunctions {
-        functions: visitor.discovered_functions,
-        fixtures: visitor.fixture_definitions,
-    }
+    (
+        DiscoveredFunctions {
+            functions: visitor.discovered_functions,
+            fixtures: visitor.fixture_definitions,
+        },
+        visitor.diagnostics,
+    )
 }
 
 #[must_use]
