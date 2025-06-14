@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -104,6 +105,8 @@ exit_code: {self.exit_code}
         if isinstance(other, CommandSnapshot):
 
             def filter_line(line: str) -> str:
+                line = line.replace("\\", "/")
+                line = re.sub(r"\\(\w\w|\s|\.|\")", r"/\1", line)
                 return line.replace(str(self.project_dir), "<temp_dir>")
 
             def filter_lines(lines: list[str]) -> list[str]:
