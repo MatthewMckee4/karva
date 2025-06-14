@@ -43,6 +43,9 @@ impl std::fmt::Display for SubDiagnosticDisplay<'_> {
             SubDiagnosticType::Error(DiagnosticError::FixtureNotFound(_)) => {
                 "error[fixture-not-found]".to_string().yellow()
             }
+            SubDiagnosticType::Error(DiagnosticError::InvalidFixture(_)) => {
+                "error[invalid-fixture]".to_string().yellow()
+            }
         };
         writeln!(
             f,

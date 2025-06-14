@@ -8,10 +8,49 @@ We do not support fixtures that require other fixtures (yet).
 
 Karva supports different types of fixtures based on their scope:
 
-- **Function Scope**: The default scope. The fixture is created for each test function.
-- **Module Scope**: The fixture is created once per test module.
-- **Package Scope**: The fixture is created once per test package.
-- **Session Scope**: The fixture is created once per test session.
+### Function Scope
+
+The default scope. The fixture is created for each test function.
+
+### Module Scope
+
+The fixture is created once per test module.
+
+### Package Scope
+
+The fixture is created once per test package.
+
+This means that every package that is a sub-package of the package with the fixture will create the fixture if and only if it has a module that requires the fixture.
+
+For example, if we have the following structure:
+
+```
+calculator
+├── src
+└── tests
+    ├── conftest.py
+    ├── bar
+    │   └── test_bar.py
+    └── foo
+        └── test_foo.py
+```
+
+If we have the following fixture in `tests/conftest.py`:
+
+```py
+@fixture(scope="package")
+def package_fixture():
+    return "package"
+```
+
+And if the fixtures is used in `tests/foo/test_foo.py` and `tests/bar/test_bar.py`
+then fixture will be created once for the `foo` package and once for the `bar` package.
+
+If you wanted it to only create the fixture once you should use the `session` scope.
+
+### Session Scope
+
+The fixture is created once per test session.
 
 Example of different scopes:
 

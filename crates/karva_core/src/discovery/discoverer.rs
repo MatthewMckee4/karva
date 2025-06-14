@@ -6,6 +6,7 @@ use karva_project::{
 };
 
 use crate::{
+    diagnostic::Diagnostic,
     discovery::discover,
     module::{Module, ModuleType},
     package::Package,
@@ -22,8 +23,10 @@ impl<'proj> Discoverer<'proj> {
     }
 
     #[must_use]
-    pub fn discover(self) -> Package<'proj> {
+    pub fn discover(self) -> (Package<'proj>, Vec<Diagnostic>) {
         let mut session_package = Package::new(self.project.cwd().clone(), self.project);
+
+        let mut discovery_diagnostics = Vec::new();
 
         tracing::info!("Discovering tests...");
 
@@ -31,7 +34,7 @@ impl<'proj> Discoverer<'proj> {
             match path {
                 Ok(path) => match path {
                     PythonTestPath::File(path) => {
-                        let test_cases = self.discover_test_file(&path);
+                        let test_cases = self.discover_test_file(&path, &mut discovery_diagnostics);
                         if let Some(module) = test_cases {
                             if path.parent().unwrap().as_std_path()
                                 == self.project.cwd().as_std_path()
@@ -46,7 +49,8 @@ impl<'proj> Discoverer<'proj> {
                         }
                     }
                     PythonTestPath::Directory(dir_path) => {
-                        let package = self.discover_directory(&dir_path);
+                        let package =
+                            self.discover_directory(&dir_path, &mut discovery_diagnostics);
                         if dir_path.as_std_path() == self.project.cwd().as_std_path() {
                             session_package.update(package);
                         } else {
@@ -62,39 +66,54 @@ impl<'proj> Discoverer<'proj> {
 
         session_package.shrink();
 
-        session_package
+        (session_package, discovery_diagnostics)
     }
 
     // Parse and run discovery on a single file
-    fn discover_test_file(&self, path: &SystemPathBuf) -> Option<Module<'proj>> {
+    fn discover_test_file(
+        &self,
+        path: &SystemPathBuf,
+        discovery_diagnostics: &mut Vec<Diagnostic>,
+    ) -> Option<Module<'proj>> {
         tracing::debug!("Discovering file: {}", path);
 
         if !is_python_file(path) {
             return None;
         }
 
-        let discovered = discover(path, self.project);
+        let (discovered, diagnostics) = discover(path, self.project);
+
+        discovery_diagnostics.extend(diagnostics);
+
         if discovered.is_empty() {
             return None;
         }
+
+        let module_type = ModuleType::from_path(path);
 
         Some(Module::new(
             self.project,
             path,
             discovered.functions,
             discovered.fixtures,
-            ModuleType::Test,
+            module_type,
         ))
     }
 
-    fn discover_configuration_file(&self, path: &SystemPathBuf) -> Option<Module<'proj>> {
+    fn discover_configuration_file(
+        &self,
+        path: &SystemPathBuf,
+        discovery_diagnostics: &mut Vec<Diagnostic>,
+    ) -> Option<Module<'proj>> {
         tracing::debug!("Discovering configuration file: {}", path);
 
         if !is_python_file(path) {
             return None;
         }
 
-        let discovered = discover(path, self.project);
+        let (discovered, diagnostics) = discover(path, self.project);
+
+        discovery_diagnostics.extend(diagnostics);
 
         if !discovered.functions.is_empty() {
             tracing::warn!("Found test functions in: {}", path);
@@ -110,7 +129,11 @@ impl<'proj> Discoverer<'proj> {
     }
 
     // Parse and run discovery on a directory
-    fn discover_directory(&self, path: &SystemPathBuf) -> Package<'proj> {
+    fn discover_directory(
+        &self,
+        path: &SystemPathBuf,
+        discovery_diagnostics: &mut Vec<Diagnostic>,
+    ) -> Package<'proj> {
         tracing::debug!("Discovering directory: {}", path);
 
         let mut package = Package::new(path.clone(), self.project);
@@ -134,18 +157,22 @@ impl<'proj> Discoverer<'proj> {
 
             match entry.file_type() {
                 Some(file_type) if file_type.is_dir() => {
-                    let subpackage = self.discover_directory(&current_path);
+                    let subpackage = self.discover_directory(&current_path, discovery_diagnostics);
                     package.add_package(subpackage);
                 }
                 Some(file_type) if file_type.is_file() => {
                     match ModuleType::from_path(&current_path) {
                         ModuleType::Test => {
-                            if let Some(module) = self.discover_test_file(&current_path) {
+                            if let Some(module) =
+                                self.discover_test_file(&current_path, discovery_diagnostics)
+                            {
                                 package.add_module(module);
                             }
                         }
                         ModuleType::Configuration => {
-                            if let Some(module) = self.discover_configuration_file(&current_path) {
+                            if let Some(module) = self
+                                .discover_configuration_file(&current_path, discovery_diagnostics)
+                            {
                                 package.add_configuration_module(module);
                             }
                         }
@@ -176,7 +203,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
+        let (session, _) = discoverer.discover();
 
         assert_eq!(
             Into::<StringPackage>::into(&session),
@@ -204,7 +231,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
+        let (session, _) = discoverer.discover();
 
         assert_eq!(
             Into::<StringPackage>::into(&session),
@@ -239,7 +266,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
+        let (session, _) = discoverer.discover();
 
         assert_eq!(
             Into::<StringPackage>::into(&session),
@@ -279,7 +306,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
+        let (session, _) = discoverer.discover();
 
         assert_eq!(
             Into::<StringPackage>::into(&session),
@@ -344,7 +371,7 @@ def not_a_test(): pass
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
+        let (session, _) = discoverer.discover();
 
         assert_eq!(
             Into::<StringPackage>::into(&session),
@@ -373,7 +400,7 @@ def not_a_test(): pass
 
         let project = Project::new(env.cwd(), vec![path.join("nonexistent_function")]);
         let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
+        let (session, _) = discoverer.discover();
 
         assert_eq!(
             Into::<StringPackage>::into(&session),
@@ -392,7 +419,7 @@ def not_a_test(): pass
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
+        let (session, _) = discoverer.discover();
 
         assert_eq!(
             Into::<StringPackage>::into(&session),
@@ -420,7 +447,7 @@ def test_function(): pass
             test_prefix: "check".to_string(),
         });
         let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
+        let (session, _) = discoverer.discover();
 
         assert_eq!(
             Into::<StringPackage>::into(&session),
@@ -451,7 +478,7 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![file1, file2, dir]);
         let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
+        let (session, _) = discoverer.discover();
 
         assert_eq!(
             Into::<StringPackage>::into(&session),
@@ -500,7 +527,7 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![path.clone(), path]);
         let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
+        let (session, _) = discoverer.discover();
         assert_eq!(
             Into::<StringPackage>::into(&session),
             StringPackage {
@@ -534,7 +561,7 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![path, path2]);
         let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
+        let (session, _) = discoverer.discover();
         assert_eq!(
             Into::<StringPackage>::into(&session),
             StringPackage {
@@ -574,7 +601,7 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![conftest_path]);
         let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
+        let (session, _) = discoverer.discover();
 
         assert_eq!(
             Into::<StringPackage>::into(&session),
@@ -607,7 +634,7 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
+        let (session, _) = discoverer.discover();
 
         assert_eq!(
             Into::<StringPackage>::into(&session),
@@ -648,7 +675,7 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = Discoverer::new(&project);
-        let session = discoverer.discover();
+        let (session, _) = discoverer.discover();
 
         assert_eq!(
             Into::<StringPackage>::into(&session),
