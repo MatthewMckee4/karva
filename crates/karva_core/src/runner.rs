@@ -325,7 +325,7 @@ impl RunDiagnostics {
         let stats = self.stats();
 
         if stats.total() > 0 {
-            let _ = writeln!(writer, "{}", "─────────────".bold());
+            let _ = writeln!(writer, "{}", "-------------".bold());
             for (label, num, color) in [
                 ("Passed tests:", stats.passed(), Color::Green),
                 ("Failed tests:", stats.failed(), Color::Red),

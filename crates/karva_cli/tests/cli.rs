@@ -161,7 +161,7 @@ fn test_one_test_fails() -> anyhow::Result<()> {
     fail[assertion-failed] in <temp_dir>/test_fail.py
      | File "<temp_dir>/test_fail.py", line 3, in test_fail
      |   assert False
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----
@@ -187,7 +187,7 @@ fn test_multiple_tests_fail() -> anyhow::Result<()> {
     fail[assertion-failed] in <temp_dir>/test_fail2.py
      | File "<temp_dir>/test_fail2.py", line 3, in test_fail2
      |   assert 1 == 2
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----
@@ -222,7 +222,7 @@ fn test_mixed_pass_and_fail() -> anyhow::Result<()> {
     fail[assertion-failed] in <temp_dir>/test_fail.py
      | File "<temp_dir>/test_fail.py", line 3, in test_fail
      |   assert False
-    ─────────────
+    -------------
     Passed tests: 1
     Failed tests: 1
 
@@ -249,7 +249,7 @@ fn test_assertion_with_message() -> anyhow::Result<()> {
     fail[assertion-failed] in <temp_dir>/test_fail_with_msg.py
      | File "<temp_dir>/test_fail_with_msg.py", line 3, in test_fail_with_message
      |   assert False, "This should not happen"
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----
@@ -277,7 +277,7 @@ fn test_equality_assertion_fail() -> anyhow::Result<()> {
     fail[assertion-failed] in <temp_dir>/test_equality.py
      | File "<temp_dir>/test_equality.py", line 5, in test_equality
      |   assert x == y
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----
@@ -304,7 +304,7 @@ fn test_complex_assertion_fail() -> anyhow::Result<()> {
     fail[assertion-failed] in <temp_dir>/test_complex.py
      | File "<temp_dir>/test_complex.py", line 4, in test_complex
      |   assert len(data) > 5, 'Data should have more items'
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----
@@ -349,7 +349,7 @@ fn test_long_file() -> anyhow::Result<()> {
     fail[assertion-failed] in <temp_dir>/test_long.py
      | File "<temp_dir>/test_long.py", line 22, in test_in_long_file
      |   assert result == expected
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----
@@ -378,7 +378,7 @@ fn test_multiple_assertions_in_function() -> anyhow::Result<()> {
     fail[assertion-failed] in <temp_dir>/test_multiple_assertions.py
      | File "<temp_dir>/test_multiple_assertions.py", line 6, in test_multiple_assertions
      |   assert y == 3  # This fails
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----
@@ -408,7 +408,7 @@ fn test_assertion_in_nested_function() -> anyhow::Result<()> {
     fail[assertion-failed] in <temp_dir>/test_nested.py
      | File "<temp_dir>/test_nested.py", line 7, in test_with_nested_call
      |   assert result == True
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----
@@ -435,7 +435,7 @@ fn test_assertion_with_complex_expression() -> anyhow::Result<()> {
     fail[assertion-failed] in <temp_dir>/test_complex_expr.py
      | File "<temp_dir>/test_complex_expr.py", line 4, in test_complex_expression
      |   assert len([x for x in items if x > 3]) == 5
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----
@@ -471,7 +471,7 @@ fn test_assertion_with_multiline_setup() -> anyhow::Result<()> {
     fail[assertion-failed] in <temp_dir>/test_multiline.py
      | File "<temp_dir>/test_multiline.py", line 13, in test_multiline_setup
      |   assert result == expected
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----
@@ -497,7 +497,7 @@ fn test_assertion_with_very_long_line() -> anyhow::Result<()> {
     fail[assertion-failed] in <temp_dir>/test_very_long_line.py
      | File "<temp_dir>/test_very_long_line.py", line 3, in test_very_long_line
      |   assert 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16 + 17 + 18 + 19 + 20 == 1000
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----
@@ -521,7 +521,7 @@ fn test_assertion_on_line_1() -> anyhow::Result<()> {
     fail[assertion-failed] in <temp_dir>/test_line_1.py
      | File "<temp_dir>/test_line_1.py", line 2, in test_line_1
      |   assert False
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----
@@ -562,7 +562,7 @@ fn test_multiple_files_with_cross_function_calls() -> anyhow::Result<()> {
      |   validate_data([])
      | File "<temp_dir>/helper.py", line 4, in validate_data
      |   assert False, 'Data validation failed'
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----
@@ -603,7 +603,7 @@ fn test_nested_function_calls_deep_stack() -> anyhow::Result<()> {
      |   level_3()
      | File "<temp_dir>/test_deep_stack.py", line 9, in level_3
      |   assert 1 == 2, 'Deep stack assertion failed'
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----
@@ -640,7 +640,7 @@ fn test_assertion_in_class_method() -> anyhow::Result<()> {
      |   calc.validate_result(result)
      | File "<temp_dir>/test_class.py", line 7, in validate_result
      |   assert result > 0, 'Result must be positive'
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----
@@ -680,7 +680,7 @@ fn test_assertion_in_imported_function() -> anyhow::Result<()> {
      |   is_positive(-10)
      | File "<temp_dir>/validators.py", line 3, in is_positive
      |   assert value > 0, f'Expected positive value, got {value}'
-    ─────────────
+    -------------
     Failed tests: 1
 
     ----- stderr -----

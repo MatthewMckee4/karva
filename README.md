@@ -82,7 +82,7 @@ fail[assertion-failed] in tests/test.py
 error[value-error] in tests/test.py
  | File "/tests/test.py", line 10, in test_error
  |   raise ValueError("This is an error")
-─────────────
+-------------
 Passed tests: 1
 Failed tests: 1
 Error tests: 1
