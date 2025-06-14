@@ -107,7 +107,8 @@ exit_code: {self.exit_code}
             def filter_line(line: str) -> str:
                 line = line.replace("\\", "/")
                 line = re.sub(r"\\(\w\w|\s|\.|\")", r"/\1", line)
-                return line.replace(str(self.project_dir), "<temp_dir>")
+                project_dir = str(self.project_dir).replace("\\", "/")
+                return line.replace(project_dir, "<temp_dir>")
 
             def filter_lines(lines: list[str]) -> list[str]:
                 return [filter_line(line) for line in lines]
