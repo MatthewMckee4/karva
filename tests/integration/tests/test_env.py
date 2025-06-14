@@ -124,5 +124,11 @@ exit_code: {self.exit_code}
             )
         if isinstance(other, str):
             other_snapshot = CommandSnapshot.from_str(other, self.project_dir)
-            return self == other_snapshot
+            res = self == other_snapshot
+            if not res:
+                print("Expected--------------------------------")
+                print(other_snapshot.format())
+                print("\nActual--------------------------------")
+                print(self.format())
+            return res
         return False
