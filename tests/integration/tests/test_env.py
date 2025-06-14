@@ -14,8 +14,8 @@ if TYPE_CHECKING:
 
 class TestEnv:
     def __init__(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.project_dir = Path(self.temp_dir.name).resolve()
+        self.temp_dir = tempfile.mkdtemp()
+        self.project_dir = Path(self.temp_dir).resolve()
         self.remove_files()
 
     def remove_files(self) -> None:
@@ -29,7 +29,7 @@ class TestEnv:
     def cleanup(self) -> None:
         """Clean up the test environment."""
         self.remove_files()
-        self.temp_dir.cleanup()
+        shutil.rmtree(self.temp_dir)
 
     def write_files(self, files: Iterable[tuple[str, str]]) -> None:
         """Write multiple files to the test environment."""
@@ -58,19 +58,17 @@ class TestEnv:
             capture_output=True,
             text=True,
         )
-        output = CommandSnapshot(
+        return CommandSnapshot(
+            project_dir=self.project_dir,
             exit_code=result.returncode,
             stdout=result.stdout,
             stderr=result.stderr,
         )
-        if result.returncode != 0:
-            print(output.format())
-
-        return output
 
 
 @dataclass(eq=False)
 class CommandSnapshot:
+    project_dir: Path
     exit_code: int
     stdout: str
     stderr: str
@@ -83,9 +81,50 @@ exit_code: {self.exit_code}
 {self.stdout}
 ----- stderr -----{f"{newline}{self.stderr}" if self.stderr else ""}"""
 
+    @classmethod
+    def from_str(cls, s: str, project_dir: Path) -> CommandSnapshot:
+        s = textwrap.dedent(s)
+        lines = s.strip().split("\n")
+        exit_code = int(lines[1].split(": ")[1])
+
+        stdout_start = lines.index("----- stdout -----")
+        stderr_start = lines.index("----- stderr -----")
+
+        stdout = "\n".join(lines[stdout_start + 1 : stderr_start]).strip()
+        stderr = "\n".join(lines[stderr_start + 1 :]).strip() if stderr_start + 1 < len(lines) else ""
+
+        return cls(
+            project_dir=project_dir,
+            exit_code=exit_code,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
     def __eq__(self, other: object) -> bool:
         if isinstance(other, CommandSnapshot):
-            return self.format() == other.format()
+
+            def filter_line(line: str) -> str:
+                return line.replace(str(self.project_dir), "<temp_dir>")
+
+            def filter_lines(lines: list[str]) -> list[str]:
+                return [filter_line(line) for line in lines]
+
+            self_stdout_lines = set(filter_lines(self.stdout.splitlines()))
+            other_stdout_lines = set(filter_lines(other.stdout.splitlines()))
+            self_stderr_lines = set(filter_lines(self.stderr.splitlines()))
+            other_stderr_lines = set(filter_lines(other.stderr.splitlines()))
+            return (
+                self.exit_code == other.exit_code
+                and self_stdout_lines == other_stdout_lines
+                and self_stderr_lines == other_stderr_lines
+            )
         if isinstance(other, str):
-            return self.format() == textwrap.dedent(other)
+            other_snapshot = CommandSnapshot.from_str(other, self.project_dir)
+            res = self == other_snapshot
+            if not res:
+                print("Expected--------------------------------")
+                print(other_snapshot.format())
+                print("\nActual--------------------------------")
+                print(self.format())
+            return res
         return False
