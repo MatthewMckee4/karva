@@ -108,9 +108,7 @@ impl<'proj> Package<'proj> {
     pub fn total_test_cases(&self) -> usize {
         let mut total = 0;
         for module in self.modules.values() {
-            if module.module_type == ModuleType::Test {
-                total += module.total_test_cases();
-            }
+            total += module.total_test_cases();
         }
         for package in self.packages.values() {
             total += package.total_test_cases();
