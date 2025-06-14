@@ -126,13 +126,9 @@ exit_code: {self.exit_code}
             other_snapshot = CommandSnapshot.from_str(other, self.project_dir)
             res = self == other_snapshot
             if not res:
-                # Use sys.stdout.buffer.write() to handle encoding issues
-                import sys
-
-                sys.stdout.buffer.write(b"Expected--------------------------------\n")
-                sys.stdout.buffer.write(other_snapshot.format().encode("utf-8"))
-                sys.stdout.buffer.write(b"\nActual--------------------------------\n")
-                sys.stdout.buffer.write(self.format().encode("utf-8"))
-                sys.stdout.buffer.write(b"\n")
+                print("Expected--------------------------------")
+                print(other_snapshot.format())
+                print("\nActual--------------------------------")
+                print(self.format())
             return res
         return False

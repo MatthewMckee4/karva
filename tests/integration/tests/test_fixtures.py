@@ -623,7 +623,7 @@ exit_code: 1
 ----- stdout -----
 error[fixture-not-found] in <temp_dir>/tests/test_calculator.py
  | Fixture failing_calculator not found
-─────────────
+-------------
 Passed tests: 1
 Error tests: 1
 Working calculator initialized
@@ -737,7 +737,7 @@ error[invalid-fixture] in <temp_dir>/tests/conftest.py
  | Invalid fixture scope: invalid_scope
 error[fixture-not-found] in <temp_dir>/tests/test_calculator.py
  | Fixture calculator not found
-─────────────
+-------------
 Error tests: 1
 
 ----- stderr -----"""
@@ -815,7 +815,7 @@ exit_code: 1
 ----- stdout -----
 error[fixture-not-found] in <temp_dir>/tests/test_calculator.py
  | Fixture calculator not found
-─────────────
+-------------
 Error tests: 1
 
 ----- stderr -----"""
@@ -868,7 +868,7 @@ exit_code: 1
 ----- stdout -----
 error[fixture-not-found] in <temp_dir>/tests/test_calculator.py
  | Fixture calculator_2 not found
-─────────────
+-------------
 Error tests: 1
 Calculator 1 initialized
 
@@ -962,7 +962,7 @@ exit_code: 1
 ----- stdout -----
 error[fixture-not-found] in <temp_dir>/tests/test_calculator.py
  | Fixture init_calculator not found
-─────────────
+-------------
 Error tests: 1
 
 ----- stderr -----"""
