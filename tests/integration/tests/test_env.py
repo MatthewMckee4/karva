@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -12,12 +13,42 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+KARVA_ROOT = Path(__file__).parent.parent.parent.parent
+
+
+def find_karva_wheel() -> Path:
+    """Find the karva wheel in the target/wheels directory."""
+    wheels_dir = KARVA_ROOT / "target" / "wheels"
+
+    for wheel in wheels_dir.iterdir():
+        if wheel.name.startswith("karva-"):
+            return wheel
+
+    msg = "Could not find karva wheel in target/wheels directory"
+    raise FileNotFoundError(msg)
+
+
+KARVA_WHEEL = find_karva_wheel()
+
 
 class TestEnv:
     def __init__(self) -> None:
-        self.temp_dir = tempfile.mkdtemp()
+        self.temp_dir = tempfile.mkdtemp(suffix="karva-test-env")
         self.project_dir = Path(self.temp_dir).resolve()
-        self.remove_files()
+        os.environ.pop("VIRTUAL_ENV", None)
+        commands = [
+            ["uv", "init", "--bare", "--directory", str(self.project_dir)],
+            ["uv", "add", "pytest", "--directory", str(self.project_dir)],
+            ["uv", "pip", "install", "--directory", str(self.project_dir), str(KARVA_WHEEL)],
+            ["uv", "sync", "--directory", str(self.project_dir)],
+        ]
+        for command in commands:
+            subprocess.run(
+                command,
+                cwd=self.project_dir,
+                check=True,
+                capture_output=True,
+            )
 
     def remove_files(self) -> None:
         """Remove all files from the test environment."""
@@ -52,8 +83,9 @@ class TestEnv:
         if karva_path is None:
             msg = "Could not find karva executable in PATH"
             raise FileNotFoundError(msg)
-        result = subprocess.run(  # noqa: S603
-            [karva_path, "test", str(self.project_dir)],
+
+        result = subprocess.run(
+            ["uv", "run", "--directory", str(self.project_dir), karva_path, "test", str(self.project_dir)],
             cwd=self.project_dir,
             check=False,
             capture_output=True,

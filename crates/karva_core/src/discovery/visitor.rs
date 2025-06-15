@@ -9,7 +9,7 @@ use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 use crate::{
     case::TestCase,
     diagnostic::Diagnostic,
-    fixture::{Fixture, is_fixture_function},
+    fixture::{Fixture, FixtureExtractor, is_fixture_function},
 };
 
 pub struct FunctionDefinitionVisitor<'a> {
@@ -38,7 +38,12 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
         if let Stmt::FunctionDef(function_def) = stmt {
             if is_fixture_function(function_def) {
                 Python::with_gil(|py| {
-                    match Fixture::from(&py, function_def.clone(), self.path, self.project.cwd()) {
+                    match FixtureExtractor::try_from_function(
+                        &py,
+                        function_def,
+                        self.path,
+                        self.project.cwd(),
+                    ) {
                         Ok(fixture_def) => self.fixture_definitions.push(fixture_def),
                         Err(e) => {
                             self.diagnostics

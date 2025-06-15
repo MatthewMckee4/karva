@@ -4,15 +4,16 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use karva_project::{path::SystemPathBuf, utils::module_name};
 use pyo3::prelude::*;
 use ruff_python_ast::{Decorator, Expr, StmtFunctionDef};
 
-use crate::{
-    case::TestCase, fixture::python::FixtureFunctionDefinition, utils::recursive_add_to_sys_path,
-};
+use crate::case::TestCase;
 
 pub mod python;
+
+pub mod extractor;
+
+pub use extractor::FixtureExtractor;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum FixtureScope {
@@ -64,7 +65,7 @@ pub struct Fixture {
     name: String,
     function_def: StmtFunctionDef,
     scope: FixtureScope,
-    function: Py<FixtureFunctionDefinition>,
+    function: Py<PyAny>,
 }
 
 impl Fixture {
@@ -73,7 +74,7 @@ impl Fixture {
         name: String,
         function_def: StmtFunctionDef,
         scope: FixtureScope,
-        function: Py<FixtureFunctionDefinition>,
+        function: Py<PyAny>,
     ) -> Self {
         Self {
             name,
@@ -96,37 +97,6 @@ impl Fixture {
     #[must_use]
     pub const fn scope(&self) -> &FixtureScope {
         &self.scope
-    }
-
-    pub fn from(
-        py: &Python<'_>,
-        val: StmtFunctionDef,
-        path: &SystemPathBuf,
-        cwd: &SystemPathBuf,
-    ) -> Result<Self, String> {
-        recursive_add_to_sys_path(py, path, cwd).map_err(|e| e.to_string())?;
-
-        let module = module_name(cwd, path);
-
-        let function = py
-            .import(module)
-            .map_err(|e| e.to_string())?
-            .getattr(val.name.to_string())
-            .map_err(|e| e.to_string())?;
-
-        let py_function = function
-            .downcast_into::<FixtureFunctionDefinition>()
-            .map_err(|e| e.to_string())?;
-
-        let scope = py_function.borrow_mut().scope.clone();
-        let name = py_function.borrow_mut().name.clone();
-
-        Ok(Self::new(
-            name,
-            val,
-            FixtureScope::try_from(scope)?,
-            py_function.into(),
-        ))
     }
 
     pub fn call<'a>(&self, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
