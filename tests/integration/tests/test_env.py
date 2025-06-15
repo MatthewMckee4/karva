@@ -80,13 +80,6 @@ class TestEnv:
 
     def run_test(self) -> CommandSnapshot:
         """Test the project and return (exit_code, stdout, stderr)."""
-        result = subprocess.run(
-            ["tree", "-a", "-L", "5", str(self.project_dir)],
-            cwd=self.project_dir,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
 
         result = subprocess.run(
             ["uv", "run", "--directory", str(self.project_dir), "karva", "test", str(self.project_dir)],
