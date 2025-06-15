@@ -74,3 +74,94 @@ fn to_kebab_case(input: &str) -> String {
             acc
         })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::diagnostic::DiagnosticScope;
+
+    #[test]
+    fn test_to_kebab_case() {
+        assert_eq!(to_kebab_case("FooBar"), "foo-bar");
+    }
+
+    #[test]
+    fn test_diagnostic_display() {
+        let diagnostic = Diagnostic::new(
+            vec![
+                SubDiagnostic::new(
+                    SubDiagnosticType::Fail,
+                    "This test should fail".to_string(),
+                    "test_fail.py:4".to_string(),
+                ),
+                SubDiagnostic::new(
+                    SubDiagnosticType::Error(DiagnosticError::Error("ValueError".to_string())),
+                    "This is an error".to_string(),
+                    "test_error.py:8".to_string(),
+                ),
+            ],
+            DiagnosticScope::Test,
+        );
+
+        let display = diagnostic.display();
+        let expected = format!(
+            "{} in test_fail.py:4\n | This test should fail\n{} in test_error.py:8\n | This is an error\n",
+            "fail[assertion-failed]".red(),
+            "error[value-error]".yellow()
+        );
+
+        assert_eq!(display.to_string(), expected);
+    }
+
+    #[test]
+    fn test_sub_diagnostic_fail_display() {
+        let diagnostic = SubDiagnostic::new(
+            SubDiagnosticType::Fail,
+            "test_fixture_function_name".to_string(),
+            "test_fixture_function_name.py".to_string(),
+        );
+        let display = SubDiagnosticDisplay::new(&diagnostic);
+        assert_eq!(
+            display.to_string(),
+            "fail[assertion-failed]".red().to_string()
+                + " in test_fixture_function_name.py\n | test_fixture_function_name\n"
+        );
+    }
+
+    #[test]
+    fn test_sub_diagnostic_error_display() {
+        let diagnostic = SubDiagnostic::new(
+            SubDiagnosticType::Error(DiagnosticError::Error("ValueError".to_string())),
+            "test_fixture_function_name".to_string(),
+            "test_fixture_function_name.py".to_string(),
+        );
+        let display = SubDiagnosticDisplay::new(&diagnostic);
+        assert_eq!(
+            display.to_string(),
+            "error[value-error]".yellow().to_string()
+                + " in test_fixture_function_name.py\n | test_fixture_function_name\n"
+        );
+    }
+
+    #[test]
+    fn test_sub_diagnostic_fixture_not_found_display() {
+        let diagnostic =
+            Diagnostic::fixture_not_found("fixture_name", "test_fixture_function_name.py");
+        assert_eq!(
+            diagnostic.display().to_string(),
+            "error[fixture-not-found]".yellow().to_string()
+                + " in test_fixture_function_name.py\n | Fixture fixture_name not found\n"
+        );
+    }
+
+    #[test]
+    fn test_sub_diagnostic_invalid_fixture_display() {
+        let diagnostic =
+            Diagnostic::invalid_fixture("fixture_name", "test_fixture_function_name.py");
+        assert_eq!(
+            diagnostic.display().to_string(),
+            "error[invalid-fixture]".yellow().to_string()
+                + " in test_fixture_function_name.py\n | fixture_name\n"
+        );
+    }
+}

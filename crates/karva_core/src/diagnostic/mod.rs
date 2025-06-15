@@ -1,4 +1,4 @@
-use pyo3::{prelude::*, types::PyString};
+use pyo3::prelude::*;
 
 use crate::{
     case::TestCase,
@@ -70,14 +70,14 @@ impl Diagnostic {
     }
 
     #[must_use]
-    pub fn fixture_not_found(fixture_name: &str, test_case: &TestCase) -> Self {
+    pub fn fixture_not_found(fixture_name: &str, location: &str) -> Self {
         Self::new(
             vec![SubDiagnostic {
                 diagnostic_type: SubDiagnosticType::Error(DiagnosticError::FixtureNotFound(
                     fixture_name.to_string(),
                 )),
                 message: format!("Fixture {fixture_name} not found"),
-                location: test_case.path().to_string(),
+                location: location.to_string(),
             }],
             DiagnosticScope::Setup,
         )
@@ -133,7 +133,7 @@ impl Diagnostic {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SubDiagnostic {
     diagnostic_type: SubDiagnosticType,
     message: String,
@@ -179,6 +179,7 @@ impl SubDiagnostic {
 pub enum DiagnosticScope {
     Test,
     Setup,
+    Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -210,8 +211,7 @@ fn get_type_name(py: Python<'_>, error: &PyErr) -> String {
     error
         .get_type(py)
         .name()
-        .unwrap_or_else(|_| PyString::new(py, "Unknown"))
-        .to_string()
+        .map_or_else(|_| "Unknown".to_string(), |name| name.to_string())
 }
 
 // Simplified traceback filtering that removes unnecessary traceback headers
@@ -223,13 +223,7 @@ fn filter_traceback(traceback: &str) -> String {
         if i == 0 && line.contains("Traceback (most recent call last):") {
             continue;
         }
-        if line.starts_with("  ") {
-            if let Some(stripped) = line.strip_prefix("  ") {
-                filtered.push_str(stripped);
-            }
-        } else {
-            filtered.push_str(line);
-        }
+        filtered.push_str(line.strip_prefix("  ").unwrap_or(line));
         filtered.push('\n');
     }
     filtered = filtered.trim_end_matches('\n').to_string();
@@ -237,4 +231,89 @@ fn filter_traceback(traceback: &str) -> String {
     filtered = filtered.trim_end_matches('^').to_string();
 
     filtered.trim_end().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use pyo3::exceptions::{PyAssertionError, PyTypeError};
+
+    use super::*;
+
+    #[test]
+    fn test_get_type_name() {
+        Python::with_gil(|py| {
+            let error = PyTypeError::new_err("Error message");
+            let type_name = get_type_name(py, &error);
+            assert_eq!(type_name, "TypeError");
+        });
+    }
+
+    #[test]
+    fn test_from_sub_diagnostics() {
+        let sub_diagnostic = SubDiagnostic::new(
+            SubDiagnosticType::Fail,
+            "message".to_string(),
+            "location".to_string(),
+        );
+        let diagnostic =
+            Diagnostic::from_sub_diagnostics(vec![sub_diagnostic.clone()], DiagnosticScope::Test);
+        assert_eq!(diagnostic.sub_diagnostics(), &[sub_diagnostic]);
+    }
+
+    #[test]
+    fn test_from_test_diagnostics() {
+        let sub_diagnostic = SubDiagnostic::new(
+            SubDiagnosticType::Fail,
+            "message".to_string(),
+            "location".to_string(),
+        );
+        let diagnostic = Diagnostic::from_test_diagnostics(vec![Diagnostic::from_sub_diagnostics(
+            vec![sub_diagnostic.clone()],
+            DiagnosticScope::Unknown,
+        )]);
+        assert_eq!(diagnostic.sub_diagnostics(), &[sub_diagnostic]);
+        assert_eq!(diagnostic.scope(), &DiagnosticScope::Test);
+    }
+
+    #[test]
+    fn test_add_sub_diagnostic() {
+        let mut diagnostic = Diagnostic::new(vec![], DiagnosticScope::Test);
+        let sub_diagnostic = SubDiagnostic::new(
+            SubDiagnosticType::Fail,
+            "message".to_string(),
+            "location".to_string(),
+        );
+        diagnostic.add_sub_diagnostic(sub_diagnostic.clone());
+        assert_eq!(diagnostic.sub_diagnostics(), &[sub_diagnostic]);
+    }
+
+    #[test]
+    fn test_subdiagnostic() {
+        let sub_diagnostic = SubDiagnostic::new(
+            SubDiagnosticType::Fail,
+            "message".to_string(),
+            "location".to_string(),
+        );
+        assert_eq!(sub_diagnostic.diagnostic_type(), &SubDiagnosticType::Fail);
+        assert_eq!(sub_diagnostic.message(), "message");
+        assert_eq!(sub_diagnostic.location(), "location");
+    }
+
+    #[test]
+    fn test_get_traceback() {
+        Python::with_gil(|py| {
+            let error = PyAssertionError::new_err("This is an error");
+            let traceback = get_traceback(py, &error);
+            assert_eq!(traceback, "AssertionError: This is an error");
+        });
+    }
+
+    #[test]
+    fn test_get_traceback_empty() {
+        Python::with_gil(|py| {
+            let error = PyAssertionError::new_err("");
+            let traceback = get_traceback(py, &error);
+            assert_eq!(traceback, "AssertionError: ");
+        });
+    }
 }

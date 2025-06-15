@@ -98,7 +98,10 @@ impl TestCase {
                     .filter_map(|fixture| {
                         fixtures.get_fixture(fixture).map_or_else(
                             || {
-                                diagnostics.push(Diagnostic::fixture_not_found(fixture, self));
+                                diagnostics.push(Diagnostic::fixture_not_found(
+                                    fixture,
+                                    &self.path.to_string(),
+                                ));
                                 None
                             },
                             Some,

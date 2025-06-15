@@ -50,11 +50,36 @@ impl FixtureExtractor {
         ))
     }
 
+    pub fn try_from_unresolved_karva_fixture(
+        function_def: StmtFunctionDef,
+        function: &Bound<'_, PyAny>,
+    ) -> Result<Fixture, String> {
+        let found_name = function.getattr("name").map_err(|e| e.to_string())?;
+
+        let name = if found_name.is_none() {
+            function_def.name.to_string()
+        } else {
+            found_name.to_string()
+        };
+
+        let scope = function.getattr("scope").map_err(|e| e.to_string())?;
+
+        Ok(Fixture::new(
+            name,
+            function_def,
+            FixtureScope::try_from(scope.to_string())?,
+            function.clone().into(),
+        ))
+    }
+
     pub fn try_from_other_function(
         function_def: StmtFunctionDef,
         function: &Bound<'_, PyAny>,
     ) -> Result<Fixture, String> {
-        Self::try_from_pytest_fixture(function_def, function)
+        Self::try_from_pytest_fixture(function_def.clone(), function).map_or_else(
+            |_| Self::try_from_unresolved_karva_fixture(function_def, function),
+            Ok,
+        )
     }
 
     pub fn try_from_function(
