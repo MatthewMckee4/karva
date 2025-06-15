@@ -179,6 +179,9 @@ impl<'proj> StandardTestRunner<'proj> {
             let test_case_fixtures = TestCaseFixtures::new(&current_function_fixtures);
             if let Some(result) = function.run_test(py, &py_module, &test_case_fixtures) {
                 diagnostics.push(result);
+                tracing::info!("Test {} failed", test_name);
+            } else {
+                tracing::info!("Test {} passed", test_name);
             }
         }
 

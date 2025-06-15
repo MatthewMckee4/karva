@@ -39,8 +39,8 @@ class TestEnv:
         commands = [
             ["uv", "init", "--bare", "--directory", str(self.project_dir)],
             ["uv", "add", "pytest", "--directory", str(self.project_dir)],
-            ["uv", "pip", "install", "--directory", str(self.project_dir), str(KARVA_WHEEL)],
             ["uv", "sync", "--directory", str(self.project_dir)],
+            ["uv", "pip", "install", "--directory", str(self.project_dir), str(KARVA_WHEEL)],
         ]
         for command in commands:
             subprocess.run(
@@ -48,6 +48,7 @@ class TestEnv:
                 cwd=self.project_dir,
                 check=True,
                 capture_output=True,
+                text=True,
             )
 
     def remove_files(self) -> None:
@@ -79,13 +80,16 @@ class TestEnv:
 
     def run_test(self) -> CommandSnapshot:
         """Test the project and return (exit_code, stdout, stderr)."""
-        karva_path = shutil.which("karva")
-        if karva_path is None:
-            msg = "Could not find karva executable in PATH"
-            raise FileNotFoundError(msg)
+        result = subprocess.run(
+            ["tree", "-a", "-L", "5", str(self.project_dir)],
+            cwd=self.project_dir,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
 
         result = subprocess.run(
-            ["uv", "run", "--directory", str(self.project_dir), karva_path, "test", str(self.project_dir)],
+            ["uv", "run", "--directory", str(self.project_dir), "karva", "test", str(self.project_dir)],
             cwd=self.project_dir,
             check=False,
             capture_output=True,
