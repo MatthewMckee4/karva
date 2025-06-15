@@ -173,6 +173,12 @@ pub trait HasFixtures<'proj> {
             .collect()
     }
 
+    fn get_fixture<'a: 'proj>(&'a self, fixture_name: &str) -> Option<&'proj Fixture> {
+        self.all_fixtures(None)
+            .into_iter()
+            .find(|fixture| fixture.name() == fixture_name)
+    }
+
     fn all_fixtures<'a: 'proj>(&'a self, test_cases: Option<&[&TestCase]>) -> Vec<&'proj Fixture>;
 }
 

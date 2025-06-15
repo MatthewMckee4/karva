@@ -535,11 +535,6 @@ def test_multiple_files_independent_fixtures(test_env: TestEnv) -> None:
                     from src import Calculator
 
                     @fixture(scope="module")
-                    def add_calculator() -> Calculator:
-                        print("Add calculator initialized")
-                        return Calculator()
-
-                    @fixture(scope="module")
                     def multiply_calculator() -> Calculator:
                         print("Multiply calculator initialized")
                         return Calculator()""",
@@ -549,11 +544,11 @@ def test_multiple_files_independent_fixtures(test_env: TestEnv) -> None:
                 """
                 from src import Calculator
 
-                def test_add_1(add_calculator: Calculator) -> None:
-                    assert add_calculator.add(1, 2) == 3
+                def test_add_1(multiply_calculator: Calculator) -> None:
+                    assert multiply_calculator.add(1, 2) == 3
 
-                def test_add_2(add_calculator: Calculator) -> None:
-                    assert add_calculator.add(3, 4) == 7""",
+                def test_add_2(multiply_calculator: Calculator) -> None:
+                    assert multiply_calculator.add(3, 4) == 7""",
             ),
             (
                 "tests/test_multiply.py",
@@ -576,7 +571,7 @@ exit_code: 0
 ----- stdout -----
 All checks passed!
 Multiply calculator initialized
-Add calculator initialized
+Multiply calculator initialized
 
 ----- stderr -----"""
     )
@@ -1000,7 +995,7 @@ def test_same_fixture_name_different_types(test_env: TestEnv) -> None:
 
                     @fixture
                     def value() -> str:
-                        print("String value initialized")
+                        print("Calculator value initialized")
                         return "test"
                     """,
             ),
@@ -1021,7 +1016,61 @@ exit_code: 0
 ----- stdout -----
 All checks passed!
 Calculator value initialized
-String value initialized
+Calculator value initialized
+
+----- stderr -----"""
+    )
+    test_env.cleanup()
+
+
+def test_fixture_dependencies(test_env: TestEnv) -> None:
+    test_env.write_files(
+        [
+            *get_source_code("print('Calculator initialized')"),
+            (
+                "tests/conftest.py",
+                """
+                from karva import fixture
+                from src import Calculator
+
+                @fixture
+                def calculator() -> Calculator:
+                    print("Calculator fixture initialized")
+                    return Calculator()
+
+                @fixture
+                def calculator_with_value(calculator: Calculator) -> Calculator:
+                    print("Calculator with value fixture initialized")
+                    calculator.add(5, 5)
+                    return calculator""",
+            ),
+            (
+                "tests/test_calculator.py",
+                """
+                from src import Calculator
+
+                def test_calculator_with_value(calculator_with_value: Calculator) -> None:
+                    assert calculator_with_value.add(1, 2) == 3
+
+                def test_calculator_dependency(calculator: Calculator, calculator_with_value: Calculator) -> None:
+                    assert calculator.add(1, 2) == 3
+                    assert calculator_with_value.add(1, 2) == 3""",
+            ),
+        ],
+    )
+
+    assert (
+        test_env.run_test()
+        == """success: true
+exit_code: 0
+----- stdout -----
+All checks passed!
+Calculator fixture initialized
+Calculator initialized
+Calculator with value fixture initialized
+Calculator fixture initialized
+Calculator initialized
+Calculator with value fixture initialized
 
 ----- stderr -----"""
     )

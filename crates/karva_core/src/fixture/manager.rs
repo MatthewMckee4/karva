@@ -4,7 +4,7 @@ use pyo3::{prelude::*, types::PyAny};
 
 use crate::{
     case::TestCase,
-    fixture::{FixtureRequester, FixtureScope, HasFixtures},
+    fixture::{Fixture, FixtureRequester, FixtureScope, HasFixtures},
 };
 
 #[derive(Debug, Default)]
@@ -66,32 +66,59 @@ impl<'proj> FixtureManager<'proj> {
     ) -> HashMap<String, Bound<'proj, PyAny>> {
         let fixtures = has_fixtures.fixtures(scope, Some(test_cases));
         let mut called_fixtures: HashMap<String, Bound<'proj, PyAny>> = HashMap::new();
+        let mut pending_fixtures: Vec<&Fixture> = fixtures.into_iter().collect();
 
-        for fixture in fixtures {
-            let required_fixtures_names = fixture.get_required_fixture_names();
-            let mut required_fixtures = Vec::new();
-            for name in required_fixtures_names {
-                if let Some(fixture) = self.get_fixture(&name) {
-                    required_fixtures.push(fixture);
-                } else if let Some(fixture) = called_fixtures.get(&name) {
-                    required_fixtures.push(fixture.clone());
+        let prev_pending_len = pending_fixtures.len();
+
+        while !pending_fixtures.is_empty() {
+            let mut remaining_fixtures = Vec::new();
+
+            for fixture in pending_fixtures {
+                let required_fixtures_names = fixture.get_required_fixture_names();
+                let mut required_fixtures = Vec::new();
+                let mut all_dependencies_available = true;
+
+                for name in required_fixtures_names {
+                    if let Some(fixture) = self.get_fixture(&name) {
+                        required_fixtures.push(fixture);
+                    } else if let Some(fixture) = called_fixtures.get(&name) {
+                        required_fixtures.push(fixture.clone());
+                    } else if let Some(fixture_def) = has_fixtures.get_fixture(&name) {
+                        remaining_fixtures.push(fixture_def);
+                        all_dependencies_available = false;
+                        break;
+                    } else {
+                        all_dependencies_available = false;
+                        break;
+                    }
+                }
+
+                if all_dependencies_available {
+                    match fixture.call(py, required_fixtures) {
+                        Ok(fixture_return) => {
+                            called_fixtures.insert(fixture.name().to_string(), fixture_return);
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to call fixture {}: {}", fixture.name(), e);
+                        }
+                    }
                 } else {
+                    remaining_fixtures.push(fixture);
+                }
+            }
+
+            if remaining_fixtures.len() == prev_pending_len {
+                // No progress made in this iteration, we have a circular dependency
+                for fixture in &remaining_fixtures {
                     tracing::error!(
-                        "Fixture {} is required by fixture {}, but is not found",
-                        name,
+                        "Circular dependency detected for fixture {}",
                         fixture.name()
                     );
                 }
+                break;
             }
 
-            match fixture.call(py, required_fixtures) {
-                Ok(fixture_return) => {
-                    called_fixtures.insert(fixture.name().to_string(), fixture_return);
-                }
-                Err(e) => {
-                    tracing::error!("Failed to call fixture {}: {}", fixture.name(), e);
-                }
-            }
+            pending_fixtures = remaining_fixtures;
         }
 
         called_fixtures
