@@ -1,4 +1,7 @@
-use pyo3::prelude::*;
+use pyo3::{
+    prelude::*,
+    types::{PyDict, PyTuple},
+};
 
 #[pyclass]
 pub struct FixtureFunctionMarker {
@@ -64,7 +67,13 @@ impl FixtureFunctionDefinition {
         }
     }
 
-    fn __call__(&self, py: Python<'_>) -> PyResult<PyObject> {
-        self.function.call0(py)
+    #[pyo3(signature = (*args, **kwargs))]
+    fn __call__(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyObject> {
+        self.function.call(py, args, kwargs)
     }
 }

@@ -4,16 +4,17 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use pyo3::prelude::*;
+use pyo3::{prelude::*, types::PyTuple};
 use ruff_python_ast::{Decorator, Expr, StmtFunctionDef};
 
 use crate::case::TestCase;
 
+mod extractor;
+mod manager;
 pub mod python;
 
-pub mod extractor;
-
 pub use extractor::FixtureExtractor;
+pub use manager::FixtureManager;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum FixtureScope {
@@ -90,17 +91,24 @@ impl Fixture {
     }
 
     #[must_use]
-    pub const fn function_def(&self) -> &StmtFunctionDef {
-        &self.function_def
-    }
-
-    #[must_use]
     pub const fn scope(&self) -> &FixtureScope {
         &self.scope
     }
 
-    pub fn call<'a>(&self, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
-        self.function.call(py, (), None).map(|r| r.into_bound(py))
+    pub fn call<'a>(
+        &self,
+        py: Python<'a>,
+        required_fixtures: Vec<Bound<'a, PyAny>>,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        let args = PyTuple::new(py, required_fixtures)?;
+        let function_return = self.function.call(py, args, None);
+        function_return.map(|r| r.into_bound(py))
+    }
+}
+
+impl FixtureRequester for Fixture {
+    fn function_definition(&self) -> &StmtFunctionDef {
+        &self.function_def
     }
 }
 
@@ -117,6 +125,22 @@ impl PartialEq for Fixture {
 }
 
 impl Eq for Fixture {}
+
+pub trait FixtureRequester {
+    #[must_use]
+    fn get_required_fixture_names(&self) -> Vec<String> {
+        let mut required_fixtures = Vec::new();
+        for parameter in self
+            .function_definition()
+            .parameters
+            .iter_non_variadic_params()
+        {
+            required_fixtures.push(parameter.parameter.name.as_str().to_string());
+        }
+        required_fixtures
+    }
+    fn function_definition(&self) -> &StmtFunctionDef;
+}
 
 pub fn is_fixture_function(val: &StmtFunctionDef) -> bool {
     val.decorator_list.iter().any(is_fixture)
@@ -137,20 +161,6 @@ fn is_fixture(decorator: &Decorator) -> bool {
 
 pub type CalledFixtures<'a> = HashMap<String, Bound<'a, PyAny>>;
 
-#[must_use]
-pub fn call_fixtures<'a>(fixtures: &[&Fixture], py: Python<'a>) -> CalledFixtures<'a> {
-    fixtures
-        .iter()
-        .filter_map(|fixture| match fixture.call(py) {
-            Ok(fixture_return) => Some((fixture.name().to_string(), fixture_return)),
-            Err(e) => {
-                tracing::error!("Failed to call fixture {}: {}", fixture.name, e);
-                None
-            }
-        })
-        .collect()
-}
-
 pub trait HasFixtures<'proj> {
     fn fixtures<'a: 'proj>(
         &'a self,
@@ -161,15 +171,6 @@ pub trait HasFixtures<'proj> {
             .into_iter()
             .filter(|fixture| scope.contains(fixture.scope()))
             .collect()
-    }
-
-    fn called_fixtures<'a: 'proj>(
-        &'a self,
-        py: Python<'proj>,
-        scope: &[FixtureScope],
-        test_cases: &[&TestCase],
-    ) -> CalledFixtures<'proj> {
-        call_fixtures(&self.fixtures(scope, Some(test_cases)), py)
     }
 
     fn all_fixtures<'a: 'proj>(&'a self, test_cases: Option<&[&TestCase]>) -> Vec<&'proj Fixture>;
