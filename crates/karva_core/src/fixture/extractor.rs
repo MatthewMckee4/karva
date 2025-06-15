@@ -76,8 +76,8 @@ impl FixtureExtractor {
         function_def: StmtFunctionDef,
         function: &Bound<'_, PyAny>,
     ) -> Result<Fixture, String> {
-        Self::try_from_pytest_fixture(function_def.clone(), function).map_or_else(
-            |_| Self::try_from_unresolved_karva_fixture(function_def, function),
+        Self::try_from_unresolved_karva_fixture(function_def.clone(), function).map_or_else(
+            |_| Self::try_from_pytest_fixture(function_def, function),
             Ok,
         )
     }
