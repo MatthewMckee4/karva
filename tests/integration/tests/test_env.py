@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -54,15 +53,12 @@ class TestEnv:
     def remove_files(self) -> None:
         """Remove all files from the test environment."""
         for item in self.project_dir.iterdir():
-            if item.is_file():
+            if item.is_file() and item.suffix == ".py":
                 item.unlink()
-            elif item.is_dir():
-                shutil.rmtree(item)
 
     def cleanup(self) -> None:
         """Clean up the test environment."""
         self.remove_files()
-        shutil.rmtree(self.temp_dir)
 
     def write_files(self, files: Iterable[tuple[str, str]]) -> None:
         """Write multiple files to the test environment."""
@@ -88,6 +84,7 @@ class TestEnv:
             capture_output=True,
             text=True,
         )
+        self.cleanup()
         return CommandSnapshot(
             project_dir=self.project_dir,
             exit_code=result.returncode,
@@ -142,10 +139,10 @@ exit_code: {self.exit_code}
             def filter_lines(lines: list[str]) -> list[str]:
                 return [filter_line(line) for line in lines]
 
-            self_stdout_lines = set(filter_lines(self.stdout.splitlines()))
-            other_stdout_lines = set(filter_lines(other.stdout.splitlines()))
-            self_stderr_lines = set(filter_lines(self.stderr.splitlines()))
-            other_stderr_lines = set(filter_lines(other.stderr.splitlines()))
+            self_stdout_lines = filter_lines(self.stdout.splitlines())
+            other_stdout_lines = filter_lines(other.stdout.splitlines())
+            self_stderr_lines = filter_lines(self.stderr.splitlines())
+            other_stderr_lines = filter_lines(other.stderr.splitlines())
             return (
                 self.exit_code == other.exit_code
                 and self_stdout_lines == other_stdout_lines

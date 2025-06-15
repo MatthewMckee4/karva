@@ -213,6 +213,20 @@ impl<'proj> HasFixtures<'proj> for Package<'proj> {
     }
 }
 
+impl<'proj> HasFixtures<'proj> for &'proj Package<'proj> {
+    fn all_fixtures<'a: 'proj>(&'a self, test_cases: Option<&[&TestCase]>) -> Vec<&'proj Fixture> {
+        let mut fixtures: Vec<&'proj Fixture> = Vec::new();
+
+        fixtures.extend(
+            self.configuration_modules()
+                .iter()
+                .flat_map(|m| m.all_fixtures(test_cases)),
+        );
+
+        fixtures
+    }
+}
+
 impl Hash for Package<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.path.hash(state);
