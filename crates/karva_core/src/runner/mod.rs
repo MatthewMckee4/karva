@@ -7,10 +7,10 @@ use crate::{
         reporter::{DummyReporter, Reporter},
     },
     discovery::Discoverer,
-    fixture::{FixtureManager, FixtureScope},
+    fixture::{FixtureManager, FixtureScope, HasFixtures},
     module::Module,
     package::Package,
-    utils::add_to_sys_path,
+    utils::{Upcast, add_to_sys_path},
 };
 
 mod diagnostic;
@@ -67,15 +67,16 @@ impl<'proj> StandardTestRunner<'proj> {
 
             fixture_manager.add_session_fixtures(
                 py,
+                vec![],
                 &session,
                 &[FixtureScope::Session],
-                &session.test_cases(),
+                session.test_cases().upcast(),
             );
 
             self.test_package(
                 py,
                 &session,
-                &[],
+                vec![],
                 &mut fixture_manager,
                 &mut diagnostics,
                 reporter,
@@ -94,34 +95,42 @@ impl<'proj> StandardTestRunner<'proj> {
         &self,
         py: Python<'a>,
         module: &'a Module<'a>,
-        parents: &[&'a Package<'a>],
+        parents: Vec<&'a Package<'a>>,
         fixture_manager: &mut FixtureManager<'a>,
         diagnostics: &mut Vec<Diagnostic>,
         reporter: &dyn Reporter,
     ) {
-        if module.total_test_cases() == 0 {
+        let module_test_cases = module.dependencies();
+        if module_test_cases.is_empty() {
             return;
+        }
+
+        let mut parents_above_current_parent: Vec<&dyn HasFixtures<'a>> = parents.clone().upcast();
+        let mut i = parents.len();
+        while i > 0 {
+            i -= 1;
+            let parent = parents[i];
+            parents_above_current_parent.truncate(i);
+            fixture_manager.add_module_fixtures(
+                py,
+                parents_above_current_parent.clone(),
+                parent,
+                &[FixtureScope::Module],
+                module_test_cases.clone(),
+            );
         }
 
         fixture_manager.add_module_fixtures(
             py,
+            parents.clone().upcast(),
             module,
             &[
                 FixtureScope::Module,
                 FixtureScope::Package,
                 FixtureScope::Session,
             ],
-            &module.test_cases(),
+            module_test_cases.upcast(),
         );
-
-        for parent in parents {
-            fixture_manager.add_module_fixtures(
-                py,
-                *parent,
-                &[FixtureScope::Module],
-                &module.test_cases(),
-            );
-        }
 
         let py_module = match PyModule::import(py, module.name()) {
             Ok(py_module) => py_module,
@@ -137,21 +146,31 @@ impl<'proj> StandardTestRunner<'proj> {
         };
 
         for function in module.test_cases() {
-            fixture_manager.add_function_fixtures(
-                py,
-                module,
-                &[FixtureScope::Function],
-                &[function],
-            );
+            let test_cases = [function].to_vec();
 
-            for parent in parents {
+            let mut parents_above_current_parent: Vec<&dyn HasFixtures<'a>> =
+                parents.clone().upcast();
+            let mut i = parents.len();
+            while i > 0 {
+                i -= 1;
+                let parent = parents[i];
+                parents_above_current_parent.truncate(i);
                 fixture_manager.add_function_fixtures(
                     py,
-                    *parent,
+                    parents_above_current_parent.clone(),
+                    parent,
                     &[FixtureScope::Function],
-                    &[function],
+                    test_cases.clone().upcast(),
                 );
             }
+
+            fixture_manager.add_function_fixtures(
+                py,
+                parents.clone().upcast(),
+                module,
+                &[FixtureScope::Function],
+                test_cases.clone().upcast(),
+            );
 
             let test_name = function.to_string();
             tracing::info!("Running test: {}", test_name);
@@ -174,7 +193,7 @@ impl<'proj> StandardTestRunner<'proj> {
         &self,
         py: Python<'a>,
         package: &'a Package<'a>,
-        parents: &[&'a Package<'a>],
+        parents: Vec<&'a Package<'a>>,
         fixture_manager: &mut FixtureManager<'a>,
         diagnostics: &mut Vec<Diagnostic>,
         reporter: &dyn Reporter,
@@ -182,31 +201,39 @@ impl<'proj> StandardTestRunner<'proj> {
         if package.total_test_cases() == 0 {
             return;
         }
+        let package_test_cases = package.dependencies();
 
-        fixture_manager.add_package_fixtures(
-            py,
-            package,
-            &[FixtureScope::Package, FixtureScope::Session],
-            &package.direct_test_cases(),
-        );
-
-        for parent in parents {
+        let mut parents_above_current_parent: Vec<&dyn HasFixtures<'a>> = parents.clone().upcast();
+        let mut i = parents.len();
+        while i > 0 {
+            i -= 1;
+            let parent = parents[i];
+            parents_above_current_parent.truncate(i);
             fixture_manager.add_package_fixtures(
                 py,
-                *parent,
+                parents_above_current_parent.clone(),
+                parent,
                 &[FixtureScope::Package],
-                &package.direct_test_cases(),
+                package_test_cases.clone().upcast(),
             );
         }
 
-        let mut new_parents: Vec<&'a Package<'a>> = parents.to_vec();
+        fixture_manager.add_package_fixtures(
+            py,
+            parents.clone().upcast(),
+            package,
+            &[FixtureScope::Package, FixtureScope::Session],
+            package_test_cases.clone().upcast(),
+        );
+
+        let mut new_parents: Vec<&'a Package<'a>> = parents.clone();
         new_parents.push(package);
 
         for module in package.modules().values() {
             self.test_module(
                 py,
                 module,
-                &new_parents,
+                new_parents.clone(),
                 fixture_manager,
                 diagnostics,
                 reporter,
@@ -217,7 +244,7 @@ impl<'proj> StandardTestRunner<'proj> {
             self.test_package(
                 py,
                 sub_package,
-                &new_parents,
+                new_parents.clone(),
                 fixture_manager,
                 diagnostics,
                 reporter,

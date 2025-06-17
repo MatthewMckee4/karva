@@ -7,8 +7,9 @@ use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 
 use crate::{
     case::TestCase,
-    fixture::{Fixture, HasFixtures},
+    fixture::{Fixture, HasFixtures, UsesFixture},
     module::{Module, ModuleType, StringModule},
+    utils::Upcast,
 };
 
 /// A package represents a single python directory.
@@ -55,6 +56,16 @@ impl<'proj> Package<'proj> {
     #[must_use]
     pub const fn packages(&self) -> &HashMap<SystemPathBuf, Self> {
         &self.packages
+    }
+
+    #[must_use]
+    pub fn get_module(&self, path: &SystemPathBuf) -> Option<&Module<'proj>> {
+        self.modules.get(path)
+    }
+
+    #[must_use]
+    pub fn get_package(&self, path: &SystemPathBuf) -> Option<&Self> {
+        self.packages.get(path)
     }
 
     pub fn add_module(&mut self, module: Module<'proj>) {
@@ -165,20 +176,27 @@ impl<'proj> Package<'proj> {
         cases
     }
 
+    // TODO: Rename this
+    // This function returns all functions that
+    #[must_use]
+    pub fn dependencies(&self) -> Vec<&dyn UsesFixture> {
+        let mut dependencies: Vec<&dyn UsesFixture> = Vec::new();
+        let direct_test_cases: Vec<&dyn UsesFixture> = self.direct_test_cases().upcast();
+
+        for configuration_module in self.configuration_modules() {
+            dependencies.extend(configuration_module.dependencies());
+        }
+        dependencies.extend(direct_test_cases);
+
+        dependencies
+    }
+
     #[must_use]
     pub fn configuration_modules(&self) -> Vec<&Module<'_>> {
         self.configuration_modules
             .iter()
             .filter_map(|path| self.modules.get(path))
             .collect()
-    }
-
-    #[must_use]
-    pub fn uses_fixture(&self, fixture_name: &str) -> bool {
-        self.direct_test_cases()
-            .iter()
-            .any(|m| m.uses_fixture(fixture_name))
-            || self.packages.values().any(|p| p.uses_fixture(fixture_name))
     }
 
     pub fn shrink(&mut self) {
@@ -200,30 +218,22 @@ impl<'proj> Package<'proj> {
 }
 
 impl<'proj> HasFixtures<'proj> for Package<'proj> {
-    fn all_fixtures<'a: 'proj>(&'a self, test_cases: Option<&[&TestCase]>) -> Vec<&'proj Fixture> {
-        let mut fixtures: Vec<&'proj Fixture> = Vec::new();
+    fn all_fixtures<'a: 'proj>(&'a self, test_cases: Vec<&dyn UsesFixture>) -> Vec<&'proj Fixture> {
+        let mut fixtures = Vec::new();
 
-        fixtures.extend(
-            self.configuration_modules()
-                .iter()
-                .flat_map(|m| m.all_fixtures(test_cases)),
-        );
+        for module in self.configuration_modules() {
+            let module_fixtures = module.all_fixtures(test_cases.clone());
+
+            fixtures.extend(module_fixtures);
+        }
 
         fixtures
     }
 }
 
 impl<'proj> HasFixtures<'proj> for &'proj Package<'proj> {
-    fn all_fixtures<'a: 'proj>(&'a self, test_cases: Option<&[&TestCase]>) -> Vec<&'proj Fixture> {
-        let mut fixtures: Vec<&'proj Fixture> = Vec::new();
-
-        fixtures.extend(
-            self.configuration_modules()
-                .iter()
-                .flat_map(|m| m.all_fixtures(test_cases)),
-        );
-
-        fixtures
+    fn all_fixtures<'a: 'proj>(&'a self, test_cases: Vec<&dyn UsesFixture>) -> Vec<&'proj Fixture> {
+        (*self).all_fixtures(test_cases)
     }
 }
 
@@ -240,6 +250,14 @@ impl PartialEq for Package<'_> {
 }
 
 impl Eq for Package<'_> {}
+
+impl<'a> Upcast<Vec<&'a dyn HasFixtures<'a>>> for Vec<&'a Package<'a>> {
+    fn upcast(self) -> Vec<&'a dyn HasFixtures<'a>> {
+        self.into_iter()
+            .map(|p| p as &dyn HasFixtures<'a>)
+            .collect()
+    }
+}
 
 #[derive(Debug)]
 pub struct StringPackage {
@@ -279,5 +297,98 @@ impl std::fmt::Debug for Package<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let string_package: StringPackage = self.into();
         write!(f, "{string_package:?}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use karva_project::tests::{MockFixture, TestEnv, mock_fixture};
+
+    use super::*;
+    use crate::discovery::Discoverer;
+
+    #[test]
+    fn test_package_dependencies() {
+        let env = TestEnv::new();
+
+        let fixture = mock_fixture(&[MockFixture {
+            name: "x".to_string(),
+            scope: "function".to_string(),
+            body: "pass".to_string(),
+            args: "".to_string(),
+        }]);
+
+        let tests_dir = env.cwd().join("tests");
+
+        env.create_file("tests/conftest.py", &fixture);
+
+        env.create_file("tests/test_1.py", "def test_1(x): pass");
+
+        let project = Project::new(env.cwd(), vec![tests_dir.clone()]);
+
+        let (session, _) = Discoverer::new(&project).discover();
+
+        let sub_packages = session.packages();
+
+        if let Some(package) = sub_packages.get(&tests_dir) {
+            let dependencies = package.dependencies();
+
+            assert_eq!(dependencies.len(), 1);
+        }
+    }
+
+    #[test]
+    fn test_package_dependencies_sub_fixtures() {
+        let env = TestEnv::new();
+
+        let fixture = mock_fixture(&[MockFixture {
+            name: "x".to_string(),
+            scope: "function".to_string(),
+            body: "pass".to_string(),
+            args: "".to_string(),
+        }]);
+
+        let tests_dir = env.cwd().join("tests");
+
+        env.create_file("tests/conftest.py", &fixture);
+
+        let dependency_fixture = mock_fixture(&[MockFixture {
+            name: "y".to_string(),
+            scope: "function".to_string(),
+            body: "pass".to_string(),
+            args: "x".to_string(),
+        }]);
+
+        let inner_tests_dir = tests_dir.join("inner");
+
+        env.create_file("tests/inner/conftest.py", &dependency_fixture);
+
+        env.create_file("tests/test_1.py", "def test_1(y): pass");
+
+        let project = Project::new(env.cwd(), vec![tests_dir.clone()]);
+
+        let (session, _) = Discoverer::new(&project).discover();
+
+        let sub_packages = session.packages();
+
+        if let Some(package) = sub_packages.get(&tests_dir) {
+            let dependencies = package.dependencies();
+
+            println!("{:?}", dependencies);
+
+            assert_eq!(dependencies.len(), 2);
+        } else {
+            panic!("Package not found");
+        }
+
+        if let Some(package) = sub_packages.get(&inner_tests_dir) {
+            let dependencies = package.dependencies();
+
+            println!("{:?}", dependencies);
+
+            assert_eq!(dependencies.len(), 2);
+        } else {
+            panic!("Package not found");
+        }
     }
 }

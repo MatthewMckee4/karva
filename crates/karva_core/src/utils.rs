@@ -51,3 +51,13 @@ pub fn add_to_sys_path(py: &Python<'_>, path: &SystemPathBuf) -> PyResult<()> {
     sys_path.call_method1("append", (path.to_string(),))?;
     Ok(())
 }
+
+pub trait Upcast<T> {
+    fn upcast(self) -> T;
+}
+
+impl<T> Upcast<T> for T {
+    fn upcast(self) -> T {
+        self
+    }
+}

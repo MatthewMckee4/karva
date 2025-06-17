@@ -10,7 +10,7 @@ use ruff_text_size::TextSize;
 use crate::{
     case::TestCase,
     discovery::visitor::source_text,
-    fixture::{Fixture, HasFixtures},
+    fixture::{Fixture, HasFixtures, UsesFixture},
     utils::from_text_size,
 };
 
@@ -76,6 +76,16 @@ impl<'proj> Module<'proj> {
     }
 
     #[must_use]
+    pub fn get_test_case(&self, name: &str) -> Option<&TestCase> {
+        self.test_cases.iter().find(|tc| tc.name() == name)
+    }
+
+    #[must_use]
+    pub fn fixtures(&self) -> Vec<&Fixture> {
+        self.fixtures.iter().collect()
+    }
+
+    #[must_use]
     pub fn total_test_cases(&self) -> usize {
         self.test_cases.len()
     }
@@ -124,10 +134,15 @@ impl<'proj> Module<'proj> {
     }
 
     #[must_use]
-    pub fn uses_fixture(&self, fixture_name: &str) -> bool {
-        self.test_cases
-            .iter()
-            .any(|tc| tc.uses_fixture(fixture_name))
+    pub fn dependencies(&self) -> Vec<&dyn UsesFixture> {
+        let mut deps = Vec::new();
+        for tc in &self.test_cases {
+            deps.push(tc as &dyn UsesFixture);
+        }
+        for f in &self.fixtures {
+            deps.push(f as &dyn UsesFixture);
+        }
+        deps
     }
 
     #[must_use]
@@ -137,23 +152,18 @@ impl<'proj> Module<'proj> {
 }
 
 impl<'proj> HasFixtures<'proj> for Module<'proj> {
-    fn all_fixtures<'a: 'proj>(&'a self, test_cases: Option<&[&TestCase]>) -> Vec<&'proj Fixture> {
-        self.fixtures
-            .iter()
-            .filter(|f| {
-                test_cases
-                    .is_none_or(|test_cases| test_cases.iter().any(|tc| tc.uses_fixture(f.name())))
-            })
-            .collect()
-    }
-}
+    fn all_fixtures<'a: 'proj>(&'a self, test_cases: Vec<&dyn UsesFixture>) -> Vec<&'proj Fixture> {
+        if test_cases.is_empty() {
+            return self.fixtures.iter().collect();
+        }
 
-impl fmt::Debug for Module<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Module")
-            .field("file", &self.path)
-            .field("functions", &self.test_cases)
-            .finish()
+        let all_fixtures: Vec<&'proj Fixture> = self
+            .fixtures
+            .iter()
+            .filter(|f| test_cases.iter().any(|tc| tc.uses_fixture(f.name())))
+            .collect();
+
+        all_fixtures
     }
 }
 
@@ -177,6 +187,13 @@ impl PartialEq for Module<'_> {
 
 impl Eq for Module<'_> {}
 
+impl std::fmt::Debug for Module<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let string_module: StringModule = self.into();
+        write!(f, "{string_module:?}")
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct StringModule {
     pub test_cases: HashSet<String>,
@@ -188,8 +205,8 @@ impl From<&Module<'_>> for StringModule {
         Self {
             test_cases: module.test_cases().iter().map(|tc| tc.name()).collect(),
             fixtures: module
-                .all_fixtures(None)
-                .iter()
+                .all_fixtures(Vec::new())
+                .into_iter()
                 .map(|f| (f.name().to_string(), f.scope().to_string()))
                 .collect(),
         }

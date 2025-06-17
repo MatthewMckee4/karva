@@ -94,9 +94,20 @@ impl FixtureExtractor {
 
         let py_module = py.import(module).map_err(|e| e.to_string())?;
 
-        let function = py_module
-            .getattr(val.name.to_string())
+        let dir_result = py
+            .import("builtins")
+            .map_err(|e| e.to_string())?
+            .getattr("dir")
+            .map_err(|e| e.to_string())?
+            .call1((py_module.clone(),))
             .map_err(|e| e.to_string())?;
+
+        println!("Module contents: {:?}", dir_result);
+
+        let function = py_module.getattr(val.name.to_string()).map_err(|e| {
+            println!("error: {:?}", e);
+            e.to_string()
+        })?;
 
         let Ok(py_function) = function
             .clone()

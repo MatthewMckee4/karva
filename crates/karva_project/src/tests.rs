@@ -49,3 +49,88 @@ impl Default for TestEnv {
         Self::new()
     }
 }
+
+pub struct MockFixture {
+    pub name: String,
+    pub scope: String,
+    pub body: String,
+    pub args: String,
+}
+
+#[must_use]
+pub fn mock_fixture(fixtures: &[MockFixture]) -> String {
+    let fixtures = fixtures
+        .iter()
+        .map(|fixture| {
+            format!(
+                r"@fixture(scope='{scope}')
+def {name}({args}):
+    {body}
+",
+                name = fixture.name,
+                scope = fixture.scope,
+                args = fixture.args,
+                body = fixture.body,
+            )
+        })
+        .collect::<Vec<String>>()
+        .join("\n\n");
+
+    format!(
+        r"from collections.abc import Callable
+from typing import Any
+
+class FixtureFunctionMarker:
+    scope: str
+    name: str | None = None
+
+    def __init__(self, scope: str, name: str | None = None) -> None:
+        self.scope = scope
+        self.name = name
+
+    def __call__(self, function: Callable[..., object]):
+        return FixtureFunctionDefinition(
+            function=function,
+            fixture_function_marker=self,
+        )
+
+class FixtureFunctionDefinition:
+    def __init__(
+        self,
+        *,
+        function: Callable[..., object],
+        fixture_function_marker: FixtureFunctionMarker,
+    ) -> None:
+        self.name = fixture_function_marker.name or function.__name__
+        self.__name__ = self.name
+        self._fixture_function_marker = fixture_function_marker
+        self._fixture_function = function
+
+    def __get__(
+        self,
+        instance: object | None,
+        owner: type | None = None,
+    ):
+        return self
+
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        return self._fixture_function(*args, **kwds)
+
+def fixture(
+    fixture_function: Callable[..., object] | None = None,
+    *,
+    scope: str = 'function',
+    name: str | None = None,
+) -> FixtureFunctionMarker | FixtureFunctionDefinition:
+    fixture_marker = FixtureFunctionMarker(
+        scope=scope,
+        name=name,
+    )
+    if fixture_function:
+        return fixture_marker(fixture_function)
+    return fixture_marker
+
+{fixtures}
+"
+    )
+}

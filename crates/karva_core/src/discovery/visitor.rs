@@ -36,7 +36,9 @@ impl<'a> FunctionDefinitionVisitor<'a> {
 impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
     fn visit_stmt(&mut self, stmt: &'a Stmt) {
         if let Stmt::FunctionDef(function_def) = stmt {
+            println!("function_def: {:?}", function_def.name);
             if is_fixture_function(function_def) {
+                println!("is_fixture_function");
                 Python::with_gil(|py| {
                     match FixtureExtractor::try_from_function(
                         &py,
@@ -46,6 +48,7 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
                     ) {
                         Ok(fixture_def) => self.fixture_definitions.push(fixture_def),
                         Err(e) => {
+                            println!("error: {:?}", e);
                             self.diagnostics
                                 .push(Diagnostic::invalid_fixture(&e, &self.path.to_string()));
                         }
@@ -103,6 +106,8 @@ pub fn parsed_module(path: &SystemPathBuf, python_version: PythonVersion) -> Par
     let mode = Mode::Module;
     let options = ParseOptions::from(mode).with_target_version(python_version);
     let source = source_text(path);
+
+    println!("source:\n{}", source);
 
     parse_unchecked(&source, options)
         .try_into_module()

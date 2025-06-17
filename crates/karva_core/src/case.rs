@@ -10,20 +10,25 @@ use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
     diagnostic::{Diagnostic, DiagnosticScope},
-    fixture::{FixtureManager, FixtureRequester},
+    fixture::{FixtureManager, HasFunctionDefinition, UsesFixture},
+    utils::Upcast,
 };
 
 /// A test case represents a single test function.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TestCase {
     path: SystemPathBuf,
     cwd: SystemPathBuf,
     function_definition: StmtFunctionDef,
 }
 
-impl FixtureRequester for TestCase {
+impl HasFunctionDefinition for TestCase {
     fn function_definition(&self) -> &StmtFunctionDef {
         &self.function_definition
+    }
+
+    fn name(&self) -> &str {
+        &self.function_definition.name
     }
 }
 
@@ -113,12 +118,6 @@ impl TestCase {
             Err(err) => Some(Diagnostic::from_test_fail(py, &err, self)),
         }
     }
-
-    #[must_use]
-    pub fn uses_fixture(&self, fixture_name: &str) -> bool {
-        self.get_required_fixture_names()
-            .contains(&fixture_name.to_string())
-    }
 }
 
 impl Display for TestCase {
@@ -147,6 +146,26 @@ impl PartialEq for TestCase {
 
 impl Eq for TestCase {}
 
+impl<'a> Upcast<Vec<&'a dyn UsesFixture>> for Vec<&'a TestCase> {
+    fn upcast(self) -> Vec<&'a dyn UsesFixture> {
+        self.into_iter().map(|tc| tc as &dyn UsesFixture).collect()
+    }
+}
+
+impl<'a> Upcast<Vec<&'a dyn HasFunctionDefinition>> for Vec<&'a TestCase> {
+    fn upcast(self) -> Vec<&'a dyn HasFunctionDefinition> {
+        self.into_iter()
+            .map(|tc| tc as &dyn HasFunctionDefinition)
+            .collect()
+    }
+}
+
+impl std::fmt::Debug for TestCase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TestCase(path: {}, name: {})", self.path, self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -155,7 +174,7 @@ mod tests {
 
     use crate::{
         discovery::Discoverer,
-        fixture::{FixtureManager, FixtureRequester},
+        fixture::{FixtureManager, HasFunctionDefinition, UsesFixture},
         utils::add_to_sys_path,
     };
 
