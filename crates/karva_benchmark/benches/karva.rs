@@ -1,7 +1,7 @@
 use anyhow::{Context, anyhow};
 use karva_benchmark::{
-    LARGE_LIST_COMPREHENSION, LARGE_SUMMATION, MATH, STRING_CONCATENATION, TRUE_ASSERTIONS,
-    TestCase,
+    FIXTURES, LARGE_LIST_COMPREHENSION, LARGE_SUMMATION, MATH, STRING_CONCATENATION,
+    TRUE_ASSERTIONS, TestCase,
     criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main},
 };
 use karva_core::{diagnostic::reporter::DummyReporter, runner::TestRunner};
@@ -12,11 +12,12 @@ use karva_project::{
 
 fn create_test_cases() -> Vec<TestCase> {
     vec![
-        TestCase::fast(TRUE_ASSERTIONS.clone()),
-        TestCase::fast(MATH.clone()),
-        TestCase::normal(STRING_CONCATENATION.clone()),
-        TestCase::normal(LARGE_SUMMATION.clone()),
-        TestCase::slow(LARGE_LIST_COMPREHENSION.clone()),
+        TestCase::new(TRUE_ASSERTIONS.clone()),
+        TestCase::new(MATH.clone()),
+        TestCase::new(STRING_CONCATENATION.clone()),
+        TestCase::new(LARGE_SUMMATION.clone()),
+        TestCase::new(LARGE_LIST_COMPREHENSION.clone()),
+        TestCase::new(FIXTURES.clone()),
     ]
 }
 

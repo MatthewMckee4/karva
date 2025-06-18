@@ -25,6 +25,11 @@ pub static LARGE_LIST_COMPREHENSION: TestFile = TestFile::new(
     include_str!("../resources/test_large_list_comprehension.py"),
 );
 
+pub static FIXTURES: TestFile = TestFile::new(
+    "test_fixtures.py",
+    include_str!("../resources/test_fixtures.py"),
+);
+
 /// Relative size of a test case. Benchmarks can use it to configure the time for how long a benchmark should run to get stable results.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum TestCaseSpeed {
@@ -41,32 +46,12 @@ pub enum TestCaseSpeed {
 #[derive(Debug, Clone)]
 pub struct TestCase {
     file: TestFile,
-    speed: TestCaseSpeed,
 }
 
 impl TestCase {
     #[must_use]
-    pub const fn fast(file: TestFile) -> Self {
-        Self {
-            file,
-            speed: TestCaseSpeed::Fast,
-        }
-    }
-
-    #[must_use]
-    pub const fn normal(file: TestFile) -> Self {
-        Self {
-            file,
-            speed: TestCaseSpeed::Normal,
-        }
-    }
-
-    #[must_use]
-    pub const fn slow(file: TestFile) -> Self {
-        Self {
-            file,
-            speed: TestCaseSpeed::Slow,
-        }
+    pub const fn new(file: TestFile) -> Self {
+        Self { file }
     }
 
     #[must_use]
@@ -79,16 +64,6 @@ impl TestCase {
         self.file.name
     }
 
-    #[must_use]
-    pub const fn speed(&self) -> TestCaseSpeed {
-        self.speed
-    }
-
-    /// Returns the path of this [`TestCase`].
-    ///
-    /// # Panics
-    ///
-    /// Panics if the path cannot be constructed.
     #[must_use]
     pub fn path(&self) -> PathBuf {
         PathBuf::from(file!())
