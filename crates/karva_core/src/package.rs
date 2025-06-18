@@ -237,11 +237,11 @@ impl<'proj> Package<'proj> {
 }
 
 impl<'proj> HasFixtures<'proj> for Package<'proj> {
-    fn all_fixtures<'a: 'proj>(&'a self, test_cases: Vec<&dyn UsesFixture>) -> Vec<&'proj Fixture> {
+    fn all_fixtures<'a: 'proj>(&'a self, test_cases: &[&dyn UsesFixture]) -> Vec<&'proj Fixture> {
         let mut fixtures = Vec::new();
 
         for module in self.configuration_modules() {
-            let module_fixtures = module.all_fixtures(test_cases.clone());
+            let module_fixtures = module.all_fixtures(test_cases);
 
             fixtures.extend(module_fixtures);
         }
@@ -251,7 +251,7 @@ impl<'proj> HasFixtures<'proj> for Package<'proj> {
 }
 
 impl<'proj> HasFixtures<'proj> for &'proj Package<'proj> {
-    fn all_fixtures<'a: 'proj>(&'a self, test_cases: Vec<&dyn UsesFixture>) -> Vec<&'proj Fixture> {
+    fn all_fixtures<'a: 'proj>(&'a self, test_cases: &[&dyn UsesFixture]) -> Vec<&'proj Fixture> {
         (*self).all_fixtures(test_cases)
     }
 }

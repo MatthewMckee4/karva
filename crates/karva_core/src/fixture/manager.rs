@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use pyo3::{prelude::*, types::PyAny};
 
-use crate::fixture::{Fixture, FixtureScope, HasFixtures, UsesFixture};
+use crate::{
+    fixture::{Fixture, FixtureScope, HasFixtures, UsesFixture},
+    package::Package,
+};
 
 #[derive(Debug, Default)]
 pub struct FixtureManager<'proj> {
@@ -28,6 +31,7 @@ impl<'proj> FixtureManager<'proj> {
         self.all_fixtures().get(fixture_name).cloned()
     }
 
+    #[must_use]
     pub fn contains_fixture(&self, fixture_name: &str) -> bool {
         self.all_fixtures().contains_key(fixture_name)
     }
@@ -80,14 +84,13 @@ impl<'proj> FixtureManager<'proj> {
     fn ensure_fixture_dependencies(
         &mut self,
         py: Python<'proj>,
-        parents: Vec<&'proj dyn HasFixtures<'proj>>,
+        parents: &[&'proj Package<'proj>],
         current: &'proj dyn HasFixtures<'proj>,
         scopes: &[FixtureScope],
         fixture: &'proj Fixture,
     ) {
-        if let Some(fixture_return) = self.get_fixture(fixture.name()) {
+        if self.get_fixture(fixture.name()).is_some() {
             // We have already called this fixture. So we can just return.
-            self.insert_fixture(fixture_return, fixture);
             return;
         }
 
@@ -96,13 +99,13 @@ impl<'proj> FixtureManager<'proj> {
         let current_dependencies = fixture.dependencies();
 
         // We need to get all of the fixtures in the current scope.
-        let current_all_fixtures = current.all_fixtures(Vec::new());
+        let current_all_fixtures = current.fixtures(scopes, &[]);
 
         for dependency in &current_dependencies {
             let mut found = false;
             for fixture in &current_all_fixtures {
                 if fixture.name() == dependency {
-                    self.ensure_fixture_dependencies(py, parents.clone(), current, scopes, fixture);
+                    self.ensure_fixture_dependencies(py, parents, current, scopes, fixture);
                     found = true;
                     break;
                 }
@@ -111,19 +114,19 @@ impl<'proj> FixtureManager<'proj> {
             // We did not find the dependency in the current scope.
             // So we must try the parent scopes.
             if !found {
-                let mut parents_above_current_parent = parents.clone();
+                let mut parents_above_current_parent = parents.to_vec();
                 let mut i = parents.len();
                 while i > 0 {
                     i -= 1;
                     let parent = &parents[i];
                     parents_above_current_parent.truncate(i);
 
-                    let parent_fixture = parent.get_fixture(dependency);
+                    let parent_fixture = (*parent).get_fixture(dependency);
 
                     if let Some(parent_fixture) = parent_fixture {
                         self.ensure_fixture_dependencies(
                             py,
-                            parents_above_current_parent.clone(),
+                            &parents_above_current_parent,
                             *parent,
                             scopes,
                             parent_fixture,
@@ -154,7 +157,6 @@ impl<'proj> FixtureManager<'proj> {
         }
 
         // I think we can be sure that required_fixtures
-
         match fixture.call(py, required_fixtures) {
             Ok(fixture_return) => {
                 self.insert_fixture(fixture_return, fixture);
@@ -174,36 +176,25 @@ impl<'proj> FixtureManager<'proj> {
     fn add_fixtures_impl(
         &mut self,
         py: Python<'proj>,
-        parents: Vec<&'proj dyn HasFixtures<'proj>>,
+        parents: &[&'proj Package<'proj>],
         current: &'proj dyn HasFixtures<'proj>,
         scopes: &[FixtureScope],
-        dependencies: Vec<&dyn UsesFixture>,
+        dependencies: &[&dyn UsesFixture],
     ) {
-        let fixtures = current.fixtures(scopes, dependencies.clone());
+        let fixtures = current.fixtures(scopes, dependencies);
 
         for fixture in &fixtures {
-            self.ensure_fixture_dependencies(py, parents.clone(), current, scopes, fixture);
+            self.ensure_fixture_dependencies(py, parents, current, scopes, fixture);
         }
     }
 
     pub fn add_fixtures(
         &mut self,
         py: Python<'proj>,
-        parents: Vec<&'proj dyn HasFixtures<'proj>>,
+        parents: &[&'proj Package<'proj>],
         current: &'proj dyn HasFixtures<'proj>,
         scope: &[FixtureScope],
-        dependencies: Vec<&dyn UsesFixture>,
-    ) {
-        self.add_fixtures_impl(py, parents, current, scope, dependencies);
-    }
-
-    pub fn add_session_fixtures(
-        &mut self,
-        py: Python<'proj>,
-        parents: Vec<&'proj dyn HasFixtures<'proj>>,
-        current: &'proj dyn HasFixtures<'proj>,
-        scope: &[FixtureScope],
-        dependencies: Vec<&dyn UsesFixture>,
+        dependencies: &[&dyn UsesFixture],
     ) {
         self.add_fixtures_impl(py, parents, current, scope, dependencies);
     }
@@ -212,45 +203,12 @@ impl<'proj> FixtureManager<'proj> {
         self.session_fixtures.clear();
     }
 
-    pub fn add_package_fixtures(
-        &mut self,
-        py: Python<'proj>,
-        parents: Vec<&'proj dyn HasFixtures<'proj>>,
-        current: &'proj dyn HasFixtures<'proj>,
-        scope: &[FixtureScope],
-        dependencies: Vec<&dyn UsesFixture>,
-    ) {
-        self.add_fixtures_impl(py, parents, current, scope, dependencies);
-    }
-
     pub fn reset_package_fixtures(&mut self) {
         self.package_fixtures.clear();
     }
 
-    pub fn add_module_fixtures(
-        &mut self,
-        py: Python<'proj>,
-        parents: Vec<&'proj dyn HasFixtures<'proj>>,
-        current: &'proj dyn HasFixtures<'proj>,
-        scope: &[FixtureScope],
-        dependencies: Vec<&dyn UsesFixture>,
-    ) {
-        self.add_fixtures_impl(py, parents, current, scope, dependencies);
-    }
-
     pub fn reset_module_fixtures(&mut self) {
         self.module_fixtures.clear();
-    }
-
-    pub fn add_function_fixtures(
-        &mut self,
-        py: Python<'proj>,
-        parents: Vec<&'proj dyn HasFixtures<'proj>>,
-        current: &'proj dyn HasFixtures<'proj>,
-        scope: &[FixtureScope],
-        dependencies: Vec<&dyn UsesFixture>,
-    ) {
-        self.add_fixtures_impl(py, parents, current, scope, dependencies);
     }
 
     pub fn reset_function_fixtures(&mut self) {
@@ -299,10 +257,10 @@ mod tests {
 
             manager.add_fixtures(
                 py,
-                Vec::new(),
+                &[],
                 &tests_package,
                 &[FixtureScope::Function],
-                vec![first_test_function],
+                &[first_test_function],
             );
             assert!(manager.contains_fixture("x"));
         });
@@ -349,10 +307,10 @@ mod tests {
 
             manager.add_fixtures(
                 py,
-                vec![&tests_package],
+                &[tests_package],
                 inner_package,
                 &[FixtureScope::Function],
-                vec![first_test_function],
+                &[first_test_function],
             );
 
             assert!(manager.contains_fixture("x"));
@@ -402,10 +360,10 @@ mod tests {
 
             manager.add_fixtures(
                 py,
-                vec![],
+                &[],
                 tests_package,
                 &[FixtureScope::Function],
-                vec![first_test_function],
+                &[first_test_function],
             );
 
             assert!(manager.contains_fixture("x"));
@@ -467,10 +425,10 @@ mod tests {
 
             manager.add_fixtures(
                 py,
-                vec![&tests_package, &inner_package],
+                &[tests_package, inner_package],
                 inner_inner_package,
                 &[FixtureScope::Function],
-                vec![first_test_function],
+                &[first_test_function],
             );
 
             assert!(manager.contains_fixture("x"));

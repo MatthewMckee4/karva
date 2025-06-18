@@ -152,7 +152,7 @@ impl<'proj> Module<'proj> {
 }
 
 impl<'proj> HasFixtures<'proj> for Module<'proj> {
-    fn all_fixtures<'a: 'proj>(&'a self, test_cases: Vec<&dyn UsesFixture>) -> Vec<&'proj Fixture> {
+    fn all_fixtures<'a: 'proj>(&'a self, test_cases: &[&dyn UsesFixture]) -> Vec<&'proj Fixture> {
         if test_cases.is_empty() {
             return self.fixtures.iter().collect();
         }
@@ -205,7 +205,7 @@ impl From<&Module<'_>> for StringModule {
         Self {
             test_cases: module.test_cases().iter().map(|tc| tc.name()).collect(),
             fixtures: module
-                .all_fixtures(Vec::new())
+                .all_fixtures(&[])
                 .into_iter()
                 .map(|f| (f.name().to_string(), f.scope().to_string()))
                 .collect(),

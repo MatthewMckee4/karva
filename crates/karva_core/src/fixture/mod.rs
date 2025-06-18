@@ -212,7 +212,7 @@ pub trait HasFixtures<'proj>: std::fmt::Debug {
     fn fixtures<'a: 'proj>(
         &'a self,
         scope: &[FixtureScope],
-        test_cases: Vec<&dyn UsesFixture>,
+        test_cases: &[&dyn UsesFixture],
     ) -> Vec<&'proj Fixture> {
         let mut graph = Vec::new();
         for fixture in self.all_fixtures(test_cases) {
@@ -224,18 +224,18 @@ pub trait HasFixtures<'proj>: std::fmt::Debug {
     }
 
     fn get_fixture<'a: 'proj>(&'a self, fixture_name: &str) -> Option<&'proj Fixture> {
-        self.all_fixtures(Vec::new())
+        self.all_fixtures(&[])
             .into_iter()
             .find(|fixture| fixture.name() == fixture_name)
     }
 
-    fn all_fixtures<'a: 'proj>(&'a self, test_cases: Vec<&dyn UsesFixture>) -> Vec<&'proj Fixture>;
+    fn all_fixtures<'a: 'proj>(&'a self, test_cases: &[&dyn UsesFixture]) -> Vec<&'proj Fixture>;
 }
 
 impl<'proj> HasFixtures<'proj> for Vec<&dyn HasFixtures<'proj>> {
-    fn all_fixtures<'a: 'proj>(&'a self, test_cases: Vec<&dyn UsesFixture>) -> Vec<&'proj Fixture> {
+    fn all_fixtures<'a: 'proj>(&'a self, test_cases: &[&dyn UsesFixture]) -> Vec<&'proj Fixture> {
         self.iter()
-            .flat_map(|p| p.all_fixtures(test_cases.clone()))
+            .flat_map(|p| p.all_fixtures(test_cases))
             .collect::<Vec<&'proj Fixture>>()
     }
 }
