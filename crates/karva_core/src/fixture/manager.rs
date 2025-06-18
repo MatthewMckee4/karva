@@ -77,13 +77,9 @@ impl<'proj> FixtureManager<'proj> {
             return;
         }
 
-        println!("Ensuring fixture dependencies for {}", fixture.name());
-
         // To ensure we can call the current fixture, we must first look at all of its dependencies,
         // and resolve them first.
         let current_dependencies = fixture.dependencies();
-
-        println!("{:?}", current_dependencies);
 
         // We need to get all of the fixtures in the current scope.
         let current_all_fixtures = current.all_fixtures(&[]);
@@ -159,8 +155,6 @@ impl<'proj> FixtureManager<'proj> {
         dependencies: &[&dyn UsesFixture],
     ) {
         let fixtures = current.fixtures(scopes, dependencies);
-
-        println!("{:?}", fixtures);
 
         for fixture in &fixtures {
             if scopes.contains(fixture.scope()) {
