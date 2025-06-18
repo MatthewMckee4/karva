@@ -230,8 +230,14 @@ mod tests {
         let env = TestEnv::new();
         let path = env.create_dir("test_dir");
 
-        env.create_file("test_dir/test_file1.py", "def test_function1(): pass");
-        env.create_file("test_dir/test_file2.py", "def function2(): pass");
+        env.create_file(
+            path.join("test_file1.py").as_std_path(),
+            "def test_function1(): pass",
+        );
+        env.create_file(
+            path.join("test_file2.py").as_std_path(),
+            "def function2(): pass",
+        );
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = Discoverer::new(&project);
@@ -265,14 +271,14 @@ mod tests {
         let test_dir = env.create_tests_dir();
 
         env.create_file(
-            &test_dir.join("test_file1.py").to_string(),
+            test_dir.join("test_file1.py").as_std_path(),
             "def test_function1(): pass",
         );
         env.create_file(
-            &test_dir.join("test_file2.py").to_string(),
+            test_dir.join("test_file2.py").as_std_path(),
             "def test_function2(): pass",
         );
-        env.create_file(&test_dir.join(".gitignore").to_string(), "test_file2.py");
+        env.create_file(test_dir.join(".gitignore").as_std_path(), "test_file2.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let discoverer = Discoverer::new(&project);
@@ -304,19 +310,19 @@ mod tests {
     fn test_discover_files_with_nested_directories() {
         let env = TestEnv::new();
         let test_dir = env.create_tests_dir();
-        env.create_dir(&test_dir.join("nested").to_string());
-        env.create_dir(&test_dir.join("nested/deeper").to_string());
+        env.create_dir(test_dir.join("nested").as_std_path());
+        env.create_dir(test_dir.join("nested/deeper").as_std_path());
 
         env.create_file(
-            &test_dir.join("test_file1.py").to_string(),
+            test_dir.join("test_file1.py").as_std_path(),
             "def test_function1(): pass",
         );
         env.create_file(
-            &test_dir.join("nested/test_file2.py").to_string(),
+            test_dir.join("nested/test_file2.py").as_std_path(),
             "def test_function2(): pass",
         );
         env.create_file(
-            &test_dir.join("nested/deeper/test_file3.py").to_string(),
+            test_dir.join("nested/deeper/test_file3.py").as_std_path(),
             "def test_function3(): pass",
         );
 
@@ -492,7 +498,7 @@ def test_function(): pass
         let file2 = env.create_file("test2.py", "def test_function2(): pass");
         let test_dir = env.create_tests_dir();
         env.create_file(
-            &test_dir.join("test3.py").to_string(),
+            test_dir.join("test3.py").as_std_path(),
             "def test_function3(): pass",
         );
 
@@ -542,7 +548,7 @@ def test_function(): pass
         let env = TestEnv::new();
         let test_dir = env.create_tests_dir();
         let path = env.create_file(
-            &test_dir.join("test_file.py").to_string(),
+            test_dir.join("test_file.py").as_std_path(),
             "def test_function(): pass\ndef test_function2(): pass",
         );
 
@@ -579,11 +585,11 @@ def test_function(): pass
         let env = TestEnv::new();
         let test_dir = env.create_tests_dir();
         let path = env.create_file(
-            &test_dir.join("test_file.py").to_string(),
+            test_dir.join("test_file.py").as_std_path(),
             "def test_function(): pass",
         );
         let path2 = env.create_file(
-            &test_dir.join("test_file2.py").to_string(),
+            test_dir.join("test_file2.py").as_std_path(),
             "def test_function(): pass",
         );
 
@@ -626,11 +632,11 @@ def test_function(): pass
         let env = TestEnv::new();
         let test_dir = env.create_tests_dir();
         let conftest_path = env.create_file(
-            &test_dir.join("conftest.py").to_string(),
+            test_dir.join("conftest.py").as_std_path(),
             "def test_function(): pass",
         );
         env.create_file(
-            &test_dir.join("test_file.py").to_string(),
+            test_dir.join("test_file.py").as_std_path(),
             "def test_function2(): pass",
         );
 
@@ -665,11 +671,11 @@ def test_function(): pass
         let env = TestEnv::new();
         let test_dir = env.create_tests_dir();
         env.create_file(
-            &test_dir.join("conftest.py").to_string(),
+            test_dir.join("conftest.py").as_std_path(),
             "def test_function(): pass",
         );
         env.create_file(
-            &test_dir.join("test_file.py").to_string(),
+            test_dir.join("test_file.py").as_std_path(),
             "def test_function2(): pass",
         );
 
@@ -714,7 +720,7 @@ def test_function(): pass
         let path = env.cwd();
         let test_dir = env.create_tests_dir();
         env.create_file(
-            &test_dir.join("test_file.py").to_string(),
+            test_dir.join("test_file.py").as_std_path(),
             "def test_function(): pass",
         );
 

@@ -48,7 +48,7 @@ pub fn recursive_add_to_sys_path(
 pub fn add_to_sys_path(py: &Python<'_>, path: &SystemPathBuf) -> PyResult<()> {
     let sys_path = py.import("sys")?;
     let sys_path = sys_path.getattr("path")?;
-    sys_path.call_method1("append", (path.to_string(),))?;
+    sys_path.call_method1("append", (path.as_std_path().display().to_string(),))?;
     Ok(())
 }
 

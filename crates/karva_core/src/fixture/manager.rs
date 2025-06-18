@@ -201,9 +201,9 @@ mod tests {
         }]);
         let tests_dir = env.create_tests_dir();
 
-        env.create_file(&tests_dir.join("conftest.py").to_string(), &fixture);
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixture);
         let test_path = env.create_file(
-            &tests_dir.join("test_1.py").to_string(),
+            tests_dir.join("test_1.py").as_std_path(),
             "def test_1(x): pass",
         );
 
@@ -248,10 +248,10 @@ mod tests {
         let tests_dir = env.create_tests_dir();
         let inner_dir = tests_dir.join("inner");
 
-        env.create_file(&tests_dir.join("conftest.py").to_string(), &fixture_x);
-        env.create_file(&inner_dir.join("conftest.py").to_string(), &fixture_y);
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixture_x);
+        env.create_file(inner_dir.join("conftest.py").as_std_path(), &fixture_y);
         let test_path = env.create_file(
-            &inner_dir.join("test_1.py").to_string(),
+            inner_dir.join("test_1.py").as_std_path(),
             "def test_1(y): pass",
         );
 
@@ -302,9 +302,9 @@ mod tests {
         let tests_dir = env.create_tests_dir();
         let inner_dir = tests_dir.join("inner");
 
-        env.create_file(&tests_dir.join("conftest.py").to_string(), &fixture_x);
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixture_x);
         let test_path = env.create_file(
-            &inner_dir.join("test_1.py").to_string(),
+            inner_dir.join("test_1.py").as_std_path(),
             "def test_1(y): pass",
         );
 
@@ -360,11 +360,14 @@ mod tests {
         let inner_dir = tests_dir.join("inner");
         let inner_inner_dir = inner_dir.join("inner");
 
-        env.create_file(&tests_dir.join("conftest.py").to_string(), &fixture_x);
-        env.create_file(&inner_dir.join("conftest.py").to_string(), &fixture_y);
-        env.create_file(&inner_inner_dir.join("conftest.py").to_string(), &fixture_z);
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixture_x);
+        env.create_file(inner_dir.join("conftest.py").as_std_path(), &fixture_y);
+        env.create_file(
+            inner_inner_dir.join("conftest.py").as_std_path(),
+            &fixture_z,
+        );
         let test_path = env.create_file(
-            &inner_inner_dir.join("test_1.py").to_string(),
+            inner_inner_dir.join("test_1.py").as_std_path(),
             "def test_1(z): pass",
         );
 
@@ -424,10 +427,10 @@ mod tests {
         let tests_dir = env.create_tests_dir();
         let inner_dir = tests_dir.join("inner");
 
-        env.create_file(&tests_dir.join("conftest.py").to_string(), &fixture_x);
-        env.create_file(&inner_dir.join("conftest.py").to_string(), &fixture_y_z);
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixture_x);
+        env.create_file(inner_dir.join("conftest.py").as_std_path(), &fixture_y_z);
         let test_path = env.create_file(
-            &inner_dir.join("test_1.py").to_string(),
+            inner_dir.join("test_1.py").as_std_path(),
             "def test_1(y, z): pass",
         );
 
@@ -484,11 +487,14 @@ mod tests {
         let inner_dir = tests_dir.join("inner");
         let inner_inner_dir = inner_dir.join("inner");
 
-        env.create_file(&tests_dir.join("conftest.py").to_string(), &fixture_x);
-        env.create_file(&inner_dir.join("conftest.py").to_string(), &fixture_y);
-        env.create_file(&inner_inner_dir.join("conftest.py").to_string(), &fixture_z);
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixture_x);
+        env.create_file(inner_dir.join("conftest.py").as_std_path(), &fixture_y);
+        env.create_file(
+            inner_inner_dir.join("conftest.py").as_std_path(),
+            &fixture_z,
+        );
         let test_path = env.create_file(
-            &inner_inner_dir.join("test_1.py").to_string(),
+            inner_inner_dir.join("test_1.py").as_std_path(),
             "def test_1(z): pass",
         );
 
@@ -550,9 +556,9 @@ mod tests {
         let tests_dir = env.create_tests_dir();
         let inner_dir = tests_dir.join("inner");
 
-        env.create_file(&tests_dir.join("conftest.py").to_string(), &fixtures);
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixtures);
         let test_path = env.create_file(
-            &inner_dir.join("test_1.py").to_string(),
+            inner_dir.join("test_1.py").as_std_path(),
             "def test_1(z): pass",
         );
 

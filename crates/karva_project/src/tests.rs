@@ -18,12 +18,12 @@ impl TestEnv {
 
     #[must_use]
     pub fn create_tests_dir(&self) -> SystemPathBuf {
-        self.create_dir(&format!("tests_{}", rand::random::<u32>()))
+        self.create_dir(format!("tests_{}", rand::random::<u32>()))
     }
 
     #[allow(clippy::must_use_candidate)]
-    pub fn create_file(&self, name: &str, content: &str) -> SystemPathBuf {
-        let path = self.temp_dir.path().join(name);
+    pub fn create_file(&self, path: impl AsRef<std::path::Path>, content: &str) -> SystemPathBuf {
+        let path = self.temp_dir.path().join(path);
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).unwrap();
         }
@@ -32,15 +32,15 @@ impl TestEnv {
     }
 
     #[allow(clippy::must_use_candidate)]
-    pub fn create_dir(&self, name: &str) -> SystemPathBuf {
-        let path = self.temp_dir.path().join(name);
+    pub fn create_dir(&self, path: impl AsRef<std::path::Path>) -> SystemPathBuf {
+        let path = self.temp_dir.path().join(path);
         fs::create_dir_all(&path).unwrap();
         SystemPathBuf::from(path)
     }
 
     #[must_use]
-    pub fn temp_path(&self, name: &str) -> SystemPathBuf {
-        SystemPathBuf::from(self.temp_dir.path().join(name))
+    pub fn temp_path(&self, path: impl AsRef<std::path::Path>) -> SystemPathBuf {
+        SystemPathBuf::from(self.temp_dir.path().join(path))
     }
 
     #[must_use]

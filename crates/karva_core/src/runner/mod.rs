@@ -314,10 +314,11 @@ mod tests {
             },
         ]);
         let tests_dir = env.create_tests_dir();
+        let inner_dir = tests_dir.join("inner");
 
-        env.create_file(&tests_dir.join("conftest.py").to_string(), &fixtures);
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixtures);
         env.create_file(
-            &tests_dir.join("inner/test_1.py").to_string(),
+            inner_dir.join("test_1.py").as_std_path(),
             "def test_1(z): pass",
         );
 
