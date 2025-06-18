@@ -277,7 +277,7 @@ mod tests {
             &path.strip_prefix(env.cwd()).unwrap().to_string(),
         );
 
-        let project = Project::new(env.cwd(), vec![test_dir.clone()]);
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
         let discoverer = Discoverer::new(&project);
         let (session, _) = discoverer.discover();
 
