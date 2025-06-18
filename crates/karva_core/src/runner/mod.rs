@@ -10,7 +10,7 @@ use crate::{
     fixture::{FixtureManager, FixtureScope, RequiresFixtures},
     module::Module,
     package::Package,
-    utils::{Upcast, add_to_sys_path, set_output},
+    utils::{Upcast, add_to_sys_path, with_gil},
 };
 
 mod diagnostic;
@@ -50,9 +50,7 @@ impl<'proj> StandardTestRunner<'proj> {
         let mut diagnostics = Vec::new();
 
         diagnostics.extend(discovery_diagnostics);
-        Python::with_gil(|py| {
-            let _ = set_output(py, self.project.options.show_output);
-
+        with_gil(self.project, |py| {
             let cwd = self.project.cwd();
 
             if let Err(err) = add_to_sys_path(&py, cwd) {

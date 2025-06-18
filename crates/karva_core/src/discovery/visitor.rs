@@ -10,7 +10,7 @@ use crate::{
     case::TestCase,
     diagnostic::Diagnostic,
     fixture::{Fixture, FixtureExtractor, is_fixture_function},
-    utils::{recursive_add_to_sys_path, set_output},
+    utils::{recursive_add_to_sys_path, with_gil},
 };
 
 pub struct FunctionDefinitionVisitor<'a, 'b> {
@@ -98,8 +98,7 @@ impl DiscoveredFunctions {
 
 #[must_use]
 pub fn discover(path: &SystemPathBuf, project: &Project) -> (DiscoveredFunctions, Vec<Diagnostic>) {
-    Python::with_gil(|py| {
-        let _ = set_output(py, project.options.show_output);
+    with_gil(project, |py| {
         let mut visitor = match FunctionDefinitionVisitor::new(py, project, path) {
             Ok(visitor) => visitor,
             Err(e) => {
