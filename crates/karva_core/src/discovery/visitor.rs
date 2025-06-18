@@ -54,7 +54,7 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
                 return;
             }
             self.inside_function = true;
-            println!("function_def: {:?}", function_def);
+            println!("function_def: {:?}", function_def.name);
             if is_fixture_function(function_def) {
                 match FixtureExtractor::try_from_function(function_def, &self.py_module) {
                     Ok(fixture_def) => self.fixture_definitions.push(fixture_def),
