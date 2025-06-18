@@ -249,9 +249,9 @@ mod tests {
         let inner_dir = tests_dir.join("inner");
 
         env.create_file(&tests_dir.join("conftest.py").to_string(), &fixture_x);
-        env.create_file(&tests_dir.join("inner/conftest.py").to_string(), &fixture_y);
+        env.create_file(&inner_dir.join("conftest.py").to_string(), &fixture_y);
         let test_path = env.create_file(
-            &tests_dir.join("inner/test_1.py").to_string(),
+            &inner_dir.join("test_1.py").to_string(),
             "def test_1(y): pass",
         );
 
@@ -304,7 +304,7 @@ mod tests {
 
         env.create_file(&tests_dir.join("conftest.py").to_string(), &fixture_x);
         let test_path = env.create_file(
-            &tests_dir.join("inner/test_1.py").to_string(),
+            &inner_dir.join("test_1.py").to_string(),
             "def test_1(y): pass",
         );
 
@@ -361,13 +361,10 @@ mod tests {
         let inner_inner_dir = inner_dir.join("inner");
 
         env.create_file(&tests_dir.join("conftest.py").to_string(), &fixture_x);
-        env.create_file(&tests_dir.join("inner/conftest.py").to_string(), &fixture_y);
-        env.create_file(
-            &tests_dir.join("inner/inner/conftest.py").to_string(),
-            &fixture_z,
-        );
+        env.create_file(&inner_dir.join("conftest.py").to_string(), &fixture_y);
+        env.create_file(&inner_inner_dir.join("conftest.py").to_string(), &fixture_z);
         let test_path = env.create_file(
-            &tests_dir.join("inner/inner/test_1.py").to_string(),
+            &inner_inner_dir.join("test_1.py").to_string(),
             "def test_1(z): pass",
         );
 
@@ -428,12 +425,9 @@ mod tests {
         let inner_dir = tests_dir.join("inner");
 
         env.create_file(&tests_dir.join("conftest.py").to_string(), &fixture_x);
-        env.create_file(
-            &tests_dir.join("inner/conftest.py").to_string(),
-            &fixture_y_z,
-        );
+        env.create_file(&inner_dir.join("conftest.py").to_string(), &fixture_y_z);
         let test_path = env.create_file(
-            &tests_dir.join("inner/test_1.py").to_string(),
+            &inner_dir.join("test_1.py").to_string(),
             "def test_1(y, z): pass",
         );
 
@@ -491,13 +485,10 @@ mod tests {
         let inner_inner_dir = inner_dir.join("inner");
 
         env.create_file(&tests_dir.join("conftest.py").to_string(), &fixture_x);
-        env.create_file(&tests_dir.join("inner/conftest.py").to_string(), &fixture_y);
-        env.create_file(
-            &tests_dir.join("inner/inner/conftest.py").to_string(),
-            &fixture_z,
-        );
+        env.create_file(&inner_dir.join("conftest.py").to_string(), &fixture_y);
+        env.create_file(&inner_inner_dir.join("conftest.py").to_string(), &fixture_z);
         let test_path = env.create_file(
-            &tests_dir.join("inner/inner/test_1.py").to_string(),
+            &inner_inner_dir.join("test_1.py").to_string(),
             "def test_1(z): pass",
         );
 
@@ -561,7 +552,7 @@ mod tests {
 
         env.create_file(&tests_dir.join("conftest.py").to_string(), &fixtures);
         let test_path = env.create_file(
-            &tests_dir.join("inner/test_1.py").to_string(),
+            &inner_dir.join("test_1.py").to_string(),
             "def test_1(z): pass",
         );
 
@@ -583,15 +574,7 @@ mod tests {
                 py,
                 &[],
                 tests_package,
-                &[FixtureScope::Module],
-                &[first_test_function],
-            );
-
-            manager.add_fixtures(
-                py,
-                &[],
-                tests_package,
-                &[FixtureScope::Function],
+                &[FixtureScope::Function, FixtureScope::Module],
                 &[first_test_function],
             );
 

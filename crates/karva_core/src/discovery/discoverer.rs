@@ -268,14 +268,11 @@ mod tests {
             &test_dir.join("test_file1.py").to_string(),
             "def test_function1(): pass",
         );
-        let path = env.create_file(
+        env.create_file(
             &test_dir.join("test_file2.py").to_string(),
             "def test_function2(): pass",
         );
-        env.create_file(
-            ".gitignore",
-            &path.strip_prefix(env.cwd()).unwrap().to_string(),
-        );
+        env.create_file(&test_dir.join(".gitignore").to_string(), "test_file2.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let discoverer = Discoverer::new(&project);
