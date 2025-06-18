@@ -48,9 +48,11 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
     fn visit_stmt(&mut self, stmt: &'a Stmt) {
         if let Stmt::FunctionDef(function_def) = stmt {
             if is_fixture_function(function_def) {
+                println!("Found fixture function: {:?}", function_def.name);
                 match FixtureExtractor::try_from_function(function_def, &self.py_module) {
                     Ok(fixture_def) => self.fixture_definitions.push(fixture_def),
                     Err(e) => {
+                        println!("Error: {:?}", e);
                         self.diagnostics
                             .push(Diagnostic::invalid_fixture(&e, &self.path.to_string()));
                     }
