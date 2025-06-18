@@ -37,15 +37,16 @@ impl std::fmt::Display for SubDiagnosticDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let diagnostic_type_str = match self.diagnostic.diagnostic_type() {
             SubDiagnosticType::Fail => "fail[assertion-failed]".red(),
-            SubDiagnosticType::Error(DiagnosticError::Error(type_name)) => {
-                format!("error[{}]", to_kebab_case(type_name)).yellow()
-            }
-            SubDiagnosticType::Error(DiagnosticError::FixtureNotFound(_)) => {
-                "error[fixture-not-found]".to_string().yellow()
-            }
-            SubDiagnosticType::Error(DiagnosticError::InvalidFixture(_)) => {
-                "error[invalid-fixture]".to_string().yellow()
-            }
+            SubDiagnosticType::Error(error) => match error {
+                DiagnosticError::Error(type_name) => {
+                    format!("error[{}]", to_kebab_case(type_name)).yellow()
+                }
+                DiagnosticError::FixtureNotFound(_) => {
+                    "error[fixture-not-found]".to_string().yellow()
+                }
+                DiagnosticError::InvalidFixture(_) => "error[invalid-fixture]".to_string().yellow(),
+                DiagnosticError::InvalidPath(_) => "error[invalid-path]".to_string().yellow(),
+            },
         };
         writeln!(
             f,

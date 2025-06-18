@@ -22,12 +22,8 @@ ruff_python_ast = { workspace = true }
 ruff_python_parser = { workspace = true }
 ruff_source_file = { workspace = true }
 ruff_text_size = { workspace = true }
-serde = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true, optional = true }
-tracing-tree = { workspace = true, optional = true }
 ignore = { workspace = true }
-indexmap = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
