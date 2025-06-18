@@ -14,7 +14,8 @@ license = { workspace = true }
 camino = { workspace = true }
 tracing = { workspace = true }
 ruff_python_ast = { workspace = true }
-tempfile = "3.8"
+tempfile = { workspace = true }
+rand = { workspace = true }
 
 [lints]
 workspace = true

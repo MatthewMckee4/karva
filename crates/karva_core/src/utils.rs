@@ -20,7 +20,7 @@ pub fn from_text_size(offset: TextSize, source: &str) -> (usize, usize) {
 }
 
 pub fn recursive_add_to_sys_path(
-    py: &Python<'_>,
+    py: Python<'_>,
     path: &SystemPathBuf,
     cwd: &SystemPathBuf,
 ) -> PyResult<()> {

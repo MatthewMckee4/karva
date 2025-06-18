@@ -1,5 +1,5 @@
-use karva_project::{path::SystemPathBuf, project::Project};
-use pyo3::Python;
+use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
+use pyo3::{prelude::*, types::PyModule};
 use ruff_python_ast::{
     ModModule, PythonVersion, Stmt,
     visitor::source_order::{self, SourceOrderVisitor},
@@ -10,50 +10,51 @@ use crate::{
     case::TestCase,
     diagnostic::Diagnostic,
     fixture::{Fixture, FixtureExtractor, is_fixture_function},
+    utils::recursive_add_to_sys_path,
 };
 
-pub struct FunctionDefinitionVisitor<'a> {
+pub struct FunctionDefinitionVisitor<'a, 'b> {
     discovered_functions: Vec<TestCase>,
     fixture_definitions: Vec<Fixture>,
     project: &'a Project,
     path: &'a SystemPathBuf,
     diagnostics: Vec<Diagnostic>,
+    py_module: Bound<'b, PyModule>,
 }
 
-impl<'a> FunctionDefinitionVisitor<'a> {
-    #[must_use]
-    pub const fn new(project: &'a Project, path: &'a SystemPathBuf) -> Self {
-        Self {
+impl<'a, 'b> FunctionDefinitionVisitor<'a, 'b> {
+    pub fn new(
+        py: Python<'b>,
+        project: &'a Project,
+        path: &'a SystemPathBuf,
+    ) -> Result<Self, String> {
+        recursive_add_to_sys_path(py, path, project.cwd()).map_err(|e| e.to_string())?;
+
+        let module = module_name(project.cwd(), path);
+
+        let py_module = py.import(module).map_err(|e| e.to_string())?;
+        Ok(Self {
             discovered_functions: Vec::new(),
             fixture_definitions: Vec::new(),
             project,
             path,
             diagnostics: Vec::new(),
-        }
+            py_module,
+        })
     }
 }
 
-impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a> {
+impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
     fn visit_stmt(&mut self, stmt: &'a Stmt) {
         if let Stmt::FunctionDef(function_def) = stmt {
-            println!("function_def: {:?}", function_def.name);
             if is_fixture_function(function_def) {
-                println!("is_fixture_function");
-                Python::with_gil(|py| {
-                    match FixtureExtractor::try_from_function(
-                        &py,
-                        function_def,
-                        self.path,
-                        self.project.cwd(),
-                    ) {
-                        Ok(fixture_def) => self.fixture_definitions.push(fixture_def),
-                        Err(e) => {
-                            println!("error: {:?}", e);
-                            self.diagnostics
-                                .push(Diagnostic::invalid_fixture(&e, &self.path.to_string()));
-                        }
+                match FixtureExtractor::try_from_function(function_def, &self.py_module) {
+                    Ok(fixture_def) => self.fixture_definitions.push(fixture_def),
+                    Err(e) => {
+                        self.diagnostics
+                            .push(Diagnostic::invalid_fixture(&e, &self.path.to_string()));
                     }
-                });
+                }
             } else if function_def
                 .name
                 .to_string()
@@ -86,19 +87,31 @@ impl DiscoveredFunctions {
 
 #[must_use]
 pub fn discover(path: &SystemPathBuf, project: &Project) -> (DiscoveredFunctions, Vec<Diagnostic>) {
-    let mut visitor = FunctionDefinitionVisitor::new(project, path);
+    Python::with_gil(|py| {
+        let mut visitor = match FunctionDefinitionVisitor::new(py, project, path) {
+            Ok(visitor) => visitor,
+            Err(e) => {
+                return (
+                    DiscoveredFunctions {
+                        functions: Vec::new(),
+                        fixtures: Vec::new(),
+                    },
+                    vec![Diagnostic::invalid_fixture(&e, &path.to_string())],
+                );
+            }
+        };
 
-    let parsed = parsed_module(path, *project.python_version());
+        let parsed = parsed_module(path, *project.python_version());
+        visitor.visit_body(&parsed.syntax().body);
 
-    visitor.visit_body(&parsed.syntax().body);
-
-    (
-        DiscoveredFunctions {
-            functions: visitor.discovered_functions,
-            fixtures: visitor.fixture_definitions,
-        },
-        visitor.diagnostics,
-    )
+        (
+            DiscoveredFunctions {
+                functions: visitor.discovered_functions,
+                fixtures: visitor.fixture_definitions,
+            },
+            visitor.diagnostics,
+        )
+    })
 }
 
 #[must_use]
@@ -106,8 +119,6 @@ pub fn parsed_module(path: &SystemPathBuf, python_version: PythonVersion) -> Par
     let mode = Mode::Module;
     let options = ParseOptions::from(mode).with_target_version(python_version);
     let source = source_text(path);
-
-    println!("source:\n{}", source);
 
     parse_unchecked(&source, options)
         .try_into_module()

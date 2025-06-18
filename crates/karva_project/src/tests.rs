@@ -16,6 +16,11 @@ impl TestEnv {
         }
     }
 
+    #[must_use]
+    pub fn create_tests_dir(&self) -> SystemPathBuf {
+        self.create_dir(&format!("tests_{}", rand::random::<u32>()))
+    }
+
     #[allow(clippy::must_use_candidate)]
     pub fn create_file(&self, name: &str, content: &str) -> SystemPathBuf {
         let path = self.temp_dir.path().join(name);
@@ -74,7 +79,7 @@ def {name}({args}):
             )
         })
         .collect::<Vec<String>>()
-        .join("\n\n");
+        .join("\n");
 
     format!(
         r"from collections.abc import Callable

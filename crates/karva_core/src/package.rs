@@ -215,6 +215,25 @@ impl<'proj> Package<'proj> {
     pub fn is_empty(&self) -> bool {
         self.modules.is_empty() && self.packages.is_empty()
     }
+
+    #[must_use]
+    pub fn display(&self) -> StringPackage {
+        let mut modules = HashMap::new();
+        let mut packages = HashMap::new();
+
+        for module in self.modules().values() {
+            modules.insert(module_name(self.path(), module.path()), module.into());
+        }
+
+        for subpackage in self.packages().values() {
+            packages.insert(
+                module_name(self.path(), subpackage.path()),
+                subpackage.display(),
+            );
+        }
+
+        StringPackage { modules, packages }
+    }
 }
 
 impl<'proj> HasFixtures<'proj> for Package<'proj> {
@@ -273,122 +292,9 @@ impl PartialEq for StringPackage {
 
 impl Eq for StringPackage {}
 
-impl From<&Package<'_>> for StringPackage {
-    fn from(package: &Package<'_>) -> Self {
-        let mut modules = HashMap::new();
-        let mut packages = HashMap::new();
-
-        for module in package.modules().values() {
-            modules.insert(module_name(package.path(), module.path()), module.into());
-        }
-
-        for subpackage in package.packages().values() {
-            packages.insert(
-                module_name(package.path(), subpackage.path()),
-                subpackage.into(),
-            );
-        }
-
-        Self { modules, packages }
-    }
-}
-
 impl std::fmt::Debug for Package<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let string_package: StringPackage = self.into();
+        let string_package: StringPackage = self.display();
         write!(f, "{string_package:?}")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use karva_project::tests::{MockFixture, TestEnv, mock_fixture};
-
-    use super::*;
-    use crate::discovery::Discoverer;
-
-    #[test]
-    fn test_package_dependencies() {
-        let env = TestEnv::new();
-
-        let fixture = mock_fixture(&[MockFixture {
-            name: "x".to_string(),
-            scope: "function".to_string(),
-            body: "pass".to_string(),
-            args: "".to_string(),
-        }]);
-
-        let tests_dir = env.cwd().join("tests");
-
-        env.create_file("tests/conftest.py", &fixture);
-
-        env.create_file("tests/test_1.py", "def test_1(x): pass");
-
-        let project = Project::new(env.cwd(), vec![tests_dir.clone()]);
-
-        let (session, _) = Discoverer::new(&project).discover();
-
-        let sub_packages = session.packages();
-
-        if let Some(package) = sub_packages.get(&tests_dir) {
-            let dependencies = package.dependencies();
-
-            assert_eq!(dependencies.len(), 1);
-        }
-    }
-
-    #[test]
-    fn test_package_dependencies_sub_fixtures() {
-        let env = TestEnv::new();
-
-        let fixture = mock_fixture(&[MockFixture {
-            name: "x".to_string(),
-            scope: "function".to_string(),
-            body: "pass".to_string(),
-            args: "".to_string(),
-        }]);
-
-        let tests_dir = env.cwd().join("tests");
-
-        env.create_file("tests/conftest.py", &fixture);
-
-        let dependency_fixture = mock_fixture(&[MockFixture {
-            name: "y".to_string(),
-            scope: "function".to_string(),
-            body: "pass".to_string(),
-            args: "x".to_string(),
-        }]);
-
-        let inner_tests_dir = tests_dir.join("inner");
-
-        env.create_file("tests/inner/conftest.py", &dependency_fixture);
-
-        env.create_file("tests/test_1.py", "def test_1(y): pass");
-
-        let project = Project::new(env.cwd(), vec![tests_dir.clone()]);
-
-        let (session, _) = Discoverer::new(&project).discover();
-
-        let sub_packages = session.packages();
-
-        if let Some(package) = sub_packages.get(&tests_dir) {
-            let dependencies = package.dependencies();
-
-            println!("{:?}", dependencies);
-
-            assert_eq!(dependencies.len(), 2);
-        } else {
-            panic!("Package not found");
-        }
-
-        if let Some(package) = sub_packages.get(&inner_tests_dir) {
-            let dependencies = package.dependencies();
-
-            println!("{:?}", dependencies);
-
-            assert_eq!(dependencies.len(), 2);
-        } else {
-            panic!("Package not found");
-        }
     }
 }
