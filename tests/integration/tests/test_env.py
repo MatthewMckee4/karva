@@ -78,7 +78,7 @@ class TestEnv:
         """Test the project and return (exit_code, stdout, stderr)."""
 
         result = subprocess.run(
-            ["uv", "run", "--directory", str(self.project_dir), "karva", "test", str(self.project_dir)],
+            ["uv", "run", "--directory", str(self.project_dir), "karva", "test", str(self.project_dir), "-s"],
             cwd=self.project_dir,
             check=False,
             capture_output=True,

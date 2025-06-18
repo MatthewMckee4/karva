@@ -14,6 +14,7 @@ pub struct ProjectMetadata {
 pub struct ProjectOptions {
     pub test_prefix: String,
     pub verbosity: VerbosityLevel,
+    pub show_output: bool,
 }
 
 impl Default for ProjectOptions {
@@ -21,6 +22,7 @@ impl Default for ProjectOptions {
         Self {
             test_prefix: "test".to_string(),
             verbosity: VerbosityLevel::default(),
+            show_output: false,
         }
     }
 }
@@ -29,8 +31,8 @@ impl Default for ProjectOptions {
 pub struct Project {
     cwd: SystemPathBuf,
     paths: Vec<SystemPathBuf>,
-    metadata: ProjectMetadata,
-    options: ProjectOptions,
+    pub metadata: ProjectMetadata,
+    pub options: ProjectOptions,
 }
 
 impl Project {
@@ -81,21 +83,6 @@ impl Project {
         } else {
             parent_of_all(&self.paths)
         }
-    }
-
-    #[must_use]
-    pub fn test_prefix(&self) -> &str {
-        &self.options.test_prefix
-    }
-
-    #[must_use]
-    pub const fn python_version(&self) -> &PythonVersion {
-        &self.metadata.python_version
-    }
-
-    #[must_use]
-    pub const fn verbosity(&self) -> &VerbosityLevel {
-        &self.options.verbosity
     }
 }
 

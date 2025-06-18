@@ -1,4 +1,4 @@
-use karva_project::{path::SystemPathBuf, verbosity::VerbosityLevel};
+use karva_project::path::SystemPathBuf;
 use pyo3::{PyResult, Python, types::PyAnyMethods};
 use ruff_python_ast::PythonVersion;
 use ruff_source_file::{LineIndex, PositionEncoding};
@@ -62,8 +62,8 @@ impl<T> Upcast<T> for T {
     }
 }
 
-pub fn set_output(py: Python<'_>, verbosity: VerbosityLevel) -> PyResult<()> {
-    if verbosity == VerbosityLevel::Default {
+pub fn set_output(py: Python<'_>, show_output: bool) -> PyResult<()> {
+    if !show_output {
         let sys = py.import("sys")?;
         let os = py.import("os")?;
         let builtins = py.import("builtins")?;
@@ -77,7 +77,6 @@ pub fn set_output(py: Python<'_>, verbosity: VerbosityLevel) -> PyResult<()> {
             sys.setattr(output, null_file.clone())?;
         }
 
-        // Suppress logging
         logging.call_method1("disable", (logging.getattr("CRITICAL")?,))?;
     }
     Ok(())

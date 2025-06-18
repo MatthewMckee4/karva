@@ -195,7 +195,7 @@ mod tests {
 
     use std::collections::{HashMap, HashSet};
 
-    use karva_project::{project::ProjectOptions, tests::TestEnv, verbosity::VerbosityLevel};
+    use karva_project::{project::ProjectOptions, tests::TestEnv};
 
     use super::*;
     use crate::{module::StringModule, package::StringPackage};
@@ -461,7 +461,7 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![path]).with_options(ProjectOptions {
             test_prefix: "check".to_string(),
-            verbosity: VerbosityLevel::default(),
+            ..Default::default()
         });
         let discoverer = Discoverer::new(&project);
         let (session, _) = discoverer.discover();

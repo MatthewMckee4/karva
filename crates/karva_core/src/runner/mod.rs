@@ -51,7 +51,7 @@ impl<'proj> StandardTestRunner<'proj> {
 
         diagnostics.extend(discovery_diagnostics);
         Python::with_gil(|py| {
-            let _ = set_output(py, *self.project.verbosity());
+            let _ = set_output(py, self.project.options.show_output);
 
             let cwd = self.project.cwd();
 

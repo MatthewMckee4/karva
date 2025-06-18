@@ -65,7 +65,7 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
             } else if function_def
                 .name
                 .to_string()
-                .starts_with(self.project.test_prefix())
+                .starts_with(&self.project.options.test_prefix)
             {
                 self.discovered_functions.push(TestCase::new(
                     self.project.cwd(),
@@ -99,7 +99,7 @@ impl DiscoveredFunctions {
 #[must_use]
 pub fn discover(path: &SystemPathBuf, project: &Project) -> (DiscoveredFunctions, Vec<Diagnostic>) {
     Python::with_gil(|py| {
-        let _ = set_output(py, *project.verbosity());
+        let _ = set_output(py, project.options.show_output);
         let mut visitor = match FunctionDefinitionVisitor::new(py, project, path) {
             Ok(visitor) => visitor,
             Err(e) => {
@@ -113,7 +113,7 @@ pub fn discover(path: &SystemPathBuf, project: &Project) -> (DiscoveredFunctions
             }
         };
 
-        let parsed = parsed_module(path, *project.python_version());
+        let parsed = parsed_module(path, project.metadata.python_version);
         visitor.visit_body(&parsed.syntax().body);
 
         (
