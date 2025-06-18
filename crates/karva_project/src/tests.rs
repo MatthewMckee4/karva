@@ -82,14 +82,10 @@ def {name}({args}):
         .join("\n");
 
     format!(
-        r"from collections.abc import Callable
-from typing import Any
+        r"
 
 class FixtureFunctionMarker:
-    scope: str
-    name: str | None = None
-
-    def __init__(self, scope: str, name: str | None = None) -> None:
+    def __init__(self, scope, name = None):
         self.scope = scope
         self.name = name
 
@@ -103,9 +99,9 @@ class FixtureFunctionDefinition:
     def __init__(
         self,
         *,
-        function: Callable[..., object],
-        fixture_function_marker: FixtureFunctionMarker,
-    ) -> None:
+        function,
+        fixture_function_marker,
+    ):
         self.name = fixture_function_marker.name or function.__name__
         self.__name__ = self.name
         self._fixture_function_marker = fixture_function_marker
@@ -113,20 +109,20 @@ class FixtureFunctionDefinition:
 
     def __get__(
         self,
-        instance: object | None,
-        owner: type | None = None,
+        instance = None,
+        owner = None,
     ):
         return self
 
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
+    def __call__(self, *args, **kwds):
         return self._fixture_function(*args, **kwds)
 
 def fixture(
-    fixture_function: Callable[..., object] | None = None,
+    fixture_function = None,
     *,
-    scope: str = 'function',
-    name: str | None = None,
-) -> FixtureFunctionMarker | FixtureFunctionDefinition:
+    scope = 'function',
+    name = None,
+):
     fixture_marker = FixtureFunctionMarker(
         scope=scope,
         name=name,

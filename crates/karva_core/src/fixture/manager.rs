@@ -210,10 +210,6 @@ mod tests {
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _diagnostics) = Discoverer::new(&project).discover();
 
-        println!("{:?}", _diagnostics);
-
-        println!("{:?}", session.display());
-
         let tests_package = session.get_package(&tests_dir).unwrap();
 
         let test_module = tests_package.get_module(&test_path).unwrap();
@@ -230,8 +226,6 @@ mod tests {
                 &[FixtureScope::Function],
                 &[first_test_function],
             );
-
-            println!("{:?}", manager);
 
             assert!(manager.contains_fixture("x"));
         });
