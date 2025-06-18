@@ -1,8 +1,6 @@
 ## Constraints
 
-We do not discover tests from a `conftest.py` unless it is explicitly specified.
-
-We do not support fixtures that require other fixtures (yet).
+We only discover package level fixtures from a `conftest.py` file in the root of that package.
 
 ## Fixture Types
 
@@ -52,26 +50,23 @@ If you wanted it to only create the fixture once you should use the `session` sc
 
 The fixture is created once per test session.
 
-Example of different scopes:
+## Dependent fixtures
+
+We support fixtures that depend on other fixtures.
 
 ```py
 from karva import fixture
 
-@fixture(scope="function")
+@fixture
 def function_fixture():
     return "function"
 
-@fixture(scope="module")
-def module_fixture():
-    return "module"
+@fixture
+def dependent_fixture(function_fixture: str) -> str:
+    return function_fixture + "dependent"
 
-@fixture(scope="package")
-def package_fixture():
-    return "package"
-
-@fixture(scope="session")
-def session_fixture():
-    return "session"
+def test_dependent(dependent_fixture: str):
+    assert dependent_fixture == "functiondependent"
 ```
 
 ## Example
