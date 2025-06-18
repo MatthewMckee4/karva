@@ -7,7 +7,7 @@ use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 
 use crate::{
     case::TestCase,
-    fixture::{Fixture, HasFixtures, UsesFixture},
+    fixture::{Fixture, HasFixtures, RequiresFixtures},
     module::{Module, ModuleType, StringModule},
     utils::Upcast,
 };
@@ -179,9 +179,9 @@ impl<'proj> Package<'proj> {
     // TODO: Rename this
     // This function returns all functions that
     #[must_use]
-    pub fn dependencies(&self) -> Vec<&dyn UsesFixture> {
-        let mut dependencies: Vec<&dyn UsesFixture> = Vec::new();
-        let direct_test_cases: Vec<&dyn UsesFixture> = self.direct_test_cases().upcast();
+    pub fn dependencies(&self) -> Vec<&dyn RequiresFixtures> {
+        let mut dependencies: Vec<&dyn RequiresFixtures> = Vec::new();
+        let direct_test_cases: Vec<&dyn RequiresFixtures> = self.direct_test_cases().upcast();
 
         for configuration_module in self.configuration_modules() {
             dependencies.extend(configuration_module.dependencies());
@@ -237,7 +237,10 @@ impl<'proj> Package<'proj> {
 }
 
 impl<'proj> HasFixtures<'proj> for Package<'proj> {
-    fn all_fixtures<'a: 'proj>(&'a self, test_cases: &[&dyn UsesFixture]) -> Vec<&'proj Fixture> {
+    fn all_fixtures<'a: 'proj>(
+        &'a self,
+        test_cases: &[&dyn RequiresFixtures],
+    ) -> Vec<&'proj Fixture> {
         let mut fixtures = Vec::new();
 
         for module in self.configuration_modules() {
@@ -251,7 +254,10 @@ impl<'proj> HasFixtures<'proj> for Package<'proj> {
 }
 
 impl<'proj> HasFixtures<'proj> for &'proj Package<'proj> {
-    fn all_fixtures<'a: 'proj>(&'a self, test_cases: &[&dyn UsesFixture]) -> Vec<&'proj Fixture> {
+    fn all_fixtures<'a: 'proj>(
+        &'a self,
+        test_cases: &[&dyn RequiresFixtures],
+    ) -> Vec<&'proj Fixture> {
         (*self).all_fixtures(test_cases)
     }
 }

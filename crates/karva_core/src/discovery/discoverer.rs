@@ -59,7 +59,7 @@ impl<'proj> Discoverer<'proj> {
                     }
                 },
                 Err(e) => {
-                    tracing::warn!("Error finding tests: {e}");
+                    discovery_diagnostics.push(Diagnostic::path_error(&e));
                 }
             }
         }

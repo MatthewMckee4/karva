@@ -10,7 +10,7 @@ use ruff_text_size::TextSize;
 use crate::{
     case::TestCase,
     discovery::visitor::source_text,
-    fixture::{Fixture, HasFixtures, UsesFixture},
+    fixture::{Fixture, HasFixtures, RequiresFixtures},
     utils::from_text_size,
 };
 
@@ -134,13 +134,13 @@ impl<'proj> Module<'proj> {
     }
 
     #[must_use]
-    pub fn dependencies(&self) -> Vec<&dyn UsesFixture> {
+    pub fn dependencies(&self) -> Vec<&dyn RequiresFixtures> {
         let mut deps = Vec::new();
         for tc in &self.test_cases {
-            deps.push(tc as &dyn UsesFixture);
+            deps.push(tc as &dyn RequiresFixtures);
         }
         for f in &self.fixtures {
-            deps.push(f as &dyn UsesFixture);
+            deps.push(f as &dyn RequiresFixtures);
         }
         deps
     }
@@ -152,7 +152,10 @@ impl<'proj> Module<'proj> {
 }
 
 impl<'proj> HasFixtures<'proj> for Module<'proj> {
-    fn all_fixtures<'a: 'proj>(&'a self, test_cases: &[&dyn UsesFixture]) -> Vec<&'proj Fixture> {
+    fn all_fixtures<'a: 'proj>(
+        &'a self,
+        test_cases: &[&dyn RequiresFixtures],
+    ) -> Vec<&'proj Fixture> {
         if test_cases.is_empty() {
             return self.fixtures.iter().collect();
         }

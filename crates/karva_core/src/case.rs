@@ -10,7 +10,7 @@ use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
     diagnostic::{Diagnostic, DiagnosticScope},
-    fixture::{FixtureManager, HasFunctionDefinition, UsesFixture},
+    fixture::{FixtureManager, HasFunctionDefinition, RequiresFixtures},
     utils::Upcast,
 };
 
@@ -25,10 +25,6 @@ pub struct TestCase {
 impl HasFunctionDefinition for TestCase {
     fn function_definition(&self) -> &StmtFunctionDef {
         &self.function_definition
-    }
-
-    fn name(&self) -> &str {
-        &self.function_definition.name
     }
 }
 
@@ -146,9 +142,11 @@ impl PartialEq for TestCase {
 
 impl Eq for TestCase {}
 
-impl<'a> Upcast<Vec<&'a dyn UsesFixture>> for Vec<&'a TestCase> {
-    fn upcast(self) -> Vec<&'a dyn UsesFixture> {
-        self.into_iter().map(|tc| tc as &dyn UsesFixture).collect()
+impl<'a> Upcast<Vec<&'a dyn RequiresFixtures>> for Vec<&'a TestCase> {
+    fn upcast(self) -> Vec<&'a dyn RequiresFixtures> {
+        self.into_iter()
+            .map(|tc| tc as &dyn RequiresFixtures)
+            .collect()
     }
 }
 
@@ -174,7 +172,7 @@ mod tests {
 
     use crate::{
         discovery::Discoverer,
-        fixture::{FixtureManager, HasFunctionDefinition, UsesFixture},
+        fixture::{FixtureManager, HasFunctionDefinition, RequiresFixtures},
         utils::add_to_sys_path,
     };
 

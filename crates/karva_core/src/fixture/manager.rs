@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use pyo3::{prelude::*, types::PyAny};
 
 use crate::{
-    fixture::{Fixture, FixtureScope, HasFixtures, UsesFixture},
+    fixture::{Fixture, FixtureScope, HasFixtures, RequiresFixtures},
     package::Package,
 };
 
@@ -79,7 +79,7 @@ impl<'proj> FixtureManager<'proj> {
 
         // To ensure we can call the current fixture, we must first look at all of its dependencies,
         // and resolve them first.
-        let current_dependencies = fixture.dependencies();
+        let current_dependencies = fixture.required_fixtures();
 
         // We need to get all of the fixtures in the current scope.
         let current_all_fixtures = current.all_fixtures(&[]);
@@ -152,7 +152,7 @@ impl<'proj> FixtureManager<'proj> {
         parents: &[&'proj Package<'proj>],
         current: &'proj dyn HasFixtures<'proj>,
         scopes: &[FixtureScope],
-        dependencies: &[&dyn UsesFixture],
+        dependencies: &[&dyn RequiresFixtures],
     ) {
         let fixtures = current.fixtures(scopes, dependencies);
 

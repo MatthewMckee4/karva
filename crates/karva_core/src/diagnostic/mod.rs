@@ -1,3 +1,4 @@
+use karva_project::path::PythonTestPathError;
 use pyo3::prelude::*;
 
 use crate::{
@@ -98,6 +99,20 @@ impl Diagnostic {
     }
 
     #[must_use]
+    pub fn path_error(error: &PythonTestPathError) -> Self {
+        Self::new(
+            vec![SubDiagnostic {
+                diagnostic_type: SubDiagnosticType::Error(DiagnosticError::InvalidPath(
+                    error.path().to_string(),
+                )),
+                message: format!("{error}"),
+                location: "setup".to_string(),
+            }],
+            DiagnosticScope::Unknown,
+        )
+    }
+
+    #[must_use]
     pub const fn from_sub_diagnostics(
         sub_diagnostics: Vec<SubDiagnostic>,
         scope: DiagnosticScope,
@@ -193,6 +208,7 @@ pub enum DiagnosticError {
     Error(String),
     FixtureNotFound(String),
     InvalidFixture(String),
+    InvalidPath(String),
 }
 
 fn get_traceback(py: Python<'_>, error: &PyErr) -> String {

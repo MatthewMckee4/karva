@@ -7,7 +7,7 @@ use crate::{
         reporter::{DummyReporter, Reporter},
     },
     discovery::Discoverer,
-    fixture::{FixtureManager, FixtureScope, UsesFixture},
+    fixture::{FixtureManager, FixtureScope, RequiresFixtures},
     module::Module,
     package::Package,
     utils::{Upcast, add_to_sys_path, set_output},
@@ -67,7 +67,7 @@ impl<'proj> StandardTestRunner<'proj> {
 
             let mut fixture_manager = FixtureManager::new();
 
-            let upcast_test_cases: Vec<&dyn UsesFixture> = session.test_cases().upcast();
+            let upcast_test_cases: Vec<&dyn RequiresFixtures> = session.test_cases().upcast();
 
             fixture_manager.add_fixtures(
                 py,
@@ -105,7 +105,7 @@ impl<'proj> StandardTestRunner<'proj> {
         reporter: &dyn Reporter,
     ) {
         let module_test_cases = module.dependencies();
-        let upcast_module_test_cases: Vec<&dyn UsesFixture> = module_test_cases.upcast();
+        let upcast_module_test_cases: Vec<&dyn RequiresFixtures> = module_test_cases.upcast();
         if upcast_module_test_cases.is_empty() {
             return;
         }
@@ -152,7 +152,7 @@ impl<'proj> StandardTestRunner<'proj> {
 
         for function in module.test_cases() {
             let test_cases = [function].to_vec();
-            let upcast_test_cases: Vec<&dyn UsesFixture> = test_cases.upcast();
+            let upcast_test_cases: Vec<&dyn RequiresFixtures> = test_cases.upcast();
 
             let mut parents_above_current_parent = parents.to_vec();
             let mut i = parents.len();
@@ -208,7 +208,7 @@ impl<'proj> StandardTestRunner<'proj> {
         }
         let package_test_cases = package.dependencies();
 
-        let upcast_package_test_cases: Vec<&dyn UsesFixture> = package_test_cases.upcast();
+        let upcast_package_test_cases: Vec<&dyn RequiresFixtures> = package_test_cases.upcast();
 
         let mut parents_above_current_parent = parents.to_vec();
         let mut i = parents.len();

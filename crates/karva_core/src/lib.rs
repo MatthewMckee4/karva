@@ -1,3 +1,4 @@
+#![warn(dead_code)]
 pub mod case;
 pub mod diagnostic;
 pub mod discovery;

@@ -44,20 +44,19 @@ impl PythonTestPath {
     }
 }
 
-impl std::fmt::Display for PythonTestPath {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::File(path) => write!(f, "File: {path}"),
-            Self::Directory(path) => write!(f, "Directory: {path}"),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub enum PythonTestPathError {
     NotFound(String),
     WrongFileExtension(String),
-    InvalidPath(String),
+}
+
+impl PythonTestPathError {
+    #[must_use]
+    pub fn path(&self) -> &str {
+        match self {
+            Self::NotFound(path) | Self::WrongFileExtension(path) => path,
+        }
+    }
 }
 
 impl std::fmt::Display for PythonTestPathError {
@@ -67,7 +66,6 @@ impl std::fmt::Display for PythonTestPathError {
             Self::WrongFileExtension(path) => {
                 write!(f, "Path `{path}` has a wrong file extension")
             }
-            Self::InvalidPath(path) => write!(f, "Path `{path}` is not a valid path"),
         }
     }
 }
@@ -131,6 +129,17 @@ mod tests {
     }
 
     #[test]
+    fn test_invalid_path_with_extension() {
+        let env = TestEnv::new();
+        let path = env.create_file("path.txt", "def test(): pass");
+        let result = PythonTestPath::new(&path);
+        assert!(matches!(
+            result,
+            Err(PythonTestPathError::WrongFileExtension(_))
+        ));
+    }
+
+    #[test]
     fn test_wrong_file_extension() {
         let env = TestEnv::new();
         let path = env.create_file("test.rs", "fn test() {}");
@@ -163,5 +172,51 @@ mod tests {
             result,
             Err(PythonTestPathError::WrongFileExtension(_))
         ));
+    }
+
+    #[test]
+    fn test_try_convert_to_py_path_file() {
+        let env = TestEnv::new();
+        let env_path = env.create_file("test.py", "def test(): pass");
+
+        let result = try_convert_to_py_path(&env.cwd().join("test"));
+        if let Ok(path) = result {
+            assert_eq!(path, env_path);
+        } else {
+            panic!("Expected Ok, got {result:?}");
+        }
+    }
+
+    #[test]
+    fn test_try_convert_to_py_path_file_slashes() {
+        let env = TestEnv::new();
+        let env_path = env.create_file("test/dir.py", "def test(): pass");
+
+        let result = try_convert_to_py_path(&env.cwd().join("test/dir"));
+        if let Ok(path) = result {
+            assert_eq!(path, env_path);
+        } else {
+            panic!("Expected Ok, got {result:?}");
+        }
+    }
+
+    #[test]
+    fn test_try_convert_to_py_path_directory() {
+        let env = TestEnv::new();
+        let env_path = env.create_dir("test.dir");
+
+        let result = try_convert_to_py_path(&env.cwd().join("test.dir"));
+        if let Ok(path) = result {
+            assert_eq!(path, env_path);
+        } else {
+            panic!("Expected Ok, got {result:?}");
+        }
+    }
+
+    #[test]
+    fn test_try_convert_to_py_path_not_found() {
+        let env = TestEnv::new();
+        let result = try_convert_to_py_path(&env.cwd().join("test/dir"));
+        assert!(matches!(result, Err(PythonTestPathError::NotFound(_))));
     }
 }
