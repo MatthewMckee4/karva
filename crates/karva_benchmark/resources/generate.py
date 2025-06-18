@@ -18,13 +18,13 @@ class AddTestFunction(Protocol):
 
 def add_true_assertions(f: TextIOWrapper, test_index: int, num_asserts: int) -> None:
     """Add true assertions to a test function."""
-    f.writelines(f"def test_{test_index}():\n" for _ in range(num_asserts))
+    f.write(f"def test_{test_index}():\n")
     f.writelines(f"{TAB}assert True\n" for _ in range(num_asserts))
 
 
 def add_math(f: TextIOWrapper, test_index: int, num_asserts: int) -> None:
     """Add complex math to a test function."""
-    f.writelines(f"def test_{test_index}():\n" for _ in range(num_asserts))
+    f.write(f"def test_{test_index}():\n")
     for _ in range(num_asserts):
         f.write(f"{TAB}x = 2\n")
         f.write(f"{TAB}y = 3\n")
@@ -37,7 +37,7 @@ def add_string_concatenation(
     num_asserts: int,
 ) -> None:
     """Add string concatenation to a test function."""
-    f.writelines(f"def test_{test_index}():\n" for _ in range(num_asserts))
+    f.write(f"def test_{test_index}():\n")
     f.writelines(
         f"{TAB}assert 'hello' + 'world' == 'helloworld'\n" for _ in range(num_asserts)
     )
@@ -45,7 +45,7 @@ def add_string_concatenation(
 
 def add_large_summation(f: TextIOWrapper, test_index: int, num_asserts: int) -> None:
     """Add a large summation to a test function."""
-    f.writelines(f"def test_{test_index}():\n" for _ in range(num_asserts))
+    f.write(f"def test_{test_index}():\n")
     number = 10_000
     f.writelines(
         f"{TAB}assert sum(range({number})) == {number * (number - 1) // 2}\n"
