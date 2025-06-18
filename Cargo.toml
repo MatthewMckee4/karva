@@ -8,7 +8,7 @@ rust-version = "1.85"
 homepage = "https://github.com/MatthewMckee4/karva"
 documentation = "https://github.com/MatthewMckee4/karva"
 repository = "https://github.com/MatthewMckee4/karva"
-authors = ["Matthew McKee <matthewmckee4@gmail.com>"]
+authors = ["Matthew McKee <matthewmckee4@yahoo.co.uk>"]
 license = "MIT"
 
 [workspace.dependencies]
