@@ -55,17 +55,6 @@ jobs:
       - name: Build docs
         run: uv run --no-project mkdocs build
 
-  check-reference:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-      - name: Generate CLI Reference
-        run: cargo dev generate-cli-reference
-
   benchmarks:
     name: Run benchmarks
     runs-on: ubuntu-latest

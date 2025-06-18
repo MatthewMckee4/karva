@@ -589,4 +589,726 @@ mod tests {
             assert!(manager.function.contains_key("z"));
         });
     }
+
+    #[test]
+    fn test_fixture_manager_complex_nested_structure_with_session_fixtures() {
+        let env = TestEnv::new();
+
+        let root_fixtures = mock_fixture(&[MockFixture {
+            name: "database".to_string(),
+            scope: "session".to_string(),
+            body: "return 'db_connection'".to_string(),
+            args: String::new(),
+        }]);
+
+        let api_fixtures = mock_fixture(&[MockFixture {
+            name: "api_client".to_string(),
+            scope: "package".to_string(),
+            body: "return 'api_client'".to_string(),
+            args: "database".to_string(),
+        }]);
+
+        let user_fixtures = mock_fixture(&[MockFixture {
+            name: "user".to_string(),
+            scope: "module".to_string(),
+            body: "return 'test_user'".to_string(),
+            args: "api_client".to_string(),
+        }]);
+
+        let auth_fixtures = mock_fixture(&[MockFixture {
+            name: "auth_token".to_string(),
+            scope: "function".to_string(),
+            body: "return 'token123'".to_string(),
+            args: "user".to_string(),
+        }]);
+
+        let tests_dir = env.create_tests_dir();
+        let api_dir = tests_dir.join("api");
+        let users_dir = api_dir.join("users");
+
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &root_fixtures);
+        env.create_file(api_dir.join("conftest.py").as_std_path(), &api_fixtures);
+        env.create_file(users_dir.join("conftest.py").as_std_path(), &user_fixtures);
+        let test_path = env.create_file(
+            users_dir.join("test_user_auth.py").as_std_path(),
+            &format!("{auth_fixtures}\ndef test_user_login(auth_token): pass"),
+        );
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let (session, _) = Discoverer::new(&project).discover();
+
+        let tests_package = session.get_package(&tests_dir).unwrap();
+        let api_package = tests_package.get_package(&api_dir).unwrap();
+        let users_package = api_package.get_package(&users_dir).unwrap();
+        let test_module = users_package.get_module(&test_path).unwrap();
+        let test_function = test_module.get_test_case("test_user_login").unwrap();
+
+        Python::with_gil(|py| {
+            let mut manager = FixtureManager::new();
+
+            manager.add_fixtures(
+                py,
+                &[tests_package, api_package, users_package],
+                test_module,
+                &[
+                    FixtureScope::Session,
+                    FixtureScope::Package,
+                    FixtureScope::Module,
+                    FixtureScope::Function,
+                ],
+                &[test_function],
+            );
+
+            assert!(manager.package.contains_key("api_client"));
+            assert!(manager.module.contains_key("user"));
+            assert!(manager.function.contains_key("auth_token"));
+            assert!(manager.session.contains_key("database"));
+        });
+    }
+
+    #[test]
+    fn test_fixture_manager_multiple_packages_same_level() {
+        let env = TestEnv::new();
+
+        let shared_fixtures = mock_fixture(&[MockFixture {
+            name: "config".to_string(),
+            scope: "session".to_string(),
+            body: "return {'env': 'test'}".to_string(),
+            args: String::new(),
+        }]);
+
+        let package_a_fixtures = mock_fixture(&[MockFixture {
+            name: "service_a".to_string(),
+            scope: "package".to_string(),
+            body: "return 'service_a'".to_string(),
+            args: "config".to_string(),
+        }]);
+
+        let package_b_fixtures = mock_fixture(&[MockFixture {
+            name: "service_b".to_string(),
+            scope: "package".to_string(),
+            body: "return 'service_b'".to_string(),
+            args: "config".to_string(),
+        }]);
+
+        let tests_dir = env.create_tests_dir();
+        let package_a_dir = tests_dir.join("package_a");
+        let package_b_dir = tests_dir.join("package_b");
+
+        env.create_file(
+            tests_dir.join("conftest.py").as_std_path(),
+            &shared_fixtures,
+        );
+        env.create_file(
+            package_a_dir.join("conftest.py").as_std_path(),
+            &package_a_fixtures,
+        );
+        env.create_file(
+            package_b_dir.join("conftest.py").as_std_path(),
+            &package_b_fixtures,
+        );
+
+        let test_a_path = env.create_file(
+            package_a_dir.join("test_a.py").as_std_path(),
+            "def test_a(service_a): pass",
+        );
+        let test_b_path = env.create_file(
+            package_b_dir.join("test_b.py").as_std_path(),
+            "def test_b(service_b): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let (session, _) = Discoverer::new(&project).discover();
+
+        let tests_package = session.get_package(&tests_dir).unwrap();
+        let package_a = tests_package.get_package(&package_a_dir).unwrap();
+        let package_b = tests_package.get_package(&package_b_dir).unwrap();
+
+        let module_a = package_a.get_module(&test_a_path).unwrap();
+        let module_b = package_b.get_module(&test_b_path).unwrap();
+
+        let test_a = module_a.get_test_case("test_a").unwrap();
+        let test_b = module_b.get_test_case("test_b").unwrap();
+
+        Python::with_gil(|py| {
+            let mut manager = FixtureManager::new();
+
+            manager.add_fixtures(
+                py,
+                &[tests_package],
+                package_a,
+                &[FixtureScope::Session, FixtureScope::Package],
+                &[test_a],
+            );
+
+            assert!(manager.session.contains_key("config"));
+            assert!(manager.package.contains_key("service_a"));
+
+            manager.reset_package_fixtures();
+
+            manager.add_fixtures(
+                py,
+                &[tests_package],
+                package_b,
+                &[FixtureScope::Session, FixtureScope::Package],
+                &[test_b],
+            );
+
+            assert!(manager.session.contains_key("config"));
+            assert!(manager.package.contains_key("service_b"));
+            assert!(!manager.package.contains_key("service_a"));
+        });
+    }
+
+    #[test]
+    fn test_fixture_manager_fixture_override_in_nested_packages() {
+        let env = TestEnv::new();
+
+        let root_fixtures = mock_fixture(&[MockFixture {
+            name: "data".to_string(),
+            scope: "function".to_string(),
+            body: "return 'root_data'".to_string(),
+            args: String::new(),
+        }]);
+
+        let child_fixtures = mock_fixture(&[MockFixture {
+            name: "data".to_string(),
+            scope: "function".to_string(),
+            body: "return 'child_data'".to_string(),
+            args: String::new(),
+        }]);
+
+        let tests_dir = env.create_tests_dir();
+        let child_dir = tests_dir.join("child");
+
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &root_fixtures);
+        env.create_file(child_dir.join("conftest.py").as_std_path(), &child_fixtures);
+
+        let root_test_path = env.create_file(
+            tests_dir.join("test_root.py").as_std_path(),
+            "def test_root(data): pass",
+        );
+        let child_test_path = env.create_file(
+            child_dir.join("test_child.py").as_std_path(),
+            "def test_child(data): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let (session, _) = Discoverer::new(&project).discover();
+
+        let tests_package = session.get_package(&tests_dir).unwrap();
+        let child_package = tests_package.get_package(&child_dir).unwrap();
+
+        let root_module = tests_package.get_module(&root_test_path).unwrap();
+        let child_module = child_package.get_module(&child_test_path).unwrap();
+
+        let root_test = root_module.get_test_case("test_root").unwrap();
+        let child_test = child_module.get_test_case("test_child").unwrap();
+
+        Python::with_gil(|py| {
+            let mut manager = FixtureManager::new();
+
+            manager.add_fixtures(
+                py,
+                &[],
+                tests_package,
+                &[FixtureScope::Function],
+                &[root_test],
+            );
+
+            manager.reset_function_fixtures();
+            manager.add_fixtures(
+                py,
+                &[tests_package],
+                child_package,
+                &[FixtureScope::Function],
+                &[child_test],
+            );
+
+            assert!(manager.function.contains_key("data"));
+        });
+    }
+
+    #[test]
+    fn test_fixture_manager_multiple_dependent_fixtures_same_scope() {
+        let env = TestEnv::new();
+
+        let fixtures = mock_fixture(&[
+            MockFixture {
+                name: "base".to_string(),
+                scope: "function".to_string(),
+                body: "return 'base'".to_string(),
+                args: String::new(),
+            },
+            MockFixture {
+                name: "derived_a".to_string(),
+                scope: "function".to_string(),
+                body: "return f'{base}_a'".to_string(),
+                args: "base".to_string(),
+            },
+            MockFixture {
+                name: "derived_b".to_string(),
+                scope: "function".to_string(),
+                body: "return f'{base}_b'".to_string(),
+                args: "base".to_string(),
+            },
+            MockFixture {
+                name: "combined".to_string(),
+                scope: "function".to_string(),
+                body: "return f'{derived_a}_{derived_b}'".to_string(),
+                args: "derived_a, derived_b".to_string(),
+            },
+        ]);
+
+        let tests_dir = env.create_tests_dir();
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixtures);
+        let test_path = env.create_file(
+            tests_dir.join("test_combined.py").as_std_path(),
+            "def test_combined(combined): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let (session, _) = Discoverer::new(&project).discover();
+
+        let tests_package = session.get_package(&tests_dir).unwrap();
+        let test_module = tests_package.get_module(&test_path).unwrap();
+        let test_function = test_module.get_test_case("test_combined").unwrap();
+
+        Python::with_gil(|py| {
+            let mut manager = FixtureManager::new();
+
+            manager.add_fixtures(
+                py,
+                &[],
+                tests_package,
+                &[FixtureScope::Function],
+                &[test_function],
+            );
+
+            assert!(manager.function.contains_key("base"));
+            assert!(manager.function.contains_key("derived_a"));
+            assert!(manager.function.contains_key("derived_b"));
+            assert!(manager.function.contains_key("combined"));
+        });
+    }
+
+    #[test]
+    fn test_fixture_manager_deep_nesting_five_levels() {
+        let env = TestEnv::new();
+
+        let level1_fixtures = mock_fixture(&[MockFixture {
+            name: "level1".to_string(),
+            scope: "session".to_string(),
+            body: "return 'l1'".to_string(),
+            args: String::new(),
+        }]);
+
+        let level2_fixtures = mock_fixture(&[MockFixture {
+            name: "level2".to_string(),
+            scope: "package".to_string(),
+            body: "return 'l2'".to_string(),
+            args: "level1".to_string(),
+        }]);
+
+        let level3_fixtures = mock_fixture(&[MockFixture {
+            name: "level3".to_string(),
+            scope: "module".to_string(),
+            body: "return 'l3'".to_string(),
+            args: "level2".to_string(),
+        }]);
+
+        let level4_fixtures = mock_fixture(&[MockFixture {
+            name: "level4".to_string(),
+            scope: "function".to_string(),
+            body: "return 'l4'".to_string(),
+            args: "level3".to_string(),
+        }]);
+
+        let level5_fixtures = mock_fixture(&[MockFixture {
+            name: "level5".to_string(),
+            scope: "function".to_string(),
+            body: "return 'l5'".to_string(),
+            args: "level4".to_string(),
+        }]);
+
+        let tests_dir = env.create_tests_dir();
+        let l2_dir = tests_dir.join("level2");
+        let l3_dir = l2_dir.join("level3");
+        let l4_dir = l3_dir.join("level4");
+        let l5_dir = l4_dir.join("level5");
+
+        env.create_file(
+            tests_dir.join("conftest.py").as_std_path(),
+            &level1_fixtures,
+        );
+        env.create_file(l2_dir.join("conftest.py").as_std_path(), &level2_fixtures);
+        env.create_file(l3_dir.join("conftest.py").as_std_path(), &level3_fixtures);
+        env.create_file(l4_dir.join("conftest.py").as_std_path(), &level4_fixtures);
+        env.create_file(l5_dir.join("conftest.py").as_std_path(), &level5_fixtures);
+
+        let test_path = env.create_file(
+            l5_dir.join("test_deep.py").as_std_path(),
+            "def test_deep(level5): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let (session, _) = Discoverer::new(&project).discover();
+
+        let l1_package = session.get_package(&tests_dir).unwrap();
+        let l2_package = l1_package.get_package(&l2_dir).unwrap();
+        let l3_package = l2_package.get_package(&l3_dir).unwrap();
+        let l4_package = l3_package.get_package(&l4_dir).unwrap();
+        let l5_package = l4_package.get_package(&l5_dir).unwrap();
+
+        let test_module = l5_package.get_module(&test_path).unwrap();
+        let test_function = test_module.get_test_case("test_deep").unwrap();
+
+        Python::with_gil(|py| {
+            let mut manager = FixtureManager::new();
+
+            manager.add_fixtures(
+                py,
+                &[l1_package, l2_package, l3_package, l4_package],
+                l5_package,
+                &[
+                    FixtureScope::Session,
+                    FixtureScope::Package,
+                    FixtureScope::Module,
+                    FixtureScope::Function,
+                ],
+                &[test_function],
+            );
+
+            assert!(manager.session.contains_key("level1"));
+            assert!(manager.package.contains_key("level2"));
+            assert!(manager.module.contains_key("level3"));
+            assert!(manager.function.contains_key("level4"));
+            assert!(manager.function.contains_key("level5"));
+        });
+    }
+
+    #[test]
+    fn test_fixture_manager_cross_package_dependencies() {
+        let env = TestEnv::new();
+
+        let root_fixtures = mock_fixture(&[MockFixture {
+            name: "utils".to_string(),
+            scope: "session".to_string(),
+            body: "return 'shared_utils'".to_string(),
+            args: String::new(),
+        }]);
+
+        let package_a_fixtures = mock_fixture(&[MockFixture {
+            name: "service_a".to_string(),
+            scope: "package".to_string(),
+            body: "return f'service_a_{utils}'".to_string(),
+            args: "utils".to_string(),
+        }]);
+
+        let package_b_fixtures = mock_fixture(&[MockFixture {
+            name: "service_b".to_string(),
+            scope: "package".to_string(),
+            body: "return f'service_b_{utils}'".to_string(),
+            args: "utils".to_string(),
+        }]);
+
+        let package_c_fixtures = mock_fixture(&[MockFixture {
+            name: "integration_service".to_string(),
+            scope: "function".to_string(),
+            body: "return f'integration_{service_a}_{service_b}'".to_string(),
+            args: "service_a, service_b".to_string(),
+        }]);
+
+        let tests_dir = env.create_tests_dir();
+        let package_a_dir = tests_dir.join("package_a");
+        let package_b_dir = tests_dir.join("package_b");
+        let package_c_dir = tests_dir.join("package_c");
+
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &root_fixtures);
+        env.create_file(
+            package_a_dir.join("conftest.py").as_std_path(),
+            &package_a_fixtures,
+        );
+        env.create_file(
+            package_b_dir.join("conftest.py").as_std_path(),
+            &package_b_fixtures,
+        );
+        env.create_file(
+            package_c_dir.join("conftest.py").as_std_path(),
+            &package_c_fixtures,
+        );
+
+        let test_path = env.create_file(
+            package_c_dir.join("test_integration.py").as_std_path(),
+            "def test_integration(integration_service): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let (session, _) = Discoverer::new(&project).discover();
+
+        let tests_package = session.get_package(&tests_dir).unwrap();
+        let package_a = tests_package.get_package(&package_a_dir).unwrap();
+        let package_b = tests_package.get_package(&package_b_dir).unwrap();
+        let package_c = tests_package.get_package(&package_c_dir).unwrap();
+
+        let test_module = package_c.get_module(&test_path).unwrap();
+        let test_function = test_module.get_test_case("test_integration").unwrap();
+
+        Python::with_gil(|py| {
+            let mut manager = FixtureManager::new();
+
+            manager.add_fixtures(
+                py,
+                &[tests_package],
+                package_a,
+                &[FixtureScope::Session, FixtureScope::Package],
+                &[],
+            );
+
+            manager.add_fixtures(
+                py,
+                &[tests_package],
+                package_b,
+                &[FixtureScope::Session, FixtureScope::Package],
+                &[],
+            );
+
+            manager.add_fixtures(
+                py,
+                &[tests_package],
+                package_c,
+                &[
+                    FixtureScope::Session,
+                    FixtureScope::Package,
+                    FixtureScope::Function,
+                ],
+                &[test_function],
+            );
+
+            assert!(manager.session.contains_key("utils"));
+            assert!(manager.package.contains_key("service_a"));
+            assert!(manager.package.contains_key("service_b"));
+            assert!(manager.function.contains_key("integration_service"));
+        });
+    }
+
+    #[test]
+    fn test_fixture_manager_multiple_tests_same_module() {
+        let env = TestEnv::new();
+
+        let fixtures = mock_fixture(&[
+            MockFixture {
+                name: "module_fixture".to_string(),
+                scope: "module".to_string(),
+                body: "return 'module_data'".to_string(),
+                args: String::new(),
+            },
+            MockFixture {
+                name: "function_fixture".to_string(),
+                scope: "function".to_string(),
+                body: "return 'function_data'".to_string(),
+                args: "module_fixture".to_string(),
+            },
+        ]);
+
+        let tests_dir = env.create_tests_dir();
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixtures);
+
+        let test_path = env.create_file(
+            tests_dir.join("test_multiple.py").as_std_path(),
+            "def test_one(function_fixture): pass\ndef test_two(function_fixture): pass\ndef test_three(module_fixture): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let (session, _) = Discoverer::new(&project).discover();
+
+        let tests_package = session.get_package(&tests_dir).unwrap();
+        let test_module = tests_package.get_module(&test_path).unwrap();
+
+        let test_one = test_module.get_test_case("test_one").unwrap();
+        let test_two = test_module.get_test_case("test_two").unwrap();
+        let test_three = test_module.get_test_case("test_three").unwrap();
+
+        Python::with_gil(|py| {
+            let mut manager = FixtureManager::new();
+
+            manager.add_fixtures(
+                py,
+                &[],
+                tests_package,
+                &[FixtureScope::Module, FixtureScope::Function],
+                &[test_one, test_two, test_three],
+            );
+
+            assert!(manager.module.contains_key("module_fixture"));
+            assert!(manager.function.contains_key("function_fixture"));
+        });
+    }
+
+    #[test]
+    fn test_fixture_manager_complex_dependency_chain_with_multiple_branches() {
+        let env = TestEnv::new();
+
+        let fixtures = mock_fixture(&[
+            MockFixture {
+                name: "root".to_string(),
+                scope: "session".to_string(),
+                body: "return 'root'".to_string(),
+                args: String::new(),
+            },
+            MockFixture {
+                name: "branch_a1".to_string(),
+                scope: "package".to_string(),
+                body: "return f'{root}_a1'".to_string(),
+                args: "root".to_string(),
+            },
+            MockFixture {
+                name: "branch_a2".to_string(),
+                scope: "module".to_string(),
+                body: "return f'{branch_a1}_a2'".to_string(),
+                args: "branch_a1".to_string(),
+            },
+            MockFixture {
+                name: "branch_b1".to_string(),
+                scope: "package".to_string(),
+                body: "return f'{root}_b1'".to_string(),
+                args: "root".to_string(),
+            },
+            MockFixture {
+                name: "branch_b2".to_string(),
+                scope: "module".to_string(),
+                body: "return f'{branch_b1}_b2'".to_string(),
+                args: "branch_b1".to_string(),
+            },
+            MockFixture {
+                name: "converged".to_string(),
+                scope: "function".to_string(),
+                body: "return f'{branch_a2}_{branch_b2}'".to_string(),
+                args: "branch_a2, branch_b2".to_string(),
+            },
+        ]);
+
+        let tests_dir = env.create_tests_dir();
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixtures);
+
+        let test_path = env.create_file(
+            tests_dir.join("test_converged.py").as_std_path(),
+            "def test_converged(converged): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let (session, _) = Discoverer::new(&project).discover();
+
+        let tests_package = session.get_package(&tests_dir).unwrap();
+        let test_module = tests_package.get_module(&test_path).unwrap();
+        let test_function = test_module.get_test_case("test_converged").unwrap();
+
+        Python::with_gil(|py| {
+            let mut manager = FixtureManager::new();
+
+            manager.add_fixtures(
+                py,
+                &[],
+                tests_package,
+                &[
+                    FixtureScope::Session,
+                    FixtureScope::Package,
+                    FixtureScope::Module,
+                    FixtureScope::Function,
+                ],
+                &[test_function],
+            );
+
+            assert!(manager.session.contains_key("root"));
+            assert!(manager.package.contains_key("branch_a1"));
+            assert!(manager.package.contains_key("branch_b1"));
+            assert!(manager.module.contains_key("branch_a2"));
+            assert!(manager.module.contains_key("branch_b2"));
+            assert!(manager.function.contains_key("converged"));
+        });
+    }
+
+    #[test]
+    fn test_fixture_manager_reset_functions() {
+        let env = TestEnv::new();
+
+        let fixtures = mock_fixture(&[
+            MockFixture {
+                name: "session_fixture".to_string(),
+                scope: "session".to_string(),
+                body: "return 'session'".to_string(),
+                args: String::new(),
+            },
+            MockFixture {
+                name: "package_fixture".to_string(),
+                scope: "package".to_string(),
+                body: "return 'package'".to_string(),
+                args: String::new(),
+            },
+            MockFixture {
+                name: "module_fixture".to_string(),
+                scope: "module".to_string(),
+                body: "return 'module'".to_string(),
+                args: String::new(),
+            },
+            MockFixture {
+                name: "function_fixture".to_string(),
+                scope: "function".to_string(),
+                body: "return 'function'".to_string(),
+                args: String::new(),
+            },
+        ]);
+
+        let tests_dir = env.create_tests_dir();
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixtures);
+
+        let test_path = env.create_file(
+            tests_dir.join("test_reset.py").as_std_path(),
+            "def test_reset(session_fixture, package_fixture, module_fixture, function_fixture): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let (session, _) = Discoverer::new(&project).discover();
+
+        let tests_package = session.get_package(&tests_dir).unwrap();
+        let test_module = tests_package.get_module(&test_path).unwrap();
+        let test_function = test_module.get_test_case("test_reset").unwrap();
+
+        Python::with_gil(|py| {
+            let mut manager = FixtureManager::new();
+
+            manager.add_fixtures(
+                py,
+                &[],
+                tests_package,
+                &[
+                    FixtureScope::Session,
+                    FixtureScope::Package,
+                    FixtureScope::Module,
+                    FixtureScope::Function,
+                ],
+                &[test_function],
+            );
+
+            assert!(manager.session.contains_key("session_fixture"));
+            assert!(manager.package.contains_key("package_fixture"));
+            assert!(manager.module.contains_key("module_fixture"));
+            assert!(manager.function.contains_key("function_fixture"));
+
+            manager.reset_function_fixtures();
+            assert!(!manager.function.contains_key("function_fixture"));
+            assert!(manager.module.contains_key("module_fixture"));
+
+            manager.reset_module_fixtures();
+            assert!(!manager.module.contains_key("module_fixture"));
+            assert!(manager.package.contains_key("package_fixture"));
+
+            manager.reset_package_fixtures();
+            assert!(!manager.package.contains_key("package_fixture"));
+            assert!(manager.session.contains_key("session_fixture"));
+
+            manager.reset_session_fixtures();
+            assert!(!manager.session.contains_key("session_fixture"));
+        });
+    }
 }
