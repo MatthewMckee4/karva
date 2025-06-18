@@ -208,7 +208,9 @@ mod tests {
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _diagnostics) = Discoverer::new(&project).discover();
+
+        println!("{:?}", _diagnostics);
 
         println!("{:?}", session.display());
 
