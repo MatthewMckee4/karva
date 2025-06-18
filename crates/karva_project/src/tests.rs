@@ -89,7 +89,7 @@ class FixtureFunctionMarker:
         self.scope = scope
         self.name = name
 
-    def __call__(self, function: Callable[..., object]):
+    def __call__(self, function):
         return FixtureFunctionDefinition(
             function=function,
             fixture_function_marker=self,
