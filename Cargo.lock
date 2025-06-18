@@ -816,6 +816,9 @@ dependencies = [
  "ruff_python_ast",
  "tempfile",
  "tracing",
+ "tracing-flame",
+ "tracing-subscriber",
+ "tracing-tree",
 ]
 
 [[package]]

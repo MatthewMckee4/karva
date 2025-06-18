@@ -1,6 +1,7 @@
 use std::{fmt, fs::File, io::BufWriter};
 
 use colored::Colorize;
+use karva_project::verbosity::VerbosityLevel;
 use tracing::{Event, Subscriber};
 use tracing_subscriber::{
     EnvFilter,
@@ -43,42 +44,6 @@ impl PartialEq<u8> for Verbosity {
 impl PartialOrd<u8> for Verbosity {
     fn partial_cmp(&self, other: &u8) -> Option<std::cmp::Ordering> {
         Some(self.verbose.cmp(other))
-    }
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub enum VerbosityLevel {
-    /// Default output level. Only shows Karva events up to the [`WARN`](tracing::Level::WARN).
-    Default,
-
-    /// Enables verbose output. Emits Karva events up to the [`INFO`](tracing::Level::INFO).
-    /// Corresponds to `-v`.
-    Verbose,
-
-    /// Enables a more verbose tracing format and emits Karva events up to [`DEBUG`](tracing::Level::DEBUG).
-    /// Corresponds to `-vv`
-    ExtraVerbose,
-
-    /// Enables all tracing events and uses a tree-like output format. Corresponds to `-vvv`.
-    Trace,
-}
-
-impl VerbosityLevel {
-    const fn level_filter(self) -> LevelFilter {
-        match self {
-            Self::Default => LevelFilter::WARN,
-            Self::Verbose => LevelFilter::INFO,
-            Self::ExtraVerbose => LevelFilter::DEBUG,
-            Self::Trace => LevelFilter::TRACE,
-        }
-    }
-
-    pub(crate) const fn is_trace(self) -> bool {
-        matches!(self, Self::Trace)
-    }
-
-    pub(crate) const fn is_extra_verbose(self) -> bool {
-        matches!(self, Self::ExtraVerbose)
     }
 }
 

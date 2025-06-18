@@ -195,7 +195,7 @@ mod tests {
 
     use std::collections::{HashMap, HashSet};
 
-    use karva_project::{project::ProjectOptions, tests::TestEnv};
+    use karva_project::{project::ProjectOptions, tests::TestEnv, verbosity::VerbosityLevel};
 
     use super::*;
     use crate::{module::StringModule, package::StringPackage};
@@ -464,6 +464,7 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![path]).with_options(ProjectOptions {
             test_prefix: "check".to_string(),
+            verbosity: VerbosityLevel::default(),
         });
         let discoverer = Discoverer::new(&project);
         let (session, _) = discoverer.discover();
@@ -744,5 +745,34 @@ def test_function(): pass
             }
         );
         assert_eq!(session.total_test_cases(), 1);
+    }
+
+    #[test]
+    fn test_discover_function_inside_function() {
+        let env = TestEnv::new();
+        let path = env.create_file(
+            "test_file.py",
+            "def test_function():
+    def test_function2(): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![path]);
+        let discoverer = Discoverer::new(&project);
+
+        let (session, _) = discoverer.discover();
+
+        assert_eq!(
+            session.display(),
+            StringPackage {
+                modules: HashMap::from([(
+                    "test_file".to_string(),
+                    StringModule {
+                        test_cases: HashSet::from(["test_function".to_string()]),
+                        fixtures: HashSet::new(),
+                    },
+                )]),
+                packages: HashMap::new(),
+            }
+        );
     }
 }

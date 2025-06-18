@@ -1,4 +1,4 @@
-use karva_project::path::SystemPathBuf;
+use karva_project::{path::SystemPathBuf, verbosity::VerbosityLevel};
 use pyo3::{PyResult, Python, types::PyAnyMethods};
 use ruff_python_ast::PythonVersion;
 use ruff_source_file::{LineIndex, PositionEncoding};
@@ -60,4 +60,18 @@ impl<T> Upcast<T> for T {
     fn upcast(self) -> T {
         self
     }
+}
+
+pub fn set_stdout(py: Python<'_>, verbosity: VerbosityLevel) -> PyResult<()> {
+    if verbosity == VerbosityLevel::Default {
+        let sys = py.import("sys")?;
+        let os = py.import("os")?;
+        let builtins = py.import("builtins")?;
+        let devnull = os.getattr("devnull")?;
+        let open_file_function = builtins.getattr("open")?;
+        let null_file = open_file_function.call_method1("open", (devnull, "w"))?;
+        sys.setattr("stdout", null_file)?;
+        sys.setattr("stdout", py.None())?;
+    }
+    Ok(())
 }

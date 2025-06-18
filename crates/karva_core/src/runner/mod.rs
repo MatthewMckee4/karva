@@ -10,7 +10,7 @@ use crate::{
     fixture::{FixtureManager, FixtureScope, UsesFixture},
     module::Module,
     package::Package,
-    utils::{Upcast, add_to_sys_path},
+    utils::{Upcast, add_to_sys_path, set_stdout},
 };
 
 mod diagnostic;
@@ -51,6 +51,8 @@ impl<'proj> StandardTestRunner<'proj> {
 
         diagnostics.extend(discovery_diagnostics);
         Python::with_gil(|py| {
+            let _ = set_stdout(py, *self.project.verbosity());
+
             let cwd = self.project.cwd();
 
             if let Err(err) = add_to_sys_path(&py, cwd) {
@@ -278,5 +280,53 @@ impl TestRunner for Project {
     fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
         let test_runner = StandardTestRunner::new(self);
         test_runner.test_with_reporter(reporter)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use karva_project::tests::{MockFixture, TestEnv, mock_fixture};
+
+    use super::*;
+    #[test]
+    fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
+     {
+        let env = TestEnv::new();
+
+        let fixtures = mock_fixture(&[
+            MockFixture {
+                name: "x".to_string(),
+                scope: "module".to_string(),
+                body: "return 1".to_string(),
+                args: String::new(),
+            },
+            MockFixture {
+                name: "y".to_string(),
+                scope: "function".to_string(),
+                body: "return 1".to_string(),
+                args: "x".to_string(),
+            },
+            MockFixture {
+                name: "z".to_string(),
+                scope: "function".to_string(),
+                body: "return 1".to_string(),
+                args: "x, y".to_string(),
+            },
+        ]);
+        let tests_dir = env.create_tests_dir();
+
+        env.create_file(&tests_dir.join("conftest.py").to_string(), &fixtures);
+        env.create_file(
+            &tests_dir.join("inner/test_1.py").to_string(),
+            "def test_1(z): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![tests_dir]);
+
+        let test_runner = StandardTestRunner::new(&project);
+
+        let diagnostics = test_runner.test();
+
+        assert_eq!(diagnostics.diagnostics.len(), 0);
     }
 }

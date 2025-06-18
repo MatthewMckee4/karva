@@ -44,6 +44,7 @@ impl TestCommand {
     pub fn into_options(self) -> ProjectOptions {
         ProjectOptions {
             test_prefix: self.test_prefix,
+            verbosity: self.verbosity.level(),
         }
     }
 }

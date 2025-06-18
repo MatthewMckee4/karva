@@ -10,7 +10,7 @@ use crate::{
     case::TestCase,
     diagnostic::Diagnostic,
     fixture::{Fixture, FixtureExtractor, is_fixture_function},
-    utils::recursive_add_to_sys_path,
+    utils::{recursive_add_to_sys_path, set_stdout},
 };
 
 pub struct FunctionDefinitionVisitor<'a, 'b> {
@@ -20,6 +20,7 @@ pub struct FunctionDefinitionVisitor<'a, 'b> {
     path: &'a SystemPathBuf,
     diagnostics: Vec<Diagnostic>,
     py_module: Bound<'b, PyModule>,
+    inside_function: bool,
 }
 
 impl<'a, 'b> FunctionDefinitionVisitor<'a, 'b> {
@@ -40,6 +41,7 @@ impl<'a, 'b> FunctionDefinitionVisitor<'a, 'b> {
             path,
             diagnostics: Vec::new(),
             py_module,
+            inside_function: false,
         })
     }
 }
@@ -47,12 +49,15 @@ impl<'a, 'b> FunctionDefinitionVisitor<'a, 'b> {
 impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
     fn visit_stmt(&mut self, stmt: &'a Stmt) {
         if let Stmt::FunctionDef(function_def) = stmt {
+            // Only consider top-level functions (not nested)
+            if self.inside_function {
+                return;
+            }
+            self.inside_function = true;
             if is_fixture_function(function_def) {
-                println!("Found fixture function: {:?}", function_def.name);
                 match FixtureExtractor::try_from_function(function_def, &self.py_module) {
                     Ok(fixture_def) => self.fixture_definitions.push(fixture_def),
                     Err(e) => {
-                        println!("Error: {:?}", e);
                         self.diagnostics
                             .push(Diagnostic::invalid_fixture(&e, &self.path.to_string()));
                     }
@@ -68,8 +73,12 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
                     function_def.clone(),
                 ));
             }
-        }
+            source_order::walk_stmt(self, stmt);
 
+            self.inside_function = false;
+            return;
+        }
+        // For all other statements, walk as normal
         source_order::walk_stmt(self, stmt);
     }
 }
@@ -90,6 +99,7 @@ impl DiscoveredFunctions {
 #[must_use]
 pub fn discover(path: &SystemPathBuf, project: &Project) -> (DiscoveredFunctions, Vec<Diagnostic>) {
     Python::with_gil(|py| {
+        let _ = set_stdout(py, *project.verbosity());
         let mut visitor = match FunctionDefinitionVisitor::new(py, project, path) {
             Ok(visitor) => visitor,
             Err(e) => {

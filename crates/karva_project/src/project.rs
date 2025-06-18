@@ -1,6 +1,9 @@
 use ruff_python_ast::PythonVersion;
 
-use crate::path::{PythonTestPath, PythonTestPathError, SystemPath, SystemPathBuf};
+use crate::{
+    path::{PythonTestPath, PythonTestPathError, SystemPath, SystemPathBuf},
+    verbosity::VerbosityLevel,
+};
 
 #[derive(Default, Debug, Clone)]
 pub struct ProjectMetadata {
@@ -10,12 +13,14 @@ pub struct ProjectMetadata {
 #[derive(Debug, Clone)]
 pub struct ProjectOptions {
     pub test_prefix: String,
+    pub verbosity: VerbosityLevel,
 }
 
 impl Default for ProjectOptions {
     fn default() -> Self {
         Self {
             test_prefix: "test".to_string(),
+            verbosity: VerbosityLevel::default(),
         }
     }
 }
@@ -86,6 +91,11 @@ impl Project {
     #[must_use]
     pub const fn python_version(&self) -> &PythonVersion {
         &self.metadata.python_version
+    }
+
+    #[must_use]
+    pub const fn verbosity(&self) -> &VerbosityLevel {
+        &self.options.verbosity
     }
 }
 

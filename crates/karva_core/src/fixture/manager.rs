@@ -86,7 +86,6 @@ impl<'proj> FixtureManager<'proj> {
         py: Python<'proj>,
         parents: &[&'proj Package<'proj>],
         current: &'proj dyn HasFixtures<'proj>,
-        scopes: &[FixtureScope],
         fixture: &'proj Fixture,
     ) {
         if self.get_fixture(fixture.name()).is_some() {
@@ -99,13 +98,13 @@ impl<'proj> FixtureManager<'proj> {
         let current_dependencies = fixture.dependencies();
 
         // We need to get all of the fixtures in the current scope.
-        let current_all_fixtures = current.fixtures(scopes, &[]);
+        let current_all_fixtures = current.all_fixtures(&[]);
 
         for dependency in &current_dependencies {
             let mut found = false;
             for fixture in &current_all_fixtures {
                 if fixture.name() == dependency {
-                    self.ensure_fixture_dependencies(py, parents, current, scopes, fixture);
+                    self.ensure_fixture_dependencies(py, parents, current, fixture);
                     found = true;
                     break;
                 }
@@ -128,7 +127,6 @@ impl<'proj> FixtureManager<'proj> {
                             py,
                             &parents_above_current_parent,
                             *parent,
-                            scopes,
                             parent_fixture,
                         );
                     }
@@ -164,7 +162,7 @@ impl<'proj> FixtureManager<'proj> {
     //
     // We take the parents to ensure that if the dependent fixtures are not in the current scope,
     // we can still look for them in the parents.
-    fn add_fixtures_impl(
+    pub fn add_fixtures(
         &mut self,
         py: Python<'proj>,
         parents: &[&'proj Package<'proj>],
@@ -175,19 +173,10 @@ impl<'proj> FixtureManager<'proj> {
         let fixtures = current.fixtures(scopes, dependencies);
 
         for fixture in &fixtures {
-            self.ensure_fixture_dependencies(py, parents, current, scopes, fixture);
+            if scopes.contains(fixture.scope()) {
+                self.ensure_fixture_dependencies(py, parents, current, fixture);
+            }
         }
-    }
-
-    pub fn add_fixtures(
-        &mut self,
-        py: Python<'proj>,
-        parents: &[&'proj Package<'proj>],
-        current: &'proj dyn HasFixtures<'proj>,
-        scope: &[FixtureScope],
-        dependencies: &[&dyn UsesFixture],
-    ) {
-        self.add_fixtures_impl(py, parents, current, scope, dependencies);
     }
 
     pub fn reset_session_fixtures(&mut self) {
@@ -284,7 +273,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Discoverer::new(&project).discover();
-        println!("{:#?}", session.display());
+
         let tests_package = session.get_package(&tests_dir).unwrap();
 
         let inner_package = tests_package.get_package(&inner_dir).unwrap();
@@ -337,7 +326,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Discoverer::new(&project).discover();
-        println!("{:#?}", session.display());
+
         let tests_package = session.get_package(&tests_dir).unwrap();
 
         let inner_package = tests_package.get_package(&inner_dir).unwrap();
@@ -400,8 +389,6 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Discoverer::new(&project).discover();
-
-        println!("{:#?}", session.display());
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -469,8 +456,6 @@ mod tests {
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Discoverer::new(&project).discover();
 
-        println!("{:#?}", session.display());
-
         let tests_package = session.get_package(&tests_dir).unwrap();
 
         let inner_package = tests_package.get_package(&inner_dir).unwrap();
@@ -535,8 +520,6 @@ mod tests {
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Discoverer::new(&project).discover();
 
-        println!("{:#?}", session.display());
-
         let tests_package = session.get_package(&tests_dir).unwrap();
 
         let inner_package = tests_package.get_package(&inner_dir).unwrap();
@@ -560,6 +543,76 @@ mod tests {
 
             assert!(manager.session_fixtures.contains_key("x"));
             assert!(manager.module_fixtures.contains_key("y"));
+            assert!(manager.function_fixtures.contains_key("z"));
+        });
+    }
+
+    #[test]
+    fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
+     {
+        let env = TestEnv::new();
+
+        let fixtures = mock_fixture(&[
+            MockFixture {
+                name: "x".to_string(),
+                scope: "module".to_string(),
+                body: "return 1".to_string(),
+                args: String::new(),
+            },
+            MockFixture {
+                name: "y".to_string(),
+                scope: "function".to_string(),
+                body: "return 1".to_string(),
+                args: "x".to_string(),
+            },
+            MockFixture {
+                name: "z".to_string(),
+                scope: "function".to_string(),
+                body: "return 1".to_string(),
+                args: "x, y".to_string(),
+            },
+        ]);
+        let tests_dir = env.create_tests_dir();
+        let inner_dir = tests_dir.join("inner");
+
+        env.create_file(&tests_dir.join("conftest.py").to_string(), &fixtures);
+        let test_path = env.create_file(
+            &tests_dir.join("inner/test_1.py").to_string(),
+            "def test_1(z): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let (session, _) = Discoverer::new(&project).discover();
+
+        let tests_package = session.get_package(&tests_dir).unwrap();
+
+        let inner_package = tests_package.get_package(&inner_dir).unwrap();
+
+        let test_module = inner_package.get_module(&test_path).unwrap();
+
+        let first_test_function = test_module.get_test_case("test_1").unwrap();
+
+        Python::with_gil(|py| {
+            let mut manager = FixtureManager::new();
+
+            manager.add_fixtures(
+                py,
+                &[],
+                tests_package,
+                &[FixtureScope::Module],
+                &[first_test_function],
+            );
+
+            manager.add_fixtures(
+                py,
+                &[],
+                tests_package,
+                &[FixtureScope::Function],
+                &[first_test_function],
+            );
+
+            assert!(manager.module_fixtures.contains_key("x"));
+            assert!(manager.function_fixtures.contains_key("y"));
             assert!(manager.function_fixtures.contains_key("z"));
         });
     }
