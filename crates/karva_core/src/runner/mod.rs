@@ -10,7 +10,7 @@ use crate::{
     fixture::{FixtureManager, FixtureScope, UsesFixture},
     module::Module,
     package::Package,
-    utils::{Upcast, add_to_sys_path, set_stdout},
+    utils::{Upcast, add_to_sys_path, set_output},
 };
 
 mod diagnostic;
@@ -51,7 +51,7 @@ impl<'proj> StandardTestRunner<'proj> {
 
         diagnostics.extend(discovery_diagnostics);
         Python::with_gil(|py| {
-            let _ = set_stdout(py, *self.project.verbosity());
+            let _ = set_output(py, *self.project.verbosity());
 
             let cwd = self.project.cwd();
 

@@ -9,20 +9,20 @@ use crate::{
 
 #[derive(Debug, Default)]
 pub struct FixtureManager<'proj> {
-    session_fixtures: HashMap<String, Bound<'proj, PyAny>>,
-    module_fixtures: HashMap<String, Bound<'proj, PyAny>>,
-    package_fixtures: HashMap<String, Bound<'proj, PyAny>>,
-    function_fixtures: HashMap<String, Bound<'proj, PyAny>>,
+    session: HashMap<String, Bound<'proj, PyAny>>,
+    module: HashMap<String, Bound<'proj, PyAny>>,
+    package: HashMap<String, Bound<'proj, PyAny>>,
+    function: HashMap<String, Bound<'proj, PyAny>>,
 }
 
 impl<'proj> FixtureManager<'proj> {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            session_fixtures: HashMap::new(),
-            module_fixtures: HashMap::new(),
-            package_fixtures: HashMap::new(),
-            function_fixtures: HashMap::new(),
+            session: HashMap::new(),
+            module: HashMap::new(),
+            package: HashMap::new(),
+            function: HashMap::new(),
         }
     }
 
@@ -39,42 +39,26 @@ impl<'proj> FixtureManager<'proj> {
     #[must_use]
     pub fn all_fixtures(&self) -> HashMap<String, Bound<'proj, PyAny>> {
         let mut fixtures = HashMap::new();
-        fixtures.extend(
-            self.session_fixtures
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone())),
-        );
-        fixtures.extend(
-            self.module_fixtures
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone())),
-        );
-        fixtures.extend(
-            self.package_fixtures
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone())),
-        );
-        fixtures.extend(
-            self.function_fixtures
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone())),
-        );
+        fixtures.extend(self.session.iter().map(|(k, v)| (k.clone(), v.clone())));
+        fixtures.extend(self.module.iter().map(|(k, v)| (k.clone(), v.clone())));
+        fixtures.extend(self.package.iter().map(|(k, v)| (k.clone(), v.clone())));
+        fixtures.extend(self.function.iter().map(|(k, v)| (k.clone(), v.clone())));
         fixtures
     }
 
     pub fn insert_fixture(&mut self, fixture_return: Bound<'proj, PyAny>, fixture: &'proj Fixture) {
         match fixture.scope() {
             FixtureScope::Session => self
-                .session_fixtures
+                .session
                 .insert(fixture.name().to_string(), fixture_return),
             FixtureScope::Module => self
-                .module_fixtures
+                .module
                 .insert(fixture.name().to_string(), fixture_return),
             FixtureScope::Package => self
-                .package_fixtures
+                .package
                 .insert(fixture.name().to_string(), fixture_return),
             FixtureScope::Function => self
-                .function_fixtures
+                .function
                 .insert(fixture.name().to_string(), fixture_return),
         };
     }
@@ -180,19 +164,19 @@ impl<'proj> FixtureManager<'proj> {
     }
 
     pub fn reset_session_fixtures(&mut self) {
-        self.session_fixtures.clear();
+        self.session.clear();
     }
 
     pub fn reset_package_fixtures(&mut self) {
-        self.package_fixtures.clear();
+        self.package.clear();
     }
 
     pub fn reset_module_fixtures(&mut self) {
-        self.module_fixtures.clear();
+        self.module.clear();
     }
 
     pub fn reset_function_fixtures(&mut self) {
-        self.function_fixtures.clear();
+        self.function.clear();
     }
 }
 
@@ -475,9 +459,9 @@ mod tests {
                 &[first_test_function],
             );
 
-            assert!(manager.module_fixtures.contains_key("x"));
-            assert!(manager.function_fixtures.contains_key("y"));
-            assert!(manager.function_fixtures.contains_key("z"));
+            assert!(manager.module.contains_key("x"));
+            assert!(manager.function.contains_key("y"));
+            assert!(manager.function.contains_key("z"));
         });
     }
 
@@ -541,9 +525,9 @@ mod tests {
                 &[first_test_function],
             );
 
-            assert!(manager.session_fixtures.contains_key("x"));
-            assert!(manager.module_fixtures.contains_key("y"));
-            assert!(manager.function_fixtures.contains_key("z"));
+            assert!(manager.session.contains_key("x"));
+            assert!(manager.module.contains_key("y"));
+            assert!(manager.function.contains_key("z"));
         });
     }
 
@@ -611,9 +595,9 @@ mod tests {
                 &[first_test_function],
             );
 
-            assert!(manager.module_fixtures.contains_key("x"));
-            assert!(manager.function_fixtures.contains_key("y"));
-            assert!(manager.function_fixtures.contains_key("z"));
+            assert!(manager.module.contains_key("x"));
+            assert!(manager.function.contains_key("y"));
+            assert!(manager.function.contains_key("z"));
         });
     }
 }

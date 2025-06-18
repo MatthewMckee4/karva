@@ -62,16 +62,23 @@ impl<T> Upcast<T> for T {
     }
 }
 
-pub fn set_stdout(py: Python<'_>, verbosity: VerbosityLevel) -> PyResult<()> {
+pub fn set_output(py: Python<'_>, verbosity: VerbosityLevel) -> PyResult<()> {
     if verbosity == VerbosityLevel::Default {
         let sys = py.import("sys")?;
         let os = py.import("os")?;
         let builtins = py.import("builtins")?;
+        let logging = py.import("logging")?;
+
         let devnull = os.getattr("devnull")?;
         let open_file_function = builtins.getattr("open")?;
-        let null_file = open_file_function.call_method1("open", (devnull, "w"))?;
-        sys.setattr("stdout", null_file)?;
-        sys.setattr("stdout", py.None())?;
+        let null_file = open_file_function.call1((devnull, "w"))?;
+
+        for output in ["stdout", "stderr"] {
+            sys.setattr(output, null_file.clone())?;
+        }
+
+        // Suppress logging
+        logging.call_method1("disable", (logging.getattr("CRITICAL")?,))?;
     }
     Ok(())
 }
