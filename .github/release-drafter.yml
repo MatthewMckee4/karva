@@ -1,12 +1,16 @@
 name-template: v$RESOLVED_VERSION
 tag-template: v$RESOLVED_VERSION
-change-template: "- $TITLE [#$NUMBER](https://github.com/MatthewMckee4/karva/pull/$NUMBER)"
 template: |
-  # What's Changed
+  ## Release Notes
 
   $CHANGES
 
-  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
+  ## Contributors
+
+  $CONTRIBUTORS
+
+change-template: "- $TITLE @$AUTHOR ([#$NUMBER](https://github.com/MatthewMckee4/karva/pull/$NUMBER))"
+
 categories:
   - title: Breaking
     label: breaking
@@ -16,64 +20,9 @@ categories:
       - enhancement
   - title: Bug Fixes
     label: bug
-  - title: Maintenance
-    labels:
-      - maintenance
-      - github_actions
   - title: Documentation
     label: documentation
   - title: Other changes
-  - title: Dependency Updates
-    label: dependencies
-    collapse-after: 5
 
 version-resolver:
-  major:
-    labels:
-      - breaking
-      - major
-  minor:
-    labels:
-      - feature
-      - minor
-      - enhancement
-  patch:
-    labels:
-      - bug
-      - maintenance
-      - github_actions
-      - documentation
-      - dependencies
-      - security
   default: patch
-
-exclude-labels:
-  - skip-changelog
-autolabeler:
-  - label: documentation
-    files:
-      - "docs/**/*"
-      - "mkdocs.yml"
-      - "*.md"
-    branch:
-      - /docs-.+/
-  - label: bug
-    branch:
-      - /fix-.+/
-    title:
-      - /fix/i
-  - label: enhancement
-    branch:
-      - /feature-.+/
-      - /add-.+/
-    title:
-      - /^add\s/i
-  - label: refactor
-    title:
-      - /refactor/i
-  - label: cli
-    files:
-      - crates/karva_cli/
-  - label: diagnostic
-    files:
-      - crates/karva_core/src/diagnostics.rs
