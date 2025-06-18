@@ -284,7 +284,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Discoverer::new(&project).discover();
-
+        println!("{:#?}", session.display());
         let tests_package = session.get_package(&tests_dir).unwrap();
 
         let inner_package = tests_package.get_package(&inner_dir).unwrap();
@@ -337,7 +337,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Discoverer::new(&project).discover();
-
+        println!("{:#?}", session.display());
         let tests_package = session.get_package(&tests_dir).unwrap();
 
         let inner_package = tests_package.get_package(&inner_dir).unwrap();
@@ -400,6 +400,8 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Discoverer::new(&project).discover();
+
+        println!("{:#?}", session.display());
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -467,6 +469,8 @@ mod tests {
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Discoverer::new(&project).discover();
 
+        println!("{:#?}", session.display());
+
         let tests_package = session.get_package(&tests_dir).unwrap();
 
         let inner_package = tests_package.get_package(&inner_dir).unwrap();
@@ -530,6 +534,8 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Discoverer::new(&project).discover();
+
+        println!("{:#?}", session.display());
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
