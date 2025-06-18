@@ -77,9 +77,13 @@ impl<'proj> FixtureManager<'proj> {
             return;
         }
 
+        println!("Ensuring fixture dependencies for {}", fixture.name());
+
         // To ensure we can call the current fixture, we must first look at all of its dependencies,
         // and resolve them first.
         let current_dependencies = fixture.dependencies();
+
+        println!("{:?}", current_dependencies);
 
         // We need to get all of the fixtures in the current scope.
         let current_all_fixtures = current.all_fixtures(&[]);
@@ -156,6 +160,8 @@ impl<'proj> FixtureManager<'proj> {
     ) {
         let fixtures = current.fixtures(scopes, dependencies);
 
+        println!("{:?}", fixtures);
+
         for fixture in &fixtures {
             if scopes.contains(fixture.scope()) {
                 self.ensure_fixture_dependencies(py, parents, current, fixture);
@@ -210,6 +216,8 @@ mod tests {
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Discoverer::new(&project).discover();
 
+        println!("{:?}", session.display());
+
         let tests_package = session.get_package(&tests_dir).unwrap();
 
         let test_module = tests_package.get_module(&test_path).unwrap();
@@ -226,6 +234,9 @@ mod tests {
                 &[FixtureScope::Function],
                 &[first_test_function],
             );
+
+            println!("{:?}", manager);
+
             assert!(manager.contains_fixture("x"));
         });
     }
