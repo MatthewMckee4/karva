@@ -54,6 +54,7 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
                 return;
             }
             self.inside_function = true;
+            println!("function_def: {:?}", function_def);
             if is_fixture_function(function_def) {
                 match FixtureExtractor::try_from_function(function_def, &self.py_module) {
                     Ok(fixture_def) => self.fixture_definitions.push(fixture_def),
@@ -131,6 +132,8 @@ pub fn parsed_module(path: &SystemPathBuf, python_version: PythonVersion) -> Par
     let mode = Mode::Module;
     let options = ParseOptions::from(mode).with_target_version(python_version);
     let source = source_text(path);
+
+    println!("source: {}", source);
 
     parse_unchecked(&source, options)
         .try_into_module()

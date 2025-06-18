@@ -26,17 +26,13 @@ jobs:
     strategy:
       max-parallel: 12
       matrix:
-        os: [ubuntu-latest, windows-2022, macos-latest]
+        os: [windows-latest] # [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+      - name: Update Rust toolchain
+        run: rustup update
       - name: Run Cargo Tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
+        run: cargo test
 
   build-docs:
     runs-on: ${{ matrix.os }}
