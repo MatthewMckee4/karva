@@ -91,24 +91,18 @@ fn redirect_output<'py>(
     }
 }
 
-fn restore_output<'py>(
-    py: Python<'py>,
-    options: &ProjectOptions,
-    null_file: &Bound<'py, PyAny>,
-) -> PyResult<()> {
-    if !options.show_output {
-        let sys = py.import("sys")?;
-        let logging = py.import("logging")?;
+fn restore_output<'py>(py: Python<'py>, null_file: &Bound<'py, PyAny>) -> PyResult<()> {
+    let sys = py.import("sys")?;
+    let logging = py.import("logging")?;
 
-        for output in ["stdout", "stderr"] {
-            let current_output = sys.getattr(output)?;
-            let close_method = current_output.getattr("close")?;
-            close_method.call0()?;
-            sys.setattr(output, null_file.clone())?;
-        }
-
-        logging.call_method1("disable", (logging.getattr("CRITICAL")?,))?;
+    for output in ["stdout", "stderr"] {
+        let current_output = sys.getattr(output)?;
+        let close_method = current_output.getattr("close")?;
+        close_method.call0()?;
+        sys.setattr(output, null_file.clone())?;
     }
+
+    logging.call_method1("disable", (logging.getattr("CRITICAL")?,))?;
     Ok(())
 }
 
@@ -120,7 +114,7 @@ where
         let null_file = redirect_output(py, &project.options);
         let result = f(py);
         if let Ok(Some(null_file)) = null_file {
-            let _ = restore_output(py, &project.options, &null_file);
+            let _ = restore_output(py, &null_file);
         }
         result
     })

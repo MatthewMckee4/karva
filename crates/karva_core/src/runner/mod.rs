@@ -328,4 +328,30 @@ mod tests {
 
         assert_eq!(diagnostics.diagnostics.len(), 0);
     }
+
+    #[test]
+    fn test_runner_given_nested_path() {
+        let env = TestEnv::new();
+
+        let fixtures = mock_fixture(&[MockFixture {
+            name: "x".to_string(),
+            scope: "module".to_string(),
+            body: "return 1".to_string(),
+            args: String::new(),
+        }]);
+        let tests_dir = env.create_tests_dir();
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixtures);
+        let test_file = env.create_file(
+            tests_dir.join("test_1.py").as_std_path(),
+            "def test_1(x): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![test_file]);
+
+        let test_runner = StandardTestRunner::new(&project);
+
+        let diagnostics = test_runner.test();
+
+        assert_eq!(diagnostics.diagnostics.len(), 0);
+    }
 }

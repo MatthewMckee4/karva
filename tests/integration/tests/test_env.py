@@ -74,11 +74,11 @@ class TestEnv:
 
         full_path.write_text(content)
 
-    def run_test(self) -> CommandSnapshot:
+    def run_test(self, args: tuple[str, ...] = ("-s",)) -> CommandSnapshot:
         """Test the project and return (exit_code, stdout, stderr)."""
 
         result = subprocess.run(
-            ["uv", "run", "--directory", str(self.project_dir), "karva", "test", str(self.project_dir), "-s"],
+            ["uv", "run", "--directory", str(self.project_dir), "karva", "test", str(self.project_dir), *args],
             cwd=self.project_dir,
             check=False,
             capture_output=True,
