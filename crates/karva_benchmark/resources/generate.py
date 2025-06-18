@@ -133,7 +133,54 @@ OUTPUT_RESOURCES = [
         num_tests=NUM_TESTS,
         num_asserts_per_function=NUM_ASSERT_PER_FUNCTION,
         add_test_function=add_fixture,
-        before_tests="from karva import fixture\n"
+        before_tests="""
+class FixtureFunctionMarker:
+    def __init__(self, scope, name = None):
+        self.scope = scope
+        self.name = name
+
+    def __call__(self, function):
+        return FixtureFunctionDefinition(
+            function=function,
+            fixture_function_marker=self,
+        )
+
+class FixtureFunctionDefinition:
+    def __init__(
+        self,
+        *,
+        function,
+        fixture_function_marker,
+    ):
+        self.name = fixture_function_marker.name or function.__name__
+        self.__name__ = self.name
+        self._fixture_function_marker = fixture_function_marker
+        self._fixture_function = function
+
+    def __get__(
+        self,
+        instance = None,
+        owner = None,
+    ):
+        return self
+
+    def __call__(self, *args, **kwds):
+        return self._fixture_function(*args, **kwds)
+
+def fixture(
+    fixture_function = None,
+    *,
+    scope = 'function',
+    name = None,
+):
+    fixture_marker = FixtureFunctionMarker(
+        scope=scope,
+        name=name,
+    )
+    if fixture_function:
+        return fixture_marker(fixture_function)
+    return fixture_marker
+"""
         + "\n".join(f"@fixture\ndef {_fixture_name(i)}(): pass" for i in range(10))
         + "\n",
     ),
