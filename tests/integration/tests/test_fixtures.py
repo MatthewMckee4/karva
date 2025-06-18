@@ -535,11 +535,6 @@ def test_multiple_files_independent_fixtures(test_env: TestEnv) -> None:
                     from src import Calculator
 
                     @fixture(scope="module")
-                    def add_calculator() -> Calculator:
-                        print("Add calculator initialized")
-                        return Calculator()
-
-                    @fixture(scope="module")
                     def multiply_calculator() -> Calculator:
                         print("Multiply calculator initialized")
                         return Calculator()""",
@@ -549,11 +544,11 @@ def test_multiple_files_independent_fixtures(test_env: TestEnv) -> None:
                 """
                 from src import Calculator
 
-                def test_add_1(add_calculator: Calculator) -> None:
-                    assert add_calculator.add(1, 2) == 3
+                def test_add_1(multiply_calculator: Calculator) -> None:
+                    assert multiply_calculator.add(1, 2) == 3
 
-                def test_add_2(add_calculator: Calculator) -> None:
-                    assert add_calculator.add(3, 4) == 7""",
+                def test_add_2(multiply_calculator: Calculator) -> None:
+                    assert multiply_calculator.add(3, 4) == 7""",
             ),
             (
                 "tests/test_multiply.py",
@@ -576,7 +571,7 @@ exit_code: 0
 ----- stdout -----
 All checks passed!
 Multiply calculator initialized
-Add calculator initialized
+Multiply calculator initialized
 
 ----- stderr -----"""
     )
@@ -1000,7 +995,7 @@ def test_same_fixture_name_different_types(test_env: TestEnv) -> None:
 
                     @fixture
                     def value() -> str:
-                        print("String value initialized")
+                        print("Calculator value initialized")
                         return "test"
                     """,
             ),
@@ -1021,7 +1016,309 @@ exit_code: 0
 ----- stdout -----
 All checks passed!
 Calculator value initialized
-String value initialized
+Calculator value initialized
+
+----- stderr -----"""
+    )
+    test_env.cleanup()
+
+
+def test_fixture_dependencies(test_env: TestEnv) -> None:
+    test_env.write_files(
+        [
+            *get_source_code("print('Calculator initialized')"),
+            (
+                "tests/conftest.py",
+                """
+                from karva import fixture
+                from src import Calculator
+
+                @fixture
+                def calculator() -> Calculator:
+                    print("Calculator fixture initialized")
+                    return Calculator()
+
+                @fixture
+                def calculator_with_value(calculator: Calculator) -> Calculator:
+                    print("Calculator with value fixture initialized")
+                    calculator.add(5, 5)
+                    return calculator""",
+            ),
+            (
+                "tests/test_calculator.py",
+                """
+                from src import Calculator
+
+                def test_calculator_with_value(calculator_with_value: Calculator) -> None:
+                    assert calculator_with_value.add(1, 2) == 3
+
+                def test_calculator_dependency(calculator: Calculator, calculator_with_value: Calculator) -> None:
+                    assert calculator.add(1, 2) == 3
+                    assert calculator_with_value.add(1, 2) == 3""",
+            ),
+        ],
+    )
+
+    assert (
+        test_env.run_test()
+        == """success: true
+exit_code: 0
+----- stdout -----
+All checks passed!
+Calculator fixture initialized
+Calculator initialized
+Calculator with value fixture initialized
+Calculator fixture initialized
+Calculator initialized
+Calculator with value fixture initialized
+
+----- stderr -----"""
+    )
+    test_env.cleanup()
+
+
+def test_dependent_fixtures_different_scopes(test_env: TestEnv) -> None:
+    test_env.write_files(
+        [
+            *get_source_code("pass"),
+            (
+                "conftest.py",
+                """
+                from karva import fixture
+                from src import Calculator
+
+                @fixture(scope="session")
+                def session_calculator() -> Calculator:
+                    print("Session calculator initialized")
+                    return Calculator()""",
+            ),
+            (
+                "tests/conftest.py",
+                """
+                from karva import fixture
+                from src import Calculator
+
+                @fixture(scope="package")
+                def package_calculator(session_calculator: Calculator) -> Calculator:
+                    print("Package calculator initialized")
+                    session_calculator.add(1, 1)
+                    return session_calculator""",
+            ),
+            (
+                "tests/inner/conftest.py",
+                """
+                from karva import fixture
+                from src import Calculator
+
+                @fixture(scope="module")
+                def module_calculator(package_calculator: Calculator) -> Calculator:
+                    print("Module calculator initialized")
+                    package_calculator.add(2, 2)
+                    return package_calculator""",
+            ),
+            (
+                "tests/inner/test_calculator.py",
+                """
+                from src import Calculator
+
+                def test_calculator_chain(module_calculator: Calculator) -> None:
+                    assert module_calculator.add(1, 2) == 3
+
+                def test_calculator_chain_2(module_calculator: Calculator) -> None:
+                    assert module_calculator.add(3, 4) == 7""",
+            ),
+        ],
+    )
+
+    assert (
+        test_env.run_test()
+        == """success: true
+exit_code: 0
+----- stdout -----
+All checks passed!
+Session calculator initialized
+Package calculator initialized
+Module calculator initialized
+
+----- stderr -----"""
+    )
+    test_env.cleanup()
+
+
+def test_complex_dependency_chain(test_env: TestEnv) -> None:
+    test_env.write_files(
+        [
+            *get_source_code("pass"),
+            (
+                "tests/conftest.py",
+                """
+                from karva import fixture
+                from src import Calculator
+
+                @fixture
+                def base_calculator() -> Calculator:
+                    print("Base calculator initialized")
+                    return Calculator()
+
+                @fixture
+                def add_calculator(base_calculator: Calculator) -> Calculator:
+                    print("Add calculator initialized")
+                    base_calculator.add(1, 1)
+                    return base_calculator
+
+                @fixture
+                def multiply_calculator(add_calculator: Calculator) -> Calculator:
+                    print("Multiply calculator initialized")
+                    add_calculator.multiply(2, 2)
+                    return add_calculator
+
+                @fixture
+                def final_calculator(multiply_calculator: Calculator, base_calculator: Calculator) -> Calculator:
+                    print("Final calculator initialized")
+                    return multiply_calculator""",
+            ),
+            (
+                "tests/test_calculator.py",
+                """
+                from src import Calculator
+
+                def test_complex_chain(final_calculator: Calculator) -> None:
+                    assert final_calculator.add(1, 2) == 3
+                    assert final_calculator.multiply(2, 3) == 6""",
+            ),
+        ],
+    )
+
+    assert (
+        test_env.run_test()
+        == """success: true
+exit_code: 0
+----- stdout -----
+All checks passed!
+Base calculator initialized
+Add calculator initialized
+Multiply calculator initialized
+Final calculator initialized
+
+----- stderr -----"""
+    )
+    test_env.cleanup()
+
+
+def test_mixed_scope_dependencies(test_env: TestEnv) -> None:
+    test_env.write_files(
+        [
+            *get_source_code("pass"),
+            (
+                "conftest.py",
+                """
+                from karva import fixture
+                from src import Calculator
+
+                @fixture(scope="session")
+                def session_base() -> Calculator:
+                    print("Session base initialized")
+                    return Calculator()""",
+            ),
+            (
+                "tests/conftest.py",
+                """
+                from karva import fixture
+                from src import Calculator
+
+                @fixture(scope="package")
+                def package_calc(session_base: Calculator) -> Calculator:
+                    print("Package calc initialized")
+                    return session_base
+
+                @fixture
+                def function_calc(package_calc: Calculator) -> Calculator:
+                    print("Function calc initialized")
+                    return package_calc""",
+            ),
+            (
+                "tests/test_calculator.py",
+                """
+                from src import Calculator
+
+                def test_mixed_scopes_1(function_calc: Calculator) -> None:
+                    assert function_calc.add(1, 2) == 3
+
+                def test_mixed_scopes_2(function_calc: Calculator) -> None:
+                    assert function_calc.multiply(2, 3) == 6""",
+            ),
+        ],
+    )
+
+    assert (
+        test_env.run_test()
+        == """success: true
+exit_code: 0
+----- stdout -----
+All checks passed!
+Session base initialized
+Package calc initialized
+Function calc initialized
+Function calc initialized
+
+----- stderr -----"""
+    )
+    test_env.cleanup()
+
+
+def test_diamond_dependency(test_env: TestEnv) -> None:
+    test_env.write_files(
+        [
+            *get_source_code("pass"),
+            (
+                "tests/conftest.py",
+                """
+                from karva import fixture
+                from src import Calculator
+
+                @fixture
+                def base_calc() -> Calculator:
+                    print("Base calc initialized")
+                    return Calculator()
+
+                @fixture
+                def left_calc(base_calc: Calculator) -> Calculator:
+                    print("Left calc initialized")
+                    base_calc.add(1, 1)
+                    return base_calc
+
+                @fixture
+                def right_calc(base_calc: Calculator) -> Calculator:
+                    print("Right calc initialized")
+                    base_calc.multiply(2, 2)
+                    return base_calc
+
+                @fixture
+                def final_calc(left_calc: Calculator, right_calc: Calculator) -> Calculator:
+                    print("Final calc initialized")
+                    return left_calc""",
+            ),
+            (
+                "tests/test_calculator.py",
+                """
+                from src import Calculator
+
+                def test_diamond(final_calc: Calculator) -> None:
+                    assert final_calc.add(1, 2) == 3""",
+            ),
+        ],
+    )
+
+    assert (
+        test_env.run_test()
+        == """success: true
+exit_code: 0
+----- stdout -----
+All checks passed!
+Base calc initialized
+Left calc initialized
+Right calc initialized
+Final calc initialized
 
 ----- stderr -----"""
     )

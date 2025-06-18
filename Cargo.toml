@@ -8,7 +8,7 @@ rust-version = "1.85"
 homepage = "https://github.com/MatthewMckee4/karva"
 documentation = "https://github.com/MatthewMckee4/karva"
 repository = "https://github.com/MatthewMckee4/karva"
-authors = ["Matthew McKee <matthewmckee4@gmail.com>"]
+authors = ["Matthew McKee <matthewmckee4@yahoo.co.uk>"]
 license = "MIT"
 
 [workspace.dependencies]
@@ -38,6 +38,7 @@ markdown = { version = "1.0.0" }
 notify = { version = "8.0.0" }
 pretty_assertions = { version = "1.4.1" }
 pyo3 = { version = "0.25.0", features = ["auto-initialize"] }
+rand = { version = "0.9.1" }
 regex = "1"
 ruff_python_ast = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_python_parser = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
@@ -72,3 +73,4 @@ too_many_lines = "allow"
 significant_drop_tightening = "allow"
 format_push_string = "allow"
 mutable_key_type = "allow"
+similar_names = "allow"

@@ -1,11 +1,7 @@
-use karva_project::{path::SystemPathBuf, utils::module_name};
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::{
-    fixture::{Fixture, FixtureScope, python::FixtureFunctionDefinition},
-    utils::recursive_add_to_sys_path,
-};
+use crate::fixture::{Fixture, FixtureScope, python::FixtureFunctionDefinition};
 
 #[derive(Default)]
 pub struct FixtureExtractor {}
@@ -83,17 +79,9 @@ impl FixtureExtractor {
     }
 
     pub fn try_from_function(
-        py: &Python<'_>,
         val: &StmtFunctionDef,
-        path: &SystemPathBuf,
-        cwd: &SystemPathBuf,
+        py_module: &Bound<'_, PyModule>,
     ) -> Result<Fixture, String> {
-        recursive_add_to_sys_path(py, path, cwd).map_err(|e| e.to_string())?;
-
-        let module = module_name(cwd, path);
-
-        let py_module = py.import(module).map_err(|e| e.to_string())?;
-
         let function = py_module
             .getattr(val.name.to_string())
             .map_err(|e| e.to_string())?;

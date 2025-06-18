@@ -155,6 +155,10 @@ impl<'proj> Discoverer<'proj> {
                 continue;
             }
 
+            if current_path.file_name() == Some("__pycache__") {
+                continue;
+            }
+
             match entry.file_type() {
                 Some(file_type) if file_type.is_dir() => {
                     let subpackage = self.discover_directory(&current_path, discovery_diagnostics);
@@ -206,7 +210,7 @@ mod tests {
         let (session, _) = discoverer.discover();
 
         assert_eq!(
-            Into::<StringPackage>::into(&session),
+            session.display(),
             StringPackage {
                 modules: HashMap::from([(
                     "test".to_string(),
@@ -226,15 +230,21 @@ mod tests {
         let env = TestEnv::new();
         let path = env.create_dir("test_dir");
 
-        env.create_file("test_dir/test_file1.py", "def test_function1(): pass");
-        env.create_file("test_dir/test_file2.py", "def function2(): pass");
+        env.create_file(
+            path.join("test_file1.py").as_std_path(),
+            "def test_function1(): pass",
+        );
+        env.create_file(
+            path.join("test_file2.py").as_std_path(),
+            "def function2(): pass",
+        );
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = Discoverer::new(&project);
         let (session, _) = discoverer.discover();
 
         assert_eq!(
-            Into::<StringPackage>::into(&session),
+            session.display(),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
@@ -258,22 +268,28 @@ mod tests {
     #[test]
     fn test_discover_files_with_gitignore() {
         let env = TestEnv::new();
-        let path = env.create_dir("tests");
+        let test_dir = env.create_tests_dir();
 
-        env.create_file(".gitignore", "tests/test_file2.py\n");
-        env.create_file("tests/test_file1.py", "def test_function1(): pass");
-        env.create_file("tests/test_file2.py", "def test_function2(): pass");
+        env.create_file(
+            test_dir.join("test_file1.py").as_std_path(),
+            "def test_function1(): pass",
+        );
+        env.create_file(
+            test_dir.join("test_file2.py").as_std_path(),
+            "def test_function2(): pass",
+        );
+        env.create_file(test_dir.join(".gitignore").as_std_path(), "test_file2.py");
 
-        let project = Project::new(env.cwd(), vec![path]);
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
         let discoverer = Discoverer::new(&project);
         let (session, _) = discoverer.discover();
 
         assert_eq!(
-            Into::<StringPackage>::into(&session),
+            session.display(),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    "tests".to_string(),
+                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file1".to_string(),
@@ -293,27 +309,33 @@ mod tests {
     #[test]
     fn test_discover_files_with_nested_directories() {
         let env = TestEnv::new();
-        let path = env.create_dir("tests");
-        env.create_dir("tests/nested");
-        env.create_dir("tests/nested/deeper");
+        let test_dir = env.create_tests_dir();
+        env.create_dir(test_dir.join("nested").as_std_path());
+        env.create_dir(test_dir.join("nested/deeper").as_std_path());
 
-        env.create_file("tests/test_file1.py", "def test_function1(): pass");
-        env.create_file("tests/nested/test_file2.py", "def test_function2(): pass");
         env.create_file(
-            "tests/nested/deeper/test_file3.py",
+            test_dir.join("test_file1.py").as_std_path(),
+            "def test_function1(): pass",
+        );
+        env.create_file(
+            test_dir.join("nested/test_file2.py").as_std_path(),
+            "def test_function2(): pass",
+        );
+        env.create_file(
+            test_dir.join("nested/deeper/test_file3.py").as_std_path(),
             "def test_function3(): pass",
         );
 
-        let project = Project::new(env.cwd(), vec![path]);
+        let project = Project::new(env.cwd(), vec![test_dir.clone()]);
         let discoverer = Discoverer::new(&project);
         let (session, _) = discoverer.discover();
 
         assert_eq!(
-            Into::<StringPackage>::into(&session),
+            session.display(),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    "tests".to_string(),
+                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file1".to_string(),
@@ -374,7 +396,7 @@ def not_a_test(): pass
         let (session, _) = discoverer.discover();
 
         assert_eq!(
-            Into::<StringPackage>::into(&session),
+            session.display(),
             StringPackage {
                 modules: HashMap::from([(
                     "test_file".to_string(),
@@ -403,7 +425,7 @@ def not_a_test(): pass
         let (session, _) = discoverer.discover();
 
         assert_eq!(
-            Into::<StringPackage>::into(&session),
+            session.display(),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::new(),
@@ -422,7 +444,7 @@ def not_a_test(): pass
         let (session, _) = discoverer.discover();
 
         assert_eq!(
-            Into::<StringPackage>::into(&session),
+            session.display(),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::new(),
@@ -445,12 +467,13 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![path]).with_options(ProjectOptions {
             test_prefix: "check".to_string(),
+            ..Default::default()
         });
         let discoverer = Discoverer::new(&project);
         let (session, _) = discoverer.discover();
 
         assert_eq!(
-            Into::<StringPackage>::into(&session),
+            session.display(),
             StringPackage {
                 modules: HashMap::from([(
                     "test_file".to_string(),
@@ -473,15 +496,18 @@ def test_function(): pass
         let env = TestEnv::new();
         let file1 = env.create_file("test1.py", "def test_function1(): pass");
         let file2 = env.create_file("test2.py", "def test_function2(): pass");
-        let dir = env.create_dir("tests");
-        env.create_file("tests/test3.py", "def test_function3(): pass");
+        let test_dir = env.create_tests_dir();
+        env.create_file(
+            test_dir.join("test3.py").as_std_path(),
+            "def test_function3(): pass",
+        );
 
-        let project = Project::new(env.cwd(), vec![file1, file2, dir]);
+        let project = Project::new(env.cwd(), vec![file1, file2, test_dir.clone()]);
         let discoverer = Discoverer::new(&project);
         let (session, _) = discoverer.discover();
 
         assert_eq!(
-            Into::<StringPackage>::into(&session),
+            session.display(),
             StringPackage {
                 modules: HashMap::from([
                     (
@@ -500,7 +526,7 @@ def test_function(): pass
                     )
                 ]),
                 packages: HashMap::from([(
-                    "tests".to_string(),
+                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test3".to_string(),
@@ -520,20 +546,21 @@ def test_function(): pass
     #[test]
     fn test_paths_shadowed_by_other_paths_are_not_discovered_twice() {
         let env = TestEnv::new();
+        let test_dir = env.create_tests_dir();
         let path = env.create_file(
-            "tests/test_file.py",
+            test_dir.join("test_file.py").as_std_path(),
             "def test_function(): pass\ndef test_function2(): pass",
         );
 
-        let project = Project::new(env.cwd(), vec![path.clone(), path]);
+        let project = Project::new(env.cwd(), vec![path, test_dir.clone()]);
         let discoverer = Discoverer::new(&project);
         let (session, _) = discoverer.discover();
         assert_eq!(
-            Into::<StringPackage>::into(&session),
+            session.display(),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    "tests".to_string(),
+                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file".to_string(),
@@ -556,18 +583,25 @@ def test_function(): pass
     #[test]
     fn test_tests_same_name_different_module_are_discovered() {
         let env = TestEnv::new();
-        let path = env.create_file("tests/test_file.py", "def test_function(): pass");
-        let path2 = env.create_file("tests/test_file2.py", "def test_function(): pass");
+        let test_dir = env.create_tests_dir();
+        let path = env.create_file(
+            test_dir.join("test_file.py").as_std_path(),
+            "def test_function(): pass",
+        );
+        let path2 = env.create_file(
+            test_dir.join("test_file2.py").as_std_path(),
+            "def test_function(): pass",
+        );
 
         let project = Project::new(env.cwd(), vec![path, path2]);
         let discoverer = Discoverer::new(&project);
         let (session, _) = discoverer.discover();
         assert_eq!(
-            Into::<StringPackage>::into(&session),
+            session.display(),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    "tests".to_string(),
+                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
                     StringPackage {
                         modules: HashMap::from([
                             (
@@ -596,19 +630,26 @@ def test_function(): pass
     #[test]
     fn test_discover_files_with_conftest_explicit_path() {
         let env = TestEnv::new();
-        let conftest_path = env.create_file("tests/conftest.py", "def test_function(): pass");
-        env.create_file("tests/test_file.py", "def test_function2(): pass");
+        let test_dir = env.create_tests_dir();
+        let conftest_path = env.create_file(
+            test_dir.join("conftest.py").as_std_path(),
+            "def test_function(): pass",
+        );
+        env.create_file(
+            test_dir.join("test_file.py").as_std_path(),
+            "def test_function2(): pass",
+        );
 
         let project = Project::new(env.cwd(), vec![conftest_path]);
         let discoverer = Discoverer::new(&project);
         let (session, _) = discoverer.discover();
 
         assert_eq!(
-            Into::<StringPackage>::into(&session),
+            session.display(),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    "tests".to_string(),
+                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "conftest".to_string(),
@@ -628,20 +669,26 @@ def test_function(): pass
     #[test]
     fn test_discover_files_with_conftest_parent_path() {
         let env = TestEnv::new();
-        let path = env.create_dir("tests");
-        env.create_file("tests/conftest.py", "def test_function(): pass");
-        env.create_file("tests/test_file.py", "def test_function2(): pass");
+        let test_dir = env.create_tests_dir();
+        env.create_file(
+            test_dir.join("conftest.py").as_std_path(),
+            "def test_function(): pass",
+        );
+        env.create_file(
+            test_dir.join("test_file.py").as_std_path(),
+            "def test_function2(): pass",
+        );
 
-        let project = Project::new(env.cwd(), vec![path]);
+        let project = Project::new(env.cwd(), vec![test_dir.clone()]);
         let discoverer = Discoverer::new(&project);
         let (session, _) = discoverer.discover();
 
         assert_eq!(
-            Into::<StringPackage>::into(&session),
+            session.display(),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    "tests".to_string(),
+                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
                     StringPackage {
                         modules: HashMap::from([
                             (
@@ -671,18 +718,22 @@ def test_function(): pass
     fn test_discover_files_with_cwd_path() {
         let env = TestEnv::new();
         let path = env.cwd();
-        env.create_file("tests/test_file.py", "def test_function(): pass");
+        let test_dir = env.create_tests_dir();
+        env.create_file(
+            test_dir.join("test_file.py").as_std_path(),
+            "def test_function(): pass",
+        );
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = Discoverer::new(&project);
         let (session, _) = discoverer.discover();
 
         assert_eq!(
-            Into::<StringPackage>::into(&session),
+            session.display(),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    "tests".to_string(),
+                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file".to_string(),
@@ -697,5 +748,34 @@ def test_function(): pass
             }
         );
         assert_eq!(session.total_test_cases(), 1);
+    }
+
+    #[test]
+    fn test_discover_function_inside_function() {
+        let env = TestEnv::new();
+        let path = env.create_file(
+            "test_file.py",
+            "def test_function():
+    def test_function2(): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![path]);
+        let discoverer = Discoverer::new(&project);
+
+        let (session, _) = discoverer.discover();
+
+        assert_eq!(
+            session.display(),
+            StringPackage {
+                modules: HashMap::from([(
+                    "test_file".to_string(),
+                    StringModule {
+                        test_cases: HashSet::from(["test_function".to_string()]),
+                        fixtures: HashSet::new(),
+                    },
+                )]),
+                packages: HashMap::new(),
+            }
+        );
     }
 }

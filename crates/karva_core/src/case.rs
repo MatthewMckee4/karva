@@ -10,15 +10,26 @@ use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
     diagnostic::{Diagnostic, DiagnosticScope},
-    fixture::TestCaseFixtures,
+    fixture::{FixtureManager, HasFunctionDefinition, UsesFixture},
+    utils::Upcast,
 };
 
 /// A test case represents a single test function.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TestCase {
     path: SystemPathBuf,
     cwd: SystemPathBuf,
     function_definition: StmtFunctionDef,
+}
+
+impl HasFunctionDefinition for TestCase {
+    fn function_definition(&self) -> &StmtFunctionDef {
+        &self.function_definition
+    }
+
+    fn name(&self) -> &str {
+        &self.function_definition.name
+    }
 }
 
 impl TestCase {
@@ -51,29 +62,11 @@ impl TestCase {
     }
 
     #[must_use]
-    pub const fn function_definition(&self) -> &StmtFunctionDef {
-        &self.function_definition
-    }
-
-    #[must_use]
-    pub fn get_required_fixtures(&self) -> Vec<String> {
-        let mut required_fixtures = Vec::new();
-        for parameter in self
-            .function_definition
-            .parameters
-            .iter_non_variadic_params()
-        {
-            required_fixtures.push(parameter.parameter.name.as_str().to_string());
-        }
-        required_fixtures
-    }
-
-    #[must_use]
     pub fn run_test(
         &self,
         py: Python<'_>,
         module: &Bound<'_, PyModule>,
-        fixtures: &TestCaseFixtures<'_>,
+        fixture_manager: &FixtureManager<'_>,
     ) -> Option<Diagnostic> {
         let result: PyResult<Bound<'_, PyAny>> = {
             let name: &str = &self.function_definition().name;
@@ -88,7 +81,7 @@ impl TestCase {
                     ));
                 }
             };
-            let required_fixture_names = self.get_required_fixtures();
+            let required_fixture_names = self.get_required_fixture_names();
             if required_fixture_names.is_empty() {
                 function.call0()
             } else {
@@ -96,7 +89,7 @@ impl TestCase {
                 let required_fixtures = required_fixture_names
                     .iter()
                     .filter_map(|fixture| {
-                        fixtures.get_fixture(fixture).map_or_else(
+                        fixture_manager.get_fixture(fixture).map_or_else(
                             || {
                                 diagnostics.push(Diagnostic::fixture_not_found(
                                     fixture,
@@ -124,12 +117,6 @@ impl TestCase {
             Ok(_) => None,
             Err(err) => Some(Diagnostic::from_test_fail(py, &err, self)),
         }
-    }
-
-    #[must_use]
-    pub fn uses_fixture(&self, fixture_name: &str) -> bool {
-        self.get_required_fixtures()
-            .contains(&fixture_name.to_string())
     }
 }
 
@@ -159,14 +146,37 @@ impl PartialEq for TestCase {
 
 impl Eq for TestCase {}
 
+impl<'a> Upcast<Vec<&'a dyn UsesFixture>> for Vec<&'a TestCase> {
+    fn upcast(self) -> Vec<&'a dyn UsesFixture> {
+        self.into_iter().map(|tc| tc as &dyn UsesFixture).collect()
+    }
+}
+
+impl<'a> Upcast<Vec<&'a dyn HasFunctionDefinition>> for Vec<&'a TestCase> {
+    fn upcast(self) -> Vec<&'a dyn HasFunctionDefinition> {
+        self.into_iter()
+            .map(|tc| tc as &dyn HasFunctionDefinition)
+            .collect()
+    }
+}
+
+impl std::fmt::Debug for TestCase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TestCase(path: {}, name: {})", self.path, self.name())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
 
     use karva_project::{project::Project, tests::TestEnv, utils::module_name};
     use pyo3::{prelude::*, types::PyModule};
 
-    use crate::{discovery::Discoverer, fixture::TestCaseFixtures, utils::add_to_sys_path};
+    use crate::{
+        discovery::Discoverer,
+        fixture::{FixtureManager, HasFunctionDefinition, UsesFixture},
+        utils::add_to_sys_path,
+    };
 
     #[test]
     fn test_case_construction_and_getters() {
@@ -198,7 +208,7 @@ mod tests {
 
         let test_case = session.test_cases()[0].clone();
 
-        let required_fixtures = test_case.get_required_fixtures();
+        let required_fixtures = test_case.get_required_fixture_names();
         assert_eq!(required_fixtures.len(), 2);
         assert!(required_fixtures.contains(&"fixture1".to_string()));
         assert!(required_fixtures.contains(&"fixture2".to_string()));
@@ -273,9 +283,8 @@ mod tests {
         Python::with_gil(|py| {
             add_to_sys_path(&py, &env.cwd()).unwrap();
             let module = PyModule::import(py, module_name(&env.cwd(), &path)).unwrap();
-            let temp_fixtures = HashMap::new();
-            let fixtures = TestCaseFixtures::new(&temp_fixtures);
-            let result = test_case.run_test(py, &module, &fixtures);
+            let fixture_manager = FixtureManager::new();
+            let result = test_case.run_test(py, &module, &fixture_manager);
             assert!(result.is_none());
         });
     }

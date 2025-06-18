@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use karva_project::project::Project;
 use pyo3::prelude::*;
 
@@ -9,10 +7,10 @@ use crate::{
         reporter::{DummyReporter, Reporter},
     },
     discovery::Discoverer,
-    fixture::{CalledFixtures, FixtureScope, HasFixtures, TestCaseFixtures},
+    fixture::{FixtureManager, FixtureScope, UsesFixture},
     module::Module,
     package::Package,
-    utils::add_to_sys_path,
+    utils::{Upcast, add_to_sys_path, set_output},
 };
 
 mod diagnostic;
@@ -53,6 +51,8 @@ impl<'proj> StandardTestRunner<'proj> {
 
         diagnostics.extend(discovery_diagnostics);
         Python::with_gil(|py| {
+            let _ = set_output(py, self.project.options.show_output);
+
             let cwd = self.project.cwd();
 
             if let Err(err) = add_to_sys_path(&py, cwd) {
@@ -65,14 +65,23 @@ impl<'proj> StandardTestRunner<'proj> {
                 return;
             }
 
-            let session_fixtures =
-                session.called_fixtures(py, &[FixtureScope::Session], &session.test_cases());
+            let mut fixture_manager = FixtureManager::new();
+
+            let upcast_test_cases: Vec<&dyn UsesFixture> = session.test_cases().upcast();
+
+            fixture_manager.add_fixtures(
+                py,
+                &[],
+                &session,
+                &[FixtureScope::Session],
+                upcast_test_cases.as_slice(),
+            );
 
             self.test_package(
                 py,
                 &session,
                 &[],
-                &session_fixtures,
+                &mut fixture_manager,
                 &mut diagnostics,
                 reporter,
             );
@@ -90,48 +99,43 @@ impl<'proj> StandardTestRunner<'proj> {
         &self,
         py: Python<'a>,
         module: &'a Module<'a>,
-        package: &'a Package<'a>,
-        parents: &'a [&'a Package<'a>],
-        parent_fixtures: &'a CalledFixtures<'a>,
+        parents: &[&'a Package<'a>],
+        fixture_manager: &mut FixtureManager<'a>,
         diagnostics: &mut Vec<Diagnostic>,
         reporter: &dyn Reporter,
     ) {
-        if module.total_test_cases() == 0 {
+        let module_test_cases = module.dependencies();
+        let upcast_module_test_cases: Vec<&dyn UsesFixture> = module_test_cases.upcast();
+        if upcast_module_test_cases.is_empty() {
             return;
         }
 
-        let mut current_module_fixtures: CalledFixtures<'a> = HashMap::new();
+        let mut parents_above_current_parent = parents.to_vec();
+        let mut i = parents.len();
+        while i > 0 {
+            i -= 1;
+            let parent = parents[i];
+            parents_above_current_parent.truncate(i);
+            fixture_manager.add_fixtures(
+                py,
+                &parents_above_current_parent,
+                parent,
+                &[FixtureScope::Module],
+                upcast_module_test_cases.as_slice(),
+            );
+        }
 
-        let module_fixtures = module.called_fixtures(
+        fixture_manager.add_fixtures(
             py,
+            parents,
+            module,
             &[
                 FixtureScope::Module,
                 FixtureScope::Package,
                 FixtureScope::Session,
             ],
-            &module.test_cases(),
+            upcast_module_test_cases.as_slice(),
         );
-        for (name, fixture) in module_fixtures {
-            current_module_fixtures.insert(name, fixture);
-        }
-
-        let package_fixtures =
-            package.called_fixtures(py, &[FixtureScope::Module], &module.test_cases());
-        for (name, fixture) in package_fixtures {
-            current_module_fixtures.insert(name, fixture);
-        }
-
-        for parent in parents {
-            let parent_fixtures =
-                parent.called_fixtures(py, &[FixtureScope::Module], &module.test_cases());
-            for (name, fixture) in parent_fixtures {
-                current_module_fixtures.insert(name, fixture);
-            }
-        }
-
-        for (name, fixture) in parent_fixtures {
-            current_module_fixtures.insert(name.clone(), fixture.clone());
-        }
 
         let py_module = match PyModule::import(py, module.name()) {
             Ok(py_module) => py_module,
@@ -147,43 +151,45 @@ impl<'proj> StandardTestRunner<'proj> {
         };
 
         for function in module.test_cases() {
-            let mut current_function_fixtures: CalledFixtures<'a> = HashMap::new();
+            let test_cases = [function].to_vec();
+            let upcast_test_cases: Vec<&dyn UsesFixture> = test_cases.upcast();
 
-            let function_module_fixtures =
-                module.called_fixtures(py, &[FixtureScope::Function], &[function]);
-            for (name, fixture) in function_module_fixtures {
-                current_function_fixtures.insert(name, fixture);
+            let mut parents_above_current_parent = parents.to_vec();
+            let mut i = parents.len();
+            while i > 0 {
+                i -= 1;
+                let parent = parents[i];
+                parents_above_current_parent.truncate(i);
+                fixture_manager.add_fixtures(
+                    py,
+                    &parents_above_current_parent,
+                    parent,
+                    &[FixtureScope::Function],
+                    upcast_test_cases.as_slice(),
+                );
             }
 
-            let function_package_fixtures =
-                package.called_fixtures(py, &[FixtureScope::Function], &[function]);
-            for (name, fixture) in function_package_fixtures {
-                current_function_fixtures.insert(name, fixture);
-            }
-
-            for parent in parents {
-                let parent_fixtures =
-                    parent.called_fixtures(py, &[FixtureScope::Function], &[function]);
-                for (name, fixture) in parent_fixtures {
-                    current_function_fixtures.insert(name, fixture);
-                }
-            }
-
-            for (name, fixture) in &current_module_fixtures {
-                current_function_fixtures.insert(name.clone(), fixture.clone());
-            }
+            fixture_manager.add_fixtures(
+                py,
+                parents,
+                module,
+                &[FixtureScope::Function],
+                upcast_test_cases.as_slice(),
+            );
 
             let test_name = function.to_string();
             tracing::info!("Running test: {}", test_name);
 
-            let test_case_fixtures = TestCaseFixtures::new(&current_function_fixtures);
-            if let Some(result) = function.run_test(py, &py_module, &test_case_fixtures) {
+            if let Some(result) = function.run_test(py, &py_module, fixture_manager) {
                 diagnostics.push(result);
                 tracing::info!("Test {} failed", test_name);
             } else {
                 tracing::info!("Test {} passed", test_name);
             }
+            fixture_manager.reset_function_fixtures();
         }
+
+        fixture_manager.reset_module_fixtures();
 
         reporter.report();
     }
@@ -192,51 +198,50 @@ impl<'proj> StandardTestRunner<'proj> {
         &self,
         py: Python<'a>,
         package: &'a Package<'a>,
-        parents: &'a [&'a Package<'a>],
-        parent_fixtures: &'a CalledFixtures<'a>,
+        parents: &[&'a Package<'a>],
+        fixture_manager: &mut FixtureManager<'a>,
         diagnostics: &mut Vec<Diagnostic>,
         reporter: &dyn Reporter,
     ) {
         if package.total_test_cases() == 0 {
             return;
         }
+        let package_test_cases = package.dependencies();
 
-        let mut current_package_fixtures: CalledFixtures<'a> = HashMap::new();
+        let upcast_package_test_cases: Vec<&dyn UsesFixture> = package_test_cases.upcast();
 
-        let package_fixtures = package.called_fixtures(
+        let mut parents_above_current_parent = parents.to_vec();
+        let mut i = parents.len();
+        while i > 0 {
+            i -= 1;
+            let parent = parents[i];
+            parents_above_current_parent.truncate(i);
+            fixture_manager.add_fixtures(
+                py,
+                &parents_above_current_parent,
+                parent,
+                &[FixtureScope::Package],
+                upcast_package_test_cases.as_slice(),
+            );
+        }
+
+        fixture_manager.add_fixtures(
             py,
+            parents,
+            package,
             &[FixtureScope::Package, FixtureScope::Session],
-            &package.direct_test_cases(),
+            upcast_package_test_cases.as_slice(),
         );
 
-        for (name, fixture) in package_fixtures {
-            current_package_fixtures.insert(name, fixture);
-        }
-
-        for parent in parents {
-            let parent_fixtures =
-                parent.called_fixtures(py, &[FixtureScope::Package], &package.direct_test_cases());
-
-            for (name, fixture) in parent_fixtures {
-                current_package_fixtures.insert(name, fixture);
-            }
-        }
-
-        for (name, fixture) in parent_fixtures {
-            current_package_fixtures.insert(name.clone(), fixture.clone());
-        }
-
-        let mut new_parents = Vec::new();
-        new_parents.extend_from_slice(parents);
+        let mut new_parents = parents.to_vec();
         new_parents.push(package);
 
         for module in package.modules().values() {
             self.test_module(
                 py,
                 module,
-                package,
-                parents,
-                &current_package_fixtures,
+                &new_parents,
+                fixture_manager,
                 diagnostics,
                 reporter,
             );
@@ -247,11 +252,12 @@ impl<'proj> StandardTestRunner<'proj> {
                 py,
                 sub_package,
                 &new_parents,
-                &current_package_fixtures,
+                fixture_manager,
                 diagnostics,
                 reporter,
             );
         }
+        fixture_manager.reset_package_fixtures();
     }
 }
 
@@ -274,5 +280,54 @@ impl TestRunner for Project {
     fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
         let test_runner = StandardTestRunner::new(self);
         test_runner.test_with_reporter(reporter)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use karva_project::tests::{MockFixture, TestEnv, mock_fixture};
+
+    use super::*;
+    #[test]
+    fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
+     {
+        let env = TestEnv::new();
+
+        let fixtures = mock_fixture(&[
+            MockFixture {
+                name: "x".to_string(),
+                scope: "module".to_string(),
+                body: "return 1".to_string(),
+                args: String::new(),
+            },
+            MockFixture {
+                name: "y".to_string(),
+                scope: "function".to_string(),
+                body: "return 1".to_string(),
+                args: "x".to_string(),
+            },
+            MockFixture {
+                name: "z".to_string(),
+                scope: "function".to_string(),
+                body: "return 1".to_string(),
+                args: "x, y".to_string(),
+            },
+        ]);
+        let tests_dir = env.create_tests_dir();
+        let inner_dir = tests_dir.join("inner");
+
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixtures);
+        env.create_file(
+            inner_dir.join("test_1.py").as_std_path(),
+            "def test_1(z): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![tests_dir]);
+
+        let test_runner = StandardTestRunner::new(&project);
+
+        let diagnostics = test_runner.test();
+
+        assert_eq!(diagnostics.diagnostics.len(), 0);
     }
 }

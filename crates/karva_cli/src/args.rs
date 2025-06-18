@@ -38,12 +38,17 @@ pub struct TestCommand {
         default_value = "test"
     )]
     pub(crate) test_prefix: String,
+
+    #[clap(short = 's', long, help = "Show Python stdout during test execution")]
+    pub(crate) show_output: bool,
 }
 
 impl TestCommand {
     pub fn into_options(self) -> ProjectOptions {
         ProjectOptions {
             test_prefix: self.test_prefix,
+            verbosity: self.verbosity.level(),
+            show_output: self.show_output,
         }
     }
 }
