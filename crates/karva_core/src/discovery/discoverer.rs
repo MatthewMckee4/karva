@@ -48,8 +48,9 @@ impl<'proj> Discoverer<'proj> {
                                 session_package.add_module(module);
                             } else {
                                 // If the path is not the cwd, create a package and add the module to it
+                                let package_path = path.parent().unwrap().to_path_buf();
                                 let mut package = self.discover_directory(
-                                    &path,
+                                    &package_path,
                                     &mut discovery_diagnostics,
                                     true,
                                 );
