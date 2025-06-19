@@ -35,9 +35,6 @@ impl<'proj> Discoverer<'proj> {
                 Ok(path) => {
                     match &path {
                         TestPath::File(path) => {
-                            let mut package =
-                                Package::new(path.parent().unwrap().to_path_buf(), self.project);
-
                             let module = self.discover_test_file(
                                 path,
                                 &session_package,
@@ -45,15 +42,8 @@ impl<'proj> Discoverer<'proj> {
                                 false,
                             );
                             if let Some(module) = module {
-                                package.add_module(module);
+                                session_package.add_module(module);
                             }
-                            self.discover_directory(
-                                &mut package,
-                                &session_package,
-                                &mut discovery_diagnostics,
-                                true,
-                            );
-                            session_package.add_package(package);
                         }
                         TestPath::Directory(path) => {
                             let mut package = Package::new(path.clone(), self.project);
