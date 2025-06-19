@@ -1,4 +1,4 @@
-use karva_project::path::PythonTestPathError;
+use karva_project::path::TestPathError;
 use pyo3::prelude::*;
 
 use crate::{
@@ -99,7 +99,7 @@ impl Diagnostic {
     }
 
     #[must_use]
-    pub fn path_error(error: &PythonTestPathError) -> Self {
+    pub fn path_error(error: &TestPathError) -> Self {
         Self::new(
             vec![SubDiagnostic {
                 diagnostic_type: SubDiagnosticType::Error(DiagnosticError::InvalidPath(

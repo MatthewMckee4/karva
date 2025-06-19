@@ -73,13 +73,39 @@ impl<'proj> Package<'proj> {
             return;
         }
 
-        if let Some(existing_module) = self.modules.get_mut(module.path()) {
-            existing_module.update(module);
-        } else {
-            if module.module_type == ModuleType::Configuration {
-                self.configuration_modules.insert(module.path().clone());
+        // If the module path equals our path, add directly to modules
+        if *module.path().parent().unwrap() == **self.path() {
+            if let Some(existing_module) = self.modules.get_mut(module.path()) {
+                existing_module.update(module);
+            } else {
+                if module.module_type == ModuleType::Configuration {
+                    self.configuration_modules.insert(module.path().clone());
+                }
+                self.modules.insert(module.path().clone(), module);
             }
-            self.modules.insert(module.path().clone(), module);
+            return;
+        }
+
+        // Chop off the current path from the start
+        let relative_path = module.path().strip_prefix(self.path()).unwrap();
+        let components: Vec<_> = relative_path.components().collect();
+
+        if components.is_empty() {
+            return;
+        }
+
+        let first_component = components[0];
+        let intermediate_path = self.path().join(first_component.as_str());
+
+        // Try to find existing sub-package and use add_module method
+        if let Some(existing_package) = self.packages.get_mut(&intermediate_path) {
+            existing_package.add_module(module);
+        } else {
+            // If not there, create a new one
+            let mut new_package = Package::new(intermediate_path, self.project);
+            new_package.add_module(module);
+            self.packages
+                .insert(new_package.path().clone(), new_package);
         }
     }
 
@@ -87,6 +113,7 @@ impl<'proj> Package<'proj> {
         self.configuration_modules.insert(module.path().clone());
         self.add_module(module);
     }
+
     pub fn add_package(&mut self, package: Self) {
         if !package.path().starts_with(self.path()) {
             return;
@@ -180,6 +207,24 @@ impl<'proj> Package<'proj> {
         }
 
         cases
+    }
+
+    #[must_use]
+    pub fn contains_path(&self, path: &SystemPathBuf) -> bool {
+        for module in self.modules.values() {
+            if module.path() == path {
+                return true;
+            }
+        }
+        for package in self.packages.values() {
+            if package.path() == path {
+                return true;
+            }
+            if package.contains_path(path) {
+                return true;
+            }
+        }
+        false
     }
 
     // TODO: Rename this

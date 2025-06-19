@@ -7,9 +7,9 @@ use std::{
 
 use camino::{Utf8Path, Utf8PathBuf};
 
-pub mod python_test_path;
+pub mod test_path;
 
-pub use python_test_path::{PythonTestPath, PythonTestPathError};
+pub use test_path::{TestPath, TestPathError};
 
 #[derive(Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct SystemPath(Utf8Path);
