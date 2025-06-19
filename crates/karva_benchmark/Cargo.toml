@@ -16,7 +16,6 @@ name = "karva"
 harness = false
 
 [dependencies]
-anyhow = { workspace = true }
 codspeed-criterion-compat = { workspace = true, default-features = false, optional = true }
 criterion = { workspace = true, default-features = false }
 

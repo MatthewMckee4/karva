@@ -48,9 +48,8 @@ impl<'proj> Discoverer<'proj> {
                                 session_package.add_module(module);
                             } else {
                                 // If the path is not the cwd, create a package and add the module to it
-                                let package_path = path.parent().unwrap().to_path_buf();
                                 let mut package = self.discover_directory(
-                                    &package_path,
+                                    &path,
                                     &mut discovery_diagnostics,
                                     true,
                                 );
@@ -145,13 +144,14 @@ impl<'proj> Discoverer<'proj> {
         path: &SystemPathBuf,
         session_package: &mut Package<'proj>,
         discovery_diagnostics: &mut Vec<Diagnostic>,
-    ) {
-        let mut current_path = path.parent().unwrap().to_path_buf();
+    ) -> Option<()> {
+        let mut current_path = path.parent()?.to_path_buf();
         while current_path.as_std_path() != self.project.cwd().as_std_path() {
             let package = self.discover_directory(&current_path, discovery_diagnostics, true);
             session_package.add_package(package);
-            current_path = current_path.parent().unwrap().to_path_buf();
+            current_path = current_path.parent()?.to_path_buf();
         }
+        Some(())
     }
 
     // Parse and run discovery on a directory

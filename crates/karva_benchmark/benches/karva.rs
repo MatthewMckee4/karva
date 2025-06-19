@@ -1,4 +1,3 @@
-use anyhow::{Context, anyhow};
 use karva_benchmark::{
     FIXTURES, LARGE_LIST_COMPREHENSION, LARGE_SUMMATION, MATH, STRING_CONCATENATION,
     TRUE_ASSERTIONS, TestCase,
@@ -24,20 +23,6 @@ fn create_test_cases() -> Vec<TestCase> {
 fn benchmark_karva(criterion: &mut Criterion) {
     let mut group = criterion.benchmark_group("karva");
 
-    let cwd = {
-        let env_cwd = std::env::current_dir()
-            .context("Failed to get the current working directory")
-            .unwrap();
-        let cwd = env_cwd.parent().unwrap().parent().unwrap();
-        SystemPathBuf::from_path_buf(cwd.to_path_buf())
-            .map_err(|path| {
-                anyhow!(
-                    "The current working directory `{}` contains non-Unicode characters. Karva only supports Unicode paths.",
-                    path.display()
-                )
-            }).unwrap()
-    };
-
     for case in create_test_cases() {
         group.throughput(Throughput::Bytes(case.code().len() as u64));
 
@@ -46,6 +31,9 @@ fn benchmark_karva(criterion: &mut Criterion) {
             &case,
             |b, case| {
                 b.iter(|| {
+                    let cwd =
+                        SystemPathBuf::from_path_buf(case.path().parent().unwrap().to_path_buf())
+                            .unwrap();
                     let project = Project::new(
                         cwd.clone(),
                         [SystemPath::absolute(
