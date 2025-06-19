@@ -208,7 +208,12 @@ impl<'proj> Package<'proj> {
                 true
             }
         });
+
         self.packages.retain(|_, package| !package.is_empty());
+
+        for package in self.packages.values_mut() {
+            package.shrink();
+        }
     }
 
     #[must_use]

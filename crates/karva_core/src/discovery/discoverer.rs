@@ -34,15 +34,26 @@ impl<'proj> Discoverer<'proj> {
             match path {
                 Ok(path) => match path {
                     PythonTestPath::File(path) => {
-                        let test_cases = self.discover_test_file(&path, &mut discovery_diagnostics);
-                        if let Some(module) = test_cases {
+                        self.add_parent_configuration_packages(
+                            &path,
+                            &mut session_package,
+                            &mut discovery_diagnostics,
+                        );
+                        let module = self.discover_test_file(&path, &mut discovery_diagnostics);
+                        if let Some(module) = module {
+                            // If the path is the cwd, add the module to the session package
                             if path.parent().unwrap().as_std_path()
                                 == self.project.cwd().as_std_path()
                             {
                                 session_package.add_module(module);
                             } else {
+                                // If the path is not the cwd, create a package and add the module to it
                                 let package_path = path.parent().unwrap().to_path_buf();
-                                let mut package = Package::new(package_path, self.project);
+                                let mut package = self.discover_directory(
+                                    &package_path,
+                                    &mut discovery_diagnostics,
+                                    true,
+                                );
                                 package.add_module(module);
                                 session_package.add_package(package);
                             }
@@ -50,7 +61,7 @@ impl<'proj> Discoverer<'proj> {
                     }
                     PythonTestPath::Directory(dir_path) => {
                         let package =
-                            self.discover_directory(&dir_path, &mut discovery_diagnostics);
+                            self.discover_directory(&dir_path, &mut discovery_diagnostics, false);
                         if dir_path.as_std_path() == self.project.cwd().as_std_path() {
                             session_package.update(package);
                         } else {
@@ -128,11 +139,30 @@ impl<'proj> Discoverer<'proj> {
         ))
     }
 
+    // This should look from the parent of path to the cwd for configuration files
+    fn add_parent_configuration_packages(
+        &self,
+        path: &SystemPathBuf,
+        session_package: &mut Package<'proj>,
+        discovery_diagnostics: &mut Vec<Diagnostic>,
+    ) -> Option<()> {
+        let mut current_path = path.parent()?.to_path_buf();
+        while current_path.as_std_path() != self.project.cwd().as_std_path() {
+            let package = self.discover_directory(&current_path, discovery_diagnostics, true);
+            session_package.add_package(package);
+            current_path = current_path.parent()?.to_path_buf();
+        }
+        Some(())
+    }
+
     // Parse and run discovery on a directory
+    //
+    // If configuration_only is true, only discover configuration files
     fn discover_directory(
         &self,
         path: &SystemPathBuf,
         discovery_diagnostics: &mut Vec<Diagnostic>,
+        configuration_only: bool,
     ) -> Package<'proj> {
         tracing::debug!("Discovering directory: {}", path);
 
@@ -155,18 +185,21 @@ impl<'proj> Discoverer<'proj> {
                 continue;
             }
 
-            if current_path.file_name() == Some("__pycache__") {
-                continue;
-            }
-
             match entry.file_type() {
                 Some(file_type) if file_type.is_dir() => {
-                    let subpackage = self.discover_directory(&current_path, discovery_diagnostics);
+                    let subpackage = self.discover_directory(
+                        &current_path,
+                        discovery_diagnostics,
+                        configuration_only,
+                    );
                     package.add_package(subpackage);
                 }
                 Some(file_type) if file_type.is_file() => {
                     match ModuleType::from_path(&current_path) {
                         ModuleType::Test => {
+                            if configuration_only {
+                                continue;
+                            }
                             if let Some(module) =
                                 self.discover_test_file(&current_path, discovery_diagnostics)
                             {
@@ -667,7 +700,7 @@ def test_function(): pass
     }
 
     #[test]
-    fn test_discover_files_with_conftest_parent_path() {
+    fn test_discover_files_with_conftest_parent_path_conftest_not_discovered() {
         let env = TestEnv::new();
         let test_dir = env.create_tests_dir();
         env.create_file(
@@ -690,22 +723,13 @@ def test_function(): pass
                 packages: HashMap::from([(
                     test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
                     StringPackage {
-                        modules: HashMap::from([
-                            (
-                                "test_file".to_string(),
-                                StringModule {
-                                    test_cases: HashSet::from(["test_function2".to_string(),]),
-                                    fixtures: HashSet::new(),
-                                },
-                            ),
-                            (
-                                "conftest".to_string(),
-                                StringModule {
-                                    test_cases: HashSet::new(),
-                                    fixtures: HashSet::new(),
-                                },
-                            )
-                        ]),
+                        modules: HashMap::from([(
+                            "test_file".to_string(),
+                            StringModule {
+                                test_cases: HashSet::from(["test_function2".to_string(),]),
+                                fixtures: HashSet::new(),
+                            },
+                        ),]),
                         packages: HashMap::new(),
                     }
                 )]),

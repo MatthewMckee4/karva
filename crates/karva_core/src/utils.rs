@@ -1,5 +1,8 @@
-use karva_project::path::SystemPathBuf;
-use pyo3::{PyResult, Python, types::PyAnyMethods};
+use karva_project::{
+    path::SystemPathBuf,
+    project::{Project, ProjectOptions},
+};
+use pyo3::{PyResult, Python, prelude::*, types::PyAnyMethods};
 use ruff_python_ast::PythonVersion;
 use ruff_source_file::{LineIndex, PositionEncoding};
 use ruff_text_size::TextSize;
@@ -62,8 +65,13 @@ impl<T> Upcast<T> for T {
     }
 }
 
-pub fn set_output(py: Python<'_>, show_output: bool) -> PyResult<()> {
-    if !show_output {
+fn redirect_output<'py>(
+    py: Python<'py>,
+    options: &ProjectOptions,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    if options.show_output {
+        Ok(None)
+    } else {
         let sys = py.import("sys")?;
         let os = py.import("os")?;
         let builtins = py.import("builtins")?;
@@ -78,6 +86,36 @@ pub fn set_output(py: Python<'_>, show_output: bool) -> PyResult<()> {
         }
 
         logging.call_method1("disable", (logging.getattr("CRITICAL")?,))?;
+
+        Ok(Some(null_file))
     }
+}
+
+fn restore_output<'py>(py: Python<'py>, null_file: &Bound<'py, PyAny>) -> PyResult<()> {
+    let sys = py.import("sys")?;
+    let logging = py.import("logging")?;
+
+    for output in ["stdout", "stderr"] {
+        let current_output = sys.getattr(output)?;
+        let close_method = current_output.getattr("close")?;
+        close_method.call0()?;
+        sys.setattr(output, null_file.clone())?;
+    }
+
+    logging.call_method1("disable", (logging.getattr("CRITICAL")?,))?;
     Ok(())
+}
+
+pub fn with_gil<F, R>(project: &Project, f: F) -> R
+where
+    F: for<'py> FnOnce(Python<'py>) -> R,
+{
+    Python::with_gil(|py| {
+        let null_file = redirect_output(py, &project.options);
+        let result = f(py);
+        if let Ok(Some(null_file)) = null_file {
+            let _ = restore_output(py, &null_file);
+        }
+        result
+    })
 }

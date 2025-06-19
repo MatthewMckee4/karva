@@ -24,7 +24,7 @@ fn create_test_cases() -> Vec<TestCase> {
 fn benchmark_karva(criterion: &mut Criterion) {
     let mut group = criterion.benchmark_group("karva");
 
-    let cwd = {
+    let root = {
         let env_cwd = std::env::current_dir()
             .context("Failed to get the current working directory")
             .unwrap();
@@ -46,10 +46,15 @@ fn benchmark_karva(criterion: &mut Criterion) {
             &case,
             |b, case| {
                 b.iter(|| {
+                    let cwd = SystemPath::absolute(
+                        SystemPathBuf::from_path_buf(case.path().parent().unwrap().to_path_buf())
+                            .unwrap(),
+                        &root,
+                    );
                     let project = Project::new(
                         cwd.clone(),
                         [SystemPath::absolute(
-                            SystemPathBuf::from_path_buf(case.path()).unwrap(),
+                            SystemPathBuf::from_path_buf(case.name().into()).unwrap(),
                             &cwd,
                         )]
                         .to_vec(),
