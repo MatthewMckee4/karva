@@ -66,7 +66,7 @@ impl<'proj> Discoverer<'proj> {
                             );
                             session_package.add_package(package);
                         }
-                    };
+                    }
                     self.add_parent_configuration_packages(
                         path.path(),
                         &mut session_package,
