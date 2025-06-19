@@ -1,7 +1,7 @@
 use ruff_python_ast::PythonVersion;
 
 use crate::{
-    path::{PythonTestPath, PythonTestPathError, SystemPathBuf},
+    path::{SystemPathBuf, TestPath, TestPathError},
     verbosity::VerbosityLevel,
 };
 
@@ -64,7 +64,7 @@ impl Project {
     }
 
     #[must_use]
-    pub fn python_test_paths(&self) -> Vec<Result<PythonTestPath, PythonTestPathError>> {
-        self.paths.iter().map(PythonTestPath::new).collect()
+    pub fn test_paths(&self) -> Vec<Result<TestPath, TestPathError>> {
+        self.paths.iter().map(TestPath::new).collect()
     }
 }
