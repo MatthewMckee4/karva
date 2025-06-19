@@ -87,31 +87,37 @@ impl<'proj> Package<'proj> {
         self.configuration_modules.insert(module.path().clone());
         self.add_module(module);
     }
-
     pub fn add_package(&mut self, package: Self) {
         if !package.path().starts_with(self.path()) {
             return;
         }
 
+        // If the package path equals our path, use update method
+        if package.path() == self.path() {
+            self.update(package);
+            return;
+        }
+
+        // Chop off the current path from the start
         let relative_path = package.path().strip_prefix(self.path()).unwrap();
         let components: Vec<_> = relative_path.components().collect();
 
-        if components.len() <= 1 {
-            if let Some(existing_package) = self.packages.get_mut(package.path()) {
-                existing_package.update(package);
-            } else {
-                self.packages.insert(package.path().clone(), package);
-            }
+        if components.is_empty() {
+            return;
+        }
+
+        let first_component = components[0];
+        let intermediate_path = self.path().join(first_component.as_str());
+
+        // Try to find existing sub-package and use add_package method
+        if let Some(existing_package) = self.packages.get_mut(&intermediate_path) {
+            existing_package.add_package(package);
         } else {
-            let first_component = components[0];
-            let intermediate_path = self.path().join(first_component.as_str());
-
-            let intermediate_package = self
-                .packages
-                .entry(intermediate_path.clone())
-                .or_insert_with(|| Package::new(intermediate_path, self.project));
-
-            intermediate_package.add_package(package);
+            // If not there, create a new one
+            let mut new_package = Package::new(intermediate_path, self.project);
+            new_package.add_package(package);
+            self.packages
+                .insert(new_package.path().clone(), new_package);
         }
     }
 

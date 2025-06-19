@@ -42,6 +42,13 @@ impl PythonTestPath {
             unreachable!("Path `{}` is neither a file nor a directory", path)
         }
     }
+
+    #[must_use]
+    pub const fn path(&self) -> &SystemPathBuf {
+        match self {
+            Self::File(path) | Self::Directory(path) => path,
+        }
+    }
 }
 
 #[derive(Debug)]
