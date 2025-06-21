@@ -146,6 +146,8 @@ impl TestFunction {
                         inner_run_result
                             .diagnostics
                             .push(Diagnostic::from_test_diagnostics(fixture_diagnostics));
+                        inner_run_result.result.add_errored();
+                        return inner_run_result;
                     }
 
                     let args = PyTuple::new(py, required_fixtures);

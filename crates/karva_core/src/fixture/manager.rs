@@ -64,7 +64,11 @@ impl FixtureManager {
     }
 
     // TODO: This is a bit of a mess.
-    // This is sued to recursively resolve all of the dependencies of a fixture.
+    // This used to ensure that all of the given dependencies (fixtures) have been called.
+    // This first starts with finding all dependencies of the given fixtures, and resolving and calling them first.
+    //
+    // We take the parents to ensure that if the dependent fixtures are not in the current scope,
+    // we can still look for them in the parents.
     fn ensure_fixture_dependencies<'proj>(
         &mut self,
         py: Python<'_>,
@@ -135,17 +139,11 @@ impl FixtureManager {
                 self.insert_fixture(fixture_return.unbind(), fixture);
             }
             Err(e) => {
-                tracing::error!("Failed to call fixture {}: {}", fixture.name(), e);
+                tracing::debug!("Failed to call fixture {}: {}", fixture.name(), e);
             }
         }
     }
 
-    // TODO: This is a bit of a mess.
-    // This used to ensure that all of the given dependencies (fixtures) have been called.
-    // This first starts with finding all dependencies of the given fixtures, and resolving and calling them first.
-    //
-    // We take the parents to ensure that if the dependent fixtures are not in the current scope,
-    // we can still look for them in the parents.
     pub fn add_fixtures<'proj>(
         &mut self,
         py: Python<'_>,

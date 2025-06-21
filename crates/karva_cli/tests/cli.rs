@@ -104,7 +104,6 @@ fn test_one_test_passes() -> anyhow::Result<()> {
     success: true
     exit_code: 0
     ----- stdout -----
-    -------------
     Passed tests: 1
     All checks passed!
 
@@ -138,7 +137,6 @@ fn test_two_tests_pass() -> anyhow::Result<()> {
     success: true
     exit_code: 0
     ----- stdout -----
-    -------------
     Passed tests: 2
     All checks passed!
 
@@ -226,7 +224,7 @@ fn test_mixed_pass_and_fail() -> anyhow::Result<()> {
     fail[assertion-failed] in <temp_dir>/test_fail.py
      | File "<temp_dir>/test_fail.py", line 3, in test_fail
      |   assert False
-    -------------
+
     Passed tests: 1
     Failed tests: 1
 

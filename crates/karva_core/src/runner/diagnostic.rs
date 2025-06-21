@@ -74,11 +74,10 @@ impl RunDiagnostics {
         let stats = self.stats();
 
         if stats.total() > 0 {
-            let _ = writeln!(writer, "{}", "-------------".bold());
             for (label, num, color) in [
                 ("Passed tests:", stats.passed(), Color::Green),
                 ("Failed tests:", stats.failed(), Color::Red),
-                ("Error tests:", stats.errored(), Color::Yellow),
+                ("Errored tests:", stats.errored(), Color::Yellow),
             ] {
                 Self::log_test_count(writer, label, num, color);
             }

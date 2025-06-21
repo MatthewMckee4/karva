@@ -85,7 +85,7 @@ error[value-error] in tests/test.py
 -------------
 Passed tests: 1
 Failed tests: 1
-Error tests: 1
+Errored tests: 1
 ```
 
 ## Contributing
