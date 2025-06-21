@@ -104,6 +104,8 @@ fn test_one_test_passes() -> anyhow::Result<()> {
     success: true
     exit_code: 0
     ----- stdout -----
+    -------------
+    Passed tests: 1
     All checks passed!
 
     ----- stderr -----
@@ -136,6 +138,8 @@ fn test_two_tests_pass() -> anyhow::Result<()> {
     success: true
     exit_code: 0
     ----- stdout -----
+    -------------
+    Passed tests: 2
     All checks passed!
 
     ----- stderr -----
