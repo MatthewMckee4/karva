@@ -112,5 +112,4 @@ jobs:
           uv sync
       - name: Run karva test
         run: |
-          cd ${{ matrix.folder }}
           uv run karva test -v -s
