@@ -107,4 +107,4 @@ jobs:
           cd ${{ matrix.folder }} && uv venv && uv sync && uv pip install -e ../../
       - name: Run karva test
         run: |
-          cd ${{ matrix.folder }} && uv run pytest karva test -v -s
+          cd ${{ matrix.folder }} && uv run karva test -v -s
