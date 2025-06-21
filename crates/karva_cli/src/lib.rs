@@ -158,8 +158,6 @@ impl ExitStatus {
 #[derive(Default)]
 struct ProgressReporter(Option<indicatif::ProgressBar>);
 
-unsafe impl pyo3::marker::Ungil for ProgressReporter {}
-
 impl karva_core::diagnostic::reporter::Reporter for ProgressReporter {
     fn set(&mut self, n: usize) {
         let progress = indicatif::ProgressBar::new(n as u64);
