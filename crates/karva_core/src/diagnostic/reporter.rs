@@ -1,5 +1,7 @@
+use pyo3::marker::Ungil;
+
 /// A progress reporter.
-pub trait Reporter: Send + Sync {
+pub trait Reporter: Send + Sync + Ungil {
     /// Initialize the reporter with the number of files.
     fn set(&mut self, num: usize);
 

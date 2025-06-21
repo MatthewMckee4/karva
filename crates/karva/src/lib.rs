@@ -1,8 +1,9 @@
 use karva_cli::karva_main;
+pub use karva_core::{
+    fixture::python::{FixtureFunctionDefinition, FixtureFunctionMarker},
+    tag::python::{PyTag, PyTags, PyTestFunction},
+};
 use pyo3::prelude::*;
-
-mod fixture;
-use fixture::{FixtureFunctionDefinition, FixtureFunctionMarker};
 
 #[pyfunction]
 #[must_use]
@@ -27,7 +28,7 @@ pub fn fixture_decorator(
 ) -> PyResult<PyObject> {
     let marker = FixtureFunctionMarker::new(scope.to_string(), name.map(String::from));
     if let Some(f) = func {
-        let fixture_def = marker.call_with_function(py, f)?;
+        let fixture_def = marker.__call__(py, f)?;
         Ok(Py::new(py, fixture_def)?.into_any())
     } else {
         Ok(Py::new(py, marker)?.into_any())
@@ -40,5 +41,8 @@ pub fn _karva(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fixture_decorator, m)?)?;
     m.add_class::<FixtureFunctionMarker>()?;
     m.add_class::<FixtureFunctionDefinition>()?;
+    m.add_class::<PyTag>()?;
+    m.add_class::<PyTags>()?;
+    m.add_class::<PyTestFunction>()?;
     Ok(())
 }

@@ -32,8 +32,8 @@ pub fn recursive_add_to_sys_path(
     let path = path.as_std_path();
     let cwd = cwd.as_std_path();
 
-    let mut current = cwd;
-    while current != path && path.starts_with(current) {
+    let mut current = path;
+    while current != cwd && current.starts_with(cwd) {
         sys_path.call_method1("append", (current.display().to_string(),))?;
         if let Some(parent) = current.parent() {
             current = parent;
@@ -42,9 +42,10 @@ pub fn recursive_add_to_sys_path(
         }
     }
 
-    if current != path {
-        sys_path.call_method1("append", (path.display().to_string(),))?;
+    if current != cwd {
+        sys_path.call_method1("append", (cwd.display().to_string(),))?;
     }
+
     Ok(())
 }
 

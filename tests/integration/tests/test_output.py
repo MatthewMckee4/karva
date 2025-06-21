@@ -14,6 +14,7 @@ def test_std_out_not_redirected(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 1
 All checks passed!
 Hello, world!
 
@@ -34,6 +35,7 @@ def test_std_out_redirected(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 1
 All checks passed!
 
 ----- stderr -----"""

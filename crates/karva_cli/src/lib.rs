@@ -115,17 +115,20 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     let mut stdout = io::stdout().lock();
 
-    if result.is_empty() {
+    let passed = result.is_empty();
+
+    for diagnostic in result.iter() {
+        write!(stdout, "{}", diagnostic.display())?;
+        writeln!(stdout)?;
+    }
+
+    result.display(&mut stdout);
+
+    if passed {
         writeln!(stdout, "{}", "All checks passed!".green().bold())?;
 
         return Ok(ExitStatus::Success);
     }
-
-    for diagnostic in result.iter() {
-        write!(stdout, "{}", diagnostic.display())?;
-    }
-
-    result.display(&mut stdout);
 
     Ok(ExitStatus::Failure)
 }
