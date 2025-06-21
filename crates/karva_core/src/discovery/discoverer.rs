@@ -202,6 +202,10 @@ impl<'proj> Discoverer<'proj> {
 
             match entry.file_type() {
                 Some(file_type) if file_type.is_dir() => {
+                    if configuration_only {
+                        continue;
+                    }
+
                     let mut subpackage = Package::new(current_path.clone(), self.project);
                     self.discover_directory(
                         py,

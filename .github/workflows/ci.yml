@@ -97,6 +97,9 @@ jobs:
         python-version: ["3.9", "3.13"]
         folder: ["tests/integration", "tests/example"]
         os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: ${{ matrix.folder }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -104,7 +107,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Setup integration test environment
         run: |
-          cd ${{ matrix.folder }}
           uv venv
           uv pip install -e ../../
           uv sync
