@@ -115,17 +115,17 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     let mut stdout = io::stdout().lock();
 
-    if result.is_empty() {
-        writeln!(stdout, "{}", "All checks passed!".green().bold())?;
-
-        return Ok(ExitStatus::Success);
-    }
-
     for diagnostic in result.iter() {
         write!(stdout, "{}", diagnostic.display())?;
     }
 
     result.display(&mut stdout);
+
+    if result.is_empty() {
+        writeln!(stdout, "{}", "All checks passed!".green().bold())?;
+
+        return Ok(ExitStatus::Success);
+    }
 
     Ok(ExitStatus::Failure)
 }
@@ -157,6 +157,8 @@ impl ExitStatus {
 
 #[derive(Default)]
 struct ProgressReporter(Option<indicatif::ProgressBar>);
+
+unsafe impl pyo3::marker::Ungil for ProgressReporter {}
 
 impl karva_core::diagnostic::reporter::Reporter for ProgressReporter {
     fn set(&mut self, n: usize) {

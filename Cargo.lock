@@ -741,6 +741,7 @@ dependencies = [
  "insta-cmd",
  "karva_core",
  "karva_project",
+ "pyo3",
  "regex",
  "ruff_python_trivia",
  "tempfile",

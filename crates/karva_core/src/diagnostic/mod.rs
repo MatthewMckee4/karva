@@ -2,7 +2,7 @@ use karva_project::path::TestPathError;
 use pyo3::prelude::*;
 
 use crate::{
-    case::TestCase,
+    case::TestFunction,
     diagnostic::render::{DisplayDiagnostic, SubDiagnosticDisplay},
 };
 
@@ -51,7 +51,7 @@ impl Diagnostic {
         )
     }
 
-    pub fn from_test_fail(py: Python<'_>, error: &PyErr, test_case: &TestCase) -> Self {
+    pub fn from_test_fail(py: Python<'_>, error: &PyErr, test_case: &TestFunction) -> Self {
         if error.is_instance_of::<pyo3::exceptions::PyAssertionError>(py) {
             return Self::new(
                 vec![SubDiagnostic {
@@ -107,6 +107,20 @@ impl Diagnostic {
                 )),
                 message: format!("{error}"),
                 location: "setup".to_string(),
+            }],
+            DiagnosticScope::Unknown,
+        )
+    }
+
+    #[must_use]
+    pub fn unknown_error(message: &str, location: &str) -> Self {
+        Self::new(
+            vec![SubDiagnostic {
+                diagnostic_type: SubDiagnosticType::Error(DiagnosticError::Error(
+                    message.to_string(),
+                )),
+                message: message.to_string(),
+                location: location.to_string(),
             }],
             DiagnosticScope::Unknown,
         )

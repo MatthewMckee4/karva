@@ -1,34 +1,36 @@
 use std::{
     cmp::{Eq, PartialEq},
+    collections::HashMap,
     fmt::{self, Display},
     hash::{Hash, Hasher},
 };
 
 use karva_project::{path::SystemPathBuf, utils::module_name};
-use pyo3::{prelude::*, types::PyTuple};
+use pyo3::{IntoPyObjectExt, prelude::*, types::PyTuple};
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
-    diagnostic::{Diagnostic, DiagnosticScope},
+    diagnostic::{Diagnostic, DiagnosticScope, SubDiagnosticType},
     fixture::{FixtureManager, HasFunctionDefinition, RequiresFixtures},
+    tag::{Tag, Tags},
     utils::Upcast,
 };
 
 /// A test case represents a single test function.
 #[derive(Clone)]
-pub struct TestCase {
+pub struct TestFunction {
     path: SystemPathBuf,
     cwd: SystemPathBuf,
     function_definition: StmtFunctionDef,
 }
 
-impl HasFunctionDefinition for TestCase {
+impl HasFunctionDefinition for TestFunction {
     fn function_definition(&self) -> &StmtFunctionDef {
         &self.function_definition
     }
 }
 
-impl TestCase {
+impl TestFunction {
     #[must_use]
     pub fn new(
         cwd: &SystemPathBuf,
@@ -58,65 +60,145 @@ impl TestCase {
     }
 
     #[must_use]
-    pub fn run_test(
+    pub fn test(
         &self,
         py: Python<'_>,
         module: &Bound<'_, PyModule>,
-        fixture_manager: &FixtureManager<'_>,
-    ) -> Option<Diagnostic> {
-        let result: PyResult<Bound<'_, PyAny>> = {
-            let name: &str = &self.function_definition().name;
-            let function = match module.getattr(name) {
-                Ok(function) => function,
-                Err(err) => {
-                    return Some(Diagnostic::from_py_err(
-                        py,
-                        &err,
-                        DiagnosticScope::Test,
-                        &self.name(),
-                    ));
-                }
-            };
-            let required_fixture_names = self.get_required_fixture_names();
-            if required_fixture_names.is_empty() {
-                function.call0()
-            } else {
-                let mut diagnostics = Vec::new();
-                let required_fixtures = required_fixture_names
-                    .iter()
-                    .filter_map(|fixture| {
-                        fixture_manager.get_fixture(fixture).map_or_else(
-                            || {
-                                diagnostics.push(Diagnostic::fixture_not_found(
-                                    fixture,
-                                    &self.path.to_string(),
-                                ));
-                                None
-                            },
-                            Some,
-                        )
-                    })
-                    .collect::<Vec<_>>();
+        fixture_manager: &FixtureManager,
+    ) -> TestFunctionRunResult {
+        let mut run_result = TestFunctionRunResult::default();
 
-                if !diagnostics.is_empty() {
-                    return Some(Diagnostic::from_test_diagnostics(diagnostics));
-                }
-
-                let args = PyTuple::new(py, required_fixtures);
-                match args {
-                    Ok(args) => function.call(args, None),
-                    Err(err) => Err(err),
-                }
+        let name: &str = &self.function_definition().name;
+        let function = match module.getattr(name) {
+            Ok(function) => function,
+            Err(err) => {
+                run_result.diagnostics.push(Diagnostic::from_py_err(
+                    py,
+                    &err,
+                    DiagnosticScope::Test,
+                    &self.name(),
+                ));
+                return run_result;
             }
         };
-        match result {
-            Ok(_) => None,
-            Err(err) => Some(Diagnostic::from_test_fail(py, &err, self)),
+        let function = function.as_unbound();
+
+        let required_fixture_names = self.get_required_fixture_names();
+        if required_fixture_names.is_empty() {
+            match function.call0(py) {
+                Ok(_) => {
+                    run_result.result.add_passed();
+                }
+                Err(err) => {
+                    let diagnostic = Diagnostic::from_test_fail(py, &err, self);
+                    match diagnostic.diagnostic_type() {
+                        SubDiagnosticType::Fail => run_result.result.add_failed(),
+                        SubDiagnosticType::Error(_) => run_result.result.add_errored(),
+                    }
+                    run_result.diagnostics.push(diagnostic);
+                }
+            }
+        } else {
+            // The function requires fixtures or parameters, so we need to extract them from the test case.
+            let mut param_args: Vec<HashMap<String, PyObject>> = Vec::new();
+            let tags = Tags::from_py_any(py, function);
+            for tag in tags {
+                match tag {
+                    Tag::Parametrize(parametrize_tag) => {
+                        param_args.extend(parametrize_tag.each_arg_value());
+                    }
+                }
+            }
+
+            if param_args.is_empty() {
+                param_args.push(HashMap::new());
+            }
+
+            let results = param_args
+                .iter()
+                .map(|params| {
+                    let mut inner_run_result = TestFunctionRunResult::default();
+                    let mut fixture_diagnostics = Vec::new();
+                    let required_fixtures = required_fixture_names
+                        .iter()
+                        .filter_map(|fixture| {
+                            params.get(fixture).map_or_else(
+                                || {
+                                    fixture_manager.get_fixture(fixture).map_or_else(
+                                        || {
+                                            fixture_diagnostics.push(
+                                                Diagnostic::fixture_not_found(
+                                                    fixture,
+                                                    &self.path.to_string(),
+                                                ),
+                                            );
+                                            None
+                                        },
+                                        |fixture| fixture.into_py_any(py).ok(),
+                                    )
+                                },
+                                |result| Some(result.clone()),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+
+                    if !fixture_diagnostics.is_empty() {
+                        inner_run_result
+                            .diagnostics
+                            .push(Diagnostic::from_test_diagnostics(fixture_diagnostics));
+                    }
+
+                    let args = PyTuple::new(py, required_fixtures);
+
+                    match args {
+                        Ok(args) => {
+                            if args.is_empty() {
+                                tracing::info!("Running test: {}", self.to_string());
+                            } else {
+                                tracing::info!("Running test: {}[{:?}]", self.to_string(), args);
+                            }
+                            match function.call1(py, args) {
+                                Ok(_) => {
+                                    tracing::info!("Test passed");
+                                    inner_run_result.result.add_passed();
+                                }
+                                Err(err) => {
+                                    let diagnostic = Diagnostic::from_test_fail(py, &err, self);
+                                    match diagnostic.diagnostic_type() {
+                                        SubDiagnosticType::Fail => {
+                                            inner_run_result.result.add_failed();
+                                            tracing::info!("Test failed");
+                                        }
+                                        SubDiagnosticType::Error(_) => {
+                                            inner_run_result.result.add_errored();
+                                            tracing::info!("Test errored");
+                                        }
+                                    }
+                                    inner_run_result.diagnostics.push(diagnostic);
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            inner_run_result.diagnostics.push(Diagnostic::unknown_error(
+                                &err.to_string(),
+                                &self.to_string(),
+                            ));
+                            inner_run_result.result.add_errored();
+                        }
+                    }
+                    inner_run_result
+                })
+                .collect::<Vec<_>>();
+
+            for result in results {
+                run_result.update(&result);
+            }
         }
+        run_result
     }
 }
 
-impl Display for TestCase {
+impl Display for TestFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -127,22 +209,22 @@ impl Display for TestCase {
     }
 }
 
-impl Hash for TestCase {
+impl Hash for TestFunction {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.path.hash(state);
         self.function_definition.name.hash(state);
     }
 }
 
-impl PartialEq for TestCase {
+impl PartialEq for TestFunction {
     fn eq(&self, other: &Self) -> bool {
         self.path == other.path && self.function_definition.name == other.function_definition.name
     }
 }
 
-impl Eq for TestCase {}
+impl Eq for TestFunction {}
 
-impl<'a> Upcast<Vec<&'a dyn RequiresFixtures>> for Vec<&'a TestCase> {
+impl<'a> Upcast<Vec<&'a dyn RequiresFixtures>> for Vec<&'a TestFunction> {
     fn upcast(self) -> Vec<&'a dyn RequiresFixtures> {
         self.into_iter()
             .map(|tc| tc as &dyn RequiresFixtures)
@@ -150,7 +232,7 @@ impl<'a> Upcast<Vec<&'a dyn RequiresFixtures>> for Vec<&'a TestCase> {
     }
 }
 
-impl<'a> Upcast<Vec<&'a dyn HasFunctionDefinition>> for Vec<&'a TestCase> {
+impl<'a> Upcast<Vec<&'a dyn HasFunctionDefinition>> for Vec<&'a TestFunction> {
     fn upcast(self) -> Vec<&'a dyn HasFunctionDefinition> {
         self.into_iter()
             .map(|tc| tc as &dyn HasFunctionDefinition)
@@ -158,9 +240,74 @@ impl<'a> Upcast<Vec<&'a dyn HasFunctionDefinition>> for Vec<&'a TestCase> {
     }
 }
 
-impl std::fmt::Debug for TestCase {
+impl std::fmt::Debug for TestFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TestCase(path: {}, name: {})", self.path, self.name())
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct TestFunctionRunResult {
+    pub diagnostics: Vec<Diagnostic>,
+    pub result: TestFunctionRunStats,
+}
+
+impl TestFunctionRunResult {
+    pub fn update(&mut self, other: &Self) {
+        self.diagnostics.extend(other.diagnostics.clone());
+        self.result.update(&other.result);
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct TestFunctionRunStats {
+    total: usize,
+    passed: usize,
+    failed: usize,
+    errored: usize,
+}
+
+impl TestFunctionRunStats {
+    #[must_use]
+    pub const fn total(&self) -> usize {
+        self.total
+    }
+
+    #[must_use]
+    pub const fn passed(&self) -> usize {
+        self.passed
+    }
+
+    #[must_use]
+    pub const fn failed(&self) -> usize {
+        self.failed
+    }
+
+    #[must_use]
+    pub const fn errored(&self) -> usize {
+        self.errored
+    }
+
+    pub const fn add_failed(&mut self) {
+        self.failed += 1;
+        self.total += 1;
+    }
+
+    pub const fn add_errored(&mut self) {
+        self.errored += 1;
+        self.total += 1;
+    }
+
+    pub const fn add_passed(&mut self) {
+        self.passed += 1;
+        self.total += 1;
+    }
+
+    pub const fn update(&mut self, other: &Self) {
+        self.total += other.total;
+        self.passed += other.passed;
+        self.failed += other.failed;
+        self.errored += other.errored;
     }
 }
 
@@ -282,8 +429,8 @@ mod tests {
             add_to_sys_path(&py, &env.cwd()).unwrap();
             let module = PyModule::import(py, module_name(&env.cwd(), &path)).unwrap();
             let fixture_manager = FixtureManager::new();
-            let result = test_case.run_test(py, &module, &fixture_manager);
-            assert!(result.is_none());
+            let result = test_case.test(py, &module, &fixture_manager);
+            assert!(result.diagnostics.is_empty());
         });
     }
 }

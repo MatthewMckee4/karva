@@ -8,7 +8,7 @@ use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 use ruff_text_size::TextSize;
 
 use crate::{
-    case::TestCase,
+    case::TestFunction,
     discovery::visitor::source_text,
     fixture::{Fixture, HasFixtures, RequiresFixtures},
     utils::from_text_size,
@@ -37,7 +37,7 @@ impl ModuleType {
 pub struct Module<'proj> {
     pub path: SystemPathBuf,
     pub project: &'proj Project,
-    test_cases: Vec<TestCase>,
+    test_cases: Vec<TestFunction>,
     fixtures: Vec<Fixture>,
     pub module_type: ModuleType,
 }
@@ -47,7 +47,7 @@ impl<'proj> Module<'proj> {
     pub fn new(
         project: &'proj Project,
         path: &SystemPathBuf,
-        test_cases: Vec<TestCase>,
+        test_cases: Vec<TestFunction>,
         fixtures: Vec<Fixture>,
         module_type: ModuleType,
     ) -> Self {
@@ -71,12 +71,12 @@ impl<'proj> Module<'proj> {
     }
 
     #[must_use]
-    pub fn test_cases(&self) -> Vec<&TestCase> {
+    pub fn test_cases(&self) -> Vec<&TestFunction> {
         self.test_cases.iter().collect()
     }
 
     #[must_use]
-    pub fn get_test_case(&self, name: &str) -> Option<&TestCase> {
+    pub fn get_test_case(&self, name: &str) -> Option<&TestFunction> {
         self.test_cases.iter().find(|tc| tc.name() == name)
     }
 

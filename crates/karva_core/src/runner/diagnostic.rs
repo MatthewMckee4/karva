@@ -2,21 +2,41 @@ use std::io::Write;
 
 use colored::{Color, Colorize};
 
-use crate::diagnostic::{Diagnostic, DiagnosticScope, SubDiagnosticType};
+use crate::{
+    case::{TestFunctionRunResult, TestFunctionRunStats},
+    diagnostic::Diagnostic,
+};
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Default)]
 pub struct RunDiagnostics {
     pub diagnostics: Vec<Diagnostic>,
-    pub total_tests: usize,
+    pub stats: DiagnosticStats,
 }
 
 impl RunDiagnostics {
-    #[must_use]
-    pub const fn new(test_results: Vec<Diagnostic>, total_tests: usize) -> Self {
-        Self {
-            diagnostics: test_results,
-            total_tests,
-        }
+    pub fn add_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
+        self.diagnostics.extend(diagnostics);
+    }
+
+    pub fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
+        self.diagnostics.push(diagnostic);
+    }
+
+    pub const fn add_stats(&mut self, stats: &TestFunctionRunStats) {
+        self.stats.add_test_function_stats(stats);
+    }
+
+    pub fn report_test_function_run_result(
+        &mut self,
+        test_function_run_result: TestFunctionRunResult,
+    ) {
+        self.add_diagnostics(test_function_run_result.diagnostics);
+        self.add_stats(&test_function_run_result.result);
+    }
+
+    pub fn update(&mut self, other: &Self) {
+        self.diagnostics.extend(other.diagnostics.clone());
+        self.stats.update(&other.stats);
     }
 
     #[must_use]
@@ -35,18 +55,8 @@ impl RunDiagnostics {
     }
 
     #[must_use]
-    pub fn stats(&self) -> DiagnosticStats {
-        let mut stats = DiagnosticStats::new(self.total_tests);
-        for diagnostic in &self.diagnostics {
-            if diagnostic.scope() == &DiagnosticScope::Test {
-                stats.passed -= 1;
-                match diagnostic.diagnostic_type() {
-                    SubDiagnosticType::Fail => stats.failed += 1,
-                    SubDiagnosticType::Error(_) => stats.error += 1,
-                }
-            }
-        }
-        stats
+    pub const fn stats(&self) -> &DiagnosticStats {
+        &self.stats
     }
 
     fn log_test_count(writer: &mut dyn Write, label: &str, count: usize, color: Color) {
@@ -68,7 +78,7 @@ impl RunDiagnostics {
             for (label, num, color) in [
                 ("Passed tests:", stats.passed(), Color::Green),
                 ("Failed tests:", stats.failed(), Color::Red),
-                ("Error tests:", stats.error(), Color::Yellow),
+                ("Error tests:", stats.errored(), Color::Yellow),
             ] {
                 Self::log_test_count(writer, label, num, color);
             }
@@ -80,23 +90,29 @@ impl RunDiagnostics {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Default)]
 pub struct DiagnosticStats {
     total: usize,
     passed: usize,
     failed: usize,
-    error: usize,
+    errored: usize,
 }
 
 impl DiagnosticStats {
-    const fn new(total: usize) -> Self {
-        Self {
-            total,
-            passed: total,
-            failed: 0,
-            error: 0,
-        }
+    pub const fn add_test_function_stats(&mut self, stats: &TestFunctionRunStats) {
+        self.total += stats.total();
+        self.passed += stats.passed();
+        self.failed += stats.failed();
+        self.errored += stats.errored();
     }
+
+    pub const fn update(&mut self, other: &Self) {
+        self.total += other.total();
+        self.passed += other.passed();
+        self.failed += other.failed();
+        self.errored += other.errored();
+    }
+
     #[must_use]
     pub const fn total(&self) -> usize {
         self.total
@@ -113,8 +129,8 @@ impl DiagnosticStats {
     }
 
     #[must_use]
-    pub const fn error(&self) -> usize {
-        self.error
+    pub const fn errored(&self) -> usize {
+        self.errored
     }
 }
 
@@ -143,7 +159,7 @@ def test_simple_pass():
         assert_eq!(result.stats().total(), 1);
         assert_eq!(result.stats().passed(), 1);
         assert_eq!(result.stats().failed(), 0);
-        assert_eq!(result.stats().error(), 0);
+        assert_eq!(result.stats().errored(), 0);
     }
 
     #[test]
@@ -165,7 +181,7 @@ def test_simple_fail():
         assert_eq!(result.stats().total(), 1);
         assert_eq!(result.stats().passed(), 0);
         assert_eq!(result.stats().failed(), 1);
-        assert_eq!(result.stats().error(), 0);
+        assert_eq!(result.stats().errored(), 0);
     }
 
     #[test]
@@ -187,7 +203,7 @@ def test_simple_error():
         assert_eq!(result.stats().total(), 1);
         assert_eq!(result.stats().passed(), 0);
         assert_eq!(result.stats().failed(), 0);
-        assert_eq!(result.stats().error(), 1);
+        assert_eq!(result.stats().errored(), 1);
     }
 
     #[test]
@@ -214,6 +230,6 @@ def test_error():
         assert_eq!(result.stats().total(), 3);
         assert_eq!(result.stats().passed(), 1);
         assert_eq!(result.stats().failed(), 1);
-        assert_eq!(result.stats().error(), 1);
+        assert_eq!(result.stats().errored(), 1);
     }
 }

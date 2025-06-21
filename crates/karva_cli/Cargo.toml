@@ -30,6 +30,7 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
 tracing-flame = { workspace = true }
 tracing-tree = { workspace = true }
 wild = { workspace = true }
+pyo3 = { workspace = true, features = ["nightly"] }
 indicatif = { workspace = true }
 
 [dev-dependencies]

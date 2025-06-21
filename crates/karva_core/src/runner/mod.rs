@@ -10,7 +10,7 @@ use crate::{
     fixture::{FixtureManager, FixtureScope, RequiresFixtures},
     module::Module,
     package::Package,
-    utils::{Upcast, add_to_sys_path, with_gil},
+    utils::{Upcast, with_gil},
 };
 
 mod diagnostic;
@@ -47,22 +47,10 @@ impl<'proj> StandardTestRunner<'proj> {
 
         reporter.set(total_files);
 
-        let mut diagnostics = Vec::new();
+        let mut diagnostics = RunDiagnostics::default();
 
-        diagnostics.extend(discovery_diagnostics);
+        diagnostics.add_diagnostics(discovery_diagnostics);
         with_gil(self.project, |py| {
-            let cwd = self.project.cwd();
-
-            if let Err(err) = add_to_sys_path(&py, cwd) {
-                diagnostics.push(Diagnostic::from_py_err(
-                    py,
-                    &err,
-                    DiagnosticScope::Setup,
-                    &cwd.to_string(),
-                ));
-                return;
-            }
-
             let mut fixture_manager = FixtureManager::new();
 
             let upcast_test_cases: Vec<&dyn RequiresFixtures> = session.test_cases().upcast();
@@ -85,10 +73,7 @@ impl<'proj> StandardTestRunner<'proj> {
             );
         });
 
-        RunDiagnostics {
-            diagnostics,
-            total_tests: total_test_cases,
-        }
+        diagnostics
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -98,14 +83,18 @@ impl<'proj> StandardTestRunner<'proj> {
         py: Python<'a>,
         module: &'a Module<'a>,
         parents: &[&'a Package<'a>],
-        fixture_manager: &mut FixtureManager<'a>,
-        diagnostics: &mut Vec<Diagnostic>,
+        fixture_manager: &mut FixtureManager,
         reporter: &dyn Reporter,
-    ) {
+    ) -> RunDiagnostics {
+        let mut diagnostics = RunDiagnostics::default();
+        if module.total_test_cases() == 0 {
+            return diagnostics;
+        }
+
         let module_test_cases = module.dependencies();
         let upcast_module_test_cases: Vec<&dyn RequiresFixtures> = module_test_cases.upcast();
         if upcast_module_test_cases.is_empty() {
-            return;
+            return diagnostics;
         }
 
         let mut parents_above_current_parent = parents.to_vec();
@@ -138,13 +127,13 @@ impl<'proj> StandardTestRunner<'proj> {
         let py_module = match PyModule::import(py, module.name()) {
             Ok(py_module) => py_module,
             Err(err) => {
-                diagnostics.extend(vec![Diagnostic::from_py_err(
+                diagnostics.add_diagnostic(Diagnostic::from_py_err(
                     py,
                     &err,
                     DiagnosticScope::Setup,
                     &module.path().to_string(),
-                )]);
-                return;
+                ));
+                return diagnostics;
             }
         };
 
@@ -175,21 +164,18 @@ impl<'proj> StandardTestRunner<'proj> {
                 upcast_test_cases.as_slice(),
             );
 
-            let test_name = function.to_string();
-            tracing::info!("Running test: {}", test_name);
+            let result = function.test(py, &py_module, fixture_manager);
 
-            if let Some(result) = function.run_test(py, &py_module, fixture_manager) {
-                diagnostics.push(result);
-                tracing::info!("Test {} failed", test_name);
-            } else {
-                tracing::info!("Test {} passed", test_name);
-            }
+            diagnostics.report_test_function_run_result(result);
+
             fixture_manager.reset_function_fixtures();
         }
 
         fixture_manager.reset_module_fixtures();
 
         reporter.report();
+
+        diagnostics
     }
 
     fn test_package<'a>(
@@ -197,8 +183,8 @@ impl<'proj> StandardTestRunner<'proj> {
         py: Python<'a>,
         package: &'a Package<'a>,
         parents: &[&'a Package<'a>],
-        fixture_manager: &mut FixtureManager<'a>,
-        diagnostics: &mut Vec<Diagnostic>,
+        fixture_manager: &mut FixtureManager,
+        diagnostics: &mut RunDiagnostics,
         reporter: &dyn Reporter,
     ) {
         if package.total_test_cases() == 0 {
@@ -234,15 +220,16 @@ impl<'proj> StandardTestRunner<'proj> {
         let mut new_parents = parents.to_vec();
         new_parents.push(package);
 
-        for module in package.modules().values() {
-            self.test_module(
-                py,
-                module,
-                &new_parents,
-                fixture_manager,
-                diagnostics,
-                reporter,
-            );
+        let module_diagnostics = {
+            package
+                .modules()
+                .values()
+                .map(|module| self.test_module(py, module, &new_parents, fixture_manager, reporter))
+                .collect::<Vec<_>>()
+        };
+
+        for module_diagnostics in module_diagnostics {
+            diagnostics.update(&module_diagnostics);
         }
 
         for sub_package in package.packages().values() {
