@@ -99,6 +99,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     defaults:
       run:
+        shell: bash
         working-directory: ${{ matrix.folder }}
     steps:
       - uses: actions/checkout@v4
@@ -108,8 +109,8 @@ jobs:
       - name: Setup integration test environment
         run: |
           uv venv
-          uv pip install -e ../../
           uv sync
+          uv pip install -e ../../
       - name: Run karva test
         run: |
-          uv run karva test -v -s
+          uv run --with pytest karva test -v -s
