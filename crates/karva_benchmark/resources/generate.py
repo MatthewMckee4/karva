@@ -100,7 +100,7 @@ class Benchmark:
 OUTPUT_RESOURCES = [
     Benchmark(
         path=RESOURCES_PATH / "test_true_assertions.py",
-        num_tests=NUM_TESTS,
+        num_tests=10000,
         num_asserts_per_function=NUM_ASSERT_PER_FUNCTION,
         add_test_function=add_true_assertions,
     ),
