@@ -51,6 +51,8 @@ impl TestEnv {
                 .arg(&wheel_path)
                 .current_dir(&test_env.project_dir);
             let _ = cmd.output();
+        } else {
+            panic!("Karva wheel file not found in target/wheels directory");
         }
 
         test_env
