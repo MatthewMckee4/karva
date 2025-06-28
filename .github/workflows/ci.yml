@@ -22,11 +22,12 @@ jobs:
       - uses: pre-commit/action@v3.0.1
 
   cargo-test:
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }} ${{ matrix.python-version }}
     strategy:
       max-parallel: 12
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.11"]
     steps:
       - uses: actions/checkout@v4
       - name: Update Rust toolchain
@@ -34,9 +35,11 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - name: Install Python dependencies
         run: |
-          uv venv
+          uv venv --python ${{ matrix.python-version }}
           uv pip install -e .
-          cargo test
+      - name: Run tests
+        run: |
+          uv run cargo test
 
   build-docs:
     runs-on: ${{ matrix.os }}

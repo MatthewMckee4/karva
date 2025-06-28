@@ -358,7 +358,7 @@ mod tests {
 
     #[test]
     fn test_parametrize() {
-        let env = TestEnv::with_karva_installed();
+        let env = TestEnv::new();
         let test_dir = env.create_tests_dir();
         let path = env.create_file(
             test_dir.join("test_parametrize.py").as_ref(),
@@ -390,7 +390,7 @@ def test_parametrize(a, b):
 
     #[test]
     fn test_parametrize_single_parameter() {
-        let env = TestEnv::with_karva_installed();
+        let env = TestEnv::new();
         let test_dir = env.create_tests_dir();
         let path = env.create_file(
             test_dir.join("test_parametrize.py").as_ref(),

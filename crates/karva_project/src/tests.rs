@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, process::Command};
+use std::{fs, path::PathBuf};
 
 use tempfile::TempDir;
 
@@ -15,13 +15,6 @@ impl TestEnv {
         let project_dir = temp_dir.path().to_path_buf();
 
         Self { project_dir }
-    }
-
-    #[must_use]
-    pub fn with_karva_installed() -> Self {
-        let test_env = Self::new();
-
-        test_env
     }
 
     #[must_use]
