@@ -37,6 +37,7 @@ jobs:
           uv venv
           uv pip install pip maturin
           uv pip install -e .
+          uv pip list
       - name: Run Cargo Tests
         run: cargo test
 
