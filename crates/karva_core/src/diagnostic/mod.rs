@@ -208,6 +208,7 @@ impl SubDiagnostic {
 pub enum DiagnosticScope {
     Test,
     Setup,
+    Discovery,
     Unknown,
 }
 

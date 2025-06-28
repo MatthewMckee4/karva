@@ -8,7 +8,7 @@ use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
 use crate::{
     case::TestFunction,
-    diagnostic::Diagnostic,
+    diagnostic::{Diagnostic, DiagnosticScope},
     fixture::{Fixture, FixtureExtractor, is_fixture_function},
 };
 
@@ -23,14 +23,11 @@ pub struct FunctionDefinitionVisitor<'a, 'b> {
 }
 
 impl<'a, 'b> FunctionDefinitionVisitor<'a, 'b> {
-    pub fn new(
-        py: Python<'b>,
-        project: &'a Project,
-        path: &'a SystemPathBuf,
-    ) -> Result<Self, String> {
+    pub fn new(py: Python<'b>, project: &'a Project, path: &'a SystemPathBuf) -> PyResult<Self> {
         let module = module_name(project.cwd(), path);
 
-        let py_module = py.import(module).map_err(|e| e.to_string())?;
+        let py_module = py.import(module)?;
+
         Ok(Self {
             discovered_functions: Vec::new(),
             fixture_definitions: Vec::new(),
@@ -107,7 +104,12 @@ pub fn discover(
                     functions: Vec::new(),
                     fixtures: Vec::new(),
                 },
-                vec![Diagnostic::invalid_fixture(&e, &path.to_string())],
+                vec![Diagnostic::from_py_err(
+                    py,
+                    &e,
+                    DiagnosticScope::Discovery,
+                    &path.to_string(),
+                )],
             );
         }
     };
