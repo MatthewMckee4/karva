@@ -1,18 +1,21 @@
-use std::fs;
+use std::{fs, path::PathBuf};
 
 use tempfile::TempDir;
 
 use crate::path::SystemPathBuf;
 
 pub struct TestEnv {
-    temp_dir: TempDir,
+    project_dir: PathBuf,
 }
 
 impl TestEnv {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            temp_dir: TempDir::new().expect("Failed to create temp directory"),
+            project_dir: TempDir::new()
+                .expect("Failed to create temp directory")
+                .path()
+                .to_path_buf(),
         }
     }
 
@@ -23,29 +26,32 @@ impl TestEnv {
 
     #[allow(clippy::must_use_candidate)]
     pub fn create_file(&self, path: impl AsRef<std::path::Path>, content: &str) -> SystemPathBuf {
-        let path = self.temp_dir.path().join(path);
+        let path = path.as_ref();
+        let path = self.project_dir.join(path);
+
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).unwrap();
+            std::fs::create_dir_all(parent).unwrap();
         }
-        fs::write(&path, content).unwrap();
+        std::fs::write(&path, &*ruff_python_trivia::textwrap::dedent(content)).unwrap();
+
         SystemPathBuf::from(path)
     }
 
     #[allow(clippy::must_use_candidate)]
     pub fn create_dir(&self, path: impl AsRef<std::path::Path>) -> SystemPathBuf {
-        let path = self.temp_dir.path().join(path);
+        let path = self.project_dir.join(path);
         fs::create_dir_all(&path).unwrap();
         SystemPathBuf::from(path)
     }
 
     #[must_use]
     pub fn temp_path(&self, path: impl AsRef<std::path::Path>) -> SystemPathBuf {
-        SystemPathBuf::from(self.temp_dir.path().join(path))
+        SystemPathBuf::from(self.project_dir.join(path))
     }
 
     #[must_use]
     pub fn cwd(&self) -> SystemPathBuf {
-        SystemPathBuf::from(self.temp_dir.path())
+        SystemPathBuf::from(self.project_dir.clone())
     }
 }
 

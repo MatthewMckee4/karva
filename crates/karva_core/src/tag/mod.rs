@@ -43,6 +43,16 @@ impl Tag {
             },
         )
     }
+
+    pub fn try_from_karva_tag(py_tag: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
+        let name_str = py_tag.call_method0("name")?.extract::<String>()?;
+
+        if name_str == "parametrize" {
+            Ok(ParametrizeTag::try_from_karva_tag(py_tag)?.map(Self::Parametrize))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -72,6 +82,31 @@ impl ParametrizeTag {
         }
     }
 
+    pub fn try_from_karva_tag(py_tag: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
+        let arg_names = py_tag.getattr("arg_names")?;
+        let arg_values = py_tag.getattr("arg_values")?;
+
+        if let (Ok(name), Ok(values)) = (
+            arg_names.extract::<String>(),
+            arg_values.extract::<Vec<PyObject>>(),
+        ) {
+            Ok(Some(Self {
+                arg_names: vec![name],
+                arg_values: values.into_iter().map(|v| vec![v]).collect(),
+            }))
+        } else if let (Ok(names), Ok(values)) = (
+            arg_names.extract::<Vec<String>>(),
+            arg_values.extract::<Vec<Vec<PyObject>>>(),
+        ) {
+            Ok(Some(Self {
+                arg_names: names,
+                arg_values: values,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
     #[must_use]
     pub fn each_arg_value(&self) -> Vec<HashMap<String, PyObject>> {
         let mut param_args: Vec<HashMap<String, PyObject>> = Vec::new();
@@ -86,7 +121,7 @@ impl ParametrizeTag {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Tags {
     pub inner: Vec<Tag>,
 }
@@ -99,22 +134,29 @@ impl Tags {
 
     #[must_use]
     pub fn from_py_any(py: Python<'_>, py_test_function: &Py<PyAny>) -> Self {
-        py_test_function
-            .extract::<Py<PyTestFunction>>(py)
-            .map_or_else(
-                |_| Self::from_pytest_function(py, py_test_function),
-                |py_test_case| {
-                    let mut tags = Vec::new();
-                    for tag in &py_test_case.borrow(py).tags.inner {
-                        tags.push(Tag::from_py_tag(tag));
-                    }
-                    Self { inner: tags }
-                },
-            )
+        if let Ok(py_test_function) = py_test_function.extract::<Py<PyTestFunction>>(py) {
+            let mut tags = Vec::new();
+            for tag in &py_test_function.borrow(py).tags.inner {
+                tags.push(Tag::from_py_tag(tag));
+            }
+            return Self { inner: tags };
+        }
+
+        if let Some(tags) = Self::from_pytest_function(py, py_test_function) {
+            return tags;
+        }
+
+        let tags = Self::try_from_unresolved_karva_tags(py, py_test_function);
+
+        if let Ok(tags) = tags {
+            return tags;
+        }
+
+        Self::default()
     }
 
     #[must_use]
-    pub fn from_pytest_function(py: Python<'_>, py_test_function: &Py<PyAny>) -> Self {
+    pub fn from_pytest_function(py: Python<'_>, py_test_function: &Py<PyAny>) -> Option<Self> {
         let mut tags = Vec::new();
         if let Ok(marks) = py_test_function.getattr(py, "pytestmark") {
             if let Ok(marks_list) = marks.extract::<Vec<Bound<'_, PyAny>>>(py) {
@@ -124,8 +166,28 @@ impl Tags {
                     }
                 }
             }
+        } else {
+            return None;
         }
-        Self { inner: tags }
+        Some(Self { inner: tags })
+    }
+
+    pub fn try_from_unresolved_karva_tags(
+        py: Python<'_>,
+        py_test_function: &Py<PyAny>,
+    ) -> PyResult<Self> {
+        let tags_attr = py_test_function.getattr(py, "tags")?;
+        let tags_iter = tags_attr.call_method0(py, "__iter__")?;
+        let tags_list = tags_iter.extract::<Vec<Bound<'_, PyAny>>>(py)?;
+
+        let mut tags = Vec::new();
+        for tag in tags_list {
+            if let Ok(Some(parsed_tag)) = Tag::try_from_karva_tag(&tag) {
+                tags.push(parsed_tag);
+            }
+        }
+
+        Ok(Self { inner: tags })
     }
 }
 

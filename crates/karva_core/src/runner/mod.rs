@@ -15,7 +15,7 @@ use crate::{
 
 mod diagnostic;
 
-pub use diagnostic::RunDiagnostics;
+pub use diagnostic::{DiagnosticStats, RunDiagnostics};
 
 pub trait TestRunner {
     fn test(&self) -> RunDiagnostics;
@@ -340,5 +340,62 @@ mod tests {
         let diagnostics = test_runner.test();
 
         assert_eq!(diagnostics.diagnostics.len(), 0);
+    }
+
+    #[test]
+    fn test_parametrize_with_fixture() {
+        let env = TestEnv::new();
+        let test_dir = env.create_tests_dir();
+        env.create_file(
+            test_dir.join("test_parametrize_fixture.py").as_ref(),
+            r#"import karva
+
+@karva.fixture
+def fixture_value():
+    return 42
+
+@karva.tags.parametrize("a", [1, 2, 3])
+def test_parametrize_with_fixture(a, fixture_value):
+    assert a > 0
+    assert fixture_value == 42"#,
+        );
+
+        let project = Project::new(env.cwd(), vec![test_dir]);
+
+        let result = project.test_with_reporter(&mut DummyReporter);
+
+        let mut expected_stats = DiagnosticStats::default();
+        expected_stats.add_passed();
+        expected_stats.add_passed();
+        expected_stats.add_passed();
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_parametrize_with_fixture_parametrize_priority() {
+        let env = TestEnv::new();
+        let test_dir = env.create_tests_dir();
+        env.create_file(
+            test_dir.join("test_parametrize_fixture.py").as_ref(),
+            r#"import karva
+
+@karva.fixture
+def a():
+    return -1
+
+@karva.tags.parametrize("a", [1, 2, 3])
+def test_parametrize_with_fixture(a):
+    assert a > 0"#,
+        );
+
+        let project = Project::new(env.cwd(), vec![test_dir]);
+
+        let result = project.test_with_reporter(&mut DummyReporter);
+
+        let mut expected_stats = DiagnosticStats::default();
+        expected_stats.add_passed();
+        expected_stats.add_passed();
+        expected_stats.add_passed();
+        assert_eq!(*result.stats(), expected_stats);
     }
 }

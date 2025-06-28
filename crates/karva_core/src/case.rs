@@ -241,6 +241,7 @@ mod tests {
     use crate::{
         discovery::Discoverer,
         fixture::{FixtureManager, HasFunctionDefinition, RequiresFixtures},
+        runner::DiagnosticStats,
         utils::add_to_sys_path,
     };
 
@@ -351,7 +352,72 @@ mod tests {
             let module = PyModule::import(py, module_name(&env.cwd(), &path)).unwrap();
             let fixture_manager = FixtureManager::new();
             let result = test_case.test(py, &module, &fixture_manager);
-            assert!(result.diagnostics.is_empty());
+            assert!(result.is_empty());
+        });
+    }
+
+    #[test]
+    fn test_parametrize() {
+        let env = TestEnv::new();
+        let test_dir = env.create_tests_dir();
+        let path = env.create_file(
+            test_dir.join("test_parametrize.py").as_ref(),
+            r#"import karva
+@karva.tags.parametrize(("a", "b"), [(1, 2), (1, 3)])
+def test_parametrize(a, b):
+    assert a < b"#,
+        );
+
+        let project = Project::new(env.cwd(), vec![test_dir]);
+        let discoverer = Discoverer::new(&project);
+
+        let (session, _) = discoverer.discover();
+
+        let test_case = session.test_cases()[0].clone();
+        Python::with_gil(|py| {
+            add_to_sys_path(&py, &env.cwd()).unwrap();
+            let module = PyModule::import(py, module_name(&env.cwd(), &path)).unwrap();
+            let fixture_manager = FixtureManager::new();
+            let result = test_case.test(py, &module, &fixture_manager);
+            assert!(result.is_empty());
+
+            let mut expected_stats = DiagnosticStats::default();
+            expected_stats.add_passed();
+            expected_stats.add_passed();
+            assert_eq!(*result.stats(), expected_stats);
+        });
+    }
+
+    #[test]
+    fn test_parametrize_single_parameter() {
+        let env = TestEnv::new();
+        let test_dir = env.create_tests_dir();
+        let path = env.create_file(
+            test_dir.join("test_parametrize.py").as_ref(),
+            r#"import karva
+@karva.tags.parametrize("a", [1, 2, 3])
+def test_parametrize(a):
+    assert a > 0"#,
+        );
+
+        let project = Project::new(env.cwd(), vec![test_dir]);
+        let discoverer = Discoverer::new(&project);
+
+        let (session, _) = discoverer.discover();
+
+        let test_case = session.test_cases()[0].clone();
+        Python::with_gil(|py| {
+            add_to_sys_path(&py, &env.cwd()).unwrap();
+            let module = PyModule::import(py, module_name(&env.cwd(), &path)).unwrap();
+            let fixture_manager = FixtureManager::new();
+            let result = test_case.test(py, &module, &fixture_manager);
+            assert!(result.is_empty());
+
+            let mut expected_stats = DiagnosticStats::default();
+            expected_stats.add_passed();
+            expected_stats.add_passed();
+            expected_stats.add_passed();
+            assert_eq!(*result.stats(), expected_stats);
         });
     }
 }
