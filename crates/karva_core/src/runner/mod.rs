@@ -344,7 +344,7 @@ mod tests {
 
     #[test]
     fn test_parametrize_with_fixture() {
-        let env = TestEnv::new();
+        let env = TestEnv::with_karva_installed();
         let test_dir = env.create_tests_dir();
         env.create_file(
             test_dir.join("test_parametrize_fixture.py").as_ref(),
@@ -373,7 +373,7 @@ def test_parametrize_with_fixture(a, fixture_value):
 
     #[test]
     fn test_parametrize_with_fixture_parametrize_priority() {
-        let env = TestEnv::new();
+        let env = TestEnv::with_karva_installed();
         let test_dir = env.create_tests_dir();
         env.create_file(
             test_dir.join("test_parametrize_fixture.py").as_ref(),
@@ -391,8 +391,6 @@ def test_parametrize_with_fixture(a):
         let project = Project::new(env.cwd(), vec![test_dir]);
 
         let result = project.test_with_reporter(&mut DummyReporter);
-
-        println!("{:?}", result);
 
         let mut expected_stats = DiagnosticStats::default();
         expected_stats.add_passed();

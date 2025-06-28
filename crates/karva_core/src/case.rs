@@ -358,7 +358,7 @@ mod tests {
 
     #[test]
     fn test_parametrize() {
-        let env = TestEnv::new();
+        let env = TestEnv::with_karva_installed();
         let test_dir = env.create_tests_dir();
         let path = env.create_file(
             test_dir.join("test_parametrize.py").as_ref(),
@@ -390,7 +390,7 @@ def test_parametrize(a, b):
 
     #[test]
     fn test_parametrize_single_parameter() {
-        let env = TestEnv::new();
+        let env = TestEnv::with_karva_installed();
         let test_dir = env.create_tests_dir();
         let path = env.create_file(
             test_dir.join("test_parametrize.py").as_ref(),
@@ -403,8 +403,7 @@ def test_parametrize(a):
         let project = Project::new(env.cwd(), vec![test_dir]);
         let discoverer = Discoverer::new(&project);
 
-        let (session, diagnostics) = discoverer.discover();
-        println!("{:?}", diagnostics);
+        let (session, _) = discoverer.discover();
 
         let test_case = session.test_cases()[0].clone();
         Python::with_gil(|py| {

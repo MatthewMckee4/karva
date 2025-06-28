@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, process::Command};
 
 use tempfile::TempDir;
 
@@ -11,12 +11,49 @@ pub struct TestEnv {
 impl TestEnv {
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            project_dir: TempDir::new()
-                .expect("Failed to create temp directory")
-                .path()
-                .to_path_buf(),
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let project_dir = temp_dir.path().to_path_buf();
+
+        Self { project_dir }
+    }
+
+    #[must_use]
+    pub fn with_karva_installed() -> Self {
+        let test_env = Self::new();
+
+        let wheel_path = std::env::current_dir()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("target/wheels");
+
+        let wheel_path = wheel_path
+            .read_dir()
+            .unwrap()
+            .filter_map(Result::ok)
+            .find(|entry| {
+                entry.path().extension().is_some_and(|ext| ext == "whl")
+                    && entry.file_name().to_string_lossy().contains("karva")
+            })
+            .map(|entry| entry.path())
+            .unwrap();
+
+        if wheel_path.exists() {
+            let mut cmd = Command::new("uv");
+            cmd.arg("venv").current_dir(&test_env.project_dir);
+            let _ = cmd.output();
+
+            let mut cmd = Command::new("uv");
+            cmd.arg("pip")
+                .arg("install")
+                .arg(&wheel_path)
+                .current_dir(&test_env.project_dir);
+            let _ = cmd.output();
         }
+
+        test_env
     }
 
     #[must_use]
