@@ -122,7 +122,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         writeln!(stdout)?;
     }
 
-    result.display(&mut stdout);
+    write!(stdout, "{}", result.display())?;
 
     if passed {
         writeln!(stdout, "{}", "All checks passed!".green().bold())?;

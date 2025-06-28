@@ -166,7 +166,7 @@ impl<'proj> StandardTestRunner<'proj> {
 
             let result = function.test(py, &py_module, fixture_manager);
 
-            diagnostics.report_test_function_run_result(result);
+            diagnostics.update(&result);
 
             fixture_manager.reset_function_fixtures();
         }
