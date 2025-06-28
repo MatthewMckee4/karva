@@ -36,7 +36,7 @@ jobs:
         run: |
           uv venv
           uv pip install pip maturin
-          maturin develop
+          uv run maturin develop
       - name: Run Cargo Tests
         run: cargo test
 
@@ -89,7 +89,7 @@ jobs:
         run: |
           uv venv
           uv pip install pip maturin
-          maturin develop
+          uv run maturin develop
       - uses: moonrepo/setup-rust@v1
         with:
           channel: stable
