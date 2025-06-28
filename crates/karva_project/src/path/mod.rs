@@ -50,7 +50,7 @@ impl SystemPath {
     }
 
     #[inline]
-    pub fn components(&self) -> camino::Utf8Components {
+    pub fn components(&self) -> camino::Utf8Components<'_> {
         self.0.components()
     }
 

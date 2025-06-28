@@ -35,8 +35,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           uv venv
-          uv pip install pip maturin
-          uv run maturin build
+          uv pip install -e .
       - name: Run Cargo Tests
         run: cargo test
 

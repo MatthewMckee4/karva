@@ -157,7 +157,7 @@ impl Diagnostic {
     }
 
     #[must_use]
-    pub const fn display(&self) -> DisplayDiagnostic {
+    pub const fn display(&self) -> DisplayDiagnostic<'_> {
         DisplayDiagnostic::new(self)
     }
 }
@@ -183,7 +183,7 @@ impl SubDiagnostic {
         }
     }
     #[must_use]
-    pub const fn display(&self) -> SubDiagnosticDisplay {
+    pub const fn display(&self) -> SubDiagnosticDisplay<'_> {
         SubDiagnosticDisplay::new(self)
     }
 
