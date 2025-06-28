@@ -392,6 +392,8 @@ def test_parametrize_with_fixture(a):
 
         let result = project.test_with_reporter(&mut DummyReporter);
 
+        println!("{:?}", result);
+
         let mut expected_stats = DiagnosticStats::default();
         expected_stats.add_passed();
         expected_stats.add_passed();
