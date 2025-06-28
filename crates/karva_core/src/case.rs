@@ -136,46 +136,46 @@ impl TestFunction {
                     .collect::<Vec<_>>();
 
                 // There are some not found fixtures.
-                if !fixture_diagnostics.is_empty() {
+                if fixture_diagnostics.is_empty() {
+                    let test_function_arguments = PyTuple::new(py, required_fixtures);
+
+                    match test_function_arguments {
+                        Ok(args) => {
+                            let test_name = if args.is_empty() {
+                                self.to_string()
+                            } else {
+                                format!("{self} [{args:?}]")
+                            };
+                            tracing::info!("Running test: {test_name}");
+                            match function.call1(py, args) {
+                                Ok(_) => {
+                                    tracing::info!("Test {test_name} passed");
+                                    inner_run_result.stats_mut().add_passed();
+                                }
+                                Err(err) => {
+                                    let diagnostic = Diagnostic::from_test_fail(py, &err, self);
+                                    match diagnostic.diagnostic_type() {
+                                        SubDiagnosticType::Fail => {
+                                            tracing::info!("Test {test_name} failed");
+                                        }
+                                        SubDiagnosticType::Error(_) => {
+                                            tracing::info!("Test {test_name} errored");
+                                        }
+                                    }
+                                    inner_run_result.add_diagnostic(diagnostic);
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            inner_run_result.add_diagnostic(Diagnostic::unknown_error(
+                                &err.to_string(),
+                                &self.to_string(),
+                            ));
+                        }
+                    }
+                } else {
                     inner_run_result
                         .add_diagnostic(Diagnostic::from_test_diagnostics(fixture_diagnostics));
-                    continue;
-                }
-
-                let test_function_arguments = PyTuple::new(py, required_fixtures);
-
-                match test_function_arguments {
-                    Ok(args) => {
-                        if args.is_empty() {
-                            tracing::info!("Running test: {}", self.to_string());
-                        } else {
-                            tracing::info!("Running test: {}[{:?}]", self.to_string(), args);
-                        }
-                        match function.call1(py, args) {
-                            Ok(_) => {
-                                tracing::info!("Test passed");
-                                inner_run_result.stats_mut().add_passed();
-                            }
-                            Err(err) => {
-                                let diagnostic = Diagnostic::from_test_fail(py, &err, self);
-                                match diagnostic.diagnostic_type() {
-                                    SubDiagnosticType::Fail => {
-                                        tracing::info!("Test failed");
-                                    }
-                                    SubDiagnosticType::Error(_) => {
-                                        tracing::info!("Test errored");
-                                    }
-                                }
-                                inner_run_result.add_diagnostic(diagnostic);
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        inner_run_result.add_diagnostic(Diagnostic::unknown_error(
-                            &err.to_string(),
-                            &self.to_string(),
-                        ));
-                    }
                 }
                 run_result.update(&inner_run_result);
             }

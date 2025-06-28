@@ -55,15 +55,17 @@ impl ParametrizeTag {
     #[must_use]
     pub fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let args = py_mark.getattr("args").ok()?;
-        if let Ok((arg_names, arg_values)) = args.extract::<(Vec<String>, Vec<Vec<PyObject>>)>() {
+        if let Ok((arg_name, arg_values)) = args.extract::<(String, Vec<PyObject>)>() {
+            Some(Self {
+                arg_names: vec![arg_name],
+                arg_values: arg_values.into_iter().map(|v| vec![v]).collect(),
+            })
+        } else if let Ok((arg_names, arg_values)) =
+            args.extract::<(Vec<String>, Vec<Vec<PyObject>>)>()
+        {
             Some(Self {
                 arg_names,
                 arg_values,
-            })
-        } else if let Ok((arg_name, arg_values)) = args.extract::<(String, Vec<PyObject>)>() {
-            Some(Self {
-                arg_names: vec![arg_name],
-                arg_values: vec![arg_values],
             })
         } else {
             None
