@@ -10,7 +10,7 @@ A Python test framework, written in Rust.
 
 Karva aims to be an efficient alternative to `pytest` and `unittest`.
 
-While we do not yet support all of `pytest`'s features, we aim to gradually add support for pytest alternatives as we add features.
+While we do not yet support all of pytest's features, we aim to gradually add support for pytest alternatives as we add features.
 
 ## Getting started
 
