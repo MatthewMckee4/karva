@@ -109,3 +109,26 @@ INFO Test test_parametrize::test_function [2, 2] passed
 Passed tests: 4
 All checks passed!
 ```
+
+We can also still use pytest's `parametrize` decorator:
+
+```python
+import karva
+
+@pytest.mark.parametrize("a", [1, 2])
+def test_function(a: int):
+    assert a > 0
+```
+
+Then running `uv run karva test -v` will provide the following output:
+
+```bash
+INFO Discovering tests...
+INFO Discovered 1 test in 1 file
+INFO Running test: test_parametrize::test_function [1]
+INFO Test test_parametrize::test_function [1] passed
+INFO Running test: test_parametrize::test_function [2]
+INFO Test test_parametrize::test_function [2] passed
+Passed tests: 2
+All checks passed!
+```
