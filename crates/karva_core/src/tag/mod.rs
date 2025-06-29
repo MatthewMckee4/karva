@@ -43,16 +43,6 @@ impl Tag {
             },
         )
     }
-
-    pub fn try_from_karva_tag(py_tag: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
-        let name_str = py_tag.call_method0("name")?.extract::<String>()?;
-
-        if name_str == "parametrize" {
-            Ok(ParametrizeTag::try_from_karva_tag(py_tag)?.map(Self::Parametrize))
-        } else {
-            Ok(None)
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -79,31 +69,6 @@ impl ParametrizeTag {
             })
         } else {
             None
-        }
-    }
-
-    pub fn try_from_karva_tag(py_tag: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
-        let arg_names = py_tag.getattr("arg_names")?;
-        let arg_values = py_tag.getattr("arg_values")?;
-
-        if let (Ok(name), Ok(values)) = (
-            arg_names.extract::<String>(),
-            arg_values.extract::<Vec<PyObject>>(),
-        ) {
-            Ok(Some(Self {
-                arg_names: vec![name],
-                arg_values: values.into_iter().map(|v| vec![v]).collect(),
-            }))
-        } else if let (Ok(names), Ok(values)) = (
-            arg_names.extract::<Vec<String>>(),
-            arg_values.extract::<Vec<Vec<PyObject>>>(),
-        ) {
-            Ok(Some(Self {
-                arg_names: names,
-                arg_values: values,
-            }))
-        } else {
-            Ok(None)
         }
     }
 
@@ -146,12 +111,6 @@ impl Tags {
             return tags;
         }
 
-        let tags = Self::try_from_unresolved_karva_tags(py, py_test_function);
-
-        if let Ok(tags) = tags {
-            return tags;
-        }
-
         Self::default()
     }
 
@@ -170,24 +129,6 @@ impl Tags {
             return None;
         }
         Some(Self { inner: tags })
-    }
-
-    pub fn try_from_unresolved_karva_tags(
-        py: Python<'_>,
-        py_test_function: &Py<PyAny>,
-    ) -> PyResult<Self> {
-        let tags_attr = py_test_function.getattr(py, "tags")?;
-        let tags_iter = tags_attr.call_method0(py, "__iter__")?;
-        let tags_list = tags_iter.extract::<Vec<Bound<'_, PyAny>>>(py)?;
-
-        let mut tags = Vec::new();
-        for tag in tags_list {
-            if let Ok(Some(parsed_tag)) = Tag::try_from_karva_tag(&tag) {
-                tags.push(parsed_tag);
-            }
-        }
-
-        Ok(Self { inner: tags })
     }
 
     #[must_use]
