@@ -21,6 +21,11 @@ pub fn setup() {
             m.add_class::<PyTestFunction>()?;
             Ok(())
         }
+        unsafe {
+            while pyo3::ffi::Py_IsInitialized() != 0 {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        }
         pyo3::append_to_inittab!(karva);
     });
 }
