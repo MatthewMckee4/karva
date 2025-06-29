@@ -240,7 +240,7 @@ impl<'a> TestCaseLogger<'a> {
             let args_str = self
                 .args
                 .iter()
-                .map(|a| a.to_string())
+                .map(|a| format!("{a:?}"))
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("{} [{args_str}]", self.function)
