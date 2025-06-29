@@ -256,11 +256,7 @@ mod tests {
 
     use std::collections::{HashMap, HashSet};
 
-    use karva_project::{
-        project::ProjectOptions,
-        tests::{MockFixture, TestEnv, mock_fixture},
-        verbosity::VerbosityLevel,
-    };
+    use karva_project::{project::ProjectOptions, tests::TestEnv, verbosity::VerbosityLevel};
 
     use super::*;
     use crate::{module::StringModule, package::StringPackage};
@@ -839,14 +835,17 @@ def test_function(): pass
     #[test]
     fn test_discover_fixture_in_same_file_in_root() {
         let env = TestEnv::new();
-        let fixture = mock_fixture(&[MockFixture {
-            name: "x".to_string(),
-            scope: "function".to_string(),
-            body: "return 1".to_string(),
-            args: String::new(),
-        }]);
 
-        let test_path = env.create_file("test_1.py", &format!("{fixture}def test_1(x): pass\n"));
+        let test_path = env.create_file(
+            "test_1.py",
+            r"
+import karva
+@karva.fixture(scope='function')
+def x():
+    return 1
+
+def test_1(x): pass",
+        );
 
         for path in [env.cwd(), test_path] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
@@ -871,12 +870,12 @@ def test_function(): pass
     #[test]
     fn test_discover_fixture_in_same_file_in_tests_dir() {
         let env = TestEnv::new();
-        let fixture = mock_fixture(&[MockFixture {
-            name: "x".to_string(),
-            scope: "function".to_string(),
-            body: "return 1".to_string(),
-            args: String::new(),
-        }]);
+        let fixture = r"
+import karva
+@karva.fixture(scope='function')
+def x():
+    return 1
+";
 
         let tests_dir = env.create_tests_dir();
 
@@ -917,16 +916,16 @@ def test_function(): pass
     #[test]
     fn test_discover_fixture_in_root_tests_in_tests_dir() {
         let env = TestEnv::new();
-        let fixture = mock_fixture(&[MockFixture {
-            name: "x".to_string(),
-            scope: "function".to_string(),
-            body: "return 1".to_string(),
-            args: String::new(),
-        }]);
+        let fixture = r"
+import karva
+@karva.fixture(scope='function')
+def x():
+    return 1
+";
 
         let tests_dir = env.create_tests_dir();
 
-        env.create_file("conftest.py", &fixture);
+        env.create_file("conftest.py", fixture);
 
         let test_path = env.create_file(
             tests_dir.join("test_1.py").as_std_path(),
@@ -969,52 +968,49 @@ def test_function(): pass
     #[test]
     fn test_discover_fixture_in_root_tests_in_nested_dir() {
         let env = TestEnv::new();
-        let fixture_x = mock_fixture(&[MockFixture {
-            name: "x".to_string(),
-            scope: "function".to_string(),
-            body: "return 1".to_string(),
-            args: String::new(),
-        }]);
+        let fixture_x = r"
+import karva
+@karva.fixture(scope='function')
+def x():
+    return 1
+";
 
-        env.create_file("conftest.py", &fixture_x);
+        env.create_file("conftest.py", fixture_x);
 
         let nested_dir = env.create_dir("nested_dir");
 
-        let fixture_y = mock_fixture(&[MockFixture {
-            name: "y".to_string(),
-            scope: "function".to_string(),
-            body: "return 2".to_string(),
-            args: "x".to_string(),
-        }]);
+        let fixture_y = r"
+import karva
+@karva.fixture(scope='function')
+def y(x):
+    return 2
+";
 
-        env.create_file(nested_dir.join("conftest.py").as_std_path(), &fixture_y);
+        env.create_file(nested_dir.join("conftest.py").as_std_path(), fixture_y);
 
         let more_nested_dir = nested_dir.join("more_nested_dir");
 
-        let fixture_z = mock_fixture(&[MockFixture {
-            name: "z".to_string(),
-            scope: "function".to_string(),
-            body: "return 3".to_string(),
-            args: "x, y".to_string(),
-        }]);
+        let fixture_z = r"
+import karva
+@karva.fixture(scope='function')
+def z(x, y):
+    return 3
+";
 
-        env.create_file(
-            more_nested_dir.join("conftest.py").as_std_path(),
-            &fixture_z,
-        );
+        env.create_file(more_nested_dir.join("conftest.py").as_std_path(), fixture_z);
 
         let even_more_nested_dir = more_nested_dir.join("even_more_nested_dir");
 
-        let fixture_w = mock_fixture(&[MockFixture {
-            name: "w".to_string(),
-            scope: "function".to_string(),
-            body: "return 4".to_string(),
-            args: "x, y, z".to_string(),
-        }]);
+        let fixture_w = r"
+import karva
+@karva.fixture(scope='function')
+def w(x, y, z):
+    return 4
+";
 
         env.create_file(
             even_more_nested_dir.join("conftest.py").as_std_path(),
-            &fixture_w,
+            fixture_w,
         );
 
         let test_path = env.create_file(
@@ -1187,15 +1183,15 @@ def test_function(): pass
     fn test_discover_doubly_nested_with_conftest_middle_path() {
         let env = TestEnv::new();
 
-        let fixture = mock_fixture(&[MockFixture {
-            name: "root_fixture".to_string(),
-            scope: "function".to_string(),
-            body: "return 'from_root'".to_string(),
-            args: String::new(),
-        }]);
+        let fixture = r"
+import karva
+@karva.fixture(scope='function')
+def root_fixture():
+    return 'from_root'
+";
 
         let tests_dir = env.create_tests_dir();
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixture);
+        env.create_file(tests_dir.join("conftest.py").as_std_path(), fixture);
 
         let middle_dir = env.create_dir(tests_dir.join("middle_dir").as_std_path());
         let deep_dir = env.create_dir(middle_dir.join("deep_dir").as_std_path());
