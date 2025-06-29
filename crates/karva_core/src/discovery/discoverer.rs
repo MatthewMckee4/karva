@@ -1248,4 +1248,62 @@ def root_fixture():
         );
         assert_eq!(session.total_test_cases(), 2);
     }
+
+    #[test]
+    #[ignore = "pytest is not supported in rust tests"]
+    fn test_discover_pytest_fixture() {
+        let env = TestEnv::new();
+
+        let test_dir = env.create_tests_dir();
+
+        let fixture = r"
+import pytest
+
+@pytest.fixture
+def x():
+    return 1
+";
+
+        env.create_file(test_dir.join("conftest.py").as_std_path(), fixture);
+
+        env.create_file(
+            test_dir.join("test_1.py").as_std_path(),
+            "def test_1(x): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![test_dir.clone()]);
+        let (session, _) = Discoverer::new(&project).discover();
+
+        assert_eq!(
+            session.display(),
+            StringPackage {
+                modules: HashMap::new(),
+                packages: HashMap::from([(
+                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
+                    StringPackage {
+                        modules: HashMap::from([
+                            (
+                                "conftest".to_string(),
+                                StringModule {
+                                    test_cases: HashSet::new(),
+                                    fixtures: HashSet::from([(
+                                        "x".to_string(),
+                                        "function".to_string()
+                                    )]),
+                                },
+                            ),
+                            (
+                                "test_1".to_string(),
+                                StringModule {
+                                    test_cases: HashSet::from(["test_1".to_string()]),
+                                    fixtures: HashSet::new(),
+                                },
+                            )
+                        ]),
+                        packages: HashMap::new(),
+                    },
+                )]),
+            }
+        );
+    }
 }
