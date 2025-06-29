@@ -82,6 +82,8 @@ All checks passed!
 
 We can also use multiple decorators:
 
+This will result in a sort of cartesian product of the parametrize values.
+
 ```python
 import karva
 
