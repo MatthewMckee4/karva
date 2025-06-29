@@ -8,4 +8,5 @@ pub mod runner;
 pub mod tag;
 pub mod utils;
 
+#[cfg(test)]
 pub mod testing;

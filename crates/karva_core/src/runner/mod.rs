@@ -273,7 +273,6 @@ mod tests {
     use karva_project::tests::{MockFixture, TestEnv, mock_fixture};
 
     use super::*;
-    use crate::testing::setup;
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
@@ -346,7 +345,6 @@ mod tests {
 
     #[test]
     fn test_parametrize_with_fixture() {
-        setup();
         let env = TestEnv::new();
         let test_dir = env.create_tests_dir();
         env.create_file(
@@ -376,7 +374,6 @@ def test_parametrize_with_fixture(a, fixture_value):
 
     #[test]
     fn test_parametrize_with_fixture_parametrize_priority() {
-        setup();
         let env = TestEnv::new();
 
         let test_dir = env.create_tests_dir();

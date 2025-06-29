@@ -242,7 +242,6 @@ mod tests {
         discovery::Discoverer,
         fixture::{FixtureManager, HasFunctionDefinition, RequiresFixtures},
         runner::DiagnosticStats,
-        testing::setup,
         utils::add_to_sys_path,
     };
 
@@ -359,7 +358,6 @@ mod tests {
 
     #[test]
     fn test_parametrize() {
-        setup();
         let env = TestEnv::new();
         let test_dir = env.create_tests_dir();
         let path = env.create_file(
@@ -394,7 +392,6 @@ def test_parametrize(a, b):
 
     #[test]
     fn test_parametrize_single_parameter() {
-        setup();
         let env = TestEnv::new();
         let test_dir = env.create_tests_dir();
         let path = env.create_file(
