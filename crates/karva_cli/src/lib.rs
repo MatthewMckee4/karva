@@ -7,7 +7,11 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use colored::Colorize;
-use karva_core::{runner::TestRunner, utils::current_python_version};
+use karva_core::{
+    diagnostic::reporter::{DummyReporter, Reporter},
+    runner::TestRunner,
+    utils::current_python_version,
+};
 use karva_project::{
     path::{SystemPath, SystemPathBuf},
     project::{Project, ProjectMetadata},
@@ -100,18 +104,20 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let options = args.into_options();
 
     let project = Project::new(cwd, paths)
-        .with_metadata(ProjectMetadata {
-            python_version: current_python_version(),
-        })
+        .with_metadata(ProjectMetadata::new(current_python_version()))
         .with_options(options);
 
     ctrlc::set_handler(move || {
         std::process::exit(0);
     })?;
 
-    let mut reporter = ProgressReporter::default();
+    let mut reporter: Box<dyn Reporter> = if project.options().verbosity().is_default() {
+        Box::new(ProgressReporter::default())
+    } else {
+        Box::new(DummyReporter)
+    };
 
-    let result = project.test_with_reporter(&mut reporter);
+    let result = project.test_with_reporter(&mut *reporter);
 
     let mut stdout = io::stdout().lock();
 

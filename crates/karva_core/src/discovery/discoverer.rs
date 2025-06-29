@@ -259,6 +259,7 @@ mod tests {
     use karva_project::{
         project::ProjectOptions,
         tests::{MockFixture, TestEnv, mock_fixture},
+        verbosity::VerbosityLevel,
     };
 
     use super::*;
@@ -529,10 +530,11 @@ def test_function(): pass
 ",
         );
 
-        let project = Project::new(env.cwd(), vec![path]).with_options(ProjectOptions {
-            test_prefix: "check".to_string(),
-            ..Default::default()
-        });
+        let project = Project::new(env.cwd(), vec![path]).with_options(ProjectOptions::new(
+            "check".to_string(),
+            VerbosityLevel::Default,
+            false,
+        ));
         let discoverer = Discoverer::new(&project);
         let (session, _) = discoverer.discover();
 

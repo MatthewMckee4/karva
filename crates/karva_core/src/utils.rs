@@ -56,7 +56,7 @@ fn redirect_output<'py>(
     py: Python<'py>,
     options: &ProjectOptions,
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
-    if options.show_output {
+    if options.show_output() {
         Ok(None)
     } else {
         let sys = py.import("sys")?;
@@ -98,7 +98,7 @@ where
     F: for<'py> FnOnce(Python<'py>) -> R,
 {
     Python::with_gil(|py| {
-        let null_file = redirect_output(py, &project.options);
+        let null_file = redirect_output(py, project.options());
         let result = f(py);
         if let Ok(Some(null_file)) = null_file {
             let _ = restore_output(py, &null_file);

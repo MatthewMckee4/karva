@@ -59,7 +59,7 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
             } else if function_def
                 .name
                 .to_string()
-                .starts_with(&self.project.options.test_prefix)
+                .starts_with(self.project.options().test_prefix())
             {
                 self.discovered_functions.push(TestFunction::new(
                     self.project.cwd(),
@@ -114,7 +114,7 @@ pub fn discover(
         }
     };
 
-    let parsed = parsed_module(path, project.metadata.python_version);
+    let parsed = parsed_module(path, project.metadata().python_version());
     visitor.visit_body(&parsed.syntax().body);
 
     (

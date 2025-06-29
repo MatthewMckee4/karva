@@ -40,9 +40,11 @@ impl<'proj> StandardTestRunner<'proj> {
         let total_test_cases = session.total_test_cases();
 
         tracing::info!(
-            "Discovered {} tests in {} files",
+            "Discovered {} test{} in {} file{}",
             total_test_cases,
-            total_files
+            if total_test_cases == 1 { "" } else { "s" },
+            total_files,
+            if total_files == 1 { "" } else { "s" }
         );
 
         reporter.set(total_files);

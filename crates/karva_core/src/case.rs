@@ -144,7 +144,12 @@ impl TestFunction {
                             let test_name = if args.is_empty() {
                                 self.to_string()
                             } else {
-                                format!("{self} [{args:?}]")
+                                let args_str = args
+                                    .iter()
+                                    .map(|a| a.to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(", ");
+                                format!("{self} [{args_str}]")
                             };
                             tracing::info!("Running test: {test_name}");
                             match function.call1(py, args) {
