@@ -1,5 +1,8 @@
 This works like pytest's `parametrize` decorator.
 
+!!! note
+    When mixing fixtures and parametrize, the parametrize values take priority.
+
 First, here is a small example:
 
 ```python
@@ -76,9 +79,6 @@ INFO Test test_parametrize::test_function [2, 1] passed
 Passed tests: 2
 All checks passed!
 ```
-
-!!! note
-    When mixing fixtures and parametrize, the parametrize values take priority.
 
 We can also use multiple decorators:
 
