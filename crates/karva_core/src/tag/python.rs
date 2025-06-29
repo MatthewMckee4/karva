@@ -121,10 +121,10 @@ mod tests {
     use pyo3::{
         ffi::c_str,
         prelude::*,
-        types::{PyDict, PyType},
+        types::{PyDict, PyTuple, PyType},
     };
 
-    use crate::tag::python::{PyTag, PyTags};
+    use crate::tag::python::{PyTag, PyTags, PyTestFunction};
 
     #[test]
     fn test_parametrize_single_arg() {
@@ -199,6 +199,60 @@ mod tests {
             assert_eq!(arg_values[1].len(), 2);
             assert_eq!(arg_values[1][0].extract::<i32>(py).unwrap(), 3);
             assert_eq!(arg_values[1][1].extract::<i32>(py).unwrap(), 4);
+        });
+    }
+
+    #[test]
+    fn test_invalid_parametrize_args() {
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+            Python::run(
+                py,
+                c_str!("import karva;tags = karva.tags"),
+                None,
+                Some(&locals),
+            )
+            .unwrap();
+
+            let binding = locals.get_item("tags").unwrap().unwrap();
+            let cls = binding.downcast::<PyType>().unwrap();
+
+            let arg_names = py.eval(c_str!("1"), None, None).unwrap();
+            let arg_values = py.eval(c_str!("[1, 2, 3]"), None, None).unwrap();
+            let tags = PyTags::parametrize(cls, &arg_names, &arg_values).unwrap_err();
+            assert_eq!(
+                tags.to_string(),
+                "TypeError: Expected a string or a list of strings for the arg_names, and a list of lists of objects for the arg_values"
+            );
+        });
+    }
+
+    #[test]
+    fn test_parametrize_multiple_args_with_fixture() {
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+
+            py.run(
+                c_str!(
+                    r#"
+import karva
+
+@karva.tags.parametrize("a", [1, 2, 3])
+def test_function(a):
+    assert a > 0
+            "#
+                ),
+                None,
+                Some(&locals),
+            )
+            .unwrap();
+
+            let test_function = locals.get_item("test_function").unwrap().unwrap();
+            let test_function = test_function.downcast::<PyTestFunction>().unwrap();
+
+            let args = PyTuple::new(py, [1]).unwrap();
+
+            test_function.call1(&args).unwrap();
         });
     }
 }
