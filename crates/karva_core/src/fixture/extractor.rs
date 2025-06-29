@@ -1,7 +1,10 @@
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::fixture::{Fixture, FixtureScope, python::FixtureFunctionDefinition};
+use crate::{
+    discovery::visitor::is_generator_function,
+    fixture::{Fixture, FixtureScope, python::FixtureFunctionDefinition},
+};
 
 #[derive(Default)]
 pub struct FixtureExtractor {}
@@ -15,6 +18,7 @@ impl FixtureExtractor {
     pub fn try_from_pytest_fixture(
         function_def: StmtFunctionDef,
         function: &Bound<'_, PyAny>,
+        is_generator_function: bool,
     ) -> Result<Fixture, String> {
         let found_name = function
             .getattr("_fixture_function_marker")
@@ -43,6 +47,7 @@ impl FixtureExtractor {
             function_def,
             FixtureScope::try_from(scope.to_string())?,
             function.into(),
+            is_generator_function,
         ))
     }
 
@@ -54,11 +59,13 @@ impl FixtureExtractor {
             .getattr(val.name.to_string())
             .map_err(|e| e.to_string())?;
 
+        let is_generator_function = is_generator_function(val);
+
         let Ok(py_function) = function
             .clone()
             .downcast_into::<FixtureFunctionDefinition>()
         else {
-            return Self::try_from_pytest_fixture(val.clone(), &function);
+            return Self::try_from_pytest_fixture(val.clone(), &function, is_generator_function);
         };
 
         let scope = py_function.borrow_mut().scope.clone();
@@ -69,6 +76,7 @@ impl FixtureExtractor {
             val.clone(),
             FixtureScope::try_from(scope)?,
             py_function.into(),
+            is_generator_function,
         ))
     }
 }

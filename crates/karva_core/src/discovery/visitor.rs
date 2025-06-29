@@ -1,7 +1,7 @@
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 use pyo3::{prelude::*, types::PyModule};
 use ruff_python_ast::{
-    ModModule, PythonVersion, Stmt,
+    Expr, ModModule, PythonVersion, Stmt, StmtFunctionDef,
     visitor::source_order::{self, SourceOrderVisitor},
 };
 use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
@@ -140,4 +140,15 @@ pub fn parsed_module(path: &SystemPathBuf, python_version: PythonVersion) -> Par
 #[must_use]
 pub fn source_text(path: &SystemPathBuf) -> String {
     std::fs::read_to_string(path.as_std_path()).unwrap()
+}
+
+pub fn is_generator_function(function_def: &StmtFunctionDef) -> bool {
+    for stmt in &function_def.body {
+        if let Stmt::Expr(expr) = stmt {
+            if let Expr::Yield(_) | Expr::YieldFrom(_) = *expr.value {
+                return true;
+            }
+        }
+    }
+    false
 }

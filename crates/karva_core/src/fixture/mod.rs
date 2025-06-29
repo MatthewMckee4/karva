@@ -49,6 +49,7 @@ pub struct Fixture {
     function_def: StmtFunctionDef,
     scope: FixtureScope,
     function: Py<PyAny>,
+    is_generator: bool,
 }
 
 impl Fixture {
@@ -58,12 +59,14 @@ impl Fixture {
         function_def: StmtFunctionDef,
         scope: FixtureScope,
         function: Py<PyAny>,
+        is_generator: bool,
     ) -> Self {
         Self {
             name,
             function_def,
             scope,
             function,
+            is_generator,
         }
     }
 
@@ -75,6 +78,11 @@ impl Fixture {
     #[must_use]
     pub const fn scope(&self) -> &FixtureScope {
         &self.scope
+    }
+
+    #[must_use]
+    pub const fn is_generator(&self) -> bool {
+        self.is_generator
     }
 
     pub fn call<'a>(

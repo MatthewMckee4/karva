@@ -1306,4 +1306,71 @@ def x():
             }
         );
     }
+
+    #[test]
+    fn test_discover_generator_fixture() {
+        let env = TestEnv::new();
+
+        let test_dir = env.create_tests_dir();
+
+        let fixture = r"
+import karva
+@karva.fixture(scope='function')
+def x():
+    yield 1
+";
+
+        env.create_file(test_dir.join("conftest.py").as_std_path(), fixture);
+
+        env.create_file(
+            test_dir.join("test_1.py").as_std_path(),
+            "def test_1(): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![test_dir.clone()]);
+        let (session, _) = Discoverer::new(&project).discover();
+
+        let tests_dir_name = test_dir.strip_prefix(env.cwd()).unwrap().to_string();
+
+        assert_eq!(
+            session.display(),
+            StringPackage {
+                modules: HashMap::new(),
+                packages: HashMap::from([(
+                    tests_dir_name.clone(),
+                    StringPackage {
+                        modules: HashMap::from([
+                            (
+                                "test_1".to_string(),
+                                StringModule {
+                                    test_cases: HashSet::from(["test_1".to_string()]),
+                                    fixtures: HashSet::new(),
+                                },
+                            ),
+                            (
+                                "conftest".to_string(),
+                                StringModule {
+                                    test_cases: HashSet::new(),
+                                    fixtures: HashSet::new(),
+                                },
+                            )
+                        ]),
+                        packages: HashMap::new(),
+                    }
+                )]),
+            }
+        );
+
+        let test_1_module = session
+            .packages()
+            .get(&SystemPathBuf::from(tests_dir_name))
+            .unwrap()
+            .modules()
+            .get(&SystemPathBuf::from("conftest"))
+            .unwrap();
+
+        let fixture = test_1_module.fixtures()[0];
+
+        assert!(fixture.is_generator());
+    }
 }
