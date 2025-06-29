@@ -8,5 +8,5 @@ pub mod runner;
 pub mod tag;
 pub mod utils;
 
-#[cfg(test)]
+#[cfg(feature = "testing")]
 pub mod testing;

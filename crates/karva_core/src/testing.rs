@@ -8,6 +8,10 @@ use crate::{
 #[cfg(test)]
 #[ctor::ctor]
 pub fn setup() {
+    setup_module();
+}
+
+pub fn setup_module() {
     #[pymodule]
     pub fn karva(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_function(wrap_pyfunction!(fixture_decorator, m)?)?;

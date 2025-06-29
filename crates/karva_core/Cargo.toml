@@ -30,5 +30,8 @@ tempfile = { workspace = true }
 regex = { workspace = true }
 ctor = { workspace = true }
 
+[features]
+testing = []
+
 [lints]
 workspace = true

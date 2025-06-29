@@ -21,7 +21,7 @@ codspeed-criterion-compat = { workspace = true, default-features = false, option
 criterion = { workspace = true, default-features = false }
 
 [dev-dependencies]
-karva_core = { workspace = true }
+karva_core = { workspace = true, features = ["testing"] }
 karva_project = { workspace = true }
 
 [lints]
