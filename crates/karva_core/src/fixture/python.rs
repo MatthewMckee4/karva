@@ -73,3 +73,20 @@ impl FixtureFunctionDefinition {
         self.function.call(py, args, kwargs)
     }
 }
+
+#[pyfunction(name = "fixture")]
+#[pyo3(signature = (func=None, *, scope="function", name=None))]
+pub fn fixture_decorator(
+    py: Python<'_>,
+    func: Option<PyObject>,
+    scope: &str,
+    name: Option<&str>,
+) -> PyResult<PyObject> {
+    let marker = FixtureFunctionMarker::new(scope.to_string(), name.map(String::from));
+    if let Some(f) = func {
+        let fixture_def = marker.__call__(py, f)?;
+        Ok(Py::new(py, fixture_def)?.into_any())
+    } else {
+        Ok(Py::new(py, marker)?.into_any())
+    }
+}
