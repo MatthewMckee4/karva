@@ -272,7 +272,7 @@ impl TestRunner for Project {
 
 #[cfg(test)]
 mod tests {
-    use karva_project::tests::{MockFixture, TestEnv, mock_fixture};
+    use karva_project::tests::TestEnv;
 
     use super::*;
 
@@ -281,30 +281,26 @@ mod tests {
      {
         let env = TestEnv::new();
 
-        let fixtures = mock_fixture(&[
-            MockFixture {
-                name: "x".to_string(),
-                scope: "module".to_string(),
-                body: "return 1".to_string(),
-                args: String::new(),
-            },
-            MockFixture {
-                name: "y".to_string(),
-                scope: "function".to_string(),
-                body: "return 1".to_string(),
-                args: "x".to_string(),
-            },
-            MockFixture {
-                name: "z".to_string(),
-                scope: "function".to_string(),
-                body: "return 1".to_string(),
-                args: "x, y".to_string(),
-            },
-        ]);
         let tests_dir = env.create_tests_dir();
         let inner_dir = tests_dir.join("inner");
 
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixtures);
+        env.create_file(
+            tests_dir.join("conftest.py").as_std_path(),
+            r"
+import karva
+@karva.fixture(scope='function')
+def x():
+    return 1
+
+@karva.fixture(scope='function')
+def y(x):
+    return 1
+
+@karva.fixture(scope='function')
+def z(x, y):
+    return 1
+",
+        );
         env.create_file(
             inner_dir.join("test_1.py").as_std_path(),
             "def test_1(z): pass",
@@ -323,14 +319,16 @@ mod tests {
     fn test_runner_given_nested_path() {
         let env = TestEnv::new();
 
-        let fixtures = mock_fixture(&[MockFixture {
-            name: "x".to_string(),
-            scope: "module".to_string(),
-            body: "return 1".to_string(),
-            args: String::new(),
-        }]);
         let tests_dir = env.create_tests_dir();
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), &fixtures);
+        env.create_file(
+            tests_dir.join("conftest.py").as_std_path(),
+            r"
+import karva
+@karva.fixture(scope='module')
+def x():
+    return 1
+",
+        );
         let test_file = env.create_file(
             tests_dir.join("test_1.py").as_std_path(),
             "def test_1(x): pass",
