@@ -37,16 +37,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Update Rust toolchain
         run: rustup update
-      - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: ${{ matrix.python-version }}
       - name: Install Python dependencies
         run: |
-          uv venv --python ${{ matrix.python-version }}
-          uv pip install -e .
+          pip install maturin
+          maturin develop
       - name: Run tests
         run: |
-          uv run cargo test
+          cargo test
 
   build-docs:
     runs-on: ${{ matrix.os }}
