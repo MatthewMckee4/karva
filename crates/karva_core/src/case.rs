@@ -134,30 +134,21 @@ impl TestFunction {
 
                     match test_function_arguments {
                         Ok(args) => {
-                            let test_name = if args.is_empty() {
-                                self.to_string()
-                            } else {
-                                let args_str = args
-                                    .iter()
-                                    .map(|a| a.to_string())
-                                    .collect::<Vec<_>>()
-                                    .join(", ");
-                                format!("{self} [{args_str}]")
-                            };
-                            tracing::info!("Running test: {test_name}");
+                            let logger = TestCaseLogger::new(self, args.clone());
+                            logger.log_running();
                             match function.call1(py, args) {
                                 Ok(_) => {
-                                    tracing::info!("Test {test_name} passed");
+                                    logger.log_passed();
                                     inner_run_result.stats_mut().add_passed();
                                 }
                                 Err(err) => {
                                     let diagnostic = Diagnostic::from_test_fail(py, &err, self);
                                     match diagnostic.diagnostic_type() {
                                         SubDiagnosticType::Fail => {
-                                            tracing::info!("Test {test_name} failed");
+                                            logger.log_failed();
                                         }
                                         SubDiagnosticType::Error(_) => {
-                                            tracing::info!("Test {test_name} errored");
+                                            logger.log_errored();
                                         }
                                     }
                                     inner_run_result.add_diagnostic(diagnostic);
@@ -227,6 +218,53 @@ impl<'a> Upcast<Vec<&'a dyn HasFunctionDefinition>> for Vec<&'a TestFunction> {
 impl std::fmt::Debug for TestFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TestCase(path: {}, name: {})", self.path, self.name())
+    }
+}
+
+struct TestCaseLogger<'a> {
+    function: &'a TestFunction,
+    args: Bound<'a, PyTuple>,
+}
+
+impl<'a> TestCaseLogger<'a> {
+    #[must_use]
+    const fn new(function: &'a TestFunction, args: Bound<'a, PyTuple>) -> Self {
+        Self { function, args }
+    }
+
+    #[must_use]
+    fn test_name(&self) -> String {
+        if self.args.is_empty() {
+            self.function.to_string()
+        } else {
+            let args_str = self
+                .args
+                .iter()
+                .map(|a| a.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{} [{args_str}]", self.function)
+        }
+    }
+
+    fn log(&self, status: &str) {
+        tracing::info!("{:<8} | {}", status, self.test_name());
+    }
+
+    fn log_running(&self) {
+        self.log("running");
+    }
+
+    fn log_passed(&self) {
+        self.log("passed");
+    }
+
+    fn log_failed(&self) {
+        self.log("failed");
+    }
+
+    fn log_errored(&self) {
+        self.log("errored");
     }
 }
 
