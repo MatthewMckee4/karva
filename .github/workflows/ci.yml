@@ -22,7 +22,7 @@ jobs:
       - uses: pre-commit/action@v3.0.1
 
   cargo-test:
-    name: cargo-test-${{ matrix.python-version }}
+    name: cargo-test-${{ matrix.os }}-${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
       max-parallel: 12
@@ -108,7 +108,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   python-test:
-    name: ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.folder }}
+    name: python-test-${{ matrix.folder }}-${{ matrix.os }}-${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
