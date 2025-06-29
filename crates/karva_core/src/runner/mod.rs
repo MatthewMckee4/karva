@@ -402,4 +402,60 @@ def test_parametrize_with_fixture(a):
         expected_stats.add_passed();
         assert_eq!(*result.stats(), expected_stats);
     }
+
+    #[test]
+    fn test_parametrize_two_decorators() {
+        let env = TestEnv::new();
+
+        let test_dir = env.create_tests_dir();
+        env.create_file(
+            test_dir.join("test_parametrize_fixture.py").as_ref(),
+            r#"import karva
+
+@karva.tags.parametrize("a", [1, 2])
+@karva.tags.parametrize("b", [1, 2])
+def test_function(a: int, b: int):
+    assert a > 0 and b > 0
+"#,
+        );
+
+        let project = Project::new(env.cwd(), vec![test_dir]);
+
+        let result = project.test_with_reporter(&mut DummyReporter);
+
+        let mut expected_stats = DiagnosticStats::default();
+        expected_stats.add_passed();
+        expected_stats.add_passed();
+        expected_stats.add_passed();
+        expected_stats.add_passed();
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_parametrize_three_decorators() {
+        let env = TestEnv::new();
+
+        let test_dir = env.create_tests_dir();
+        env.create_file(
+            test_dir.join("test_parametrize_fixture.py").as_ref(),
+            r#"import karva
+
+@karva.tags.parametrize("a", [1, 2])
+@karva.tags.parametrize("b", [1, 2])
+@karva.tags.parametrize("c", [1, 2])
+def test_function(a: int, b: int, c: int):
+    assert a > 0 and b > 0 and c > 0
+"#,
+        );
+
+        let project = Project::new(env.cwd(), vec![test_dir]);
+
+        let result = project.test_with_reporter(&mut DummyReporter);
+
+        let mut expected_stats = DiagnosticStats::default();
+        for _ in 0..8 {
+            expected_stats.add_passed();
+        }
+        assert_eq!(*result.stats(), expected_stats);
+    }
 }

@@ -13,7 +13,7 @@ use crate::{
     diagnostic::{Diagnostic, DiagnosticScope, SubDiagnosticType},
     fixture::{FixtureManager, HasFunctionDefinition, RequiresFixtures},
     runner::RunDiagnostics,
-    tag::{Tag, Tags},
+    tag::Tags,
     utils::Upcast,
 };
 
@@ -97,15 +97,8 @@ impl TestFunction {
             }
         } else {
             // The function requires fixtures or parameters, so we need to try to extract them from the test case.
-            let mut param_args: Vec<HashMap<String, PyObject>> = Vec::new();
             let tags = Tags::from_py_any(py, function);
-            for tag in tags {
-                match tag {
-                    Tag::Parametrize(parametrize_tag) => {
-                        param_args.extend(parametrize_tag.each_arg_value());
-                    }
-                }
-            }
+            let mut param_args = tags.parametrize_args();
 
             // Ensure that there is at least one set of parameters.
             if param_args.is_empty() {

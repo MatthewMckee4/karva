@@ -79,3 +79,31 @@ All checks passed!
 
 !!! note
     When mixing fixtures and parametrize, the parametrize values take priority.
+
+We can also use multiple decorators:
+
+```python
+import karva
+
+@karva.tags.parametrize("a", [1, 2])
+@karva.tags.parametrize("b", [1, 2])
+def test_function(a: int, b: int):
+    assert a > 0 and b > 0
+```
+
+Then running `uv run karva test -v` will provide the following output:
+
+```bash
+INFO Discovering tests...
+INFO Discovered 1 test in 1 file
+INFO Running test: test_parametrize::test_function [1, 1]
+INFO Test test_parametrize::test_function [1, 1] passed
+INFO Running test: test_parametrize::test_function [2, 1]
+INFO Test test_parametrize::test_function [2, 1] passed
+INFO Running test: test_parametrize::test_function [1, 2]
+INFO Test test_parametrize::test_function [1, 2] passed
+INFO Running test: test_parametrize::test_function [2, 2]
+INFO Test test_parametrize::test_function [2, 2] passed
+Passed tests: 4
+All checks passed!
+```

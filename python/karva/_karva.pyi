@@ -9,7 +9,7 @@ from typing import (
     overload,
 )
 
-_ScopeName: TypeAlias = Literal["session", "module", "function"]
+_ScopeName: TypeAlias = Literal["session", "package", "module", "function"]
 
 _T = TypeVar("_T")
 _P = ParamSpec("_P")
@@ -52,8 +52,6 @@ class tags:  # noqa: N801
         arg_names: Sequence[str] | str,
         arg_values: Sequence[Sequence[Any]] | Sequence[Any],
     ) -> tags: ...
-    @overload
-    def __call__(self, f: tags, /) -> tags: ...
     @overload
     def __call__(self, f: tag, /) -> tags: ...
     @overload

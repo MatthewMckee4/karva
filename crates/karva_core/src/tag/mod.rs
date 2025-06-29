@@ -189,6 +189,27 @@ impl Tags {
 
         Ok(Self { inner: tags })
     }
+
+    #[must_use]
+    pub fn parametrize_args(&self) -> Vec<HashMap<String, PyObject>> {
+        let mut param_args: Vec<HashMap<String, PyObject>> = vec![HashMap::new()];
+
+        for tag in &self.inner {
+            let Tag::Parametrize(parametrize_tag) = tag;
+            let mut new_param_args = Vec::new();
+            let current_values = parametrize_tag.each_arg_value();
+            for existing_params in &param_args {
+                for new_params in &current_values {
+                    let mut combined_params = existing_params.clone();
+                    combined_params.extend(new_params.clone());
+                    new_param_args.push(combined_params);
+                }
+            }
+            param_args = new_param_args;
+        }
+
+        param_args
+    }
 }
 
 impl Iterator for Tags {
