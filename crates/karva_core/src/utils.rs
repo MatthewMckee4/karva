@@ -22,31 +22,17 @@ pub fn from_text_size(offset: TextSize, source: &str) -> (usize, usize) {
     (location.line.get(), location.character_offset.get())
 }
 
-pub fn recursive_add_to_sys_path(
-    py: Python<'_>,
-    path: &SystemPathBuf,
-    cwd: &SystemPathBuf,
-) -> PyResult<()> {
-    let sys = py.import("sys")?;
-    let sys_path = sys.getattr("path")?;
-    let path = path.as_std_path();
-    let cwd = cwd.as_std_path();
-
-    let mut current = path;
-    while current != cwd && current.starts_with(cwd) {
-        sys_path.call_method1("append", (current.display().to_string(),))?;
-        if let Some(parent) = current.parent() {
-            current = parent;
-        } else {
-            break;
-        }
-    }
-
-    if current != cwd {
-        sys_path.call_method1("append", (cwd.display().to_string(),))?;
-    }
-
-    Ok(())
+#[must_use]
+pub fn root_dir() -> String {
+    std::env::current_dir()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string()
 }
 
 pub fn add_to_sys_path(py: &Python<'_>, path: &SystemPathBuf) -> PyResult<()> {

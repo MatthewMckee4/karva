@@ -371,7 +371,9 @@ def test_parametrize(a, b):
         let project = Project::new(env.cwd(), vec![test_dir]);
         let discoverer = Discoverer::new(&project);
 
-        let (session, _) = discoverer.discover();
+        let (session, diagnostics) = discoverer.discover();
+
+        eprintln!("{diagnostics:?}");
 
         let test_case = session.test_cases()[0].clone();
         Python::with_gil(|py| {
@@ -403,7 +405,9 @@ def test_parametrize(a):
         let project = Project::new(env.cwd(), vec![test_dir]);
         let discoverer = Discoverer::new(&project);
 
-        let (session, _) = discoverer.discover();
+        let (session, diagnostics) = discoverer.discover();
+
+        eprintln!("{diagnostics:?}");
 
         let test_case = session.test_cases()[0].clone();
         Python::with_gil(|py| {
