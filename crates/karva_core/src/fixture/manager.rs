@@ -7,15 +7,15 @@ use crate::{
     package::Package,
 };
 
-#[derive(Debug, Default)]
-pub struct FixtureManager<'proj> {
-    session: HashMap<String, Bound<'proj, PyAny>>,
-    module: HashMap<String, Bound<'proj, PyAny>>,
-    package: HashMap<String, Bound<'proj, PyAny>>,
-    function: HashMap<String, Bound<'proj, PyAny>>,
+#[derive(Debug, Default, Clone)]
+pub struct FixtureManager {
+    session: HashMap<String, Py<PyAny>>,
+    module: HashMap<String, Py<PyAny>>,
+    package: HashMap<String, Py<PyAny>>,
+    function: HashMap<String, Py<PyAny>>,
 }
 
-impl<'proj> FixtureManager<'proj> {
+impl FixtureManager {
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -27,7 +27,7 @@ impl<'proj> FixtureManager<'proj> {
     }
 
     #[must_use]
-    pub fn get_fixture(&self, fixture_name: &str) -> Option<Bound<'proj, PyAny>> {
+    pub fn get_fixture(&self, fixture_name: &str) -> Option<Py<PyAny>> {
         self.all_fixtures().get(fixture_name).cloned()
     }
 
@@ -37,7 +37,7 @@ impl<'proj> FixtureManager<'proj> {
     }
 
     #[must_use]
-    pub fn all_fixtures(&self) -> HashMap<String, Bound<'proj, PyAny>> {
+    pub fn all_fixtures(&self) -> HashMap<String, Py<PyAny>> {
         let mut fixtures = HashMap::new();
         fixtures.extend(self.session.iter().map(|(k, v)| (k.clone(), v.clone())));
         fixtures.extend(self.module.iter().map(|(k, v)| (k.clone(), v.clone())));
@@ -46,7 +46,7 @@ impl<'proj> FixtureManager<'proj> {
         fixtures
     }
 
-    pub fn insert_fixture(&mut self, fixture_return: Bound<'proj, PyAny>, fixture: &'proj Fixture) {
+    pub fn insert_fixture(&mut self, fixture_return: Py<PyAny>, fixture: &Fixture) {
         match fixture.scope() {
             FixtureScope::Session => self
                 .session
@@ -64,13 +64,17 @@ impl<'proj> FixtureManager<'proj> {
     }
 
     // TODO: This is a bit of a mess.
-    // This is sued to recursively resolve all of the dependencies of a fixture.
-    fn ensure_fixture_dependencies(
+    // This used to ensure that all of the given dependencies (fixtures) have been called.
+    // This first starts with finding all dependencies of the given fixtures, and resolving and calling them first.
+    //
+    // We take the parents to ensure that if the dependent fixtures are not in the current scope,
+    // we can still look for them in the parents.
+    fn ensure_fixture_dependencies<'proj>(
         &mut self,
-        py: Python<'proj>,
+        py: Python<'_>,
         parents: &[&'proj Package<'proj>],
         current: &'proj dyn HasFixtures<'proj>,
-        fixture: &'proj Fixture,
+        fixture: &Fixture,
     ) {
         if self.get_fixture(fixture.name()).is_some() {
             // We have already called this fixture. So we can just return.
@@ -125,30 +129,24 @@ impl<'proj> FixtureManager<'proj> {
 
         for name in current_dependencies {
             if let Some(fixture) = self.get_fixture(&name) {
-                required_fixtures.push(fixture.clone());
+                required_fixtures.push(fixture.clone().into_bound(py));
             }
         }
 
         // I think we can be sure that required_fixtures
         match fixture.call(py, required_fixtures) {
             Ok(fixture_return) => {
-                self.insert_fixture(fixture_return, fixture);
+                self.insert_fixture(fixture_return.unbind(), fixture);
             }
             Err(e) => {
-                tracing::error!("Failed to call fixture {}: {}", fixture.name(), e);
+                tracing::debug!("Failed to call fixture {}: {}", fixture.name(), e);
             }
         }
     }
 
-    // TODO: This is a bit of a mess.
-    // This used to ensure that all of the given dependencies (fixtures) have been called.
-    // This first starts with finding all dependencies of the given fixtures, and resolving and calling them first.
-    //
-    // We take the parents to ensure that if the dependent fixtures are not in the current scope,
-    // we can still look for them in the parents.
-    pub fn add_fixtures(
+    pub fn add_fixtures<'proj>(
         &mut self,
-        py: Python<'proj>,
+        py: Python<'_>,
         parents: &[&'proj Package<'proj>],
         current: &'proj dyn HasFixtures<'proj>,
         scopes: &[FixtureScope],

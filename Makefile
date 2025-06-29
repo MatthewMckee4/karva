@@ -8,10 +8,11 @@ build:
 	cargo build
 
 docs:
-	uv run mkdocs build
+	uv run --no-project mkdocs build
 
 docs-serve:
-	uv run mkdocs serve
+	uv sync --group docs --no-install-project
+	uv run --no-project mkdocs serve
 
 clean:
 	git clean -xdf

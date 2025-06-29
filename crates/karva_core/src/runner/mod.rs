@@ -10,12 +10,12 @@ use crate::{
     fixture::{FixtureManager, FixtureScope, RequiresFixtures},
     module::Module,
     package::Package,
-    utils::{Upcast, add_to_sys_path, with_gil},
+    utils::{Upcast, with_gil},
 };
 
 mod diagnostic;
 
-pub use diagnostic::RunDiagnostics;
+pub use diagnostic::{DiagnosticStats, RunDiagnostics};
 
 pub trait TestRunner {
     fn test(&self) -> RunDiagnostics;
@@ -40,29 +40,19 @@ impl<'proj> StandardTestRunner<'proj> {
         let total_test_cases = session.total_test_cases();
 
         tracing::info!(
-            "Discovered {} tests in {} files",
+            "Discovered {} test{} in {} file{}",
             total_test_cases,
-            total_files
+            if total_test_cases == 1 { "" } else { "s" },
+            total_files,
+            if total_files == 1 { "" } else { "s" }
         );
 
         reporter.set(total_files);
 
-        let mut diagnostics = Vec::new();
+        let mut diagnostics = RunDiagnostics::default();
 
-        diagnostics.extend(discovery_diagnostics);
+        diagnostics.add_diagnostics(discovery_diagnostics);
         with_gil(self.project, |py| {
-            let cwd = self.project.cwd();
-
-            if let Err(err) = add_to_sys_path(&py, cwd) {
-                diagnostics.push(Diagnostic::from_py_err(
-                    py,
-                    &err,
-                    DiagnosticScope::Setup,
-                    &cwd.to_string(),
-                ));
-                return;
-            }
-
             let mut fixture_manager = FixtureManager::new();
 
             let upcast_test_cases: Vec<&dyn RequiresFixtures> = session.test_cases().upcast();
@@ -85,10 +75,7 @@ impl<'proj> StandardTestRunner<'proj> {
             );
         });
 
-        RunDiagnostics {
-            diagnostics,
-            total_tests: total_test_cases,
-        }
+        diagnostics
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -98,14 +85,18 @@ impl<'proj> StandardTestRunner<'proj> {
         py: Python<'a>,
         module: &'a Module<'a>,
         parents: &[&'a Package<'a>],
-        fixture_manager: &mut FixtureManager<'a>,
-        diagnostics: &mut Vec<Diagnostic>,
+        fixture_manager: &mut FixtureManager,
         reporter: &dyn Reporter,
-    ) {
+    ) -> RunDiagnostics {
+        let mut diagnostics = RunDiagnostics::default();
+        if module.total_test_cases() == 0 {
+            return diagnostics;
+        }
+
         let module_test_cases = module.dependencies();
         let upcast_module_test_cases: Vec<&dyn RequiresFixtures> = module_test_cases.upcast();
         if upcast_module_test_cases.is_empty() {
-            return;
+            return diagnostics;
         }
 
         let mut parents_above_current_parent = parents.to_vec();
@@ -138,13 +129,13 @@ impl<'proj> StandardTestRunner<'proj> {
         let py_module = match PyModule::import(py, module.name()) {
             Ok(py_module) => py_module,
             Err(err) => {
-                diagnostics.extend(vec![Diagnostic::from_py_err(
+                diagnostics.add_diagnostic(Diagnostic::from_py_err(
                     py,
                     &err,
                     DiagnosticScope::Setup,
                     &module.path().to_string(),
-                )]);
-                return;
+                ));
+                return diagnostics;
             }
         };
 
@@ -175,21 +166,18 @@ impl<'proj> StandardTestRunner<'proj> {
                 upcast_test_cases.as_slice(),
             );
 
-            let test_name = function.to_string();
-            tracing::info!("Running test: {}", test_name);
+            let result = function.test(py, &py_module, fixture_manager);
 
-            if let Some(result) = function.run_test(py, &py_module, fixture_manager) {
-                diagnostics.push(result);
-                tracing::info!("Test {} failed", test_name);
-            } else {
-                tracing::info!("Test {} passed", test_name);
-            }
+            diagnostics.update(&result);
+
             fixture_manager.reset_function_fixtures();
         }
 
         fixture_manager.reset_module_fixtures();
 
         reporter.report();
+
+        diagnostics
     }
 
     fn test_package<'a>(
@@ -197,8 +185,8 @@ impl<'proj> StandardTestRunner<'proj> {
         py: Python<'a>,
         package: &'a Package<'a>,
         parents: &[&'a Package<'a>],
-        fixture_manager: &mut FixtureManager<'a>,
-        diagnostics: &mut Vec<Diagnostic>,
+        fixture_manager: &mut FixtureManager,
+        diagnostics: &mut RunDiagnostics,
         reporter: &dyn Reporter,
     ) {
         if package.total_test_cases() == 0 {
@@ -234,15 +222,16 @@ impl<'proj> StandardTestRunner<'proj> {
         let mut new_parents = parents.to_vec();
         new_parents.push(package);
 
-        for module in package.modules().values() {
-            self.test_module(
-                py,
-                module,
-                &new_parents,
-                fixture_manager,
-                diagnostics,
-                reporter,
-            );
+        let module_diagnostics = {
+            package
+                .modules()
+                .values()
+                .map(|module| self.test_module(py, module, &new_parents, fixture_manager, reporter))
+                .collect::<Vec<_>>()
+        };
+
+        for module_diagnostics in module_diagnostics {
+            diagnostics.update(&module_diagnostics);
         }
 
         for sub_package in package.packages().values() {
@@ -286,6 +275,7 @@ mod tests {
     use karva_project::tests::{MockFixture, TestEnv, mock_fixture};
 
     use super::*;
+
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
      {
@@ -353,5 +343,119 @@ mod tests {
         let diagnostics = test_runner.test();
 
         assert_eq!(diagnostics.diagnostics.len(), 0);
+    }
+
+    #[test]
+    fn test_parametrize_with_fixture() {
+        let env = TestEnv::new();
+        let test_dir = env.create_tests_dir();
+        env.create_file(
+            test_dir.join("test_parametrize_fixture.py").as_ref(),
+            r#"import karva
+
+@karva.fixture
+def fixture_value():
+    return 42
+
+@karva.tags.parametrize("a", [1, 2, 3])
+def test_parametrize_with_fixture(a, fixture_value):
+    assert a > 0
+    assert fixture_value == 42"#,
+        );
+
+        let project = Project::new(env.cwd(), vec![test_dir]);
+
+        let result = project.test_with_reporter(&mut DummyReporter);
+
+        let mut expected_stats = DiagnosticStats::default();
+        expected_stats.add_passed();
+        expected_stats.add_passed();
+        expected_stats.add_passed();
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_parametrize_with_fixture_parametrize_priority() {
+        let env = TestEnv::new();
+
+        let test_dir = env.create_tests_dir();
+        env.create_file(
+            test_dir.join("test_parametrize_fixture.py").as_ref(),
+            r#"import karva
+
+@karva.fixture
+def a():
+    return -1
+
+@karva.tags.parametrize("a", [1, 2, 3])
+def test_parametrize_with_fixture(a):
+    assert a > 0"#,
+        );
+
+        let project = Project::new(env.cwd(), vec![test_dir]);
+
+        let result = project.test_with_reporter(&mut DummyReporter);
+
+        let mut expected_stats = DiagnosticStats::default();
+        expected_stats.add_passed();
+        expected_stats.add_passed();
+        expected_stats.add_passed();
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_parametrize_two_decorators() {
+        let env = TestEnv::new();
+
+        let test_dir = env.create_tests_dir();
+        env.create_file(
+            test_dir.join("test_parametrize_fixture.py").as_ref(),
+            r#"import karva
+
+@karva.tags.parametrize("a", [1, 2])
+@karva.tags.parametrize("b", [1, 2])
+def test_function(a: int, b: int):
+    assert a > 0 and b > 0
+"#,
+        );
+
+        let project = Project::new(env.cwd(), vec![test_dir]);
+
+        let result = project.test_with_reporter(&mut DummyReporter);
+
+        let mut expected_stats = DiagnosticStats::default();
+        expected_stats.add_passed();
+        expected_stats.add_passed();
+        expected_stats.add_passed();
+        expected_stats.add_passed();
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_parametrize_three_decorators() {
+        let env = TestEnv::new();
+
+        let test_dir = env.create_tests_dir();
+        env.create_file(
+            test_dir.join("test_parametrize_fixture.py").as_ref(),
+            r#"import karva
+
+@karva.tags.parametrize("a", [1, 2])
+@karva.tags.parametrize("b", [1, 2])
+@karva.tags.parametrize("c", [1, 2])
+def test_function(a: int, b: int, c: int):
+    assert a > 0 and b > 0 and c > 0
+"#,
+        );
+
+        let project = Project::new(env.cwd(), vec![test_dir]);
+
+        let result = project.test_with_reporter(&mut DummyReporter);
+
+        let mut expected_stats = DiagnosticStats::default();
+        for _ in 0..8 {
+            expected_stats.add_passed();
+        }
+        assert_eq!(*result.stats(), expected_stats);
     }
 }

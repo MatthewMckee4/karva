@@ -45,10 +45,6 @@ pub struct TestCommand {
 
 impl TestCommand {
     pub fn into_options(self) -> ProjectOptions {
-        ProjectOptions {
-            test_prefix: self.test_prefix,
-            verbosity: self.verbosity.level(),
-            show_output: self.show_output,
-        }
+        ProjectOptions::new(self.test_prefix, self.verbosity.level(), self.show_output)
     }
 }

@@ -30,6 +30,11 @@ pub static FIXTURES: TestFile = TestFile::new(
     include_str!("../resources/test_fixtures.py"),
 );
 
+pub static PARAMETRIZE: TestFile = TestFile::new(
+    "test_parametrize.py",
+    include_str!("../resources/test_parametrize.py"),
+);
+
 /// Relative size of a test case. Benchmarks can use it to configure the time for how long a benchmark should run to get stable results.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum TestCaseSpeed {

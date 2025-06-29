@@ -20,7 +20,7 @@ impl FixtureFunctionMarker {
         Self { scope, name }
     }
 
-    pub fn call_with_function(
+    pub fn __call__(
         &self,
         py: Python<'_>,
         function: PyObject,
@@ -32,16 +32,12 @@ impl FixtureFunctionMarker {
         };
 
         let fixture_def = FixtureFunctionDefinition {
+            function,
             name: func_name,
             scope: self.scope.clone(),
-            function,
         };
 
         Ok(fixture_def)
-    }
-
-    fn __call__(&self, py: Python<'_>, function: PyObject) -> PyResult<FixtureFunctionDefinition> {
-        self.call_with_function(py, function)
     }
 }
 
@@ -59,7 +55,7 @@ pub struct FixtureFunctionDefinition {
 impl FixtureFunctionDefinition {
     #[new]
     #[must_use]
-    pub const fn new(name: String, scope: String, function: PyObject) -> Self {
+    pub const fn new(function: PyObject, name: String, scope: String) -> Self {
         Self {
             name,
             scope,
@@ -75,5 +71,22 @@ impl FixtureFunctionDefinition {
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyObject> {
         self.function.call(py, args, kwargs)
+    }
+}
+
+#[pyfunction(name = "fixture")]
+#[pyo3(signature = (func=None, *, scope="function", name=None))]
+pub fn fixture_decorator(
+    py: Python<'_>,
+    func: Option<PyObject>,
+    scope: &str,
+    name: Option<&str>,
+) -> PyResult<PyObject> {
+    let marker = FixtureFunctionMarker::new(scope.to_string(), name.map(String::from));
+    if let Some(f) = func {
+        let fixture_def = marker.__call__(py, f)?;
+        Ok(Py::new(py, fixture_def)?.into_any())
+    } else {
+        Ok(Py::new(py, marker)?.into_any())
     }
 }

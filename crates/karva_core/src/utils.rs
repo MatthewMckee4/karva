@@ -22,30 +22,17 @@ pub fn from_text_size(offset: TextSize, source: &str) -> (usize, usize) {
     (location.line.get(), location.character_offset.get())
 }
 
-pub fn recursive_add_to_sys_path(
-    py: Python<'_>,
-    path: &SystemPathBuf,
-    cwd: &SystemPathBuf,
-) -> PyResult<()> {
-    let sys = py.import("sys")?;
-    let sys_path = sys.getattr("path")?;
-    let path = path.as_std_path();
-    let cwd = cwd.as_std_path();
-
-    let mut current = cwd;
-    while current != path && path.starts_with(current) {
-        sys_path.call_method1("append", (current.display().to_string(),))?;
-        if let Some(parent) = current.parent() {
-            current = parent;
-        } else {
-            break;
-        }
-    }
-
-    if current != path {
-        sys_path.call_method1("append", (path.display().to_string(),))?;
-    }
-    Ok(())
+#[must_use]
+pub fn root_dir() -> String {
+    std::env::current_dir()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string()
 }
 
 pub fn add_to_sys_path(py: &Python<'_>, path: &SystemPathBuf) -> PyResult<()> {
@@ -69,7 +56,7 @@ fn redirect_output<'py>(
     py: Python<'py>,
     options: &ProjectOptions,
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
-    if options.show_output {
+    if options.show_output() {
         Ok(None)
     } else {
         let sys = py.import("sys")?;
@@ -111,7 +98,7 @@ where
     F: for<'py> FnOnce(Python<'py>) -> R,
 {
     Python::with_gil(|py| {
-        let null_file = redirect_output(py, &project.options);
+        let null_file = redirect_output(py, project.options());
         let result = f(py);
         if let Ok(Some(null_file)) = null_file {
             let _ = restore_output(py, &null_file);

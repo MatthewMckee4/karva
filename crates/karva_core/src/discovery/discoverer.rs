@@ -4,12 +4,14 @@ use karva_project::{
     project::Project,
     utils::is_python_file,
 };
+use pyo3::prelude::*;
 
 use crate::{
-    diagnostic::Diagnostic,
+    diagnostic::{Diagnostic, DiagnosticScope},
     discovery::discover,
     module::{Module, ModuleType},
     package::Package,
+    utils::{add_to_sys_path, with_gil},
 };
 
 pub struct Discoverer<'proj> {
@@ -27,47 +29,63 @@ impl<'proj> Discoverer<'proj> {
         let mut session_package = Package::new(self.project.cwd().clone(), self.project);
 
         let mut discovery_diagnostics = Vec::new();
+        with_gil(self.project, |py| {
+            let cwd = self.project.cwd();
 
-        tracing::info!("Discovering tests...");
+            if let Err(err) = add_to_sys_path(&py, cwd) {
+                discovery_diagnostics.push(Diagnostic::from_py_err(
+                    py,
+                    &err,
+                    DiagnosticScope::Setup,
+                    &cwd.to_string(),
+                ));
+                return;
+            }
 
-        for path in self.project.test_paths() {
-            match path {
-                Ok(path) => {
-                    match &path {
-                        TestPath::File(path) => {
-                            let module = self.discover_test_file(
-                                path,
-                                &session_package,
-                                &mut discovery_diagnostics,
-                                false,
-                            );
-                            if let Some(module) = module {
-                                session_package.add_module(module);
+            tracing::info!("Discovering tests...");
+
+            for path in self.project.test_paths() {
+                match path {
+                    Ok(path) => {
+                        match &path {
+                            TestPath::File(path) => {
+                                let module = self.discover_test_file(
+                                    py,
+                                    path,
+                                    &session_package,
+                                    &mut discovery_diagnostics,
+                                    false,
+                                );
+                                if let Some(module) = module {
+                                    session_package.add_module(module);
+                                }
+                            }
+                            TestPath::Directory(path) => {
+                                let mut package = Package::new(path.clone(), self.project);
+
+                                self.discover_directory(
+                                    py,
+                                    &mut package,
+                                    &session_package,
+                                    &mut discovery_diagnostics,
+                                    false,
+                                );
+                                session_package.add_package(package);
                             }
                         }
-                        TestPath::Directory(path) => {
-                            let mut package = Package::new(path.clone(), self.project);
-
-                            self.discover_directory(
-                                &mut package,
-                                &session_package,
-                                &mut discovery_diagnostics,
-                                false,
-                            );
-                            session_package.add_package(package);
-                        }
+                        self.add_parent_configuration_packages(
+                            py,
+                            path.path(),
+                            &mut session_package,
+                            &mut discovery_diagnostics,
+                        );
                     }
-                    self.add_parent_configuration_packages(
-                        path.path(),
-                        &mut session_package,
-                        &mut discovery_diagnostics,
-                    );
-                }
-                Err(e) => {
-                    discovery_diagnostics.push(Diagnostic::path_error(&e));
+                    Err(e) => {
+                        discovery_diagnostics.push(Diagnostic::path_error(&e));
+                    }
                 }
             }
-        }
+        });
 
         session_package.shrink();
 
@@ -77,6 +95,7 @@ impl<'proj> Discoverer<'proj> {
     // Parse and run discovery on a single file
     fn discover_test_file(
         &self,
+        py: Python<'_>,
         path: &SystemPathBuf,
         session_package: &Package<'proj>,
         discovery_diagnostics: &mut Vec<Diagnostic>,
@@ -92,7 +111,7 @@ impl<'proj> Discoverer<'proj> {
             return None;
         }
 
-        let (discovered, diagnostics) = discover(path, self.project);
+        let (discovered, diagnostics) = discover(py, path, self.project);
 
         discovery_diagnostics.extend(diagnostics);
 
@@ -120,6 +139,7 @@ impl<'proj> Discoverer<'proj> {
     // This should look from the parent of path to the cwd for configuration files
     fn add_parent_configuration_packages(
         &self,
+        py: Python<'_>,
         path: &SystemPathBuf,
         session_package: &mut Package<'proj>,
         discovery_diagnostics: &mut Vec<Diagnostic>,
@@ -128,7 +148,13 @@ impl<'proj> Discoverer<'proj> {
 
         loop {
             let mut package = Package::new(current_path.clone(), self.project);
-            self.discover_directory(&mut package, session_package, discovery_diagnostics, true);
+            self.discover_directory(
+                py,
+                &mut package,
+                session_package,
+                discovery_diagnostics,
+                true,
+            );
             session_package.add_package(package);
 
             if current_path == *self.project.cwd() {
@@ -145,6 +171,7 @@ impl<'proj> Discoverer<'proj> {
     // If configuration_only is true, only discover configuration files
     fn discover_directory(
         &self,
+        py: Python<'_>,
         package: &mut Package<'proj>,
         session_package: &Package<'proj>,
         discovery_diagnostics: &mut Vec<Diagnostic>,
@@ -175,8 +202,13 @@ impl<'proj> Discoverer<'proj> {
 
             match entry.file_type() {
                 Some(file_type) if file_type.is_dir() => {
+                    if configuration_only {
+                        continue;
+                    }
+
                     let mut subpackage = Package::new(current_path.clone(), self.project);
                     self.discover_directory(
+                        py,
                         &mut subpackage,
                         session_package,
                         discovery_diagnostics,
@@ -191,6 +223,7 @@ impl<'proj> Discoverer<'proj> {
                                 continue;
                             }
                             if let Some(module) = self.discover_test_file(
+                                py,
                                 &current_path,
                                 session_package,
                                 discovery_diagnostics,
@@ -201,6 +234,7 @@ impl<'proj> Discoverer<'proj> {
                         }
                         ModuleType::Configuration => {
                             if let Some(module) = self.discover_test_file(
+                                py,
                                 &current_path,
                                 session_package,
                                 discovery_diagnostics,
@@ -225,6 +259,7 @@ mod tests {
     use karva_project::{
         project::ProjectOptions,
         tests::{MockFixture, TestEnv, mock_fixture},
+        verbosity::VerbosityLevel,
     };
 
     use super::*;
@@ -495,10 +530,11 @@ def test_function(): pass
 ",
         );
 
-        let project = Project::new(env.cwd(), vec![path]).with_options(ProjectOptions {
-            test_prefix: "check".to_string(),
-            ..Default::default()
-        });
+        let project = Project::new(env.cwd(), vec![path]).with_options(ProjectOptions::new(
+            "check".to_string(),
+            VerbosityLevel::Default,
+            false,
+        ));
         let discoverer = Discoverer::new(&project);
         let (session, _) = discoverer.discover();
 

@@ -7,14 +7,13 @@ use ruff_python_ast::{
 use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
 use crate::{
-    case::TestCase,
-    diagnostic::Diagnostic,
+    case::TestFunction,
+    diagnostic::{Diagnostic, DiagnosticScope},
     fixture::{Fixture, FixtureExtractor, is_fixture_function},
-    utils::{recursive_add_to_sys_path, with_gil},
 };
 
 pub struct FunctionDefinitionVisitor<'a, 'b> {
-    discovered_functions: Vec<TestCase>,
+    discovered_functions: Vec<TestFunction>,
     fixture_definitions: Vec<Fixture>,
     project: &'a Project,
     path: &'a SystemPathBuf,
@@ -24,16 +23,11 @@ pub struct FunctionDefinitionVisitor<'a, 'b> {
 }
 
 impl<'a, 'b> FunctionDefinitionVisitor<'a, 'b> {
-    pub fn new(
-        py: Python<'b>,
-        project: &'a Project,
-        path: &'a SystemPathBuf,
-    ) -> Result<Self, String> {
-        recursive_add_to_sys_path(py, path, project.cwd()).map_err(|e| e.to_string())?;
-
+    pub fn new(py: Python<'b>, project: &'a Project, path: &'a SystemPathBuf) -> PyResult<Self> {
         let module = module_name(project.cwd(), path);
 
-        let py_module = py.import(module).map_err(|e| e.to_string())?;
+        let py_module = py.import(module)?;
+
         Ok(Self {
             discovered_functions: Vec::new(),
             fixture_definitions: Vec::new(),
@@ -65,9 +59,9 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
             } else if function_def
                 .name
                 .to_string()
-                .starts_with(&self.project.options.test_prefix)
+                .starts_with(self.project.options().test_prefix())
             {
-                self.discovered_functions.push(TestCase::new(
+                self.discovered_functions.push(TestFunction::new(
                     self.project.cwd(),
                     self.path.clone(),
                     function_def.clone(),
@@ -85,7 +79,7 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
 
 #[derive(Debug)]
 pub struct DiscoveredFunctions {
-    pub functions: Vec<TestCase>,
+    pub functions: Vec<TestFunction>,
     pub fixtures: Vec<Fixture>,
 }
 
@@ -97,32 +91,39 @@ impl DiscoveredFunctions {
 }
 
 #[must_use]
-pub fn discover(path: &SystemPathBuf, project: &Project) -> (DiscoveredFunctions, Vec<Diagnostic>) {
-    with_gil(project, |py| {
-        let mut visitor = match FunctionDefinitionVisitor::new(py, project, path) {
-            Ok(visitor) => visitor,
-            Err(e) => {
-                return (
-                    DiscoveredFunctions {
-                        functions: Vec::new(),
-                        fixtures: Vec::new(),
-                    },
-                    vec![Diagnostic::invalid_fixture(&e, &path.to_string())],
-                );
-            }
-        };
+pub fn discover(
+    py: Python<'_>,
+    path: &SystemPathBuf,
+    project: &Project,
+) -> (DiscoveredFunctions, Vec<Diagnostic>) {
+    let mut visitor = match FunctionDefinitionVisitor::new(py, project, path) {
+        Ok(visitor) => visitor,
+        Err(e) => {
+            return (
+                DiscoveredFunctions {
+                    functions: Vec::new(),
+                    fixtures: Vec::new(),
+                },
+                vec![Diagnostic::from_py_err(
+                    py,
+                    &e,
+                    DiagnosticScope::Discovery,
+                    &path.to_string(),
+                )],
+            );
+        }
+    };
 
-        let parsed = parsed_module(path, project.metadata.python_version);
-        visitor.visit_body(&parsed.syntax().body);
+    let parsed = parsed_module(path, project.metadata().python_version());
+    visitor.visit_body(&parsed.syntax().body);
 
-        (
-            DiscoveredFunctions {
-                functions: visitor.discovered_functions,
-                fixtures: visitor.fixture_definitions,
-            },
-            visitor.diagnostics,
-        )
-    })
+    (
+        DiscoveredFunctions {
+            functions: visitor.discovered_functions,
+            fixtures: visitor.fixture_definitions,
+        },
+        visitor.diagnostics,
+    )
 }
 
 #[must_use]

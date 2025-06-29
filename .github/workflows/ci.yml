@@ -25,14 +25,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       max-parallel: 12
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
       - name: Update Rust toolchain
         run: rustup update
-      - name: Run Cargo Tests
-        run: cargo test
+      - name: Run tests
+        run: |
+          cargo test
 
   build-docs:
     runs-on: ${{ matrix.os }}
@@ -76,6 +78,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - name: Install Python dependencies
+        run: |
+          uv venv
+          uv pip install pip maturin
+          uv run maturin build
       - uses: moonrepo/setup-rust@v1
         with:
           channel: stable
@@ -90,7 +100,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   python-test:
-    name: python${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.folder }}
+    name: python-test-${{ matrix.folder }}-${{ matrix.os }}-${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -102,13 +112,17 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Setup karva environment
+        run: |
+          uv venv
+          uv pip install pytest
       - name: Setup integration test environment
         run: |
           cd ${{ matrix.folder }}
           uv venv
-          uv pip install -e ../../
           uv sync
+          uv pip install -e ../../
       - name: Run karva test
         run: |
           cd ${{ matrix.folder }}
-          uv run karva test -v -s
+          uv run --with pytest karva test -v -s

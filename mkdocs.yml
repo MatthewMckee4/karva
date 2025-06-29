@@ -6,6 +6,8 @@ nav:
   - Installation: installation.md
   - Tutorial: tutorial.md
   - Fixtures: fixtures.md
+  - Tags:
+      - Parametrize: tags/parametrize.md
   - CLI: cli.md
 
 theme:
@@ -35,6 +37,7 @@ theme:
     repo: fontawesome/brands/github
 
 markdown_extensions:
+  - admonition
   - pymdownx.details
   - toc:
       anchorlink: true
@@ -49,10 +52,6 @@ markdown_extensions:
   - pymdownx.superfences:
   - markdown.extensions.attr_list:
   - pymdownx.keys:
-  - pymdownx.tasklist:
-      custom_checkbox: true
-  - pymdownx.highlight:
-      anchor_linenums: true
   - pymdownx.tabbed:
       alternate_style: true
 

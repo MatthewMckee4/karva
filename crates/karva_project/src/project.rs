@@ -7,14 +7,52 @@ use crate::{
 
 #[derive(Default, Debug, Clone)]
 pub struct ProjectMetadata {
-    pub python_version: PythonVersion,
+    python_version: PythonVersion,
+}
+
+impl ProjectMetadata {
+    #[must_use]
+    pub const fn new(python_version: PythonVersion) -> Self {
+        Self { python_version }
+    }
+
+    #[must_use]
+    pub const fn python_version(&self) -> PythonVersion {
+        self.python_version
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct ProjectOptions {
-    pub test_prefix: String,
-    pub verbosity: VerbosityLevel,
-    pub show_output: bool,
+    test_prefix: String,
+    verbosity: VerbosityLevel,
+    show_output: bool,
+}
+
+impl ProjectOptions {
+    #[must_use]
+    pub const fn new(test_prefix: String, verbosity: VerbosityLevel, show_output: bool) -> Self {
+        Self {
+            test_prefix,
+            verbosity,
+            show_output,
+        }
+    }
+
+    #[must_use]
+    pub fn test_prefix(&self) -> &str {
+        &self.test_prefix
+    }
+
+    #[must_use]
+    pub const fn verbosity(&self) -> VerbosityLevel {
+        self.verbosity
+    }
+
+    #[must_use]
+    pub const fn show_output(&self) -> bool {
+        self.show_output
+    }
 }
 
 impl Default for ProjectOptions {
@@ -31,8 +69,8 @@ impl Default for ProjectOptions {
 pub struct Project {
     cwd: SystemPathBuf,
     paths: Vec<SystemPathBuf>,
-    pub metadata: ProjectMetadata,
-    pub options: ProjectOptions,
+    metadata: ProjectMetadata,
+    options: ProjectOptions,
 }
 
 impl Project {
@@ -53,9 +91,19 @@ impl Project {
     }
 
     #[must_use]
+    pub const fn metadata(&self) -> &ProjectMetadata {
+        &self.metadata
+    }
+
+    #[must_use]
     pub fn with_options(mut self, options: ProjectOptions) -> Self {
         self.options = options;
         self
+    }
+
+    #[must_use]
+    pub const fn options(&self) -> &ProjectOptions {
+        &self.options
     }
 
     #[must_use]

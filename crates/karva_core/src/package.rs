@@ -6,7 +6,7 @@ use std::{
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 
 use crate::{
-    case::TestCase,
+    case::TestFunction,
     fixture::{Fixture, HasFixtures, RequiresFixtures},
     module::{Module, ModuleType, StringModule},
     utils::Upcast,
@@ -164,7 +164,7 @@ impl<'proj> Package<'proj> {
     pub fn total_test_modules(&self) -> usize {
         let mut total = 0;
         for module in self.modules.values() {
-            if module.module_type == ModuleType::Test {
+            if module.module_type == ModuleType::Test && !module.is_empty() {
                 total += 1;
             }
         }
@@ -188,7 +188,7 @@ impl<'proj> Package<'proj> {
     }
 
     #[must_use]
-    pub fn test_cases(&self) -> Vec<&TestCase> {
+    pub fn test_cases(&self) -> Vec<&TestFunction> {
         let mut cases = self.direct_test_cases();
 
         for sub_package in self.packages.values() {
@@ -199,7 +199,7 @@ impl<'proj> Package<'proj> {
     }
 
     #[must_use]
-    pub fn direct_test_cases(&self) -> Vec<&TestCase> {
+    pub fn direct_test_cases(&self) -> Vec<&TestFunction> {
         let mut cases = Vec::new();
 
         for module in self.modules.values() {

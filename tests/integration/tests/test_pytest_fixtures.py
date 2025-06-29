@@ -59,6 +59,7 @@ def test_function_scopes(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 2
 All checks passed!
 Calculator initialized
 Calculator initialized
@@ -102,6 +103,7 @@ def test_module_scopes(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 2
 All checks passed!
 Calculator initialized
 
@@ -149,6 +151,7 @@ def test_package_scopes(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 2
 All checks passed!
 Calculator initialized
 
@@ -206,6 +209,7 @@ def test_session_scopes(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 3
 All checks passed!
 Calculator initialized
 
@@ -260,6 +264,7 @@ def test_mixed_scopes(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 3
 All checks passed!
 Session calculator initialized
 Function calculator initialized
@@ -310,6 +315,7 @@ def test_fixture_across_files(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 2
 All checks passed!
 Package calculator initialized
 
@@ -372,6 +378,7 @@ def test_fixture_initialization_order(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 1
 All checks passed!
 Session calculator initialized
 Package calculator initialized
@@ -413,6 +420,7 @@ def test_named_fixtures(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 1
 All checks passed!
 Named calculator initialized
 
@@ -466,6 +474,7 @@ def test_nested_package_scopes(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 2
 All checks passed!
 Calculator initialized
 Package calculator initialized
@@ -515,6 +524,7 @@ def test_independent_fixtures(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 2
 All checks passed!
 Calculator A initialized
 Calculator B initialized
@@ -569,6 +579,7 @@ def test_multiple_files_independent_fixtures(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 4
 All checks passed!
 Multiply calculator initialized
 Multiply calculator initialized
@@ -618,13 +629,12 @@ exit_code: 1
 ----- stdout -----
 error[fixture-not-found] in <temp_dir>/tests/test_calculator.py
  | Fixture failing_calculator not found
--------------
+
 Passed tests: 1
-Error tests: 1
+Errored tests: 1
 Working calculator initialized
 
------ stderr -----
-ERROR Failed to call fixture failing_calculator: RuntimeError: Fixture initialization failed"""
+----- stderr -----"""
     )
     test_env.cleanup()
 
@@ -688,6 +698,7 @@ def test_different_scopes_independent(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 3
 All checks passed!
 Session calculator initialized
 Package calculator initialized
@@ -730,10 +741,11 @@ exit_code: 1
 ----- stdout -----
 error[invalid-fixture] in <temp_dir>/tests/conftest.py
  | Invalid fixture scope: invalid_scope
+
 error[fixture-not-found] in <temp_dir>/tests/test_calculator.py
  | Fixture calculator not found
--------------
-Error tests: 1
+
+Errored tests: 1
 
 ----- stderr -----"""
     )
@@ -771,6 +783,7 @@ def test_empty_conftest(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 1
 All checks passed!
 
 ----- stderr -----"""
@@ -810,8 +823,8 @@ exit_code: 1
 ----- stdout -----
 error[fixture-not-found] in <temp_dir>/tests/test_calculator.py
  | Fixture calculator not found
--------------
-Error tests: 1
+
+Errored tests: 1
 
 ----- stderr -----"""
     )
@@ -863,8 +876,8 @@ exit_code: 1
 ----- stdout -----
 error[fixture-not-found] in <temp_dir>/tests/test_calculator.py
  | Fixture calculator_2 not found
--------------
-Error tests: 1
+
+Errored tests: 1
 Calculator 1 initialized
 
 ----- stderr -----"""
@@ -915,6 +928,7 @@ def test_very_deep_directory_structure(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 1
 All checks passed!
 Root calculator initialized
 Deep calculator initialized
@@ -957,8 +971,8 @@ exit_code: 1
 ----- stdout -----
 error[fixture-not-found] in <temp_dir>/tests/test_calculator.py
  | Fixture init_calculator not found
--------------
-Error tests: 1
+
+Errored tests: 1
 
 ----- stderr -----"""
     )
@@ -1014,6 +1028,7 @@ def test_same_fixture_name_different_types(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 2
 All checks passed!
 Calculator value initialized
 Calculator value initialized
@@ -1064,6 +1079,7 @@ def test_fixture_dependencies(test_env: TestEnv) -> None:
         == """success: true
 exit_code: 0
 ----- stdout -----
+Passed tests: 2
 All checks passed!
 Calculator fixture initialized
 Calculator initialized

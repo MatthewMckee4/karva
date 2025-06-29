@@ -82,6 +82,19 @@ def add_fixture(
     f.writelines(f"{TAB}assert True\n" for _ in range(num_asserts))
 
 
+def add_parametrize(
+    f: TextIOWrapper,
+    test_index: int,
+    num_asserts: int,
+) -> None:
+    """Add a parametrize to a test function."""
+    args = tuple(f"a{i}" for i in range(num_asserts))
+    f.writelines(f"@karva.tags.parametrize('{arg}', [1, 2, 3])\n" for arg in args)
+
+    f.write(f"def test_{test_index}({', '.join(args)}):\n")
+    f.writelines(f"{TAB}assert {arg} > 0\n" for arg in args)
+
+
 NUM_TESTS = 100
 NUM_ASSERT_PER_FUNCTION = 5
 
@@ -100,7 +113,7 @@ class Benchmark:
 OUTPUT_RESOURCES = [
     Benchmark(
         path=RESOURCES_PATH / "test_true_assertions.py",
-        num_tests=NUM_TESTS,
+        num_tests=10000,
         num_asserts_per_function=NUM_ASSERT_PER_FUNCTION,
         add_test_function=add_true_assertions,
     ),
@@ -134,55 +147,21 @@ OUTPUT_RESOURCES = [
         num_asserts_per_function=NUM_ASSERT_PER_FUNCTION,
         add_test_function=add_fixture,
         before_tests="""
-class FixtureFunctionMarker:
-    def __init__(self, scope, name = None):
-        self.scope = scope
-        self.name = name
-
-    def __call__(self, function):
-        return FixtureFunctionDefinition(
-            function=function,
-            fixture_function_marker=self,
-        )
-
-class FixtureFunctionDefinition:
-    def __init__(
-        self,
-        *,
-        function,
-        fixture_function_marker,
-    ):
-        self.name = fixture_function_marker.name or function.__name__
-        self.__name__ = self.name
-        self._fixture_function_marker = fixture_function_marker
-        self._fixture_function = function
-
-    def __get__(
-        self,
-        instance = None,
-        owner = None,
-    ):
-        return self
-
-    def __call__(self, *args, **kwds):
-        return self._fixture_function(*args, **kwds)
-
-def fixture(
-    fixture_function = None,
-    *,
-    scope = 'function',
-    name = None,
-):
-    fixture_marker = FixtureFunctionMarker(
-        scope=scope,
-        name=name,
-    )
-    if fixture_function:
-        return fixture_marker(fixture_function)
-    return fixture_marker
+import karva
 """
-        + "\n".join(f"@fixture\ndef {_fixture_name(i)}(): pass" for i in range(10))
+        + "\n".join(
+            f"@karva.fixture\ndef {_fixture_name(i)}(): pass" for i in range(10)
+        )
         + "\n",
+    ),
+    Benchmark(
+        path=RESOURCES_PATH / "test_parametrize.py",
+        num_tests=NUM_TESTS,
+        num_asserts_per_function=6,
+        add_test_function=add_parametrize,
+        before_tests="""
+import karva
+""",
     ),
 ]
 
@@ -199,6 +178,7 @@ def generate_test_file(benchmark: Benchmark) -> None:
 
 def main() -> None:
     """Generate the test files."""
+    clear_files()
     for benchmark in OUTPUT_RESOURCES:
         generate_test_file(benchmark)
 
