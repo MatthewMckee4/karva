@@ -1,38 +1,37 @@
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 use pyo3::{prelude::*, types::PyModule};
 use ruff_python_ast::{
-    Expr, ModModule, PythonVersion, Stmt, StmtFunctionDef,
+    Expr, Stmt, StmtFunctionDef,
     visitor::source_order::{self, SourceOrderVisitor},
 };
-use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
 use crate::{
-    case::TestFunction,
-    diagnostic::{Diagnostic, DiagnosticScope},
+    diagnostic::{Diagnostic, DiagnosticScope, ErrorType, Severity},
     fixture::{Fixture, FixtureExtractor, is_fixture_function},
+    models::{Module, TestFunction},
 };
 
 pub struct FunctionDefinitionVisitor<'a, 'b> {
     discovered_functions: Vec<TestFunction>,
     fixture_definitions: Vec<Fixture>,
     project: &'a Project,
-    path: &'a SystemPathBuf,
+    module: &'a Module<'a>,
     diagnostics: Vec<Diagnostic>,
     py_module: Bound<'b, PyModule>,
     inside_function: bool,
 }
 
 impl<'a, 'b> FunctionDefinitionVisitor<'a, 'b> {
-    pub fn new(py: Python<'b>, project: &'a Project, path: &'a SystemPathBuf) -> PyResult<Self> {
-        let module = module_name(project.cwd(), path);
+    pub fn new(py: Python<'b>, project: &'a Project, module: &'a Module<'a>) -> PyResult<Self> {
+        let module_name = module_name(project.cwd(), module.path());
 
-        let py_module = py.import(module)?;
+        let py_module = py.import(module_name)?;
 
         Ok(Self {
             discovered_functions: Vec::new(),
             fixture_definitions: Vec::new(),
             project,
-            path,
+            module,
             diagnostics: Vec::new(),
             py_module,
             inside_function: false,
@@ -52,8 +51,10 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
                 match FixtureExtractor::try_from_function(function_def, &self.py_module) {
                     Ok(fixture_def) => self.fixture_definitions.push(fixture_def),
                     Err(e) => {
-                        self.diagnostics
-                            .push(Diagnostic::invalid_fixture(&e, &self.path.to_string()));
+                        self.diagnostics.push(Diagnostic::invalid_fixture(
+                            e,
+                            Some(self.module.path().to_string()),
+                        ));
                     }
                 }
             } else if function_def
@@ -62,8 +63,7 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
                 .starts_with(self.project.options().test_prefix())
             {
                 self.discovered_functions.push(TestFunction::new(
-                    self.project.cwd(),
-                    self.path.clone(),
+                    self.module.path().clone(),
                     function_def.clone(),
                 ));
             }
@@ -93,10 +93,10 @@ impl DiscoveredFunctions {
 #[must_use]
 pub fn discover(
     py: Python<'_>,
-    path: &SystemPathBuf,
+    module: &Module,
     project: &Project,
 ) -> (DiscoveredFunctions, Vec<Diagnostic>) {
-    let mut visitor = match FunctionDefinitionVisitor::new(py, project, path) {
+    let mut visitor = match FunctionDefinitionVisitor::new(py, project, module) {
         Ok(visitor) => visitor,
         Err(e) => {
             return (
@@ -108,13 +108,14 @@ pub fn discover(
                     py,
                     &e,
                     DiagnosticScope::Discovery,
-                    &path.to_string(),
+                    Some(module.path().to_string()),
+                    Severity::Error(ErrorType::Unknown),
                 )],
             );
         }
     };
 
-    let parsed = parsed_module(path, project.metadata().python_version());
+    let parsed = module.parsed_module(project.metadata().python_version());
     visitor.visit_body(&parsed.syntax().body);
 
     (
@@ -124,17 +125,6 @@ pub fn discover(
         },
         visitor.diagnostics,
     )
-}
-
-#[must_use]
-pub fn parsed_module(path: &SystemPathBuf, python_version: PythonVersion) -> Parsed<ModModule> {
-    let mode = Mode::Module;
-    let options = ParseOptions::from(mode).with_target_version(python_version);
-    let source = source_text(path);
-
-    parse_unchecked(&source, options)
-        .try_into_module()
-        .expect("PySourceType always parses into a module")
 }
 
 #[must_use]

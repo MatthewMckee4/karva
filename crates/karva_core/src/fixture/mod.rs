@@ -4,10 +4,12 @@ use pyo3::{prelude::*, types::PyTuple};
 use ruff_python_ast::{Decorator, Expr, StmtFunctionDef};
 
 mod extractor;
+mod finalizer;
 mod manager;
 pub mod python;
 
 pub use extractor::FixtureExtractor;
+pub use finalizer::Finalizer;
 pub use manager::FixtureManager;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -88,11 +90,31 @@ impl Fixture {
     pub fn call<'a>(
         &self,
         py: Python<'a>,
-        required_fixtures: Vec<Bound<'a, PyAny>>,
+        fixture_manager: &mut FixtureManager,
     ) -> PyResult<Bound<'a, PyAny>> {
+        let mut required_fixtures = Vec::new();
+
+        for name in self.get_required_fixture_names() {
+            if let Some(fixture) = fixture_manager.get_fixture(&name) {
+                required_fixtures.push(fixture.clone().into_bound(py));
+            }
+        }
         let args = PyTuple::new(py, required_fixtures)?;
-        let function_return = self.function.call(py, args, None);
-        function_return.map(|r| r.into_bound(py))
+        if self.is_generator {
+            let function_return = self.function.call(py, args.clone(), None)?;
+
+            let finalizer = Finalizer::new(self.name().to_string(), function_return.clone());
+            fixture_manager.insert_finalizer(finalizer, self.scope());
+
+            let self_return = function_return
+                .call_method1(py, "__next__", args)
+                .map(|r| r.into_bound(py))?;
+
+            Ok(self_return)
+        } else {
+            let function_return = self.function.call(py, args, None);
+            function_return.map(|r| r.into_bound(py))
+        }
     }
 }
 
@@ -158,7 +180,7 @@ fn is_fixture(decorator: &Decorator) -> bool {
     }
 }
 
-/// This trait is used to get all fixtures (from a module or package) used that have a given scope.
+/// This trait is used to get all fixtures (from a module or package) that have a given scope.
 ///
 /// For example, if we are in a test module, we want to get all fixtures used in the test module.
 /// If we are in a package, we want to get all fixtures used in the package from the configuration module.
@@ -168,13 +190,13 @@ pub trait HasFixtures<'proj>: std::fmt::Debug {
         scope: &[FixtureScope],
         test_cases: &[&dyn RequiresFixtures],
     ) -> Vec<&'proj Fixture> {
-        let mut graph = Vec::new();
+        let mut fixtures = Vec::new();
         for fixture in self.all_fixtures(test_cases) {
             if scope.contains(fixture.scope()) {
-                graph.push(fixture);
+                fixtures.push(fixture);
             }
         }
-        graph
+        fixtures
     }
 
     fn get_fixture<'a: 'proj>(&'a self, fixture_name: &str) -> Option<&'proj Fixture> {
@@ -187,4 +209,25 @@ pub trait HasFixtures<'proj>: std::fmt::Debug {
         &'a self,
         test_cases: &[&dyn RequiresFixtures],
     ) -> Vec<&'proj Fixture>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_invalid_fixture_scope() {
+        assert_eq!(
+            FixtureScope::try_from("invalid".to_string()),
+            Err("Invalid fixture scope: invalid".to_string())
+        );
+    }
+
+    #[test]
+    fn test_fixture_scope_display() {
+        assert_eq!(FixtureScope::Function.to_string(), "function");
+        assert_eq!(FixtureScope::Module.to_string(), "module");
+        assert_eq!(FixtureScope::Package.to_string(), "package");
+        assert_eq!(FixtureScope::Session.to_string(), "session");
+    }
 }

@@ -65,7 +65,10 @@ impl FixtureExtractor {
             .clone()
             .downcast_into::<FixtureFunctionDefinition>()
         else {
-            return Self::try_from_pytest_fixture(val.clone(), &function, is_generator_function);
+            match Self::try_from_pytest_fixture(val.clone(), &function, is_generator_function) {
+                Ok(fixture) => return Ok(fixture),
+                Err(_) => return Err("invalid fixture".to_string()),
+            }
         };
 
         let scope = py_function.borrow_mut().scope.clone();

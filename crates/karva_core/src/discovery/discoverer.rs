@@ -7,10 +7,9 @@ use karva_project::{
 use pyo3::prelude::*;
 
 use crate::{
-    diagnostic::{Diagnostic, DiagnosticScope},
+    diagnostic::{Diagnostic, DiagnosticScope, ErrorType, Severity},
     discovery::discover,
-    module::{Module, ModuleType},
-    package::Package,
+    models::{Module, ModuleType, Package},
     utils::{add_to_sys_path, with_gil},
 };
 
@@ -37,7 +36,8 @@ impl<'proj> Discoverer<'proj> {
                     py,
                     &err,
                     DiagnosticScope::Setup,
-                    &cwd.to_string(),
+                    Some(cwd.to_string()),
+                    Severity::Error(ErrorType::Known("invalid-path".to_string())),
                 ));
                 return;
             }
@@ -81,7 +81,7 @@ impl<'proj> Discoverer<'proj> {
                         );
                     }
                     Err(e) => {
-                        discovery_diagnostics.push(Diagnostic::path_error(&e));
+                        discovery_diagnostics.push(Diagnostic::invalid_path_error(&e));
                     }
                 }
             }
@@ -111,29 +111,24 @@ impl<'proj> Discoverer<'proj> {
             return None;
         }
 
-        let (discovered, diagnostics) = discover(py, path, self.project);
+        let module_type = ModuleType::from_path(path);
+
+        let mut module = Module::new(self.project, path, module_type);
+
+        let (discovered, diagnostics) = discover(py, &module, self.project);
+
+        if !configuration_only {
+            module.set_test_cases(discovered.functions);
+        }
+        module.set_fixtures(discovered.fixtures);
 
         discovery_diagnostics.extend(diagnostics);
 
-        if discovered.is_empty() {
+        if module.is_empty() {
             return None;
         }
 
-        let module_type = ModuleType::from_path(path);
-
-        let test_cases = if configuration_only {
-            Vec::new()
-        } else {
-            discovered.functions
-        };
-
-        Some(Module::new(
-            self.project,
-            path,
-            test_cases,
-            discovered.fixtures,
-            module_type,
-        ))
+        Some(module)
     }
 
     // This should look from the parent of path to the cwd for configuration files
@@ -259,7 +254,7 @@ mod tests {
     use karva_project::{project::ProjectOptions, tests::TestEnv, verbosity::VerbosityLevel};
 
     use super::*;
-    use crate::{module::StringModule, package::StringPackage};
+    use crate::models::{StringModule, StringPackage};
 
     #[test]
     fn test_discover_files() {
@@ -1315,16 +1310,17 @@ def x():
 
         let fixture = r"
 import karva
+
 @karva.fixture(scope='function')
 def x():
     yield 1
 ";
 
-        env.create_file(test_dir.join("conftest.py").as_std_path(), fixture);
+        let conftest_path = env.create_file(test_dir.join("conftest.py").as_std_path(), fixture);
 
         env.create_file(
             test_dir.join("test_1.py").as_std_path(),
-            "def test_1(): pass",
+            "def test_1(x): pass",
         );
 
         let project = Project::new(env.cwd(), vec![test_dir.clone()]);
@@ -1337,7 +1333,7 @@ def x():
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    tests_dir_name.clone(),
+                    tests_dir_name,
                     StringPackage {
                         modules: HashMap::from([
                             (
@@ -1351,7 +1347,10 @@ def x():
                                 "conftest".to_string(),
                                 StringModule {
                                     test_cases: HashSet::new(),
-                                    fixtures: HashSet::new(),
+                                    fixtures: HashSet::from([(
+                                        "x".to_string(),
+                                        "function".to_string()
+                                    )]),
                                 },
                             )
                         ]),
@@ -1363,10 +1362,10 @@ def x():
 
         let test_1_module = session
             .packages()
-            .get(&SystemPathBuf::from(tests_dir_name))
+            .get(&test_dir)
             .unwrap()
             .modules()
-            .get(&SystemPathBuf::from("conftest"))
+            .get(&conftest_path)
             .unwrap();
 
         let fixture = test_1_module.fixtures()[0];

@@ -3,26 +3,63 @@ use std::collections::HashMap;
 use pyo3::{prelude::*, types::PyAny};
 
 use crate::{
-    fixture::{Fixture, FixtureScope, HasFixtures, RequiresFixtures},
-    package::Package,
+    diagnostic::Diagnostic,
+    fixture::{Finalizer, Fixture, FixtureScope, HasFixtures, RequiresFixtures},
+    models::Package,
 };
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
+pub struct FixtureCollection {
+    fixtures: HashMap<String, Py<PyAny>>,
+    finalizers: Vec<Finalizer>,
+}
+
+impl FixtureCollection {
+    pub fn insert_fixture(&mut self, fixture_name: String, fixture_return: Py<PyAny>) {
+        self.fixtures.insert(fixture_name, fixture_return);
+    }
+
+    pub fn insert_finalizer(&mut self, finalizer: Finalizer) {
+        self.finalizers.push(finalizer);
+    }
+
+    pub fn iter_fixtures(&self) -> impl Iterator<Item = (&String, &Py<PyAny>)> {
+        self.fixtures.iter()
+    }
+
+    pub fn reset(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
+        self.fixtures.clear();
+        for finalizer in self.finalizers.drain(..) {
+            if let Some(diagnostic) = finalizer.reset(py) {
+                diagnostics.push(diagnostic);
+            }
+        }
+        diagnostics
+    }
+
+    #[cfg(test)]
+    pub fn contains_fixture(&self, fixture_name: &str) -> bool {
+        self.fixtures.contains_key(fixture_name)
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct FixtureManager {
-    session: HashMap<String, Py<PyAny>>,
-    module: HashMap<String, Py<PyAny>>,
-    package: HashMap<String, Py<PyAny>>,
-    function: HashMap<String, Py<PyAny>>,
+    session: FixtureCollection,
+    module: FixtureCollection,
+    package: FixtureCollection,
+    function: FixtureCollection,
 }
 
 impl FixtureManager {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            session: HashMap::new(),
-            module: HashMap::new(),
-            package: HashMap::new(),
-            function: HashMap::new(),
+            session: FixtureCollection::default(),
+            module: FixtureCollection::default(),
+            package: FixtureCollection::default(),
+            function: FixtureCollection::default(),
         }
     }
 
@@ -39,10 +76,13 @@ impl FixtureManager {
     #[must_use]
     pub fn all_fixtures(&self) -> HashMap<String, Py<PyAny>> {
         let mut fixtures = HashMap::new();
-        fixtures.extend(self.session.iter().map(|(k, v)| (k.clone(), v.clone())));
-        fixtures.extend(self.module.iter().map(|(k, v)| (k.clone(), v.clone())));
-        fixtures.extend(self.package.iter().map(|(k, v)| (k.clone(), v.clone())));
-        fixtures.extend(self.function.iter().map(|(k, v)| (k.clone(), v.clone())));
+        for self_fixtures in [&self.session, &self.module, &self.package, &self.function] {
+            fixtures.extend(
+                self_fixtures
+                    .iter_fixtures()
+                    .map(|(k, v)| (k.clone(), v.clone())),
+            );
+        }
         fixtures
     }
 
@@ -50,17 +90,26 @@ impl FixtureManager {
         match fixture.scope() {
             FixtureScope::Session => self
                 .session
-                .insert(fixture.name().to_string(), fixture_return),
+                .insert_fixture(fixture.name().to_string(), fixture_return),
             FixtureScope::Module => self
                 .module
-                .insert(fixture.name().to_string(), fixture_return),
+                .insert_fixture(fixture.name().to_string(), fixture_return),
             FixtureScope::Package => self
                 .package
-                .insert(fixture.name().to_string(), fixture_return),
+                .insert_fixture(fixture.name().to_string(), fixture_return),
             FixtureScope::Function => self
                 .function
-                .insert(fixture.name().to_string(), fixture_return),
-        };
+                .insert_fixture(fixture.name().to_string(), fixture_return),
+        }
+    }
+
+    pub fn insert_finalizer(&mut self, finalizer: Finalizer, scope: &FixtureScope) {
+        match scope {
+            FixtureScope::Session => self.session.insert_finalizer(finalizer),
+            FixtureScope::Module => self.module.insert_finalizer(finalizer),
+            FixtureScope::Package => self.package.insert_finalizer(finalizer),
+            FixtureScope::Function => self.function.insert_finalizer(finalizer),
+        }
     }
 
     // TODO: This is a bit of a mess.
@@ -114,7 +163,7 @@ impl FixtureManager {
                         self.ensure_fixture_dependencies(
                             py,
                             &parents_above_current_parent,
-                            *parent,
+                            parent,
                             parent_fixture,
                         );
                     }
@@ -125,16 +174,7 @@ impl FixtureManager {
             }
         }
 
-        let mut required_fixtures = Vec::new();
-
-        for name in current_dependencies {
-            if let Some(fixture) = self.get_fixture(&name) {
-                required_fixtures.push(fixture.clone().into_bound(py));
-            }
-        }
-
-        // I think we can be sure that required_fixtures
-        match fixture.call(py, required_fixtures) {
+        match fixture.call(py, self) {
             Ok(fixture_return) => {
                 self.insert_fixture(fixture_return.unbind(), fixture);
             }
@@ -155,26 +195,24 @@ impl FixtureManager {
         let fixtures = current.fixtures(scopes, dependencies);
 
         for fixture in fixtures {
-            if scopes.contains(fixture.scope()) {
-                self.ensure_fixture_dependencies(py, parents, current, fixture);
-            }
+            self.ensure_fixture_dependencies(py, parents, current, fixture);
         }
     }
 
-    pub fn reset_session_fixtures(&mut self) {
-        self.session.clear();
+    pub fn reset_session_fixtures(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
+        self.session.reset(py)
     }
 
-    pub fn reset_package_fixtures(&mut self) {
-        self.package.clear();
+    pub fn reset_package_fixtures(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
+        self.package.reset(py)
     }
 
-    pub fn reset_module_fixtures(&mut self) {
-        self.module.clear();
+    pub fn reset_module_fixtures(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
+        self.module.reset(py)
     }
 
-    pub fn reset_function_fixtures(&mut self) {
-        self.function.clear();
+    pub fn reset_function_fixtures(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
+        self.function.reset(py)
     }
 }
 
@@ -442,9 +480,9 @@ def z(x):
                 &[first_test_function],
             );
 
-            assert!(manager.module.contains_key("x"));
-            assert!(manager.function.contains_key("y"));
-            assert!(manager.function.contains_key("z"));
+            assert!(manager.module.contains_fixture("x"));
+            assert!(manager.function.contains_fixture("y"));
+            assert!(manager.function.contains_fixture("z"));
         });
     }
 
@@ -505,9 +543,9 @@ def z(y):
                 &[first_test_function],
             );
 
-            assert!(manager.session.contains_key("x"));
-            assert!(manager.module.contains_key("y"));
-            assert!(manager.function.contains_key("z"));
+            assert!(manager.session.contains_fixture("x"));
+            assert!(manager.module.contains_fixture("y"));
+            assert!(manager.function.contains_fixture("z"));
         });
     }
 
@@ -561,9 +599,9 @@ def z(x, y):
                 &[first_test_function],
             );
 
-            assert!(manager.module.contains_key("x"));
-            assert!(manager.function.contains_key("y"));
-            assert!(manager.function.contains_key("z"));
+            assert!(manager.module.contains_fixture("x"));
+            assert!(manager.function.contains_fixture("y"));
+            assert!(manager.function.contains_fixture("z"));
         });
     }
 
@@ -636,10 +674,10 @@ def auth_token(user):
                 &[test_function],
             );
 
-            assert!(manager.package.contains_key("api_client"));
-            assert!(manager.module.contains_key("user"));
-            assert!(manager.function.contains_key("auth_token"));
-            assert!(manager.session.contains_key("database"));
+            assert!(manager.package.contains_fixture("api_client"));
+            assert!(manager.module.contains_fixture("user"));
+            assert!(manager.function.contains_fixture("auth_token"));
+            assert!(manager.session.contains_fixture("database"));
         });
     }
 
@@ -715,10 +753,10 @@ def service_b(config):
                 &[test_a],
             );
 
-            assert!(manager.session.contains_key("config"));
-            assert!(manager.package.contains_key("service_a"));
+            assert!(manager.session.contains_fixture("config"));
+            assert!(manager.package.contains_fixture("service_a"));
 
-            manager.reset_package_fixtures();
+            manager.reset_package_fixtures(py);
 
             manager.add_fixtures(
                 py,
@@ -728,9 +766,9 @@ def service_b(config):
                 &[test_b],
             );
 
-            assert!(manager.session.contains_key("config"));
-            assert!(manager.package.contains_key("service_b"));
-            assert!(!manager.package.contains_key("service_a"));
+            assert!(manager.session.contains_fixture("config"));
+            assert!(manager.package.contains_fixture("service_b"));
+            assert!(!manager.package.contains_fixture("service_a"));
         });
     }
 
@@ -790,7 +828,7 @@ def data():
                 &[root_test],
             );
 
-            manager.reset_function_fixtures();
+            manager.reset_function_fixtures(py);
             manager.add_fixtures(
                 py,
                 &[tests_package],
@@ -799,7 +837,7 @@ def data():
                 &[child_test],
             );
 
-            assert!(manager.function.contains_key("data"));
+            assert!(manager.function.contains_fixture("data"));
         });
     }
 
@@ -848,10 +886,10 @@ def combined(derived_a, derived_b):
                 &[test_function],
             );
 
-            assert!(manager.function.contains_key("base"));
-            assert!(manager.function.contains_key("derived_a"));
-            assert!(manager.function.contains_key("derived_b"));
-            assert!(manager.function.contains_key("combined"));
+            assert!(manager.function.contains_fixture("base"));
+            assert!(manager.function.contains_fixture("derived_a"));
+            assert!(manager.function.contains_fixture("derived_b"));
+            assert!(manager.function.contains_fixture("combined"));
         });
     }
 
@@ -938,11 +976,11 @@ def level5(level4):
                 &[test_function],
             );
 
-            assert!(manager.session.contains_key("level1"));
-            assert!(manager.package.contains_key("level2"));
-            assert!(manager.module.contains_key("level3"));
-            assert!(manager.function.contains_key("level4"));
-            assert!(manager.function.contains_key("level5"));
+            assert!(manager.session.contains_fixture("level1"));
+            assert!(manager.package.contains_fixture("level2"));
+            assert!(manager.module.contains_fixture("level3"));
+            assert!(manager.function.contains_fixture("level4"));
+            assert!(manager.function.contains_fixture("level5"));
         });
     }
 
@@ -1043,10 +1081,10 @@ def integration_service(service_a, service_b):
                 &[test_function],
             );
 
-            assert!(manager.session.contains_key("utils"));
-            assert!(manager.package.contains_key("service_a"));
-            assert!(manager.package.contains_key("service_b"));
-            assert!(manager.function.contains_key("integration_service"));
+            assert!(manager.session.contains_fixture("utils"));
+            assert!(manager.package.contains_fixture("service_a"));
+            assert!(manager.package.contains_fixture("service_b"));
+            assert!(manager.function.contains_fixture("integration_service"));
         });
     }
 
@@ -1094,8 +1132,8 @@ def function_fixture(module_fixture):
                 &[test_one, test_two, test_three],
             );
 
-            assert!(manager.module.contains_key("module_fixture"));
-            assert!(manager.function.contains_key("function_fixture"));
+            assert!(manager.module.contains_fixture("module_fixture"));
+            assert!(manager.function.contains_fixture("function_fixture"));
         });
     }
 
@@ -1157,12 +1195,12 @@ def converged(branch_a2, branch_b2):
                 &[test_function],
             );
 
-            assert!(manager.session.contains_key("root"));
-            assert!(manager.package.contains_key("branch_a1"));
-            assert!(manager.package.contains_key("branch_b1"));
-            assert!(manager.module.contains_key("branch_a2"));
-            assert!(manager.module.contains_key("branch_b2"));
-            assert!(manager.function.contains_key("converged"));
+            assert!(manager.session.contains_fixture("root"));
+            assert!(manager.package.contains_fixture("branch_a1"));
+            assert!(manager.package.contains_fixture("branch_b1"));
+            assert!(manager.module.contains_fixture("branch_a2"));
+            assert!(manager.module.contains_fixture("branch_b2"));
+            assert!(manager.function.contains_fixture("converged"));
         });
     }
 
@@ -1217,25 +1255,25 @@ def function_fixture():
                 &[test_function],
             );
 
-            assert!(manager.session.contains_key("session_fixture"));
-            assert!(manager.package.contains_key("package_fixture"));
-            assert!(manager.module.contains_key("module_fixture"));
-            assert!(manager.function.contains_key("function_fixture"));
+            assert!(manager.session.contains_fixture("session_fixture"));
+            assert!(manager.package.contains_fixture("package_fixture"));
+            assert!(manager.module.contains_fixture("module_fixture"));
+            assert!(manager.function.contains_fixture("function_fixture"));
 
-            manager.reset_function_fixtures();
-            assert!(!manager.function.contains_key("function_fixture"));
-            assert!(manager.module.contains_key("module_fixture"));
+            manager.reset_function_fixtures(py);
+            assert!(!manager.function.contains_fixture("function_fixture"));
+            assert!(manager.module.contains_fixture("module_fixture"));
 
-            manager.reset_module_fixtures();
-            assert!(!manager.module.contains_key("module_fixture"));
-            assert!(manager.package.contains_key("package_fixture"));
+            manager.reset_module_fixtures(py);
+            assert!(!manager.module.contains_fixture("module_fixture"));
+            assert!(manager.package.contains_fixture("package_fixture"));
 
-            manager.reset_package_fixtures();
-            assert!(!manager.package.contains_key("package_fixture"));
-            assert!(manager.session.contains_key("session_fixture"));
+            manager.reset_package_fixtures(py);
+            assert!(!manager.package.contains_fixture("package_fixture"));
+            assert!(manager.session.contains_fixture("session_fixture"));
 
-            manager.reset_session_fixtures();
-            assert!(!manager.session.contains_key("session_fixture"));
+            manager.reset_session_fixtures(py);
+            assert!(!manager.session.contains_fixture("session_fixture"));
         });
     }
 }

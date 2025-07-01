@@ -63,7 +63,7 @@ fn benchmark_karva(criterion: &mut Criterion) {
                         .to_vec(),
                     );
                     let runner_result = project.test_with_reporter(&mut DummyReporter);
-                    assert!(runner_result.is_empty());
+                    assert!(runner_result.passed());
                 });
             },
         );

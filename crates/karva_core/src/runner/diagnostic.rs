@@ -1,6 +1,6 @@
 use colored::{Color, Colorize};
 
-use crate::diagnostic::{Diagnostic, DiagnosticScope, SubDiagnosticType};
+use crate::diagnostic::{Diagnostic, DiagnosticScope};
 
 #[derive(Clone, Debug, Default)]
 pub struct RunDiagnostics {
@@ -15,9 +15,11 @@ impl RunDiagnostics {
 
     pub fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
         if *diagnostic.scope() == DiagnosticScope::Test {
-            match diagnostic.diagnostic_type() {
-                SubDiagnosticType::Fail => self.stats.add_failed(),
-                SubDiagnosticType::Error(_) => self.stats.add_errored(),
+            let error_type = diagnostic.severity();
+            if error_type.is_test_fail() {
+                self.stats.add_failed();
+            } else if error_type.is_test_error() {
+                self.stats.add_errored();
             }
         }
         self.diagnostics.push(diagnostic);
@@ -33,18 +35,18 @@ impl RunDiagnostics {
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.diagnostics.is_empty()
+    pub fn passed(&self) -> bool {
+        for diagnostic in &self.diagnostics {
+            if diagnostic.severity().is_error() {
+                return false;
+            }
+        }
+        true
     }
 
     #[must_use]
     pub fn test_results(&self) -> &[Diagnostic] {
         &self.diagnostics
-    }
-
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.diagnostics.len()
     }
 
     #[must_use]

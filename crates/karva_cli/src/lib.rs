@@ -121,7 +121,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     let mut stdout = io::stdout().lock();
 
-    let passed = result.is_empty();
+    let passed = result.passed();
 
     for diagnostic in result.iter() {
         write!(stdout, "{}", diagnostic.display())?;
