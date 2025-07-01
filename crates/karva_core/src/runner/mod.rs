@@ -593,4 +593,43 @@ def test_fixture_with_name_parameter(fixture_name):
         expected_stats.add_passed();
         assert_eq!(*result.stats(), expected_stats);
     }
+
+    #[test]
+    fn test_fixture_is_different_in_different_functions() {
+        let env = TestEnv::new();
+
+        let test_dir = env.create_tests_dir();
+        env.create_file(
+            test_dir
+                .join("test_fixture_is_different_in_different_functions.py")
+                .as_ref(),
+            r"import karva
+
+class TestEnv:
+    def __init__(self):
+        self.x = 1
+
+@karva.fixture
+def fixture():
+    return TestEnv()
+
+def test_fixture(fixture):
+    assert fixture.x == 1
+    fixture.x = 2
+
+def test_fixture_2(fixture):
+    assert fixture.x == 1
+    fixture.x = 2
+",
+        );
+
+        let project = Project::new(env.cwd(), vec![test_dir]);
+
+        let result = project.test_with_reporter(&mut DummyReporter);
+
+        let mut expected_stats = DiagnosticStats::default();
+        expected_stats.add_passed();
+        expected_stats.add_passed();
+        assert_eq!(*result.stats(), expected_stats);
+    }
 }

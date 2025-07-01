@@ -65,10 +65,10 @@ impl FixtureExtractor {
             .clone()
             .downcast_into::<FixtureFunctionDefinition>()
         else {
-            match Self::try_from_pytest_fixture(val.clone(), &function, is_generator_function) {
-                Ok(fixture) => return Ok(fixture),
-                Err(_) => return Err("invalid fixture".to_string()),
-            }
+            tracing::info!(
+                "Could not parse fixture as a karva fixture, trying to parse as a pytest fixture"
+            );
+            return Self::try_from_pytest_fixture(val.clone(), &function, is_generator_function);
         };
 
         let scope = py_function.borrow_mut().scope.clone();

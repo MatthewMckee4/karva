@@ -78,7 +78,9 @@ impl Diagnostic {
             vec![SubDiagnostic::new(
                 format!("Fixture {fixture_name} not found"),
                 location,
-                Severity::Error(ErrorType::Fixture("fixture-not-found".to_string())),
+                Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Error(
+                    "fixture-not-found".to_string(),
+                ))),
             )],
             DiagnosticScope::Setup,
         )
