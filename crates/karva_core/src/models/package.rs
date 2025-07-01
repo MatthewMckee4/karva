@@ -6,9 +6,8 @@ use std::{
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 
 use crate::{
-    case::TestFunction,
     fixture::{Fixture, HasFixtures, RequiresFixtures},
-    module::{Module, ModuleType, StringModule},
+    models::{Module, ModuleType, StringModule, TestFunction},
     utils::Upcast,
 };
 

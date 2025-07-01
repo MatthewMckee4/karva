@@ -1,3 +1,5 @@
+import karva
+
 from .test_env import TestEnv
 
 
@@ -26,14 +28,18 @@ def get_source_code(constructor_body: str = "pass") -> list[tuple[str, str]]:
     ]
 
 
-def test_function_scopes(test_env: TestEnv) -> None:
+_framework = karva.tags.parametrize("framework", ["karva", "pytest"])
+
+
+@_framework
+def test_function_scopes(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("print('Calculator initialized')"),
             (
                 "tests/conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture
@@ -67,17 +73,16 @@ Calculator initialized
 ----- stderr -----"""
     )
 
-    test_env.cleanup()
 
-
-def test_module_scopes(test_env: TestEnv) -> None:
+@_framework
+def test_module_scopes(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("print('Calculator initialized')"),
             (
                 "tests/conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture(scope="module")
@@ -110,17 +115,16 @@ Calculator initialized
 ----- stderr -----"""
     )
 
-    test_env.cleanup()
 
-
-def test_package_scopes(test_env: TestEnv) -> None:
+@_framework
+def test_package_scopes(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("print('Calculator initialized')"),
             (
                 "tests/conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture(scope="package")
@@ -158,17 +162,16 @@ Calculator initialized
 ----- stderr -----"""
     )
 
-    test_env.cleanup()
 
-
-def test_session_scopes(test_env: TestEnv) -> None:
+@_framework
+def test_session_scopes(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("print('Calculator initialized')"),
             (
                 "conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture(scope="session")
@@ -216,17 +219,16 @@ Calculator initialized
 ----- stderr -----"""
     )
 
-    test_env.cleanup()
 
-
-def test_mixed_scopes(test_env: TestEnv) -> None:
+@_framework
+def test_mixed_scopes(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture(scope="session")
@@ -273,17 +275,16 @@ Function calculator initialized
 ----- stderr -----"""
     )
 
-    test_env.cleanup()
 
-
-def test_fixture_across_files(test_env: TestEnv) -> None:
+@_framework
+def test_fixture_across_files(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture(scope="package")
@@ -321,17 +322,17 @@ Package calculator initialized
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_fixture_initialization_order(test_env: TestEnv) -> None:
+@_framework
+def test_fixture_initialization_order(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture(scope="session")
@@ -387,17 +388,17 @@ Function calculator initialized
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_named_fixtures(test_env: TestEnv) -> None:
+@_framework
+def test_named_fixtures(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("print('Named calculator initialized')"),
             (
                 "tests/conftest.py",
-                """
-                from karva import fixture
+                f"""
+                from {framework} import fixture
                 from src import Calculator
 
                 @fixture(name="named_calculator")
@@ -426,17 +427,17 @@ Named calculator initialized
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_nested_package_scopes(test_env: TestEnv) -> None:
+@_framework
+def test_nested_package_scopes(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "tests/test_calculator.py",
-                """
-                from karva import fixture
+                f"""
+                from {framework} import fixture
                 from src import Calculator
 
                 @fixture
@@ -449,8 +450,8 @@ def test_nested_package_scopes(test_env: TestEnv) -> None:
             ),
             (
                 "tests/inner/conftest.py",
-                """
-                from karva import fixture
+                f"""
+                from {framework} import fixture
                 from src import Calculator
 
                 @fixture(scope="package")
@@ -482,17 +483,16 @@ Package calculator initialized
 ----- stderr -----"""
     )
 
-    test_env.cleanup()
 
-
-def test_independent_fixtures(test_env: TestEnv) -> None:
+@_framework
+def test_independent_fixtures(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "tests/conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture
@@ -531,17 +531,17 @@ Calculator B initialized
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_multiple_files_independent_fixtures(test_env: TestEnv) -> None:
+@_framework
+def test_multiple_files_independent_fixtures(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "tests/conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture(scope="module")
@@ -586,17 +586,17 @@ Multiply calculator initialized
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_basic_error_handling(test_env: TestEnv) -> None:
+@_framework
+def test_basic_error_handling(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "tests/conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture
@@ -636,17 +636,17 @@ Working calculator initialized
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_different_scopes_independent(test_env: TestEnv) -> None:
+@_framework
+def test_different_scopes_independent(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture(scope="session")
@@ -656,8 +656,8 @@ def test_different_scopes_independent(test_env: TestEnv) -> None:
             ),
             (
                 "tests/conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture(scope="package")
@@ -667,8 +667,8 @@ def test_different_scopes_independent(test_env: TestEnv) -> None:
             ),
             (
                 "tests/inner/conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture(scope="module")
@@ -706,17 +706,17 @@ Module calculator initialized
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_invalid_scope_value(test_env: TestEnv) -> None:
+@_framework
+def test_invalid_scope_value(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "tests/conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture(scope="invalid_scope")
@@ -749,7 +749,6 @@ Errored tests: 1
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
 def test_empty_conftest(test_env: TestEnv) -> None:
@@ -788,17 +787,17 @@ All checks passed!
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_invalid_fixture_name(test_env: TestEnv) -> None:
+@_framework
+def test_invalid_fixture_name(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "tests/conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture(name="123invalid")
@@ -828,17 +827,17 @@ Errored tests: 1
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_multiple_conftest_same_dir(test_env: TestEnv) -> None:
+@_framework
+def test_multiple_conftest_same_dir(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "tests/conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture
@@ -848,8 +847,8 @@ def test_multiple_conftest_same_dir(test_env: TestEnv) -> None:
             ),
             (
                 "tests/conftest_more.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture
@@ -882,17 +881,17 @@ Calculator 1 initialized
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_very_deep_directory_structure(test_env: TestEnv) -> None:
+@_framework
+def test_very_deep_directory_structure(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture(scope="session")
@@ -902,8 +901,8 @@ def test_very_deep_directory_structure(test_env: TestEnv) -> None:
             ),
             (
                 "tests/level1/level2/level3/level4/level5/conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture(scope="package")
@@ -935,17 +934,17 @@ Deep calculator initialized
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_fixture_in_init_file(test_env: TestEnv) -> None:
+@_framework
+def test_fixture_in_init_file(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "tests/__init__.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture
@@ -976,17 +975,17 @@ Errored tests: 1
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_same_fixture_name_different_types(test_env: TestEnv) -> None:
+@_framework
+def test_same_fixture_name_different_types(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "tests/math/conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
                     from src import Calculator
 
                     @fixture
@@ -1004,8 +1003,8 @@ def test_same_fixture_name_different_types(test_env: TestEnv) -> None:
             ),
             (
                 "tests/string/conftest.py",
-                """
-                    from karva import fixture
+                f"""
+                    from {framework} import fixture
 
                     @fixture
                     def value() -> str:
@@ -1035,17 +1034,17 @@ Calculator value initialized
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_fixture_dependencies(test_env: TestEnv) -> None:
+@_framework
+def test_fixture_dependencies(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("print('Calculator initialized')"),
             (
                 "tests/conftest.py",
-                """
-                from karva import fixture
+                f"""
+                from {framework} import fixture
                 from src import Calculator
 
                 @fixture
@@ -1090,17 +1089,17 @@ Calculator with value fixture initialized
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_dependent_fixtures_different_scopes(test_env: TestEnv) -> None:
+@_framework
+def test_dependent_fixtures_different_scopes(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "conftest.py",
-                """
-                from karva import fixture
+                f"""
+                from {framework} import fixture
                 from src import Calculator
 
                 @fixture(scope="session")
@@ -1110,8 +1109,8 @@ def test_dependent_fixtures_different_scopes(test_env: TestEnv) -> None:
             ),
             (
                 "tests/conftest.py",
-                """
-                from karva import fixture
+                f"""
+                from {framework} import fixture
                 from src import Calculator
 
                 @fixture(scope="package")
@@ -1122,8 +1121,8 @@ def test_dependent_fixtures_different_scopes(test_env: TestEnv) -> None:
             ),
             (
                 "tests/inner/conftest.py",
-                """
-                from karva import fixture
+                f"""
+                from {framework} import fixture
                 from src import Calculator
 
                 @fixture(scope="module")
@@ -1159,17 +1158,17 @@ Module calculator initialized
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_complex_dependency_chain(test_env: TestEnv) -> None:
+@_framework
+def test_complex_dependency_chain(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "tests/conftest.py",
-                """
-                from karva import fixture
+                f"""
+                from {framework} import fixture
                 from src import Calculator
 
                 @fixture
@@ -1220,17 +1219,17 @@ Final calculator initialized
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_mixed_scope_dependencies(test_env: TestEnv) -> None:
+@_framework
+def test_mixed_scope_dependencies(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "conftest.py",
-                """
-                from karva import fixture
+                f"""
+                from {framework} import fixture
                 from src import Calculator
 
                 @fixture(scope="session")
@@ -1240,8 +1239,8 @@ def test_mixed_scope_dependencies(test_env: TestEnv) -> None:
             ),
             (
                 "tests/conftest.py",
-                """
-                from karva import fixture
+                f"""
+                from {framework} import fixture
                 from src import Calculator
 
                 @fixture(scope="package")
@@ -1282,17 +1281,17 @@ Function calc initialized
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
 
 
-def test_diamond_dependency(test_env: TestEnv) -> None:
+@_framework
+def test_diamond_dependency(test_env: TestEnv, framework: str) -> None:
     test_env.write_files(
         [
             *get_source_code("pass"),
             (
                 "tests/conftest.py",
-                """
-                from karva import fixture
+                f"""
+                from {framework} import fixture
                 from src import Calculator
 
                 @fixture
@@ -1342,4 +1341,44 @@ Final calc initialized
 
 ----- stderr -----"""
     )
-    test_env.cleanup()
+
+
+@_framework
+def test_generator_fixture(test_env: TestEnv, framework: str) -> None:
+    test_env.write_files(
+        [
+            *get_source_code("pass"),
+            (
+                "tests/conftest.py",
+                f"""
+                from {framework} import fixture
+                from src import Calculator
+
+                @fixture
+                def generator_fixture():
+                    yield Calculator()
+                    print("Generator fixture teardown")""",
+            ),
+            (
+                "tests/test_calculator.py",
+                """
+                from src import Calculator
+
+                def test_generator_fixture(generator_fixture: Calculator) -> None:
+                    assert generator_fixture.add(1, 2) == 3""",
+            ),
+        ],
+    )
+
+    assert (
+        test_env.run_test()
+        == """success: true
+exit_code: 0
+----- stdout -----
+Passed tests: 1
+All checks passed!
+Generator fixture teardown
+
+----- stderr -----
+"""
+    )

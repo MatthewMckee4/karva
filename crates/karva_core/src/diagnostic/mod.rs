@@ -2,14 +2,14 @@ use karva_project::path::TestPathError;
 use pyo3::prelude::*;
 
 use crate::{
-    case::TestFunction,
     diagnostic::render::{DisplayDiagnostic, SubDiagnosticDisplay},
+    models::TestFunction,
 };
 
 pub mod render;
 pub mod reporter;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Diagnostic {
     sub_diagnostics: Vec<SubDiagnostic>,
     scope: DiagnosticScope,
@@ -37,16 +37,15 @@ impl Diagnostic {
         py: Python<'_>,
         error: &PyErr,
         scope: DiagnosticScope,
-        location: &str,
+        location: Option<String>,
+        severity: Severity,
     ) -> Self {
         Self::new(
-            vec![SubDiagnostic {
-                diagnostic_type: SubDiagnosticType::Error(DiagnosticError::Error(get_type_name(
-                    py, error,
-                ))),
-                message: get_traceback(py, error),
-                location: location.to_string(),
-            }],
+            vec![SubDiagnostic::new(
+                get_traceback(py, error),
+                location,
+                severity,
+            )],
             scope,
         )
     }
@@ -54,11 +53,11 @@ impl Diagnostic {
     pub fn from_test_fail(py: Python<'_>, error: &PyErr, test_case: &TestFunction) -> Self {
         if error.is_instance_of::<pyo3::exceptions::PyAssertionError>(py) {
             return Self::new(
-                vec![SubDiagnostic {
-                    diagnostic_type: SubDiagnosticType::Fail,
-                    message: get_traceback(py, error),
-                    location: test_case.path().to_string(),
-                }],
+                vec![SubDiagnostic::new(
+                    get_traceback(py, error),
+                    Some(test_case.path().to_string()),
+                    Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Fail)),
+                )],
                 DiagnosticScope::Test,
             );
         }
@@ -66,63 +65,78 @@ impl Diagnostic {
             py,
             error,
             DiagnosticScope::Test,
-            &test_case.path().to_string(),
+            Some(test_case.path().to_string()),
+            Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Error(
+                get_type_name(py, error),
+            ))),
         )
     }
 
     #[must_use]
-    pub fn fixture_not_found(fixture_name: &str, location: &str) -> Self {
+    pub fn fixture_not_found(fixture_name: &String, location: Option<String>) -> Self {
         Self::new(
-            vec![SubDiagnostic {
-                diagnostic_type: SubDiagnosticType::Error(DiagnosticError::FixtureNotFound(
-                    fixture_name.to_string(),
-                )),
-                message: format!("Fixture {fixture_name} not found"),
-                location: location.to_string(),
-            }],
+            vec![SubDiagnostic::new(
+                format!("Fixture {fixture_name} not found"),
+                location,
+                Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Error(
+                    "fixture-not-found".to_string(),
+                ))),
+            )],
             DiagnosticScope::Setup,
         )
     }
 
     #[must_use]
-    pub fn invalid_fixture(message: &str, location: &str) -> Self {
+    pub fn invalid_fixture(message: String, location: Option<String>) -> Self {
         Self::new(
-            vec![SubDiagnostic {
-                diagnostic_type: SubDiagnosticType::Error(DiagnosticError::InvalidFixture(
-                    message.to_string(),
-                )),
-                message: message.to_string(),
-                location: location.to_string(),
-            }],
+            vec![SubDiagnostic::new(
+                message,
+                location,
+                Severity::Error(ErrorType::Fixture("invalid-fixture".to_string())),
+            )],
             DiagnosticScope::Setup,
         )
     }
 
     #[must_use]
-    pub fn path_error(error: &TestPathError) -> Self {
+    pub fn invalid_path_error(error: &TestPathError) -> Self {
+        let path = error.path().to_string();
         Self::new(
-            vec![SubDiagnostic {
-                diagnostic_type: SubDiagnosticType::Error(DiagnosticError::InvalidPath(
-                    error.path().to_string(),
-                )),
-                message: format!("{error}"),
-                location: "setup".to_string(),
-            }],
+            vec![SubDiagnostic::new(
+                format!("{error}"),
+                Some(path),
+                Severity::Error(ErrorType::Known("invalid-path".to_string())),
+            )],
             DiagnosticScope::Unknown,
         )
     }
 
     #[must_use]
-    pub fn unknown_error(message: &str, location: &str) -> Self {
+    pub fn unknown_error(message: String, location: Option<String>) -> Self {
         Self::new(
-            vec![SubDiagnostic {
-                diagnostic_type: SubDiagnosticType::Error(DiagnosticError::Error(
-                    message.to_string(),
-                )),
-                message: message.to_string(),
-                location: location.to_string(),
-            }],
+            vec![SubDiagnostic::new(
+                message,
+                location,
+                Severity::Error(ErrorType::Unknown),
+            )],
             DiagnosticScope::Unknown,
+        )
+    }
+
+    #[must_use]
+    pub fn warning(
+        warning_type: &str,
+        message: String,
+        location: Option<String>,
+        scope: DiagnosticScope,
+    ) -> Self {
+        Self::new(
+            vec![SubDiagnostic::new(
+                message,
+                location,
+                Severity::Warning(warning_type.to_string()),
+            )],
+            scope,
         )
     }
 
@@ -148,12 +162,18 @@ impl Diagnostic {
     }
 
     #[must_use]
-    pub fn diagnostic_type(&self) -> SubDiagnosticType {
+    pub fn severity(&self) -> Severity {
         self.sub_diagnostics
             .iter()
-            .map(|sub_diagnostic| sub_diagnostic.diagnostic_type().clone())
-            .find(|diagnostic_type| matches!(diagnostic_type, SubDiagnosticType::Error(_)))
-            .unwrap_or(SubDiagnosticType::Fail)
+            .map(SubDiagnostic::severity)
+            .find(|severity| severity.is_error())
+            .or_else(|| {
+                self.sub_diagnostics
+                    .iter()
+                    .map(SubDiagnostic::severity)
+                    .find(|severity| matches!(severity, Severity::Warning(_)))
+            })
+            .map_or_else(|| Severity::Warning("unknown".to_string()), Clone::clone)
     }
 
     #[must_use]
@@ -164,22 +184,18 @@ impl Diagnostic {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SubDiagnostic {
-    diagnostic_type: SubDiagnosticType,
     message: String,
-    location: String,
+    location: Option<String>,
+    severity: Severity,
 }
 
 impl SubDiagnostic {
     #[must_use]
-    pub const fn new(
-        diagnostic_type: SubDiagnosticType,
-        message: String,
-        location: String,
-    ) -> Self {
+    pub const fn new(message: String, location: Option<String>, severity: Severity) -> Self {
         Self {
-            diagnostic_type,
             message,
             location,
+            severity,
         }
     }
     #[must_use]
@@ -188,8 +204,11 @@ impl SubDiagnostic {
     }
 
     #[must_use]
-    pub const fn diagnostic_type(&self) -> &SubDiagnosticType {
-        &self.diagnostic_type
+    pub const fn error_type(&self) -> Option<&ErrorType> {
+        match &self.severity {
+            Severity::Error(diagnostic_type) => Some(diagnostic_type),
+            Severity::Warning(_) => None,
+        }
     }
 
     #[must_use]
@@ -198,8 +217,13 @@ impl SubDiagnostic {
     }
 
     #[must_use]
-    pub fn location(&self) -> &str {
-        &self.location
+    pub fn location(&self) -> Option<&str> {
+        self.location.as_deref()
+    }
+
+    #[must_use]
+    pub const fn severity(&self) -> &Severity {
+        &self.severity
     }
 }
 
@@ -209,21 +233,50 @@ pub enum DiagnosticScope {
     Test,
     Setup,
     Discovery,
+    Teardown,
     Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SubDiagnosticType {
-    Fail,
-    Error(DiagnosticError),
+pub enum Severity {
+    Error(ErrorType),
+    Warning(String),
+}
+
+impl Severity {
+    #[must_use]
+    pub const fn is_error(&self) -> bool {
+        matches!(self, Self::Error(_))
+    }
+
+    #[must_use]
+    pub const fn is_test_fail(&self) -> bool {
+        matches!(
+            self,
+            Self::Error(ErrorType::TestCase(TestCaseDiagnosticType::Fail))
+        )
+    }
+    #[must_use]
+    pub const fn is_test_error(&self) -> bool {
+        matches!(
+            self,
+            Self::Error(ErrorType::TestCase(TestCaseDiagnosticType::Error(_)))
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DiagnosticError {
+pub enum ErrorType {
+    TestCase(TestCaseDiagnosticType),
+    Fixture(String),
+    Known(String),
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TestCaseDiagnosticType {
+    Fail,
     Error(String),
-    FixtureNotFound(String),
-    InvalidFixture(String),
-    InvalidPath(String),
 }
 
 fn get_traceback(py: Python<'_>, error: &PyErr) -> String {
@@ -282,9 +335,9 @@ mod tests {
     #[test]
     fn test_from_sub_diagnostics() {
         let sub_diagnostic = SubDiagnostic::new(
-            SubDiagnosticType::Fail,
             "message".to_string(),
-            "location".to_string(),
+            None,
+            Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Fail)),
         );
         let diagnostic =
             Diagnostic::from_sub_diagnostics(vec![sub_diagnostic.clone()], DiagnosticScope::Test);
@@ -294,9 +347,9 @@ mod tests {
     #[test]
     fn test_from_test_diagnostics() {
         let sub_diagnostic = SubDiagnostic::new(
-            SubDiagnosticType::Fail,
             "message".to_string(),
-            "location".to_string(),
+            None,
+            Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Fail)),
         );
         let diagnostic = Diagnostic::from_test_diagnostics(vec![Diagnostic::from_sub_diagnostics(
             vec![sub_diagnostic.clone()],
@@ -310,9 +363,9 @@ mod tests {
     fn test_add_sub_diagnostic() {
         let mut diagnostic = Diagnostic::new(vec![], DiagnosticScope::Test);
         let sub_diagnostic = SubDiagnostic::new(
-            SubDiagnosticType::Fail,
             "message".to_string(),
-            "location".to_string(),
+            None,
+            Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Fail)),
         );
         diagnostic.add_sub_diagnostic(sub_diagnostic.clone());
         assert_eq!(diagnostic.sub_diagnostics(), &[sub_diagnostic]);
@@ -321,13 +374,20 @@ mod tests {
     #[test]
     fn test_subdiagnostic() {
         let sub_diagnostic = SubDiagnostic::new(
-            SubDiagnosticType::Fail,
             "message".to_string(),
-            "location".to_string(),
+            None,
+            Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Fail)),
         );
-        assert_eq!(sub_diagnostic.diagnostic_type(), &SubDiagnosticType::Fail);
+        assert_eq!(
+            sub_diagnostic.error_type(),
+            Some(&ErrorType::TestCase(TestCaseDiagnosticType::Fail))
+        );
         assert_eq!(sub_diagnostic.message(), "message");
-        assert_eq!(sub_diagnostic.location(), "location");
+        assert_eq!(sub_diagnostic.location(), None);
+        assert_eq!(
+            sub_diagnostic.severity(),
+            &Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Fail))
+        );
     }
 
     #[test]

@@ -5,12 +5,14 @@ use std::{
 };
 
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
+use ruff_python_ast::{ModModule, PythonVersion};
+use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 use ruff_text_size::TextSize;
 
 use crate::{
-    case::TestFunction,
     discovery::visitor::source_text,
     fixture::{Fixture, HasFixtures, RequiresFixtures},
+    models::TestFunction,
     utils::from_text_size,
 };
 
@@ -44,18 +46,12 @@ pub struct Module<'proj> {
 
 impl<'proj> Module<'proj> {
     #[must_use]
-    pub fn new(
-        project: &'proj Project,
-        path: &SystemPathBuf,
-        test_cases: Vec<TestFunction>,
-        fixtures: Vec<Fixture>,
-        module_type: ModuleType,
-    ) -> Self {
+    pub fn new(project: &'proj Project, path: &SystemPathBuf, module_type: ModuleType) -> Self {
         Self {
             path: path.clone(),
             project,
-            test_cases,
-            fixtures,
+            test_cases: Vec::new(),
+            fixtures: Vec::new(),
             module_type,
         }
     }
@@ -75,6 +71,10 @@ impl<'proj> Module<'proj> {
         self.test_cases.iter().collect()
     }
 
+    pub fn set_test_cases(&mut self, test_cases: Vec<TestFunction>) {
+        self.test_cases = test_cases;
+    }
+
     #[must_use]
     pub fn get_test_case(&self, name: &str) -> Option<&TestFunction> {
         self.test_cases.iter().find(|tc| tc.name() == name)
@@ -83,6 +83,10 @@ impl<'proj> Module<'proj> {
     #[must_use]
     pub fn fixtures(&self) -> Vec<&Fixture> {
         self.fixtures.iter().collect()
+    }
+
+    pub fn set_fixtures(&mut self, fixtures: Vec<Fixture>) {
+        self.fixtures = fixtures;
     }
 
     #[must_use]
@@ -149,6 +153,17 @@ impl<'proj> Module<'proj> {
     pub fn is_empty(&self) -> bool {
         self.test_cases.is_empty() && self.fixtures.is_empty()
     }
+
+    #[must_use]
+    pub fn parsed_module(&self, python_version: PythonVersion) -> Parsed<ModModule> {
+        let mode = Mode::Module;
+        let options = ParseOptions::from(mode).with_target_version(python_version);
+        let source = source_text(self.path());
+
+        parse_unchecked(&source, options)
+            .try_into_module()
+            .expect("PySourceType always parses into a module")
+    }
 }
 
 impl<'proj> HasFixtures<'proj> for Module<'proj> {
@@ -203,8 +218,8 @@ pub struct StringModule {
     pub fixtures: HashSet<(String, String)>,
 }
 
-impl From<&Module<'_>> for StringModule {
-    fn from(module: &Module<'_>) -> Self {
+impl From<&'_ Module<'_>> for StringModule {
+    fn from(module: &'_ Module<'_>) -> Self {
         Self {
             test_cases: module.test_cases().iter().map(|tc| tc.name()).collect(),
             fixtures: module
