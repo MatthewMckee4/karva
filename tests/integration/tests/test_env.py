@@ -53,8 +53,13 @@ class TestEnv:
     def remove_files(self) -> None:
         """Remove all files from the test environment."""
         for item in self.project_dir.iterdir():
-            if item.is_file() and item.suffix == ".py":
-                item.unlink()
+            if item.name != ".venv":
+                if item.is_file():
+                    item.unlink()
+                elif item.is_dir():
+                    import shutil
+
+                    shutil.rmtree(item)
 
     def cleanup(self) -> None:
         """Clean up the test environment."""
@@ -84,13 +89,15 @@ class TestEnv:
             capture_output=True,
             text=True,
         )
-        self.cleanup()
         return CommandSnapshot(
             project_dir=self.project_dir,
             exit_code=result.returncode,
             stdout=result.stdout,
             stderr=result.stderr,
         )
+
+    def __repr__(self) -> str:
+        return f"TestEnv(project_dir={self.project_dir!r})"
 
 
 @dataclass(eq=False)
