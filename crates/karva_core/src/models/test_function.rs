@@ -56,7 +56,9 @@ impl TestFunction {
         py: Python<'_>,
         module: &Module,
         py_module: &Bound<'_, PyModule>,
-        fixture_manager: &FixtureManager,
+        fixture_manager_func: &mut impl FnMut(
+            &mut dyn FnMut(&mut FixtureManager) -> RunDiagnostics,
+        ) -> RunDiagnostics,
     ) -> RunDiagnostics {
         let mut run_result = RunDiagnostics::default();
 
@@ -98,66 +100,70 @@ impl TestFunction {
             }
 
             for params in param_args {
-                let mut inner_run_result = RunDiagnostics::default();
-                let mut fixture_diagnostics = Vec::new();
+                // let fixture_manager = fixture_manager_func();
+                let mut f = |fixture_manager: &mut FixtureManager| {
+                    let mut inner_run_result = RunDiagnostics::default();
+                    let mut fixture_diagnostics = Vec::new();
 
-                let required_fixtures = required_fixture_names
-                    .iter()
-                    .filter_map(|fixture| {
-                        if let Some(fixture) = params.get(fixture) {
-                            return Some(fixture.clone());
-                        }
+                    let required_fixtures = required_fixture_names
+                        .iter()
+                        .filter_map(|fixture| {
+                            if let Some(fixture) = params.get(fixture) {
+                                return Some(fixture.clone());
+                            }
 
-                        if let Some(fixture) = fixture_manager.get_fixture(fixture) {
-                            return Some(fixture);
-                        }
+                            if let Some(fixture) = fixture_manager.get_fixture(fixture) {
+                                return Some(fixture);
+                            }
 
-                        fixture_diagnostics.push(Diagnostic::fixture_not_found(
-                            fixture,
-                            Some(self.path.to_string()),
-                        ));
-                        None
-                    })
-                    .collect::<Vec<_>>();
+                            fixture_diagnostics.push(Diagnostic::fixture_not_found(
+                                fixture,
+                                Some(self.path.to_string()),
+                            ));
+                            None
+                        })
+                        .collect::<Vec<_>>();
 
-                // There are some not found fixtures.
-                if fixture_diagnostics.is_empty() {
-                    let test_function_arguments = PyTuple::new(py, required_fixtures);
+                    // There are some not found fixtures.
+                    if fixture_diagnostics.is_empty() {
+                        let test_function_arguments = PyTuple::new(py, required_fixtures);
 
-                    match test_function_arguments {
-                        Ok(args) => {
-                            let display = self.display(module.name());
-                            let logger = TestCaseLogger::new(&display, args.clone());
-                            logger.log_running();
-                            match function.call1(py, args) {
-                                Ok(_) => {
-                                    logger.log_passed();
-                                    inner_run_result.stats_mut().add_passed();
-                                }
-                                Err(err) => {
-                                    let diagnostic = Diagnostic::from_test_fail(py, &err, self);
-                                    let error_type = diagnostic.severity();
-                                    if error_type.is_test_fail() {
-                                        logger.log_failed();
-                                    } else if error_type.is_test_error() {
-                                        logger.log_errored();
+                        match test_function_arguments {
+                            Ok(args) => {
+                                let display = self.display(module.name());
+                                let logger = TestCaseLogger::new(&display, args.clone());
+                                logger.log_running();
+                                match function.call1(py, args) {
+                                    Ok(_) => {
+                                        logger.log_passed();
+                                        inner_run_result.stats_mut().add_passed();
                                     }
-                                    inner_run_result.add_diagnostic(diagnostic);
+                                    Err(err) => {
+                                        let diagnostic = Diagnostic::from_test_fail(py, &err, self);
+                                        let error_type = diagnostic.severity();
+                                        if error_type.is_test_fail() {
+                                            logger.log_failed();
+                                        } else if error_type.is_test_error() {
+                                            logger.log_errored();
+                                        }
+                                        inner_run_result.add_diagnostic(diagnostic);
+                                    }
                                 }
                             }
+                            Err(err) => {
+                                inner_run_result.add_diagnostic(Diagnostic::unknown_error(
+                                    err.to_string(),
+                                    Some(self.display(module.name()).to_string()),
+                                ));
+                            }
                         }
-                        Err(err) => {
-                            inner_run_result.add_diagnostic(Diagnostic::unknown_error(
-                                err.to_string(),
-                                Some(self.display(module.name()).to_string()),
-                            ));
-                        }
+                    } else {
+                        inner_run_result
+                            .add_diagnostic(Diagnostic::from_test_diagnostics(fixture_diagnostics));
                     }
-                } else {
                     inner_run_result
-                        .add_diagnostic(Diagnostic::from_test_diagnostics(fixture_diagnostics));
-                }
-                run_result.update(&inner_run_result);
+                };
+                run_result.update(&fixture_manager_func(&mut f));
             }
         }
         run_result
@@ -269,14 +275,11 @@ impl<'a> TestCaseLogger<'a> {
 #[cfg(test)]
 mod tests {
 
-    use karva_project::{project::Project, tests::TestEnv, utils::module_name};
-    use pyo3::{prelude::*, types::PyModule};
+    use karva_project::{project::Project, tests::TestEnv};
 
     use crate::{
         discovery::Discoverer,
-        fixture::{FixtureManager, HasFunctionDefinition, RequiresFixtures},
-        runner::DiagnosticStats,
-        utils::add_to_sys_path,
+        fixture::{HasFunctionDefinition, RequiresFixtures},
     };
 
     #[test]
@@ -373,128 +376,5 @@ mod tests {
         set.insert(test_case1.clone());
         assert!(!set.contains(&test_case2));
         assert!(set.contains(&test_case1));
-    }
-
-    #[test]
-    fn test_run_test_without_fixtures() {
-        let env = TestEnv::new();
-        let path = env.create_file("tests/test.py", "def test_simple(): pass");
-
-        let project = Project::new(env.cwd(), vec![path.clone()]);
-        let discoverer = Discoverer::new(&project);
-        let (session, _) = discoverer.discover();
-
-        let test_case = session.test_cases()[0].clone();
-        Python::with_gil(|py| {
-            add_to_sys_path(&py, &env.cwd()).unwrap();
-            let module = PyModule::import(py, module_name(&env.cwd(), &path)).unwrap();
-            let fixture_manager = FixtureManager::new();
-            let result = test_case.test(
-                py,
-                session
-                    .packages()
-                    .values()
-                    .next()
-                    .unwrap()
-                    .modules()
-                    .values()
-                    .next()
-                    .unwrap(),
-                &module,
-                &fixture_manager,
-            );
-            assert!(result.passed());
-        });
-    }
-
-    #[test]
-    fn test_parametrize() {
-        let env = TestEnv::new();
-        let test_dir = env.create_tests_dir();
-        let path = env.create_file(
-            test_dir.join("test_parametrize.py").as_ref(),
-            r#"import karva
-@karva.tags.parametrize(("a", "b"), [(1, 2), (1, 3)])
-def test_parametrize(a, b):
-    assert a < b"#,
-        );
-
-        let project = Project::new(env.cwd(), vec![test_dir]);
-        let discoverer = Discoverer::new(&project);
-
-        let (session, _) = discoverer.discover();
-
-        let test_case = session.test_cases()[0].clone();
-        Python::with_gil(|py| {
-            add_to_sys_path(&py, &env.cwd()).unwrap();
-            let module = PyModule::import(py, module_name(&env.cwd(), &path)).unwrap();
-            let fixture_manager = FixtureManager::new();
-            let result = test_case.test(
-                py,
-                session
-                    .packages()
-                    .values()
-                    .next()
-                    .unwrap()
-                    .modules()
-                    .values()
-                    .next()
-                    .unwrap(),
-                &module,
-                &fixture_manager,
-            );
-            assert!(result.passed());
-
-            let mut expected_stats = DiagnosticStats::default();
-            expected_stats.add_passed();
-            expected_stats.add_passed();
-            assert_eq!(*result.stats(), expected_stats);
-        });
-    }
-
-    #[test]
-    fn test_parametrize_single_parameter() {
-        let env = TestEnv::new();
-        let test_dir = env.create_tests_dir();
-        let path = env.create_file(
-            test_dir.join("test_parametrize.py").as_ref(),
-            r#"import karva
-@karva.tags.parametrize("a", [1, 2, 3])
-def test_parametrize(a):
-    assert a > 0"#,
-        );
-
-        let project = Project::new(env.cwd(), vec![test_dir]);
-        let discoverer = Discoverer::new(&project);
-
-        let (session, _) = discoverer.discover();
-
-        let test_case = session.test_cases()[0].clone();
-        Python::with_gil(|py| {
-            add_to_sys_path(&py, &env.cwd()).unwrap();
-            let module = PyModule::import(py, module_name(&env.cwd(), &path)).unwrap();
-            let fixture_manager = FixtureManager::new();
-            let result = test_case.test(
-                py,
-                session
-                    .packages()
-                    .values()
-                    .next()
-                    .unwrap()
-                    .modules()
-                    .values()
-                    .next()
-                    .unwrap(),
-                &module,
-                &fixture_manager,
-            );
-            assert!(result.passed());
-
-            let mut expected_stats = DiagnosticStats::default();
-            expected_stats.add_passed();
-            expected_stats.add_passed();
-            expected_stats.add_passed();
-            assert_eq!(*result.stats(), expected_stats);
-        });
     }
 }

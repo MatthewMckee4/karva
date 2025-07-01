@@ -1382,3 +1382,50 @@ Generator fixture teardown
 ----- stderr -----
 """
     )
+
+
+@_framework
+def test_fixture_called_for_each_parametrization(test_env: TestEnv, framework: str) -> None:
+    test_env.write_files(
+        [
+            *get_source_code("pass"),
+            (
+                "tests/conftest.py",
+                f"""
+                from {framework} import fixture
+                from src import Calculator
+
+                @fixture
+                def calculator() -> Calculator:
+                    print("Calculator initialized")
+                    return Calculator()""",
+            ),
+            (
+                "tests/test_calculator.py",
+                f"""
+                from src import Calculator
+                import {framework}
+
+                @{framework}.{"tags.parametrize" if framework == "karva" else "mark.parametrize"}(
+                    "value",
+                    [1, 2, 3],
+                )
+                def test_calculator(calculator: Calculator, value: int) -> None:
+                    assert calculator.add(1, value) == value + 1""",
+            ),
+        ],
+    )
+
+    assert (
+        test_env.run_test()
+        == """success: true
+exit_code: 0
+----- stdout -----
+Passed tests: 3
+All checks passed!
+Calculator initialized
+Calculator initialized
+Calculator initialized
+
+----- stderr -----"""
+    )

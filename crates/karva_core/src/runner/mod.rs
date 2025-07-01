@@ -142,37 +142,44 @@ impl<'proj> StandardTestRunner<'proj> {
         };
 
         for function in module.test_cases() {
-            let test_cases = [function].to_vec();
-            let upcast_test_cases: Vec<&dyn RequiresFixtures> = test_cases.upcast();
+            let mut get_function_fixture_manager =
+                |f: &mut dyn FnMut(&mut FixtureManager) -> RunDiagnostics| {
+                    let test_cases = [function].to_vec();
+                    let upcast_test_cases: Vec<&dyn RequiresFixtures> = test_cases.upcast();
 
-            let mut parents_above_current_parent = parents.to_vec();
-            let mut i = parents.len();
-            while i > 0 {
-                i -= 1;
-                let parent = parents[i];
-                parents_above_current_parent.truncate(i);
-                fixture_manager.add_fixtures(
-                    py,
-                    &parents_above_current_parent,
-                    parent,
-                    &[FixtureScope::Function],
-                    upcast_test_cases.as_slice(),
-                );
-            }
+                    let mut parents_above_current_parent = parents.to_vec();
+                    let mut i = parents.len();
+                    while i > 0 {
+                        i -= 1;
+                        let parent = parents[i];
+                        parents_above_current_parent.truncate(i);
+                        fixture_manager.add_fixtures(
+                            py,
+                            &parents_above_current_parent,
+                            parent,
+                            &[FixtureScope::Function],
+                            upcast_test_cases.as_slice(),
+                        );
+                    }
 
-            fixture_manager.add_fixtures(
-                py,
-                parents,
-                module,
-                &[FixtureScope::Function],
-                upcast_test_cases.as_slice(),
-            );
+                    fixture_manager.add_fixtures(
+                        py,
+                        parents,
+                        module,
+                        &[FixtureScope::Function],
+                        upcast_test_cases.as_slice(),
+                    );
 
-            let result = function.test(py, module, &py_module, fixture_manager);
+                    let result = f(fixture_manager);
+
+                    diagnostics.add_diagnostics(fixture_manager.reset_function_fixtures(py));
+
+                    result
+                };
+
+            let result = function.test(py, module, &py_module, &mut get_function_fixture_manager);
 
             diagnostics.update(&result);
-
-            diagnostics.add_diagnostics(fixture_manager.reset_function_fixtures(py));
         }
 
         diagnostics.add_diagnostics(fixture_manager.reset_module_fixtures(py));
