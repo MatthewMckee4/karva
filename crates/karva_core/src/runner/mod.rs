@@ -1,4 +1,5 @@
 use karva_project::project::Project;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{
     collector::TestCaseCollector,
@@ -29,36 +30,44 @@ impl<'proj> StandardTestRunner<'proj> {
     fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
         let (session, discovery_diagnostics) = Discoverer::new(self.project).discover();
 
-        with_gil(self.project, |py| {
-            let collector_diagnostics = TestCaseCollector.collect(py, &session, reporter);
+        let collector_diagnostics =
+            with_gil(self.project, |py| TestCaseCollector.collect(py, &session));
 
-            let total_files = session.total_test_modules();
+        let total_files = session.total_test_modules();
 
-            let total_test_cases = session.total_test_cases();
+        let total_test_cases = collector_diagnostics.test_cases().len();
 
-            tracing::info!(
-                "Discovered {} test{} in {} file{}",
-                total_test_cases,
-                if total_test_cases == 1 { "" } else { "s" },
-                total_files,
-                if total_files == 1 { "" } else { "s" }
-            );
+        tracing::info!(
+            "Discovered {} test{} in {} file{}",
+            total_test_cases,
+            if total_test_cases == 1 { "" } else { "s" },
+            total_files,
+            if total_files == 1 { "" } else { "s" }
+        );
 
-            reporter.set(total_files);
+        reporter.set(total_files);
 
-            let mut diagnostics = RunDiagnostics::default();
+        let mut diagnostics = RunDiagnostics::default();
 
-            diagnostics.add_diagnostics(discovery_diagnostics);
+        diagnostics.add_diagnostics(discovery_diagnostics);
 
-            diagnostics.add_diagnostics(collector_diagnostics.diagnostics().to_vec());
+        diagnostics.add_diagnostics(collector_diagnostics.diagnostics().to_vec());
 
-            for test_case in collector_diagnostics.test_cases() {
-                let test_case_diagnostics = test_case.run(py);
-                diagnostics.update(&test_case_diagnostics);
-            }
+        collector_diagnostics
+            .test_cases()
+            .par_iter()
+            .map(|test_case| {
+                with_gil(self.project, |inner_py| {
+                    let result = test_case.run(inner_py);
+                    reporter.report();
+                    result
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .for_each(|test_case_diagnostics| diagnostics.update(&test_case_diagnostics));
 
-            diagnostics
-        })
+        diagnostics
     }
 }
 

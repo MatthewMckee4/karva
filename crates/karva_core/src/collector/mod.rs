@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
 use crate::{
-    diagnostic::{Diagnostic, DiagnosticScope, ErrorType, Severity, reporter::Reporter},
+    diagnostic::{Diagnostic, DiagnosticScope, ErrorType, Severity},
     fixture::{FixtureManager, FixtureScope, RequiresFixtures},
     models::{Module, Package, TestCase},
     utils::Upcast,
@@ -15,26 +15,8 @@ use diagnostic::CollectorDiagnostics;
 pub struct TestCaseCollector;
 
 impl TestCaseCollector {
-    pub fn collect<'a>(
-        &self,
-        py: Python<'a>,
-        session: &'a Package,
-        reporter: &mut dyn Reporter,
-    ) -> CollectorDiagnostics<'a> {
-        let total_files = session.total_test_modules();
-
-        let total_test_cases = session.total_test_cases();
-
-        tracing::info!(
-            "Collected {} test{} in {} file{}",
-            total_test_cases,
-            if total_test_cases == 1 { "" } else { "s" },
-            total_files,
-            if total_files == 1 { "" } else { "s" }
-        );
-
-        reporter.set(total_files);
-
+    #[must_use]
+    pub fn collect<'a>(&self, py: Python<'_>, session: &'a Package) -> CollectorDiagnostics<'a> {
         let mut diagnostics = CollectorDiagnostics::default();
 
         let mut fixture_manager = FixtureManager::new();
@@ -48,8 +30,7 @@ impl TestCaseCollector {
             upcast_test_cases.as_slice(),
         );
 
-        let mut package_diagnostics =
-            self.test_package(py, session, &[], &mut fixture_manager, reporter);
+        let mut package_diagnostics = self.test_package(py, session, &[], &mut fixture_manager);
 
         package_diagnostics.add_diagnostics(fixture_manager.reset_session_fixtures(py));
 
@@ -66,7 +47,6 @@ impl TestCaseCollector {
         module: &'a Module<'a>,
         parents: &[&'a Package<'a>],
         fixture_manager: &mut FixtureManager,
-        reporter: &dyn Reporter,
     ) -> CollectorDiagnostics<'a> {
         let mut diagnostics = CollectorDiagnostics::default();
         if module.total_test_cases() == 0 {
@@ -179,8 +159,6 @@ impl TestCaseCollector {
 
         diagnostics.add_diagnostics(fixture_manager.reset_module_fixtures(py));
 
-        reporter.report();
-
         diagnostics
     }
 
@@ -190,7 +168,6 @@ impl TestCaseCollector {
         package: &'a Package<'a>,
         parents: &[&'a Package<'a>],
         fixture_manager: &mut FixtureManager,
-        reporter: &dyn Reporter,
     ) -> CollectorDiagnostics<'a> {
         let mut package_diagnostics = CollectorDiagnostics::default();
         if package.total_test_cases() == 0 {
@@ -230,7 +207,7 @@ impl TestCaseCollector {
             package
                 .modules()
                 .values()
-                .map(|module| self.test_module(py, module, &new_parents, fixture_manager, reporter))
+                .map(|module| self.test_module(py, module, &new_parents, fixture_manager))
                 .collect::<Vec<_>>()
         };
 
@@ -244,7 +221,6 @@ impl TestCaseCollector {
                 sub_package,
                 &new_parents,
                 fixture_manager,
-                reporter,
             ));
         }
         package_diagnostics.add_diagnostics(fixture_manager.reset_package_fixtures(py));
