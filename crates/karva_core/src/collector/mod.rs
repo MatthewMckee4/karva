@@ -146,21 +146,14 @@ impl<'proj> TestCaseCollector<'proj> {
 
             let result = function.collect(py, &py_module, &mut get_function_fixture_manager);
 
-            match result {
-                Ok(test_case_results) => {
-                    for test_case_result in test_case_results {
-                        match test_case_result {
-                            Ok(test_case) => {
-                                diagnostics.add_test_case(test_case);
-                            }
-                            Err(diagnostic) => {
-                                diagnostics.add_diagnostic(diagnostic);
-                            }
-                        }
+            for test_case_result in result {
+                match test_case_result {
+                    Ok(test_case) => {
+                        diagnostics.add_test_case(test_case);
                     }
-                }
-                Err(diagnostic) => {
-                    diagnostics.add_diagnostic(diagnostic);
+                    Err(diagnostic) => {
+                        diagnostics.add_diagnostic(diagnostic);
+                    }
                 }
             }
         }

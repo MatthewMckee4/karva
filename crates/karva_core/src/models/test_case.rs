@@ -1,11 +1,12 @@
 use pyo3::{prelude::*, types::PyTuple};
 
 use crate::{
-    diagnostic::{Diagnostic, DiagnosticScope, Severity},
+    diagnostic::{Diagnostic, DiagnosticScope, ErrorType, Severity},
     models::{TestFunction, test_function::TestFunctionDisplay},
     runner::RunDiagnostics,
 };
 
+#[derive(Debug)]
 pub struct TestCase<'proj> {
     function: &'proj TestFunction<'proj>,
     args: Vec<PyObject>,
@@ -47,7 +48,7 @@ impl<'proj> TestCase<'proj> {
                     &err,
                     DiagnosticScope::Test,
                     Some(self.function.name()),
-                    Severity::Warning("Unknown".to_string()),
+                    Severity::Error(ErrorType::Unknown),
                 ));
                 return run_result;
             }

@@ -10,7 +10,7 @@ use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
-    diagnostic::{Diagnostic, DiagnosticScope, Severity},
+    diagnostic::Diagnostic,
     fixture::{FixtureManager, HasFunctionDefinition, RequiresFixtures},
     models::TestCase,
     tag::Tags,
@@ -67,24 +67,16 @@ impl<'proj> TestFunction<'proj> {
         fixture_manager_func: &mut impl FnMut(
             &dyn Fn(&FixtureManager) -> Result<TestCase<'a>, Diagnostic>,
         ) -> Result<TestCase<'a>, Diagnostic>,
-    ) -> Result<Vec<Result<TestCase<'a>, Diagnostic>>, Diagnostic> {
+    ) -> Vec<Result<TestCase<'a>, Diagnostic>> {
+        tracing::info!("Collecting test cases for function: {}", self.name());
         let mut test_cases: Vec<Result<TestCase<'a>, Diagnostic>> = Vec::new();
 
         let name = self.function_definition().name.to_string();
 
-        let py_function = match py_module.getattr(name) {
-            Ok(function) => function,
-            Err(err) => {
-                return Err(Diagnostic::from_py_err(
-                    py,
-                    &err,
-                    DiagnosticScope::Test,
-                    Some(self.name()),
-                    Severity::Warning("Unknown".to_string()),
-                ));
-            }
+        let Ok(py_function) = py_module.getattr(name) else {
+            return test_cases;
         };
-        let function = py_function.as_unbound();
+        let py_function = py_function.as_unbound();
 
         let required_fixture_names = self.get_required_fixture_names();
         if required_fixture_names.is_empty() {
@@ -95,7 +87,7 @@ impl<'proj> TestFunction<'proj> {
             )));
         } else {
             // The function requires fixtures or parameters, so we need to try to extract them from the test case.
-            let tags = Tags::from_py_any(py, function);
+            let tags = Tags::from_py_any(py, py_function);
             let mut param_args = tags.parametrize_args();
 
             // Ensure that there is at least one set of parameters.
@@ -127,7 +119,6 @@ impl<'proj> TestFunction<'proj> {
                         .collect::<Vec<_>>();
 
                     // There are some not found fixtures.
-
                     if fixture_diagnostics.is_empty() {
                         Ok(TestCase::new(
                             self,
@@ -142,7 +133,8 @@ impl<'proj> TestFunction<'proj> {
                 test_cases.push(fixture_manager_func(&mut f));
             }
         }
-        Ok(test_cases)
+
+        test_cases
     }
 
     pub const fn display(&self, module_name: String) -> TestFunctionDisplay<'_> {

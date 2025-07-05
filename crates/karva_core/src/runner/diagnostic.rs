@@ -10,7 +10,9 @@ pub struct RunDiagnostics {
 
 impl RunDiagnostics {
     pub fn add_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
-        self.diagnostics.extend(diagnostics);
+        for diagnostic in diagnostics {
+            self.add_diagnostic(diagnostic);
+        }
     }
 
     pub fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
@@ -30,7 +32,7 @@ impl RunDiagnostics {
     }
 
     pub fn update(&mut self, other: &Self) {
-        self.diagnostics.extend(other.diagnostics.clone());
+        self.add_diagnostics(other.diagnostics.clone());
         self.stats.update(&other.stats);
     }
 

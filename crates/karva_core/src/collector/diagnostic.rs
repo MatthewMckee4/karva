@@ -1,6 +1,6 @@
 use crate::{diagnostic::Diagnostic, models::TestCase};
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct CollectorDiagnostics<'proj> {
     diagnostics: Vec<Diagnostic>,
     test_cases: Vec<TestCase<'proj>>,
