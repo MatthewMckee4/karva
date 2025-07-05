@@ -1,26 +1,31 @@
 use colored::{Color, Colorize};
 
-use crate::diagnostic::{Diagnostic, DiagnosticScope};
+use crate::diagnostic::Diagnostic;
 
 #[derive(Clone, Debug, Default)]
 pub struct RunDiagnostics {
-    pub diagnostics: Vec<Diagnostic>,
-    pub stats: DiagnosticStats,
+    diagnostics: Vec<Diagnostic>,
+    stats: DiagnosticStats,
 }
 
 impl RunDiagnostics {
+    #[must_use]
+    pub const fn diagnostics(&self) -> &Vec<Diagnostic> {
+        &self.diagnostics
+    }
+
     pub fn add_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
-        self.diagnostics.extend(diagnostics);
+        for diagnostic in diagnostics {
+            self.add_diagnostic(diagnostic);
+        }
     }
 
     pub fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
-        if *diagnostic.scope() == DiagnosticScope::Test {
-            let error_type = diagnostic.severity();
-            if error_type.is_test_fail() {
-                self.stats.add_failed();
-            } else if error_type.is_test_error() {
-                self.stats.add_errored();
-            }
+        let severity = diagnostic.severity();
+        if severity.is_test_fail() {
+            self.stats.add_failed();
+        } else if severity.is_test_error() {
+            self.stats.add_errored();
         }
         self.diagnostics.push(diagnostic);
     }
@@ -30,7 +35,9 @@ impl RunDiagnostics {
     }
 
     pub fn update(&mut self, other: &Self) {
-        self.diagnostics.extend(other.diagnostics.clone());
+        for diagnostic in other.diagnostics.clone() {
+            self.diagnostics.push(diagnostic);
+        }
         self.stats.update(&other.stats);
     }
 

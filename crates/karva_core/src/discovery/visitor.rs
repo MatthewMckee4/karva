@@ -1,29 +1,34 @@
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 use pyo3::{prelude::*, types::PyModule};
 use ruff_python_ast::{
-    Expr, Stmt, StmtFunctionDef,
+    Expr, ModModule, PythonVersion, Stmt, StmtFunctionDef,
     visitor::source_order::{self, SourceOrderVisitor},
 };
+use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
 use crate::{
-    diagnostic::{Diagnostic, DiagnosticScope, ErrorType, Severity},
+    diagnostic::{Diagnostic, ErrorType, Severity},
     fixture::{Fixture, FixtureExtractor, is_fixture_function},
-    models::{Module, TestFunction},
+    models::TestFunction,
 };
 
-pub struct FunctionDefinitionVisitor<'a, 'b> {
-    discovered_functions: Vec<TestFunction>,
+pub struct FunctionDefinitionVisitor<'proj, 'b> {
+    discovered_functions: Vec<TestFunction<'proj>>,
     fixture_definitions: Vec<Fixture>,
-    project: &'a Project,
-    module: &'a Module<'a>,
+    project: &'proj Project,
+    module_path: SystemPathBuf,
     diagnostics: Vec<Diagnostic>,
     py_module: Bound<'b, PyModule>,
     inside_function: bool,
 }
 
-impl<'a, 'b> FunctionDefinitionVisitor<'a, 'b> {
-    pub fn new(py: Python<'b>, project: &'a Project, module: &'a Module<'a>) -> PyResult<Self> {
-        let module_name = module_name(project.cwd(), module.path());
+impl<'proj, 'b> FunctionDefinitionVisitor<'proj, 'b> {
+    pub fn new(
+        py: Python<'b>,
+        project: &'proj Project,
+        module_path: SystemPathBuf,
+    ) -> PyResult<Self> {
+        let module_name = module_name(project.cwd(), &module_path);
 
         let py_module = py.import(module_name)?;
 
@@ -31,7 +36,7 @@ impl<'a, 'b> FunctionDefinitionVisitor<'a, 'b> {
             discovered_functions: Vec::new(),
             fixture_definitions: Vec::new(),
             project,
-            module,
+            module_path,
             diagnostics: Vec::new(),
             py_module,
             inside_function: false,
@@ -39,8 +44,8 @@ impl<'a, 'b> FunctionDefinitionVisitor<'a, 'b> {
     }
 }
 
-impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
-    fn visit_stmt(&mut self, stmt: &'a Stmt) {
+impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_> {
+    fn visit_stmt(&mut self, stmt: &'_ Stmt) {
         if let Stmt::FunctionDef(function_def) = stmt {
             // Only consider top-level functions (not nested)
             if self.inside_function {
@@ -53,7 +58,7 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
                     Err(e) => {
                         self.diagnostics.push(Diagnostic::invalid_fixture(
                             e,
-                            Some(self.module.path().to_string()),
+                            Some(self.module_path.to_string()),
                         ));
                     }
                 }
@@ -63,7 +68,8 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
                 .starts_with(self.project.options().test_prefix())
             {
                 self.discovered_functions.push(TestFunction::new(
-                    self.module.path().clone(),
+                    self.project,
+                    self.module_path.clone(),
                     function_def.clone(),
                 ));
             }
@@ -78,12 +84,12 @@ impl<'a> SourceOrderVisitor<'a> for FunctionDefinitionVisitor<'a, '_> {
 }
 
 #[derive(Debug)]
-pub struct DiscoveredFunctions {
-    pub functions: Vec<TestFunction>,
+pub struct DiscoveredFunctions<'a> {
+    pub functions: Vec<TestFunction<'a>>,
     pub fixtures: Vec<Fixture>,
 }
 
-impl DiscoveredFunctions {
+impl DiscoveredFunctions<'_> {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.functions.is_empty() && self.fixtures.is_empty()
@@ -91,12 +97,12 @@ impl DiscoveredFunctions {
 }
 
 #[must_use]
-pub fn discover(
+pub fn discover<'proj>(
     py: Python<'_>,
-    module: &Module,
-    project: &Project,
-) -> (DiscoveredFunctions, Vec<Diagnostic>) {
-    let mut visitor = match FunctionDefinitionVisitor::new(py, project, module) {
+    module_path: &SystemPathBuf,
+    project: &'proj Project,
+) -> (DiscoveredFunctions<'proj>, Vec<Diagnostic>) {
+    let mut visitor = match FunctionDefinitionVisitor::new(py, project, module_path.clone()) {
         Ok(visitor) => visitor,
         Err(e) => {
             return (
@@ -107,15 +113,14 @@ pub fn discover(
                 vec![Diagnostic::from_py_err(
                     py,
                     &e,
-                    DiagnosticScope::Discovery,
-                    Some(module.path().to_string()),
+                    Some(module_path.to_string()),
                     Severity::Error(ErrorType::Unknown),
                 )],
             );
         }
     };
 
-    let parsed = module.parsed_module(project.metadata().python_version());
+    let parsed = parsed_module(module_path, project.metadata().python_version());
     visitor.visit_body(&parsed.syntax().body);
 
     (
@@ -125,6 +130,17 @@ pub fn discover(
         },
         visitor.diagnostics,
     )
+}
+
+#[must_use]
+pub fn parsed_module(path: &SystemPathBuf, python_version: PythonVersion) -> Parsed<ModModule> {
+    let mode = Mode::Module;
+    let options = ParseOptions::from(mode).with_target_version(python_version);
+    let source = source_text(path);
+
+    parse_unchecked(&source, options)
+        .try_into_module()
+        .expect("PySourceType always parses into a module")
 }
 
 #[must_use]

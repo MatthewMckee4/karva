@@ -50,7 +50,7 @@ class TestEnv:
                 text=True,
             )
 
-    def remove_files(self) -> None:
+    def remove_test_files(self) -> None:
         """Remove all files from the test environment."""
         for item in self.project_dir.iterdir():
             if item.name != ".venv":
@@ -63,7 +63,9 @@ class TestEnv:
 
     def cleanup(self) -> None:
         """Clean up the test environment."""
-        self.remove_files()
+        import shutil
+
+        shutil.rmtree(self.temp_dir)
 
     def write_files(self, files: Iterable[tuple[str, str]]) -> None:
         """Write multiple files to the test environment."""

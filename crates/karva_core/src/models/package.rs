@@ -77,7 +77,7 @@ impl<'proj> Package<'proj> {
             if let Some(existing_module) = self.modules.get_mut(module.path()) {
                 existing_module.update(module);
             } else {
-                if module.module_type == ModuleType::Configuration {
+                if module.module_type() == ModuleType::Configuration {
                     self.configuration_modules.insert(module.path().clone());
                 }
                 self.modules.insert(module.path().clone(), module);
@@ -163,7 +163,7 @@ impl<'proj> Package<'proj> {
     pub fn total_test_modules(&self) -> usize {
         let mut total = 0;
         for module in self.modules.values() {
-            if module.module_type == ModuleType::Test && !module.is_empty() {
+            if module.module_type() == ModuleType::Test && !module.is_empty() {
                 total += 1;
             }
         }
@@ -187,7 +187,7 @@ impl<'proj> Package<'proj> {
     }
 
     #[must_use]
-    pub fn test_cases(&self) -> Vec<&TestFunction> {
+    pub fn test_cases(&self) -> Vec<&TestFunction<'proj>> {
         let mut cases = self.direct_test_cases();
 
         for sub_package in self.packages.values() {
@@ -198,7 +198,7 @@ impl<'proj> Package<'proj> {
     }
 
     #[must_use]
-    pub fn direct_test_cases(&self) -> Vec<&TestFunction> {
+    pub fn direct_test_cases(&self) -> Vec<&TestFunction<'proj>> {
         let mut cases = Vec::new();
 
         for module in self.modules.values() {

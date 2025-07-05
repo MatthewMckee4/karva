@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use pyo3::{prelude::*, types::PyAny};
 
 use crate::{
-    diagnostic::Diagnostic,
-    fixture::{Finalizer, Fixture, FixtureScope, HasFixtures, RequiresFixtures},
+    fixture::{Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, RequiresFixtures},
     models::Package,
 };
 
@@ -27,15 +26,9 @@ impl FixtureCollection {
         self.fixtures.iter()
     }
 
-    pub fn reset(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
-        let mut diagnostics = Vec::new();
+    pub fn reset(&mut self) -> Finalizers {
         self.fixtures.clear();
-        for finalizer in self.finalizers.drain(..) {
-            if let Some(diagnostic) = finalizer.reset(py) {
-                diagnostics.push(diagnostic);
-            }
-        }
-        diagnostics
+        Finalizers::new(self.finalizers.drain(..).collect())
     }
 
     #[cfg(test)]
@@ -199,20 +192,20 @@ impl FixtureManager {
         }
     }
 
-    pub fn reset_session_fixtures(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
-        self.session.reset(py)
+    pub fn reset_session_fixtures(&mut self) -> Finalizers {
+        self.session.reset()
     }
 
-    pub fn reset_package_fixtures(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
-        self.package.reset(py)
+    pub fn reset_package_fixtures(&mut self) -> Finalizers {
+        self.package.reset()
     }
 
-    pub fn reset_module_fixtures(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
-        self.module.reset(py)
+    pub fn reset_module_fixtures(&mut self) -> Finalizers {
+        self.module.reset()
     }
 
-    pub fn reset_function_fixtures(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
-        self.function.reset(py)
+    pub fn reset_function_fixtures(&mut self) -> Finalizers {
+        self.function.reset()
     }
 }
 
@@ -243,7 +236,7 @@ def x():
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _diagnostics) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -292,7 +285,7 @@ def y(x):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -341,7 +334,7 @@ def y(x):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -401,7 +394,7 @@ def z(y):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -459,7 +452,7 @@ def z(x):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -520,7 +513,7 @@ def z(y):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -578,7 +571,7 @@ def z(x, y):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -650,7 +643,7 @@ def auth_token(user):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let api_package = tests_package.get_package(&api_dir).unwrap();
@@ -730,7 +723,7 @@ def service_b(config):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let package_a = tests_package.get_package(&package_a_dir).unwrap();
@@ -756,7 +749,7 @@ def service_b(config):
             assert!(manager.session.contains_fixture("config"));
             assert!(manager.package.contains_fixture("service_a"));
 
-            manager.reset_package_fixtures(py);
+            manager.reset_package_fixtures();
 
             manager.add_fixtures(
                 py,
@@ -806,7 +799,7 @@ def data():
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let child_package = tests_package.get_package(&child_dir).unwrap();
@@ -828,7 +821,7 @@ def data():
                 &[root_test],
             );
 
-            manager.reset_function_fixtures(py);
+            manager.reset_function_fixtures();
             manager.add_fixtures(
                 py,
                 &[tests_package],
@@ -869,7 +862,7 @@ def combined(derived_a, derived_b):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
@@ -949,7 +942,7 @@ def level5(level4):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let l1_package = session.get_package(&tests_dir).unwrap();
         let l2_package = l1_package.get_package(&l2_dir).unwrap();
@@ -1040,7 +1033,7 @@ def integration_service(service_a, service_b):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let package_a = tests_package.get_package(&package_a_dir).unwrap();
@@ -1112,7 +1105,7 @@ def function_fixture(module_fixture):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
@@ -1173,7 +1166,7 @@ def converged(branch_a2, branch_b2):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
@@ -1233,7 +1226,7 @@ def function_fixture():
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
@@ -1260,19 +1253,19 @@ def function_fixture():
             assert!(manager.module.contains_fixture("module_fixture"));
             assert!(manager.function.contains_fixture("function_fixture"));
 
-            manager.reset_function_fixtures(py);
+            manager.reset_function_fixtures();
             assert!(!manager.function.contains_fixture("function_fixture"));
             assert!(manager.module.contains_fixture("module_fixture"));
 
-            manager.reset_module_fixtures(py);
+            manager.reset_module_fixtures();
             assert!(!manager.module.contains_fixture("module_fixture"));
             assert!(manager.package.contains_fixture("package_fixture"));
 
-            manager.reset_package_fixtures(py);
+            manager.reset_package_fixtures();
             assert!(!manager.package.contains_fixture("package_fixture"));
             assert!(manager.session.contains_fixture("session_fixture"));
 
-            manager.reset_session_fixtures(py);
+            manager.reset_session_fixtures();
             assert!(!manager.session.contains_fixture("session_fixture"));
         });
     }

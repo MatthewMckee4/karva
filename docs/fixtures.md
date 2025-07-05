@@ -69,6 +69,28 @@ def test_dependent(dependent_fixture: str):
     assert dependent_fixture == "functiondependent"
 ```
 
+## Finalizers
+
+We support finalizers that are called after all test functions have finished running.
+
+```py
+from karva import fixture
+
+@fixture
+def finalizer_fixture():
+    print("Finalizer fixture initialized")
+    yield 1
+    print("Finalizer fixture finalizer called")
+
+def test_finalizer(finalizer_fixture: int):
+    assert finalizer_fixture == 1
+```
+
+!!! note
+    At some point we aim to support finalizers that are called after each test case has finished running.
+    This current implementation is not perfect.
+
+
 ## Example
 
 ```bash
