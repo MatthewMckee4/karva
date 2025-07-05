@@ -78,12 +78,15 @@ impl<'proj> TestFunction<'proj> {
         };
         let py_function = py_function.as_unbound();
 
+        let module_name = self.module_name();
+
         let required_fixture_names = self.get_required_fixture_names();
         if required_fixture_names.is_empty() {
             test_cases.push(Ok(TestCase::new(
                 self,
                 vec![],
-                py_module.as_unbound().clone(),
+                py_function.clone(),
+                module_name,
             )));
         } else {
             // The function requires fixtures or parameters, so we need to try to extract them from the test case.
@@ -123,7 +126,8 @@ impl<'proj> TestFunction<'proj> {
                         Ok(TestCase::new(
                             self,
                             required_fixtures,
-                            py_module.as_unbound().clone(),
+                            py_function.clone(),
+                            module_name.clone(),
                         ))
                     } else {
                         Err(Diagnostic::from_test_diagnostics(fixture_diagnostics))

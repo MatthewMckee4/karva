@@ -1,7 +1,7 @@
 use pyo3::{prelude::*, types::PyTuple};
 
 use crate::{
-    diagnostic::{Diagnostic, ErrorType, Severity},
+    diagnostic::Diagnostic,
     models::{TestFunction, test_function::TestFunctionDisplay},
     runner::RunDiagnostics,
 };
@@ -10,19 +10,22 @@ use crate::{
 pub struct TestCase<'proj> {
     function: &'proj TestFunction<'proj>,
     args: Vec<PyObject>,
-    py_module: Py<PyModule>,
+    py_function: Py<PyAny>,
+    module_name: String,
 }
 
 impl<'proj> TestCase<'proj> {
     pub const fn new(
         function: &'proj TestFunction<'proj>,
         args: Vec<PyObject>,
-        py_module: Py<PyModule>,
+        py_function: Py<PyAny>,
+        module_name: String,
     ) -> Self {
         Self {
             function,
             args,
-            py_module,
+            py_function,
+            module_name,
         }
     }
 
@@ -40,21 +43,8 @@ impl<'proj> TestCase<'proj> {
     pub fn run(&self, py: Python<'_>) -> RunDiagnostics {
         let mut run_result = RunDiagnostics::default();
 
-        let py_function = match self.py_module.getattr(py, self.function.name()) {
-            Ok(function) => function,
-            Err(err) => {
-                run_result.add_diagnostic(Diagnostic::from_py_err(
-                    py,
-                    &err,
-                    Some(self.function.name()),
-                    Severity::Error(ErrorType::Unknown),
-                ));
-                return run_result;
-            }
-        };
-
         if self.args.is_empty() {
-            match py_function.call0(py) {
+            match self.py_function.call0(py) {
                 Ok(_) => {
                     run_result.stats_mut().add_passed();
                 }
@@ -67,10 +57,10 @@ impl<'proj> TestCase<'proj> {
 
             match test_function_arguments {
                 Ok(args) => {
-                    let display = self.function.display(self.function.module_name());
+                    let display = self.function.display(self.module_name.clone());
                     let logger = TestCaseLogger::new(&display, args.clone());
                     logger.log_running();
-                    match py_function.call1(py, args) {
+                    match self.py_function.call1(py, args) {
                         Ok(_) => {
                             logger.log_passed();
                             run_result.stats_mut().add_passed();
@@ -90,11 +80,7 @@ impl<'proj> TestCase<'proj> {
                 Err(err) => {
                     run_result.add_diagnostic(Diagnostic::unknown_error(
                         err.to_string(),
-                        Some(
-                            self.function
-                                .display(self.function.module_name())
-                                .to_string(),
-                        ),
+                        Some(self.function.display(self.module_name.clone()).to_string()),
                     ));
                 }
             }
