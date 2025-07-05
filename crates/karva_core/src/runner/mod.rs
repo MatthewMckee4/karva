@@ -31,39 +31,34 @@ impl<'proj> StandardTestRunner<'proj> {
             Discoverer::new(self.project).discover(py)
         });
 
-        let collector_diagnostics = with_gil(self.project, |py| {
+        let collector_result = with_gil(self.project, |py| {
             TestCaseCollector::new(&session).collect(py)
         });
-        let total_files = session.total_test_modules();
 
-        let total_test_cases = collector_diagnostics.test_cases().len();
+        let total_test_cases = collector_result.test_cases().len();
 
         tracing::info!(
-            "Discovered {} test{} in {} file{}",
+            "Discovered {} test{}",
             total_test_cases,
             if total_test_cases == 1 { "" } else { "s" },
-            total_files,
-            if total_files == 1 { "" } else { "s" }
         );
 
-        reporter.set(total_files);
+        reporter.set(total_test_cases);
 
         let mut diagnostics = RunDiagnostics::default();
 
         diagnostics.add_diagnostics(discovery_diagnostics);
 
-        diagnostics.add_diagnostics(collector_diagnostics.diagnostics().clone());
+        diagnostics.add_diagnostics(collector_result.diagnostics().clone());
 
-        collector_diagnostics
-            .test_cases()
-            .iter()
-            .for_each(|test_case| {
-                with_gil(self.project, |inner_py| {
-                    let result = test_case.run(inner_py);
-                    reporter.report();
-                    diagnostics.update(&result);
-                });
+        with_gil(self.project, |py| {
+            collector_result.test_cases().iter().for_each(|test_case| {
+                let result = test_case.run(py);
+                reporter.report();
+                diagnostics.update(&result);
             });
+            diagnostics.add_diagnostics(collector_result.finalizers().run(py));
+        });
 
         diagnostics
     }

@@ -1,12 +1,13 @@
-use crate::{diagnostic::Diagnostic, models::TestCase};
+use crate::{diagnostic::Diagnostic, fixture::Finalizers, models::TestCase};
 
 #[derive(Debug, Default)]
-pub struct CollectorDiagnostics<'proj> {
+pub struct CollectorResult<'proj> {
     diagnostics: Vec<Diagnostic>,
     test_cases: Vec<TestCase<'proj>>,
+    finalizers: Finalizers,
 }
 
-impl<'proj> CollectorDiagnostics<'proj> {
+impl<'proj> CollectorResult<'proj> {
     pub fn add_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
         for diagnostic in diagnostics {
             self.diagnostics.push(diagnostic);
@@ -19,6 +20,10 @@ impl<'proj> CollectorDiagnostics<'proj> {
 
     pub fn add_test_case(&mut self, test_case: TestCase<'proj>) {
         self.test_cases.push(test_case);
+    }
+
+    pub fn add_finalizers(&mut self, finalizers: Finalizers) {
+        self.finalizers.update(finalizers);
     }
 
     pub fn update(&mut self, other: Self) {
@@ -34,5 +39,9 @@ impl<'proj> CollectorDiagnostics<'proj> {
 
     pub const fn diagnostics(&self) -> &Vec<Diagnostic> {
         &self.diagnostics
+    }
+
+    pub const fn finalizers(&self) -> &Finalizers {
+        &self.finalizers
     }
 }

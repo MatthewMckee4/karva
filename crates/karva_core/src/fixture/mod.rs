@@ -9,7 +9,7 @@ mod manager;
 pub mod python;
 
 pub use extractor::FixtureExtractor;
-pub use finalizer::Finalizer;
+pub use finalizer::{Finalizer, Finalizers};
 pub use manager::FixtureManager;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

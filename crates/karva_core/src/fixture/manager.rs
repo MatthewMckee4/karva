@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use pyo3::{prelude::*, types::PyAny};
 
 use crate::{
-    diagnostic::Diagnostic,
-    fixture::{Finalizer, Fixture, FixtureScope, HasFixtures, RequiresFixtures},
+    fixture::{Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, RequiresFixtures},
     models::Package,
 };
 
@@ -27,15 +26,9 @@ impl FixtureCollection {
         self.fixtures.iter()
     }
 
-    pub fn reset(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
-        let mut diagnostics = Vec::new();
+    pub fn reset(&mut self) -> Finalizers {
         self.fixtures.clear();
-        for finalizer in self.finalizers.drain(..) {
-            if let Some(diagnostic) = finalizer.reset(py) {
-                diagnostics.push(diagnostic);
-            }
-        }
-        diagnostics
+        Finalizers::new(self.finalizers.drain(..).collect())
     }
 
     #[cfg(test)]
@@ -199,20 +192,20 @@ impl FixtureManager {
         }
     }
 
-    pub fn reset_session_fixtures(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
-        self.session.reset(py)
+    pub fn reset_session_fixtures(&mut self) -> Finalizers {
+        self.session.reset()
     }
 
-    pub fn reset_package_fixtures(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
-        self.package.reset(py)
+    pub fn reset_package_fixtures(&mut self) -> Finalizers {
+        self.package.reset()
     }
 
-    pub fn reset_module_fixtures(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
-        self.module.reset(py)
+    pub fn reset_module_fixtures(&mut self) -> Finalizers {
+        self.module.reset()
     }
 
-    pub fn reset_function_fixtures(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
-        self.function.reset(py)
+    pub fn reset_function_fixtures(&mut self) -> Finalizers {
+        self.function.reset()
     }
 }
 
@@ -756,7 +749,7 @@ def service_b(config):
             assert!(manager.session.contains_fixture("config"));
             assert!(manager.package.contains_fixture("service_a"));
 
-            manager.reset_package_fixtures(py);
+            manager.reset_package_fixtures();
 
             manager.add_fixtures(
                 py,
@@ -828,7 +821,7 @@ def data():
                 &[root_test],
             );
 
-            manager.reset_function_fixtures(py);
+            manager.reset_function_fixtures();
             manager.add_fixtures(
                 py,
                 &[tests_package],
@@ -1260,19 +1253,19 @@ def function_fixture():
             assert!(manager.module.contains_fixture("module_fixture"));
             assert!(manager.function.contains_fixture("function_fixture"));
 
-            manager.reset_function_fixtures(py);
+            manager.reset_function_fixtures();
             assert!(!manager.function.contains_fixture("function_fixture"));
             assert!(manager.module.contains_fixture("module_fixture"));
 
-            manager.reset_module_fixtures(py);
+            manager.reset_module_fixtures();
             assert!(!manager.module.contains_fixture("module_fixture"));
             assert!(manager.package.contains_fixture("package_fixture"));
 
-            manager.reset_package_fixtures(py);
+            manager.reset_package_fixtures();
             assert!(!manager.package.contains_fixture("package_fixture"));
             assert!(manager.session.contains_fixture("session_fixture"));
 
-            manager.reset_session_fixtures(py);
+            manager.reset_session_fixtures();
             assert!(!manager.session.contains_fixture("session_fixture"));
         });
     }
