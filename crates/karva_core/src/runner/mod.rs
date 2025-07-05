@@ -52,7 +52,7 @@ impl<'proj> StandardTestRunner<'proj> {
 
         diagnostics.add_diagnostics(discovery_diagnostics);
 
-        diagnostics.update(collector_diagnostics.diagnostics());
+        diagnostics.add_diagnostics(collector_diagnostics.diagnostics().clone());
 
         collector_diagnostics
             .test_cases()

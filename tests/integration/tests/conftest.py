@@ -10,4 +10,3 @@ def test_env() -> Generator[TestEnv, None, None]:
     """Create a test environment for the entire test session."""
     test_env = TestEnv()
     yield test_env
-    test_env.cleanup()

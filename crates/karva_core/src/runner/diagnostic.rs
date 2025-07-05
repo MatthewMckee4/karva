@@ -35,7 +35,9 @@ impl RunDiagnostics {
     }
 
     pub fn update(&mut self, other: &Self) {
-        self.add_diagnostics(other.diagnostics.clone());
+        for diagnostic in other.diagnostics.clone() {
+            self.diagnostics.push(diagnostic);
+        }
         self.stats.update(&other.stats);
     }
 

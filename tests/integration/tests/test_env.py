@@ -63,7 +63,9 @@ class TestEnv:
 
     def cleanup(self) -> None:
         """Clean up the test environment."""
-        self.remove_files()
+        import shutil
+
+        shutil.rmtree(self.temp_dir)
 
     def write_files(self, files: Iterable[tuple[str, str]]) -> None:
         """Write multiple files to the test environment."""
