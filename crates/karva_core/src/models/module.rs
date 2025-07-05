@@ -5,8 +5,6 @@ use std::{
 };
 
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
-use ruff_python_ast::{ModModule, PythonVersion};
-use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 use ruff_text_size::TextSize;
 
 use crate::{
@@ -37,11 +35,11 @@ impl ModuleType {
 
 /// A module represents a single python file.
 pub struct Module<'proj> {
-    pub path: SystemPathBuf,
-    pub project: &'proj Project,
-    test_cases: Vec<TestFunction>,
+    path: SystemPathBuf,
+    project: &'proj Project,
+    test_cases: Vec<TestFunction<'proj>>,
     fixtures: Vec<Fixture>,
-    pub module_type: ModuleType,
+    r#type: ModuleType,
 }
 
 impl<'proj> Module<'proj> {
@@ -52,7 +50,7 @@ impl<'proj> Module<'proj> {
             project,
             test_cases: Vec::new(),
             fixtures: Vec::new(),
-            module_type,
+            r#type: module_type,
         }
     }
 
@@ -62,21 +60,31 @@ impl<'proj> Module<'proj> {
     }
 
     #[must_use]
+    pub const fn project(&self) -> &'proj Project {
+        self.project
+    }
+
+    #[must_use]
     pub fn name(&self) -> String {
         module_name(self.project.cwd(), &self.path)
     }
 
     #[must_use]
-    pub fn test_cases(&self) -> Vec<&TestFunction> {
+    pub const fn module_type(&self) -> ModuleType {
+        self.r#type
+    }
+
+    #[must_use]
+    pub fn test_cases(&self) -> Vec<&TestFunction<'proj>> {
         self.test_cases.iter().collect()
     }
 
-    pub fn set_test_cases(&mut self, test_cases: Vec<TestFunction>) {
+    pub fn set_test_cases(&mut self, test_cases: Vec<TestFunction<'proj>>) {
         self.test_cases = test_cases;
     }
 
     #[must_use]
-    pub fn get_test_case(&self, name: &str) -> Option<&TestFunction> {
+    pub fn get_test_case(&self, name: &str) -> Option<&TestFunction<'proj>> {
         self.test_cases.iter().find(|tc| tc.name() == name)
     }
 
@@ -152,17 +160,6 @@ impl<'proj> Module<'proj> {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.test_cases.is_empty() && self.fixtures.is_empty()
-    }
-
-    #[must_use]
-    pub fn parsed_module(&self, python_version: PythonVersion) -> Parsed<ModModule> {
-        let mode = Mode::Module;
-        let options = ParseOptions::from(mode).with_target_version(python_version);
-        let source = source_text(self.path());
-
-        parse_unchecked(&source, options)
-            .try_into_module()
-            .expect("PySourceType always parses into a module")
     }
 }
 

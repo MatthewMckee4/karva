@@ -1,3 +1,4 @@
+pub mod collector;
 pub mod diagnostic;
 pub mod discovery;
 pub mod fixture;

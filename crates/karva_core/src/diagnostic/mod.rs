@@ -3,7 +3,7 @@ use pyo3::prelude::*;
 
 use crate::{
     diagnostic::render::{DisplayDiagnostic, SubDiagnosticDisplay},
-    models::TestFunction,
+    models::TestCase,
 };
 
 pub mod render;
@@ -50,12 +50,12 @@ impl Diagnostic {
         )
     }
 
-    pub fn from_test_fail(py: Python<'_>, error: &PyErr, test_case: &TestFunction) -> Self {
+    pub fn from_test_fail(py: Python<'_>, error: &PyErr, test_case: &TestCase) -> Self {
         if error.is_instance_of::<pyo3::exceptions::PyAssertionError>(py) {
             return Self::new(
                 vec![SubDiagnostic::new(
                     get_traceback(py, error),
-                    Some(test_case.path().to_string()),
+                    Some(test_case.function().path().to_string()),
                     Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Fail)),
                 )],
                 DiagnosticScope::Test,
@@ -65,7 +65,7 @@ impl Diagnostic {
             py,
             error,
             DiagnosticScope::Test,
-            Some(test_case.path().to_string()),
+            Some(test_case.function().path().to_string()),
             Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Error(
                 get_type_name(py, error),
             ))),

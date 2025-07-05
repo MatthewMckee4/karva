@@ -17,6 +17,7 @@ doctest = false
 karva_project = { workspace = true }
 
 colored = { workspace = true }
+rayon = { workspace = true }
 pyo3 = { workspace = true, features = ["py-clone"] }
 ruff_python_ast = { workspace = true }
 ruff_python_parser = { workspace = true }
