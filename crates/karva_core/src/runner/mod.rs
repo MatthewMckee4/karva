@@ -52,7 +52,7 @@ impl<'proj> StandardTestRunner<'proj> {
 
         diagnostics.add_diagnostics(discovery_diagnostics);
 
-        diagnostics.add_diagnostics(collector_diagnostics.diagnostics().to_vec());
+        diagnostics.update(collector_diagnostics.diagnostics());
 
         collector_diagnostics
             .test_cases()
@@ -96,7 +96,7 @@ mod tests {
     use karva_project::tests::TestEnv;
 
     use super::*;
-    use crate::diagnostic::{Diagnostic, DiagnosticScope, Severity};
+    use crate::diagnostic::{Diagnostic, Severity};
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
@@ -134,7 +134,7 @@ def z(x, y):
 
         let diagnostics = test_runner.test();
 
-        assert_eq!(diagnostics.diagnostics.len(), 0);
+        assert_eq!(diagnostics.diagnostics().len(), 0);
     }
 
     #[test]
@@ -162,7 +162,7 @@ def x():
 
         let diagnostics = test_runner.test();
 
-        assert_eq!(diagnostics.diagnostics.len(), 0);
+        assert_eq!(diagnostics.diagnostics().len(), 0);
     }
 
     #[test]
@@ -332,13 +332,12 @@ def test_fixture_generator(fixture_generator):
         let mut expected_stats = DiagnosticStats::default();
         expected_stats.add_passed();
         assert_eq!(*result.stats(), expected_stats);
-        assert_eq!(result.diagnostics.len(), 1);
-        let first_diagnostic = &result.diagnostics[0];
+        assert_eq!(result.diagnostics().len(), 1);
+        let first_diagnostic = &result.diagnostics()[0];
         let expected_diagnostic = Diagnostic::warning(
             "fixture-error",
             "Fixture fixture_generator had more than one yield statement".to_string(),
             None,
-            DiagnosticScope::Teardown,
         );
         assert_eq!(*first_diagnostic, expected_diagnostic);
     }
@@ -369,9 +368,8 @@ def test_fixture_generator(fixture_generator):
         let mut expected_stats = DiagnosticStats::default();
         expected_stats.add_passed();
         assert_eq!(*result.stats(), expected_stats);
-        assert_eq!(result.diagnostics.len(), 1);
-        let first_diagnostic = &result.diagnostics[0];
-        assert_eq!(*first_diagnostic.scope(), DiagnosticScope::Teardown);
+        assert_eq!(result.diagnostics().len(), 1);
+        let first_diagnostic = &result.diagnostics()[0];
         assert_eq!(first_diagnostic.sub_diagnostics().len(), 1);
         let sub_diagnostic = &first_diagnostic.sub_diagnostics()[0];
         assert_eq!(

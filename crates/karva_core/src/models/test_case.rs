@@ -1,7 +1,7 @@
 use pyo3::{prelude::*, types::PyTuple};
 
 use crate::{
-    diagnostic::{Diagnostic, DiagnosticScope, ErrorType, Severity},
+    diagnostic::{Diagnostic, ErrorType, Severity},
     models::{TestFunction, test_function::TestFunctionDisplay},
     runner::RunDiagnostics,
 };
@@ -46,7 +46,6 @@ impl<'proj> TestCase<'proj> {
                 run_result.add_diagnostic(Diagnostic::from_py_err(
                     py,
                     &err,
-                    DiagnosticScope::Test,
                     Some(self.function.name()),
                     Severity::Error(ErrorType::Unknown),
                 ));

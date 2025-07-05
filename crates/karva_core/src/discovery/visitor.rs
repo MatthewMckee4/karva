@@ -7,7 +7,7 @@ use ruff_python_ast::{
 use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
 use crate::{
-    diagnostic::{Diagnostic, DiagnosticScope, ErrorType, Severity},
+    diagnostic::{Diagnostic, ErrorType, Severity},
     fixture::{Fixture, FixtureExtractor, is_fixture_function},
     models::TestFunction,
 };
@@ -113,7 +113,6 @@ pub fn discover<'proj>(
                 vec![Diagnostic::from_py_err(
                     py,
                     &e,
-                    DiagnosticScope::Discovery,
                     Some(module_path.to_string()),
                     Severity::Error(ErrorType::Unknown),
                 )],

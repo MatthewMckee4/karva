@@ -7,7 +7,7 @@ use karva_project::{
 use pyo3::prelude::*;
 
 use crate::{
-    diagnostic::{Diagnostic, DiagnosticScope, ErrorType, Severity},
+    diagnostic::{Diagnostic, ErrorType, Severity},
     discovery::discover,
     models::{Module, ModuleType, Package},
     utils::add_to_sys_path,
@@ -34,7 +34,6 @@ impl<'proj> Discoverer<'proj> {
             discovery_diagnostics.push(Diagnostic::from_py_err(
                 py,
                 &err,
-                DiagnosticScope::Setup,
                 Some(cwd.to_string()),
                 Severity::Error(ErrorType::Known("invalid-path".to_string())),
             ));

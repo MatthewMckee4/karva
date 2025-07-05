@@ -1,6 +1,8 @@
 use colored::Colorize;
 
-use crate::diagnostic::{Diagnostic, ErrorType, Severity, SubDiagnostic, TestCaseDiagnosticType};
+use crate::diagnostic::{
+    Diagnostic, ErrorType, FixtureDiagnosticType, Severity, SubDiagnostic, TestCaseDiagnosticType,
+};
 
 pub struct DisplayDiagnostic<'a> {
     diagnostic: &'a Diagnostic,
@@ -40,11 +42,15 @@ impl std::fmt::Display for SubDiagnosticDisplay<'_> {
                 "fail[assertion-failed]".red()
             }
             Severity::Error(
-                ErrorType::TestCase(TestCaseDiagnosticType::Error(error))
-                | ErrorType::Fixture(error)
-                | ErrorType::Known(error),
+                ErrorType::TestCase(TestCaseDiagnosticType::Error(error)) | ErrorType::Known(error),
             ) => format!("error[{}]", to_kebab_case(error)).yellow(),
             Severity::Error(ErrorType::Unknown) => "error[unknown]".to_string().yellow(),
+            Severity::Error(ErrorType::Fixture(FixtureDiagnosticType::NotFound)) => {
+                "error[fixture-not-found]".to_string().yellow()
+            }
+            Severity::Error(ErrorType::Fixture(FixtureDiagnosticType::Invalid)) => {
+                "error[invalid-fixture]".to_string().yellow()
+            }
             Severity::Warning(error) => format!("warning[{}]", to_kebab_case(error)).yellow(),
         };
         writeln!(
@@ -80,7 +86,6 @@ fn to_kebab_case(input: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diagnostic::DiagnosticScope;
 
     #[test]
     fn test_to_kebab_case() {
@@ -89,23 +94,20 @@ mod tests {
 
     #[test]
     fn test_diagnostic_display() {
-        let diagnostic = Diagnostic::new(
-            vec![
-                SubDiagnostic::new(
-                    "This test should fail".to_string(),
-                    Some("test_fail.py:4".to_string()),
-                    Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Fail)),
-                ),
-                SubDiagnostic::new(
-                    "This is an error".to_string(),
-                    Some("test_error.py:8".to_string()),
-                    Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Error(
-                        "ValueError".to_string(),
-                    ))),
-                ),
-            ],
-            DiagnosticScope::Test,
-        );
+        let diagnostic = Diagnostic::from_sub_diagnostics(vec![
+            SubDiagnostic::new(
+                "This test should fail".to_string(),
+                Some("test_fail.py:4".to_string()),
+                Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Fail)),
+            ),
+            SubDiagnostic::new(
+                "This is an error".to_string(),
+                Some("test_error.py:8".to_string()),
+                Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Error(
+                    "ValueError".to_string(),
+                ))),
+            ),
+        ]);
 
         let display = diagnostic.display();
         let expected = format!(

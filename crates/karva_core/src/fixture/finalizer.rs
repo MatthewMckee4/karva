@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-use crate::diagnostic::{Diagnostic, DiagnosticScope};
+use crate::diagnostic::Diagnostic;
 
 #[derive(Debug)]
 pub struct Finalizer {
@@ -27,7 +27,6 @@ impl Finalizer {
                     self.fixture_name
                 ),
                 None,
-                DiagnosticScope::Teardown,
             )),
             Err(e) => {
                 if e.is_instance_of::<pyo3::exceptions::PyStopIteration>(py) {
@@ -37,7 +36,6 @@ impl Finalizer {
                         "fixture-error",
                         format!("Failed to reset fixture {}", self.fixture_name),
                         None,
-                        DiagnosticScope::Teardown,
                     ))
                 }
             }

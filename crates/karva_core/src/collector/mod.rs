@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
 use crate::{
-    diagnostic::{Diagnostic, DiagnosticScope, ErrorType, Severity},
+    diagnostic::Diagnostic,
     fixture::{FixtureManager, FixtureScope, RequiresFixtures},
     models::{Module, Package, TestCase},
     utils::Upcast,
@@ -94,18 +94,8 @@ impl<'proj> TestCaseCollector<'proj> {
             upcast_module_test_cases.as_slice(),
         );
 
-        let py_module = match PyModule::import(py, module.name()) {
-            Ok(py_module) => py_module,
-            Err(err) => {
-                diagnostics.add_diagnostic(Diagnostic::from_py_err(
-                    py,
-                    &err,
-                    DiagnosticScope::Setup,
-                    Some(module.path().to_string()),
-                    Severity::Error(ErrorType::Unknown),
-                ));
-                return diagnostics;
-            }
+        let Ok(py_module) = PyModule::import(py, module.name()) else {
+            return diagnostics;
         };
 
         for function in module.test_cases() {

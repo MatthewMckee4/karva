@@ -1,18 +1,18 @@
-use crate::{diagnostic::Diagnostic, models::TestCase};
+use crate::{diagnostic::Diagnostic, models::TestCase, runner::RunDiagnostics};
 
 #[derive(Debug, Default)]
 pub struct CollectorDiagnostics<'proj> {
-    diagnostics: Vec<Diagnostic>,
+    diagnostics: RunDiagnostics,
     test_cases: Vec<TestCase<'proj>>,
 }
 
 impl<'proj> CollectorDiagnostics<'proj> {
     pub fn add_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
-        self.diagnostics.extend(diagnostics);
+        self.diagnostics.add_diagnostics(diagnostics);
     }
 
     pub fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
-        self.diagnostics.push(diagnostic);
+        self.diagnostics.add_diagnostic(diagnostic);
     }
 
     pub fn add_test_case(&mut self, test_case: TestCase<'proj>) {
@@ -20,7 +20,7 @@ impl<'proj> CollectorDiagnostics<'proj> {
     }
 
     pub fn update(&mut self, other: Self) {
-        self.diagnostics.extend(other.diagnostics);
+        self.diagnostics.update(&other.diagnostics);
         self.test_cases.extend(other.test_cases);
     }
 
@@ -28,7 +28,7 @@ impl<'proj> CollectorDiagnostics<'proj> {
         &self.test_cases
     }
 
-    pub fn diagnostics(&self) -> &[Diagnostic] {
+    pub const fn diagnostics(&self) -> &RunDiagnostics {
         &self.diagnostics
     }
 }
