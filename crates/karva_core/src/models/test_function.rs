@@ -205,6 +205,7 @@ impl std::fmt::Debug for TestFunction<'_> {
 mod tests {
 
     use karva_project::{project::Project, tests::TestEnv};
+    use pyo3::prelude::*;
 
     use crate::{
         discovery::Discoverer,
@@ -218,7 +219,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![path.clone()]);
         let discoverer = Discoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
         let test_case = session.test_cases()[0].clone();
 
@@ -236,7 +237,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = Discoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
         let test_case = session.test_cases()[0].clone();
 
@@ -257,7 +258,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = Discoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
         let test_case = session.test_cases()[0].clone();
 
@@ -277,7 +278,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![path1, path2]);
         let discoverer = Discoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
         let test_case1 = session.test_cases()[0].clone();
         let test_case2 = session.test_cases()[1].clone();
@@ -296,7 +297,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![path1, path2]);
         let discoverer = Discoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
         let test_case1 = session.test_cases()[0].clone();
         let test_case2 = session.test_cases()[1].clone();

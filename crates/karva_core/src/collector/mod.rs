@@ -23,6 +23,8 @@ impl<'proj> TestCaseCollector<'proj> {
 
     #[must_use]
     pub fn collect(&self, py: Python<'_>) -> CollectorDiagnostics<'proj> {
+        tracing::info!("Collecting test cases");
+
         let mut diagnostics = CollectorDiagnostics::default();
 
         let mut fixture_manager = FixtureManager::new();
@@ -209,17 +211,10 @@ impl<'proj> TestCaseCollector<'proj> {
         let mut new_parents = parents.to_vec();
         new_parents.push(package);
 
-        let module_diagnostics = {
-            package
-                .modules()
-                .values()
-                .map(|module| self.collect_module(py, module, &new_parents, fixture_manager))
-                .collect::<Vec<_>>()
-        };
-
-        for module_diagnostics in module_diagnostics {
+        package.modules().values().for_each(|module| {
+            let module_diagnostics = self.collect_module(py, module, &new_parents, fixture_manager);
             package_diagnostics.update(module_diagnostics);
-        }
+        });
 
         for sub_package in package.packages().values() {
             package_diagnostics.update(self.collect_package(

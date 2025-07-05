@@ -243,7 +243,7 @@ def x():
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _diagnostics) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -292,7 +292,7 @@ def y(x):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -341,7 +341,7 @@ def y(x):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -401,7 +401,7 @@ def z(y):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -459,7 +459,7 @@ def z(x):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -520,7 +520,7 @@ def z(y):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -578,7 +578,7 @@ def z(x, y):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -650,7 +650,7 @@ def auth_token(user):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let api_package = tests_package.get_package(&api_dir).unwrap();
@@ -730,7 +730,7 @@ def service_b(config):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let package_a = tests_package.get_package(&package_a_dir).unwrap();
@@ -806,7 +806,7 @@ def data():
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let child_package = tests_package.get_package(&child_dir).unwrap();
@@ -869,7 +869,7 @@ def combined(derived_a, derived_b):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
@@ -949,7 +949,7 @@ def level5(level4):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let l1_package = session.get_package(&tests_dir).unwrap();
         let l2_package = l1_package.get_package(&l2_dir).unwrap();
@@ -1040,7 +1040,7 @@ def integration_service(service_a, service_b):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let package_a = tests_package.get_package(&package_a_dir).unwrap();
@@ -1112,7 +1112,7 @@ def function_fixture(module_fixture):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
@@ -1173,7 +1173,7 @@ def converged(branch_a2, branch_b2):
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
@@ -1233,7 +1233,7 @@ def function_fixture():
         );
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Discoverer::new(&project).discover();
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();

@@ -1,5 +1,4 @@
 use karva_project::project::Project;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{
     collector::TestCaseCollector,
@@ -28,12 +27,13 @@ impl<'proj> StandardTestRunner<'proj> {
     }
 
     fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
-        let (session, discovery_diagnostics) = Discoverer::new(self.project).discover();
+        let (session, discovery_diagnostics) = with_gil(self.project, |py| {
+            Discoverer::new(self.project).discover(py)
+        });
 
         let collector_diagnostics = with_gil(self.project, |py| {
             TestCaseCollector::new(&session).collect(py)
         });
-
         let total_files = session.total_test_modules();
 
         let total_test_cases = collector_diagnostics.test_cases().len();
@@ -56,17 +56,14 @@ impl<'proj> StandardTestRunner<'proj> {
 
         collector_diagnostics
             .test_cases()
-            .par_iter()
-            .map(|test_case| {
+            .iter()
+            .for_each(|test_case| {
                 with_gil(self.project, |inner_py| {
                     let result = test_case.run(inner_py);
                     reporter.report();
-                    result
-                })
-            })
-            .collect::<Vec<_>>()
-            .into_iter()
-            .for_each(|test_case_diagnostics| diagnostics.update(&test_case_diagnostics));
+                    diagnostics.update(&result);
+                });
+            });
 
         diagnostics
     }
