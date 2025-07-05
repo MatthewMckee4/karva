@@ -193,13 +193,13 @@ impl<'proj> TestCaseCollector<'proj> {
         new_parents.push(package);
 
         package.modules().values().for_each(|module| {
-            let module_diagnostics = self.collect_module(py, module, &new_parents, fixture_manager);
-            result.update(module_diagnostics);
+            result.update(self.collect_module(py, module, &new_parents, fixture_manager));
         });
 
         for sub_package in package.packages().values() {
             result.update(self.collect_package(py, sub_package, &new_parents, fixture_manager));
         }
+
         result.add_finalizers(fixture_manager.reset_package_fixtures());
 
         result

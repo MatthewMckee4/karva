@@ -31,6 +31,7 @@ impl<'proj> CollectorResult<'proj> {
             self.diagnostics.push(diagnostic);
         }
         self.test_cases.extend(other.test_cases);
+        self.finalizers.update(other.finalizers);
     }
 
     pub fn test_cases(&self) -> &[TestCase<'proj>] {
