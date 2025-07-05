@@ -1429,3 +1429,48 @@ Calculator initialized
 
 ----- stderr -----"""
     )
+
+
+@_framework
+def test_fixture_finalizer_called_after_test(test_env: TestEnv, framework: str) -> None:
+    test_env.write_files(
+        [
+            *get_source_code("pass"),
+            (
+                "tests/conftest.py",
+                f"""
+                from {framework} import fixture
+                from src import Calculator
+
+                @fixture
+                def calculator() -> Calculator:
+                    print("Calculator initialized")
+                    yield Calculator()
+                    print("Calculator finalizer called")""",
+            ),
+            (
+                "tests/test_calculator.py",
+                """
+                from src import Calculator
+
+                def test_calculator(calculator: Calculator) -> None:
+                    print("Test function called")
+                    assert calculator.add(1, 2) == 3""",
+            ),
+        ],
+    )
+
+    assert (
+        test_env.run_test()
+        == """success: true
+exit_code: 0
+----- stdout -----
+Passed tests: 1
+All checks passed!
+Calculator initialized
+Test function called
+Calculator finalizer called
+
+----- stderr -----
+"""
+    )

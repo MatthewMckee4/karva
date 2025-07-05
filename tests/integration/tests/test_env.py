@@ -50,7 +50,7 @@ class TestEnv:
                 text=True,
             )
 
-    def remove_files(self) -> None:
+    def remove_test_files(self) -> None:
         """Remove all files from the test environment."""
         for item in self.project_dir.iterdir():
             if item.name != ".venv":
