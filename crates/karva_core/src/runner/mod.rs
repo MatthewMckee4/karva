@@ -30,8 +30,9 @@ impl<'proj> StandardTestRunner<'proj> {
     fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
         let (session, discovery_diagnostics) = Discoverer::new(self.project).discover();
 
-        let collector_diagnostics =
-            with_gil(self.project, |py| TestCaseCollector.collect(py, &session));
+        let collector_diagnostics = with_gil(self.project, |py| {
+            TestCaseCollector::new(&session).collect(py)
+        });
 
         let total_files = session.total_test_modules();
 

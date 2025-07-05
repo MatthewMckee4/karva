@@ -11,26 +11,33 @@ mod diagnostic;
 
 use diagnostic::CollectorDiagnostics;
 
-#[derive(Default)]
-pub struct TestCaseCollector;
+pub struct TestCaseCollector<'proj> {
+    session: &'proj Package<'proj>,
+}
 
-impl TestCaseCollector {
+impl<'proj> TestCaseCollector<'proj> {
     #[must_use]
-    pub fn collect<'a>(&self, py: Python<'_>, session: &'a Package) -> CollectorDiagnostics<'a> {
+    pub const fn new(session: &'proj Package<'proj>) -> Self {
+        Self { session }
+    }
+
+    #[must_use]
+    pub fn collect(&self, py: Python<'_>) -> CollectorDiagnostics<'proj> {
         let mut diagnostics = CollectorDiagnostics::default();
 
         let mut fixture_manager = FixtureManager::new();
-        let upcast_test_cases: Vec<&dyn RequiresFixtures> = session.test_cases().upcast();
+        let upcast_test_cases: Vec<&dyn RequiresFixtures> = self.session.test_cases().upcast();
 
         fixture_manager.add_fixtures(
             py,
             &[],
-            &session,
+            self.session,
             &[FixtureScope::Session],
             upcast_test_cases.as_slice(),
         );
 
-        let mut package_diagnostics = self.test_package(py, session, &[], &mut fixture_manager);
+        let mut package_diagnostics =
+            self.collect_package(py, self.session, &[], &mut fixture_manager);
 
         package_diagnostics.add_diagnostics(fixture_manager.reset_session_fixtures(py));
 
@@ -39,15 +46,14 @@ impl TestCaseCollector {
         diagnostics
     }
 
-    #[allow(clippy::too_many_arguments)]
     #[allow(clippy::unused_self)]
-    fn test_module<'a>(
+    fn collect_module(
         &self,
         py: Python<'_>,
-        module: &'a Module<'a>,
-        parents: &[&'a Package<'a>],
+        module: &'proj Module<'proj>,
+        parents: &[&'proj Package<'proj>],
         fixture_manager: &mut FixtureManager,
-    ) -> CollectorDiagnostics<'a> {
+    ) -> CollectorDiagnostics<'proj> {
         let mut diagnostics = CollectorDiagnostics::default();
         if module.total_test_cases() == 0 {
             return diagnostics;
@@ -102,7 +108,7 @@ impl TestCaseCollector {
 
         for function in module.test_cases() {
             let mut get_function_fixture_manager =
-                |f: &dyn Fn(&FixtureManager) -> Result<TestCase<'a>, Diagnostic>| {
+                |f: &dyn Fn(&FixtureManager) -> Result<TestCase<'proj>, Diagnostic>| {
                     let test_cases = [function].to_vec();
                     let upcast_test_cases: Vec<&dyn RequiresFixtures> = test_cases.upcast();
 
@@ -162,13 +168,13 @@ impl TestCaseCollector {
         diagnostics
     }
 
-    fn test_package<'a>(
+    fn collect_package(
         &self,
         py: Python<'_>,
-        package: &'a Package<'a>,
-        parents: &[&'a Package<'a>],
+        package: &'proj Package<'proj>,
+        parents: &[&'proj Package<'proj>],
         fixture_manager: &mut FixtureManager,
-    ) -> CollectorDiagnostics<'a> {
+    ) -> CollectorDiagnostics<'proj> {
         let mut package_diagnostics = CollectorDiagnostics::default();
         if package.total_test_cases() == 0 {
             return package_diagnostics;
@@ -207,7 +213,7 @@ impl TestCaseCollector {
             package
                 .modules()
                 .values()
-                .map(|module| self.test_module(py, module, &new_parents, fixture_manager))
+                .map(|module| self.collect_module(py, module, &new_parents, fixture_manager))
                 .collect::<Vec<_>>()
         };
 
@@ -216,7 +222,7 @@ impl TestCaseCollector {
         }
 
         for sub_package in package.packages().values() {
-            package_diagnostics.update(self.test_package(
+            package_diagnostics.update(self.collect_package(
                 py,
                 sub_package,
                 &new_parents,

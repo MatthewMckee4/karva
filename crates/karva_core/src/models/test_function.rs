@@ -60,15 +60,15 @@ impl<'proj> TestFunction<'proj> {
         module_name(self.project.cwd(), &self.path)
     }
 
-    pub fn collect(
-        &self,
+    pub fn collect<'a: 'proj>(
+        &'a self,
         py: Python<'_>,
         py_module: &Bound<'_, PyModule>,
         fixture_manager_func: &mut impl FnMut(
-            &dyn Fn(&FixtureManager) -> Result<TestCase<'proj>, Diagnostic>,
-        ) -> Result<TestCase<'proj>, Diagnostic>,
-    ) -> Result<Vec<Result<TestCase<'proj>, Diagnostic>>, Diagnostic> {
-        let mut test_cases = Vec::new();
+            &dyn Fn(&FixtureManager) -> Result<TestCase<'a>, Diagnostic>,
+        ) -> Result<TestCase<'a>, Diagnostic>,
+    ) -> Result<Vec<Result<TestCase<'a>, Diagnostic>>, Diagnostic> {
+        let mut test_cases: Vec<Result<TestCase<'a>, Diagnostic>> = Vec::new();
 
         let name = self.function_definition().name.to_string();
 
@@ -89,7 +89,7 @@ impl<'proj> TestFunction<'proj> {
         let required_fixture_names = self.get_required_fixture_names();
         if required_fixture_names.is_empty() {
             test_cases.push(Ok(TestCase::new(
-                self.clone(),
+                self,
                 vec![],
                 py_module.as_unbound().clone(),
             )));
@@ -130,7 +130,7 @@ impl<'proj> TestFunction<'proj> {
 
                     if fixture_diagnostics.is_empty() {
                         Ok(TestCase::new(
-                            self.clone(),
+                            self,
                             required_fixtures,
                             py_module.as_unbound().clone(),
                         ))

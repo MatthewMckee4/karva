@@ -7,14 +7,14 @@ use crate::{
 };
 
 pub struct TestCase<'proj> {
-    function: TestFunction<'proj>,
+    function: &'proj TestFunction<'proj>,
     args: Vec<PyObject>,
     py_module: Py<PyModule>,
 }
 
 impl<'proj> TestCase<'proj> {
     pub const fn new(
-        function: TestFunction<'proj>,
+        function: &'proj TestFunction<'proj>,
         args: Vec<PyObject>,
         py_module: Py<PyModule>,
     ) -> Self {
@@ -25,14 +25,17 @@ impl<'proj> TestCase<'proj> {
         }
     }
 
+    #[must_use]
     pub const fn function(&self) -> &TestFunction<'proj> {
-        &self.function
+        self.function
     }
 
+    #[must_use]
     pub fn args(&self) -> &[PyObject] {
         &self.args
     }
 
+    #[must_use]
     pub fn run(&self, py: Python<'_>) -> RunDiagnostics {
         let mut run_result = RunDiagnostics::default();
 
