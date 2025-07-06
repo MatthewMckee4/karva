@@ -1527,3 +1527,48 @@ Calculator finalizer called
 ----- stderr -----
 """
     )
+
+
+@_framework
+def test_auto_use_fixture(test_env: TestEnv, framework: str) -> None:
+    test_env.write_files(
+        [
+            *get_source_code("pass"),
+            (
+                "tests/test_append.py",
+                f"""
+                from {framework} import fixture
+
+                @fixture
+                def first_entry():
+                    return "a"
+
+                @fixture
+                def order(first_entry):
+                    return []
+
+                @fixture({"auto_use" if framework == "karva" else "autouse"}=True)
+                def append_first(order, first_entry):
+                    return order.append(first_entry)
+
+                def test_string_only(order, first_entry):
+                    assert order == [first_entry]
+
+                def test_string_and_int(order, first_entry):
+                    order.append(2)
+                    assert order == [first_entry, 2]""",
+            ),
+        ],
+    )
+
+    assert (
+        test_env.run_test()
+        == """success: true
+exit_code: 0
+----- stdout -----
+Passed tests: 2
+All checks passed!
+
+----- stderr -----
+"""
+    )
