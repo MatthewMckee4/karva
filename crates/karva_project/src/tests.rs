@@ -54,7 +54,7 @@ impl TestEnv {
     }
 
     #[must_use]
-    pub fn create_tests_dir(&self) -> SystemPathBuf {
+    pub fn create_test_dir(&self) -> SystemPathBuf {
         self.create_dir(format!("tests_{}", rand::random::<u32>()))
     }
 
@@ -86,6 +86,11 @@ impl TestEnv {
     #[must_use]
     pub fn cwd(&self) -> SystemPathBuf {
         SystemPathBuf::from(self.project_dir.clone())
+    }
+
+    #[must_use]
+    pub fn relative_path(&self, path: &SystemPathBuf) -> SystemPathBuf {
+        SystemPathBuf::from(path.strip_prefix(self.cwd()).unwrap().to_string())
     }
 }
 

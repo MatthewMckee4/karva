@@ -31,11 +31,10 @@ impl<'proj> StandardTestRunner<'proj> {
             Discoverer::new(self.project).discover(py)
         });
 
-        let collector_result = with_gil(self.project, |py| {
-            TestCaseCollector::new(&session).collect(py)
-        });
+        let (collected_session, collector_diagnostics) =
+            with_gil(self.project, |py| TestCaseCollector::collect(py, &session));
 
-        let total_test_cases = collector_result.test_cases().len();
+        let total_test_cases = collected_session.total_test_cases();
 
         tracing::info!(
             "Discovered {} test{}",
@@ -49,15 +48,10 @@ impl<'proj> StandardTestRunner<'proj> {
 
         diagnostics.add_diagnostics(discovery_diagnostics);
 
-        diagnostics.add_diagnostics(collector_result.diagnostics().clone());
+        diagnostics.add_diagnostics(collector_diagnostics);
 
         with_gil(self.project, |py| {
-            collector_result.test_cases().iter().for_each(|test_case| {
-                let result = test_case.run(py);
-                reporter.report();
-                diagnostics.update(&result);
-            });
-            diagnostics.add_diagnostics(collector_result.finalizers().run(py));
+            diagnostics.update(&collected_session.run_with_reporter(py, reporter));
         });
 
         diagnostics
@@ -98,7 +92,7 @@ mod tests {
      {
         let env = TestEnv::new();
 
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         let inner_dir = tests_dir.join("inner");
 
         env.create_file(
@@ -136,7 +130,7 @@ def z(x, y):
     fn test_runner_given_nested_path() {
         let env = TestEnv::new();
 
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         env.create_file(
             tests_dir.join("conftest.py").as_std_path(),
             r"
@@ -163,7 +157,7 @@ def x():
     #[test]
     fn test_parametrize_with_fixture() {
         let env = TestEnv::new();
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         env.create_file(
             test_dir.join("test_parametrize_fixture.py").as_ref(),
             r#"import karva
@@ -193,7 +187,7 @@ def test_parametrize_with_fixture(a, fixture_value):
     fn test_parametrize_with_fixture_parametrize_priority() {
         let env = TestEnv::new();
 
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         env.create_file(
             test_dir.join("test_parametrize_fixture.py").as_ref(),
             r#"import karva
@@ -222,7 +216,7 @@ def test_parametrize_with_fixture(a):
     fn test_parametrize_two_decorators() {
         let env = TestEnv::new();
 
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         env.create_file(
             test_dir.join("test_parametrize_fixture.py").as_ref(),
             r#"import karva
@@ -250,7 +244,7 @@ def test_function(a: int, b: int):
     fn test_parametrize_three_decorators() {
         let env = TestEnv::new();
 
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         env.create_file(
             test_dir.join("test_parametrize_fixture.py").as_ref(),
             r#"import karva
@@ -278,7 +272,7 @@ def test_function(a: int, b: int, c: int):
     fn test_fixture_generator() {
         let env = TestEnv::new();
 
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         env.create_file(
             test_dir.join("test_fixture_generator.py").as_ref(),
             r"import karva
@@ -305,7 +299,7 @@ def test_fixture_generator(fixture_generator):
     fn test_fixture_generator_two_yields() {
         let env = TestEnv::new();
 
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         env.create_file(
             test_dir.join("test_fixture_generator.py").as_ref(),
             r"import karva
@@ -341,7 +335,7 @@ def test_fixture_generator(fixture_generator):
     fn test_fixture_generator_fail_in_teardown() {
         let env = TestEnv::new();
 
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         env.create_file(
             test_dir.join("test_fixture_generator.py").as_ref(),
             r#"import karva
@@ -382,7 +376,7 @@ def test_fixture_generator(fixture_generator):
     fn test_fixture_with_name_parameter() {
         let env = TestEnv::new();
 
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         env.create_file(
             test_dir
                 .join("test_fixture_with_name_parameter.py")
@@ -411,7 +405,7 @@ def test_fixture_with_name_parameter(fixture_name):
     fn test_fixture_is_different_in_different_functions() {
         let env = TestEnv::new();
 
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         env.create_file(
             test_dir
                 .join("test_fixture_is_different_in_different_functions.py")

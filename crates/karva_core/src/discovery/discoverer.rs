@@ -7,7 +7,7 @@ use karva_project::{
 use pyo3::prelude::*;
 
 use crate::{
-    diagnostic::{Diagnostic, ErrorType, Severity},
+    diagnostic::Diagnostic,
     discovery::discover,
     models::{Module, ModuleType, Package},
     utils::add_to_sys_path,
@@ -30,13 +30,7 @@ impl<'proj> Discoverer<'proj> {
         let mut discovery_diagnostics = Vec::new();
         let cwd = self.project.cwd();
 
-        if let Err(err) = add_to_sys_path(&py, cwd) {
-            discovery_diagnostics.push(Diagnostic::from_py_err(
-                py,
-                &err,
-                Some(cwd.to_string()),
-                Severity::Error(ErrorType::Known("invalid-path".to_string())),
-            ));
+        if add_to_sys_path(&py, cwd).is_err() {
             return (session_package, discovery_diagnostics);
         }
 
@@ -115,7 +109,7 @@ impl<'proj> Discoverer<'proj> {
         let (discovered, diagnostics) = discover(py, path, self.project);
 
         if !configuration_only {
-            module.set_test_cases(discovered.functions);
+            module.set_test_functions(discovered.functions);
         }
         module.set_fixtures(discovered.fixtures);
 
@@ -275,7 +269,7 @@ mod tests {
                 packages: HashMap::new(),
             }
         );
-        assert_eq!(session.total_test_cases(), 1);
+        assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
@@ -315,13 +309,13 @@ mod tests {
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 1);
+        assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
     fn test_discover_files_with_gitignore() {
         let env = TestEnv::new();
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
 
         env.create_file(
             test_dir.join("test_file1.py").as_std_path(),
@@ -342,7 +336,7 @@ mod tests {
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
+                    env.relative_path(&test_dir).to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file1".to_string(),
@@ -356,13 +350,13 @@ mod tests {
                 ),]),
             }
         );
-        assert_eq!(session.total_test_cases(), 1);
+        assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
     fn test_discover_files_with_nested_directories() {
         let env = TestEnv::new();
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         env.create_dir(test_dir.join("nested").as_std_path());
         env.create_dir(test_dir.join("nested/deeper").as_std_path());
 
@@ -388,7 +382,7 @@ mod tests {
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
+                    env.relative_path(&test_dir).to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file1".to_string(),
@@ -428,7 +422,7 @@ mod tests {
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 3);
+        assert_eq!(session.total_test_functions(), 3);
     }
 
     #[test]
@@ -465,7 +459,7 @@ def not_a_test(): pass
                 packages: HashMap::new(),
             }
         );
-        assert_eq!(session.total_test_cases(), 3);
+        assert_eq!(session.total_test_functions(), 3);
     }
 
     #[test]
@@ -484,7 +478,7 @@ def not_a_test(): pass
                 packages: HashMap::new(),
             }
         );
-        assert_eq!(session.total_test_cases(), 0);
+        assert_eq!(session.total_test_functions(), 0);
     }
 
     #[test]
@@ -503,7 +497,7 @@ def not_a_test(): pass
                 packages: HashMap::new(),
             }
         );
-        assert_eq!(session.total_test_cases(), 0);
+        assert_eq!(session.total_test_functions(), 0);
     }
 
     #[test]
@@ -542,7 +536,7 @@ def test_function(): pass
                 packages: HashMap::new(),
             }
         );
-        assert_eq!(session.total_test_cases(), 2);
+        assert_eq!(session.total_test_functions(), 2);
     }
 
     #[test]
@@ -550,7 +544,7 @@ def test_function(): pass
         let env = TestEnv::new();
         let file1 = env.create_file("test1.py", "def test_function1(): pass");
         let file2 = env.create_file("test2.py", "def test_function2(): pass");
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         env.create_file(
             test_dir.join("test3.py").as_std_path(),
             "def test_function3(): pass",
@@ -580,7 +574,7 @@ def test_function(): pass
                     )
                 ]),
                 packages: HashMap::from([(
-                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
+                    env.relative_path(&test_dir).to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test3".to_string(),
@@ -594,13 +588,13 @@ def test_function(): pass
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 3);
+        assert_eq!(session.total_test_functions(), 3);
     }
 
     #[test]
     fn test_paths_shadowed_by_other_paths_are_not_discovered_twice() {
         let env = TestEnv::new();
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         let path = env.create_file(
             test_dir.join("test_file.py").as_std_path(),
             "def test_function(): pass\ndef test_function2(): pass",
@@ -614,7 +608,7 @@ def test_function(): pass
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
+                    env.relative_path(&test_dir).to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file".to_string(),
@@ -631,13 +625,13 @@ def test_function(): pass
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 2);
+        assert_eq!(session.total_test_functions(), 2);
     }
 
     #[test]
     fn test_tests_same_name_different_module_are_discovered() {
         let env = TestEnv::new();
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         let path = env.create_file(
             test_dir.join("test_file.py").as_std_path(),
             "def test_function(): pass",
@@ -655,7 +649,7 @@ def test_function(): pass
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
+                    env.relative_path(&test_dir).to_string(),
                     StringPackage {
                         modules: HashMap::from([
                             (
@@ -678,13 +672,13 @@ def test_function(): pass
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 2);
+        assert_eq!(session.total_test_functions(), 2);
     }
 
     #[test]
     fn test_discover_files_with_conftest_explicit_path() {
         let env = TestEnv::new();
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         let conftest_path = env.create_file(
             test_dir.join("conftest.py").as_std_path(),
             "def test_function(): pass",
@@ -703,7 +697,7 @@ def test_function(): pass
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
+                    env.relative_path(&test_dir).to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "conftest".to_string(),
@@ -717,13 +711,13 @@ def test_function(): pass
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 1);
+        assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
     fn test_discover_files_with_conftest_parent_path_conftest_not_discovered() {
         let env = TestEnv::new();
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         env.create_file(
             test_dir.join("conftest.py").as_std_path(),
             "def test_function(): pass",
@@ -742,7 +736,7 @@ def test_function(): pass
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
+                    env.relative_path(&test_dir).to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file".to_string(),
@@ -756,14 +750,14 @@ def test_function(): pass
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 1);
+        assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
     fn test_discover_files_with_cwd_path() {
         let env = TestEnv::new();
         let path = env.cwd();
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
         env.create_file(
             test_dir.join("test_file.py").as_std_path(),
             "def test_function(): pass",
@@ -778,7 +772,7 @@ def test_function(): pass
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
+                    env.relative_path(&test_dir).to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file".to_string(),
@@ -792,7 +786,7 @@ def test_function(): pass
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 1);
+        assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
@@ -860,7 +854,7 @@ def test_1(x): pass",
     }
 
     #[test]
-    fn test_discover_fixture_in_same_file_in_tests_dir() {
+    fn test_discover_fixture_in_same_file_in_test_dir() {
         let env = TestEnv::new();
         let fixture = r"
 import karva
@@ -869,14 +863,14 @@ def x():
     return 1
 ";
 
-        let tests_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
 
         let test_path = env.create_file(
-            tests_dir.join("test_1.py").as_std_path(),
+            test_dir.join("test_1.py").as_std_path(),
             &format!("{fixture}def test_1(x): pass\n"),
         );
 
-        for path in [env.cwd(), tests_dir.clone(), test_path] {
+        for path in [env.cwd(), test_dir.clone(), test_path] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
             let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
             assert_eq!(
@@ -884,7 +878,7 @@ def x():
                 StringPackage {
                     modules: HashMap::new(),
                     packages: HashMap::from([(
-                        tests_dir.strip_prefix(env.cwd()).unwrap().to_string(),
+                        env.relative_path(&test_dir).to_string(),
                         StringPackage {
                             modules: HashMap::from([(
                                 "test_1".to_string(),
@@ -906,7 +900,7 @@ def x():
     }
 
     #[test]
-    fn test_discover_fixture_in_root_tests_in_tests_dir() {
+    fn test_discover_fixture_in_root_tests_in_test_dir() {
         let env = TestEnv::new();
         let fixture = r"
 import karva
@@ -915,16 +909,16 @@ def x():
     return 1
 ";
 
-        let tests_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
 
         env.create_file("conftest.py", fixture);
 
         let test_path = env.create_file(
-            tests_dir.join("test_1.py").as_std_path(),
+            test_dir.join("test_1.py").as_std_path(),
             "def test_1(x): pass\n",
         );
 
-        for path in [env.cwd(), tests_dir.clone(), test_path] {
+        for path in [env.cwd(), test_dir.clone(), test_path] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
             let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
@@ -939,7 +933,7 @@ def x():
                         },
                     )]),
                     packages: HashMap::from([(
-                        tests_dir.strip_prefix(env.cwd()).unwrap().to_string(),
+                        env.relative_path(&test_dir).to_string(),
                         StringPackage {
                             modules: HashMap::from([(
                                 "test_1".to_string(),
@@ -1030,11 +1024,7 @@ def w(x, y, z):
                         },
                     )]),
                     packages: HashMap::from([(
-                        nested_dir
-                            .clone()
-                            .strip_prefix(env.cwd())
-                            .unwrap()
-                            .to_string(),
+                        env.relative_path(&nested_dir).to_string(),
                         StringPackage {
                             modules: HashMap::from([(
                                 "conftest".to_string(),
@@ -1108,15 +1098,15 @@ def w(x, y, z):
     fn test_discover_multiple_test_paths() {
         let env = TestEnv::new();
 
-        let tests_dir_1 = env.create_tests_dir();
+        let test_dir_1 = env.create_test_dir();
         env.create_file(
-            tests_dir_1.join("test_1.py").as_std_path(),
+            test_dir_1.join("test_1.py").as_std_path(),
             "def test_1(): pass",
         );
 
-        let tests_dir_2 = env.create_dir("tests2");
+        let test_dir_2 = env.create_dir("tests2");
         env.create_file(
-            tests_dir_2.join("test_2.py").as_std_path(),
+            test_dir_2.join("test_2.py").as_std_path(),
             "def test_2(): pass",
         );
 
@@ -1124,7 +1114,7 @@ def w(x, y, z):
 
         let project = Project::new(
             env.cwd(),
-            vec![tests_dir_1.clone(), tests_dir_2.clone(), test_file_3],
+            vec![test_dir_1.clone(), test_dir_2.clone(), test_file_3],
         );
 
         let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
@@ -1141,7 +1131,7 @@ def w(x, y, z):
                 ),]),
                 packages: HashMap::from([
                     (
-                        tests_dir_1.strip_prefix(env.cwd()).unwrap().to_string(),
+                        env.relative_path(&test_dir_1).to_string(),
                         StringPackage {
                             modules: HashMap::from([(
                                 "test_1".to_string(),
@@ -1154,7 +1144,7 @@ def w(x, y, z):
                         },
                     ),
                     (
-                        tests_dir_2.strip_prefix(env.cwd()).unwrap().to_string(),
+                        env.relative_path(&test_dir_2).to_string(),
                         StringPackage {
                             modules: HashMap::from([(
                                 "test_2".to_string(),
@@ -1182,10 +1172,10 @@ def root_fixture():
     return 'from_root'
 ";
 
-        let tests_dir = env.create_tests_dir();
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), fixture);
+        let test_dir = env.create_test_dir();
+        env.create_file(test_dir.join("conftest.py").as_std_path(), fixture);
 
-        let middle_dir = env.create_dir(tests_dir.join("middle_dir").as_std_path());
+        let middle_dir = env.create_dir(test_dir.join("middle_dir").as_std_path());
         let deep_dir = env.create_dir(middle_dir.join("deep_dir").as_std_path());
         env.create_file(
             deep_dir.join("test_nested.py").as_std_path(),
@@ -1200,7 +1190,7 @@ def root_fixture():
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    tests_dir.strip_prefix(env.cwd()).unwrap().to_string(),
+                    env.relative_path(&test_dir).to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "conftest".to_string(),
@@ -1213,7 +1203,7 @@ def root_fixture():
                             },
                         )]),
                         packages: HashMap::from([(
-                            middle_dir.strip_prefix(tests_dir).unwrap().to_string(),
+                            middle_dir.strip_prefix(test_dir).unwrap().to_string(),
                             StringPackage {
                                 modules: HashMap::new(),
                                 packages: HashMap::from([(
@@ -1238,7 +1228,7 @@ def root_fixture():
                 )]),
             },
         );
-        assert_eq!(session.total_test_cases(), 2);
+        assert_eq!(session.total_test_functions(), 2);
     }
 
     #[test]
@@ -1246,7 +1236,7 @@ def root_fixture():
     fn test_discover_pytest_fixture() {
         let env = TestEnv::new();
 
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
 
         let fixture = r"
 import pytest
@@ -1271,7 +1261,7 @@ def x():
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    test_dir.strip_prefix(env.cwd()).unwrap().to_string(),
+                    env.relative_path(&test_dir).to_string(),
                     StringPackage {
                         modules: HashMap::from([
                             (
@@ -1303,7 +1293,7 @@ def x():
     fn test_discover_generator_fixture() {
         let env = TestEnv::new();
 
-        let test_dir = env.create_tests_dir();
+        let test_dir = env.create_test_dir();
 
         let fixture = r"
 import karva
@@ -1323,14 +1313,14 @@ def x():
         let project = Project::new(env.cwd(), vec![test_dir.clone()]);
         let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
-        let tests_dir_name = test_dir.strip_prefix(env.cwd()).unwrap().to_string();
+        let test_dir_name = env.relative_path(&test_dir).to_string();
 
         assert_eq!(
             session.display(),
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    tests_dir_name,
+                    test_dir_name,
                     StringPackage {
                         modules: HashMap::from([
                             (
@@ -1368,5 +1358,23 @@ def x():
         let fixture = test_1_module.fixtures()[0];
 
         assert!(fixture.is_generator());
+    }
+
+    #[test]
+    fn test_discovery_same_module_given_twice() {
+        let env = TestEnv::new();
+
+        let test_dir = env.create_test_dir();
+
+        let path = env.create_file(
+            test_dir.join("test_1.py").as_std_path(),
+            "def test_1(x): pass",
+        );
+
+        let project = Project::new(env.cwd(), vec![path.clone(), path]);
+
+        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+
+        assert_eq!(session.total_test_functions(), 1);
     }
 }

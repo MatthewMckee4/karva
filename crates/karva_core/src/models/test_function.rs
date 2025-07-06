@@ -1,8 +1,6 @@
 use std::{
-    cmp::{Eq, PartialEq},
     collections::HashMap,
     fmt::{self, Display},
-    hash::{Hash, Hasher},
 };
 
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
@@ -17,7 +15,7 @@ use crate::{
     utils::Upcast,
 };
 
-/// A test case represents a single test function.
+/// Represents a single test function.
 #[derive(Clone)]
 pub struct TestFunction<'proj> {
     project: &'proj Project,
@@ -60,12 +58,12 @@ impl<'proj> TestFunction<'proj> {
         module_name(self.project.cwd(), &self.path)
     }
 
-    pub fn collect<'a: 'proj>(
+    pub fn collect<'a>(
         &'a self,
         py: Python<'_>,
         py_module: &Bound<'_, PyModule>,
         fixture_manager_func: &mut impl FnMut(
-            &dyn Fn(&FixtureManager) -> Result<TestCase<'a>, Diagnostic>,
+            &mut dyn FnMut(&mut FixtureManager) -> Result<TestCase<'a>, Diagnostic>,
         ) -> Result<TestCase<'a>, Diagnostic>,
     ) -> Vec<Result<TestCase<'a>, Diagnostic>> {
         tracing::info!("Collecting test cases for function: {}", self.name());
@@ -99,7 +97,7 @@ impl<'proj> TestFunction<'proj> {
             }
 
             for params in param_args {
-                let mut f = |fixture_manager: &FixtureManager| {
+                let mut f = |fixture_manager: &mut FixtureManager| {
                     let mut fixture_diagnostics = Vec::new();
 
                     let required_fixtures = required_fixture_names
@@ -148,21 +146,6 @@ impl<'proj> TestFunction<'proj> {
         }
     }
 }
-
-impl Hash for TestFunction<'_> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.path.hash(state);
-        self.function_definition.name.hash(state);
-    }
-}
-
-impl PartialEq for TestFunction<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.path == other.path && self.function_definition.name == other.function_definition.name
-    }
-}
-
-impl Eq for TestFunction<'_> {}
 
 pub struct TestFunctionDisplay<'proj> {
     test_function: &'proj TestFunction<'proj>,
@@ -217,7 +200,7 @@ mod tests {
         let discoverer = Discoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        let test_case = session.test_cases()[0].clone();
+        let test_case = session.test_functions()[0].clone();
 
         assert_eq!(test_case.path(), &path);
         assert_eq!(test_case.name(), "test_function");
@@ -235,7 +218,7 @@ mod tests {
         let discoverer = Discoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        let test_case = session.test_cases()[0].clone();
+        let test_case = session.test_functions()[0].clone();
 
         let required_fixtures = test_case.get_required_fixture_names();
         assert_eq!(required_fixtures.len(), 2);
@@ -256,7 +239,7 @@ mod tests {
         let discoverer = Discoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        let test_case = session.test_cases()[0].clone();
+        let test_case = session.test_functions()[0].clone();
 
         assert_eq!(
             test_case
@@ -264,43 +247,5 @@ mod tests {
                 .to_string(),
             "test::test_display"
         );
-    }
-
-    #[test]
-    fn test_case_equality() {
-        let env = TestEnv::new();
-        let path1 = env.create_file("test1.py", "def test_same(): pass");
-        let path2 = env.create_file("test2.py", "def test_different(): pass");
-
-        let project = Project::new(env.cwd(), vec![path1, path2]);
-        let discoverer = Discoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
-
-        let test_case1 = session.test_cases()[0].clone();
-        let test_case2 = session.test_cases()[1].clone();
-
-        assert_eq!(test_case1, test_case1);
-        assert_ne!(test_case1, test_case2);
-    }
-
-    #[test]
-    fn test_case_hash() {
-        use std::collections::HashSet;
-
-        let env = TestEnv::new();
-        let path1 = env.create_file("test1.py", "def test_same(): pass");
-        let path2 = env.create_file("test2.py", "def test_different(): pass");
-
-        let project = Project::new(env.cwd(), vec![path1, path2]);
-        let discoverer = Discoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
-
-        let test_case1 = session.test_cases()[0].clone();
-        let test_case2 = session.test_cases()[1].clone();
-
-        let mut set = HashSet::new();
-        set.insert(test_case1.clone());
-        assert!(!set.contains(&test_case2));
-        assert!(set.contains(&test_case1));
     }
 }
