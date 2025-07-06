@@ -1,8 +1,6 @@
 use std::{
-    cmp::{Eq, PartialEq},
     collections::HashMap,
     fmt::{self, Display},
-    hash::{Hash, Hasher},
 };
 
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
@@ -149,21 +147,6 @@ impl<'proj> TestFunction<'proj> {
     }
 }
 
-impl Hash for TestFunction<'_> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.path.hash(state);
-        self.function_definition.name.hash(state);
-    }
-}
-
-impl PartialEq for TestFunction<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.path == other.path && self.function_definition.name == other.function_definition.name
-    }
-}
-
-impl Eq for TestFunction<'_> {}
-
 pub struct TestFunctionDisplay<'proj> {
     test_function: &'proj TestFunction<'proj>,
     module_name: String,
@@ -264,43 +247,5 @@ mod tests {
                 .to_string(),
             "test::test_display"
         );
-    }
-
-    #[test]
-    fn test_case_equality() {
-        let env = TestEnv::new();
-        let path1 = env.create_file("test1.py", "def test_same(): pass");
-        let path2 = env.create_file("test2.py", "def test_different(): pass");
-
-        let project = Project::new(env.cwd(), vec![path1, path2]);
-        let discoverer = Discoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
-
-        let test_case1 = session.test_functions()[0].clone();
-        let test_case2 = session.test_functions()[1].clone();
-
-        assert_eq!(test_case1, test_case1);
-        assert_ne!(test_case1, test_case2);
-    }
-
-    #[test]
-    fn test_case_hash() {
-        use std::collections::HashSet;
-
-        let env = TestEnv::new();
-        let path1 = env.create_file("test1.py", "def test_same(): pass");
-        let path2 = env.create_file("test2.py", "def test_different(): pass");
-
-        let project = Project::new(env.cwd(), vec![path1, path2]);
-        let discoverer = Discoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
-
-        let test_case1 = session.test_functions()[0].clone();
-        let test_case2 = session.test_functions()[1].clone();
-
-        let mut set = HashSet::new();
-        set.insert(test_case1.clone());
-        assert!(!set.contains(&test_case2));
-        assert!(set.contains(&test_case1));
     }
 }

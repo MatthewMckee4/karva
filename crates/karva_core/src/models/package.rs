@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    hash::{Hash, Hasher},
-};
+use std::collections::{HashMap, HashSet};
 
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 use pyo3::prelude::*;
@@ -38,16 +35,6 @@ impl<'proj> Package<'proj> {
     #[must_use]
     pub const fn path(&self) -> &SystemPathBuf {
         &self.path
-    }
-
-    #[must_use]
-    pub fn name(&self) -> String {
-        module_name(self.project.cwd(), &self.path)
-    }
-
-    #[must_use]
-    pub const fn project(&self) -> &Project {
-        self.project
     }
 
     #[must_use]
@@ -162,20 +149,6 @@ impl<'proj> Package<'proj> {
         total
     }
 
-    #[must_use]
-    pub fn total_test_modules(&self) -> usize {
-        let mut total = 0;
-        for module in self.modules.values() {
-            if module.module_type() == ModuleType::Test && !module.is_empty() {
-                total += 1;
-            }
-        }
-        for package in self.packages.values() {
-            total += package.total_test_modules();
-        }
-        total
-    }
-
     pub fn update(&mut self, package: Self) {
         for (_, module) in package.modules {
             self.add_module(module);
@@ -230,7 +203,6 @@ impl<'proj> Package<'proj> {
     }
 
     // TODO: Rename this
-    // This function returns all functions that
     #[must_use]
     pub fn dependencies(&self) -> Vec<&dyn RequiresFixtures> {
         let mut dependencies: Vec<&dyn RequiresFixtures> = Vec::new();
@@ -295,6 +267,13 @@ impl<'proj> Package<'proj> {
     }
 }
 
+impl std::fmt::Debug for Package<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let string_package: StringPackage = self.display();
+        write!(f, "{string_package:?}")
+    }
+}
+
 impl<'proj> HasFixtures<'proj> for Package<'proj> {
     fn all_fixtures<'a: 'proj>(
         &'a self,
@@ -321,28 +300,6 @@ impl<'proj> HasFixtures<'proj> for &'proj Package<'proj> {
     }
 }
 
-impl Hash for Package<'_> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.path.hash(state);
-    }
-}
-
-impl PartialEq for Package<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.path == other.path
-    }
-}
-
-impl Eq for Package<'_> {}
-
-impl<'a> Upcast<Vec<&'a dyn HasFixtures<'a>>> for Vec<&'a Package<'a>> {
-    fn upcast(self) -> Vec<&'a dyn HasFixtures<'a>> {
-        self.into_iter()
-            .map(|p| p as &dyn HasFixtures<'a>)
-            .collect()
-    }
-}
-
 #[derive(Debug)]
 pub struct StringPackage {
     pub modules: HashMap<String, StringModule>,
@@ -356,13 +313,6 @@ impl PartialEq for StringPackage {
 }
 
 impl Eq for StringPackage {}
-
-impl std::fmt::Debug for Package<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let string_package: StringPackage = self.display();
-        write!(f, "{string_package:?}")
-    }
-}
 
 #[derive(Default)]
 pub struct CollectedPackage<'proj> {
@@ -407,13 +357,156 @@ impl<'proj> CollectedPackage<'proj> {
             diagnostics.update(&package.run_with_reporter(py, reporter));
         }
 
-        diagnostics.add_diagnostics(self.finalizers().run(py));
+        diagnostics.add_diagnostics(self.finalizers.run(py));
 
         diagnostics
     }
+}
 
-    #[must_use]
-    pub const fn finalizers(&self) -> &Finalizers {
-        &self.finalizers
+#[cfg(test)]
+mod tests {
+    use karva_project::tests::TestEnv;
+
+    use super::*;
+
+    #[test]
+    fn test_update_package() {
+        let env = TestEnv::new();
+
+        let tests_dir = env.create_test_dir();
+
+        let project = Project::new(env.cwd(), vec![tests_dir.clone()]);
+
+        let mut package = Package::new(env.cwd(), &project);
+
+        package.add_module(Module::new(
+            &project,
+            &tests_dir.join("test_1.py"),
+            ModuleType::Test,
+        ));
+
+        assert_eq!(
+            package.display(),
+            StringPackage {
+                modules: HashMap::new(),
+                packages: HashMap::from([(
+                    env.relative_path(&tests_dir).to_string(),
+                    StringPackage {
+                        modules: HashMap::from([(
+                            "test_1".to_string(),
+                            StringModule::from(&Module::new(
+                                &project,
+                                &tests_dir.join("test_1.py"),
+                                ModuleType::Test
+                            ))
+                        )]),
+                        packages: HashMap::new(),
+                    }
+                )]),
+            }
+        );
+    }
+
+    #[test]
+    fn add_module_different_start_path() {
+        let env = TestEnv::new();
+
+        let tests_dir = env.create_test_dir();
+
+        let project = Project::new(env.cwd(), vec![tests_dir.clone()]);
+
+        let mut package = Package::new(tests_dir, &project);
+
+        let module_dir = env.create_test_dir();
+
+        let module = Module::new(&project, &module_dir.join("test_1.py"), ModuleType::Test);
+
+        package.add_module(module);
+
+        assert_eq!(
+            package.display(),
+            StringPackage {
+                modules: HashMap::new(),
+                packages: HashMap::new(),
+            }
+        );
+    }
+
+    #[test]
+    fn add_module_already_in_package() {
+        let env = TestEnv::new();
+
+        let tests_dir = env.create_test_dir();
+
+        let project = Project::new(env.cwd(), vec![tests_dir.clone()]);
+
+        let mut package = Package::new(env.cwd(), &project);
+
+        let module = Module::new(&project, &tests_dir.join("test_1.py"), ModuleType::Test);
+
+        package.add_module(module);
+
+        let module_1 = Module::new(&project, &tests_dir.join("test_1.py"), ModuleType::Test);
+
+        package.add_module(module_1);
+
+        assert_eq!(
+            package.display(),
+            StringPackage {
+                modules: HashMap::new(),
+                packages: HashMap::from([(
+                    env.relative_path(&tests_dir).to_string(),
+                    StringPackage {
+                        modules: HashMap::from([(
+                            "test_1".to_string(),
+                            StringModule::from(&Module::new(
+                                &project,
+                                &tests_dir.join("test_1.py"),
+                                ModuleType::Test
+                            ))
+                        )]),
+                        packages: HashMap::new(),
+                    }
+                )]),
+            }
+        );
+    }
+
+    #[test]
+    fn add_configuration_module() {
+        let env = TestEnv::new();
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+
+        let mut package = Package::new(env.cwd(), &project);
+
+        let module = Module::new(
+            &project,
+            &env.cwd().join("conftest.py"),
+            ModuleType::Configuration,
+        );
+
+        package.add_module(module);
+
+        assert_eq!(
+            package.display(),
+            StringPackage {
+                modules: HashMap::from([(
+                    "conftest".to_string(),
+                    StringModule::from(&Module::new(
+                        &project,
+                        &env.cwd().join("conftest.py"),
+                        ModuleType::Configuration
+                    ))
+                )]),
+                packages: HashMap::new(),
+            }
+        );
+
+        assert_eq!(package.configuration_modules().len(), 1);
+        assert_eq!(
+            package.configuration_modules()[0].path(),
+            &env.cwd().join("conftest.py")
+        );
     }
 }

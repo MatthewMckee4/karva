@@ -1518,10 +1518,10 @@ exit_code: 0
 Passed tests: 1
 All checks passed!
 Calculator initialized
-Test function called
-Calculator finalizer called
 Calculator initialized
 Test function called
+Calculator finalizer called
+Test function 2 called
 Calculator finalizer called
 
 ----- stderr -----

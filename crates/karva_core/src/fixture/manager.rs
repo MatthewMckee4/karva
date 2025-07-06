@@ -219,7 +219,7 @@ mod tests {
     #[test]
     fn test_fixture_manager_add_fixtures_impl_one_dependency() {
         let env = TestEnv::new();
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
 
         env.create_file(
             tests_dir.join("conftest.py").as_std_path(),
@@ -274,7 +274,7 @@ import karva
 def y(x):
     return 1
 ";
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         let inner_dir = tests_dir.join("inner");
 
         env.create_file(tests_dir.join("conftest.py").as_std_path(), fixture_x);
@@ -324,7 +324,7 @@ def y(x):
     return 1
 ";
 
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         let inner_dir = tests_dir.join("inner");
 
         env.create_file(tests_dir.join("conftest.py").as_std_path(), fixture_x);
@@ -381,7 +381,7 @@ import karva
 def z(y):
     return 3
 ";
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         let inner_dir = tests_dir.join("inner");
         let inner_inner_dir = inner_dir.join("inner");
 
@@ -441,7 +441,7 @@ def y(x):
 def z(x):
     return 1
 ";
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         let inner_dir = tests_dir.join("inner");
 
         env.create_file(tests_dir.join("conftest.py").as_std_path(), fixture_x);
@@ -500,7 +500,7 @@ import karva
 def z(y):
     return 3
 ";
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         let inner_dir = tests_dir.join("inner");
         let inner_inner_dir = inner_dir.join("inner");
 
@@ -561,7 +561,7 @@ def z(x, y):
     return 1
 ";
 
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         let inner_dir = tests_dir.join("inner");
 
         env.create_file(tests_dir.join("conftest.py").as_std_path(), fixtures);
@@ -630,7 +630,7 @@ def auth_token(user):
     return 'token123'
 ";
 
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         let api_dir = tests_dir.join("api");
         let users_dir = api_dir.join("users");
 
@@ -699,7 +699,7 @@ def service_b(config):
     return 'service_b'
 ";
 
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         let package_a_dir = tests_dir.join("package_a");
         let package_b_dir = tests_dir.join("package_b");
 
@@ -783,7 +783,7 @@ def data():
     return 'child_data'
 ";
 
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         let child_dir = tests_dir.join("child");
 
         env.create_file(tests_dir.join("conftest.py").as_std_path(), root_fixtures);
@@ -854,7 +854,7 @@ def combined(derived_a, derived_b):
     return f'{derived_a}_{derived_b}'
 ";
 
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         env.create_file(tests_dir.join("conftest.py").as_std_path(), fixtures);
         let test_path = env.create_file(
             tests_dir.join("test_combined.py").as_std_path(),
@@ -924,7 +924,7 @@ def level5(level4):
     return 'l5'
 ";
 
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         let l2_dir = tests_dir.join("level2");
         let l3_dir = l2_dir.join("level3");
         let l4_dir = l3_dir.join("level4");
@@ -1008,7 +1008,7 @@ def integration_service(service_a, service_b):
     return f'integration_{service_a}_{service_b}'
 ";
 
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         let package_a_dir = tests_dir.join("package_a");
         let package_b_dir = tests_dir.join("package_b");
         let package_c_dir = tests_dir.join("package_c");
@@ -1096,7 +1096,7 @@ def function_fixture(module_fixture):
     return 'function_data'
 ";
 
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         env.create_file(tests_dir.join("conftest.py").as_std_path(), fixtures);
 
         let test_path = env.create_file(
@@ -1157,7 +1157,7 @@ def converged(branch_a2, branch_b2):
 
 ";
 
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         env.create_file(tests_dir.join("conftest.py").as_std_path(), fixtures);
 
         let test_path = env.create_file(
@@ -1217,7 +1217,7 @@ def function_fixture():
     return 'function'
 ";
 
-        let tests_dir = env.create_tests_dir();
+        let tests_dir = env.create_test_dir();
         env.create_file(tests_dir.join("conftest.py").as_std_path(), fixtures);
 
         let test_path = env.create_file(

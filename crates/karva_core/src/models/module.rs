@@ -1,7 +1,6 @@
 use std::{
     collections::HashSet,
     fmt::{self, Display},
-    hash::{Hash, Hasher},
 };
 
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
@@ -53,10 +52,6 @@ impl<'proj> Module<'proj> {
     #[must_use]
     pub fn test_functions(&self) -> Vec<&TestFunction<'proj>> {
         self.test_functions.iter().collect()
-    }
-
-    pub fn for_each_test_function_mut(&mut self, f: impl FnMut(&mut TestFunction<'proj>)) {
-        self.test_functions.iter_mut().for_each(f);
     }
 
     pub fn set_test_functions(&mut self, test_cases: Vec<TestFunction<'proj>>) {
@@ -148,20 +143,6 @@ impl Display for Module<'_> {
         write!(f, "{}", self.name())
     }
 }
-
-impl Hash for Module<'_> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.path.hash(state);
-    }
-}
-
-impl PartialEq for Module<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.path == other.path && self.name() == other.name()
-    }
-}
-
-impl Eq for Module<'_> {}
 
 impl std::fmt::Debug for Module<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
