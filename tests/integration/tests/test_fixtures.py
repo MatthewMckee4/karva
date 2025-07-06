@@ -1515,7 +1515,7 @@ def test_fixture_finalizer_called_at_correct_time(test_env: TestEnv, framework: 
         == """success: true
 exit_code: 0
 ----- stdout -----
-Passed tests: 1
+Passed tests: 2
 All checks passed!
 Calculator initialized
 Calculator initialized
