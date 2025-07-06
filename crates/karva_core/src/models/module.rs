@@ -131,7 +131,13 @@ impl<'proj> HasFixtures<'proj> for Module<'proj> {
         let all_fixtures: Vec<&'proj Fixture> = self
             .fixtures
             .iter()
-            .filter(|f| test_cases.iter().any(|tc| tc.uses_fixture(f.name())))
+            .filter(|f| {
+                if f.auto_use() {
+                    true
+                } else {
+                    test_cases.iter().any(|tc| tc.uses_fixture(f.name()))
+                }
+            })
             .collect();
 
         all_fixtures
