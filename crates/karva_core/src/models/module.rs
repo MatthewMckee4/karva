@@ -5,13 +5,13 @@ use std::{
 };
 
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
-use ruff_text_size::TextSize;
+use pyo3::prelude::*;
 
 use crate::{
-    discovery::visitor::source_text,
-    fixture::{Fixture, HasFixtures, RequiresFixtures},
-    models::TestFunction,
-    utils::from_text_size,
+    diagnostic::reporter::Reporter,
+    fixture::{Finalizers, Fixture, HasFixtures, RequiresFixtures},
+    models::{TestCase, TestFunction},
+    runner::RunDiagnostics,
 };
 
 /// The type of module.
@@ -33,11 +33,52 @@ impl ModuleType {
     }
 }
 
+#[derive(Default)]
+pub struct CollectedModule<'proj> {
+    test_cases: Vec<TestCase<'proj>>,
+    finalizers: Finalizers,
+}
+
+impl<'proj> CollectedModule<'proj> {
+    #[must_use]
+    pub fn test_cases(&self) -> &[TestCase<'proj>] {
+        &self.test_cases
+    }
+
+    pub fn add_test_cases(&mut self, test_cases: Vec<TestCase<'proj>>) {
+        self.test_cases.extend(test_cases);
+    }
+
+    #[must_use]
+    pub const fn finalizers(&self) -> &Finalizers {
+        &self.finalizers
+    }
+
+    pub fn add_finalizers(&mut self, finalizers: Finalizers) {
+        self.finalizers.update(finalizers);
+    }
+
+    pub fn run_with_reporter(&self, py: Python<'_>, reporter: &mut dyn Reporter) -> RunDiagnostics {
+        let mut diagnostics = RunDiagnostics::default();
+
+        for test_case in &self.test_cases {
+            let result = test_case.run(py);
+            reporter.report();
+            diagnostics.update(&result);
+            diagnostics.add_diagnostics(test_case.finalizers().run(py));
+        }
+
+        diagnostics.add_diagnostics(self.finalizers().run(py));
+
+        diagnostics
+    }
+}
+
 /// A module represents a single python file.
 pub struct Module<'proj> {
     path: SystemPathBuf,
     project: &'proj Project,
-    test_cases: Vec<TestFunction<'proj>>,
+    test_functions: Vec<TestFunction<'proj>>,
     fixtures: Vec<Fixture>,
     r#type: ModuleType,
 }
@@ -48,7 +89,7 @@ impl<'proj> Module<'proj> {
         Self {
             path: path.clone(),
             project,
-            test_cases: Vec::new(),
+            test_functions: Vec::new(),
             fixtures: Vec::new(),
             r#type: module_type,
         }
@@ -57,11 +98,6 @@ impl<'proj> Module<'proj> {
     #[must_use]
     pub const fn path(&self) -> &SystemPathBuf {
         &self.path
-    }
-
-    #[must_use]
-    pub const fn project(&self) -> &'proj Project {
-        self.project
     }
 
     #[must_use]
@@ -75,17 +111,21 @@ impl<'proj> Module<'proj> {
     }
 
     #[must_use]
-    pub fn test_cases(&self) -> Vec<&TestFunction<'proj>> {
-        self.test_cases.iter().collect()
+    pub fn test_functions(&self) -> Vec<&TestFunction<'proj>> {
+        self.test_functions.iter().collect()
     }
 
-    pub fn set_test_cases(&mut self, test_cases: Vec<TestFunction<'proj>>) {
-        self.test_cases = test_cases;
+    pub fn for_each_test_function_mut(&mut self, f: impl FnMut(&mut TestFunction<'proj>)) {
+        self.test_functions.iter_mut().for_each(f);
+    }
+
+    pub fn set_test_functions(&mut self, test_cases: Vec<TestFunction<'proj>>) {
+        self.test_functions = test_cases;
     }
 
     #[must_use]
-    pub fn get_test_case(&self, name: &str) -> Option<&TestFunction<'proj>> {
-        self.test_cases.iter().find(|tc| tc.name() == name)
+    pub fn get_test_function(&self, name: &str) -> Option<&TestFunction<'proj>> {
+        self.test_functions.iter().find(|tc| tc.name() == name)
     }
 
     #[must_use]
@@ -98,38 +138,19 @@ impl<'proj> Module<'proj> {
     }
 
     #[must_use]
-    pub fn total_test_cases(&self) -> usize {
-        self.test_cases.len()
-    }
-
-    #[must_use]
-    pub fn to_column_row(&self, position: TextSize) -> (usize, usize) {
-        let source_text = source_text(&self.path);
-        from_text_size(position, &source_text)
-    }
-
-    #[must_use]
-    pub fn source_text(&self) -> String {
-        source_text(&self.path)
-    }
-
-    // Optimized method that returns both position and source text in one operation
-    #[must_use]
-    pub fn to_column_row_with_source(&self, position: TextSize) -> ((usize, usize), String) {
-        let source_text = source_text(&self.path);
-        let position = from_text_size(position, &source_text);
-        (position, source_text)
+    pub fn total_test_functions(&self) -> usize {
+        self.test_functions.len()
     }
 
     pub fn update(&mut self, module: Self) {
         if self.path == module.path {
-            for test_case in module.test_cases {
+            for test_case in module.test_functions {
                 if !self
-                    .test_cases
+                    .test_functions
                     .iter()
                     .any(|existing| existing.name() == test_case.name())
                 {
-                    self.test_cases.push(test_case);
+                    self.test_functions.push(test_case);
                 }
             }
 
@@ -148,7 +169,7 @@ impl<'proj> Module<'proj> {
     #[must_use]
     pub fn dependencies(&self) -> Vec<&dyn RequiresFixtures> {
         let mut deps = Vec::new();
-        for tc in &self.test_cases {
+        for tc in &self.test_functions {
             deps.push(tc as &dyn RequiresFixtures);
         }
         for f in &self.fixtures {
@@ -159,7 +180,7 @@ impl<'proj> Module<'proj> {
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.test_cases.is_empty() && self.fixtures.is_empty()
+        self.test_functions.is_empty() && self.fixtures.is_empty()
     }
 }
 
@@ -218,7 +239,7 @@ pub struct StringModule {
 impl From<&'_ Module<'_>> for StringModule {
     fn from(module: &'_ Module<'_>) -> Self {
         Self {
-            test_cases: module.test_cases().iter().map(|tc| tc.name()).collect(),
+            test_cases: module.test_functions().iter().map(|tc| tc.name()).collect(),
             fixtures: module
                 .all_fixtures(&[])
                 .into_iter()

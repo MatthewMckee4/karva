@@ -115,7 +115,7 @@ impl<'proj> Discoverer<'proj> {
         let (discovered, diagnostics) = discover(py, path, self.project);
 
         if !configuration_only {
-            module.set_test_cases(discovered.functions);
+            module.set_test_functions(discovered.functions);
         }
         module.set_fixtures(discovered.fixtures);
 
@@ -275,7 +275,7 @@ mod tests {
                 packages: HashMap::new(),
             }
         );
-        assert_eq!(session.total_test_cases(), 1);
+        assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
@@ -315,7 +315,7 @@ mod tests {
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 1);
+        assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
@@ -356,7 +356,7 @@ mod tests {
                 ),]),
             }
         );
-        assert_eq!(session.total_test_cases(), 1);
+        assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
@@ -428,7 +428,7 @@ mod tests {
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 3);
+        assert_eq!(session.total_test_functions(), 3);
     }
 
     #[test]
@@ -465,7 +465,7 @@ def not_a_test(): pass
                 packages: HashMap::new(),
             }
         );
-        assert_eq!(session.total_test_cases(), 3);
+        assert_eq!(session.total_test_functions(), 3);
     }
 
     #[test]
@@ -484,7 +484,7 @@ def not_a_test(): pass
                 packages: HashMap::new(),
             }
         );
-        assert_eq!(session.total_test_cases(), 0);
+        assert_eq!(session.total_test_functions(), 0);
     }
 
     #[test]
@@ -503,7 +503,7 @@ def not_a_test(): pass
                 packages: HashMap::new(),
             }
         );
-        assert_eq!(session.total_test_cases(), 0);
+        assert_eq!(session.total_test_functions(), 0);
     }
 
     #[test]
@@ -542,7 +542,7 @@ def test_function(): pass
                 packages: HashMap::new(),
             }
         );
-        assert_eq!(session.total_test_cases(), 2);
+        assert_eq!(session.total_test_functions(), 2);
     }
 
     #[test]
@@ -594,7 +594,7 @@ def test_function(): pass
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 3);
+        assert_eq!(session.total_test_functions(), 3);
     }
 
     #[test]
@@ -631,7 +631,7 @@ def test_function(): pass
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 2);
+        assert_eq!(session.total_test_functions(), 2);
     }
 
     #[test]
@@ -678,7 +678,7 @@ def test_function(): pass
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 2);
+        assert_eq!(session.total_test_functions(), 2);
     }
 
     #[test]
@@ -717,7 +717,7 @@ def test_function(): pass
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 1);
+        assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
@@ -756,7 +756,7 @@ def test_function(): pass
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 1);
+        assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
@@ -792,7 +792,7 @@ def test_function(): pass
                 )]),
             }
         );
-        assert_eq!(session.total_test_cases(), 1);
+        assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
@@ -1238,7 +1238,7 @@ def root_fixture():
                 )]),
             },
         );
-        assert_eq!(session.total_test_cases(), 2);
+        assert_eq!(session.total_test_functions(), 2);
     }
 
     #[test]

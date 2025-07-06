@@ -4,12 +4,69 @@ use std::{
 };
 
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
+use pyo3::prelude::*;
 
 use crate::{
-    fixture::{Fixture, HasFixtures, RequiresFixtures},
-    models::{Module, ModuleType, StringModule, TestFunction},
+    diagnostic::reporter::Reporter,
+    fixture::{Finalizers, Fixture, HasFixtures, RequiresFixtures},
+    models::{Module, ModuleType, StringModule, TestFunction, module::CollectedModule},
+    runner::RunDiagnostics,
     utils::Upcast,
 };
+
+#[derive(Default)]
+pub struct CollectedPackage<'proj> {
+    finalizers: Finalizers,
+    modules: Vec<CollectedModule<'proj>>,
+    packages: Vec<CollectedPackage<'proj>>,
+}
+
+impl<'proj> CollectedPackage<'proj> {
+    pub fn add_collected_module(&mut self, collected_module: CollectedModule<'proj>) {
+        self.modules.push(collected_module);
+    }
+
+    pub fn add_collected_package(&mut self, collected_package: Self) {
+        self.packages.push(collected_package);
+    }
+
+    pub fn add_finalizers(&mut self, finalizers: Finalizers) {
+        self.finalizers.update(finalizers);
+    }
+
+    #[must_use]
+    pub fn total_test_cases(&self) -> usize {
+        let mut total = 0;
+        for module in &self.modules {
+            total += module.test_cases().len();
+        }
+        for package in &self.packages {
+            total += package.total_test_cases();
+        }
+        total
+    }
+
+    pub fn run_with_reporter(&self, py: Python<'_>, reporter: &mut dyn Reporter) -> RunDiagnostics {
+        let mut diagnostics = RunDiagnostics::default();
+
+        for module in &self.modules {
+            diagnostics.update(&module.run_with_reporter(py, reporter));
+        }
+
+        for package in &self.packages {
+            diagnostics.update(&package.run_with_reporter(py, reporter));
+        }
+
+        diagnostics.add_diagnostics(self.finalizers().run(py));
+
+        diagnostics
+    }
+
+    #[must_use]
+    pub const fn finalizers(&self) -> &Finalizers {
+        &self.finalizers
+    }
+}
 
 /// A package represents a single python directory.
 pub struct Package<'proj> {
@@ -148,13 +205,13 @@ impl<'proj> Package<'proj> {
     }
 
     #[must_use]
-    pub fn total_test_cases(&self) -> usize {
+    pub fn total_test_functions(&self) -> usize {
         let mut total = 0;
         for module in self.modules.values() {
-            total += module.total_test_cases();
+            total += module.total_test_functions();
         }
         for package in self.packages.values() {
-            total += package.total_test_cases();
+            total += package.total_test_functions();
         }
         total
     }
@@ -187,25 +244,25 @@ impl<'proj> Package<'proj> {
     }
 
     #[must_use]
-    pub fn test_cases(&self) -> Vec<&TestFunction<'proj>> {
-        let mut cases = self.direct_test_cases();
+    pub fn test_functions(&self) -> Vec<&TestFunction<'proj>> {
+        let mut functions = self.direct_test_functions();
 
         for sub_package in self.packages.values() {
-            cases.extend(sub_package.test_cases());
+            functions.extend(sub_package.test_functions());
         }
 
-        cases
+        functions
     }
 
     #[must_use]
-    pub fn direct_test_cases(&self) -> Vec<&TestFunction<'proj>> {
-        let mut cases = Vec::new();
+    pub fn direct_test_functions(&self) -> Vec<&TestFunction<'proj>> {
+        let mut functions = Vec::new();
 
         for module in self.modules.values() {
-            cases.extend(module.test_cases());
+            functions.extend(module.test_functions());
         }
 
-        cases
+        functions
     }
 
     #[must_use]
@@ -231,12 +288,13 @@ impl<'proj> Package<'proj> {
     #[must_use]
     pub fn dependencies(&self) -> Vec<&dyn RequiresFixtures> {
         let mut dependencies: Vec<&dyn RequiresFixtures> = Vec::new();
-        let direct_test_cases: Vec<&dyn RequiresFixtures> = self.direct_test_cases().upcast();
+        let direct_test_functions: Vec<&dyn RequiresFixtures> =
+            self.direct_test_functions().upcast();
 
         for configuration_module in self.configuration_modules() {
             dependencies.extend(configuration_module.dependencies());
         }
-        dependencies.extend(direct_test_cases);
+        dependencies.extend(direct_test_functions);
 
         dependencies
     }

@@ -242,7 +242,7 @@ def x():
 
         let test_module = tests_package.get_module(&test_path).unwrap();
 
-        let first_test_function = test_module.get_test_case("test_1").unwrap();
+        let first_test_function = test_module.get_test_function("test_1").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();
@@ -293,7 +293,7 @@ def y(x):
 
         let test_module = inner_package.get_module(&test_path).unwrap();
 
-        let first_test_function = test_module.get_test_case("test_1").unwrap();
+        let first_test_function = test_module.get_test_function("test_1").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();
@@ -342,7 +342,7 @@ def y(x):
 
         let test_module = inner_package.get_module(&test_path).unwrap();
 
-        let first_test_function = test_module.get_test_case("test_1").unwrap();
+        let first_test_function = test_module.get_test_function("test_1").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();
@@ -404,7 +404,7 @@ def z(y):
 
         let test_module = inner_inner_package.get_module(&test_path).unwrap();
 
-        let first_test_function = test_module.get_test_case("test_1").unwrap();
+        let first_test_function = test_module.get_test_function("test_1").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();
@@ -460,7 +460,7 @@ def z(x):
 
         let test_module = inner_package.get_module(&test_path).unwrap();
 
-        let first_test_function = test_module.get_test_case("test_1").unwrap();
+        let first_test_function = test_module.get_test_function("test_1").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();
@@ -523,7 +523,7 @@ def z(y):
 
         let test_module = inner_inner_package.get_module(&test_path).unwrap();
 
-        let first_test_function = test_module.get_test_case("test_1").unwrap();
+        let first_test_function = test_module.get_test_function("test_1").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();
@@ -579,7 +579,7 @@ def z(x, y):
 
         let test_module = inner_package.get_module(&test_path).unwrap();
 
-        let first_test_function = test_module.get_test_case("test_1").unwrap();
+        let first_test_function = test_module.get_test_function("test_1").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();
@@ -649,7 +649,7 @@ def auth_token(user):
         let api_package = tests_package.get_package(&api_dir).unwrap();
         let users_package = api_package.get_package(&users_dir).unwrap();
         let test_module = users_package.get_module(&test_path).unwrap();
-        let test_function = test_module.get_test_case("test_user_login").unwrap();
+        let test_function = test_module.get_test_function("test_user_login").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();
@@ -732,8 +732,8 @@ def service_b(config):
         let module_a = package_a.get_module(&test_a_path).unwrap();
         let module_b = package_b.get_module(&test_b_path).unwrap();
 
-        let test_a = module_a.get_test_case("test_a").unwrap();
-        let test_b = module_b.get_test_case("test_b").unwrap();
+        let test_a = module_a.get_test_function("test_a").unwrap();
+        let test_b = module_b.get_test_function("test_b").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();
@@ -807,8 +807,8 @@ def data():
         let root_module = tests_package.get_module(&root_test_path).unwrap();
         let child_module = child_package.get_module(&child_test_path).unwrap();
 
-        let root_test = root_module.get_test_case("test_root").unwrap();
-        let child_test = child_module.get_test_case("test_child").unwrap();
+        let root_test = root_module.get_test_function("test_root").unwrap();
+        let child_test = child_module.get_test_function("test_child").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();
@@ -866,7 +866,7 @@ def combined(derived_a, derived_b):
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
-        let test_function = test_module.get_test_case("test_combined").unwrap();
+        let test_function = test_module.get_test_function("test_combined").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();
@@ -951,7 +951,7 @@ def level5(level4):
         let l5_package = l4_package.get_package(&l5_dir).unwrap();
 
         let test_module = l5_package.get_module(&test_path).unwrap();
-        let test_function = test_module.get_test_case("test_deep").unwrap();
+        let test_function = test_module.get_test_function("test_deep").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();
@@ -1041,7 +1041,7 @@ def integration_service(service_a, service_b):
         let package_c = tests_package.get_package(&package_c_dir).unwrap();
 
         let test_module = package_c.get_module(&test_path).unwrap();
-        let test_function = test_module.get_test_case("test_integration").unwrap();
+        let test_function = test_module.get_test_function("test_integration").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();
@@ -1110,9 +1110,9 @@ def function_fixture(module_fixture):
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
 
-        let test_one = test_module.get_test_case("test_one").unwrap();
-        let test_two = test_module.get_test_case("test_two").unwrap();
-        let test_three = test_module.get_test_case("test_three").unwrap();
+        let test_one = test_module.get_test_function("test_one").unwrap();
+        let test_two = test_module.get_test_function("test_two").unwrap();
+        let test_three = test_module.get_test_function("test_three").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();
@@ -1170,7 +1170,7 @@ def converged(branch_a2, branch_b2):
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
-        let test_function = test_module.get_test_case("test_converged").unwrap();
+        let test_function = test_module.get_test_function("test_converged").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();
@@ -1230,7 +1230,7 @@ def function_fixture():
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
-        let test_function = test_module.get_test_case("test_reset").unwrap();
+        let test_function = test_module.get_test_function("test_reset").unwrap();
 
         Python::with_gil(|py| {
             let mut manager = FixtureManager::new();

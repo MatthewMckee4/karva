@@ -31,11 +31,10 @@ impl<'proj> StandardTestRunner<'proj> {
             Discoverer::new(self.project).discover(py)
         });
 
-        let collector_result = with_gil(self.project, |py| {
-            TestCaseCollector::new(&session).collect(py)
-        });
+        let (collected_session, collector_diagnostics) =
+            with_gil(self.project, |py| TestCaseCollector::collect(py, &session));
 
-        let total_test_cases = collector_result.test_cases().len();
+        let total_test_cases = collected_session.total_test_cases();
 
         tracing::info!(
             "Discovered {} test{}",
@@ -49,15 +48,10 @@ impl<'proj> StandardTestRunner<'proj> {
 
         diagnostics.add_diagnostics(discovery_diagnostics);
 
-        diagnostics.add_diagnostics(collector_result.diagnostics().clone());
+        diagnostics.add_diagnostics(collector_diagnostics);
 
         with_gil(self.project, |py| {
-            collector_result.test_cases().iter().for_each(|test_case| {
-                let result = test_case.run(py);
-                reporter.report();
-                diagnostics.update(&result);
-            });
-            diagnostics.add_diagnostics(collector_result.finalizers().run(py));
+            diagnostics.update(&collected_session.run_with_reporter(py, reporter));
         });
 
         diagnostics

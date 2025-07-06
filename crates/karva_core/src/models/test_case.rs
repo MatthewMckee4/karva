@@ -2,6 +2,7 @@ use pyo3::{prelude::*, types::PyTuple};
 
 use crate::{
     diagnostic::Diagnostic,
+    fixture::Finalizers,
     models::{TestFunction, test_function::TestFunctionDisplay},
     runner::RunDiagnostics,
 };
@@ -12,10 +13,11 @@ pub struct TestCase<'proj> {
     args: Vec<PyObject>,
     py_function: Py<PyAny>,
     module_name: String,
+    finalizers: Finalizers,
 }
 
 impl<'proj> TestCase<'proj> {
-    pub const fn new(
+    pub fn new(
         function: &'proj TestFunction<'proj>,
         args: Vec<PyObject>,
         py_function: Py<PyAny>,
@@ -26,6 +28,7 @@ impl<'proj> TestCase<'proj> {
             args,
             py_function,
             module_name,
+            finalizers: Finalizers::default(),
         }
     }
 
@@ -37,6 +40,15 @@ impl<'proj> TestCase<'proj> {
     #[must_use]
     pub fn args(&self) -> &[PyObject] {
         &self.args
+    }
+
+    pub fn add_finalizers(&mut self, finalizers: Finalizers) {
+        self.finalizers.update(finalizers);
+    }
+
+    #[must_use]
+    pub const fn finalizers(&self) -> &Finalizers {
+        &self.finalizers
     }
 
     #[must_use]

@@ -3,65 +3,134 @@ use pyo3::prelude::*;
 use crate::{
     diagnostic::Diagnostic,
     fixture::{FixtureManager, FixtureScope, RequiresFixtures},
-    models::{Module, Package, TestCase},
+    models::{
+        Module, Package, TestCase, TestFunction, module::CollectedModule, package::CollectedPackage,
+    },
     utils::Upcast,
 };
 
-mod diagnostic;
+#[derive(Default)]
+pub struct TestCaseCollector;
 
-use diagnostic::CollectorResult;
-
-pub struct TestCaseCollector<'proj> {
-    session: &'proj Package<'proj>,
-}
-
-impl<'proj> TestCaseCollector<'proj> {
+impl TestCaseCollector {
     #[must_use]
-    pub const fn new(session: &'proj Package<'proj>) -> Self {
-        Self { session }
-    }
-
-    #[must_use]
-    pub fn collect(&self, py: Python<'_>) -> CollectorResult<'proj> {
+    pub fn collect<'a>(
+        py: Python<'_>,
+        session: &'a Package<'a>,
+    ) -> (CollectedPackage<'a>, Vec<Diagnostic>) {
         tracing::info!("Collecting test cases");
 
-        let mut result = CollectorResult::default();
+        let mut result = Vec::new();
 
         let mut fixture_manager = FixtureManager::new();
-        let upcast_test_cases: Vec<&dyn RequiresFixtures> = self.session.test_cases().upcast();
+
+        let upcast_test_cases: Vec<&dyn RequiresFixtures> = session.test_functions().upcast();
+
+        let mut session_collected = CollectedPackage::default();
 
         fixture_manager.add_fixtures(
             py,
             &[],
-            self.session,
+            session,
             &[FixtureScope::Session],
             upcast_test_cases.as_slice(),
         );
 
-        result.update(self.collect_package(py, self.session, &[], &mut fixture_manager));
+        let (package_collected, package_diagnostics) =
+            Self::collect_package(py, session, &[], &mut fixture_manager);
 
-        result.add_finalizers(fixture_manager.reset_session_fixtures());
+        result.extend(package_diagnostics);
 
-        result
+        session_collected.add_finalizers(fixture_manager.reset_session_fixtures());
+
+        session_collected.add_collected_package(package_collected);
+
+        (session_collected, result)
+    }
+
+    fn collect_test_function<'a>(
+        py: Python<'_>,
+        test_function: &'a TestFunction<'a>,
+        py_module: &Bound<'_, PyModule>,
+        module: &'a Module<'a>,
+        parents: &[&Package<'_>],
+        fixture_manager: &mut FixtureManager,
+    ) -> (Vec<TestCase<'a>>, Vec<Diagnostic>) {
+        let mut diagnostics = Vec::new();
+
+        let mut test_cases = Vec::new();
+
+        let mut get_function_fixture_manager =
+            |f: &mut dyn FnMut(&mut FixtureManager) -> Result<TestCase<'a>, Diagnostic>| {
+                let test_cases = [test_function].to_vec();
+                let upcast_test_cases: Vec<&dyn RequiresFixtures> = test_cases.upcast();
+
+                let mut parents_above_current_parent = parents.to_vec();
+                let mut i = parents.len();
+                while i > 0 {
+                    i -= 1;
+                    let parent = parents[i];
+                    parents_above_current_parent.truncate(i);
+                    fixture_manager.add_fixtures(
+                        py,
+                        &parents_above_current_parent,
+                        parent,
+                        &[FixtureScope::Function],
+                        upcast_test_cases.as_slice(),
+                    );
+                }
+
+                fixture_manager.add_fixtures(
+                    py,
+                    parents,
+                    module,
+                    &[FixtureScope::Function],
+                    upcast_test_cases.as_slice(),
+                );
+
+                let mut collected_test_case = f(fixture_manager);
+
+                if let Ok(test_case) = &mut collected_test_case {
+                    test_case.add_finalizers(fixture_manager.reset_function_fixtures());
+                }
+
+                collected_test_case
+            };
+
+        let collected_test_cases =
+            test_function.collect(py, py_module, &mut get_function_fixture_manager);
+
+        for test_case_result in collected_test_cases {
+            match test_case_result {
+                Ok(test_case) => {
+                    test_cases.push(test_case);
+                }
+                Err(diagnostic) => {
+                    diagnostics.push(diagnostic);
+                }
+            }
+        }
+
+        (test_cases, diagnostics)
     }
 
     #[allow(clippy::unused_self)]
-    fn collect_module(
-        &self,
+    fn collect_module<'a>(
         py: Python<'_>,
-        module: &'proj Module<'proj>,
-        parents: &[&'proj Package<'proj>],
+        module: &'a Module<'a>,
+        parents: &[&Package<'_>],
         fixture_manager: &mut FixtureManager,
-    ) -> CollectorResult<'proj> {
-        let mut result = CollectorResult::default();
-        if module.total_test_cases() == 0 {
-            return result;
+    ) -> (CollectedModule<'a>, Vec<Diagnostic>) {
+        let mut diagnostics = Vec::new();
+        let mut module_collected = CollectedModule::default();
+        if module.total_test_functions() == 0 {
+            return (module_collected, diagnostics);
         }
 
         let module_test_cases = module.dependencies();
         let upcast_module_test_cases: Vec<&dyn RequiresFixtures> = module_test_cases.upcast();
         if upcast_module_test_cases.is_empty() {
-            return result;
+            return (module_collected, diagnostics);
         }
 
         let mut parents_above_current_parent = parents.to_vec();
@@ -92,75 +161,40 @@ impl<'proj> TestCaseCollector<'proj> {
         );
 
         let Ok(py_module) = PyModule::import(py, module.name()) else {
-            return result;
+            return (module_collected, diagnostics);
         };
 
-        for function in module.test_cases() {
-            let mut get_function_fixture_manager =
-                |f: &dyn Fn(&FixtureManager) -> Result<TestCase<'proj>, Diagnostic>| {
-                    let test_cases = [function].to_vec();
-                    let upcast_test_cases: Vec<&dyn RequiresFixtures> = test_cases.upcast();
+        let mut module_test_cases = Vec::new();
 
-                    let mut parents_above_current_parent = parents.to_vec();
-                    let mut i = parents.len();
-                    while i > 0 {
-                        i -= 1;
-                        let parent = parents[i];
-                        parents_above_current_parent.truncate(i);
-                        fixture_manager.add_fixtures(
-                            py,
-                            &parents_above_current_parent,
-                            parent,
-                            &[FixtureScope::Function],
-                            upcast_test_cases.as_slice(),
-                        );
-                    }
-
-                    fixture_manager.add_fixtures(
-                        py,
-                        parents,
-                        module,
-                        &[FixtureScope::Function],
-                        upcast_test_cases.as_slice(),
-                    );
-
-                    let collected_test_case = f(fixture_manager);
-
-                    result.add_finalizers(fixture_manager.reset_function_fixtures());
-
-                    collected_test_case
-                };
-
-            let collected_test_cases =
-                function.collect(py, &py_module, &mut get_function_fixture_manager);
-
-            for test_case_result in collected_test_cases {
-                match test_case_result {
-                    Ok(test_case) => {
-                        result.add_test_case(test_case);
-                    }
-                    Err(diagnostic) => {
-                        result.add_diagnostic(diagnostic);
-                    }
-                }
-            }
+        for function in module.test_functions() {
+            let (function_test_cases, function_diagnostics) = Self::collect_test_function(
+                py,
+                function,
+                &py_module,
+                module,
+                parents,
+                fixture_manager,
+            );
+            module_test_cases.extend(function_test_cases);
+            diagnostics.extend(function_diagnostics);
         }
 
-        result.add_finalizers(fixture_manager.reset_module_fixtures());
+        module_collected.add_test_cases(module_test_cases);
+        module_collected.add_finalizers(fixture_manager.reset_module_fixtures());
 
-        result
+        (module_collected, diagnostics)
     }
 
-    fn collect_package(
-        &self,
+    fn collect_package<'a>(
         py: Python<'_>,
-        package: &'proj Package<'proj>,
-        parents: &[&'proj Package<'proj>],
+        package: &'a Package<'a>,
+        parents: &[&Package<'_>],
         fixture_manager: &mut FixtureManager,
-    ) -> CollectorResult<'proj> {
-        let mut result = CollectorResult::default();
-        if package.total_test_cases() == 0 {
-            return result;
+    ) -> (CollectedPackage<'a>, Vec<Diagnostic>) {
+        let mut diagnostics = Vec::new();
+        let mut package_collected = CollectedPackage::default();
+        if package.total_test_functions() == 0 {
+            return (package_collected, diagnostics);
         }
         let package_test_cases = package.dependencies();
 
@@ -192,16 +226,22 @@ impl<'proj> TestCaseCollector<'proj> {
         let mut new_parents = parents.to_vec();
         new_parents.push(package);
 
-        package.modules().values().for_each(|module| {
-            result.update(self.collect_module(py, module, &new_parents, fixture_manager));
-        });
-
-        for sub_package in package.packages().values() {
-            result.update(self.collect_package(py, sub_package, &new_parents, fixture_manager));
+        for module in package.modules().values() {
+            let (module_collected, module_diagnostics) =
+                Self::collect_module(py, module, &new_parents, fixture_manager);
+            diagnostics.extend(module_diagnostics);
+            package_collected.add_collected_module(module_collected);
         }
 
-        result.add_finalizers(fixture_manager.reset_package_fixtures());
+        for sub_package in package.packages().values() {
+            let (sub_package_collected, sub_package_diagnostics) =
+                Self::collect_package(py, sub_package, &new_parents, fixture_manager);
+            diagnostics.extend(sub_package_diagnostics);
+            package_collected.add_collected_package(sub_package_collected);
+        }
 
-        result
+        package_collected.add_finalizers(fixture_manager.reset_package_fixtures());
+
+        (package_collected, diagnostics)
     }
 }
