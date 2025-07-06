@@ -5,6 +5,7 @@ use pyo3::{prelude::*, types::PyAny};
 use crate::{
     fixture::{Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, RequiresFixtures},
     models::Package,
+    utils::partition_iter,
 };
 
 #[derive(Debug, Default)]
@@ -143,13 +144,7 @@ impl FixtureManager {
             // We did not find the dependency in the current scope.
             // So we must try the parent scopes.
             if !found {
-                let mut parents_above_current_parent = parents.to_vec();
-                let mut i = parents.len();
-                while i > 0 {
-                    i -= 1;
-                    let parent = &parents[i];
-                    parents_above_current_parent.truncate(i);
-
+                for (parent, parents_above_current_parent) in partition_iter(parents) {
                     let parent_fixture = (*parent).get_fixture(dependency);
 
                     if let Some(parent_fixture) = parent_fixture {
