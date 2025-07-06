@@ -111,11 +111,12 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         std::process::exit(0);
     })?;
 
-    let mut reporter: Box<dyn Reporter> = if project.options().verbosity().is_default() {
-        Box::new(ProgressReporter::default())
-    } else {
-        Box::new(DummyReporter)
-    };
+    let mut reporter: Box<dyn Reporter> =
+        if project.options().verbosity().is_default() && !project.options().show_output() {
+            Box::new(ProgressReporter::default())
+        } else {
+            Box::new(DummyReporter)
+        };
 
     let result = project.test_with_reporter(&mut *reporter);
 
@@ -172,7 +173,7 @@ impl karva_core::diagnostic::reporter::Reporter for ProgressReporter {
         let progress = indicatif::ProgressBar::new(n as u64);
         progress.set_style(
             indicatif::ProgressStyle::with_template(
-                r"{msg:10.dim} {bar:60.green/dim} {pos}/{len} files",
+                r"{msg:10.dim} {bar:60.green/dim} {pos}/{len} tests",
             )
             .unwrap()
             .progress_chars("--"),
