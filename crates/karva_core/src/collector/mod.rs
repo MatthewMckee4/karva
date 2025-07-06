@@ -6,7 +6,7 @@ use crate::{
     models::{
         Module, Package, TestCase, TestFunction, module::CollectedModule, package::CollectedPackage,
     },
-    utils::Upcast,
+    utils::{Upcast, partition_iter},
 };
 
 #[derive(Default)]
@@ -65,12 +65,7 @@ impl TestCaseCollector {
                 let test_cases = [test_function].to_vec();
                 let upcast_test_cases: Vec<&dyn RequiresFixtures> = test_cases.upcast();
 
-                let mut parents_above_current_parent = parents.to_vec();
-                let mut i = parents.len();
-                while i > 0 {
-                    i -= 1;
-                    let parent = parents[i];
-                    parents_above_current_parent.truncate(i);
+                for (parent, parents_above_current_parent) in partition_iter(parents) {
                     fixture_manager.add_fixtures(
                         py,
                         &parents_above_current_parent,
@@ -133,12 +128,7 @@ impl TestCaseCollector {
             return (module_collected, diagnostics);
         }
 
-        let mut parents_above_current_parent = parents.to_vec();
-        let mut i = parents.len();
-        while i > 0 {
-            i -= 1;
-            let parent = parents[i];
-            parents_above_current_parent.truncate(i);
+        for (parent, parents_above_current_parent) in partition_iter(parents) {
             fixture_manager.add_fixtures(
                 py,
                 &parents_above_current_parent,
@@ -200,12 +190,7 @@ impl TestCaseCollector {
 
         let upcast_package_test_cases: Vec<&dyn RequiresFixtures> = package_test_cases.upcast();
 
-        let mut parents_above_current_parent = parents.to_vec();
-        let mut i = parents.len();
-        while i > 0 {
-            i -= 1;
-            let parent = parents[i];
-            parents_above_current_parent.truncate(i);
+        for (parent, parents_above_current_parent) in partition_iter(parents) {
             fixture_manager.add_fixtures(
                 py,
                 &parents_above_current_parent,

@@ -106,3 +106,18 @@ where
         result
     })
 }
+
+pub fn partition_iter<'a, T>(items: &[&'a T]) -> impl Iterator<Item = (&'a T, Vec<&'a T>)> {
+    let mut parents_above_current_parent = items.to_vec();
+    let mut i = items.len();
+    std::iter::from_fn(move || {
+        if i > 0 {
+            i -= 1;
+            let parent = items[i];
+            parents_above_current_parent.truncate(i);
+            Some((parent, parents_above_current_parent.clone()))
+        } else {
+            None
+        }
+    })
+}
