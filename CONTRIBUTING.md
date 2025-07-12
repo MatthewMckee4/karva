@@ -33,6 +33,10 @@ cargo run test tests/test_add.py
 
 ### Running the tests
 
+You must have `uv` installed to run the tests.
+
+You must also first run `maturin build` to build the Python wheels.
+
 ```bash
 cargo test
 ```

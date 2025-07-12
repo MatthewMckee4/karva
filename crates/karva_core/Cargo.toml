@@ -10,14 +10,11 @@ repository = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
 
-[lib]
-doctest = false
-
 [dependencies]
 karva_project = { workspace = true }
 
 colored = { workspace = true }
-pyo3 = { workspace = true, features = ["py-clone"] }
+pyo3 = { workspace = true, features = ["py-clone", "auto-initialize"] }
 ruff_python_ast = { workspace = true }
 ruff_python_parser = { workspace = true }
 ruff_source_file = { workspace = true }
@@ -30,8 +27,6 @@ tempfile = { workspace = true }
 regex = { workspace = true }
 ctor = { workspace = true }
 
-[features]
-testing = []
 
 [lints]
 workspace = true
