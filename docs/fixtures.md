@@ -86,6 +86,23 @@ def test_finalizer(finalizer_fixture: int):
     assert finalizer_fixture == 1
 ```
 
+## Auto-use fixtures
+
+We support auto-use fixtures. These are fixtures that are automatically used in their scope.
+
+```py
+from karva import fixture
+
+data = {}
+
+@fixture(auto_use=True)
+def add_data():
+    data.update(value=True)
+
+def test_value():
+    assert data.get('value')
+```
+
 ## Example
 
 ```bash

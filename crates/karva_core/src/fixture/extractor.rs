@@ -38,6 +38,12 @@ impl FixtureExtractor {
             .getattr("scope")
             .map_err(|e| e.to_string())?;
 
+        let auto_use = function
+            .getattr("_fixture_function_marker")
+            .map_err(|e| e.to_string())?
+            .getattr("autouse")
+            .map_err(|e| e.to_string())?;
+
         let function = function
             .getattr("_fixture_function")
             .map_err(|e| e.to_string())?;
@@ -46,6 +52,7 @@ impl FixtureExtractor {
             name,
             function_def,
             FixtureScope::try_from(scope.to_string())?,
+            auto_use.extract::<bool>().unwrap_or(false),
             function.into(),
             is_generator_function,
         ))
@@ -73,11 +80,13 @@ impl FixtureExtractor {
 
         let scope = py_function.borrow_mut().scope.clone();
         let name = py_function.borrow_mut().name.clone();
+        let auto_use = py_function.borrow_mut().auto_use;
 
         Ok(Fixture::new(
             name,
             val.clone(),
             FixtureScope::try_from(scope)?,
+            auto_use,
             py_function.into(),
             is_generator_function,
         ))

@@ -35,6 +35,7 @@ def fixture(
     *,
     scope: _ScopeName = "function",
     name: str | None = ...,
+    auto_use: bool = ...,
 ) -> Callable[[Callable[_P, _T]], FixtureFunctionDefinition[_P, _T]]: ...
 
 class TestFunction(Generic[_P, _T]):
