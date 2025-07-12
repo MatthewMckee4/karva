@@ -1,94 +1,70 @@
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::{
-    discovery::visitor::is_generator_function,
-    extensions::fixtures::{Fixture, FixtureScope, python::FixtureFunctionDefinition},
-};
+use crate::extensions::fixtures::{Fixture, FixtureScope, python::FixtureFunctionDefinition};
 
-#[derive(Default)]
-pub struct FixtureExtractor {}
-
-impl FixtureExtractor {
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {}
+fn get_attribute<'a>(function: Bound<'a, PyAny>, attributes: &[&str]) -> Option<Bound<'a, PyAny>> {
+    let mut current = function;
+    for attribute in attributes {
+        let current_attr = current.getattr(attribute).ok()?;
+        current = current_attr;
     }
+    Some(current.clone())
+}
 
-    pub fn try_from_pytest_fixture(
-        function_def: StmtFunctionDef,
-        function: &Bound<'_, PyAny>,
-        is_generator_function: bool,
-    ) -> Result<Fixture, String> {
-        let found_name = function
-            .getattr("_fixture_function_marker")
-            .map_err(|e| e.to_string())?
-            .getattr("name")
-            .map_err(|e| e.to_string())?;
+pub fn try_from_pytest_function(
+    function_definition: &StmtFunctionDef,
+    function: &Bound<'_, PyAny>,
+    is_generator_function: bool,
+) -> Option<Fixture> {
+    let found_name = get_attribute(function.clone(), &["_fixture_function_marker", "name"])?;
 
-        let name = if found_name.is_none() {
-            function_def.name.to_string()
-        } else {
-            found_name.to_string()
-        };
+    let scope = get_attribute(function.clone(), &["_fixture_function_marker", "scope"])?;
 
-        let scope = function
-            .getattr("_fixture_function_marker")
-            .map_err(|e| e.to_string())?
-            .getattr("scope")
-            .map_err(|e| e.to_string())?;
+    let auto_use = get_attribute(function.clone(), &["_fixture_function_marker", "autouse"])?;
 
-        let auto_use = function
-            .getattr("_fixture_function_marker")
-            .map_err(|e| e.to_string())?
-            .getattr("autouse")
-            .map_err(|e| e.to_string())?;
+    let function = get_attribute(function.clone(), &["_fixture_function"])?;
 
-        let function = function
-            .getattr("_fixture_function")
-            .map_err(|e| e.to_string())?;
+    let name = if found_name.is_none() {
+        function_definition.name.to_string()
+    } else {
+        found_name.to_string()
+    };
 
-        Ok(Fixture::new(
-            name,
-            function_def,
-            FixtureScope::try_from(scope.to_string())?,
-            auto_use.extract::<bool>().unwrap_or(false),
-            function.into(),
-            is_generator_function,
-        ))
-    }
+    Some(Fixture::new(
+        name,
+        function_definition.clone(),
+        FixtureScope::try_from(scope.to_string()).ok()?,
+        auto_use.extract::<bool>().unwrap_or(false),
+        function.into(),
+        is_generator_function,
+    ))
+}
 
-    pub fn try_from_function(
-        val: &StmtFunctionDef,
-        py_module: &Bound<'_, PyModule>,
-    ) -> Result<Fixture, String> {
-        let function = py_module
-            .getattr(val.name.to_string())
-            .map_err(|e| e.to_string())?;
+pub fn try_from_karva_function(
+    function_def: &StmtFunctionDef,
+    function: &Bound<'_, PyAny>,
+    is_generator_function: bool,
+) -> Result<Fixture, String> {
+    let Ok(py_function) = function
+        .clone()
+        .downcast_into::<FixtureFunctionDefinition>()
+    else {
+        return Err("Could not downcast function to FixtureFunctionDefinition".to_string());
+    };
 
-        let is_generator_function = is_generator_function(val);
+    let py_function_borrow = py_function.borrow_mut();
 
-        let Ok(py_function) = function
-            .clone()
-            .downcast_into::<FixtureFunctionDefinition>()
-        else {
-            tracing::info!(
-                "Could not parse fixture as a karva fixture, trying to parse as a pytest fixture"
-            );
-            return Self::try_from_pytest_fixture(val.clone(), &function, is_generator_function);
-        };
+    let scope = py_function_borrow.scope.clone();
+    let name = py_function_borrow.name.clone();
+    let auto_use = py_function_borrow.auto_use;
 
-        let scope = py_function.borrow_mut().scope.clone();
-        let name = py_function.borrow_mut().name.clone();
-        let auto_use = py_function.borrow_mut().auto_use;
-
-        Ok(Fixture::new(
-            name,
-            val.clone(),
-            FixtureScope::try_from(scope)?,
-            auto_use,
-            py_function.into(),
-            is_generator_function,
-        ))
-    }
+    Ok(Fixture::new(
+        name,
+        function_def.clone(),
+        FixtureScope::try_from(scope)?,
+        auto_use,
+        py_function.into(),
+        is_generator_function,
+    ))
 }

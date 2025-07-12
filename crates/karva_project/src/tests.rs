@@ -13,11 +13,13 @@ impl TestEnv {
     #[must_use]
     pub fn new() -> Self {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
-        let project_dir = SystemPathBuf::from(temp_dir.path().to_path_buf());
+        let project_dir = temp_dir.path();
 
-        fs::create_dir_all(&project_dir).expect("Failed to create project directory");
+        fs::create_dir_all(project_dir).expect("Failed to create project directory");
 
-        Self { project_dir }
+        Self {
+            project_dir: project_dir.to_path_buf(),
+        }
     }
 
     fn venv_path(&self) -> PathBuf {

@@ -8,9 +8,10 @@ mod finalizer;
 mod manager;
 pub mod python;
 
-pub use extractor::FixtureExtractor;
 pub use finalizer::{Finalizer, Finalizers};
 pub use manager::FixtureManager;
+
+use crate::discovery::visitor::is_generator_function;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum FixtureScope {
@@ -123,6 +124,40 @@ impl Fixture {
             let function_return = self.function.call(py, args, None);
             function_return.map(|r| r.into_bound(py))
         }
+    }
+
+    pub fn try_from_function(
+        function_definition: &StmtFunctionDef,
+        py_module: &Bound<'_, PyModule>,
+    ) -> Result<Option<Self>, String> {
+        let function = py_module
+            .getattr(function_definition.name.to_string())
+            .map_err(|e| e.to_string())?;
+
+        let is_generator_function = is_generator_function(function_definition);
+
+        let try_karva = extractor::try_from_karva_function(
+            function_definition,
+            &function,
+            is_generator_function,
+        );
+
+        let try_karva_err = match try_karva {
+            Ok(fixture) => return Ok(Some(fixture)),
+            Err(e) => e,
+        };
+
+        let try_pytest = extractor::try_from_pytest_function(
+            function_definition,
+            &function,
+            is_generator_function,
+        );
+
+        if let Some(fixture) = try_pytest {
+            return Ok(Some(fixture));
+        }
+
+        Err(try_karva_err)
     }
 }
 

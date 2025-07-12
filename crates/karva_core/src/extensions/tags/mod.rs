@@ -27,21 +27,12 @@ impl Tag {
 
     #[must_use]
     pub fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
-        py_mark.getattr("name").map_or_else(
-            |_| None,
-            |name| {
-                name.extract::<String>().map_or_else(
-                    |_| None,
-                    |name_str| {
-                        if name_str == "parametrize" {
-                            ParametrizeTag::try_from_pytest_mark(py_mark).map(Self::Parametrize)
-                        } else {
-                            None
-                        }
-                    },
-                )
-            },
-        )
+        let name = py_mark.getattr("name").ok()?.extract::<String>().ok()?;
+        if name == "parametrize" {
+            ParametrizeTag::try_from_pytest_mark(py_mark).map(Self::Parametrize)
+        } else {
+            None
+        }
     }
 }
 
