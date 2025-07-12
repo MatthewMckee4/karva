@@ -93,7 +93,14 @@ impl TestCase {
                 .current_dir(&project_dir)
                 .output()
                 .with_context(|| format!("Failed to run command: {command:?}"))?;
-            if !output.status.success() {
+            if output.status.success() {
+                eprintln!(
+                    "Command succeeded: {:?}\nstdout:\n{}\nstderr:\n{}",
+                    command,
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            } else {
                 eprintln!(
                     "Command failed: {:?}\nstdout:\n{}\nstderr:\n{}",
                     command,

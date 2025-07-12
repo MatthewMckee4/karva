@@ -41,7 +41,7 @@ jobs:
           uv pip install -e .
       - name: Run tests
         run: |
-          cargo test
+          uv run --no-project cargo test
 
   build-docs:
     runs-on: ${{ matrix.os }}
