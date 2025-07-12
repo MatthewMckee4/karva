@@ -36,15 +36,15 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Build wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          command: build
       - name: Set up Python
         uses: actions/setup-python@v4
         id: setup-python
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
       - name: Run tests
         env:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
@@ -98,6 +98,11 @@ jobs:
           channel: stable
           cache-target: release
           bins: cargo-tarpaulin
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        id: setup-python
+        with:
+          python-version: 3.11
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: 3.11
@@ -105,11 +110,6 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        id: setup-python
-        with:
-          python-version: 3.11
       - name: Generate code coverage
         run: |
           export PYO3_PYTHON="${{ steps.setup-python.outputs.python-path }}"
