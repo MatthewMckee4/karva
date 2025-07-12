@@ -41,14 +41,14 @@ impl Diagnostic {
         if error.is_instance_of::<pyo3::exceptions::PyAssertionError>(py) {
             return Self::from_sub_diagnostics(vec![SubDiagnostic::new(
                 get_traceback(py, error),
-                Some(test_case.function().path().to_string()),
+                Some(test_case.function().path().display().to_string()),
                 Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Fail)),
             )]);
         }
         Self::from_py_err(
             py,
             error,
-            Some(test_case.function().path().to_string()),
+            Some(test_case.function().path().display().to_string()),
             Severity::Error(ErrorType::TestCase(TestCaseDiagnosticType::Error(
                 get_type_name(py, error),
             ))),
@@ -75,7 +75,7 @@ impl Diagnostic {
 
     #[must_use]
     pub fn invalid_path_error(error: &TestPathError) -> Self {
-        let path = error.path().to_string();
+        let path = error.path().display().to_string();
         Self::from_sub_diagnostics(vec![SubDiagnostic::new(
             format!("{error}"),
             Some(path),

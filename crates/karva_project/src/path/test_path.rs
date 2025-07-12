@@ -7,17 +7,20 @@ fn try_convert_to_py_path(path: &SystemPathBuf) -> Result<SystemPathBuf, TestPat
         return Ok(path.clone());
     }
 
-    let path_with_py = SystemPathBuf::from(format!("{path}.py"));
+    let path_with_py = SystemPathBuf::from(format!("{}.py", path.display()));
     if path_with_py.exists() {
         return Ok(path_with_py);
     }
 
-    let path_with_slash = SystemPathBuf::from(format!("{}.py", path.to_string().replace('.', "/")));
+    let path_with_slash = SystemPathBuf::from(format!(
+        "{}.py",
+        path.display().to_string().replace('.', "/")
+    ));
     if path_with_slash.exists() {
         return Ok(path_with_slash);
     }
 
-    Err(TestPathError::NotFound(path.to_string()))
+    Err(TestPathError::NotFound(path.clone()))
 }
 
 #[derive(Eq, PartialEq, Clone, Hash, PartialOrd, Ord, Debug)]
@@ -34,12 +37,12 @@ impl TestPath {
             if is_python_file(&path) {
                 Ok(Self::File(path))
             } else {
-                Err(TestPathError::WrongFileExtension(path.to_string()))
+                Err(TestPathError::WrongFileExtension(path))
             }
         } else if path.is_dir() {
             Ok(Self::Directory(path))
         } else {
-            Err(TestPathError::InvalidPath(path.to_string()))
+            Err(TestPathError::InvalidPath(path))
         }
     }
 
@@ -53,14 +56,14 @@ impl TestPath {
 
 #[derive(Debug)]
 pub enum TestPathError {
-    NotFound(String),
-    WrongFileExtension(String),
-    InvalidPath(String),
+    NotFound(SystemPathBuf),
+    WrongFileExtension(SystemPathBuf),
+    InvalidPath(SystemPathBuf),
 }
 
 impl TestPathError {
     #[must_use]
-    pub fn path(&self) -> &str {
+    pub const fn path(&self) -> &SystemPathBuf {
         match self {
             Self::NotFound(path) | Self::WrongFileExtension(path) | Self::InvalidPath(path) => path,
         }
@@ -70,11 +73,11 @@ impl TestPathError {
 impl std::fmt::Display for TestPathError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NotFound(path) => write!(f, "Path `{path}` could not be found"),
+            Self::NotFound(path) => write!(f, "Path `{}` could not be found", path.display()),
             Self::WrongFileExtension(path) => {
-                write!(f, "Path `{path}` has a wrong file extension")
+                write!(f, "Path `{}` has a wrong file extension", path.display())
             }
-            Self::InvalidPath(path) => write!(f, "Path `{path}` is invalid"),
+            Self::InvalidPath(path) => write!(f, "Path `{}` is invalid", path.display()),
         }
     }
 }

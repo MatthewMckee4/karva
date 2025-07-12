@@ -1,14 +1,11 @@
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use karva_benchmark::{
     FIXTURES, LARGE_LIST_COMPREHENSION, LARGE_SUMMATION, MATH, PARAMETRIZE, STRING_CONCATENATION,
     TRUE_ASSERTIONS, TestCase,
     criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main},
 };
 use karva_core::{diagnostic::reporter::DummyReporter, runner::TestRunner, testing::setup_module};
-use karva_project::{
-    path::{SystemPath, SystemPathBuf},
-    project::Project,
-};
+use karva_project::{path::absolute, project::Project};
 
 fn create_test_cases() -> Vec<TestCase> {
     vec![
@@ -31,14 +28,7 @@ fn benchmark_karva(criterion: &mut Criterion) {
         let env_cwd = std::env::current_dir()
             .context("Failed to get the current working directory")
             .unwrap();
-        let cwd = env_cwd.parent().unwrap().parent().unwrap();
-        SystemPathBuf::from_path_buf(cwd.to_path_buf())
-            .map_err(|path| {
-                anyhow!(
-                    "The current working directory `{}` contains non-Unicode characters. Karva only supports Unicode paths.",
-                    path.display()
-                )
-            }).unwrap()
+        env_cwd.parent().unwrap().parent().unwrap().to_path_buf()
     };
 
     for case in create_test_cases() {
@@ -49,19 +39,8 @@ fn benchmark_karva(criterion: &mut Criterion) {
             &case,
             |b, case| {
                 b.iter(|| {
-                    let cwd = SystemPath::absolute(
-                        SystemPathBuf::from_path_buf(case.path().parent().unwrap().to_path_buf())
-                            .unwrap(),
-                        &root,
-                    );
-                    let project = Project::new(
-                        cwd.clone(),
-                        [SystemPath::absolute(
-                            SystemPathBuf::from_path_buf(case.name().into()).unwrap(),
-                            &cwd,
-                        )]
-                        .to_vec(),
-                    );
+                    let cwd = absolute(case.path().parent().unwrap(), &root);
+                    let project = Project::new(cwd.clone(), [absolute(case.name(), &cwd)].to_vec());
                     let runner_result = project.test_with_reporter(&mut DummyReporter);
                     assert!(runner_result.passed());
                 });

@@ -168,7 +168,10 @@ pub enum ModuleType {
 impl ModuleType {
     #[must_use]
     pub fn from_path(path: &SystemPathBuf) -> Self {
-        if path.file_name() == Some("conftest.py") {
+        if path
+            .file_name()
+            .is_some_and(|file_name| file_name == "conftest.py")
+        {
             Self::Configuration
         } else {
             Self::Test

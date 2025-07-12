@@ -113,7 +113,7 @@ impl<'proj> TestFunction<'proj> {
 
                             fixture_diagnostics.push(Diagnostic::fixture_not_found(
                                 fixture,
-                                Some(self.path.to_string()),
+                                Some(self.path.display().to_string()),
                             ));
                             None
                         })
@@ -176,7 +176,7 @@ impl<'proj> Upcast<Vec<&'proj dyn HasFunctionDefinition>> for Vec<&'proj TestFun
 
 impl std::fmt::Debug for TestFunction<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TestCase(path: {}, name: {})", self.path, self.name())
+        write!(f, "{}::{}", self.path.display(), self.name())
     }
 }
 

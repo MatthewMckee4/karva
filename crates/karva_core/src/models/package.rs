@@ -84,7 +84,7 @@ impl<'proj> Package<'proj> {
         }
 
         let first_component = components[0];
-        let intermediate_path = self.path().join(first_component.as_str());
+        let intermediate_path = self.path().join(first_component);
 
         // Try to find existing sub-package and use add_module method
         if let Some(existing_package) = self.packages.get_mut(&intermediate_path) {
@@ -123,7 +123,7 @@ impl<'proj> Package<'proj> {
         }
 
         let first_component = components[0];
-        let intermediate_path = self.path().join(first_component.as_str());
+        let intermediate_path = self.path().join(first_component);
 
         // Try to find existing sub-package and use add_package method
         if let Some(existing_package) = self.packages.get_mut(&intermediate_path) {
@@ -390,7 +390,7 @@ mod tests {
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    env.relative_path(&tests_dir).to_string(),
+                    env.relative_path(&tests_dir).display().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_1".to_string(),
@@ -455,7 +455,7 @@ mod tests {
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    env.relative_path(&tests_dir).to_string(),
+                    env.relative_path(&tests_dir).display().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_1".to_string(),
