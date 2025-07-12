@@ -85,6 +85,7 @@ impl TestCase {
                 project_dir.to_str().unwrap(),
                 karva_wheel.to_str().unwrap(),
             ],
+            vec!["tree", "-a", project_dir.to_str().unwrap()],
         ];
 
         for command in &commands {
