@@ -4,7 +4,8 @@ use crate::{
     diagnostic::Diagnostic,
     fixture::{FixtureManager, FixtureScope, RequiresFixtures},
     models::{
-        Module, Package, TestCase, TestFunction, module::CollectedModule, package::CollectedPackage,
+        DiscoveredModule, DiscoveredPackage, TestCase, TestFunction, module::CollectedModule,
+        package::CollectedPackage,
     },
     utils::{Upcast, partition_iter},
 };
@@ -16,7 +17,7 @@ impl TestCaseCollector {
     #[must_use]
     pub fn collect<'a>(
         py: Python<'_>,
-        session: &'a Package<'a>,
+        session: &'a DiscoveredPackage<'a>,
     ) -> (CollectedPackage<'a>, Vec<Diagnostic>) {
         tracing::info!("Collecting test cases");
 
@@ -52,8 +53,8 @@ impl TestCaseCollector {
         py: Python<'_>,
         test_function: &'a TestFunction<'a>,
         py_module: &Bound<'_, PyModule>,
-        module: &'a Module<'a>,
-        parents: &[&Package<'_>],
+        module: &'a DiscoveredModule<'a>,
+        parents: &[&DiscoveredPackage<'_>],
         fixture_manager: &mut FixtureManager,
     ) -> (Vec<TestCase<'a>>, Vec<Diagnostic>) {
         let mut diagnostics = Vec::new();
@@ -112,8 +113,8 @@ impl TestCaseCollector {
     #[allow(clippy::unused_self)]
     fn collect_module<'a>(
         py: Python<'_>,
-        module: &'a Module<'a>,
-        parents: &[&Package<'_>],
+        module: &'a DiscoveredModule<'a>,
+        parents: &[&DiscoveredPackage<'_>],
         fixture_manager: &mut FixtureManager,
     ) -> (CollectedModule<'a>, Vec<Diagnostic>) {
         let mut diagnostics = Vec::new();
@@ -177,8 +178,8 @@ impl TestCaseCollector {
 
     fn collect_package<'a>(
         py: Python<'_>,
-        package: &'a Package<'a>,
-        parents: &[&Package<'_>],
+        package: &'a DiscoveredPackage<'a>,
+        parents: &[&DiscoveredPackage<'_>],
         fixture_manager: &mut FixtureManager,
     ) -> (CollectedPackage<'a>, Vec<Diagnostic>) {
         let mut diagnostics = Vec::new();

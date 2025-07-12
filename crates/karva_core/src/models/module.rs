@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// A module represents a single python file.
-pub struct Module<'proj> {
+pub struct DiscoveredModule<'proj> {
     path: SystemPathBuf,
     project: &'proj Project,
     test_functions: Vec<TestFunction<'proj>>,
@@ -22,7 +22,7 @@ pub struct Module<'proj> {
     r#type: ModuleType,
 }
 
-impl<'proj> Module<'proj> {
+impl<'proj> DiscoveredModule<'proj> {
     #[must_use]
     pub fn new(project: &'proj Project, path: &SystemPathBuf, module_type: ModuleType) -> Self {
         Self {
@@ -119,7 +119,7 @@ impl<'proj> Module<'proj> {
     }
 }
 
-impl<'proj> HasFixtures<'proj> for Module<'proj> {
+impl<'proj> HasFixtures<'proj> for DiscoveredModule<'proj> {
     fn all_fixtures<'a: 'proj>(
         &'a self,
         test_cases: &[&dyn RequiresFixtures],
@@ -144,13 +144,13 @@ impl<'proj> HasFixtures<'proj> for Module<'proj> {
     }
 }
 
-impl Display for Module<'_> {
+impl Display for DiscoveredModule<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name())
     }
 }
 
-impl std::fmt::Debug for Module<'_> {
+impl std::fmt::Debug for DiscoveredModule<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let string_module: StringModule = self.into();
         write!(f, "{string_module:?}")
@@ -185,8 +185,8 @@ pub struct StringModule {
     pub fixtures: HashSet<(String, String)>,
 }
 
-impl From<&'_ Module<'_>> for StringModule {
-    fn from(module: &'_ Module<'_>) -> Self {
+impl From<&'_ DiscoveredModule<'_>> for StringModule {
+    fn from(module: &'_ DiscoveredModule<'_>) -> Self {
         Self {
             test_cases: module.test_functions().iter().map(|tc| tc.name()).collect(),
             fixtures: module

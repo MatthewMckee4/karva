@@ -4,7 +4,7 @@ use pyo3::{prelude::*, types::PyAny};
 
 use crate::{
     fixture::{Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, RequiresFixtures},
-    models::Package,
+    models::DiscoveredPackage,
     utils::partition_iter,
 };
 
@@ -115,7 +115,7 @@ impl FixtureManager {
     fn ensure_fixture_dependencies<'proj>(
         &mut self,
         py: Python<'_>,
-        parents: &[&'proj Package<'proj>],
+        parents: &[&'proj DiscoveredPackage<'proj>],
         current: &'proj dyn HasFixtures<'proj>,
         fixture: &Fixture,
     ) {
@@ -175,7 +175,7 @@ impl FixtureManager {
     pub fn add_fixtures<'proj>(
         &mut self,
         py: Python<'_>,
-        parents: &[&'proj Package<'proj>],
+        parents: &[&'proj DiscoveredPackage<'proj>],
         current: &'proj dyn HasFixtures<'proj>,
         scopes: &[FixtureScope],
         dependencies: &[&dyn RequiresFixtures],
