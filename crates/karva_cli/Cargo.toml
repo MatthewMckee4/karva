@@ -39,6 +39,7 @@ tempfile = { workspace = true }
 dunce = { workspace = true }
 regex = { workspace = true }
 ruff_python_trivia = { workspace = true }
+rstest = { workspace = true }
 
 [lints]
 workspace = true
