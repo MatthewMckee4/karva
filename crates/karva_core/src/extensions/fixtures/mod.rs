@@ -154,15 +154,11 @@ impl Fixture {
             is_generator_function,
         );
 
-        if let Some(fixture) = try_pytest {
-            return Ok(Some(fixture));
+        match try_pytest {
+            Ok(Some(fixture)) => Ok(Some(fixture)),
+            Ok(None) => try_karva_err.map_or_else(|| Ok(None), Err),
+            Err(e) => Err(e),
         }
-
-        if let Some(e) = try_karva_err {
-            return Err(e);
-        }
-
-        Ok(None)
     }
 }
 

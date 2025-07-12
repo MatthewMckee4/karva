@@ -16,14 +16,25 @@ pub fn try_from_pytest_function(
     function_definition: &StmtFunctionDef,
     function: &Bound<'_, PyAny>,
     is_generator_function: bool,
-) -> Option<Fixture> {
-    let found_name = get_attribute(function.clone(), &["_fixture_function_marker", "name"])?;
+) -> Result<Option<Fixture>, String> {
+    let Some(found_name) = get_attribute(function.clone(), &["_fixture_function_marker", "name"])
+    else {
+        return Ok(None);
+    };
 
-    let scope = get_attribute(function.clone(), &["_fixture_function_marker", "scope"])?;
+    let Some(scope) = get_attribute(function.clone(), &["_fixture_function_marker", "scope"])
+    else {
+        return Ok(None);
+    };
 
-    let auto_use = get_attribute(function.clone(), &["_fixture_function_marker", "autouse"])?;
+    let Some(auto_use) = get_attribute(function.clone(), &["_fixture_function_marker", "autouse"])
+    else {
+        return Ok(None);
+    };
 
-    let function = get_attribute(function.clone(), &["_fixture_function"])?;
+    let Some(function) = get_attribute(function.clone(), &["_fixture_function"]) else {
+        return Ok(None);
+    };
 
     let name = if found_name.is_none() {
         function_definition.name.to_string()
@@ -31,14 +42,14 @@ pub fn try_from_pytest_function(
         found_name.to_string()
     };
 
-    Some(Fixture::new(
+    Ok(Some(Fixture::new(
         name,
         function_definition.clone(),
-        FixtureScope::try_from(scope.to_string()).ok()?,
+        FixtureScope::try_from(scope.to_string())?,
         auto_use.extract::<bool>().unwrap_or(false),
         function.into(),
         is_generator_function,
-    ))
+    )))
 }
 
 pub fn try_from_karva_function(
