@@ -8,8 +8,7 @@ use pyo3::prelude::*;
 
 use crate::{
     diagnostic::Diagnostic,
-    discovery::discover,
-    models::{DiscoveredModule, DiscoveredPackage, ModuleType},
+    discovery::{DiscoveredModule, DiscoveredPackage, ModuleType, discover},
     utils::add_to_sys_path,
 };
 
@@ -245,7 +244,7 @@ mod tests {
     use karva_project::{project::ProjectOptions, tests::TestEnv, verbosity::VerbosityLevel};
 
     use super::*;
-    use crate::models::{StringModule, StringPackage};
+    use crate::discovery::{StringModule, StringPackage};
 
     #[test]
     fn test_discover_files() {

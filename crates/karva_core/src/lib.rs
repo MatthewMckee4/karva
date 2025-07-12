@@ -1,8 +1,7 @@
-pub mod collector;
+pub mod collection;
 pub mod diagnostic;
 pub mod discovery;
 pub mod fixture;
-pub mod models;
 pub mod runner;
 pub mod tag;
 pub mod utils;

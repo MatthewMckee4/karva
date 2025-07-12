@@ -2,8 +2,8 @@ use karva_project::path::TestPathError;
 use pyo3::prelude::*;
 
 use crate::{
+    collection::TestCase,
     diagnostic::render::{DisplayDiagnostic, SubDiagnosticDisplay},
-    models::TestCase,
 };
 
 pub mod render;
