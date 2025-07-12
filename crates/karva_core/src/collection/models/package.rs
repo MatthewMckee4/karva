@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
 use crate::{
-    collection::CollectedModule, diagnostic::reporter::Reporter, fixture::Finalizers,
+    collection::CollectedModule, diagnostic::reporter::Reporter, extensions::fixtures::Finalizers,
     runner::RunDiagnostics,
 };
 

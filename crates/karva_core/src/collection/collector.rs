@@ -4,7 +4,7 @@ use crate::{
     collection::{CollectedModule, CollectedPackage, TestCase},
     diagnostic::Diagnostic,
     discovery::{DiscoveredModule, DiscoveredPackage, TestFunction},
-    fixture::{FixtureManager, FixtureScope, RequiresFixtures},
+    extensions::fixtures::{FixtureManager, FixtureScope, RequiresFixtures},
     utils::{Upcast, partition_iter},
 };
 

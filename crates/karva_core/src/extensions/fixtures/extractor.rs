@@ -3,7 +3,7 @@ use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
     discovery::visitor::is_generator_function,
-    fixture::{Fixture, FixtureScope, python::FixtureFunctionDefinition},
+    extensions::fixtures::{Fixture, FixtureScope, python::FixtureFunctionDefinition},
 };
 
 #[derive(Default)]

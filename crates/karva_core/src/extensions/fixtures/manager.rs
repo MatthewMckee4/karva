@@ -4,7 +4,9 @@ use pyo3::{prelude::*, types::PyAny};
 
 use crate::{
     discovery::DiscoveredPackage,
-    fixture::{Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, RequiresFixtures},
+    extensions::fixtures::{
+        Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, RequiresFixtures,
+    },
     utils::partition_iter,
 };
 

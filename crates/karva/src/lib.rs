@@ -1,7 +1,7 @@
 use karva_cli::karva_main;
-pub use karva_core::{
-    fixture::python::{FixtureFunctionDefinition, FixtureFunctionMarker, fixture_decorator},
-    tag::python::{PyTag, PyTags, PyTestFunction},
+pub use karva_core::extensions::{
+    fixtures::python::{FixtureFunctionDefinition, FixtureFunctionMarker, fixture_decorator},
+    tags::python::{PyTag, PyTags, PyTestFunction},
 };
 use pyo3::prelude::*;
 

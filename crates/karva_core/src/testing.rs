@@ -1,8 +1,8 @@
 use pyo3::prelude::*;
 
-use crate::{
-    fixture::python::{FixtureFunctionDefinition, FixtureFunctionMarker, fixture_decorator},
-    tag::python::{PyTag, PyTags, PyTestFunction},
+use crate::extensions::{
+    fixtures::python::{FixtureFunctionDefinition, FixtureFunctionMarker, fixture_decorator},
+    tags::python::{PyTag, PyTags, PyTestFunction},
 };
 
 #[cfg(test)]

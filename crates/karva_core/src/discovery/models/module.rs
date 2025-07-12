@@ -7,7 +7,7 @@ use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 
 use crate::{
     discovery::TestFunction,
-    fixture::{Fixture, HasFixtures, RequiresFixtures},
+    extensions::fixtures::{Fixture, HasFixtures, RequiresFixtures},
 };
 
 /// A module represents a single python file.
