@@ -60,6 +60,8 @@ impl TestCase {
 
         let karva_wheel = find_karva_wheel()?;
 
+        let venv_path = project_dir.join(".venv");
+
         // Set up a bare uv project and install pytest, mimicking the Python TestEnv
         let commands = [
             vec![
@@ -69,21 +71,15 @@ impl TestCase {
                 "--directory",
                 project_dir.to_str().unwrap(),
             ],
-            vec![
-                "uv",
-                "add",
-                "pytest",
-                "--directory",
-                project_dir.to_str().unwrap(),
-            ],
-            vec!["uv", "sync", "--directory", project_dir.to_str().unwrap()],
+            vec!["uv", "venv", venv_path.to_str().unwrap()],
             vec![
                 "uv",
                 "pip",
                 "install",
-                "--directory",
-                project_dir.to_str().unwrap(),
+                "--python",
+                venv_path.to_str().unwrap(),
                 karva_wheel.to_str().unwrap(),
+                "pytest",
             ],
             vec!["tree", "-a", project_dir.to_str().unwrap()],
         ];
