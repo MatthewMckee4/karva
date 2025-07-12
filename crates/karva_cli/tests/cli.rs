@@ -2668,10 +2668,20 @@ fn test_stdout_is_captured_and_displayed_with_args() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn get_auto_use_kw(framework: &str) -> &str {
+    match framework {
+        "pytest" => "autouse",
+        "karva" => "auto_use",
+        _ => panic!("Invalid framework"),
+    }
+}
+
 #[rstest]
-#[case("pytest", "autouse")]
-#[case("karva", "auto_use")]
-fn test_auto_use_fixture(#[case] framework: &str, #[case] auto_use_kw: &str) -> anyhow::Result<()> {
+#[case("pytest")]
+#[case("karva")]
+fn test_auto_use_fixture(#[case] framework: &str) -> anyhow::Result<()> {
+    let auto_use_kw = get_auto_use_kw(framework);
+
     let test_code = format!(
         r#"
 from {framework} import fixture
@@ -2704,6 +2714,46 @@ def test_string_and_int(order, first_entry):
     exit_code: 0
     ----- stdout -----
     Passed tests: 2
+    All checks passed!
+
+    ----- stderr -----
+    "#));
+
+    Ok(())
+}
+
+#[rstest]
+#[case("pytest")]
+#[case("karva")]
+fn test_fixture_order_respects_scope(#[case] framework: &str) -> anyhow::Result<()> {
+    let auto_use_kw = get_auto_use_kw(framework);
+
+    let test_code = format!(
+        r"
+from {framework} import fixture
+
+data = {{}}
+
+@fixture(scope='module')
+def clean_data():
+    data.clear()
+
+@fixture({auto_use_kw}=True)
+def add_data():
+    data.update(value=True)
+
+def test_value(clean_data):
+    assert data.get('value')
+",
+    );
+
+    let case = TestCase::with_file("test_fixture_order_scope.py", &test_code)?;
+
+    allow_duplicates!(assert_cmd_snapshot!(case.command(), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Passed tests: 1
     All checks passed!
 
     ----- stderr -----
