@@ -98,12 +98,12 @@ jobs:
           channel: stable
           cache-target: release
           bins: cargo-tarpaulin
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: 3.11
       - name: Set up Python
         uses: actions/setup-python@v4
         id: setup-python
-        with:
-          python-version: 3.11
-      - uses: astral-sh/setup-uv@v5
         with:
           python-version: 3.11
       - name: Build wheels
@@ -111,8 +111,9 @@ jobs:
         with:
           command: build
       - name: Generate code coverage
+        env:
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         run: |
-          export PYO3_PYTHON="${{ steps.setup-python.outputs.python-path }}"
           cargo +nightly tarpaulin --out Xml
       - name: Upload to Codecov
         uses: codecov/codecov-action@v5
