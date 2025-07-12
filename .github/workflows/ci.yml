@@ -48,7 +48,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Run tests
         run: |
-          echo "Python path: ${{ steps.setup-python.outputs.python-path }}"
           export PYO3_PYTHON=${{ steps.setup-python.outputs.python-path }}
           cargo test
 
@@ -99,8 +98,19 @@ jobs:
           channel: stable
           cache-target: release
           bins: cargo-tarpaulin
+      - name: Install dependencies
+        run: |
+          uv venv
+          uv pip install -e .
+          rm -rf .venv
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        id: setup-python
+        with:
+          python-version: 3.11
       - name: Generate code coverage
         run: |
+          export PYO3_PYTHON=${{ steps.setup-python.outputs.python-path }}
           cargo +nightly tarpaulin --out Xml
       - name: Upload to Codecov
         uses: codecov/codecov-action@v5
