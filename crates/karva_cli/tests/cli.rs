@@ -2699,7 +2699,7 @@ def test_string_and_int(order, first_entry):
 
     let case = TestCase::with_file("test_append.py", &test_code)?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    allow_duplicates!(assert_cmd_snapshot!(case.command(), @r#"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2707,7 +2707,7 @@ def test_string_and_int(order, first_entry):
     All checks passed!
 
     ----- stderr -----
-    "#);
+    "#));
 
     Ok(())
 }
