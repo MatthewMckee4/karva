@@ -8,9 +8,9 @@ use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
+    collection::TestCase,
     diagnostic::Diagnostic,
     fixture::{FixtureManager, HasFunctionDefinition, RequiresFixtures},
-    models::TestCase,
     tag::Tags,
     utils::Upcast,
 };

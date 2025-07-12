@@ -1,12 +1,10 @@
 use pyo3::prelude::*;
 
 use crate::{
+    collection::{CollectedModule, CollectedPackage, TestCase},
     diagnostic::Diagnostic,
+    discovery::{DiscoveredModule, DiscoveredPackage, TestFunction},
     fixture::{FixtureManager, FixtureScope, RequiresFixtures},
-    models::{
-        DiscoveredModule, DiscoveredPackage, TestCase, TestFunction, module::CollectedModule,
-        package::CollectedPackage,
-    },
     utils::{Upcast, partition_iter},
 };
 

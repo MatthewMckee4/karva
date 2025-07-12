@@ -4,13 +4,10 @@ use std::{
 };
 
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
-use pyo3::prelude::*;
 
 use crate::{
-    diagnostic::reporter::Reporter,
-    fixture::{Finalizers, Fixture, HasFixtures, RequiresFixtures},
-    models::{TestCase, TestFunction},
-    runner::RunDiagnostics,
+    discovery::TestFunction,
+    fixture::{Fixture, HasFixtures, RequiresFixtures},
 };
 
 /// A module represents a single python file.
@@ -195,46 +192,5 @@ impl From<&'_ DiscoveredModule<'_>> for StringModule {
                 .map(|f| (f.name().to_string(), f.scope().to_string()))
                 .collect(),
         }
-    }
-}
-
-#[derive(Default)]
-pub struct CollectedModule<'proj> {
-    test_cases: Vec<TestCase<'proj>>,
-    finalizers: Finalizers,
-}
-
-impl<'proj> CollectedModule<'proj> {
-    #[must_use]
-    pub fn test_cases(&self) -> &[TestCase<'proj>] {
-        &self.test_cases
-    }
-
-    pub fn add_test_cases(&mut self, test_cases: Vec<TestCase<'proj>>) {
-        self.test_cases.extend(test_cases);
-    }
-
-    #[must_use]
-    pub const fn finalizers(&self) -> &Finalizers {
-        &self.finalizers
-    }
-
-    pub fn add_finalizers(&mut self, finalizers: Finalizers) {
-        self.finalizers.update(finalizers);
-    }
-
-    pub fn run_with_reporter(&self, py: Python<'_>, reporter: &mut dyn Reporter) -> RunDiagnostics {
-        let mut diagnostics = RunDiagnostics::default();
-
-        for test_case in &self.test_cases {
-            let result = test_case.run(py);
-            reporter.report();
-            diagnostics.update(&result);
-            diagnostics.add_diagnostics(test_case.finalizers().run(py));
-        }
-
-        diagnostics.add_diagnostics(self.finalizers().run(py));
-
-        diagnostics
     }
 }

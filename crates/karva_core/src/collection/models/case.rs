@@ -2,8 +2,8 @@ use pyo3::{prelude::*, types::PyTuple};
 
 use crate::{
     diagnostic::Diagnostic,
+    discovery::{TestFunction, TestFunctionDisplay},
     fixture::Finalizers,
-    models::{TestFunction, test_function::TestFunctionDisplay},
     runner::RunDiagnostics,
 };
 

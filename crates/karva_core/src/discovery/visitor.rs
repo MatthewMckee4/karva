@@ -8,8 +8,8 @@ use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
 use crate::{
     diagnostic::{Diagnostic, ErrorType, Severity},
+    discovery::TestFunction,
     fixture::{Fixture, FixtureExtractor, is_fixture_function},
-    models::TestFunction,
 };
 
 pub struct FunctionDefinitionVisitor<'proj, 'b> {
