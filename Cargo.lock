@@ -997,6 +997,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "camino",
+ "dunce",
  "rand 0.9.1",
  "ruff_python_ast",
  "ruff_python_trivia",

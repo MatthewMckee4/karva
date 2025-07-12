@@ -50,7 +50,14 @@ impl TestEnv {
     pub fn new() -> Self {
         let temp_dir = TempDir::with_prefix("karva-test-env").unwrap();
 
-        let project_dir = temp_dir.path().to_path_buf();
+        let project_dir = dunce::simplified(
+            &temp_dir
+                .path()
+                .canonicalize()
+                .context("Failed to canonicalize project path")
+                .unwrap(),
+        )
+        .to_path_buf();
 
         let karva_wheel = find_karva_wheel().unwrap();
 
