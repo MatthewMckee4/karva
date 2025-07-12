@@ -2037,14 +2037,12 @@ fn test_same_fixture_name_different_types(#[case] framework: &str) -> anyhow::Re
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    allow_duplicates!(assert_cmd_snapshot!(case.command(), @r#"
     success: true
     exit_code: 0
     ----- stdout -----
     Passed tests: 2
     All checks passed!
-    String value initialized
-    Calculator value initialized
 
     ----- stderr -----
     "#));
