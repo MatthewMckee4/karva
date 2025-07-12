@@ -4,7 +4,7 @@ use std::{
     process::{ExitCode, Termination},
 };
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use clap::Parser;
 use colored::Colorize;
 use karva_core::{
@@ -13,7 +13,7 @@ use karva_core::{
     utils::current_python_version,
 };
 use karva_project::{
-    path::{SystemPath, SystemPathBuf},
+    path::absolute,
     project::{Project, ProjectMetadata},
 };
 
@@ -77,22 +77,9 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let verbosity = args.verbosity.level();
     let _guard = setup_tracing(verbosity);
 
-    let cwd = {
-        let cwd = std::env::current_dir().context("Failed to get the current working directory")?;
-        SystemPathBuf::from_path_buf(cwd)
-            .map_err(|path| {
-                anyhow!(
-                    "The current working directory `{}` contains non-Unicode characters. Karva only supports Unicode paths.",
-                    path.display()
-                )
-            })?
-    };
+    let cwd = std::env::current_dir().context("Failed to get the current working directory")?;
 
-    let mut paths: Vec<_> = args
-        .paths
-        .iter()
-        .map(|path| SystemPath::absolute(path, &cwd))
-        .collect();
+    let mut paths: Vec<_> = args.paths.iter().map(|path| absolute(path, &cwd)).collect();
 
     if args.paths.is_empty() {
         tracing::debug!(

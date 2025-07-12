@@ -92,7 +92,7 @@ impl<'proj> Discoverer<'proj> {
         discovery_diagnostics: &mut Vec<Diagnostic>,
         configuration_only: bool,
     ) -> Option<Module<'proj>> {
-        tracing::debug!("Discovering file: {}", path);
+        tracing::debug!("Discovering file: {}", path.display());
 
         if !is_python_file(path) {
             return None;
@@ -163,9 +163,9 @@ impl<'proj> Discoverer<'proj> {
         discovery_diagnostics: &mut Vec<Diagnostic>,
         configuration_only: bool,
     ) {
-        tracing::debug!("Discovering directory: {}", package.path());
+        tracing::debug!("Discovering directory: {}", package.path().display());
 
-        let walker = WalkBuilder::new(package.path().as_std_path())
+        let walker = WalkBuilder::new(package.path())
             .max_depth(Some(1))
             .standard_filters(true)
             .require_git(false)
@@ -277,14 +277,8 @@ mod tests {
         let env = TestEnv::new();
         let path = env.create_dir("test_dir");
 
-        env.create_file(
-            path.join("test_file1.py").as_std_path(),
-            "def test_function1(): pass",
-        );
-        env.create_file(
-            path.join("test_file2.py").as_std_path(),
-            "def function2(): pass",
-        );
+        env.create_file(path.join("test_file1.py"), "def test_function1(): pass");
+        env.create_file(path.join("test_file2.py"), "def function2(): pass");
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = Discoverer::new(&project);
@@ -317,15 +311,9 @@ mod tests {
         let env = TestEnv::new();
         let test_dir = env.create_test_dir();
 
-        env.create_file(
-            test_dir.join("test_file1.py").as_std_path(),
-            "def test_function1(): pass",
-        );
-        env.create_file(
-            test_dir.join("test_file2.py").as_std_path(),
-            "def test_function2(): pass",
-        );
-        env.create_file(test_dir.join(".gitignore").as_std_path(), "test_file2.py");
+        env.create_file(test_dir.join("test_file1.py"), "def test_function1(): pass");
+        env.create_file(test_dir.join("test_file2.py"), "def test_function2(): pass");
+        env.create_file(test_dir.join(".gitignore"), "test_file2.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let discoverer = Discoverer::new(&project);
@@ -336,7 +324,7 @@ mod tests {
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    env.relative_path(&test_dir).to_string(),
+                    env.relative_path(&test_dir).display().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file1".to_string(),
@@ -357,19 +345,16 @@ mod tests {
     fn test_discover_files_with_nested_directories() {
         let env = TestEnv::new();
         let test_dir = env.create_test_dir();
-        env.create_dir(test_dir.join("nested").as_std_path());
-        env.create_dir(test_dir.join("nested/deeper").as_std_path());
+        env.create_dir(test_dir.join("nested"));
+        env.create_dir(test_dir.join("nested/deeper"));
 
+        env.create_file(test_dir.join("test_file1.py"), "def test_function1(): pass");
         env.create_file(
-            test_dir.join("test_file1.py").as_std_path(),
-            "def test_function1(): pass",
-        );
-        env.create_file(
-            test_dir.join("nested/test_file2.py").as_std_path(),
+            test_dir.join("nested/test_file2.py"),
             "def test_function2(): pass",
         );
         env.create_file(
-            test_dir.join("nested/deeper/test_file3.py").as_std_path(),
+            test_dir.join("nested/deeper/test_file3.py"),
             "def test_function3(): pass",
         );
 
@@ -382,7 +367,7 @@ mod tests {
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    env.relative_path(&test_dir).to_string(),
+                    env.relative_path(&test_dir).display().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file1".to_string(),
@@ -545,10 +530,7 @@ def test_function(): pass
         let file1 = env.create_file("test1.py", "def test_function1(): pass");
         let file2 = env.create_file("test2.py", "def test_function2(): pass");
         let test_dir = env.create_test_dir();
-        env.create_file(
-            test_dir.join("test3.py").as_std_path(),
-            "def test_function3(): pass",
-        );
+        env.create_file(test_dir.join("test3.py"), "def test_function3(): pass");
 
         let project = Project::new(env.cwd(), vec![file1, file2, test_dir.clone()]);
         let discoverer = Discoverer::new(&project);
@@ -574,7 +556,7 @@ def test_function(): pass
                     )
                 ]),
                 packages: HashMap::from([(
-                    env.relative_path(&test_dir).to_string(),
+                    env.relative_path(&test_dir).display().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test3".to_string(),
@@ -596,7 +578,7 @@ def test_function(): pass
         let env = TestEnv::new();
         let test_dir = env.create_test_dir();
         let path = env.create_file(
-            test_dir.join("test_file.py").as_std_path(),
+            test_dir.join("test_file.py"),
             "def test_function(): pass\ndef test_function2(): pass",
         );
 
@@ -608,7 +590,7 @@ def test_function(): pass
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    env.relative_path(&test_dir).to_string(),
+                    env.relative_path(&test_dir).display().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file".to_string(),
@@ -632,14 +614,8 @@ def test_function(): pass
     fn test_tests_same_name_different_module_are_discovered() {
         let env = TestEnv::new();
         let test_dir = env.create_test_dir();
-        let path = env.create_file(
-            test_dir.join("test_file.py").as_std_path(),
-            "def test_function(): pass",
-        );
-        let path2 = env.create_file(
-            test_dir.join("test_file2.py").as_std_path(),
-            "def test_function(): pass",
-        );
+        let path = env.create_file(test_dir.join("test_file.py"), "def test_function(): pass");
+        let path2 = env.create_file(test_dir.join("test_file2.py"), "def test_function(): pass");
 
         let project = Project::new(env.cwd(), vec![path, path2]);
         let discoverer = Discoverer::new(&project);
@@ -649,7 +625,7 @@ def test_function(): pass
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    env.relative_path(&test_dir).to_string(),
+                    env.relative_path(&test_dir).display().to_string(),
                     StringPackage {
                         modules: HashMap::from([
                             (
@@ -679,14 +655,9 @@ def test_function(): pass
     fn test_discover_files_with_conftest_explicit_path() {
         let env = TestEnv::new();
         let test_dir = env.create_test_dir();
-        let conftest_path = env.create_file(
-            test_dir.join("conftest.py").as_std_path(),
-            "def test_function(): pass",
-        );
-        env.create_file(
-            test_dir.join("test_file.py").as_std_path(),
-            "def test_function2(): pass",
-        );
+        let conftest_path =
+            env.create_file(test_dir.join("conftest.py"), "def test_function(): pass");
+        env.create_file(test_dir.join("test_file.py"), "def test_function2(): pass");
 
         let project = Project::new(env.cwd(), vec![conftest_path]);
         let discoverer = Discoverer::new(&project);
@@ -697,7 +668,7 @@ def test_function(): pass
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    env.relative_path(&test_dir).to_string(),
+                    env.relative_path(&test_dir).display().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "conftest".to_string(),
@@ -718,14 +689,8 @@ def test_function(): pass
     fn test_discover_files_with_conftest_parent_path_conftest_not_discovered() {
         let env = TestEnv::new();
         let test_dir = env.create_test_dir();
-        env.create_file(
-            test_dir.join("conftest.py").as_std_path(),
-            "def test_function(): pass",
-        );
-        env.create_file(
-            test_dir.join("test_file.py").as_std_path(),
-            "def test_function2(): pass",
-        );
+        env.create_file(test_dir.join("conftest.py"), "def test_function(): pass");
+        env.create_file(test_dir.join("test_file.py"), "def test_function2(): pass");
 
         let project = Project::new(env.cwd(), vec![test_dir.clone()]);
         let discoverer = Discoverer::new(&project);
@@ -736,7 +701,7 @@ def test_function(): pass
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    env.relative_path(&test_dir).to_string(),
+                    env.relative_path(&test_dir).display().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file".to_string(),
@@ -758,10 +723,7 @@ def test_function(): pass
         let env = TestEnv::new();
         let path = env.cwd();
         let test_dir = env.create_test_dir();
-        env.create_file(
-            test_dir.join("test_file.py").as_std_path(),
-            "def test_function(): pass",
-        );
+        env.create_file(test_dir.join("test_file.py"), "def test_function(): pass");
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = Discoverer::new(&project);
@@ -772,7 +734,7 @@ def test_function(): pass
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    env.relative_path(&test_dir).to_string(),
+                    env.relative_path(&test_dir).display().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "test_file".to_string(),
@@ -848,7 +810,6 @@ def test_1(x): pass",
                     )]),
                     packages: HashMap::new(),
                 },
-                "{path}",
             );
         }
     }
@@ -866,7 +827,7 @@ def x():
         let test_dir = env.create_test_dir();
 
         let test_path = env.create_file(
-            test_dir.join("test_1.py").as_std_path(),
+            test_dir.join("test_1.py"),
             &format!("{fixture}def test_1(x): pass\n"),
         );
 
@@ -878,7 +839,7 @@ def x():
                 StringPackage {
                     modules: HashMap::new(),
                     packages: HashMap::from([(
-                        env.relative_path(&test_dir).to_string(),
+                        env.relative_path(&test_dir).display().to_string(),
                         StringPackage {
                             modules: HashMap::from([(
                                 "test_1".to_string(),
@@ -894,7 +855,6 @@ def x():
                         }
                     )]),
                 },
-                "{path}"
             );
         }
     }
@@ -913,10 +873,7 @@ def x():
 
         env.create_file("conftest.py", fixture);
 
-        let test_path = env.create_file(
-            test_dir.join("test_1.py").as_std_path(),
-            "def test_1(x): pass\n",
-        );
+        let test_path = env.create_file(test_dir.join("test_1.py"), "def test_1(x): pass\n");
 
         for path in [env.cwd(), test_dir.clone(), test_path] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
@@ -933,7 +890,7 @@ def x():
                         },
                     )]),
                     packages: HashMap::from([(
-                        env.relative_path(&test_dir).to_string(),
+                        env.relative_path(&test_dir).display().to_string(),
                         StringPackage {
                             modules: HashMap::from([(
                                 "test_1".to_string(),
@@ -946,7 +903,6 @@ def x():
                         }
                     )]),
                 },
-                "{path}"
             );
         }
     }
@@ -972,7 +928,7 @@ def y(x):
     return 2
 ";
 
-        env.create_file(nested_dir.join("conftest.py").as_std_path(), fixture_y);
+        env.create_file(nested_dir.join("conftest.py"), fixture_y);
 
         let more_nested_dir = nested_dir.join("more_nested_dir");
 
@@ -983,7 +939,7 @@ def z(x, y):
     return 3
 ";
 
-        env.create_file(more_nested_dir.join("conftest.py").as_std_path(), fixture_z);
+        env.create_file(more_nested_dir.join("conftest.py"), fixture_z);
 
         let even_more_nested_dir = more_nested_dir.join("even_more_nested_dir");
 
@@ -994,13 +950,10 @@ def w(x, y, z):
     return 4
 ";
 
-        env.create_file(
-            even_more_nested_dir.join("conftest.py").as_std_path(),
-            fixture_w,
-        );
+        env.create_file(even_more_nested_dir.join("conftest.py"), fixture_w);
 
         let test_path = env.create_file(
-            even_more_nested_dir.join("test_1.py").as_std_path(),
+            even_more_nested_dir.join("test_1.py"),
             "def test_1(x): pass\n",
         );
 
@@ -1024,7 +977,7 @@ def w(x, y, z):
                         },
                     )]),
                     packages: HashMap::from([(
-                        env.relative_path(&nested_dir).to_string(),
+                        env.relative_path(&nested_dir).display().to_string(),
                         StringPackage {
                             modules: HashMap::from([(
                                 "conftest".to_string(),
@@ -1041,6 +994,7 @@ def w(x, y, z):
                                     .clone()
                                     .strip_prefix(&nested_dir)
                                     .unwrap()
+                                    .display()
                                     .to_string(),
                                 StringPackage {
                                     modules: HashMap::from([(
@@ -1058,6 +1012,7 @@ def w(x, y, z):
                                             .clone()
                                             .strip_prefix(&more_nested_dir)
                                             .unwrap()
+                                            .display()
                                             .to_string(),
                                         StringPackage {
                                             modules: HashMap::from([
@@ -1089,7 +1044,6 @@ def w(x, y, z):
                         },
                     ),]),
                 },
-                "{path}"
             );
         }
     }
@@ -1099,16 +1053,10 @@ def w(x, y, z):
         let env = TestEnv::new();
 
         let test_dir_1 = env.create_test_dir();
-        env.create_file(
-            test_dir_1.join("test_1.py").as_std_path(),
-            "def test_1(): pass",
-        );
+        env.create_file(test_dir_1.join("test_1.py"), "def test_1(): pass");
 
         let test_dir_2 = env.create_dir("tests2");
-        env.create_file(
-            test_dir_2.join("test_2.py").as_std_path(),
-            "def test_2(): pass",
-        );
+        env.create_file(test_dir_2.join("test_2.py"), "def test_2(): pass");
 
         let test_file_3 = env.create_file("test_3.py", "def test_3(): pass");
 
@@ -1131,7 +1079,7 @@ def w(x, y, z):
                 ),]),
                 packages: HashMap::from([
                     (
-                        env.relative_path(&test_dir_1).to_string(),
+                        env.relative_path(&test_dir_1).display().to_string(),
                         StringPackage {
                             modules: HashMap::from([(
                                 "test_1".to_string(),
@@ -1144,7 +1092,7 @@ def w(x, y, z):
                         },
                     ),
                     (
-                        env.relative_path(&test_dir_2).to_string(),
+                        env.relative_path(&test_dir_2).display().to_string(),
                         StringPackage {
                             modules: HashMap::from([(
                                 "test_2".to_string(),
@@ -1173,12 +1121,12 @@ def root_fixture():
 ";
 
         let test_dir = env.create_test_dir();
-        env.create_file(test_dir.join("conftest.py").as_std_path(), fixture);
+        env.create_file(test_dir.join("conftest.py"), fixture);
 
-        let middle_dir = env.create_dir(test_dir.join("middle_dir").as_std_path());
-        let deep_dir = env.create_dir(middle_dir.join("deep_dir").as_std_path());
+        let middle_dir = env.create_dir(test_dir.join("middle_dir"));
+        let deep_dir = env.create_dir(middle_dir.join("deep_dir"));
         env.create_file(
-            deep_dir.join("test_nested.py").as_std_path(),
+            deep_dir.join("test_nested.py"),
             "def test_with_fixture(root_fixture): pass\ndef test_without_fixture(): pass",
         );
 
@@ -1190,7 +1138,7 @@ def root_fixture():
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    env.relative_path(&test_dir).to_string(),
+                    env.relative_path(&test_dir).display().to_string(),
                     StringPackage {
                         modules: HashMap::from([(
                             "conftest".to_string(),
@@ -1203,7 +1151,11 @@ def root_fixture():
                             },
                         )]),
                         packages: HashMap::from([(
-                            middle_dir.strip_prefix(test_dir).unwrap().to_string(),
+                            middle_dir
+                                .strip_prefix(test_dir)
+                                .unwrap()
+                                .display()
+                                .to_string(),
                             StringPackage {
                                 modules: HashMap::new(),
                                 packages: HashMap::from([(
@@ -1246,12 +1198,9 @@ def x():
     return 1
 ";
 
-        env.create_file(test_dir.join("conftest.py").as_std_path(), fixture);
+        env.create_file(test_dir.join("conftest.py"), fixture);
 
-        env.create_file(
-            test_dir.join("test_1.py").as_std_path(),
-            "def test_1(x): pass",
-        );
+        env.create_file(test_dir.join("test_1.py"), "def test_1(x): pass");
 
         let project = Project::new(env.cwd(), vec![test_dir.clone()]);
         let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
@@ -1261,7 +1210,7 @@ def x():
             StringPackage {
                 modules: HashMap::new(),
                 packages: HashMap::from([(
-                    env.relative_path(&test_dir).to_string(),
+                    env.relative_path(&test_dir).display().to_string(),
                     StringPackage {
                         modules: HashMap::from([
                             (
@@ -1303,17 +1252,14 @@ def x():
     yield 1
 ";
 
-        let conftest_path = env.create_file(test_dir.join("conftest.py").as_std_path(), fixture);
+        let conftest_path = env.create_file(test_dir.join("conftest.py"), fixture);
 
-        env.create_file(
-            test_dir.join("test_1.py").as_std_path(),
-            "def test_1(x): pass",
-        );
+        env.create_file(test_dir.join("test_1.py"), "def test_1(x): pass");
 
         let project = Project::new(env.cwd(), vec![test_dir.clone()]);
         let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
-        let test_dir_name = env.relative_path(&test_dir).to_string();
+        let test_dir_name = env.relative_path(&test_dir).display().to_string();
 
         assert_eq!(
             session.display(),
@@ -1366,10 +1312,7 @@ def x():
 
         let test_dir = env.create_test_dir();
 
-        let path = env.create_file(
-            test_dir.join("test_1.py").as_std_path(),
-            "def test_1(x): pass",
-        );
+        let path = env.create_file(test_dir.join("test_1.py"), "def test_1(x): pass");
 
         let project = Project::new(env.cwd(), vec![path.clone(), path]);
 

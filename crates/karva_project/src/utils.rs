@@ -2,7 +2,7 @@ use crate::path::SystemPathBuf;
 
 #[must_use]
 pub fn is_python_file(path: &SystemPathBuf) -> bool {
-    path.extension() == Some("py")
+    path.extension().is_some_and(|extension| extension == "py")
 }
 
 /// Gets the module name from a path.

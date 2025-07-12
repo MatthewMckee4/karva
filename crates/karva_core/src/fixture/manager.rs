@@ -217,7 +217,7 @@ mod tests {
         let tests_dir = env.create_test_dir();
 
         env.create_file(
-            tests_dir.join("conftest.py").as_std_path(),
+            tests_dir.join("conftest.py"),
             r"
 import karva
 @karva.fixture(scope='function')
@@ -225,10 +225,7 @@ def x():
     return 1
 ",
         );
-        let test_path = env.create_file(
-            tests_dir.join("test_1.py").as_std_path(),
-            "def test_1(x): pass",
-        );
+        let test_path = env.create_file(tests_dir.join("test_1.py"), "def test_1(x): pass");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
@@ -272,12 +269,9 @@ def y(x):
         let tests_dir = env.create_test_dir();
         let inner_dir = tests_dir.join("inner");
 
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), fixture_x);
-        env.create_file(inner_dir.join("conftest.py").as_std_path(), fixture_y);
-        let test_path = env.create_file(
-            inner_dir.join("test_1.py").as_std_path(),
-            "def test_1(y): pass",
-        );
+        env.create_file(tests_dir.join("conftest.py"), fixture_x);
+        env.create_file(inner_dir.join("conftest.py"), fixture_y);
+        let test_path = env.create_file(inner_dir.join("test_1.py"), "def test_1(y): pass");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
@@ -322,11 +316,8 @@ def y(x):
         let tests_dir = env.create_test_dir();
         let inner_dir = tests_dir.join("inner");
 
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), fixture_x);
-        let test_path = env.create_file(
-            inner_dir.join("test_1.py").as_std_path(),
-            "def test_1(y): pass",
-        );
+        env.create_file(tests_dir.join("conftest.py"), fixture_x);
+        let test_path = env.create_file(inner_dir.join("test_1.py"), "def test_1(y): pass");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
@@ -380,13 +371,10 @@ def z(y):
         let inner_dir = tests_dir.join("inner");
         let inner_inner_dir = inner_dir.join("inner");
 
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), fixture_x);
-        env.create_file(inner_dir.join("conftest.py").as_std_path(), fixture_y);
-        env.create_file(inner_inner_dir.join("conftest.py").as_std_path(), fixture_z);
-        let test_path = env.create_file(
-            inner_inner_dir.join("test_1.py").as_std_path(),
-            "def test_1(z): pass",
-        );
+        env.create_file(tests_dir.join("conftest.py"), fixture_x);
+        env.create_file(inner_dir.join("conftest.py"), fixture_y);
+        env.create_file(inner_inner_dir.join("conftest.py"), fixture_z);
+        let test_path = env.create_file(inner_inner_dir.join("test_1.py"), "def test_1(z): pass");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
@@ -439,12 +427,9 @@ def z(x):
         let tests_dir = env.create_test_dir();
         let inner_dir = tests_dir.join("inner");
 
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), fixture_x);
-        env.create_file(inner_dir.join("conftest.py").as_std_path(), fixture_y_z);
-        let test_path = env.create_file(
-            inner_dir.join("test_1.py").as_std_path(),
-            "def test_1(y, z): pass",
-        );
+        env.create_file(tests_dir.join("conftest.py"), fixture_x);
+        env.create_file(inner_dir.join("conftest.py"), fixture_y_z);
+        let test_path = env.create_file(inner_dir.join("test_1.py"), "def test_1(y, z): pass");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
@@ -499,13 +484,10 @@ def z(y):
         let inner_dir = tests_dir.join("inner");
         let inner_inner_dir = inner_dir.join("inner");
 
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), fixture_x);
-        env.create_file(inner_dir.join("conftest.py").as_std_path(), fixture_y);
-        env.create_file(inner_inner_dir.join("conftest.py").as_std_path(), fixture_z);
-        let test_path = env.create_file(
-            inner_inner_dir.join("test_1.py").as_std_path(),
-            "def test_1(z): pass",
-        );
+        env.create_file(tests_dir.join("conftest.py"), fixture_x);
+        env.create_file(inner_dir.join("conftest.py"), fixture_y);
+        env.create_file(inner_inner_dir.join("conftest.py"), fixture_z);
+        let test_path = env.create_file(inner_inner_dir.join("test_1.py"), "def test_1(z): pass");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
@@ -559,11 +541,8 @@ def z(x, y):
         let tests_dir = env.create_test_dir();
         let inner_dir = tests_dir.join("inner");
 
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), fixtures);
-        let test_path = env.create_file(
-            inner_dir.join("test_1.py").as_std_path(),
-            "def test_1(z): pass",
-        );
+        env.create_file(tests_dir.join("conftest.py"), fixtures);
+        let test_path = env.create_file(inner_dir.join("test_1.py"), "def test_1(z): pass");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
@@ -629,11 +608,11 @@ def auth_token(user):
         let api_dir = tests_dir.join("api");
         let users_dir = api_dir.join("users");
 
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), root_fixtures);
-        env.create_file(api_dir.join("conftest.py").as_std_path(), api_fixtures);
-        env.create_file(users_dir.join("conftest.py").as_std_path(), user_fixtures);
+        env.create_file(tests_dir.join("conftest.py"), root_fixtures);
+        env.create_file(api_dir.join("conftest.py"), api_fixtures);
+        env.create_file(users_dir.join("conftest.py"), user_fixtures);
         let test_path = env.create_file(
-            users_dir.join("test_user_auth.py").as_std_path(),
+            users_dir.join("test_user_auth.py"),
             &format!("{auth_fixtures}\ndef test_user_login(auth_token): pass"),
         );
 
@@ -698,22 +677,16 @@ def service_b(config):
         let package_a_dir = tests_dir.join("package_a");
         let package_b_dir = tests_dir.join("package_b");
 
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), shared_fixtures);
-        env.create_file(
-            package_a_dir.join("conftest.py").as_std_path(),
-            package_a_fixtures,
-        );
-        env.create_file(
-            package_b_dir.join("conftest.py").as_std_path(),
-            package_b_fixtures,
-        );
+        env.create_file(tests_dir.join("conftest.py"), shared_fixtures);
+        env.create_file(package_a_dir.join("conftest.py"), package_a_fixtures);
+        env.create_file(package_b_dir.join("conftest.py"), package_b_fixtures);
 
         let test_a_path = env.create_file(
-            package_a_dir.join("test_a.py").as_std_path(),
+            package_a_dir.join("test_a.py"),
             "def test_a(service_a): pass",
         );
         let test_b_path = env.create_file(
-            package_b_dir.join("test_b.py").as_std_path(),
+            package_b_dir.join("test_b.py"),
             "def test_b(service_b): pass",
         );
 
@@ -781,15 +754,13 @@ def data():
         let tests_dir = env.create_test_dir();
         let child_dir = tests_dir.join("child");
 
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), root_fixtures);
-        env.create_file(child_dir.join("conftest.py").as_std_path(), child_fixtures);
+        env.create_file(tests_dir.join("conftest.py"), root_fixtures);
+        env.create_file(child_dir.join("conftest.py"), child_fixtures);
 
-        let root_test_path = env.create_file(
-            tests_dir.join("test_root.py").as_std_path(),
-            "def test_root(data): pass",
-        );
+        let root_test_path =
+            env.create_file(tests_dir.join("test_root.py"), "def test_root(data): pass");
         let child_test_path = env.create_file(
-            child_dir.join("test_child.py").as_std_path(),
+            child_dir.join("test_child.py"),
             "def test_child(data): pass",
         );
 
@@ -850,9 +821,9 @@ def combined(derived_a, derived_b):
 ";
 
         let tests_dir = env.create_test_dir();
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), fixtures);
+        env.create_file(tests_dir.join("conftest.py"), fixtures);
         let test_path = env.create_file(
-            tests_dir.join("test_combined.py").as_std_path(),
+            tests_dir.join("test_combined.py"),
             "def test_combined(combined): pass",
         );
 
@@ -925,16 +896,13 @@ def level5(level4):
         let l4_dir = l3_dir.join("level4");
         let l5_dir = l4_dir.join("level5");
 
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), level1_fixtures);
-        env.create_file(l2_dir.join("conftest.py").as_std_path(), level2_fixtures);
-        env.create_file(l3_dir.join("conftest.py").as_std_path(), level3_fixtures);
-        env.create_file(l4_dir.join("conftest.py").as_std_path(), level4_fixtures);
-        env.create_file(l5_dir.join("conftest.py").as_std_path(), level5_fixtures);
+        env.create_file(tests_dir.join("conftest.py"), level1_fixtures);
+        env.create_file(l2_dir.join("conftest.py"), level2_fixtures);
+        env.create_file(l3_dir.join("conftest.py"), level3_fixtures);
+        env.create_file(l4_dir.join("conftest.py"), level4_fixtures);
+        env.create_file(l5_dir.join("conftest.py"), level5_fixtures);
 
-        let test_path = env.create_file(
-            l5_dir.join("test_deep.py").as_std_path(),
-            "def test_deep(level5): pass",
-        );
+        let test_path = env.create_file(l5_dir.join("test_deep.py"), "def test_deep(level5): pass");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
@@ -1008,22 +976,13 @@ def integration_service(service_a, service_b):
         let package_b_dir = tests_dir.join("package_b");
         let package_c_dir = tests_dir.join("package_c");
 
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), root_fixtures);
-        env.create_file(
-            package_a_dir.join("conftest.py").as_std_path(),
-            package_a_fixtures,
-        );
-        env.create_file(
-            package_b_dir.join("conftest.py").as_std_path(),
-            package_b_fixtures,
-        );
-        env.create_file(
-            package_c_dir.join("conftest.py").as_std_path(),
-            package_c_fixtures,
-        );
+        env.create_file(tests_dir.join("conftest.py"), root_fixtures);
+        env.create_file(package_a_dir.join("conftest.py"), package_a_fixtures);
+        env.create_file(package_b_dir.join("conftest.py"), package_b_fixtures);
+        env.create_file(package_c_dir.join("conftest.py"), package_c_fixtures);
 
         let test_path = env.create_file(
-            package_c_dir.join("test_integration.py").as_std_path(),
+            package_c_dir.join("test_integration.py"),
             "def test_integration(integration_service): pass",
         );
 
@@ -1092,10 +1051,10 @@ def function_fixture(module_fixture):
 ";
 
         let tests_dir = env.create_test_dir();
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), fixtures);
+        env.create_file(tests_dir.join("conftest.py"), fixtures);
 
         let test_path = env.create_file(
-            tests_dir.join("test_multiple.py").as_std_path(),
+            tests_dir.join("test_multiple.py"),
             "def test_one(function_fixture): pass\ndef test_two(function_fixture): pass\ndef test_three(module_fixture): pass",
         );
 
@@ -1153,10 +1112,10 @@ def converged(branch_a2, branch_b2):
 ";
 
         let tests_dir = env.create_test_dir();
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), fixtures);
+        env.create_file(tests_dir.join("conftest.py"), fixtures);
 
         let test_path = env.create_file(
-            tests_dir.join("test_converged.py").as_std_path(),
+            tests_dir.join("test_converged.py"),
             "def test_converged(converged): pass",
         );
 
@@ -1213,10 +1172,10 @@ def function_fixture():
 ";
 
         let tests_dir = env.create_test_dir();
-        env.create_file(tests_dir.join("conftest.py").as_std_path(), fixtures);
+        env.create_file(tests_dir.join("conftest.py"), fixtures);
 
         let test_path = env.create_file(
-            tests_dir.join("test_reset.py").as_std_path(),
+            tests_dir.join("test_reset.py"),
             "def test_reset(session_fixture, package_fixture, module_fixture, function_fixture): pass",
         );
 

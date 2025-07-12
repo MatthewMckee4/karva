@@ -58,7 +58,7 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_> {
                     Err(e) => {
                         self.diagnostics.push(Diagnostic::invalid_fixture(
                             e,
-                            Some(self.module_path.to_string()),
+                            Some(self.module_path.display().to_string()),
                         ));
                     }
                 }
@@ -113,7 +113,7 @@ pub fn discover<'proj>(
                 vec![Diagnostic::from_py_err(
                     py,
                     &e,
-                    Some(module_path.to_string()),
+                    Some(module_path.display().to_string()),
                     Severity::Error(ErrorType::Unknown),
                 )],
             );
@@ -145,7 +145,7 @@ pub fn parsed_module(path: &SystemPathBuf, python_version: PythonVersion) -> Par
 
 #[must_use]
 pub fn source_text(path: &SystemPathBuf) -> String {
-    std::fs::read_to_string(path.as_std_path()).unwrap()
+    std::fs::read_to_string(path).unwrap()
 }
 
 pub fn is_generator_function(function_def: &StmtFunctionDef) -> bool {

@@ -96,7 +96,7 @@ mod tests {
         let inner_dir = tests_dir.join("inner");
 
         env.create_file(
-            tests_dir.join("conftest.py").as_std_path(),
+            tests_dir.join("conftest.py"),
             r"
 import karva
 @karva.fixture(scope='function')
@@ -112,10 +112,7 @@ def z(x, y):
     return 1
 ",
         );
-        env.create_file(
-            inner_dir.join("test_1.py").as_std_path(),
-            "def test_1(z): pass",
-        );
+        env.create_file(inner_dir.join("test_1.py"), "def test_1(z): pass");
 
         let project = Project::new(env.cwd(), vec![tests_dir]);
 
@@ -132,7 +129,7 @@ def z(x, y):
 
         let tests_dir = env.create_test_dir();
         env.create_file(
-            tests_dir.join("conftest.py").as_std_path(),
+            tests_dir.join("conftest.py"),
             r"
 import karva
 @karva.fixture(scope='module')
@@ -140,10 +137,7 @@ def x():
     return 1
 ",
         );
-        let test_file = env.create_file(
-            tests_dir.join("test_1.py").as_std_path(),
-            "def test_1(x): pass",
-        );
+        let test_file = env.create_file(tests_dir.join("test_1.py"), "def test_1(x): pass");
 
         let project = Project::new(env.cwd(), vec![test_file]);
 
@@ -159,7 +153,7 @@ def x():
         let env = TestEnv::new();
         let test_dir = env.create_test_dir();
         env.create_file(
-            test_dir.join("test_parametrize_fixture.py").as_ref(),
+            test_dir.join("test_parametrize_fixture.py"),
             r#"import karva
 
 @karva.fixture
@@ -189,7 +183,7 @@ def test_parametrize_with_fixture(a, fixture_value):
 
         let test_dir = env.create_test_dir();
         env.create_file(
-            test_dir.join("test_parametrize_fixture.py").as_ref(),
+            test_dir.join("test_parametrize_fixture.py"),
             r#"import karva
 
 @karva.fixture
@@ -218,7 +212,7 @@ def test_parametrize_with_fixture(a):
 
         let test_dir = env.create_test_dir();
         env.create_file(
-            test_dir.join("test_parametrize_fixture.py").as_ref(),
+            test_dir.join("test_parametrize_fixture.py"),
             r#"import karva
 
 @karva.tags.parametrize("a", [1, 2])
@@ -246,7 +240,7 @@ def test_function(a: int, b: int):
 
         let test_dir = env.create_test_dir();
         env.create_file(
-            test_dir.join("test_parametrize_fixture.py").as_ref(),
+            test_dir.join("test_parametrize_fixture.py"),
             r#"import karva
 
 @karva.tags.parametrize("a", [1, 2])
@@ -274,7 +268,7 @@ def test_function(a: int, b: int, c: int):
 
         let test_dir = env.create_test_dir();
         env.create_file(
-            test_dir.join("test_fixture_generator.py").as_ref(),
+            test_dir.join("test_fixture_generator.py"),
             r"import karva
 
 @karva.fixture
@@ -301,7 +295,7 @@ def test_fixture_generator(fixture_generator):
 
         let test_dir = env.create_test_dir();
         env.create_file(
-            test_dir.join("test_fixture_generator.py").as_ref(),
+            test_dir.join("test_fixture_generator.py"),
             r"import karva
 
 @karva.fixture
@@ -337,7 +331,7 @@ def test_fixture_generator(fixture_generator):
 
         let test_dir = env.create_test_dir();
         env.create_file(
-            test_dir.join("test_fixture_generator.py").as_ref(),
+            test_dir.join("test_fixture_generator.py"),
             r#"import karva
 
 @karva.fixture
@@ -378,9 +372,7 @@ def test_fixture_generator(fixture_generator):
 
         let test_dir = env.create_test_dir();
         env.create_file(
-            test_dir
-                .join("test_fixture_with_name_parameter.py")
-                .as_ref(),
+            test_dir.join("test_fixture_with_name_parameter.py"),
             r#"import karva
 
 @karva.fixture(name="fixture_name")
@@ -407,9 +399,7 @@ def test_fixture_with_name_parameter(fixture_name):
 
         let test_dir = env.create_test_dir();
         env.create_file(
-            test_dir
-                .join("test_fixture_is_different_in_different_functions.py")
-                .as_ref(),
+            test_dir.join("test_fixture_is_different_in_different_functions.py"),
             r"import karva
 
 class TestEnv:

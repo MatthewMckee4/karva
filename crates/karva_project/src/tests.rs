@@ -6,14 +6,14 @@ use tempfile::TempDir;
 use crate::path::SystemPathBuf;
 
 pub struct TestEnv {
-    project_dir: PathBuf,
+    project_dir: SystemPathBuf,
 }
 
 impl TestEnv {
     #[must_use]
     pub fn new() -> Self {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
-        let project_dir = temp_dir.path().to_path_buf();
+        let project_dir = SystemPathBuf::from(temp_dir.path().to_path_buf());
 
         fs::create_dir_all(&project_dir).expect("Failed to create project directory");
 
@@ -85,12 +85,12 @@ impl TestEnv {
 
     #[must_use]
     pub fn cwd(&self) -> SystemPathBuf {
-        SystemPathBuf::from(self.project_dir.clone())
+        self.project_dir.clone()
     }
 
     #[must_use]
     pub fn relative_path(&self, path: &SystemPathBuf) -> SystemPathBuf {
-        SystemPathBuf::from(path.strip_prefix(self.cwd()).unwrap().to_string())
+        SystemPathBuf::from(path.strip_prefix(self.cwd()).unwrap())
     }
 }
 
