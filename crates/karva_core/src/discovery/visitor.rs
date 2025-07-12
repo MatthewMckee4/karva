@@ -7,9 +7,9 @@ use ruff_python_ast::{
 use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
 use crate::{
-    diagnostic::{Diagnostic, ErrorType, Severity},
+    diagnostic::Diagnostic,
     discovery::TestFunction,
-    extensions::fixtures::{Fixture, FixtureExtractor, is_fixture_function},
+    extensions::fixtures::{Fixture, is_fixture_function},
 };
 
 pub struct FunctionDefinitionVisitor<'proj, 'b> {
@@ -53,8 +53,9 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_> {
             }
             self.inside_function = true;
             if is_fixture_function(function_def) {
-                match FixtureExtractor::try_from_function(function_def, &self.py_module) {
-                    Ok(fixture_def) => self.fixture_definitions.push(fixture_def),
+                match Fixture::try_from_function(function_def, &self.py_module) {
+                    Ok(Some(fixture_def)) => self.fixture_definitions.push(fixture_def),
+                    Ok(None) => {}
                     Err(e) => {
                         self.diagnostics.push(Diagnostic::invalid_fixture(
                             e,
@@ -89,35 +90,20 @@ pub struct DiscoveredFunctions<'a> {
     pub fixtures: Vec<Fixture>,
 }
 
-impl DiscoveredFunctions<'_> {
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.functions.is_empty() && self.fixtures.is_empty()
-    }
-}
-
 #[must_use]
 pub fn discover<'proj>(
     py: Python<'_>,
     module_path: &SystemPathBuf,
     project: &'proj Project,
 ) -> (DiscoveredFunctions<'proj>, Vec<Diagnostic>) {
-    let mut visitor = match FunctionDefinitionVisitor::new(py, project, module_path.clone()) {
-        Ok(visitor) => visitor,
-        Err(e) => {
-            return (
-                DiscoveredFunctions {
-                    functions: Vec::new(),
-                    fixtures: Vec::new(),
-                },
-                vec![Diagnostic::from_py_err(
-                    py,
-                    &e,
-                    Some(module_path.display().to_string()),
-                    Severity::Error(ErrorType::Unknown),
-                )],
-            );
-        }
+    let Ok(mut visitor) = FunctionDefinitionVisitor::new(py, project, module_path.clone()) else {
+        return (
+            DiscoveredFunctions {
+                functions: Vec::new(),
+                fixtures: Vec::new(),
+            },
+            vec![],
+        );
     };
 
     let parsed = parsed_module(module_path, project.metadata().python_version());

@@ -6,136 +6,57 @@ use std::{
 use anyhow::Context;
 use insta::{allow_duplicates, internals::SettingsBindDropGuard};
 use insta_cmd::assert_cmd_snapshot;
+use karva_core::{
+    diagnostic::reporter::DummyReporter,
+    runner::{RunDiagnostics, TestRunner},
+    testing::setup_module,
+};
+use karva_project::{project::Project, tests::TestEnv};
 use rstest::rstest;
-use tempfile::TempDir;
 
-/// Find the karva wheel in the target/wheels directory.
-/// Returns the path to the wheel file.
-fn find_karva_wheel() -> anyhow::Result<PathBuf> {
-    let karva_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|p| p.parent())
-        .ok_or_else(|| anyhow::anyhow!("Could not determine KARVA_ROOT"))?
-        .to_path_buf();
-
-    let wheels_dir = karva_root.join("target").join("wheels");
-
-    let entries = std::fs::read_dir(&wheels_dir)
-        .with_context(|| format!("Could not read wheels directory: {}", wheels_dir.display()))?;
-
-    for entry in entries {
-        let entry = entry?;
-        let file_name = entry.file_name();
-        if let Some(name) = file_name.to_str() {
-            if name.starts_with("karva-")
-                && std::path::Path::new(name)
-                    .extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("whl"))
-            {
-                return Ok(entry.path());
-            }
-        }
-    }
-
-    anyhow::bail!("Could not find karva wheel in target/wheels directory");
+#[ctor::ctor]
+pub fn setup() {
+    setup_module();
 }
 
-struct TestCase {
-    _temp_dir: TempDir,
+struct IntegrationTestEnv {
+    test_env: TestEnv,
     _settings_scope: SettingsBindDropGuard,
-    project_dir: PathBuf,
 }
 
-impl TestCase {
-    fn new() -> anyhow::Result<Self> {
-        let temp_dir = TempDir::with_prefix("karva-test-env")?;
-
-        let project_dir = dunce::simplified(
-            &temp_dir
-                .path()
-                .canonicalize()
-                .context("Failed to canonicalize project path")?,
-        )
-        .to_path_buf();
-
-        let karva_wheel = find_karva_wheel()?;
-
-        let venv_path = project_dir.join(".venv");
-
-        // Set up a bare uv project and install pytest, mimicking the Python TestEnv
-        let commands = [
-            vec![
-                "uv",
-                "init",
-                "--bare",
-                "--directory",
-                project_dir.to_str().unwrap(),
-            ],
-            vec!["uv", "venv", venv_path.to_str().unwrap()],
-            vec![
-                "uv",
-                "pip",
-                "install",
-                "--python",
-                venv_path.to_str().unwrap(),
-                karva_wheel.to_str().unwrap(),
-                "pytest",
-            ],
-        ];
-
-        for command in &commands {
-            let output = Command::new(command[0])
-                .args(&command[1..])
-                .current_dir(&project_dir)
-                .output()
-                .with_context(|| format!("Failed to run command: {command:?}"))?;
-            if output.status.success() {
-                eprintln!(
-                    "Command succeeded: {:?}\nstdout:\n{}\nstderr:\n{}",
-                    command,
-                    String::from_utf8_lossy(&output.stdout),
-                    String::from_utf8_lossy(&output.stderr)
-                );
-            } else {
-                eprintln!(
-                    "Command failed: {:?}\nstdout:\n{}\nstderr:\n{}",
-                    command,
-                    String::from_utf8_lossy(&output.stdout),
-                    String::from_utf8_lossy(&output.stderr)
-                );
-                anyhow::bail!("Command failed: {:?}", command);
-            }
-        }
+impl IntegrationTestEnv {
+    fn new() -> Self {
+        let test_env = TestEnv::new();
 
         let mut settings = insta::Settings::clone_current();
-        settings.add_filter(&tempdir_filter(&project_dir), "<temp_dir>/");
+        settings.add_filter(&tempdir_filter(&test_env.cwd()), "<temp_dir>/");
         settings.add_filter(r#"\\(\w\w|\s|\.|")"#, "/$1");
 
         let settings_scope = settings.bind_to_scope();
 
-        Ok(Self {
-            project_dir,
-            _temp_dir: temp_dir,
+        Self {
+            test_env,
             _settings_scope: settings_scope,
-        })
+        }
     }
 
     fn karva_bin(&self) -> PathBuf {
         let venv_bin =
-            self.project_dir
+            self.test_env
+                .cwd()
                 .join(".venv")
                 .join(if cfg!(windows) { "Scripts" } else { "bin" });
         venv_bin.join(if cfg!(windows) { "karva.exe" } else { "karva" })
     }
 
     fn with_files<'a>(files: impl IntoIterator<Item = (&'a str, &'a str)>) -> anyhow::Result<Self> {
-        let case = Self::new()?;
+        let case = Self::new();
         case.write_files(files)?;
         Ok(case)
     }
 
     fn with_file(path: impl AsRef<Path>, content: &str) -> anyhow::Result<Self> {
-        let case = Self::new()?;
+        let case = Self::new();
         case.write_file(path, content)?;
         Ok(case)
     }
@@ -153,7 +74,7 @@ impl TestCase {
 
     fn write_file(&self, path: impl AsRef<Path>, content: &str) -> anyhow::Result<()> {
         let path = path.as_ref();
-        let path = self.project_dir.join(path);
+        let path = self.test_env.cwd().join(path);
 
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
@@ -167,7 +88,7 @@ impl TestCase {
 
     fn command(&self) -> Command {
         let mut command = Command::new(self.karva_bin());
-        command.current_dir(&self.project_dir).arg("test");
+        command.current_dir(self.test_env.cwd()).arg("test");
         command
     }
 
@@ -176,6 +97,90 @@ impl TestCase {
         command.args(args);
         command
     }
+
+    fn run(&self) -> RunDiagnostics {
+        self.run_with_path(self.test_env.cwd())
+    }
+
+    fn run_with_path(&self, path: impl AsRef<Path>) -> RunDiagnostics {
+        let project = Project::new(self.test_env.cwd(), vec![path.as_ref().to_path_buf()]);
+        project.test_with_reporter(&mut DummyReporter)
+    }
+}
+
+fn assert_test_counts(result: &RunDiagnostics, snapshot: &str) {
+    let passed_tests = snapshot.lines().find_map(|line| {
+        line.strip_prefix("Passed tests: ")
+            .and_then(|n| n.split_whitespace().next())
+            .and_then(|n| n.parse::<u32>().ok())
+    });
+    let failed_tests = snapshot.lines().find_map(|line| {
+        line.strip_prefix("Failed tests: ")
+            .and_then(|n| n.split_whitespace().next())
+            .and_then(|n| n.parse::<u32>().ok())
+    });
+    let errors = snapshot.lines().find_map(|line| {
+        line.strip_prefix("Errored tests: ")
+            .and_then(|n| n.split_whitespace().next())
+            .and_then(|n| n.parse::<u32>().ok())
+    });
+
+    if let Some(passed_tests) = passed_tests {
+        assert_eq!(
+            passed_tests,
+            u32::try_from(result.stats().passed()).unwrap(),
+            "Passed tests count mismatch"
+        );
+    }
+    if let Some(failed_tests) = failed_tests {
+        assert_eq!(
+            failed_tests,
+            u32::try_from(result.stats().failed()).unwrap(),
+            "Failed tests count mismatch"
+        );
+    }
+    if let Some(errors) = errors {
+        assert_eq!(
+            errors,
+            u32::try_from(result.stats().errored()).unwrap(),
+            "Errored tests count mismatch"
+        );
+    }
+}
+
+macro_rules! run_with_path_and_snapshot {
+    // Pattern 1: Just case and snapshot with @
+    ($case:expr, @$snapshot:literal $(,)?) => {{
+        let result = $case.run();
+        assert_test_counts(&result, $snapshot);
+        allow_duplicates!(assert_cmd_snapshot!(
+            $case.command(),
+            @$snapshot
+        ));
+        result
+    }};
+
+    // Pattern 2: Case with args and snapshot with @
+    ($case:expr, &$args:expr, @$snapshot:literal $(,)?) => {{
+        let result = $case.run();
+        assert_test_counts(&result, $snapshot);
+        allow_duplicates!(assert_cmd_snapshot!(
+            $case.command_with_args(&$args),
+            @$snapshot
+        ));
+        result
+    }};
+
+    // Pattern 3: Case with args (no brackets) and snapshot with @
+    ($case:expr, $args:expr, @$snapshot:literal $(,)?) => {{
+        let result = $case.run();
+        assert_test_counts(&result, $snapshot);
+        allow_duplicates!(assert_cmd_snapshot!(
+            $case.command_with_args($args),
+            @$snapshot
+        ));
+        result
+    }};
 }
 
 fn tempdir_filter(path: &Path) -> String {
@@ -184,15 +189,15 @@ fn tempdir_filter(path: &Path) -> String {
 
 #[test]
 fn test_one_test_passes() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_pass.py",
         r"
         def test_pass():
             assert True
-    ",
+        ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r"
+    run_with_path_and_snapshot!(case, @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -207,7 +212,7 @@ fn test_one_test_passes() -> anyhow::Result<()> {
 
 #[test]
 fn test_two_tests_pass() -> anyhow::Result<()> {
-    let case = TestCase::with_files([
+    let case = IntegrationTestEnv::with_files([
         (
             "test_pass.py",
             r"
@@ -225,7 +230,7 @@ fn test_two_tests_pass() -> anyhow::Result<()> {
         ),
     ])?;
 
-    assert_cmd_snapshot!(case.command(), @r"
+    run_with_path_and_snapshot!(case, @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -240,7 +245,7 @@ fn test_two_tests_pass() -> anyhow::Result<()> {
 
 #[test]
 fn test_one_test_fails() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_fail.py",
         r"
         def test_fail():
@@ -248,7 +253,7 @@ fn test_one_test_fails() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case, @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -266,7 +271,7 @@ fn test_one_test_fails() -> anyhow::Result<()> {
 
 #[test]
 fn test_multiple_tests_fail() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_fail2.py",
         r"
         def test_fail2():
@@ -274,7 +279,7 @@ fn test_multiple_tests_fail() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -292,7 +297,7 @@ fn test_multiple_tests_fail() -> anyhow::Result<()> {
 
 #[test]
 fn test_mixed_pass_and_fail() -> anyhow::Result<()> {
-    let case = TestCase::with_files([
+    let case = IntegrationTestEnv::with_files([
         (
             "test_pass.py",
             r"
@@ -309,7 +314,7 @@ fn test_mixed_pass_and_fail() -> anyhow::Result<()> {
         ),
     ])?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -328,7 +333,7 @@ fn test_mixed_pass_and_fail() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_with_message() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_fail_with_msg.py",
         r#"
         def test_fail_with_message():
@@ -336,7 +341,7 @@ fn test_assertion_with_message() -> anyhow::Result<()> {
     "#,
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -354,7 +359,7 @@ fn test_assertion_with_message() -> anyhow::Result<()> {
 
 #[test]
 fn test_equality_assertion_fail() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_equality.py",
         r"
         def test_equality():
@@ -364,7 +369,7 @@ fn test_equality_assertion_fail() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -382,7 +387,7 @@ fn test_equality_assertion_fail() -> anyhow::Result<()> {
 
 #[test]
 fn test_complex_assertion_fail() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_complex.py",
         r"
         def test_complex():
@@ -391,7 +396,7 @@ fn test_complex_assertion_fail() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -409,7 +414,7 @@ fn test_complex_assertion_fail() -> anyhow::Result<()> {
 
 #[test]
 fn test_long_file() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_long.py",
         r"
         # This is a long test file with many comments and functions
@@ -436,7 +441,7 @@ fn test_long_file() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -454,7 +459,7 @@ fn test_long_file() -> anyhow::Result<()> {
 
 #[test]
 fn test_multiple_assertions_in_function() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_multiple_assertions.py",
         r"
         def test_multiple_assertions():
@@ -465,7 +470,7 @@ fn test_multiple_assertions_in_function() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -483,7 +488,7 @@ fn test_multiple_assertions_in_function() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_in_nested_function() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_nested.py",
         r"
         def helper():
@@ -495,7 +500,7 @@ fn test_assertion_in_nested_function() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -513,7 +518,7 @@ fn test_assertion_in_nested_function() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_with_complex_expression() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_complex_expr.py",
         r"
         def test_complex_expression():
@@ -522,7 +527,7 @@ fn test_assertion_with_complex_expression() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -540,7 +545,7 @@ fn test_assertion_with_complex_expression() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_with_multiline_setup() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_multiline.py",
         r"
         def test_multiline_setup():
@@ -558,7 +563,7 @@ fn test_assertion_with_multiline_setup() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -576,7 +581,7 @@ fn test_assertion_with_multiline_setup() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_with_very_long_line() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_very_long_line.py",
         r"
         def test_very_long_line():
@@ -584,7 +589,7 @@ fn test_assertion_with_very_long_line() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -602,13 +607,13 @@ fn test_assertion_with_very_long_line() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_on_line_1() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_line_1.py",
         r"def test_line_1():
     assert False",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -626,7 +631,7 @@ fn test_assertion_on_line_1() -> anyhow::Result<()> {
 
 #[test]
 fn test_multiple_files_with_cross_function_calls() -> anyhow::Result<()> {
-    let case = TestCase::with_files([
+    let case = IntegrationTestEnv::with_files([
         (
             "helper.py",
             r"
@@ -647,7 +652,7 @@ fn test_multiple_files_with_cross_function_calls() -> anyhow::Result<()> {
         ),
     ])?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -667,7 +672,7 @@ fn test_multiple_files_with_cross_function_calls() -> anyhow::Result<()> {
 
 #[test]
 fn test_nested_function_calls_deep_stack() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_deep_stack.py",
         r"
         def level_1():
@@ -684,7 +689,7 @@ fn test_nested_function_calls_deep_stack() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -708,7 +713,7 @@ fn test_nested_function_calls_deep_stack() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_in_class_method() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_class.py",
         r"
         class Calculator:
@@ -725,7 +730,7 @@ fn test_assertion_in_class_method() -> anyhow::Result<()> {
     ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -745,7 +750,7 @@ fn test_assertion_in_class_method() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_in_imported_function() -> anyhow::Result<()> {
-    let case = TestCase::with_files([
+    let case = IntegrationTestEnv::with_files([
         (
             "validators.py",
             r"
@@ -765,7 +770,7 @@ fn test_assertion_in_imported_function() -> anyhow::Result<()> {
         ),
     ])?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -838,9 +843,12 @@ fn test_fixture_initialization_order(#[case] framework: &str) -> anyhow::Result<
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(
+        case,
+        &["-s"],
+        @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -852,7 +860,8 @@ fn test_fixture_initialization_order(#[case] framework: &str) -> anyhow::Result<
     Function calculator initialized
 
     ----- stderr -----
-    "#));
+    "
+    );
 
     Ok(())
 }
@@ -888,7 +897,7 @@ fn test_empty_conftest() -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
     success: true
@@ -915,7 +924,7 @@ fn get_parametrize_function(package: &str) -> String {
 #[case("pytest")]
 #[case("karva")]
 fn test_parametrize(#[case] package: &str) -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_parametrize.py",
         &format!(
             r"
@@ -934,7 +943,7 @@ fn test_parametrize(#[case] package: &str) -> anyhow::Result<()> {
         ),
     )?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -942,7 +951,7 @@ fn test_parametrize(#[case] package: &str) -> anyhow::Result<()> {
     All checks passed!
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1012,9 +1021,9 @@ fn test_function_scopes(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1024,7 +1033,7 @@ fn test_function_scopes(#[case] framework: &str) -> anyhow::Result<()> {
     Calculator initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1063,9 +1072,9 @@ fn test_module_scopes(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1074,7 +1083,7 @@ fn test_module_scopes(#[case] framework: &str) -> anyhow::Result<()> {
     Calculator initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1120,9 +1129,9 @@ fn test_package_scopes(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1131,7 +1140,7 @@ fn test_package_scopes(#[case] framework: &str) -> anyhow::Result<()> {
     Calculator initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1187,9 +1196,9 @@ fn test_session_scopes(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1198,7 +1207,7 @@ fn test_session_scopes(#[case] framework: &str) -> anyhow::Result<()> {
     Calculator initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1247,9 +1256,9 @@ fn test_mixed_scopes(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1260,7 +1269,7 @@ fn test_mixed_scopes(#[case] framework: &str) -> anyhow::Result<()> {
     Function calculator initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1307,9 +1316,9 @@ fn test_fixture_across_files(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1318,7 +1327,7 @@ fn test_fixture_across_files(#[case] framework: &str) -> anyhow::Result<()> {
     Package calculator initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1354,9 +1363,9 @@ fn test_named_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1365,7 +1374,7 @@ fn test_named_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
     Named calculator initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1419,9 +1428,9 @@ fn test_nested_package_scopes(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1431,7 +1440,7 @@ fn test_nested_package_scopes(#[case] framework: &str) -> anyhow::Result<()> {
     Package calculator initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1476,9 +1485,9 @@ fn test_independent_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1488,7 +1497,7 @@ fn test_independent_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
     Calculator B initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1541,9 +1550,9 @@ fn test_multiple_files_independent_fixtures(#[case] framework: &str) -> anyhow::
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1553,7 +1562,7 @@ fn test_multiple_files_independent_fixtures(#[case] framework: &str) -> anyhow::
     Multiply calculator initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1597,9 +1606,9 @@ fn test_basic_error_handling(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1611,7 +1620,7 @@ fn test_basic_error_handling(#[case] framework: &str) -> anyhow::Result<()> {
     Working calculator initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1682,9 +1691,9 @@ fn test_different_scopes_independent(#[case] framework: &str) -> anyhow::Result<
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1695,7 +1704,7 @@ fn test_different_scopes_independent(#[case] framework: &str) -> anyhow::Result<
     Module calculator initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1731,9 +1740,9 @@ fn test_invalid_scope_value(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1746,7 +1755,7 @@ fn test_invalid_scope_value(#[case] framework: &str) -> anyhow::Result<()> {
     Errored tests: 1
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1782,9 +1791,9 @@ fn test_invalid_fixture_name(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1794,7 +1803,7 @@ fn test_invalid_fixture_name(#[case] framework: &str) -> anyhow::Result<()> {
     Errored tests: 1
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1846,9 +1855,9 @@ fn test_multiple_conftest_same_dir(#[case] framework: &str) -> anyhow::Result<()
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1859,7 +1868,7 @@ fn test_multiple_conftest_same_dir(#[case] framework: &str) -> anyhow::Result<()
     Calculator 1 initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1911,9 +1920,9 @@ fn test_very_deep_directory_structure(#[case] framework: &str) -> anyhow::Result
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1923,7 +1932,7 @@ fn test_very_deep_directory_structure(#[case] framework: &str) -> anyhow::Result
     Deep calculator initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -1960,9 +1969,9 @@ fn test_fixture_in_init_file(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1972,7 +1981,7 @@ fn test_fixture_in_init_file(#[case] framework: &str) -> anyhow::Result<()> {
     Errored tests: 1
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -2030,9 +2039,9 @@ fn test_same_fixture_name_different_types(#[case] framework: &str) -> anyhow::Re
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case, @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2040,7 +2049,7 @@ fn test_same_fixture_name_different_types(#[case] framework: &str) -> anyhow::Re
     All checks passed!
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -2086,9 +2095,9 @@ fn test_fixture_dependencies(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2102,7 +2111,7 @@ fn test_fixture_dependencies(#[case] framework: &str) -> anyhow::Result<()> {
     Calculator with value fixture initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -2172,9 +2181,9 @@ fn test_dependent_fixtures_different_scopes(#[case] framework: &str) -> anyhow::
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2185,7 +2194,7 @@ fn test_dependent_fixtures_different_scopes(#[case] framework: &str) -> anyhow::
     Module calculator initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -2239,9 +2248,9 @@ fn test_complex_dependency_chain(#[case] framework: &str) -> anyhow::Result<()> 
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2253,7 +2262,7 @@ fn test_complex_dependency_chain(#[case] framework: &str) -> anyhow::Result<()> 
     Final calculator initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -2312,9 +2321,9 @@ fn test_mixed_scope_dependencies(#[case] framework: &str) -> anyhow::Result<()> 
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2326,7 +2335,7 @@ fn test_mixed_scope_dependencies(#[case] framework: &str) -> anyhow::Result<()> 
     Function calc initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -2380,9 +2389,9 @@ fn test_diamond_dependency(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2394,7 +2403,7 @@ fn test_diamond_dependency(#[case] framework: &str) -> anyhow::Result<()> {
     Final calc initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -2431,9 +2440,9 @@ fn test_generator_fixture(#[case] framework: &str) -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2442,7 +2451,7 @@ fn test_generator_fixture(#[case] framework: &str) -> anyhow::Result<()> {
     Generator fixture teardown
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -2492,9 +2501,9 @@ fn test_fixture_called_for_each_parametrization(#[case] framework: &str) -> anyh
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2505,7 +2514,7 @@ fn test_fixture_called_for_each_parametrization(#[case] framework: &str) -> anyh
     Calculator initialized
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -2544,9 +2553,9 @@ fn test_fixture_finalizer_called_after_test(#[case] framework: &str) -> anyhow::
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2557,7 +2566,7 @@ fn test_fixture_finalizer_called_after_test(#[case] framework: &str) -> anyhow::
     Calculator finalizer called
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -2600,9 +2609,9 @@ fn test_fixture_finalizer_called_at_correct_time(#[case] framework: &str) -> any
         ),
     ]);
 
-    let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2616,14 +2625,14 @@ fn test_fixture_finalizer_called_at_correct_time(#[case] framework: &str) -> any
     Calculator finalizer called
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
 
 #[test]
 fn test_stdout_is_captured_and_displayed() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_std_out_redirected.py",
         r"
         def test_std_out_redirected():
@@ -2647,7 +2656,7 @@ fn test_stdout_is_captured_and_displayed() -> anyhow::Result<()> {
 
 #[test]
 fn test_stdout_is_captured_and_displayed_with_args() -> anyhow::Result<()> {
-    let case = TestCase::with_file(
+    let case = IntegrationTestEnv::with_file(
         "test_std_out_redirected.py",
         r"
         def test_std_out_redirected():
@@ -2655,7 +2664,7 @@ fn test_stdout_is_captured_and_displayed_with_args() -> anyhow::Result<()> {
         ",
     )?;
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2663,7 +2672,7 @@ fn test_stdout_is_captured_and_displayed_with_args() -> anyhow::Result<()> {
     All checks passed!
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2707,9 +2716,9 @@ def test_string_and_int(order, first_entry):
 "#,
     );
 
-    let case = TestCase::with_file("test_append.py", &test_code)?;
+    let case = IntegrationTestEnv::with_file("test_append.py", &test_code)?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2717,7 +2726,7 @@ def test_string_and_int(order, first_entry):
     All checks passed!
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
@@ -2747,9 +2756,9 @@ def test_value(clean_data):
 ",
     );
 
-    let case = TestCase::with_file("test_fixture_order_scope.py", &test_code)?;
+    let case = IntegrationTestEnv::with_file("test_fixture_order_scope.py", &test_code)?;
 
-    allow_duplicates!(assert_cmd_snapshot!(case.command(), @r#"
+    run_with_path_and_snapshot!(case,  @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2757,7 +2766,7 @@ def test_value(clean_data):
     All checks passed!
 
     ----- stderr -----
-    "#));
+    ");
 
     Ok(())
 }
