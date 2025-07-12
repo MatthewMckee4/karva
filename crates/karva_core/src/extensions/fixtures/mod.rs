@@ -143,8 +143,9 @@ impl Fixture {
         );
 
         let try_karva_err = match try_karva {
-            Ok(fixture) => return Ok(Some(fixture)),
-            Err(e) => e,
+            Ok(Some(fixture)) => return Ok(Some(fixture)),
+            Ok(None) => None,
+            Err(e) => Some(e),
         };
 
         let try_pytest = extractor::try_from_pytest_function(
@@ -157,7 +158,11 @@ impl Fixture {
             return Ok(Some(fixture));
         }
 
-        Err(try_karva_err)
+        if let Some(e) = try_karva_err {
+            return Err(e);
+        }
+
+        Ok(None)
     }
 }
 

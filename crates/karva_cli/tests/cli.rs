@@ -932,7 +932,7 @@ fn test_fixture_initialization_order(#[case] framework: &str) -> anyhow::Result<
     run_with_path_and_snapshot!(
         case,
         &["-s"],
-        @r#"
+        @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -944,7 +944,7 @@ fn test_fixture_initialization_order(#[case] framework: &str) -> anyhow::Result<
     Function calculator initialized
 
     ----- stderr -----
-    "#
+    "
     );
 
     Ok(())
@@ -1027,7 +1027,7 @@ fn test_parametrize(#[case] package: &str) -> anyhow::Result<()> {
         ),
     )?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1035,7 +1035,7 @@ fn test_parametrize(#[case] package: &str) -> anyhow::Result<()> {
     All checks passed!
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -1107,7 +1107,7 @@ fn test_function_scopes(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1117,7 +1117,7 @@ fn test_function_scopes(#[case] framework: &str) -> anyhow::Result<()> {
     Calculator initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -1158,7 +1158,7 @@ fn test_module_scopes(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1167,7 +1167,7 @@ fn test_module_scopes(#[case] framework: &str) -> anyhow::Result<()> {
     Calculator initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -1215,7 +1215,7 @@ fn test_package_scopes(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1224,7 +1224,7 @@ fn test_package_scopes(#[case] framework: &str) -> anyhow::Result<()> {
     Calculator initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -1282,7 +1282,7 @@ fn test_session_scopes(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1291,7 +1291,7 @@ fn test_session_scopes(#[case] framework: &str) -> anyhow::Result<()> {
     Calculator initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -1342,7 +1342,7 @@ fn test_mixed_scopes(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1353,7 +1353,7 @@ fn test_mixed_scopes(#[case] framework: &str) -> anyhow::Result<()> {
     Function calculator initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -1402,7 +1402,7 @@ fn test_fixture_across_files(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1411,7 +1411,7 @@ fn test_fixture_across_files(#[case] framework: &str) -> anyhow::Result<()> {
     Package calculator initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -1449,7 +1449,7 @@ fn test_named_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1458,7 +1458,7 @@ fn test_named_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
     Named calculator initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -1514,7 +1514,7 @@ fn test_nested_package_scopes(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1524,7 +1524,7 @@ fn test_nested_package_scopes(#[case] framework: &str) -> anyhow::Result<()> {
     Package calculator initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -1571,7 +1571,7 @@ fn test_independent_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1581,7 +1581,7 @@ fn test_independent_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
     Calculator B initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -1636,7 +1636,7 @@ fn test_multiple_files_independent_fixtures(#[case] framework: &str) -> anyhow::
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1646,7 +1646,7 @@ fn test_multiple_files_independent_fixtures(#[case] framework: &str) -> anyhow::
     Multiply calculator initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -1692,7 +1692,7 @@ fn test_basic_error_handling(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1704,7 +1704,7 @@ fn test_basic_error_handling(#[case] framework: &str) -> anyhow::Result<()> {
     Working calculator initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -1777,7 +1777,7 @@ fn test_different_scopes_independent(#[case] framework: &str) -> anyhow::Result<
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1788,7 +1788,7 @@ fn test_different_scopes_independent(#[case] framework: &str) -> anyhow::Result<
     Module calculator initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -1826,7 +1826,7 @@ fn test_invalid_scope_value(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1839,7 +1839,7 @@ fn test_invalid_scope_value(#[case] framework: &str) -> anyhow::Result<()> {
     Errored tests: 1
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -1877,7 +1877,7 @@ fn test_invalid_fixture_name(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1887,7 +1887,7 @@ fn test_invalid_fixture_name(#[case] framework: &str) -> anyhow::Result<()> {
     Errored tests: 1
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -1941,7 +1941,7 @@ fn test_multiple_conftest_same_dir(#[case] framework: &str) -> anyhow::Result<()
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1952,7 +1952,7 @@ fn test_multiple_conftest_same_dir(#[case] framework: &str) -> anyhow::Result<()
     Calculator 1 initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2006,7 +2006,7 @@ fn test_very_deep_directory_structure(#[case] framework: &str) -> anyhow::Result
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2016,7 +2016,7 @@ fn test_very_deep_directory_structure(#[case] framework: &str) -> anyhow::Result
     Deep calculator initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2055,7 +2055,7 @@ fn test_fixture_in_init_file(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -2065,7 +2065,7 @@ fn test_fixture_in_init_file(#[case] framework: &str) -> anyhow::Result<()> {
     Errored tests: 1
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2125,7 +2125,7 @@ fn test_same_fixture_name_different_types(#[case] framework: &str) -> anyhow::Re
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, @r#"
+    run_with_path_and_snapshot!(case, @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2133,7 +2133,7 @@ fn test_same_fixture_name_different_types(#[case] framework: &str) -> anyhow::Re
     All checks passed!
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2181,7 +2181,7 @@ fn test_fixture_dependencies(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2195,7 +2195,7 @@ fn test_fixture_dependencies(#[case] framework: &str) -> anyhow::Result<()> {
     Calculator with value fixture initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2267,7 +2267,7 @@ fn test_dependent_fixtures_different_scopes(#[case] framework: &str) -> anyhow::
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2278,7 +2278,7 @@ fn test_dependent_fixtures_different_scopes(#[case] framework: &str) -> anyhow::
     Module calculator initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2407,7 +2407,7 @@ fn test_mixed_scope_dependencies(#[case] framework: &str) -> anyhow::Result<()> 
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2419,7 +2419,7 @@ fn test_mixed_scope_dependencies(#[case] framework: &str) -> anyhow::Result<()> 
     Function calc initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2475,7 +2475,7 @@ fn test_diamond_dependency(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2487,7 +2487,7 @@ fn test_diamond_dependency(#[case] framework: &str) -> anyhow::Result<()> {
     Final calc initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2526,7 +2526,7 @@ fn test_generator_fixture(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2535,7 +2535,7 @@ fn test_generator_fixture(#[case] framework: &str) -> anyhow::Result<()> {
     Generator fixture teardown
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2587,7 +2587,7 @@ fn test_fixture_called_for_each_parametrization(#[case] framework: &str) -> anyh
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2598,7 +2598,7 @@ fn test_fixture_called_for_each_parametrization(#[case] framework: &str) -> anyh
     Calculator initialized
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2639,7 +2639,7 @@ fn test_fixture_finalizer_called_after_test(#[case] framework: &str) -> anyhow::
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2650,7 +2650,7 @@ fn test_fixture_finalizer_called_after_test(#[case] framework: &str) -> anyhow::
     Calculator finalizer called
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2695,7 +2695,7 @@ fn test_fixture_finalizer_called_at_correct_time(#[case] framework: &str) -> any
 
     let case = TestCase::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r#"
+    run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2709,7 +2709,7 @@ fn test_fixture_finalizer_called_at_correct_time(#[case] framework: &str) -> any
     Calculator finalizer called
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2748,7 +2748,7 @@ fn test_stdout_is_captured_and_displayed_with_args() -> anyhow::Result<()> {
         ",
     )?;
 
-    run_with_path_and_snapshot!(case,  @r#"
+    run_with_path_and_snapshot!(case,  @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2756,7 +2756,7 @@ fn test_stdout_is_captured_and_displayed_with_args() -> anyhow::Result<()> {
     All checks passed!
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2802,7 +2802,7 @@ def test_string_and_int(order, first_entry):
 
     let case = TestCase::with_file("test_append.py", &test_code)?;
 
-    run_with_path_and_snapshot!(case,  @r#"
+    run_with_path_and_snapshot!(case,  @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2810,7 +2810,7 @@ def test_string_and_int(order, first_entry):
     All checks passed!
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2842,7 +2842,7 @@ def test_value(clean_data):
 
     let case = TestCase::with_file("test_fixture_order_scope.py", &test_code)?;
 
-    run_with_path_and_snapshot!(case,  @r#"
+    run_with_path_and_snapshot!(case,  @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2850,7 +2850,7 @@ def test_value(clean_data):
     All checks passed!
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }

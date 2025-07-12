@@ -45,12 +45,12 @@ pub fn try_from_karva_function(
     function_def: &StmtFunctionDef,
     function: &Bound<'_, PyAny>,
     is_generator_function: bool,
-) -> Result<Fixture, String> {
+) -> Result<Option<Fixture>, String> {
     let Ok(py_function) = function
         .clone()
         .downcast_into::<FixtureFunctionDefinition>()
     else {
-        return Err("Could not downcast function to FixtureFunctionDefinition".to_string());
+        return Ok(None);
     };
 
     let py_function_borrow = py_function.borrow_mut();
@@ -59,12 +59,12 @@ pub fn try_from_karva_function(
     let name = py_function_borrow.name.clone();
     let auto_use = py_function_borrow.auto_use;
 
-    Ok(Fixture::new(
+    Ok(Some(Fixture::new(
         name,
         function_def.clone(),
         FixtureScope::try_from(scope)?,
         auto_use,
         py_function.into(),
         is_generator_function,
-    ))
+    )))
 }
