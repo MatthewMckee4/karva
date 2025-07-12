@@ -9,10 +9,16 @@ use insta_cmd::assert_cmd_snapshot;
 use karva_core::{
     diagnostic::reporter::DummyReporter,
     runner::{RunDiagnostics, TestRunner},
+    testing::setup_module,
 };
 use karva_project::project::Project;
 use rstest::rstest;
 use tempfile::TempDir;
+
+#[ctor::ctor]
+pub fn setup() {
+    setup_module();
+}
 
 /// Find the karva wheel in the target/wheels directory.
 /// Returns the path to the wheel file.
