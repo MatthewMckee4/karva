@@ -81,7 +81,6 @@ impl TestCase {
                 karva_wheel.to_str().unwrap(),
                 "pytest",
             ],
-            vec!["tree", "-a", project_dir.to_str().unwrap()],
         ];
 
         for command in &commands {
