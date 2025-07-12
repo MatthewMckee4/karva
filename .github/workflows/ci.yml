@@ -40,7 +40,6 @@ jobs:
         run: |
           uv venv
           uv pip install -e .
-          rm -rf .venv
       - name: Set up Python
         uses: actions/setup-python@v4
         id: setup-python
@@ -102,7 +101,6 @@ jobs:
         run: |
           uv venv
           uv pip install -e .
-          rm -rf .venv
       - name: Set up Python
         uses: actions/setup-python@v4
         id: setup-python
