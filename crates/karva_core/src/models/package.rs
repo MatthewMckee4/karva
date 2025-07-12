@@ -6,21 +6,21 @@ use pyo3::prelude::*;
 use crate::{
     diagnostic::reporter::Reporter,
     fixture::{Finalizers, Fixture, HasFixtures, RequiresFixtures},
-    models::{Module, ModuleType, StringModule, TestFunction, module::CollectedModule},
+    models::{DiscoveredModule, ModuleType, StringModule, TestFunction, module::CollectedModule},
     runner::RunDiagnostics,
     utils::Upcast,
 };
 
 /// A package represents a single python directory.
-pub struct Package<'proj> {
+pub struct DiscoveredPackage<'proj> {
     path: SystemPathBuf,
     project: &'proj Project,
-    modules: HashMap<SystemPathBuf, Module<'proj>>,
-    packages: HashMap<SystemPathBuf, Package<'proj>>,
+    modules: HashMap<SystemPathBuf, DiscoveredModule<'proj>>,
+    packages: HashMap<SystemPathBuf, DiscoveredPackage<'proj>>,
     configuration_modules: HashSet<SystemPathBuf>,
 }
 
-impl<'proj> Package<'proj> {
+impl<'proj> DiscoveredPackage<'proj> {
     #[must_use]
     pub fn new(path: SystemPathBuf, project: &'proj Project) -> Self {
         Self {
@@ -38,7 +38,7 @@ impl<'proj> Package<'proj> {
     }
 
     #[must_use]
-    pub const fn modules(&self) -> &HashMap<SystemPathBuf, Module<'proj>> {
+    pub const fn modules(&self) -> &HashMap<SystemPathBuf, DiscoveredModule<'proj>> {
         &self.modules
     }
 
@@ -48,7 +48,7 @@ impl<'proj> Package<'proj> {
     }
 
     #[must_use]
-    pub fn get_module(&self, path: &SystemPathBuf) -> Option<&Module<'proj>> {
+    pub fn get_module(&self, path: &SystemPathBuf) -> Option<&DiscoveredModule<'proj>> {
         self.modules.get(path)
     }
 
@@ -57,7 +57,7 @@ impl<'proj> Package<'proj> {
         self.packages.get(path)
     }
 
-    pub fn add_module(&mut self, module: Module<'proj>) {
+    pub fn add_module(&mut self, module: DiscoveredModule<'proj>) {
         if !module.path().starts_with(self.path()) {
             return;
         }
@@ -91,14 +91,14 @@ impl<'proj> Package<'proj> {
             existing_package.add_module(module);
         } else {
             // If not there, create a new one
-            let mut new_package = Package::new(intermediate_path, self.project);
+            let mut new_package = DiscoveredPackage::new(intermediate_path, self.project);
             new_package.add_module(module);
             self.packages
                 .insert(new_package.path().clone(), new_package);
         }
     }
 
-    pub fn add_configuration_module(&mut self, module: Module<'proj>) {
+    pub fn add_configuration_module(&mut self, module: DiscoveredModule<'proj>) {
         self.configuration_modules.insert(module.path().clone());
         self.add_module(module);
     }
@@ -130,7 +130,7 @@ impl<'proj> Package<'proj> {
             existing_package.add_package(package);
         } else {
             // If not there, create a new one
-            let mut new_package = Package::new(intermediate_path, self.project);
+            let mut new_package = DiscoveredPackage::new(intermediate_path, self.project);
             new_package.add_package(package);
             self.packages
                 .insert(new_package.path().clone(), new_package);
@@ -218,7 +218,7 @@ impl<'proj> Package<'proj> {
     }
 
     #[must_use]
-    pub fn configuration_modules(&self) -> Vec<&Module<'_>> {
+    pub fn configuration_modules(&self) -> Vec<&DiscoveredModule<'_>> {
         self.configuration_modules
             .iter()
             .filter_map(|path| self.modules.get(path))
@@ -267,14 +267,14 @@ impl<'proj> Package<'proj> {
     }
 }
 
-impl std::fmt::Debug for Package<'_> {
+impl std::fmt::Debug for DiscoveredPackage<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let string_package: StringPackage = self.display();
         write!(f, "{string_package:?}")
     }
 }
 
-impl<'proj> HasFixtures<'proj> for Package<'proj> {
+impl<'proj> HasFixtures<'proj> for DiscoveredPackage<'proj> {
     fn all_fixtures<'a: 'proj>(
         &'a self,
         test_cases: &[&dyn RequiresFixtures],
@@ -291,7 +291,7 @@ impl<'proj> HasFixtures<'proj> for Package<'proj> {
     }
 }
 
-impl<'proj> HasFixtures<'proj> for &'proj Package<'proj> {
+impl<'proj> HasFixtures<'proj> for &'proj DiscoveredPackage<'proj> {
     fn all_fixtures<'a: 'proj>(
         &'a self,
         test_cases: &[&dyn RequiresFixtures],
@@ -377,9 +377,9 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![tests_dir.clone()]);
 
-        let mut package = Package::new(env.cwd(), &project);
+        let mut package = DiscoveredPackage::new(env.cwd(), &project);
 
-        package.add_module(Module::new(
+        package.add_module(DiscoveredModule::new(
             &project,
             &tests_dir.join("test_1.py"),
             ModuleType::Test,
@@ -394,7 +394,7 @@ mod tests {
                     StringPackage {
                         modules: HashMap::from([(
                             "test_1".to_string(),
-                            StringModule::from(&Module::new(
+                            StringModule::from(&DiscoveredModule::new(
                                 &project,
                                 &tests_dir.join("test_1.py"),
                                 ModuleType::Test
@@ -415,11 +415,12 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![tests_dir.clone()]);
 
-        let mut package = Package::new(tests_dir, &project);
+        let mut package = DiscoveredPackage::new(tests_dir, &project);
 
         let module_dir = env.create_test_dir();
 
-        let module = Module::new(&project, &module_dir.join("test_1.py"), ModuleType::Test);
+        let module =
+            DiscoveredModule::new(&project, &module_dir.join("test_1.py"), ModuleType::Test);
 
         package.add_module(module);
 
@@ -440,13 +441,15 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![tests_dir.clone()]);
 
-        let mut package = Package::new(env.cwd(), &project);
+        let mut package = DiscoveredPackage::new(env.cwd(), &project);
 
-        let module = Module::new(&project, &tests_dir.join("test_1.py"), ModuleType::Test);
+        let module =
+            DiscoveredModule::new(&project, &tests_dir.join("test_1.py"), ModuleType::Test);
 
         package.add_module(module);
 
-        let module_1 = Module::new(&project, &tests_dir.join("test_1.py"), ModuleType::Test);
+        let module_1 =
+            DiscoveredModule::new(&project, &tests_dir.join("test_1.py"), ModuleType::Test);
 
         package.add_module(module_1);
 
@@ -459,7 +462,7 @@ mod tests {
                     StringPackage {
                         modules: HashMap::from([(
                             "test_1".to_string(),
-                            StringModule::from(&Module::new(
+                            StringModule::from(&DiscoveredModule::new(
                                 &project,
                                 &tests_dir.join("test_1.py"),
                                 ModuleType::Test
@@ -478,9 +481,9 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
 
-        let mut package = Package::new(env.cwd(), &project);
+        let mut package = DiscoveredPackage::new(env.cwd(), &project);
 
-        let module = Module::new(
+        let module = DiscoveredModule::new(
             &project,
             &env.cwd().join("conftest.py"),
             ModuleType::Configuration,
@@ -493,7 +496,7 @@ mod tests {
             StringPackage {
                 modules: HashMap::from([(
                     "conftest".to_string(),
-                    StringModule::from(&Module::new(
+                    StringModule::from(&DiscoveredModule::new(
                         &project,
                         &env.cwd().join("conftest.py"),
                         ModuleType::Configuration

@@ -9,7 +9,7 @@ use pyo3::prelude::*;
 use crate::{
     diagnostic::Diagnostic,
     discovery::discover,
-    models::{Module, ModuleType, Package},
+    models::{DiscoveredModule, DiscoveredPackage, ModuleType},
     utils::add_to_sys_path,
 };
 
@@ -24,8 +24,8 @@ impl<'proj> Discoverer<'proj> {
     }
 
     #[must_use]
-    pub fn discover(self, py: Python<'_>) -> (Package<'proj>, Vec<Diagnostic>) {
-        let mut session_package = Package::new(self.project.cwd().clone(), self.project);
+    pub fn discover(self, py: Python<'_>) -> (DiscoveredPackage<'proj>, Vec<Diagnostic>) {
+        let mut session_package = DiscoveredPackage::new(self.project.cwd().clone(), self.project);
 
         let mut discovery_diagnostics = Vec::new();
         let cwd = self.project.cwd();
@@ -53,7 +53,7 @@ impl<'proj> Discoverer<'proj> {
                             }
                         }
                         TestPath::Directory(path) => {
-                            let mut package = Package::new(path.clone(), self.project);
+                            let mut package = DiscoveredPackage::new(path.clone(), self.project);
 
                             self.discover_directory(
                                 py,
@@ -88,10 +88,10 @@ impl<'proj> Discoverer<'proj> {
         &self,
         py: Python<'_>,
         path: &SystemPathBuf,
-        session_package: &Package<'proj>,
+        session_package: &DiscoveredPackage<'proj>,
         discovery_diagnostics: &mut Vec<Diagnostic>,
         configuration_only: bool,
-    ) -> Option<Module<'proj>> {
+    ) -> Option<DiscoveredModule<'proj>> {
         tracing::debug!("Discovering file: {}", path.display());
 
         if !is_python_file(path) {
@@ -104,7 +104,7 @@ impl<'proj> Discoverer<'proj> {
 
         let module_type = ModuleType::from_path(path);
 
-        let mut module = Module::new(self.project, path, module_type);
+        let mut module = DiscoveredModule::new(self.project, path, module_type);
 
         let (discovered, diagnostics) = discover(py, path, self.project);
 
@@ -127,13 +127,13 @@ impl<'proj> Discoverer<'proj> {
         &self,
         py: Python<'_>,
         path: &SystemPathBuf,
-        session_package: &mut Package<'proj>,
+        session_package: &mut DiscoveredPackage<'proj>,
         discovery_diagnostics: &mut Vec<Diagnostic>,
     ) -> Option<()> {
         let mut current_path = path.clone();
 
         loop {
-            let mut package = Package::new(current_path.clone(), self.project);
+            let mut package = DiscoveredPackage::new(current_path.clone(), self.project);
             self.discover_directory(
                 py,
                 &mut package,
@@ -158,8 +158,8 @@ impl<'proj> Discoverer<'proj> {
     fn discover_directory(
         &self,
         py: Python<'_>,
-        package: &mut Package<'proj>,
-        session_package: &Package<'proj>,
+        package: &mut DiscoveredPackage<'proj>,
+        session_package: &DiscoveredPackage<'proj>,
         discovery_diagnostics: &mut Vec<Diagnostic>,
         configuration_only: bool,
     ) {
@@ -192,7 +192,7 @@ impl<'proj> Discoverer<'proj> {
                         continue;
                     }
 
-                    let mut subpackage = Package::new(current_path.clone(), self.project);
+                    let mut subpackage = DiscoveredPackage::new(current_path.clone(), self.project);
                     self.discover_directory(
                         py,
                         &mut subpackage,
