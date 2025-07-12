@@ -10,8 +10,10 @@ use ruff_python_ast::StmtFunctionDef;
 use crate::{
     collection::TestCase,
     diagnostic::Diagnostic,
-    fixture::{FixtureManager, HasFunctionDefinition, RequiresFixtures},
-    tag::Tags,
+    extensions::{
+        fixtures::{FixtureManager, HasFunctionDefinition, RequiresFixtures},
+        tags::Tags,
+    },
     utils::Upcast,
 };
 
@@ -188,7 +190,7 @@ mod tests {
 
     use crate::{
         discovery::Discoverer,
-        fixture::{HasFunctionDefinition, RequiresFixtures},
+        extensions::fixtures::{HasFunctionDefinition, RequiresFixtures},
     };
 
     #[test]

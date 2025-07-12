@@ -3,7 +3,7 @@ use pyo3::{prelude::*, types::PyTuple};
 use crate::{
     diagnostic::Diagnostic,
     discovery::{TestFunction, TestFunctionDisplay},
-    fixture::Finalizers,
+    extensions::fixtures::Finalizers,
     runner::RunDiagnostics,
 };
 

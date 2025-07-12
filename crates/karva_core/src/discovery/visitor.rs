@@ -9,7 +9,7 @@ use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 use crate::{
     diagnostic::{Diagnostic, ErrorType, Severity},
     discovery::TestFunction,
-    fixture::{Fixture, FixtureExtractor, is_fixture_function},
+    extensions::fixtures::{Fixture, FixtureExtractor, is_fixture_function},
 };
 
 pub struct FunctionDefinitionVisitor<'proj, 'b> {

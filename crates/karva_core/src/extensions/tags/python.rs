@@ -124,7 +124,7 @@ mod tests {
         types::{PyDict, PyTuple, PyType},
     };
 
-    use crate::tag::python::{PyTag, PyTags, PyTestFunction};
+    use crate::extensions::tags::python::{PyTag, PyTags, PyTestFunction};
 
     #[test]
     fn test_parametrize_single_arg() {

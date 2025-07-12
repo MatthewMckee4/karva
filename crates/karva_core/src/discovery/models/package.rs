@@ -4,7 +4,7 @@ use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 
 use crate::{
     discovery::{DiscoveredModule, ModuleType, StringModule, TestFunction},
-    fixture::{Fixture, HasFixtures, RequiresFixtures},
+    extensions::fixtures::{Fixture, HasFixtures, RequiresFixtures},
     utils::Upcast,
 };
 

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use pyo3::prelude::*;
 
-use crate::tag::python::{PyTag, PyTestFunction};
+use crate::extensions::tags::python::{PyTag, PyTestFunction};
 
 pub mod python;
 
