@@ -7,6 +7,11 @@ build:
 	uv venv
 	cargo build
 
+test:
+    uv venv
+	uv run --no-project maturin build
+	cargo test
+
 docs:
 	uv run --no-project mkdocs build
 
