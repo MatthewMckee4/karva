@@ -51,6 +51,11 @@ impl<'proj> TestFunction<'proj> {
     }
 
     #[must_use]
+    pub fn name_str(&self) -> &str {
+        &self.function_definition.name
+    }
+
+    #[must_use]
     pub fn name(&self) -> String {
         self.function_definition.name.to_string()
     }
@@ -68,74 +73,73 @@ impl<'proj> TestFunction<'proj> {
             &mut dyn FnMut(&mut FixtureManager) -> Result<TestCase<'a>, Diagnostic>,
         ) -> Result<TestCase<'a>, Diagnostic>,
     ) -> Vec<Result<TestCase<'a>, Diagnostic>> {
-        tracing::info!("Collecting test cases for function: {}", self.name());
-        let mut test_cases: Vec<Result<TestCase<'a>, Diagnostic>> = Vec::new();
+        tracing::info!(
+            "Collecting test cases for function: {}",
+            self.function_definition.name
+        );
 
-        let name = self.function_definition().name.to_string();
-
-        let Ok(py_function) = py_module.getattr(name) else {
-            return test_cases;
+        // Pre-compute values to avoid repeated allocations
+        let Ok(py_function) = py_module.getattr(self.function_definition.name.to_string()) else {
+            return Vec::new();
         };
         let py_function = py_function.as_unbound();
 
         let module_name = self.module_name();
-
         let required_fixture_names = self.get_required_fixture_names();
+
         if required_fixture_names.is_empty() {
-            test_cases.push(Ok(TestCase::new(
+            return vec![Ok(TestCase::new(
                 self,
                 vec![],
                 py_function.clone(),
                 module_name,
-            )));
-        } else {
-            // The function requires fixtures or parameters, so we need to try to extract them from the test case.
-            let tags = Tags::from_py_any(py, py_function);
-            let mut param_args = tags.parametrize_args();
+            ))];
+        }
 
-            // Ensure that there is at least one set of parameters.
-            if param_args.is_empty() {
-                param_args.push(HashMap::new());
-            }
+        // The function requires fixtures or parameters
+        let tags = Tags::from_py_any(py, py_function);
+        let mut param_args = tags.parametrize_args();
 
-            for params in param_args {
-                let mut f = |fixture_manager: &mut FixtureManager| {
-                    let mut fixture_diagnostics = Vec::new();
+        // Ensure that there is at least one set of parameters
+        if param_args.is_empty() {
+            param_args.push(HashMap::new());
+        }
 
-                    let required_fixtures = required_fixture_names
-                        .iter()
-                        .filter_map(|fixture| {
-                            if let Some(fixture) = params.get(fixture) {
-                                return Some(fixture.clone());
-                            }
+        // Pre-allocate the result vector with known capacity
+        let mut test_cases = Vec::with_capacity(param_args.len());
 
-                            if let Some(fixture) = fixture_manager.get_fixture(fixture) {
-                                return Some(fixture);
-                            }
+        for params in param_args {
+            let mut f = |fixture_manager: &mut FixtureManager| {
+                // Pre-allocate vectors with estimated capacity
+                let mut fixture_diagnostics = Vec::new();
+                let mut required_fixtures = Vec::with_capacity(required_fixture_names.len());
 
-                            fixture_diagnostics.push(Diagnostic::fixture_not_found(
-                                fixture,
-                                Some(self.path.display().to_string()),
-                            ));
-                            None
-                        })
-                        .collect::<Vec<_>>();
-
-                    // There are some not found fixtures.
-                    if fixture_diagnostics.is_empty() {
-                        Ok(TestCase::new(
-                            self,
-                            required_fixtures,
-                            py_function.clone(),
-                            module_name.clone(),
-                        ))
+                for fixture_name in &required_fixture_names {
+                    if let Some(fixture) = params.get(fixture_name) {
+                        required_fixtures.push(fixture.clone());
+                    } else if let Some(fixture) = fixture_manager.get_fixture(fixture_name) {
+                        required_fixtures.push(fixture);
                     } else {
-                        Err(Diagnostic::from_test_diagnostics(fixture_diagnostics))
+                        fixture_diagnostics.push(Diagnostic::fixture_not_found(
+                            fixture_name,
+                            Some(self.path.display().to_string()),
+                        ));
                     }
-                };
+                }
 
-                test_cases.push(fixture_manager_func(&mut f));
-            }
+                if fixture_diagnostics.is_empty() {
+                    Ok(TestCase::new(
+                        self,
+                        required_fixtures,
+                        py_function.clone(),
+                        module_name.clone(),
+                    ))
+                } else {
+                    Err(Diagnostic::from_test_diagnostics(fixture_diagnostics))
+                }
+            };
+
+            test_cases.push(fixture_manager_func(&mut f));
         }
 
         test_cases
@@ -162,23 +166,27 @@ impl Display for TestFunctionDisplay<'_> {
 
 impl<'proj> Upcast<Vec<&'proj dyn RequiresFixtures>> for Vec<&'proj TestFunction<'proj>> {
     fn upcast(self) -> Vec<&'proj dyn RequiresFixtures> {
-        self.into_iter()
-            .map(|tc| tc as &dyn RequiresFixtures)
-            .collect()
+        let mut result = Vec::with_capacity(self.len());
+        for tc in self {
+            result.push(tc as &dyn RequiresFixtures);
+        }
+        result
     }
 }
 
 impl<'proj> Upcast<Vec<&'proj dyn HasFunctionDefinition>> for Vec<&'proj TestFunction<'proj>> {
     fn upcast(self) -> Vec<&'proj dyn HasFunctionDefinition> {
-        self.into_iter()
-            .map(|tc| tc as &dyn HasFunctionDefinition)
-            .collect()
+        let mut result = Vec::with_capacity(self.len());
+        for tc in self {
+            result.push(tc as &dyn HasFunctionDefinition);
+        }
+        result
     }
 }
 
 impl std::fmt::Debug for TestFunction<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}::{}", self.path.display(), self.name())
+        write!(f, "{}::{}", self.path.display(), self.name_str())
     }
 }
 
