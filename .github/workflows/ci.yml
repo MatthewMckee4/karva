@@ -41,6 +41,10 @@ jobs:
           uv venv
           uv pip install -e .
           rm -rf .venv
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
       - name: Run tests
         run: |
           cargo test
