@@ -96,23 +96,22 @@ impl<'proj> TestFunction<'proj> {
             ))];
         }
 
-        // The function requires fixtures or parameters
         let tags = Tags::from_py_any(py, py_function);
-        let mut param_args = tags.parametrize_args();
+        let mut parametrize_args = tags.parametrize_args();
 
         // Ensure that there is at least one set of parameters
-        if param_args.is_empty() {
-            param_args.push(HashMap::new());
+        if parametrize_args.is_empty() {
+            parametrize_args.push(HashMap::new());
         }
 
-        // Pre-allocate the result vector with known capacity
-        let mut test_cases = Vec::with_capacity(param_args.len());
+        let mut test_cases = Vec::with_capacity(parametrize_args.len());
 
-        for params in param_args {
+        for params in parametrize_args {
             let mut f = |fixture_manager: &mut FixtureManager| {
+                let num_required_fixtures = required_fixture_names.len();
                 // Pre-allocate vectors with estimated capacity
-                let mut fixture_diagnostics = Vec::new();
-                let mut required_fixtures = Vec::with_capacity(required_fixture_names.len());
+                let mut fixture_diagnostics = Vec::with_capacity(num_required_fixtures);
+                let mut required_fixtures = Vec::with_capacity(num_required_fixtures);
 
                 for fixture_name in &required_fixture_names {
                     if let Some(fixture) = params.get(fixture_name) {

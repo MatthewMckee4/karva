@@ -8,7 +8,7 @@ build:
 	cargo build
 
 test:
-    uv venv
+	uv venv
 	uv run --no-project maturin build
 	cargo test
 
@@ -54,4 +54,4 @@ temp-test-dir:
 	done
 
 
-.PHONY: dev pre-commit build clean docs benchmark build
+.PHONY: dev pre-commit build clean docs benchmark build test
