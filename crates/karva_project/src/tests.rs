@@ -1,58 +1,111 @@
-use std::{fs, path::PathBuf, process::Command};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
-use anyhow::{Context, Result};
+use anyhow::Context;
 use tempfile::TempDir;
 
 use crate::path::SystemPathBuf;
 
+/// Find the karva wheel in the target/wheels directory.
+/// Returns the path to the wheel file.
+fn find_karva_wheel() -> anyhow::Result<PathBuf> {
+    let karva_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .ok_or_else(|| anyhow::anyhow!("Could not determine KARVA_ROOT"))?
+        .to_path_buf();
+
+    let wheels_dir = karva_root.join("target").join("wheels");
+
+    let entries = std::fs::read_dir(&wheels_dir)
+        .with_context(|| format!("Could not read wheels directory: {}", wheels_dir.display()))?;
+
+    for entry in entries {
+        let entry = entry?;
+        let file_name = entry.file_name();
+        if let Some(name) = file_name.to_str() {
+            if name.starts_with("karva-")
+                && std::path::Path::new(name)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("whl"))
+            {
+                return Ok(entry.path());
+            }
+        }
+    }
+
+    anyhow::bail!("Could not find karva wheel in target/wheels directory");
+}
+
 pub struct TestEnv {
-    project_dir: SystemPathBuf,
+    _temp_dir: TempDir,
+    project_dir: PathBuf,
 }
 
 impl TestEnv {
     #[must_use]
     pub fn new() -> Self {
-        let temp_dir = TempDir::new().expect("Failed to create temp directory");
-        let project_dir = temp_dir.path();
+        let temp_dir = TempDir::with_prefix("karva-test-env").unwrap();
 
-        fs::create_dir_all(project_dir).expect("Failed to create project directory");
+        let project_dir = temp_dir.path().to_path_buf();
+
+        let karva_wheel = find_karva_wheel().unwrap();
+
+        let venv_path = project_dir.join(".venv");
+
+        // Set up a bare uv project and install pytest, mimicking the Python TestEnv
+        let commands = [
+            vec![
+                "uv",
+                "init",
+                "--bare",
+                "--directory",
+                project_dir.to_str().unwrap(),
+            ],
+            vec!["uv", "venv", venv_path.to_str().unwrap()],
+            vec![
+                "uv",
+                "pip",
+                "install",
+                "--python",
+                venv_path.to_str().unwrap(),
+                karva_wheel.to_str().unwrap(),
+                "pytest",
+            ],
+        ];
+
+        for command in &commands {
+            let output = Command::new(command[0])
+                .args(&command[1..])
+                .current_dir(&project_dir)
+                .output()
+                .with_context(|| format!("Failed to run command: {command:?}"))
+                .unwrap();
+            if output.status.success() {
+                eprintln!(
+                    "Command succeeded: {:?}\nstdout:\n{}\nstderr:\n{}",
+                    command,
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            } else {
+                eprintln!(
+                    "Command failed: {:?}\nstdout:\n{}\nstderr:\n{}",
+                    command,
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                panic!("Command failed: {command:?}");
+            }
+        }
 
         Self {
-            project_dir: project_dir.to_path_buf(),
+            project_dir,
+            _temp_dir: temp_dir,
         }
-    }
-
-    fn venv_path(&self) -> PathBuf {
-        self.project_dir.join(".venv")
-    }
-
-    pub fn with_dependencies(&self, dependencies: &[&str]) -> Result<()> {
-        let venv_path = self.venv_path();
-
-        let output = Command::new("uv")
-            .arg("venv")
-            .arg(&venv_path)
-            .output()
-            .context("Failed to execute uv venv command")?;
-
-        if !output.status.success() {
-            anyhow::bail!("uv venv failed with status: {:?}", output.status);
-        }
-
-        let output = Command::new("uv")
-            .arg("pip")
-            .arg("install")
-            .arg("--python")
-            .arg(&venv_path)
-            .args(dependencies)
-            .output()
-            .context("Failed to execute uv pip install command")?;
-
-        if !output.status.success() {
-            anyhow::bail!("uv pip install failed with status: {:?}", output.status);
-        }
-
-        Ok(())
     }
 
     #[must_use]
@@ -60,7 +113,6 @@ impl TestEnv {
         self.create_dir(format!("tests_{}", rand::random::<u32>()))
     }
 
-    #[allow(clippy::must_use_candidate)]
     pub fn create_file(&self, path: impl AsRef<std::path::Path>, content: &str) -> SystemPathBuf {
         let path = path.as_ref();
         let path = self.project_dir.join(path);
