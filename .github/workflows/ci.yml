@@ -40,7 +40,6 @@ jobs:
         run: |
           uv venv
           uv pip install -e .
-          uv venv
       - name: Run tests
         run: |
           cargo test
