@@ -232,3 +232,25 @@ impl<'a> TestCaseLogger<'a> {
         self.log("errored");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_missing_arguments_from_error() {
+        let err = "missing 2 required positional arguments: 'a' and 'b'";
+        let missing_args = missing_arguments_from_error(err);
+        assert_eq!(
+            missing_args,
+            HashSet::from([String::from("a"), String::from("b")])
+        );
+    }
+
+    #[test]
+    fn test_missing_arguments_from_error_single() {
+        let err = "missing 1 required positional argument: 'a'";
+        let missing_args = missing_arguments_from_error(err);
+        assert_eq!(missing_args, HashSet::from([String::from("a")]));
+    }
+}
