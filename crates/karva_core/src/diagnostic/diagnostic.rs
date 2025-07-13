@@ -36,6 +36,10 @@ impl Diagnostic {
         }
     }
 
+    pub fn clear_sub_diagnostics(&mut self) {
+        self.sub_diagnostics.clear();
+    }
+
     pub fn add_sub_diagnostics(&mut self, sub_diagnostics: Vec<SubDiagnostic>) {
         self.sub_diagnostics.extend(sub_diagnostics);
     }

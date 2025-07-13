@@ -83,9 +83,9 @@ impl<'proj> TestFunction<'proj> {
         module: &'a DiscoveredModule<'a>,
         py_module: &Bound<'_, PyModule>,
         fixture_manager_func: &mut impl FnMut(
-            &mut dyn FnMut(&mut FixtureManager) -> Result<TestCase<'a>, Diagnostic>,
-        ) -> Result<TestCase<'a>, Diagnostic>,
-    ) -> Vec<Result<TestCase<'a>, Diagnostic>> {
+            &mut dyn FnMut(&mut FixtureManager) -> (TestCase<'a>, Option<Diagnostic>),
+        ) -> (TestCase<'a>, Option<Diagnostic>),
+    ) -> Vec<(TestCase<'a>, Option<Diagnostic>)> {
         tracing::info!(
             "Collecting test cases for function: {}",
             self.function_definition.name
@@ -99,7 +99,10 @@ impl<'proj> TestFunction<'proj> {
         let required_fixture_names = self.get_required_fixture_names();
 
         if required_fixture_names.is_empty() {
-            return vec![Ok(TestCase::new(self, vec![], py_function.clone(), module))];
+            return vec![(
+                TestCase::new(self, HashMap::new(), py_function.clone(), module),
+                None,
+            )];
         }
 
         let tags = Tags::from_py_any(py, py_function);
@@ -116,25 +119,20 @@ impl<'proj> TestFunction<'proj> {
             let mut f = |fixture_manager: &mut FixtureManager| {
                 let num_required_fixtures = required_fixture_names.len();
                 let mut fixture_diagnostics = Vec::with_capacity(num_required_fixtures);
-                let mut required_fixtures = Vec::with_capacity(num_required_fixtures);
+                let mut required_fixtures = HashMap::with_capacity(num_required_fixtures);
 
                 for fixture_name in &required_fixture_names {
                     if let Some(fixture) = params.get(fixture_name) {
-                        required_fixtures.push(fixture.clone());
+                        required_fixtures.insert(fixture_name.clone(), fixture.clone());
                     } else if let Some(fixture) = fixture_manager.get_fixture(fixture_name) {
-                        required_fixtures.push(fixture);
+                        required_fixtures.insert(fixture_name.clone(), fixture);
                     } else {
                         fixture_diagnostics.push(SubDiagnostic::fixture_not_found(fixture_name));
                     }
                 }
 
-                if fixture_diagnostics.is_empty() {
-                    Ok(TestCase::new(
-                        self,
-                        required_fixtures,
-                        py_function.clone(),
-                        module,
-                    ))
+                let diagnostic = if fixture_diagnostics.is_empty() {
+                    None
                 } else {
                     let mut diagnostic = Diagnostic::new(
                         Some(format!("Fixture(s) not found for {}", self.name())),
@@ -148,8 +146,13 @@ impl<'proj> TestFunction<'proj> {
                         )),
                     );
                     diagnostic.add_sub_diagnostics(fixture_diagnostics);
-                    Err(diagnostic)
-                }
+                    Some(diagnostic)
+                };
+
+                (
+                    TestCase::new(self, required_fixtures, py_function.clone(), module),
+                    diagnostic,
+                )
             };
 
             test_cases.push(fixture_manager_func(&mut f));

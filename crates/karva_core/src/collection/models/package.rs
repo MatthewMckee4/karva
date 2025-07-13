@@ -29,7 +29,7 @@ impl<'proj> CollectedPackage<'proj> {
     pub fn total_test_cases(&self) -> usize {
         let mut total = 0;
         for module in &self.modules {
-            total += module.test_cases().len();
+            total += module.total_test_cases();
         }
         for package in &self.packages {
             total += package.total_test_cases();

@@ -1,23 +1,25 @@
 use pyo3::prelude::*;
 
 use crate::{
-    collection::TestCase, diagnostic::reporter::Reporter, extensions::fixtures::Finalizers,
+    collection::TestCase,
+    diagnostic::{Diagnostic, reporter::Reporter},
+    extensions::fixtures::Finalizers,
     runner::RunDiagnostics,
 };
 
 #[derive(Default)]
 pub struct CollectedModule<'proj> {
-    test_cases: Vec<TestCase<'proj>>,
+    test_cases: Vec<(TestCase<'proj>, Option<Diagnostic>)>,
     finalizers: Finalizers,
 }
 
 impl<'proj> CollectedModule<'proj> {
     #[must_use]
-    pub fn test_cases(&self) -> &[TestCase<'proj>] {
-        &self.test_cases
+    pub fn total_test_cases(&self) -> usize {
+        self.test_cases.len()
     }
 
-    pub fn add_test_cases(&mut self, test_cases: Vec<TestCase<'proj>>) {
+    pub fn add_test_cases(&mut self, test_cases: Vec<(TestCase<'proj>, Option<Diagnostic>)>) {
         self.test_cases.extend(test_cases);
     }
 
@@ -33,8 +35,8 @@ impl<'proj> CollectedModule<'proj> {
     pub fn run_with_reporter(&self, py: Python<'_>, reporter: &mut dyn Reporter) -> RunDiagnostics {
         let mut diagnostics = RunDiagnostics::default();
 
-        for test_case in &self.test_cases {
-            let result = test_case.run(py);
+        for (test_case, diagnostic) in &self.test_cases {
+            let result = test_case.run(py, diagnostic.clone());
             reporter.report();
             diagnostics.update(&result);
             diagnostics.add_diagnostics(test_case.finalizers().run(py));

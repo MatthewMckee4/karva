@@ -1,10 +1,16 @@
-use std::fmt::{self, Display};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::{self, Display},
+};
 
 use karva_project::path::SystemPathBuf;
-use pyo3::{prelude::*, types::PyTuple};
+use pyo3::{prelude::*, types::PyDict};
+use regex::Regex;
 
 use crate::{
-    diagnostic::Diagnostic,
+    diagnostic::{
+        Diagnostic, FixtureSubDiagnosticType, SubDiagnosticErrorType, SubDiagnosticSeverity,
+    },
     discovery::{DiscoveredModule, TestFunction, TestFunctionDisplay},
     extensions::fixtures::Finalizers,
     runner::RunDiagnostics,
@@ -13,7 +19,7 @@ use crate::{
 #[derive(Debug)]
 pub struct TestCase<'proj> {
     function: &'proj TestFunction<'proj>,
-    args: Vec<PyObject>,
+    kwargs: HashMap<String, PyObject>,
     py_function: Py<PyAny>,
     module: &'proj DiscoveredModule<'proj>,
     finalizers: Finalizers,
@@ -22,13 +28,13 @@ pub struct TestCase<'proj> {
 impl<'proj> TestCase<'proj> {
     pub fn new(
         function: &'proj TestFunction<'proj>,
-        args: Vec<PyObject>,
+        kwargs: HashMap<String, PyObject>,
         py_function: Py<PyAny>,
         module: &'proj DiscoveredModule<'proj>,
     ) -> Self {
         Self {
             function,
-            args,
+            kwargs,
             py_function,
             module,
             finalizers: Finalizers::default(),
@@ -38,11 +44,6 @@ impl<'proj> TestCase<'proj> {
     #[must_use]
     pub const fn function(&self) -> &TestFunction<'proj> {
         self.function
-    }
-
-    #[must_use]
-    pub fn args(&self) -> &[PyObject] {
-        &self.args
     }
 
     pub fn add_finalizers(&mut self, finalizers: Finalizers) {
@@ -63,62 +64,110 @@ impl<'proj> TestCase<'proj> {
     }
 
     #[must_use]
-    pub fn run(&self, py: Python<'_>) -> RunDiagnostics {
+    pub fn run(&self, py: Python<'_>, diagnostic: Option<Diagnostic>) -> RunDiagnostics {
         let mut run_result = RunDiagnostics::default();
 
-        if self.args.is_empty() {
-            match self.py_function.call0(py) {
-                Ok(_) => {
-                    run_result.stats_mut().add_passed();
-                }
-                Err(err) => {
-                    run_result.add_diagnostic(Diagnostic::from_test_fail(
-                        py,
-                        &err,
-                        self,
-                        self.module,
-                    ));
-                }
-            }
-        } else {
-            let test_function_arguments = PyTuple::new(py, self.args.clone());
-
-            match test_function_arguments {
-                Ok(args) => {
-                    let display = self
-                        .function
-                        .display(self.module.path().display().to_string());
-                    let logger = TestCaseLogger::new(&display, args.clone());
-                    logger.log_running();
-                    match self.py_function.call1(py, args) {
-                        Ok(_) => {
-                            logger.log_passed();
-                            run_result.stats_mut().add_passed();
-                        }
-                        Err(err) => {
-                            let diagnostic =
-                                Diagnostic::from_test_fail(py, &err, self, self.module);
-                            let error_type = diagnostic.severity();
-                            if error_type.is_test_fail() {
-                                logger.log_failed();
-                            } else if error_type.is_test_error() {
-                                logger.log_errored();
+        let handle_missing_fixtures = |missing_args: &HashSet<String>| -> Option<Diagnostic> {
+            diagnostic.and_then(|mut diagnostic| {
+                let sub_diagnostics = diagnostic
+                    .sub_diagnostics()
+                    .iter()
+                    .filter_map(|sd| {
+                        if let SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
+                            FixtureSubDiagnosticType::NotFound(fixture_name),
+                        )) = sd.severity()
+                        {
+                            if missing_args.contains(fixture_name) {
+                                Some(sd.clone())
+                            } else {
+                                None
                             }
-                            run_result.add_diagnostic(diagnostic);
+                        } else {
+                            None
                         }
-                    }
+                    })
+                    .collect::<Vec<_>>();
+                diagnostic.clear_sub_diagnostics();
+                if sub_diagnostics.is_empty() {
+                    None
+                } else {
+                    diagnostic.add_sub_diagnostics(sub_diagnostics);
+                    Some(diagnostic)
                 }
-                Err(err) => {
-                    run_result.add_diagnostic(Diagnostic::unknown_error(
-                        Some(err.to_string()),
-                        Some(self.function.display_with_line(self.module)),
-                    ));
+            })
+        };
+
+        let kwargs = PyDict::new(py);
+
+        for (key, value) in &self.kwargs {
+            let _ = kwargs.set_item(key, value);
+        }
+
+        let display = self
+            .function
+            .display(self.module.path().display().to_string());
+        let logger = TestCaseLogger::new(&display, kwargs.clone());
+        logger.log_running();
+
+        let case_call_result = if self.kwargs.is_empty() {
+            self.py_function.call0(py)
+        } else {
+            self.py_function.call(py, (), Some(&kwargs))
+        };
+
+        match case_call_result {
+            Ok(_) => {
+                logger.log_passed();
+                run_result.stats_mut().add_passed();
+            }
+            Err(err) => {
+                let missing_args = missing_arguments_from_error(&err.to_string());
+
+                let diagnostic = handle_missing_fixtures(&missing_args).map_or_else(
+                    || Diagnostic::from_test_fail(py, &err, self, self.module),
+                    |missing_fixtures| missing_fixtures,
+                );
+
+                let error_type = diagnostic.severity();
+
+                if error_type.is_test_fail() {
+                    logger.log_failed();
+                    run_result.stats_mut().add_failed();
+                } else if error_type.is_test_error() {
+                    logger.log_errored();
+                    run_result.stats_mut().add_errored();
                 }
+
+                run_result.add_diagnostic(diagnostic);
             }
         }
 
         run_result
     }
+}
+
+fn missing_arguments_from_error(err: &str) -> HashSet<String> {
+    // Regex for "missing N required positional arguments: 'a' and 'b'"
+    let re_multi = Regex::new(r"missing \d+ required positional arguments?: (.+)").unwrap();
+    // Regex for "missing 1 required positional argument: 'a'"
+    let re_single = Regex::new(r"missing 1 required positional argument: '([^']+)'").unwrap();
+
+    if let Some(caps) = re_multi.captures(err) {
+        // The group is something like: "'y' and 'z'" or "'x', 'y', and 'z'"
+        let args_str = caps.get(1).unwrap().as_str();
+        let args_str = args_str.replace(" and ", ", ");
+        let mut result = HashSet::new();
+        for part in args_str.split(',') {
+            let trimmed = part.trim();
+            if trimmed.starts_with('\'') && trimmed.ends_with('\'') && trimmed.len() > 2 {
+                result.insert(trimmed[1..trimmed.len() - 1].to_string());
+            }
+        }
+        return result;
+    } else if let Some(caps) = re_single.captures(err) {
+        return HashSet::from([caps.get(1).unwrap().as_str().to_string()]);
+    }
+    HashSet::new()
 }
 
 pub struct TestCaseDisplay<'proj> {
@@ -139,24 +188,24 @@ impl Display for TestCaseDisplay<'_> {
 
 struct TestCaseLogger<'a> {
     function: &'a TestFunctionDisplay<'a>,
-    args: Bound<'a, PyTuple>,
+    kwargs: Bound<'a, PyDict>,
 }
 
 impl<'a> TestCaseLogger<'a> {
     #[must_use]
-    const fn new(function: &'a TestFunctionDisplay<'a>, args: Bound<'a, PyTuple>) -> Self {
-        Self { function, args }
+    const fn new(function: &'a TestFunctionDisplay<'a>, kwargs: Bound<'a, PyDict>) -> Self {
+        Self { function, kwargs }
     }
 
     #[must_use]
     fn test_name(&self) -> String {
-        if self.args.is_empty() {
+        if self.kwargs.is_empty() {
             self.function.to_string()
         } else {
             let args_str = self
-                .args
+                .kwargs
                 .iter()
-                .map(|a| format!("{a:?}"))
+                .map(|(key, value)| format!("{key}={value:?}"))
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("{} [{args_str}]", self.function)

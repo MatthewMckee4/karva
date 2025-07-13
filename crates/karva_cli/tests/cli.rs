@@ -2853,3 +2853,214 @@ fn test_nested_generator_fixture(#[case] framework: &str) -> anyhow::Result<()> 
 
     Ok(())
 }
+
+#[test]
+fn test_fixtures_given_by_decorator() -> anyhow::Result<()> {
+    let case = IntegrationTestEnv::with_file(
+        "test_fixtures_given_by_decorator.py",
+        r"
+        import functools
+
+        def given(**kwargs):
+            def decorator(func):
+                @functools.wraps(func)
+                def wrapper(*args, **wrapper_kwargs):
+                    return func(*args, **kwargs, **wrapper_kwargs)
+                return wrapper
+            return decorator
+
+        @given(a=1)
+        def test_fixtures_given_by_decorator(a):
+            assert a == 1
+        ",
+    )?;
+
+    run_with_path_and_snapshot!(case,  @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Passed tests: 1
+    All checks passed!
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[rstest]
+#[case("pytest")]
+#[case("karva")]
+fn test_fixtures_given_by_decorator_and_fixture(#[case] framework: &str) -> anyhow::Result<()> {
+    let case = IntegrationTestEnv::with_file(
+        "test_fixtures_given_by_decorator.py",
+        format!(
+            r"
+        from {framework} import fixture
+        import functools
+
+        def given(**kwargs):
+            def decorator(func):
+                @functools.wraps(func)
+                def wrapper(*args, **wrapper_kwargs):
+                    return func(*args, **kwargs, **wrapper_kwargs)
+                return wrapper
+            return decorator
+
+        @fixture
+        def b():
+            return 1
+
+        @given(a=1)
+        def test_fixtures_given_by_decorator(a, b):
+            assert a == 1
+            assert b == 1
+        ",
+        )
+        .as_str(),
+    )?;
+
+    run_with_path_and_snapshot!(case,  @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Passed tests: 1
+    All checks passed!
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[rstest]
+#[case("pytest")]
+#[case("karva")]
+fn test_fixtures_given_by_decorator_and_parametrize(#[case] framework: &str) -> anyhow::Result<()> {
+    let case = IntegrationTestEnv::with_file(
+        "test_fixtures_given_by_decorator.py",
+        format!(
+            r#"
+        import {framework}
+        import functools
+
+        def given(**kwargs):
+            def decorator(func):
+                @functools.wraps(func)
+                def wrapper(*args, **wrapper_kwargs):
+                    return func(*args, **kwargs, **wrapper_kwargs)
+                return wrapper
+            return decorator
+
+        @given(a=1)
+        @{}("b", [1, 2])
+        def test_fixtures_given_by_decorator(a, b):
+            assert a == 1
+            assert b in [1, 2]
+        "#,
+            get_parametrize_function(framework)
+        )
+        .as_str(),
+    )?;
+
+    run_with_path_and_snapshot!(case,  @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Passed tests: 2
+    All checks passed!
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[rstest]
+#[case("pytest")]
+#[case("karva")]
+fn test_fixtures_given_by_decorator_and_parametrize_and_fixture(
+    #[case] framework: &str,
+) -> anyhow::Result<()> {
+    let case = IntegrationTestEnv::with_file(
+        "test_fixtures_given_by_decorator.py",
+        format!(
+            r#"
+        import {framework}
+        import functools
+
+        def given(**kwargs):
+            def decorator(func):
+                @functools.wraps(func)
+                def wrapper(*args, **wrapper_kwargs):
+                    return func(*args, **kwargs, **wrapper_kwargs)
+                return wrapper
+            return decorator
+
+        @{framework}.fixture
+        def c():
+            return 1
+
+        @given(a=1)
+        @{}("b", [1, 2])
+        def test_fixtures_given_by_decorator(a, b, c):
+            assert a == 1
+            assert b in [1, 2]
+            assert c == 1
+        "#,
+            get_parametrize_function(framework)
+        )
+        .as_str(),
+    )?;
+
+    run_with_path_and_snapshot!(case,  @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Passed tests: 2
+    All checks passed!
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[rstest]
+fn test_fixtures_given_by_decorator_one_missing() -> anyhow::Result<()> {
+    let case = IntegrationTestEnv::with_file(
+        "test_fixtures_given_by_decorator.py",
+        r"
+        import functools
+
+        def given(**kwargs):
+            def decorator(func):
+                @functools.wraps(func)
+                def wrapper(*args, **wrapper_kwargs):
+                    return func(*args, **kwargs, **wrapper_kwargs)
+                return wrapper
+            return decorator
+
+
+        @given(a=1)
+        def test_fixtures_given_by_decorator(a, b):
+            assert a == 1
+            assert b == 1
+        ",
+    )?;
+
+    run_with_path_and_snapshot!(case,  @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    error[fixtures-not-found]: Fixture(s) not found for test_fixtures_given_by_decorator
+     --> test_fixtures_given_by_decorator at <temp_dir>/test_fixtures_given_by_decorator.py:13
+    error (fixture-not-found): fixture 'b' not found
+
+    Errored tests: 1
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}

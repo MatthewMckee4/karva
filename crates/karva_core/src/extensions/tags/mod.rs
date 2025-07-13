@@ -98,6 +98,14 @@ impl Tags {
                 tags.push(Tag::from_py_tag(tag));
             }
             return Self { inner: tags };
+        } else if let Ok(wrapped) = py_test_function.getattr(py, "__wrapped__") {
+            if let Ok(py_wrapped_function) = wrapped.extract::<Py<PyTestFunction>>(py) {
+                let mut tags = Vec::new();
+                for tag in &py_wrapped_function.borrow(py).tags.inner {
+                    tags.push(Tag::from_py_tag(tag));
+                }
+                return Self { inner: tags };
+            }
         }
 
         if let Some(tags) = Self::from_pytest_function(py, py_test_function) {
