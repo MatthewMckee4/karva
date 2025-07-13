@@ -78,7 +78,6 @@ impl<'proj> TestFunction<'proj> {
             self.function_definition.name
         );
 
-        // Pre-compute values to avoid repeated allocations
         let Ok(py_function) = py_module.getattr(self.function_definition.name.to_string()) else {
             return Vec::new();
         };
@@ -102,7 +101,7 @@ impl<'proj> TestFunction<'proj> {
         let tags = Tags::from_py_any(py, py_function);
         let mut parametrize_args = tags.parametrize_args();
 
-        // Ensure that there is at least one set of parameters
+        // Ensure that we collect at least one test case (no parametrization)
         if parametrize_args.is_empty() {
             parametrize_args.push(HashMap::new());
         }
@@ -112,7 +111,6 @@ impl<'proj> TestFunction<'proj> {
         for params in parametrize_args {
             let mut f = |fixture_manager: &mut FixtureManager| {
                 let num_required_fixtures = required_fixture_names.len();
-                // Pre-allocate vectors with estimated capacity
                 let mut fixture_diagnostics = Vec::with_capacity(num_required_fixtures);
                 let mut required_fixtures = Vec::with_capacity(num_required_fixtures);
 
