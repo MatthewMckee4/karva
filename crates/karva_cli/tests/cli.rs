@@ -11,7 +11,7 @@ use karva_core::{
     runner::{RunDiagnostics, TestRunner},
     testing::setup_module,
 };
-use karva_project::{project::Project, tests::TestEnv};
+use karva_project::{project::Project, testing::TestEnv};
 use rstest::rstest;
 
 #[ctor::ctor]

@@ -27,10 +27,13 @@ impl<'proj, 'b> FunctionDefinitionVisitor<'proj, 'b> {
         py: Python<'b>,
         project: &'proj Project,
         module_path: SystemPathBuf,
-    ) -> PyResult<Self> {
-        let module_name = module_name(project.cwd(), &module_path);
+    ) -> Result<Self, String> {
+        let module_name =
+            module_name(project.cwd(), &module_path).ok_or("Failed to get module name")?;
 
-        let py_module = py.import(module_name)?;
+        let py_module = py
+            .import(module_name)
+            .map_err(|_| "Failed to import module")?;
 
         Ok(Self {
             discovered_functions: Vec::new(),
@@ -131,7 +134,7 @@ pub fn parsed_module(path: &SystemPathBuf, python_version: PythonVersion) -> Par
 
 #[must_use]
 pub fn source_text(path: &SystemPathBuf) -> String {
-    std::fs::read_to_string(path).unwrap()
+    std::fs::read_to_string(path).expect("Failed to read source file")
 }
 
 pub fn is_generator_function(function_def: &StmtFunctionDef) -> bool {

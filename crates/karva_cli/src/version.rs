@@ -12,10 +12,8 @@ impl fmt::Display for VersionInfo {
     }
 }
 
-pub fn version() -> VersionInfo {
-    let version = option_env!("CARGO_PKG_VERSION")
-        .map(ToString::to_string)
-        .unwrap();
+pub fn version() -> Option<VersionInfo> {
+    let version = option_env!("CARGO_PKG_VERSION").map(ToString::to_string);
 
-    VersionInfo { version }
+    version.map(|version| VersionInfo { version })
 }

@@ -86,7 +86,7 @@ impl std::fmt::Display for TestPathError {
 mod tests {
 
     use super::*;
-    use crate::tests::TestEnv;
+    use crate::testing::TestEnv;
 
     #[test]
     fn test_python_file_exact_path() {

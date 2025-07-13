@@ -149,7 +149,11 @@ impl TestCaseCollector {
             upcast_module_test_cases.as_slice(),
         );
 
-        let Ok(py_module) = PyModule::import(py, module.name()) else {
+        let Some(module_name) = module.name() else {
+            return (module_collected, diagnostics);
+        };
+
+        let Ok(py_module) = PyModule::import(py, module_name) else {
             return (module_collected, diagnostics);
         };
 

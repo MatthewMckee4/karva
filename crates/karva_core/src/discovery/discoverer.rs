@@ -241,7 +241,7 @@ mod tests {
 
     use std::collections::{HashMap, HashSet};
 
-    use karva_project::{project::ProjectOptions, tests::TestEnv, verbosity::VerbosityLevel};
+    use karva_project::{project::ProjectOptions, testing::TestEnv, verbosity::VerbosityLevel};
 
     use super::*;
     use crate::discovery::{StringModule, StringPackage};
