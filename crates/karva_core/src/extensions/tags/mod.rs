@@ -65,9 +65,11 @@ impl ParametrizeTag {
 
     #[must_use]
     pub fn each_arg_value(&self) -> Vec<HashMap<String, PyObject>> {
-        let mut param_args: Vec<HashMap<String, PyObject>> = Vec::new();
+        let total_combinations = self.arg_values.len();
+        let mut param_args = Vec::with_capacity(total_combinations);
+
         for values in &self.arg_values {
-            let mut current_parameratisation = HashMap::new();
+            let mut current_parameratisation = HashMap::with_capacity(self.arg_names.len());
             for (arg_name, arg_value) in self.arg_names.iter().zip(values.iter()) {
                 current_parameratisation.insert(arg_name.clone(), arg_value.clone());
             }
@@ -124,16 +126,40 @@ impl Tags {
 
     #[must_use]
     pub fn parametrize_args(&self) -> Vec<HashMap<String, PyObject>> {
-        let mut param_args: Vec<HashMap<String, PyObject>> = vec![HashMap::new()];
+        if self.inner.is_empty() {
+            return vec![HashMap::new()];
+        }
+
+        let total_combinations = self
+            .inner
+            .iter()
+            .map(|tag| match tag {
+                Tag::Parametrize(p) => p.arg_values.len(),
+            })
+            .product();
+
+        let mut param_args: Vec<HashMap<String, PyObject>> = Vec::with_capacity(total_combinations);
+        param_args.push(HashMap::new());
 
         for tag in &self.inner {
             let Tag::Parametrize(parametrize_tag) = tag;
             let current_values = parametrize_tag.each_arg_value();
+
+            if current_values.is_empty() {
+                continue;
+            }
+
             let mut new_param_args = Vec::with_capacity(param_args.len() * current_values.len());
+
             for existing_params in &param_args {
                 for new_params in &current_values {
-                    let mut combined_params = existing_params.clone();
-                    combined_params.extend(new_params.clone());
+                    let mut combined_params =
+                        HashMap::with_capacity(existing_params.len() + new_params.len());
+
+                    combined_params
+                        .extend(existing_params.iter().map(|(k, v)| (k.clone(), v.clone())));
+                    combined_params.extend(new_params.iter().map(|(k, v)| (k.clone(), v.clone())));
+
                     new_param_args.push(combined_params);
                 }
             }
@@ -149,5 +175,148 @@ impl Iterator for Tags {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.pop()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pyo3::{ffi::c_str, prelude::*, types::PyDict};
+
+    use super::*;
+
+    #[test]
+    fn test_parametrize_args_single_arg() {
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+            Python::run(
+                py,
+                c_str!(
+                    r#"
+import karva
+
+@karva.tags.parametrize("a", [1, 2, 3])
+def test_parametrize(a):
+    pass
+                "#
+                ),
+                None,
+                Some(&locals),
+            )
+            .unwrap();
+
+            let test_function = locals.get_item("test_parametrize").unwrap().unwrap();
+
+            let test_function = test_function.as_unbound();
+
+            let tags = Tags::from_py_any(py, test_function);
+
+            let expected_parametrize_args = [
+                HashMap::from([(String::from("a"), 1)]),
+                HashMap::from([(String::from("a"), 2)]),
+                HashMap::from([(String::from("a"), 3)]),
+            ];
+
+            for (i, parametrize_arg) in tags.parametrize_args().iter().enumerate() {
+                for (key, value) in parametrize_arg {
+                    assert_eq!(
+                        value.extract::<i32>(py).unwrap(),
+                        expected_parametrize_args[i][&key.to_string()]
+                    );
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn test_parametrize_args_two_args() {
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+            Python::run(
+                py,
+                c_str!(
+                    r#"
+import karva
+
+@karva.tags.parametrize(("a", "b"), [(1, 4), (2, 5), (3, 6)])
+def test_parametrize(a, b):
+    pass
+                "#
+                ),
+                None,
+                Some(&locals),
+            )
+            .unwrap();
+
+            let test_function = locals.get_item("test_parametrize").unwrap().unwrap();
+
+            let test_function = test_function.as_unbound();
+
+            let tags = Tags::from_py_any(py, test_function);
+
+            let expected_parametrize_args = [
+                HashMap::from([(String::from("a"), 1), (String::from("b"), 4)]),
+                HashMap::from([(String::from("a"), 2), (String::from("b"), 5)]),
+                HashMap::from([(String::from("a"), 3), (String::from("b"), 6)]),
+            ];
+
+            for (i, parametrize_arg) in tags.parametrize_args().iter().enumerate() {
+                for (key, value) in parametrize_arg {
+                    assert_eq!(
+                        value.extract::<i32>(py).unwrap(),
+                        expected_parametrize_args[i][&key.to_string()]
+                    );
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn test_parametrize_args_multiple_tags() {
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+            Python::run(
+                py,
+                c_str!(
+                    r#"
+import karva
+
+@karva.tags.parametrize("a", [1, 2, 3])
+@karva.tags.parametrize("b", [4, 5, 6])
+def test_parametrize(a):
+    pass
+                "#
+                ),
+                None,
+                Some(&locals),
+            )
+            .unwrap();
+
+            let test_function = locals.get_item("test_parametrize").unwrap().unwrap();
+
+            let test_function = test_function.as_unbound();
+
+            let tags = Tags::from_py_any(py, test_function);
+
+            let expected_parametrize_args = [
+                HashMap::from([(String::from("a"), 1), (String::from("b"), 4)]),
+                HashMap::from([(String::from("a"), 2), (String::from("b"), 4)]),
+                HashMap::from([(String::from("a"), 3), (String::from("b"), 4)]),
+                HashMap::from([(String::from("a"), 1), (String::from("b"), 5)]),
+                HashMap::from([(String::from("a"), 2), (String::from("b"), 5)]),
+                HashMap::from([(String::from("a"), 3), (String::from("b"), 5)]),
+                HashMap::from([(String::from("a"), 1), (String::from("b"), 6)]),
+                HashMap::from([(String::from("a"), 2), (String::from("b"), 6)]),
+                HashMap::from([(String::from("a"), 3), (String::from("b"), 6)]),
+            ];
+
+            for (i, parametrize_arg) in tags.parametrize_args().iter().enumerate() {
+                for (key, value) in parametrize_arg {
+                    assert_eq!(
+                        value.extract::<i32>(py).unwrap(),
+                        expected_parametrize_args[i][&key.to_string()]
+                    );
+                }
+            }
+        });
     }
 }
