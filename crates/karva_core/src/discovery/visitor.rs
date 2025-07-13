@@ -1,7 +1,7 @@
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 use pyo3::{prelude::*, types::PyModule};
 use ruff_python_ast::{
-    Expr, ModModule, PythonVersion, Stmt, StmtFunctionDef,
+    Expr, ModModule, PythonVersion, Stmt,
     visitor::source_order::{self, SourceOrderVisitor},
 };
 use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
@@ -56,7 +56,14 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_> {
             }
             self.inside_function = true;
             if is_fixture_function(function_def) {
-                match Fixture::try_from_function(function_def, &self.py_module) {
+                let mut generator_function_visitor = GeneratorFunctionVisitor::default();
+                source_order::walk_body(&mut generator_function_visitor, &function_def.body);
+                let is_generator_function = generator_function_visitor.is_generator;
+                match Fixture::try_from_function(
+                    function_def,
+                    &self.py_module,
+                    is_generator_function,
+                ) {
                     Ok(Some(fixture_def)) => self.fixture_definitions.push(fixture_def),
                     Ok(None) => {}
                     Err(e) => {
@@ -135,13 +142,15 @@ pub fn parsed_module(
         .expect("PySourceType always parses into a module")
 }
 
-pub fn is_generator_function(function_def: &StmtFunctionDef) -> bool {
-    for stmt in &function_def.body {
-        if let Stmt::Expr(expr) = stmt {
-            if let Expr::Yield(_) | Expr::YieldFrom(_) = *expr.value {
-                return true;
-            }
+#[derive(Default)]
+pub struct GeneratorFunctionVisitor {
+    is_generator: bool,
+}
+
+impl SourceOrderVisitor<'_> for GeneratorFunctionVisitor {
+    fn visit_expr(&mut self, expr: &'_ Expr) {
+        if let Expr::Yield(_) | Expr::YieldFrom(_) = *expr {
+            self.is_generator = true;
         }
     }
-    false
 }

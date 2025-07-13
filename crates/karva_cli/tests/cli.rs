@@ -2804,3 +2804,52 @@ fn test_multiple_fixtures_not_found() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[rstest]
+#[case("pytest")]
+#[case("karva")]
+fn test_nested_generator_fixture(#[case] framework: &str) -> anyhow::Result<()> {
+    let mut files = get_source_code("pass");
+    files.extend([
+        (
+            "tests/conftest.py".to_string(),
+            format!(
+                r"
+                from {framework} import fixture
+                from src import Calculator
+
+                @fixture
+                def calculator() -> Calculator:
+                    if 1:
+                        yield Calculator()
+                    else:
+                        yield Calculator()
+                ",
+            ),
+        ),
+        (
+            "tests/test_calculator.py".to_string(),
+            r"
+            from src import Calculator
+
+            def test_calculator(calculator: Calculator) -> None:
+                assert calculator.add(1, 2) == 3
+            "
+            .to_string(),
+        ),
+    ]);
+
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+
+    run_with_path_and_snapshot!(case, &["-s"], @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Passed tests: 1
+    All checks passed!
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
