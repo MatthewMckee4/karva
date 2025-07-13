@@ -58,9 +58,44 @@ pub fn filter_traceback(traceback: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    mod to_kebab_case_tests {
+        use super::*;
 
-    #[test]
-    fn test_to_kebab_case() {
-        assert_eq!(to_kebab_case("FooBar"), "foo-bar");
+        #[test]
+        fn test_kebab_case_conversion() {
+            assert_eq!(to_kebab_case("SpecialError"), "special-error");
+            assert_eq!(to_kebab_case("ValueError"), "value-error");
+            assert_eq!(to_kebab_case("DeprecationWarning"), "deprecation-warning");
+            assert_eq!(to_kebab_case("UnicodeWarning"), "unicode-warning");
+            assert_eq!(to_kebab_case("TestWarning"), "test-warning");
+            assert_eq!(to_kebab_case("SomeComplexWarning"), "some-complex-warning");
+        }
+    }
+
+    mod filter_traceback_tests {
+        use super::*;
+
+        #[test]
+        fn test_filter_traceback() {
+            let traceback = r#"Traceback (most recent call last):
+File "test.py", line 1, in <module>
+    raise Exception('Test error')
+Exception: Test error
+"#;
+            let filtered = filter_traceback(traceback);
+            assert_eq!(
+                filtered,
+                r#"File "test.py", line 1, in <module>
+  raise Exception('Test error')
+Exception: Test error"#
+            );
+        }
+
+        #[test]
+        fn test_filter_traceback_empty() {
+            let traceback = "";
+            let filtered = filter_traceback(traceback);
+            assert_eq!(filtered, "");
+        }
     }
 }

@@ -108,3 +108,18 @@ pub fn partition_iter<'a, T>(items: &[&'a T]) -> impl Iterator<Item = (&'a T, Ve
         }
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod python_version_tests {
+        use super::*;
+
+        #[test]
+        fn test_current_python_version() {
+            let version = current_python_version();
+            assert!(version >= PythonVersion::from((3, 7)));
+        }
+    }
+}

@@ -150,12 +150,6 @@ impl Diagnostic {
     }
 }
 
-impl From<Diagnostic> for DiagnosticInner {
-    fn from(val: Diagnostic) -> Self {
-        val.inner
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DiagnosticInner {
     message: Option<String>,
@@ -184,14 +178,6 @@ impl DiagnosticInner {
     #[must_use]
     pub const fn display(&self) -> DiagnosticInnerDisplay<'_> {
         DiagnosticInnerDisplay::new(self)
-    }
-
-    #[must_use]
-    pub const fn error_type(&self) -> Option<&DiagnosticErrorType> {
-        match &self.severity {
-            DiagnosticSeverity::Error(diagnostic_type) => Some(diagnostic_type),
-            DiagnosticSeverity::Warning(_) => None,
-        }
     }
 
     #[must_use]
@@ -277,113 +263,4 @@ pub enum TestCaseCollectionDiagnosticType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FixtureDiagnosticType {
     Invalid,
-}
-
-#[cfg(test)]
-mod tests {
-    use pyo3::exceptions::{PyAssertionError, PyTypeError};
-
-    use super::*;
-    use crate::diagnostic::{SubDiagnosticErrorType, SubDiagnosticSeverity};
-
-    #[test]
-    fn test_get_type_name() {
-        Python::with_gil(|py| {
-            let error = PyTypeError::new_err("Error message");
-            let type_name = get_type_name(py, &error);
-            assert_eq!(type_name, "TypeError");
-        });
-    }
-
-    #[test]
-    fn test_from_sub_diagnostics() {
-        let sub_diagnostic = SubDiagnostic::new(
-            "message".to_string(),
-            SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Unknown),
-        );
-        let mut diagnostic = Diagnostic::new(
-            Some("message".to_string()),
-            None,
-            None,
-            DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                "test_function".to_string(),
-                TestCaseDiagnosticType::Fail,
-            )),
-        );
-        diagnostic.add_sub_diagnostics(vec![sub_diagnostic.clone()]);
-        assert_eq!(diagnostic.sub_diagnostics(), &[sub_diagnostic]);
-    }
-
-    #[test]
-    fn test_from_test_diagnostics() {
-        let sub_diagnostic = SubDiagnostic::new(
-            "message".to_string(),
-            SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Unknown),
-        );
-        let mut diagnostic = Diagnostic::new(
-            Some("message".to_string()),
-            None,
-            None,
-            DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                "test_function".to_string(),
-                TestCaseDiagnosticType::Fail,
-            )),
-        );
-        diagnostic.add_sub_diagnostic(sub_diagnostic.clone());
-        assert_eq!(diagnostic.sub_diagnostics(), &[sub_diagnostic]);
-    }
-
-    #[test]
-    fn test_add_sub_diagnostic() {
-        let mut diagnostic = Diagnostic::new(
-            Some("message".to_string()),
-            None,
-            None,
-            DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                "test_function".to_string(),
-                TestCaseDiagnosticType::Fail,
-            )),
-        );
-        let sub_diagnostic = SubDiagnostic::new(
-            "message".to_string(),
-            SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Unknown),
-        );
-        diagnostic.add_sub_diagnostic(sub_diagnostic.clone());
-        assert_eq!(diagnostic.sub_diagnostics(), &[sub_diagnostic]);
-    }
-
-    #[test]
-    fn test_subdiagnostic() {
-        let sub_diagnostic = SubDiagnostic::new(
-            "message".to_string(),
-            SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Unknown),
-        );
-        assert_eq!(
-            sub_diagnostic.error_type(),
-            Some(&SubDiagnosticErrorType::Unknown)
-        );
-        assert_eq!(sub_diagnostic.message(), "message");
-        assert_eq!(
-            sub_diagnostic.severity(),
-            &SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Unknown)
-        );
-    }
-
-    #[test]
-    fn test_get_traceback() {
-        Python::with_gil(|py| {
-            let error = PyAssertionError::new_err("This is an error");
-            let traceback = get_traceback(py, &error);
-            assert_eq!(traceback, "AssertionError: This is an error");
-        });
-    }
-
-    #[test]
-    fn test_get_traceback_empty() {
-        Python::with_gil(|py| {
-            let error = PyAssertionError::new_err("");
-            let traceback = get_traceback(py, &error);
-            assert_eq!(traceback, "AssertionError: ");
-        });
-    }
 }

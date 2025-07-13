@@ -28,14 +28,6 @@ impl SubDiagnostic {
     }
 
     #[must_use]
-    pub const fn error_type(&self) -> Option<&SubDiagnosticErrorType> {
-        match &self.severity {
-            SubDiagnosticSeverity::Error(diagnostic_type) => Some(diagnostic_type),
-            SubDiagnosticSeverity::Warning(_) => None,
-        }
-    }
-
-    #[must_use]
     pub fn message(&self) -> &str {
         &self.message
     }

@@ -236,6 +236,7 @@ def test_function(a: int, b: int):
         expected_stats.add_passed();
         expected_stats.add_passed();
         assert_eq!(*result.stats(), expected_stats);
+        assert!(result.passed());
     }
 
     #[test]
@@ -264,6 +265,7 @@ def test_function(a: int, b: int, c: int):
             expected_stats.add_passed();
         }
         assert_eq!(*result.stats(), expected_stats);
+        assert!(result.passed());
     }
 
     #[test]
@@ -291,6 +293,7 @@ def test_fixture_generator(fixture_generator):
         let mut expected_stats = DiagnosticStats::default();
         expected_stats.add_passed();
         assert_eq!(*result.stats(), expected_stats);
+        assert!(result.passed());
     }
 
     #[test]

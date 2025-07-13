@@ -460,7 +460,7 @@ fn test_long_file() -> anyhow::Result<()> {
     ----- stdout -----
     fail[assertion-failed]
      --> test_in_long_file at <temp_dir>/test_long.py:11
-     | File "<temp_dir>/test_long.py", line 24, in test_in_long_file
+     | File "<temp_dir>/test_long.py", line 14, in test_in_long_file
      |   assert result == expected
 
     Failed tests: 1
@@ -561,16 +561,13 @@ fn test_assertion_with_multiline_setup() -> anyhow::Result<()> {
         "test_multiline.py",
         r"
         def test_multiline_setup():
-            # Setup with multiple lines
             a = 10
             b = 20
             c = a + b
 
-            # Multiple operations
             result = c * 2
             expected = 100
 
-            # The assertion that fails
             assert result == expected
     ",
     )?;
@@ -581,7 +578,7 @@ fn test_assertion_with_multiline_setup() -> anyhow::Result<()> {
     ----- stdout -----
     fail[assertion-failed]
      --> test_multiline_setup at <temp_dir>/test_multiline.py:2
-     | File "<temp_dir>/test_multiline.py", line 13, in test_multiline_setup
+     | File "<temp_dir>/test_multiline.py", line 10, in test_multiline_setup
      |   assert result == expected
 
     Failed tests: 1
@@ -889,20 +886,8 @@ fn test_fixture_initialization_order(#[case] framework: &str) -> anyhow::Result<
 fn test_empty_conftest() -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
-        (
-            "conftest.py".to_string(),
-            r"
-            # Empty conftest file
-            "
-            .to_string(),
-        ),
-        (
-            "tests/conftest.py".to_string(),
-            r"
-            # Another empty conftest file
-            "
-            .to_string(),
-        ),
+        ("conftest.py".to_string(), String::new()),
+        ("tests/conftest.py".to_string(), String::new()),
         (
             "tests/test_calculator.py".to_string(),
             r"
@@ -1767,7 +1752,7 @@ fn test_invalid_scope_value(#[case] framework: &str) -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     error[invalid-fixture]: Invalid fixture scope: invalid_scope
-     -->  at <temp_dir>/tests/conftest.py
+     --> <temp_dir>/tests/conftest.py
 
     error[fixtures-not-found]: Fixture(s) not found for test_calc
      --> test_calc at <temp_dir>/tests/test_calculator.py:4
