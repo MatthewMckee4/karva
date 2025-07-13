@@ -42,13 +42,17 @@ impl<'proj> StandardTestRunner<'proj> {
             if total_test_cases == 1 { "" } else { "s" },
         );
 
-        reporter.set(total_test_cases);
-
         let mut diagnostics = RunDiagnostics::default();
 
         diagnostics.add_diagnostics(discovery_diagnostics);
 
         diagnostics.add_diagnostics(collector_diagnostics);
+
+        if total_test_cases == 0 {
+            return diagnostics;
+        }
+
+        reporter.set(total_test_cases);
 
         with_gil(self.project, |py| {
             diagnostics.update(&collected_session.run_with_reporter(py, reporter));

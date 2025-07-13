@@ -63,7 +63,7 @@ def run_benchmark(command: str, iterations: int = 5) -> float:
     times: list[float] = []
     for _ in range(iterations + 1):
         start = time.time()
-        result = subprocess.run(command, shell=True, capture_output=True, check=False)  # noqa: S602
+        result = subprocess.run(command, shell=True, capture_output=True, check=False)
         print(result.stdout.decode("utf-8"))
         print(result.stderr.decode("utf-8"))
         time_taken = time.time() - start
@@ -114,7 +114,7 @@ def create_benchmark_graph(
         color="grey",
     )
 
-    bars = ax.barh(y_pos, means, color=["#6CAE75", "#6CAE75"], height=0.5)
+    bars = ax.barh(y_pos, means, color=["#45744a", "#45744a"], height=0.5)
 
     ax.set_yticks(y_pos)
     ax.set_yticklabels(labels, fontsize=16, color="grey")

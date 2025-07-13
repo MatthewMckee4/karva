@@ -188,6 +188,21 @@ fn tempdir_filter(path: &Path) -> String {
 }
 
 #[test]
+fn test_no_tests_found() -> anyhow::Result<()> {
+    let case = IntegrationTestEnv::with_file("test_no_tests.py", r"")?;
+    run_with_path_and_snapshot!(case, @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    No tests found
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[test]
 fn test_one_test_passes() -> anyhow::Result<()> {
     let case = IntegrationTestEnv::with_file(
         "test_pass.py",

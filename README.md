@@ -3,7 +3,7 @@
 A Python test framework, written in Rust.
 
 <div align="center">
-  <img src="docs/assets/benchmark_results.svg" alt="Benchmark results" width="70%">
+  <img src="https://raw.githubusercontent.com/MatthewMckee4/karva/main/docs/assets/benchmark_results.svg" alt="Benchmark results" width="70%">
 </div>
 
 ## About Karva
