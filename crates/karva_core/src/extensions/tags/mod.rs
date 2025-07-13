@@ -126,46 +126,21 @@ impl Tags {
 
     #[must_use]
     pub fn parametrize_args(&self) -> Vec<HashMap<String, PyObject>> {
-        if self.inner.is_empty() {
-            return vec![HashMap::new()];
-        }
-
-        let total_combinations = self
-            .inner
-            .iter()
-            .map(|tag| match tag {
-                Tag::Parametrize(p) => p.arg_values.len(),
-            })
-            .product();
-
-        let mut param_args: Vec<HashMap<String, PyObject>> = Vec::with_capacity(total_combinations);
-        param_args.push(HashMap::new());
+        let mut param_args: Vec<HashMap<String, PyObject>> = vec![HashMap::new()];
 
         for tag in &self.inner {
             let Tag::Parametrize(parametrize_tag) = tag;
             let current_values = parametrize_tag.each_arg_value();
-
-            if current_values.is_empty() {
-                continue;
-            }
-
             let mut new_param_args = Vec::with_capacity(param_args.len() * current_values.len());
-
             for existing_params in &param_args {
                 for new_params in &current_values {
-                    let mut combined_params =
-                        HashMap::with_capacity(existing_params.len() + new_params.len());
-
-                    combined_params
-                        .extend(existing_params.iter().map(|(k, v)| (k.clone(), v.clone())));
-                    combined_params.extend(new_params.iter().map(|(k, v)| (k.clone(), v.clone())));
-
+                    let mut combined_params = existing_params.clone();
+                    combined_params.extend(new_params.clone());
                     new_param_args.push(combined_params);
                 }
             }
             param_args = new_param_args;
         }
-
         param_args
     }
 }
