@@ -8,7 +8,7 @@ use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
 use crate::{
     diagnostic::Diagnostic,
-    discovery::TestFunction,
+    discovery::{DiscoveredModule, TestFunction},
     extensions::fixtures::{Fixture, is_fixture_function},
 };
 
@@ -61,7 +61,7 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_> {
                     Ok(None) => {}
                     Err(e) => {
                         self.diagnostics.push(Diagnostic::invalid_fixture(
-                            e,
+                            Some(e),
                             Some(self.module_path.display().to_string()),
                         ));
                     }
@@ -96,10 +96,10 @@ pub struct DiscoveredFunctions<'a> {
 #[must_use]
 pub fn discover<'proj>(
     py: Python<'_>,
-    module_path: &SystemPathBuf,
+    module: &DiscoveredModule<'proj>,
     project: &'proj Project,
 ) -> (DiscoveredFunctions<'proj>, Vec<Diagnostic>) {
-    let Ok(mut visitor) = FunctionDefinitionVisitor::new(py, project, module_path.clone()) else {
+    let Ok(mut visitor) = FunctionDefinitionVisitor::new(py, project, module.path().clone()) else {
         return (
             DiscoveredFunctions {
                 functions: Vec::new(),
@@ -109,7 +109,7 @@ pub fn discover<'proj>(
         );
     };
 
-    let parsed = parsed_module(module_path, project.metadata().python_version());
+    let parsed = parsed_module(module, project.metadata().python_version());
     visitor.visit_body(&parsed.syntax().body);
 
     (
@@ -122,19 +122,17 @@ pub fn discover<'proj>(
 }
 
 #[must_use]
-pub fn parsed_module(path: &SystemPathBuf, python_version: PythonVersion) -> Parsed<ModModule> {
+pub fn parsed_module(
+    module: &DiscoveredModule<'_>,
+    python_version: PythonVersion,
+) -> Parsed<ModModule> {
     let mode = Mode::Module;
     let options = ParseOptions::from(mode).with_target_version(python_version);
-    let source = source_text(path);
+    let source = module.source_text();
 
     parse_unchecked(&source, options)
         .try_into_module()
         .expect("PySourceType always parses into a module")
-}
-
-#[must_use]
-pub fn source_text(path: &SystemPathBuf) -> String {
-    std::fs::read_to_string(path).expect("Failed to read source file")
 }
 
 pub fn is_generator_function(function_def: &StmtFunctionDef) -> bool {

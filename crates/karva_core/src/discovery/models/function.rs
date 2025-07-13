@@ -9,7 +9,11 @@ use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
     collection::TestCase,
-    diagnostic::Diagnostic,
+    diagnostic::{
+        Diagnostic, DiagnosticErrorType, DiagnosticSeverity, SubDiagnostic,
+        TestCaseCollectionDiagnosticType, TestCaseDiagnosticType,
+    },
+    discovery::DiscoveredModule,
     extensions::{
         fixtures::{FixtureManager, HasFunctionDefinition, RequiresFixtures},
         tags::Tags,
@@ -65,9 +69,18 @@ impl<'proj> TestFunction<'proj> {
         module_name(self.project.cwd(), &self.path)
     }
 
+    pub fn display_with_line(&self, module: &DiscoveredModule<'_>) -> String {
+        let line_index = module.line_index();
+        let source_text = module.source_text();
+        let start = self.function_definition.range.start();
+        let line_number = line_index.line_column(start, &source_text);
+        format!("{}:{}", module.path().display(), line_number.line)
+    }
+
     pub fn collect<'a>(
         &'a self,
         py: Python<'_>,
+        module: &'a DiscoveredModule<'a>,
         py_module: &Bound<'_, PyModule>,
         fixture_manager_func: &mut impl FnMut(
             &mut dyn FnMut(&mut FixtureManager) -> Result<TestCase<'a>, Diagnostic>,
@@ -83,19 +96,10 @@ impl<'proj> TestFunction<'proj> {
         };
         let py_function = py_function.as_unbound();
 
-        let Some(module_name) = self.module_name() else {
-            return Vec::new();
-        };
-
         let required_fixture_names = self.get_required_fixture_names();
 
         if required_fixture_names.is_empty() {
-            return vec![Ok(TestCase::new(
-                self,
-                vec![],
-                py_function.clone(),
-                module_name,
-            ))];
+            return vec![Ok(TestCase::new(self, vec![], py_function.clone(), module))];
         }
 
         let tags = Tags::from_py_any(py, py_function);
@@ -120,10 +124,8 @@ impl<'proj> TestFunction<'proj> {
                     } else if let Some(fixture) = fixture_manager.get_fixture(fixture_name) {
                         required_fixtures.push(fixture);
                     } else {
-                        fixture_diagnostics.push(Diagnostic::fixture_not_found(
-                            fixture_name,
-                            Some(self.path.display().to_string()),
-                        ));
+                        fixture_diagnostics
+                            .push(SubDiagnostic::fixture_not_found(fixture_name, None));
                     }
                 }
 
@@ -132,10 +134,22 @@ impl<'proj> TestFunction<'proj> {
                         self,
                         required_fixtures,
                         py_function.clone(),
-                        module_name.clone(),
+                        module,
                     ))
                 } else {
-                    Err(Diagnostic::from_test_diagnostics(fixture_diagnostics))
+                    let mut diagnostic = Diagnostic::new(
+                        Some(format!("Fixture(s) not found for {}", self.name())),
+                        Some(self.display_with_line(module)),
+                        None,
+                        DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
+                            self.name(),
+                            TestCaseDiagnosticType::Collection(
+                                TestCaseCollectionDiagnosticType::FixtureNotFound,
+                            ),
+                        )),
+                    );
+                    diagnostic.add_sub_diagnostics(fixture_diagnostics);
+                    Err(diagnostic)
                 }
             };
 

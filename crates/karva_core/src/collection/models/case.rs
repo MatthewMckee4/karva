@@ -1,8 +1,11 @@
+use std::fmt::{self, Display};
+
+use karva_project::path::SystemPathBuf;
 use pyo3::{prelude::*, types::PyTuple};
 
 use crate::{
     diagnostic::Diagnostic,
-    discovery::{TestFunction, TestFunctionDisplay},
+    discovery::{DiscoveredModule, TestFunction, TestFunctionDisplay},
     extensions::fixtures::Finalizers,
     runner::RunDiagnostics,
 };
@@ -12,7 +15,7 @@ pub struct TestCase<'proj> {
     function: &'proj TestFunction<'proj>,
     args: Vec<PyObject>,
     py_function: Py<PyAny>,
-    module_name: String,
+    module: &'proj DiscoveredModule<'proj>,
     finalizers: Finalizers,
 }
 
@@ -21,13 +24,13 @@ impl<'proj> TestCase<'proj> {
         function: &'proj TestFunction<'proj>,
         args: Vec<PyObject>,
         py_function: Py<PyAny>,
-        module_name: String,
+        module: &'proj DiscoveredModule<'proj>,
     ) -> Self {
         Self {
             function,
             args,
             py_function,
-            module_name,
+            module,
             finalizers: Finalizers::default(),
         }
     }
@@ -52,6 +55,14 @@ impl<'proj> TestCase<'proj> {
     }
 
     #[must_use]
+    pub fn display(&self) -> TestCaseDisplay<'_> {
+        TestCaseDisplay {
+            test_case: self,
+            module_path: self.module.path().clone(),
+        }
+    }
+
+    #[must_use]
     pub fn run(&self, py: Python<'_>) -> RunDiagnostics {
         let mut run_result = RunDiagnostics::default();
 
@@ -61,7 +72,12 @@ impl<'proj> TestCase<'proj> {
                     run_result.stats_mut().add_passed();
                 }
                 Err(err) => {
-                    run_result.add_diagnostic(Diagnostic::from_test_fail(py, &err, self));
+                    run_result.add_diagnostic(Diagnostic::from_test_fail(
+                        py,
+                        &err,
+                        self,
+                        self.module,
+                    ));
                 }
             }
         } else {
@@ -69,7 +85,9 @@ impl<'proj> TestCase<'proj> {
 
             match test_function_arguments {
                 Ok(args) => {
-                    let display = self.function.display(self.module_name.clone());
+                    let display = self
+                        .function
+                        .display(self.module.path().display().to_string());
                     let logger = TestCaseLogger::new(&display, args.clone());
                     logger.log_running();
                     match self.py_function.call1(py, args) {
@@ -78,7 +96,8 @@ impl<'proj> TestCase<'proj> {
                             run_result.stats_mut().add_passed();
                         }
                         Err(err) => {
-                            let diagnostic = Diagnostic::from_test_fail(py, &err, self);
+                            let diagnostic =
+                                Diagnostic::from_test_fail(py, &err, self, self.module);
                             let error_type = diagnostic.severity();
                             if error_type.is_test_fail() {
                                 logger.log_failed();
@@ -91,14 +110,30 @@ impl<'proj> TestCase<'proj> {
                 }
                 Err(err) => {
                     run_result.add_diagnostic(Diagnostic::unknown_error(
-                        err.to_string(),
-                        Some(self.function.display(self.module_name.clone()).to_string()),
+                        Some(err.to_string()),
+                        Some(self.function.display_with_line(self.module)),
                     ));
                 }
             }
         }
 
         run_result
+    }
+}
+
+pub struct TestCaseDisplay<'proj> {
+    test_case: &'proj TestCase<'proj>,
+    module_path: SystemPathBuf,
+}
+
+impl Display for TestCaseDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}::{}",
+            self.module_path.display(),
+            self.test_case.function().name()
+        )
     }
 }
 

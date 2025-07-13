@@ -89,7 +89,7 @@ mod tests {
     use karva_project::testing::TestEnv;
 
     use super::*;
-    use crate::diagnostic::{Diagnostic, Severity};
+    use crate::diagnostic::{Diagnostic, SubDiagnosticSeverity};
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
@@ -323,7 +323,7 @@ def test_fixture_generator(fixture_generator):
         let first_diagnostic = &result.diagnostics()[0];
         let expected_diagnostic = Diagnostic::warning(
             "fixture-error",
-            "Fixture fixture_generator had more than one yield statement".to_string(),
+            Some("Fixture fixture_generator had more than one yield statement".to_string()),
             None,
         );
         assert_eq!(*first_diagnostic, expected_diagnostic);
@@ -366,7 +366,7 @@ def test_fixture_generator(fixture_generator):
         assert_eq!(sub_diagnostic.location(), None);
         assert_eq!(
             *sub_diagnostic.severity(),
-            Severity::Warning("fixture-error".to_string())
+            SubDiagnosticSeverity::Warning("fixture-error".to_string())
         );
     }
 

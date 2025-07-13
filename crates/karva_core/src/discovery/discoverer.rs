@@ -105,7 +105,7 @@ impl<'proj> Discoverer<'proj> {
 
         let mut module = DiscoveredModule::new(self.project, path, module_type);
 
-        let (discovered, diagnostics) = discover(py, path, self.project);
+        let (discovered, diagnostics) = discover(py, &module, self.project);
 
         if !configuration_only {
             module.set_test_functions(discovered.functions);

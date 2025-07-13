@@ -4,6 +4,7 @@ use std::{
 };
 
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
+use ruff_source_file::LineIndex;
 
 use crate::{
     discovery::TestFunction,
@@ -72,6 +73,17 @@ impl<'proj> DiscoveredModule<'proj> {
     #[must_use]
     pub fn total_test_functions(&self) -> usize {
         self.test_functions.len()
+    }
+
+    #[must_use]
+    pub fn source_text(&self) -> String {
+        std::fs::read_to_string(self.path()).expect("Failed to read source file")
+    }
+
+    #[must_use]
+    pub fn line_index(&self) -> LineIndex {
+        let source_text = self.source_text();
+        LineIndex::from_source_text(&source_text)
     }
 
     pub fn update(&mut self, module: Self) {
