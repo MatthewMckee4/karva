@@ -23,7 +23,6 @@ tracing = { workspace = true }
 ignore = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
 regex = { workspace = true }
 ctor = { workspace = true }
 

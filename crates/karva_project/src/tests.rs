@@ -11,7 +11,7 @@ use crate::path::SystemPathBuf;
 
 /// Find the karva wheel in the target/wheels directory.
 /// Returns the path to the wheel file.
-fn find_karva_wheel() -> anyhow::Result<PathBuf> {
+pub fn find_karva_wheel() -> anyhow::Result<PathBuf> {
     let karva_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())

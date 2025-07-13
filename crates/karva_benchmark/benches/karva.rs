@@ -2,10 +2,15 @@ use anyhow::Context;
 use karva_benchmark::{
     FIXTURES, LARGE_LIST_COMPREHENSION, LARGE_SUMMATION, MATH, PARAMETRIZE, STRING_CONCATENATION,
     TRUE_ASSERTIONS, TestCase,
-    criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main},
+    criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main},
+    real_world_projects::{InstalledProject, RealWorldProject},
 };
 use karva_core::{diagnostic::reporter::DummyReporter, runner::TestRunner, testing::setup_module};
-use karva_project::{path::absolute, project::Project};
+use karva_project::{
+    path::{SystemPathBuf, absolute},
+    project::Project,
+};
+use ruff_python_ast::PythonVersion;
 
 fn create_test_cases() -> Vec<TestCase> {
     vec![
@@ -51,5 +56,83 @@ fn benchmark_karva(criterion: &mut Criterion) {
     group.finish();
 }
 
+struct ProjectBenchmark<'a> {
+    installed_project: InstalledProject<'a>,
+}
+
+impl<'a> ProjectBenchmark<'a> {
+    fn new(project: RealWorldProject<'a>) -> Self {
+        let installed_project = project.setup().expect("Failed to setup project");
+        Self { installed_project }
+    }
+
+    fn project(&self) -> Project {
+        let test_paths = self.installed_project.config().paths.clone();
+
+        let absolute_test_paths = test_paths
+            .iter()
+            .map(|path| absolute(path, self.installed_project.path()))
+            .collect();
+
+        Project::new(self.installed_project.path(), absolute_test_paths)
+    }
+}
+
+fn bench_project(benchmark: &ProjectBenchmark, criterion: &mut Criterion) {
+    fn test_project(project: &Project) {
+        let result = project.test_with_reporter(&mut DummyReporter);
+
+        assert!(result.stats().total() > 0);
+
+        for diagnostic in result.iter() {
+            eprintln!("{}", diagnostic.display());
+        }
+    }
+
+    // Set LD_LIBRARY_PATH to the Python venv's lib directory for the benchmark
+    use std::env;
+
+    let python_path = benchmark.installed_project.python_path();
+
+    // Prepend to LD_LIBRARY_PATH if it exists, otherwise set it
+    let python_path_str = python_path.to_str().expect("Non-UTF8 venv lib path");
+    if let Some(current) = env::var_os("LD_LIBRARY_PATH") {
+        let mut new_val = python_path_str.to_owned();
+        new_val.push(':');
+        new_val.push_str(&current.to_string_lossy());
+        eprintln!("Setting LD_LIBRARY_PATH to {new_val}");
+        unsafe { env::set_var("LD_LIBRARY_PATH", new_val) };
+    } else {
+        eprintln!("Setting LD_LIBRARY_PATH to {python_path_str}");
+        unsafe { env::set_var("LD_LIBRARY_PATH", python_path_str) };
+    }
+
+    let mut group = criterion.benchmark_group("project");
+
+    group.sampling_mode(karva_benchmark::criterion::SamplingMode::Flat);
+    group.bench_function(benchmark.installed_project.config().name, |b| {
+        b.iter_batched_ref(
+            || benchmark.project(),
+            |db| test_project(db),
+            BatchSize::SmallInput,
+        );
+    });
+}
+
+fn affect(criterion: &mut Criterion) {
+    let benchmark = ProjectBenchmark::new(RealWorldProject {
+        name: "affect",
+        repository: "https://github.com/MatthewMckee4/affect",
+        commit: "803cc916b492378a8ad8966e747cac3325e11b5f",
+        paths: vec![SystemPathBuf::from("tests")],
+        dependencies: vec!["pydantic", "pydantic-settings", "pytest"],
+        python_version: PythonVersion::PY313,
+    });
+
+    bench_project(&benchmark, criterion);
+}
+
 criterion_group!(karva, benchmark_karva);
-criterion_main!(karva);
+criterion_group!(project, affect);
+
+criterion_main!(karva, project);
