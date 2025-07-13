@@ -106,7 +106,7 @@ impl<'proj> TestCase<'proj> {
         let display = self
             .function
             .display(self.module.path().display().to_string());
-        let logger = TestCaseLogger::new(&display, kwargs.clone());
+        let logger = TestCaseLogger::new(&display, &kwargs);
         logger.log_running();
 
         let case_call_result = if self.kwargs.is_empty() {
@@ -186,34 +186,29 @@ impl Display for TestCaseDisplay<'_> {
     }
 }
 
-struct TestCaseLogger<'a> {
-    function: &'a TestFunctionDisplay<'a>,
-    kwargs: Bound<'a, PyDict>,
+struct TestCaseLogger {
+    test_name: String,
 }
 
-impl<'a> TestCaseLogger<'a> {
+impl TestCaseLogger {
     #[must_use]
-    const fn new(function: &'a TestFunctionDisplay<'a>, kwargs: Bound<'a, PyDict>) -> Self {
-        Self { function, kwargs }
-    }
-
-    #[must_use]
-    fn test_name(&self) -> String {
-        if self.kwargs.is_empty() {
-            self.function.to_string()
+    fn new(function: &TestFunctionDisplay<'_>, kwargs: &Bound<'_, PyDict>) -> Self {
+        let test_name = if kwargs.is_empty() {
+            function.to_string()
         } else {
-            let args_str = self
-                .kwargs
+            let args_str = kwargs
                 .iter()
                 .map(|(key, value)| format!("{key}={value:?}"))
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("{} [{args_str}]", self.function)
-        }
+            format!("{function} [{args_str}]",)
+        };
+
+        Self { test_name }
     }
 
     fn log(&self, status: &str) {
-        tracing::info!("{:<8} | {}", status, self.test_name());
+        tracing::info!("{:<8} | {}", status, self.test_name);
     }
 
     fn log_running(&self) {
