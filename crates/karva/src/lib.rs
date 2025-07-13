@@ -10,8 +10,12 @@ use pyo3::prelude::*;
 pub fn karva_run() -> i32 {
     karva_main(|args| {
         let mut args: Vec<_> = args.into_iter().skip(1).collect();
-        if !args.is_empty() && args[0].to_string_lossy() == "python" {
-            args.remove(0);
+        if !args.is_empty() {
+            if let Some(arg) = args.first() {
+                if arg.to_string_lossy() == "python" {
+                    args.remove(0);
+                }
+            }
         }
         args
     })
