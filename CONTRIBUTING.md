@@ -27,18 +27,16 @@ pre-commit install
 
 ### Development
 
+To run the cli on a test file, run:
+
 ```bash
 cargo run test tests/test_add.py
 ```
 
-### Running the tests
-
-You must have `uv` installed to run the tests.
-
-You must also first run `maturin build` to build the Python wheels.
+For many common commands, you can use the `just` tool to run them.
 
 ```bash
-cargo test
+just test
 ```
 
 ### Documentation
@@ -46,5 +44,5 @@ cargo test
 We use mkdocs to build the documentation.
 
 ```bash
-mkdocs build
+just docs
 ```

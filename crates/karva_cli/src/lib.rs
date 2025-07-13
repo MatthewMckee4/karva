@@ -122,7 +122,10 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     write!(stdout, "{}", result.display())?;
 
-    if passed {
+    if result.stats().total() == 0 {
+        writeln!(stdout, "{}", "No tests found".yellow().bold())?;
+        return Ok(ExitStatus::Failure);
+    } else if passed {
         writeln!(stdout, "{}", "All checks passed!".green().bold())?;
 
         return Ok(ExitStatus::Success);
