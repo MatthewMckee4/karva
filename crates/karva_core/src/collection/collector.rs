@@ -92,7 +92,7 @@ impl TestCaseCollector {
             };
 
         let collected_test_cases =
-            test_function.collect(py, py_module, &mut get_function_fixture_manager);
+            test_function.collect(py, module, py_module, &mut get_function_fixture_manager);
 
         for test_case_result in collected_test_cases {
             match test_case_result {

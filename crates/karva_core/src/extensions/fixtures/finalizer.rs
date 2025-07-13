@@ -59,10 +59,10 @@ impl Finalizer {
         match self.fixture_return.call_method0(py, "__next__") {
             Ok(_) => Some(Diagnostic::warning(
                 "fixture-error",
-                format!(
+                Some(format!(
                     "Fixture {} had more than one yield statement",
                     self.fixture_name
-                ),
+                )),
                 None,
             )),
             Err(e) => {
@@ -71,7 +71,7 @@ impl Finalizer {
                 } else {
                     Some(Diagnostic::warning(
                         "fixture-error",
-                        format!("Failed to reset fixture {}", self.fixture_name),
+                        Some(format!("Failed to reset fixture {}", self.fixture_name)),
                         None,
                     ))
                 }
