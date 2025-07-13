@@ -50,6 +50,11 @@ impl Diagnostic {
     }
 
     #[must_use]
+    pub fn message(&self) -> Option<&str> {
+        self.inner.message.as_deref()
+    }
+
+    #[must_use]
     pub const fn severity(&self) -> &DiagnosticSeverity {
         &self.inner.severity
     }
@@ -294,7 +299,6 @@ mod tests {
     fn test_from_sub_diagnostics() {
         let sub_diagnostic = SubDiagnostic::new(
             "message".to_string(),
-            None,
             SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Unknown),
         );
         let mut diagnostic = Diagnostic::new(
@@ -314,7 +318,6 @@ mod tests {
     fn test_from_test_diagnostics() {
         let sub_diagnostic = SubDiagnostic::new(
             "message".to_string(),
-            None,
             SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Unknown),
         );
         let mut diagnostic = Diagnostic::new(
@@ -343,7 +346,6 @@ mod tests {
         );
         let sub_diagnostic = SubDiagnostic::new(
             "message".to_string(),
-            None,
             SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Unknown),
         );
         diagnostic.add_sub_diagnostic(sub_diagnostic.clone());
@@ -354,7 +356,6 @@ mod tests {
     fn test_subdiagnostic() {
         let sub_diagnostic = SubDiagnostic::new(
             "message".to_string(),
-            None,
             SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Unknown),
         );
         assert_eq!(
@@ -362,7 +363,6 @@ mod tests {
             Some(&SubDiagnosticErrorType::Unknown)
         );
         assert_eq!(sub_diagnostic.message(), "message");
-        assert_eq!(sub_diagnostic.location(), None);
         assert_eq!(
             sub_diagnostic.severity(),
             &SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Unknown)

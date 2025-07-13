@@ -124,8 +124,7 @@ impl<'proj> TestFunction<'proj> {
                     } else if let Some(fixture) = fixture_manager.get_fixture(fixture_name) {
                         required_fixtures.push(fixture);
                     } else {
-                        fixture_diagnostics
-                            .push(SubDiagnostic::fixture_not_found(fixture_name, None));
+                        fixture_diagnostics.push(SubDiagnostic::fixture_not_found(fixture_name));
                     }
                 }
 

@@ -3,29 +3,19 @@ use crate::diagnostic::render::SubDiagnosticDisplay;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SubDiagnostic {
     message: String,
-    location: Option<String>,
     severity: SubDiagnosticSeverity,
 }
 
 impl SubDiagnostic {
     #[must_use]
-    pub const fn new(
-        message: String,
-        location: Option<String>,
-        severity: SubDiagnosticSeverity,
-    ) -> Self {
-        Self {
-            message,
-            location,
-            severity,
-        }
+    pub const fn new(message: String, severity: SubDiagnosticSeverity) -> Self {
+        Self { message, severity }
     }
 
     #[must_use]
-    pub fn fixture_not_found(fixture_name: &String, location: Option<String>) -> Self {
+    pub fn fixture_not_found(fixture_name: &String) -> Self {
         Self::new(
-            format!("Fixture {fixture_name} not found"),
-            location,
+            format!("fixture '{fixture_name}' not found"),
             SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
                 FixtureSubDiagnosticType::NotFound,
             )),
@@ -48,11 +38,6 @@ impl SubDiagnostic {
     #[must_use]
     pub fn message(&self) -> &str {
         &self.message
-    }
-
-    #[must_use]
-    pub fn location(&self) -> Option<&str> {
-        self.location.as_deref()
     }
 
     #[must_use]

@@ -89,7 +89,7 @@ mod tests {
     use karva_project::testing::TestEnv;
 
     use super::*;
-    use crate::diagnostic::{Diagnostic, SubDiagnosticSeverity};
+    use crate::diagnostic::{Diagnostic, DiagnosticSeverity};
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
@@ -357,16 +357,13 @@ def test_fixture_generator(fixture_generator):
         assert_eq!(*result.stats(), expected_stats);
         assert_eq!(result.diagnostics().len(), 1);
         let first_diagnostic = &result.diagnostics()[0];
-        assert_eq!(first_diagnostic.sub_diagnostics().len(), 1);
-        let sub_diagnostic = &first_diagnostic.sub_diagnostics()[0];
         assert_eq!(
-            sub_diagnostic.message(),
-            "Failed to reset fixture fixture_generator"
+            first_diagnostic.message(),
+            Some("Failed to reset fixture fixture_generator")
         );
-        assert_eq!(sub_diagnostic.location(), None);
         assert_eq!(
-            *sub_diagnostic.severity(),
-            SubDiagnosticSeverity::Warning("fixture-error".to_string())
+            first_diagnostic.severity(),
+            &DiagnosticSeverity::Warning("fixture-error".to_string())
         );
     }
 

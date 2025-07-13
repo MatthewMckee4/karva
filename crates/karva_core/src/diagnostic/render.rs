@@ -121,22 +121,16 @@ impl std::fmt::Display for SubDiagnosticDisplay<'_> {
         let diagnostic_type_label = match self.diagnostic.severity() {
             SubDiagnosticSeverity::Error(error_type) => match error_type {
                 SubDiagnosticErrorType::Fixture(fixture_type) => match fixture_type {
-                    FixtureSubDiagnosticType::NotFound => "error[fixture-not-found]".yellow(),
+                    FixtureSubDiagnosticType::NotFound => "error (fixture-not-found)".yellow(),
                 },
                 SubDiagnosticErrorType::Unknown => "error".yellow(),
             },
             SubDiagnosticSeverity::Warning(error) => {
-                format!("warning[{}]", to_kebab_case(error)).yellow()
+                format!("warning ({})", to_kebab_case(error)).yellow()
             }
         };
 
-        writeln!(
-            f,
-            "{diagnostic_type_label}{}",
-            self.diagnostic
-                .location()
-                .map_or_else(String::new, |location| format!(" in {location}"))
-        )?;
+        writeln!(f, "{diagnostic_type_label}: {}", self.diagnostic.message())?;
 
         Ok(())
     }
