@@ -11,8 +11,6 @@ pub mod python;
 pub use finalizer::{Finalizer, Finalizers};
 pub use manager::FixtureManager;
 
-use crate::discovery::visitor::is_generator_function;
-
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum FixtureScope {
     #[default]
@@ -129,12 +127,11 @@ impl Fixture {
     pub fn try_from_function(
         function_definition: &StmtFunctionDef,
         py_module: &Bound<'_, PyModule>,
+        is_generator_function: bool,
     ) -> Result<Option<Self>, String> {
         let function = py_module
             .getattr(function_definition.name.to_string())
             .map_err(|e| e.to_string())?;
-
-        let is_generator_function = is_generator_function(function_definition);
 
         let try_karva = extractor::try_from_karva_function(
             function_definition,

@@ -4,11 +4,11 @@ N := "1000"
 
 # Build the project
 build:
-    uv venv
-    cargo build
+    uv run --no-project maturin build
 
 # Run tests
 test:
+    @rm -f target/wheels/*.whl
     uv run --no-project maturin build
     cargo test
 
