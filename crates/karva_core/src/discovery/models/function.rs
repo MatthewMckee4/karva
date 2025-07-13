@@ -61,7 +61,7 @@ impl<'proj> TestFunction<'proj> {
     }
 
     #[must_use]
-    pub fn module_name(&self) -> String {
+    pub fn module_name(&self) -> Option<String> {
         module_name(self.project.cwd(), &self.path)
     }
 
@@ -84,7 +84,10 @@ impl<'proj> TestFunction<'proj> {
         };
         let py_function = py_function.as_unbound();
 
-        let module_name = self.module_name();
+        let Some(module_name) = self.module_name() else {
+            return Vec::new();
+        };
+
         let required_fixture_names = self.get_required_fixture_names();
 
         if required_fixture_names.is_empty() {
@@ -192,7 +195,7 @@ impl std::fmt::Debug for TestFunction<'_> {
 #[cfg(test)]
 mod tests {
 
-    use karva_project::{project::Project, tests::TestEnv};
+    use karva_project::{project::Project, testing::TestEnv};
     use pyo3::prelude::*;
 
     use crate::{
@@ -252,7 +255,7 @@ mod tests {
 
         assert_eq!(
             test_case
-                .display(session.modules().values().next().unwrap().name())
+                .display(session.modules().values().next().unwrap().name().unwrap())
                 .to_string(),
             "test::test_display"
         );

@@ -82,7 +82,7 @@ impl TestRunner for Project {
 
 #[cfg(test)]
 mod tests {
-    use karva_project::tests::TestEnv;
+    use karva_project::testing::TestEnv;
 
     use super::*;
     use crate::diagnostic::{Diagnostic, Severity};

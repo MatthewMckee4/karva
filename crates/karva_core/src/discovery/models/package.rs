@@ -60,7 +60,12 @@ impl<'proj> DiscoveredPackage<'proj> {
         }
 
         // If the module path equals our path, add directly to modules
-        if *module.path().parent().unwrap() == **self.path() {
+        if *module
+            .path()
+            .parent()
+            .expect("Failed to get parent of module path")
+            == **self.path()
+        {
             if let Some(existing_module) = self.modules.get_mut(module.path()) {
                 existing_module.update(module);
             } else {
@@ -73,7 +78,10 @@ impl<'proj> DiscoveredPackage<'proj> {
         }
 
         // Chop off the current path from the start
-        let relative_path = module.path().strip_prefix(self.path()).unwrap();
+        let relative_path = module
+            .path()
+            .strip_prefix(self.path())
+            .expect("Failed to strip prefix");
         let components: Vec<_> = relative_path.components().collect();
 
         if components.is_empty() {
@@ -112,7 +120,10 @@ impl<'proj> DiscoveredPackage<'proj> {
         }
 
         // Chop off the current path from the start
-        let relative_path = package.path().strip_prefix(self.path()).unwrap();
+        let relative_path = package
+            .path()
+            .strip_prefix(self.path())
+            .expect("Failed to strip prefix");
         let components: Vec<_> = relative_path.components().collect();
 
         if components.is_empty() {
@@ -250,14 +261,15 @@ impl<'proj> DiscoveredPackage<'proj> {
         let mut packages = HashMap::new();
 
         for module in self.modules().values() {
-            modules.insert(module_name(self.path(), module.path()), module.into());
+            if let Some(module_name) = module_name(self.path(), module.path()) {
+                modules.insert(module_name, module.into());
+            }
         }
 
         for subpackage in self.packages().values() {
-            packages.insert(
-                module_name(self.path(), subpackage.path()),
-                subpackage.display(),
-            );
+            if let Some(package_name) = module_name(self.path(), subpackage.path()) {
+                packages.insert(package_name, subpackage.display());
+            }
         }
 
         StringPackage { modules, packages }
@@ -313,7 +325,7 @@ impl Eq for StringPackage {}
 
 #[cfg(test)]
 mod tests {
-    use karva_project::tests::TestEnv;
+    use karva_project::testing::TestEnv;
 
     use super::*;
 

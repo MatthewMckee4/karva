@@ -37,7 +37,7 @@ impl<'proj> DiscoveredModule<'proj> {
     }
 
     #[must_use]
-    pub fn name(&self) -> String {
+    pub fn name(&self) -> Option<String> {
         module_name(self.project.cwd(), &self.path)
     }
 
@@ -143,7 +143,7 @@ impl<'proj> HasFixtures<'proj> for DiscoveredModule<'proj> {
 
 impl Display for DiscoveredModule<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name())
+        write!(f, "{}", self.name().expect("Module has no name"))
     }
 }
 

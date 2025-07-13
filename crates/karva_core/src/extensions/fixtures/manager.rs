@@ -208,7 +208,7 @@ impl FixtureManager {
 
 #[cfg(test)]
 mod tests {
-    use karva_project::{project::Project, tests::TestEnv};
+    use karva_project::{project::Project, testing::TestEnv};
 
     use super::*;
     use crate::discovery::Discoverer;

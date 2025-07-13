@@ -167,7 +167,7 @@ impl std::fmt::Display for DisplayRunDiagnostics<'_> {
 }
 #[cfg(test)]
 mod tests {
-    use karva_project::{project::Project, tests::TestEnv};
+    use karva_project::{project::Project, testing::TestEnv};
 
     use crate::runner::{StandardTestRunner, TestRunner};
 

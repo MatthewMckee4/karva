@@ -22,19 +22,6 @@ pub fn from_text_size(offset: TextSize, source: &str) -> (usize, usize) {
     (location.line.get(), location.character_offset.get())
 }
 
-#[must_use]
-pub fn root_dir() -> String {
-    std::env::current_dir()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string()
-}
-
 pub fn add_to_sys_path(py: &Python<'_>, path: &SystemPathBuf) -> PyResult<()> {
     let sys_path = py.import("sys")?;
     let sys_path = sys_path.getattr("path")?;

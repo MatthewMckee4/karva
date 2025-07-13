@@ -68,8 +68,12 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
 pub(crate) fn version() -> Result<()> {
     let mut stdout = BufWriter::new(io::stdout().lock());
-    let version_info = crate::version::version();
-    writeln!(stdout, "karva {}", &version_info)?;
+    if let Some(version_info) = crate::version::version() {
+        writeln!(stdout, "karva {}", &version_info)?;
+    } else {
+        writeln!(stdout, "Failed to get karva version")?;
+    }
+
     Ok(())
 }
 
@@ -162,7 +166,7 @@ impl karva_core::diagnostic::reporter::Reporter for ProgressReporter {
             indicatif::ProgressStyle::with_template(
                 r"{msg:10.dim} {bar:60.green/dim} {pos}/{len} tests",
             )
-            .unwrap()
+            .expect("Failed to create progress style")
             .progress_chars("--"),
         );
         progress.set_message("Testing");
