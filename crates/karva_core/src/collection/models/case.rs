@@ -57,10 +57,10 @@ impl<'proj> TestCase<'proj> {
     }
 
     #[must_use]
-    pub fn display(&self) -> TestCaseDisplay<'_> {
+    pub const fn display(&self) -> TestCaseDisplay<'_> {
         TestCaseDisplay {
             test_case: self,
-            module_path: self.module.path().clone(),
+            module_path: self.module.path(),
         }
     }
 
@@ -185,7 +185,7 @@ fn missing_arguments_from_error(err: &str) -> HashSet<String> {
 
 pub struct TestCaseDisplay<'proj> {
     test_case: &'proj TestCase<'proj>,
-    module_path: SystemPathBuf,
+    module_path: &'proj SystemPathBuf,
 }
 
 impl Display for TestCaseDisplay<'_> {
@@ -214,7 +214,7 @@ impl TestCaseLogger {
                     if i > 0 {
                         args_str.push_str(", ");
                     }
-                    args_str.push_str(&format!("{key}={value:?}"));
+                    args_str.push_str(&format!("{key}={:?}", value.to_string()));
                 }
                 format!("{function} [{args_str}]")
             },
