@@ -199,43 +199,32 @@ impl Display for TestCaseDisplay<'_> {
     }
 }
 
-struct TestCaseLogger<'proj> {
-    function: &'proj TestFunctionDisplay<'proj>,
-    kwargs: Option<&'proj HashMap<String, PyObject>>,
-    test_name: Option<String>,
+struct TestCaseLogger {
+    test_name: String,
 }
 
-impl<'proj> TestCaseLogger<'proj> {
+impl TestCaseLogger {
     #[must_use]
-    const fn new(
-        function: &'proj TestFunctionDisplay<'proj>,
-        kwargs: Option<&'proj HashMap<String, PyObject>>,
-    ) -> Self {
-        Self {
-            function,
-            kwargs,
-            test_name: None,
-        }
+    fn new(function: &TestFunctionDisplay<'_>, kwargs: Option<&HashMap<String, PyObject>>) -> Self {
+        let test_name = kwargs.map_or_else(
+            || function.to_string(),
+            |kwargs| {
+                let mut args_str = String::new();
+                for (i, (key, value)) in kwargs.iter().enumerate() {
+                    if i > 0 {
+                        args_str.push_str(", ");
+                    }
+                    args_str.push_str(&format!("{key}={value:?}"));
+                }
+                format!("{function} [{args_str}]")
+            },
+        );
+
+        Self { test_name }
     }
 
     fn log(&self, status: &str) {
-        // let test_name = self.test_name.clone().unwrap_or_else(|| {
-        //     self.kwargs.map_or_else(
-        //         || ,
-        //         |kwargs| {
-        //             let mut args_str = String::new();
-        //             for (i, (key, value)) in kwargs.iter().enumerate() {
-        //                 if i > 0 {
-        //                     args_str.push_str(", ");
-        //                 }
-        //                 args_str.push_str(&format!("{key}={value:?}"));
-        //             }
-        //             format!("{} [{args_str}]", self.function)
-        //         },
-        //     )
-        // });
-
-        tracing::info!("{:<8} | {}", status, self.function.to_string());
+        tracing::info!("{:<8} | {}", status, self.test_name);
     }
 
     fn log_running(&self) {
