@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::{self, Display},
+    sync::LazyLock,
 };
 
 use karva_project::path::SystemPathBuf;
@@ -67,36 +68,6 @@ impl<'proj> TestCase<'proj> {
     pub fn run(&self, py: Python<'_>, diagnostic: Option<Diagnostic>) -> RunDiagnostics {
         let mut run_result = RunDiagnostics::default();
 
-        let handle_missing_fixtures = |missing_args: &HashSet<String>| -> Option<Diagnostic> {
-            diagnostic.and_then(|mut diagnostic| {
-                let sub_diagnostics = diagnostic
-                    .sub_diagnostics()
-                    .iter()
-                    .filter_map(|sd| {
-                        if let SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
-                            FixtureSubDiagnosticType::NotFound(fixture_name),
-                        )) = sd.severity()
-                        {
-                            if missing_args.contains(fixture_name) {
-                                Some(sd.clone())
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                diagnostic.clear_sub_diagnostics();
-                if sub_diagnostics.is_empty() {
-                    None
-                } else {
-                    diagnostic.add_sub_diagnostics(sub_diagnostics);
-                    Some(diagnostic)
-                }
-            })
-        };
-
         let display = self
             .function
             .display(self.module.path().display().to_string());
@@ -122,11 +93,14 @@ impl<'proj> TestCase<'proj> {
                 run_result.stats_mut().add_passed();
             }
             Err(err) => {
-                let missing_args = missing_arguments_from_error(&err.to_string());
-
-                let diagnostic = handle_missing_fixtures(&missing_args).map_or_else(
+                let diagnostic = diagnostic.map_or_else(
                     || Diagnostic::from_test_fail(py, &err, self, self.module),
-                    |missing_fixtures| missing_fixtures,
+                    |input_diagnostic| {
+                        let missing_args = missing_arguments_from_error(&err.to_string());
+                        handle_missing_fixtures(&missing_args, input_diagnostic).unwrap_or_else(
+                            || Diagnostic::from_test_fail(py, &err, self, self.module),
+                        )
+                    },
                 );
 
                 let error_type = diagnostic.severity();
@@ -147,28 +121,67 @@ impl<'proj> TestCase<'proj> {
     }
 }
 
-fn missing_arguments_from_error(err: &str) -> HashSet<String> {
-    // Regex for "missing N required positional arguments: 'a' and 'b'"
-    let re_multi = Regex::new(r"missing \d+ required positional arguments?: (.+)").unwrap();
-    // Regex for "missing 1 required positional argument: 'a'"
-    let re_single = Regex::new(r"missing 1 required positional argument: '([^']+)'").unwrap();
-
-    if let Some(caps) = re_multi.captures(err) {
-        // The group is something like: "'y' and 'z'" or "'x', 'y', and 'z'"
-        let args_str = caps.get(1).unwrap().as_str();
-        let args_str = args_str.replace(" and ", ", ");
-        let mut result = HashSet::new();
-        for part in args_str.split(',') {
-            let trimmed = part.trim();
-            if trimmed.starts_with('\'') && trimmed.ends_with('\'') && trimmed.len() > 2 {
-                result.insert(trimmed[1..trimmed.len() - 1].to_string());
+// Extract closure to standalone function to avoid repeated closure allocation
+fn handle_missing_fixtures(
+    missing_args: &HashSet<String>,
+    mut diagnostic: Diagnostic,
+) -> Option<Diagnostic> {
+    let sub_diagnostics: Vec<_> = diagnostic
+        .sub_diagnostics()
+        .iter()
+        .filter_map(|sd| {
+            if let SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
+                FixtureSubDiagnosticType::NotFound(fixture_name),
+            )) = sd.severity()
+            {
+                if missing_args.contains(fixture_name) {
+                    Some(sd.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
             }
-        }
-        return result;
-    } else if let Some(caps) = re_single.captures(err) {
-        return HashSet::from([caps.get(1).unwrap().as_str().to_string()]);
+        })
+        .collect();
+
+    diagnostic.clear_sub_diagnostics();
+    if sub_diagnostics.is_empty() {
+        None
+    } else {
+        diagnostic.add_sub_diagnostics(sub_diagnostics);
+        Some(diagnostic)
     }
-    HashSet::new()
+}
+
+// Pre-compile regexes at startup for better performance
+static RE_MULTI: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"missing \d+ required positional arguments?: (.+)").unwrap());
+
+static RE_SINGLE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"missing 1 required positional argument: '([^']+)'").unwrap());
+
+fn missing_arguments_from_error(err: &str) -> HashSet<String> {
+    RE_MULTI.captures(err).map_or_else(
+        || {
+            RE_SINGLE.captures(err).map_or_else(HashSet::new, |caps| {
+                HashSet::from([caps.get(1).unwrap().as_str().to_string()])
+            })
+        },
+        |caps| {
+            // The group is something like: "'y' and 'z'" or "'x', 'y', and 'z'"
+            let args_str = caps.get(1).unwrap().as_str();
+            let args_str = args_str.replace(" and ", ", ");
+            let mut result = HashSet::new();
+            for part in args_str.split(',') {
+                let trimmed = part.trim();
+                if trimmed.len() > 2 && trimmed.starts_with('\'') && trimmed.ends_with('\'') {
+                    result.insert(trimmed[1..trimmed.len() - 1].to_string());
+                }
+            }
+            result
+        },
+    )
 }
 
 pub struct TestCaseDisplay<'proj> {
