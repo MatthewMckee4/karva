@@ -5,7 +5,7 @@ use std::{
 };
 
 use karva_project::path::SystemPathBuf;
-use pyo3::{prelude::*, types::PyTuple};
+use pyo3::{prelude::*, types::PyDict};
 use regex::Regex;
 
 use crate::{
@@ -20,7 +20,7 @@ use crate::{
 #[derive(Debug)]
 pub struct TestCase<'proj> {
     function: &'proj TestFunction<'proj>,
-    kwargs: Vec<PyObject>,
+    kwargs: HashMap<String, PyObject>,
     py_function: Py<PyAny>,
     module: &'proj DiscoveredModule<'proj>,
     finalizers: Finalizers,
@@ -29,7 +29,7 @@ pub struct TestCase<'proj> {
 impl<'proj> TestCase<'proj> {
     pub fn new(
         function: &'proj TestFunction<'proj>,
-        kwargs: Vec<PyObject>,
+        kwargs: HashMap<String, PyObject>,
         py_function: Py<PyAny>,
         module: &'proj DiscoveredModule<'proj>,
     ) -> Self {
@@ -77,10 +77,14 @@ impl<'proj> TestCase<'proj> {
             logger.log_running();
             (self.py_function.call0(py), logger)
         } else {
-            let tuple = PyTuple::new(py, self.kwargs.clone()).unwrap();
+            let kwargs = PyDict::new(py);
+
+            for (key, value) in &self.kwargs {
+                let _ = kwargs.set_item(key, value);
+            }
             let logger = TestCaseLogger::new(&display, Some(&self.kwargs));
             logger.log_running();
-            (self.py_function.call(py, tuple, None), logger)
+            (self.py_function.call(py, (), Some(&kwargs)), logger)
         };
 
         match case_call_result {
@@ -201,16 +205,18 @@ struct TestCaseLogger {
 
 impl TestCaseLogger {
     #[must_use]
-    fn new(function: &TestFunctionDisplay<'_>, kwargs: Option<&Vec<PyObject>>) -> Self {
+    fn new(function: &TestFunctionDisplay<'_>, kwargs: Option<&HashMap<String, PyObject>>) -> Self {
         let test_name = kwargs.map_or_else(
             || function.to_string(),
             |kwargs| {
-                let args_str = kwargs
-                    .iter()
-                    .map(|value| format!("{value:?}"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("{function} [{args_str}]",)
+                let mut args_str = String::new();
+                for (i, (key, value)) in kwargs.iter().enumerate() {
+                    if i > 0 {
+                        args_str.push_str(", ");
+                    }
+                    args_str.push_str(&format!("{key}={value:?}"));
+                }
+                format!("{function} [{args_str}]")
             },
         );
 
