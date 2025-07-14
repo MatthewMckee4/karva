@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fmt::{self, Display},
     sync::LazyLock,
 };
@@ -20,7 +20,7 @@ use crate::{
 #[derive(Debug)]
 pub struct TestCase<'proj> {
     function: &'proj TestFunction<'proj>,
-    kwargs: HashMap<String, PyObject>,
+    kwargs: Vec<(String, PyObject)>,
     py_function: Py<PyAny>,
     module: &'proj DiscoveredModule<'proj>,
     finalizers: Finalizers,
@@ -29,7 +29,7 @@ pub struct TestCase<'proj> {
 impl<'proj> TestCase<'proj> {
     pub fn new(
         function: &'proj TestFunction<'proj>,
-        kwargs: HashMap<String, PyObject>,
+        kwargs: Vec<(String, PyObject)>,
         py_function: Py<PyAny>,
         module: &'proj DiscoveredModule<'proj>,
     ) -> Self {
@@ -68,28 +68,28 @@ impl<'proj> TestCase<'proj> {
     pub fn run(&self, py: Python<'_>, diagnostic: Option<Diagnostic>) -> RunDiagnostics {
         let mut run_result = RunDiagnostics::default();
 
-        // let display = self
-        //     .function
-        //     .display(self.module.path().display().to_string());
+        let display = self
+            .function
+            .display(self.module.path().display().to_string());
 
-        let case_call_result = if self.kwargs.is_empty() {
-            // let logger = TestCaseLogger::new(&display, None);
-            // logger.log_running();
-            self.py_function.call0(py)
+        let (case_call_result, logger) = if self.kwargs.is_empty() {
+            let logger = TestCaseLogger::new(&display, None);
+            logger.log_running();
+            (self.py_function.call0(py), logger)
         } else {
             let kwargs = PyDict::new(py);
 
             for (key, value) in &self.kwargs {
                 let _ = kwargs.set_item(key, value);
             }
-            // let logger = TestCaseLogger::new(&display, Some(&kwargs));
-            // logger.log_running();
-            self.py_function.call(py, (), Some(&kwargs))
+            let logger = TestCaseLogger::new(&display, Some(&self.kwargs));
+            logger.log_running();
+            (self.py_function.call(py, (), Some(&kwargs)), logger)
         };
 
         match case_call_result {
             Ok(_) => {
-                // logger.log_passed();
+                logger.log_passed();
                 run_result.stats_mut().add_passed();
             }
             Err(err) => {
@@ -106,10 +106,10 @@ impl<'proj> TestCase<'proj> {
                 let error_type = diagnostic.severity();
 
                 if error_type.is_test_fail() {
-                    // logger.log_failed();
+                    logger.log_failed();
                     run_result.stats_mut().add_failed();
                 } else if error_type.is_test_error() {
-                    // logger.log_errored();
+                    logger.log_errored();
                     run_result.stats_mut().add_errored();
                 }
 
@@ -205,7 +205,7 @@ struct TestCaseLogger {
 
 impl TestCaseLogger {
     #[must_use]
-    fn new(function: &TestFunctionDisplay<'_>, kwargs: Option<&Bound<'_, PyDict>>) -> Self {
+    fn new(function: &TestFunctionDisplay<'_>, kwargs: Option<&Vec<(String, PyObject)>>) -> Self {
         let test_name = kwargs.map_or_else(
             || function.to_string(),
             |kwargs| {
