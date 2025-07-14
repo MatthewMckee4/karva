@@ -100,7 +100,7 @@ impl<'proj> TestFunction<'proj> {
 
         if required_fixture_names.is_empty() {
             return vec![(
-                TestCase::new(self, vec![], py_function.clone(), module),
+                TestCase::new(self, HashMap::new(), py_function.clone(), module),
                 None,
             )];
         }
@@ -119,13 +119,13 @@ impl<'proj> TestFunction<'proj> {
             let mut f = |fixture_manager: &mut FixtureManager| {
                 let num_required_fixtures = required_fixture_names.len();
                 let mut fixture_diagnostics = Vec::with_capacity(num_required_fixtures);
-                let mut required_fixtures = Vec::with_capacity(num_required_fixtures);
+                let mut required_fixtures = HashMap::with_capacity(num_required_fixtures);
 
                 for fixture_name in &required_fixture_names {
                     if let Some(fixture) = params.get(fixture_name) {
-                        required_fixtures.push((fixture_name.clone(), fixture.clone()));
+                        required_fixtures.insert(fixture_name.clone(), fixture.clone());
                     } else if let Some(fixture) = fixture_manager.get_fixture(fixture_name) {
-                        required_fixtures.push((fixture_name.clone(), fixture));
+                        required_fixtures.insert(fixture_name.clone(), fixture);
                     } else {
                         fixture_diagnostics.push(SubDiagnostic::fixture_not_found(fixture_name));
                     }

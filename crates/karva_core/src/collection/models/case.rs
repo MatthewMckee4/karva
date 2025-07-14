@@ -1,11 +1,14 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fmt::{self, Display},
     sync::LazyLock,
 };
 
 use karva_project::path::SystemPathBuf;
-use pyo3::{prelude::*, types::PyDict};
+use pyo3::{
+    prelude::*,
+    types::{PyDict, PyTuple},
+};
 use regex::Regex;
 
 use crate::{
@@ -20,7 +23,7 @@ use crate::{
 #[derive(Debug)]
 pub struct TestCase<'proj> {
     function: &'proj TestFunction<'proj>,
-    kwargs: Vec<(String, PyObject)>,
+    kwargs: HashMap<String, PyObject>,
     py_function: Py<PyAny>,
     module: &'proj DiscoveredModule<'proj>,
     finalizers: Finalizers,
@@ -29,7 +32,7 @@ pub struct TestCase<'proj> {
 impl<'proj> TestCase<'proj> {
     pub fn new(
         function: &'proj TestFunction<'proj>,
-        kwargs: Vec<(String, PyObject)>,
+        kwargs: HashMap<String, PyObject>,
         py_function: Py<PyAny>,
         module: &'proj DiscoveredModule<'proj>,
     ) -> Self {
@@ -77,14 +80,10 @@ impl<'proj> TestCase<'proj> {
             logger.log_running();
             (self.py_function.call0(py), logger)
         } else {
-            let kwargs = PyDict::new(py);
-
-            for (key, value) in &self.kwargs {
-                let _ = kwargs.set_item(key, value);
-            }
+            let tuple = PyTuple::new(py, self.kwargs.values()).unwrap();
             let logger = TestCaseLogger::new(&display, Some(&self.kwargs));
             logger.log_running();
-            (self.py_function.call(py, (), Some(&kwargs)), logger)
+            (self.py_function.call(py, tuple, None), logger)
         };
 
         match case_call_result {
@@ -205,7 +204,7 @@ struct TestCaseLogger {
 
 impl TestCaseLogger {
     #[must_use]
-    fn new(function: &TestFunctionDisplay<'_>, kwargs: Option<&Vec<(String, PyObject)>>) -> Self {
+    fn new(function: &TestFunctionDisplay<'_>, kwargs: Option<&HashMap<String, PyObject>>) -> Self {
         let test_name = kwargs.map_or_else(
             || function.to_string(),
             |kwargs| {
