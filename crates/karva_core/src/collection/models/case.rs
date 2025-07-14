@@ -219,23 +219,23 @@ impl<'proj> TestCaseLogger<'proj> {
     }
 
     fn log(&self, status: &str) {
-        let test_name = self.test_name.clone().unwrap_or_else(|| {
-            self.kwargs.map_or_else(
-                || self.function.to_string(),
-                |kwargs| {
-                    let mut args_str = String::new();
-                    for (i, (key, value)) in kwargs.iter().enumerate() {
-                        if i > 0 {
-                            args_str.push_str(", ");
-                        }
-                        args_str.push_str(&format!("{key}={value:?}"));
-                    }
-                    format!("{} [{args_str}]", self.function)
-                },
-            )
-        });
+        // let test_name = self.test_name.clone().unwrap_or_else(|| {
+        //     self.kwargs.map_or_else(
+        //         || ,
+        //         |kwargs| {
+        //             let mut args_str = String::new();
+        //             for (i, (key, value)) in kwargs.iter().enumerate() {
+        //                 if i > 0 {
+        //                     args_str.push_str(", ");
+        //                 }
+        //                 args_str.push_str(&format!("{key}={value:?}"));
+        //             }
+        //             format!("{} [{args_str}]", self.function)
+        //         },
+        //     )
+        // });
 
-        tracing::info!("{:<8} | {}", status, test_name);
+        tracing::info!("{:<8} | {}", status, self.function.to_string());
     }
 
     fn log_running(&self) {
