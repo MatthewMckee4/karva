@@ -21,12 +21,6 @@ impl RunDiagnostics {
     }
 
     pub fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
-        let severity = diagnostic.severity();
-        if severity.is_test_fail() {
-            self.stats.add_failed();
-        } else if severity.is_test_error() {
-            self.stats.add_errored();
-        }
         self.diagnostics.push(diagnostic);
     }
 

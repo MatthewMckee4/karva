@@ -17,7 +17,7 @@ impl SubDiagnostic {
         Self::new(
             format!("fixture '{fixture_name}' not found"),
             SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
-                FixtureSubDiagnosticType::NotFound,
+                FixtureSubDiagnosticType::NotFound(fixture_name.clone()),
             )),
         )
     }
@@ -53,5 +53,5 @@ pub enum SubDiagnosticErrorType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FixtureSubDiagnosticType {
-    NotFound,
+    NotFound(String),
 }

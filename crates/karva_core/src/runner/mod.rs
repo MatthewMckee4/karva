@@ -31,7 +31,7 @@ impl<'proj> StandardTestRunner<'proj> {
             Discoverer::new(self.project).discover(py)
         });
 
-        let (collected_session, collector_diagnostics) =
+        let collected_session =
             with_gil(self.project, |py| TestCaseCollector::collect(py, &session));
 
         let total_test_cases = collected_session.total_test_cases();
@@ -45,8 +45,6 @@ impl<'proj> StandardTestRunner<'proj> {
         let mut diagnostics = RunDiagnostics::default();
 
         diagnostics.add_diagnostics(discovery_diagnostics);
-
-        diagnostics.add_diagnostics(collector_diagnostics);
 
         if total_test_cases == 0 {
             return diagnostics;

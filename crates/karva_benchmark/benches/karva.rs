@@ -22,6 +22,8 @@ fn create_test_cases() -> Vec<TestCase> {
 fn benchmark_karva(criterion: &mut Criterion) {
     let mut group = criterion.benchmark_group("karva");
 
+    group.sample_size(10);
+
     setup_module();
 
     let root = {

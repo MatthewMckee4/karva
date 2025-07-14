@@ -117,7 +117,7 @@ impl std::fmt::Display for SubDiagnosticDisplay<'_> {
         let diagnostic_type_label = match self.diagnostic.severity() {
             SubDiagnosticSeverity::Error(error_type) => match error_type {
                 SubDiagnosticErrorType::Fixture(fixture_type) => match fixture_type {
-                    FixtureSubDiagnosticType::NotFound => "error (fixture-not-found)".yellow(),
+                    FixtureSubDiagnosticType::NotFound(_) => "error (fixture-not-found)".yellow(),
                 },
                 SubDiagnosticErrorType::Unknown => "error".yellow(),
             },
@@ -367,7 +367,7 @@ mod test {
             let sub_diagnostic = SubDiagnostic::new(
                 "fixture 'my_fixture' not found".to_string(),
                 SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
-                    FixtureSubDiagnosticType::NotFound,
+                    FixtureSubDiagnosticType::NotFound("fixture1".to_string()),
                 )),
             );
 
@@ -441,14 +441,14 @@ mod test {
             let sub_diagnostic1 = SubDiagnostic::new(
                 "fixture 'fixture1' not found".to_string(),
                 SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
-                    FixtureSubDiagnosticType::NotFound,
+                    FixtureSubDiagnosticType::NotFound("fixture1".to_string()),
                 )),
             );
 
             let sub_diagnostic2 = SubDiagnostic::new(
                 "fixture 'fixture2' not found".to_string(),
                 SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
-                    FixtureSubDiagnosticType::NotFound,
+                    FixtureSubDiagnosticType::NotFound("fixture1".to_string()),
                 )),
             );
 
