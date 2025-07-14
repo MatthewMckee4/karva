@@ -97,22 +97,23 @@ impl<'proj> TestCase<'proj> {
             })
         };
 
-        let kwargs = PyDict::new(py);
-
-        for (key, value) in &self.kwargs {
-            let _ = kwargs.set_item(key, value);
-        }
-
         let display = self
             .function
             .display(self.module.path().display().to_string());
-        let logger = TestCaseLogger::new(&display, &kwargs);
-        logger.log_running();
 
-        let case_call_result = if self.kwargs.is_empty() {
-            self.py_function.call0(py)
+        let (case_call_result, logger) = if self.kwargs.is_empty() {
+            let logger = TestCaseLogger::new(&display, None);
+            logger.log_running();
+            (self.py_function.call0(py), logger)
         } else {
-            self.py_function.call(py, (), Some(&kwargs))
+            let kwargs = PyDict::new(py);
+
+            for (key, value) in &self.kwargs {
+                let _ = kwargs.set_item(key, value);
+            }
+            let logger = TestCaseLogger::new(&display, Some(&kwargs));
+            logger.log_running();
+            (self.py_function.call(py, (), Some(&kwargs)), logger)
         };
 
         match case_call_result {
@@ -192,17 +193,18 @@ struct TestCaseLogger {
 
 impl TestCaseLogger {
     #[must_use]
-    fn new(function: &TestFunctionDisplay<'_>, kwargs: &Bound<'_, PyDict>) -> Self {
-        let test_name = if kwargs.is_empty() {
-            function.to_string()
-        } else {
-            let args_str = kwargs
-                .iter()
-                .map(|(key, value)| format!("{key}={value:?}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("{function} [{args_str}]",)
-        };
+    fn new(function: &TestFunctionDisplay<'_>, kwargs: Option<&Bound<'_, PyDict>>) -> Self {
+        let test_name = kwargs.map_or_else(
+            || function.to_string(),
+            |kwargs| {
+                let args_str = kwargs
+                    .iter()
+                    .map(|(key, value)| format!("{key}={value:?}"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{function} [{args_str}]",)
+            },
+        );
 
         Self { test_name }
     }
