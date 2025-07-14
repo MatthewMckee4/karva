@@ -214,7 +214,7 @@ impl TestCaseLogger {
                     if i > 0 {
                         args_str.push_str(", ");
                     }
-                    args_str.push_str(&format!("{key}={:?}", value.to_string()));
+                    args_str.push_str(&format!("{key}={value:?}"));
                 }
                 format!("{function} [{args_str}]")
             },
