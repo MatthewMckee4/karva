@@ -68,28 +68,28 @@ impl<'proj> TestCase<'proj> {
     pub fn run(&self, py: Python<'_>, diagnostic: Option<Diagnostic>) -> RunDiagnostics {
         let mut run_result = RunDiagnostics::default();
 
-        let display = self
-            .function
-            .display(self.module.path().display().to_string());
+        // let display = self
+        //     .function
+        //     .display(self.module.path().display().to_string());
 
-        let (case_call_result, logger) = if self.kwargs.is_empty() {
-            let logger = TestCaseLogger::new(&display, None);
-            logger.log_running();
-            (self.py_function.call0(py), logger)
+        let case_call_result = if self.kwargs.is_empty() {
+            // let logger = TestCaseLogger::new(&display, None);
+            // logger.log_running();
+            self.py_function.call0(py)
         } else {
             let kwargs = PyDict::new(py);
 
             for (key, value) in &self.kwargs {
                 let _ = kwargs.set_item(key, value);
             }
-            let logger = TestCaseLogger::new(&display, Some(&kwargs));
-            logger.log_running();
-            (self.py_function.call(py, (), Some(&kwargs)), logger)
+            // let logger = TestCaseLogger::new(&display, Some(&kwargs));
+            // logger.log_running();
+            self.py_function.call(py, (), Some(&kwargs))
         };
 
         match case_call_result {
             Ok(_) => {
-                logger.log_passed();
+                // logger.log_passed();
                 run_result.stats_mut().add_passed();
             }
             Err(err) => {
@@ -106,10 +106,10 @@ impl<'proj> TestCase<'proj> {
                 let error_type = diagnostic.severity();
 
                 if error_type.is_test_fail() {
-                    logger.log_failed();
+                    // logger.log_failed();
                     run_result.stats_mut().add_failed();
                 } else if error_type.is_test_error() {
-                    logger.log_errored();
+                    // logger.log_errored();
                     run_result.stats_mut().add_errored();
                 }
 
@@ -121,7 +121,6 @@ impl<'proj> TestCase<'proj> {
     }
 }
 
-// Extract closure to standalone function to avoid repeated closure allocation
 fn handle_missing_fixtures(
     missing_args: &HashSet<String>,
     mut diagnostic: Diagnostic,
