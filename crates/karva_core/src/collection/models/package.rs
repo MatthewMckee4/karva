@@ -1,3 +1,4 @@
+use karva_project::Project;
 use pyo3::prelude::*;
 
 use crate::{
@@ -39,17 +40,18 @@ impl<'proj> CollectedPackage<'proj> {
 
     pub(crate) fn run_with_reporter(
         &self,
+        project: &Project,
         py: Python<'_>,
         reporter: &mut dyn Reporter,
     ) -> RunDiagnostics {
         let mut diagnostics = RunDiagnostics::default();
 
         for module in &self.modules {
-            diagnostics.update(&module.run_with_reporter(py, reporter));
+            diagnostics.update(&module.run_with_reporter(project, py, reporter));
         }
 
         for package in &self.packages {
-            diagnostics.update(&package.run_with_reporter(py, reporter));
+            diagnostics.update(&package.run_with_reporter(project, py, reporter));
         }
 
         diagnostics.add_diagnostics(self.finalizers.run(py));

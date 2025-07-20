@@ -1,3 +1,4 @@
+use karva_project::Project;
 use pyo3::prelude::*;
 
 use crate::{
@@ -5,6 +6,7 @@ use crate::{
     diagnostic::{Diagnostic, reporter::Reporter},
     extensions::fixtures::Finalizers,
     runner::RunDiagnostics,
+    utils::with_gil,
 };
 
 #[derive(Default)]
@@ -37,17 +39,22 @@ impl<'proj> CollectedModule<'proj> {
 
     pub(crate) fn run_with_reporter(
         &self,
+        project: &Project,
         py: Python<'_>,
         reporter: &dyn Reporter,
     ) -> RunDiagnostics {
         let mut diagnostics = RunDiagnostics::default();
 
-        for (test_case, diagnostic) in &self.test_cases {
-            let result = test_case.run(py, diagnostic.clone());
-            reporter.report();
-            diagnostics.update(&result);
-            diagnostics.add_diagnostics(test_case.finalizers().run(py));
-        }
+        py.allow_threads(|| {
+            with_gil(project, |inner_py| {
+                for (test_case, diagnostic) in &self.test_cases {
+                    let result = test_case.run(inner_py, diagnostic.clone());
+                    reporter.report();
+                    diagnostics.update(&result);
+                    diagnostics.add_diagnostics(test_case.finalizers().run(inner_py));
+                }
+            });
+        });
 
         diagnostics.add_diagnostics(self.finalizers().run(py));
 

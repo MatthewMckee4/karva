@@ -57,7 +57,7 @@ impl<'proj> StandardTestRunner<'proj> {
         reporter.set(total_test_cases);
 
         with_gil(self.project, |py| {
-            diagnostics.update(&collected_session.run_with_reporter(py, reporter));
+            diagnostics.update(&collected_session.run_with_reporter(self.project, py, reporter));
         });
 
         diagnostics
