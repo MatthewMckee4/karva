@@ -68,7 +68,7 @@ impl Default for ProjectOptions {
 #[derive(Debug, Clone)]
 pub struct Project {
     cwd: SystemPathBuf,
-    paths: Vec<SystemPathBuf>,
+    paths: Vec<String>,
     metadata: ProjectMetadata,
     options: ProjectOptions,
 }
@@ -78,7 +78,7 @@ impl Project {
     pub fn new(cwd: SystemPathBuf, paths: Vec<SystemPathBuf>) -> Self {
         Self {
             cwd,
-            paths,
+            paths: paths.into_iter().map(|p| p.display().to_string()).collect(),
             metadata: ProjectMetadata::default(),
             options: ProjectOptions::default(),
         }
@@ -113,6 +113,6 @@ impl Project {
 
     #[must_use]
     pub fn test_paths(&self) -> Vec<Result<TestPath, TestPathError>> {
-        self.paths.iter().map(TestPath::new).collect()
+        self.paths.iter().map(|p| TestPath::new(p)).collect()
     }
 }

@@ -7,10 +7,10 @@ build:
     uv run --no-project maturin build
 
 # Run tests
-test:
+test *args:
     @rm -f target/wheels/*.whl
     uv run --no-project maturin build
-    cargo test
+    cargo test {{args}}
 
 # Build documentation
 docs:

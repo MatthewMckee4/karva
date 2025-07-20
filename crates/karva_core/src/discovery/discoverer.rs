@@ -24,7 +24,7 @@ impl<'proj> StandardDiscoverer<'proj> {
 
     #[must_use]
     pub fn discover(self, py: Python<'_>) -> (DiscoveredPackage<'proj>, Vec<Diagnostic>) {
-        let mut session_package = DiscoveredPackage::new(self.project.cwd().clone(), self.project);
+        let mut session_package = DiscoveredPackage::new(self.project.cwd().clone());
 
         let mut discovery_diagnostics = Vec::new();
         let cwd = self.project.cwd();
@@ -43,27 +43,53 @@ impl<'proj> StandardDiscoverer<'proj> {
                             let module = self.discover_test_file(
                                 py,
                                 path,
-                                &session_package,
                                 &mut discovery_diagnostics,
                                 false,
                             );
+
                             if let Some(module) = module {
                                 session_package.add_module(module);
                             }
                         }
                         TestPath::Directory(path) => {
-                            let mut package = DiscoveredPackage::new(path.clone(), self.project);
+                            let mut package = DiscoveredPackage::new(path.clone());
 
                             self.discover_directory(
                                 py,
                                 &mut package,
-                                &session_package,
                                 &mut discovery_diagnostics,
                                 false,
                             );
                             session_package.add_package(package);
                         }
+                        TestPath::Function {
+                            path,
+                            function_name,
+                        } => {
+                            let module = self.discover_test_file(
+                                py,
+                                path,
+                                &mut discovery_diagnostics,
+                                false,
+                            );
+
+                            if let Some(mut module) = module {
+                                let test_functions = module.test_functions();
+
+                                let filtered_functions: Vec<_> = test_functions
+                                    .into_iter()
+                                    .filter(|func| func.name() == *function_name)
+                                    .cloned()
+                                    .collect();
+
+                                if !filtered_functions.is_empty() {
+                                    module.set_test_functions(filtered_functions);
+                                    session_package.add_module(module);
+                                }
+                            }
+                        }
                     }
+
                     self.add_parent_configuration_packages(
                         py,
                         path.path(),
@@ -87,17 +113,12 @@ impl<'proj> StandardDiscoverer<'proj> {
         &self,
         py: Python<'_>,
         path: &SystemPathBuf,
-        session_package: &DiscoveredPackage<'proj>,
         discovery_diagnostics: &mut Vec<Diagnostic>,
         configuration_only: bool,
     ) -> Option<DiscoveredModule<'proj>> {
         tracing::debug!("Discovering file: {}", path.display());
 
         if !is_python_file(path) {
-            return None;
-        }
-
-        if session_package.contains_path(path) {
             return None;
         }
 
@@ -129,17 +150,17 @@ impl<'proj> StandardDiscoverer<'proj> {
         session_package: &mut DiscoveredPackage<'proj>,
         discovery_diagnostics: &mut Vec<Diagnostic>,
     ) -> Option<()> {
-        let mut current_path = path.clone();
+        let mut current_path = if path.is_dir() {
+            path.clone()
+        } else {
+            path.parent()?.to_path_buf()
+        };
 
         loop {
-            let mut package = DiscoveredPackage::new(current_path.clone(), self.project);
-            self.discover_directory(
-                py,
-                &mut package,
-                session_package,
-                discovery_diagnostics,
-                true,
-            );
+            let mut package = DiscoveredPackage::new(current_path.clone());
+
+            self.discover_directory(py, &mut package, discovery_diagnostics, true);
+
             session_package.add_package(package);
 
             if current_path == *self.project.cwd() {
@@ -158,7 +179,6 @@ impl<'proj> StandardDiscoverer<'proj> {
         &self,
         py: Python<'_>,
         package: &mut DiscoveredPackage<'proj>,
-        session_package: &DiscoveredPackage<'proj>,
         discovery_diagnostics: &mut Vec<Diagnostic>,
         configuration_only: bool,
     ) {
@@ -181,21 +201,17 @@ impl<'proj> StandardDiscoverer<'proj> {
                 continue;
             }
 
-            if session_package.contains_path(&current_path) {
-                continue;
-            }
-
             match entry.file_type() {
                 Some(file_type) if file_type.is_dir() => {
                     if configuration_only {
                         continue;
                     }
 
-                    let mut subpackage = DiscoveredPackage::new(current_path.clone(), self.project);
+                    let mut subpackage = DiscoveredPackage::new(current_path.clone());
+
                     self.discover_directory(
                         py,
                         &mut subpackage,
-                        session_package,
                         discovery_diagnostics,
                         configuration_only,
                     );
@@ -210,7 +226,6 @@ impl<'proj> StandardDiscoverer<'proj> {
                             if let Some(module) = self.discover_test_file(
                                 py,
                                 &current_path,
-                                session_package,
                                 discovery_diagnostics,
                                 false,
                             ) {
@@ -221,7 +236,6 @@ impl<'proj> StandardDiscoverer<'proj> {
                             if let Some(module) = self.discover_test_file(
                                 py,
                                 &current_path,
-                                session_package,
                                 discovery_diagnostics,
                                 true,
                             ) {
@@ -578,7 +592,7 @@ def test_function(): pass
 
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        assert_snapshot!(session.display(), @"└── <temp_dir>/<test>/");
+        assert_snapshot!(session.display(), @"");
     }
 
     #[test]

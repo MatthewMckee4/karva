@@ -12,10 +12,10 @@ use crate::{
 #[derive(Debug)]
 pub struct DiscoveredModule<'proj> {
     path: SystemPathBuf,
-    project: &'proj Project,
     test_functions: Vec<TestFunction<'proj>>,
     fixtures: Vec<Fixture>,
     r#type: ModuleType,
+    name: String,
 }
 
 impl<'proj> DiscoveredModule<'proj> {
@@ -23,10 +23,10 @@ impl<'proj> DiscoveredModule<'proj> {
     pub fn new(project: &'proj Project, path: &SystemPathBuf, module_type: ModuleType) -> Self {
         Self {
             path: path.clone(),
-            project,
             test_functions: Vec::new(),
             fixtures: Vec::new(),
             r#type: module_type,
+            name: module_name(project.cwd(), path).expect("Module has no name"),
         }
     }
 
@@ -36,8 +36,8 @@ impl<'proj> DiscoveredModule<'proj> {
     }
 
     #[must_use]
-    pub fn name(&self) -> Option<String> {
-        module_name(self.project.cwd(), &self.path)
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     #[must_use]
@@ -158,7 +158,7 @@ impl<'proj> HasFixtures<'proj> for DiscoveredModule<'proj> {
 
 impl Display for DiscoveredModule<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name().expect("Module has no name"))
+        write!(f, "{}", self.name())
     }
 }
 
@@ -197,7 +197,7 @@ impl<'proj> DisplayDiscoveredModule<'proj> {
 
 impl std::fmt::Display for DisplayDiscoveredModule<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = self.module.name().expect("Module has no name");
+        let name = self.module.name();
         write!(f, "{name}\n├── test_cases [")?;
         let test_cases = self.module.test_functions();
         for (i, test) in test_cases.iter().enumerate() {

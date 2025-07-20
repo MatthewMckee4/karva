@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use karva_project::{path::SystemPathBuf, project::Project};
+use karva_project::path::SystemPathBuf;
 
 use crate::{
     discovery::{DiscoveredModule, ModuleType, TestFunction},
@@ -12,7 +12,6 @@ use crate::{
 #[derive(Debug)]
 pub struct DiscoveredPackage<'proj> {
     path: SystemPathBuf,
-    project: &'proj Project,
     modules: HashMap<SystemPathBuf, DiscoveredModule<'proj>>,
     packages: HashMap<SystemPathBuf, DiscoveredPackage<'proj>>,
     configuration_modules: HashSet<SystemPathBuf>,
@@ -20,10 +19,9 @@ pub struct DiscoveredPackage<'proj> {
 
 impl<'proj> DiscoveredPackage<'proj> {
     #[must_use]
-    pub fn new(path: SystemPathBuf, project: &'proj Project) -> Self {
+    pub fn new(path: SystemPathBuf) -> Self {
         Self {
             path,
-            project,
             modules: HashMap::new(),
             packages: HashMap::new(),
             configuration_modules: HashSet::new(),
@@ -116,7 +114,7 @@ impl<'proj> DiscoveredPackage<'proj> {
             existing_package.add_module(module);
         } else {
             // If not there, create a new one
-            let mut new_package = DiscoveredPackage::new(intermediate_path, self.project);
+            let mut new_package = DiscoveredPackage::new(intermediate_path);
             new_package.add_module(module);
             self.packages
                 .insert(new_package.path().clone(), new_package);
@@ -158,7 +156,7 @@ impl<'proj> DiscoveredPackage<'proj> {
             existing_package.add_package(package);
         } else {
             // If not there, create a new one
-            let mut new_package = DiscoveredPackage::new(intermediate_path, self.project);
+            let mut new_package = DiscoveredPackage::new(intermediate_path);
             new_package.add_package(package);
             self.packages
                 .insert(new_package.path().clone(), new_package);
@@ -329,7 +327,7 @@ impl std::fmt::Display for DisplayDiscoveredPackage<'_> {
 
             // Add modules first (sorted by name)
             let mut modules: Vec<_> = package.modules().values().collect();
-            modules.sort_by_key(|m| m.name().unwrap_or_default());
+            modules.sort_by_key(|m| m.name());
 
             for module in modules {
                 entries.push(("module", module.display().to_string()));
@@ -404,7 +402,7 @@ impl PartialEq<&str> for DisplayDiscoveredPackage<'_> {
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
-    use karva_project::testing::TestEnv;
+    use karva_project::{project::Project, testing::TestEnv};
 
     use super::*;
 
@@ -416,7 +414,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![tests_dir.clone()]);
 
-        let mut package = DiscoveredPackage::new(env.cwd(), &project);
+        let mut package = DiscoveredPackage::new(env.cwd());
 
         package.add_module(DiscoveredModule::new(
             &project,
@@ -441,7 +439,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![tests_dir.clone(), tests_dir_2.clone()]);
 
-        let mut package = DiscoveredPackage::new(tests_dir.clone(), &project);
+        let mut package = DiscoveredPackage::new(tests_dir.clone());
 
         let module =
             DiscoveredModule::new(&project, &tests_dir.join("test_1.py"), ModuleType::Test);
@@ -463,7 +461,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![mapped_test_dir.clone()]);
 
-        let mut package = DiscoveredPackage::new(env.cwd(), &project);
+        let mut package = DiscoveredPackage::new(env.cwd());
 
         let module = DiscoveredModule::new(
             &project,
@@ -499,7 +497,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
 
-        let mut package = DiscoveredPackage::new(env.cwd(), &project);
+        let mut package = DiscoveredPackage::new(env.cwd());
 
         let module = DiscoveredModule::new(&project, &conftest_path, ModuleType::Configuration);
 
