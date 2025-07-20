@@ -120,9 +120,11 @@ impl TestCaseCollector {
             upcast_module_test_cases.as_slice(),
         );
 
-        let Some(module_name) = module.name() else {
+        let module_name = module.name();
+
+        if module_name.is_empty() {
             return module_collected;
-        };
+        }
 
         let Ok(py_module) = PyModule::import(py, module_name) else {
             return module_collected;

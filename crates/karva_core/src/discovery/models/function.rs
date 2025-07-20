@@ -275,8 +275,10 @@ mod tests {
         let test_case = session.test_functions()[0].clone();
 
         assert_eq!(
-            test_case.display(test_module.name().unwrap()).to_string(),
-            format!("{}::test_display", test_module.name().unwrap())
+            test_case
+                .display(test_module.name().to_string())
+                .to_string(),
+            format!("{}::test_display", test_module.name())
         );
     }
 }

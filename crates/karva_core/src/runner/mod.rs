@@ -88,7 +88,7 @@ impl TestRunner for TestEnv {
 
 #[cfg(test)]
 mod tests {
-    use karva_project::testing::TestEnv;
+    use karva_project::{path::SystemPathBuf, testing::TestEnv};
 
     use super::*;
     use crate::diagnostic::{Diagnostic, DiagnosticSeverity};
@@ -399,5 +399,105 @@ def test_fixture_2(fixture):
         }
 
         assert_eq!(*result.stats(), expected_stats, "{result:?}");
+    }
+
+    #[test]
+    fn test_single_function() {
+        let env = TestEnv::with_files([(
+            "<test>/test_file.py",
+            r"
+            def test_1(): pass
+            def test_2(): pass",
+        )]);
+
+        let mapped_path = env.mapped_path("<test>").unwrap().clone();
+
+        let test_file1_path = mapped_path.join("test_file.py");
+
+        let project = Project::new(
+            env.cwd(),
+            vec![SystemPathBuf::from(format!(
+                "{}::test_1",
+                test_file1_path.display()
+            ))],
+        );
+
+        let test_runner = StandardTestRunner::new(&project);
+
+        let result = test_runner.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_single_function_shadowed_by_file() {
+        let env = TestEnv::with_files([(
+            "<test>/test_file.py",
+            r"
+            def test_1(): pass
+            def test_2(): pass",
+        )]);
+
+        let mapped_path = env.mapped_path("<test>").unwrap().clone();
+
+        let test_file1_path = mapped_path.join("test_file.py");
+
+        let project = Project::new(
+            env.cwd(),
+            vec![
+                SystemPathBuf::from(format!("{}::test_1", test_file1_path.display())),
+                test_file1_path,
+            ],
+        );
+
+        let test_runner = StandardTestRunner::new(&project);
+
+        let result = test_runner.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_single_function_shadowed_by_directory() {
+        let env = TestEnv::with_files([(
+            "<test>/test_file.py",
+            r"
+            def test_1(): pass
+            def test_2(): pass",
+        )]);
+
+        let mapped_path = env.mapped_path("<test>").unwrap().clone();
+
+        let test_file1_path = mapped_path.join("test_file.py");
+
+        let project = Project::new(
+            env.cwd(),
+            vec![
+                SystemPathBuf::from(format!("{}::test_1", test_file1_path.display())),
+                mapped_path,
+            ],
+        );
+
+        let test_runner = StandardTestRunner::new(&project);
+
+        let result = test_runner.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
     }
 }
