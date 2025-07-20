@@ -1,14 +1,14 @@
 #[allow(clippy::module_inception)]
-mod diagnostic;
-mod render;
+pub mod diagnostic;
+pub mod render;
 pub mod reporter;
-mod sub_diagnostic;
-mod utils;
+pub mod sub_diagnostic;
+pub mod utils;
 
-pub use diagnostic::{
+pub(crate) use diagnostic::{
     Diagnostic, DiagnosticErrorType, DiagnosticInner, DiagnosticSeverity,
     TestCaseCollectionDiagnosticType, TestCaseDiagnosticType,
 };
-pub use sub_diagnostic::{
+pub(crate) use sub_diagnostic::{
     FixtureSubDiagnosticType, SubDiagnostic, SubDiagnosticErrorType, SubDiagnosticSeverity,
 };

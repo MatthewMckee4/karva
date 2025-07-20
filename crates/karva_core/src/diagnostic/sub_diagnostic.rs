@@ -1,19 +1,19 @@
 use crate::diagnostic::render::SubDiagnosticDisplay;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SubDiagnostic {
+pub(crate) struct SubDiagnostic {
     message: String,
     severity: SubDiagnosticSeverity,
 }
 
 impl SubDiagnostic {
     #[must_use]
-    pub const fn new(message: String, severity: SubDiagnosticSeverity) -> Self {
+    pub(crate) const fn new(message: String, severity: SubDiagnosticSeverity) -> Self {
         Self { message, severity }
     }
 
     #[must_use]
-    pub fn fixture_not_found(fixture_name: &String) -> Self {
+    pub(crate) fn fixture_not_found(fixture_name: &String) -> Self {
         Self::new(
             format!("fixture '{fixture_name}' not found"),
             SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
@@ -23,35 +23,33 @@ impl SubDiagnostic {
     }
 
     #[must_use]
-    pub const fn display(&self) -> SubDiagnosticDisplay<'_> {
+    pub(crate) const fn display(&self) -> SubDiagnosticDisplay<'_> {
         SubDiagnosticDisplay::new(self)
     }
 
     #[must_use]
-    pub fn message(&self) -> &str {
+    pub(crate) fn message(&self) -> &str {
         &self.message
     }
 
     #[must_use]
-    pub const fn severity(&self) -> &SubDiagnosticSeverity {
+    pub(crate) const fn severity(&self) -> &SubDiagnosticSeverity {
         &self.severity
     }
 }
 
 // Sub diagnostic severity
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SubDiagnosticSeverity {
+pub(crate) enum SubDiagnosticSeverity {
     Error(SubDiagnosticErrorType),
-    Warning(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SubDiagnosticErrorType {
+pub(crate) enum SubDiagnosticErrorType {
     Fixture(FixtureSubDiagnosticType),
-    Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FixtureSubDiagnosticType {
+pub(crate) enum FixtureSubDiagnosticType {
     NotFound(String),
 }

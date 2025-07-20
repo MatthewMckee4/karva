@@ -10,17 +10,17 @@ use crate::{
 
 /// A module represents a single python file.
 #[derive(Debug)]
-pub struct DiscoveredModule<'proj> {
+pub(crate) struct DiscoveredModule {
     path: SystemPathBuf,
-    test_functions: Vec<TestFunction<'proj>>,
+    test_functions: Vec<TestFunction>,
     fixtures: Vec<Fixture>,
     r#type: ModuleType,
     name: String,
 }
 
-impl<'proj> DiscoveredModule<'proj> {
+impl DiscoveredModule {
     #[must_use]
-    pub fn new(project: &'proj Project, path: &SystemPathBuf, module_type: ModuleType) -> Self {
+    pub(crate) fn new(project: &Project, path: &SystemPathBuf, module_type: ModuleType) -> Self {
         Self {
             path: path.clone(),
             test_functions: Vec::new(),
@@ -31,60 +31,62 @@ impl<'proj> DiscoveredModule<'proj> {
     }
 
     #[must_use]
-    pub const fn path(&self) -> &SystemPathBuf {
+    pub(crate) const fn path(&self) -> &SystemPathBuf {
         &self.path
     }
 
     #[must_use]
-    pub fn name(&self) -> &str {
+    pub(crate) fn name(&self) -> &str {
         &self.name
     }
 
     #[must_use]
-    pub const fn module_type(&self) -> ModuleType {
+    pub(crate) const fn module_type(&self) -> ModuleType {
         self.r#type
     }
 
     #[must_use]
-    pub fn test_functions(&self) -> Vec<&TestFunction<'proj>> {
+    pub(crate) fn test_functions(&self) -> Vec<&TestFunction> {
         self.test_functions.iter().collect()
     }
 
-    pub fn set_test_functions(&mut self, test_cases: Vec<TestFunction<'proj>>) {
+    pub(crate) fn set_test_functions(&mut self, test_cases: Vec<TestFunction>) {
         self.test_functions = test_cases;
     }
 
     #[must_use]
-    pub fn get_test_function(&self, name: &str) -> Option<&TestFunction<'proj>> {
+    #[cfg(test)]
+    pub(crate) fn get_test_function(&self, name: &str) -> Option<&TestFunction> {
         self.test_functions.iter().find(|tc| tc.name() == name)
     }
 
     #[must_use]
-    pub fn fixtures(&self) -> Vec<&Fixture> {
+    #[cfg(test)]
+    pub(crate) fn fixtures(&self) -> Vec<&Fixture> {
         self.fixtures.iter().collect()
     }
 
-    pub fn set_fixtures(&mut self, fixtures: Vec<Fixture>) {
+    pub(crate) fn set_fixtures(&mut self, fixtures: Vec<Fixture>) {
         self.fixtures = fixtures;
     }
 
     #[must_use]
-    pub fn total_test_functions(&self) -> usize {
+    pub(crate) fn total_test_functions(&self) -> usize {
         self.test_functions.len()
     }
 
     #[must_use]
-    pub fn source_text(&self) -> String {
+    pub(crate) fn source_text(&self) -> String {
         std::fs::read_to_string(self.path()).expect("Failed to read source file")
     }
 
     #[must_use]
-    pub fn line_index(&self) -> LineIndex {
+    pub(crate) fn line_index(&self) -> LineIndex {
         let source_text = self.source_text();
         LineIndex::from_source_text(&source_text)
     }
 
-    pub fn update(&mut self, module: Self) {
+    pub(crate) fn update(&mut self, module: Self) {
         if self.path == module.path {
             for test_case in module.test_functions {
                 if !self
@@ -109,7 +111,7 @@ impl<'proj> DiscoveredModule<'proj> {
     }
 
     #[must_use]
-    pub fn dependencies(&self) -> Vec<&dyn RequiresFixtures> {
+    pub(crate) fn dependencies(&self) -> Vec<&dyn RequiresFixtures> {
         let mut deps = Vec::new();
         for tc in &self.test_functions {
             deps.push(tc as &dyn RequiresFixtures);
@@ -121,17 +123,18 @@ impl<'proj> DiscoveredModule<'proj> {
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.test_functions.is_empty() && self.fixtures.is_empty()
     }
 
     #[must_use]
-    pub const fn display(&self) -> DisplayDiscoveredModule<'_> {
+    #[cfg(test)]
+    pub(crate) const fn display(&self) -> DisplayDiscoveredModule<'_> {
         DisplayDiscoveredModule::new(self)
     }
 }
 
-impl<'proj> HasFixtures<'proj> for DiscoveredModule<'proj> {
+impl<'proj> HasFixtures<'proj> for DiscoveredModule {
     fn all_fixtures<'a: 'proj>(
         &'a self,
         test_cases: &[&dyn RequiresFixtures],
@@ -156,7 +159,7 @@ impl<'proj> HasFixtures<'proj> for DiscoveredModule<'proj> {
     }
 }
 
-impl Display for DiscoveredModule<'_> {
+impl Display for DiscoveredModule {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name())
     }
@@ -165,14 +168,14 @@ impl Display for DiscoveredModule<'_> {
 /// The type of module.
 /// This is used to differentiation between files that contain only test functions and files that contain only configuration functions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ModuleType {
+pub(crate) enum ModuleType {
     Test,
     Configuration,
 }
 
 impl ModuleType {
     #[must_use]
-    pub fn from_path(path: &SystemPathBuf) -> Self {
+    pub(crate) fn from_path(path: &SystemPathBuf) -> Self {
         if path
             .file_name()
             .is_some_and(|file_name| file_name == "conftest.py")
@@ -184,17 +187,20 @@ impl ModuleType {
     }
 }
 
-pub struct DisplayDiscoveredModule<'proj> {
-    module: &'proj DiscoveredModule<'proj>,
+#[cfg(test)]
+pub(crate) struct DisplayDiscoveredModule<'proj> {
+    module: &'proj DiscoveredModule,
 }
 
+#[cfg(test)]
 impl<'proj> DisplayDiscoveredModule<'proj> {
     #[must_use]
-    pub const fn new(module: &'proj DiscoveredModule<'proj>) -> Self {
+    pub(crate) const fn new(module: &'proj DiscoveredModule) -> Self {
         Self { module }
     }
 }
 
+#[cfg(test)]
 impl std::fmt::Display for DisplayDiscoveredModule<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = self.module.name();
@@ -219,18 +225,20 @@ impl std::fmt::Display for DisplayDiscoveredModule<'_> {
     }
 }
 
+#[cfg(test)]
 impl std::fmt::Debug for DisplayDiscoveredModule<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.module.display())
     }
 }
 
+#[cfg(test)]
 impl PartialEq<String> for DisplayDiscoveredModule<'_> {
     fn eq(&self, other: &String) -> bool {
         self.to_string() == *other
     }
 }
-
+#[cfg(test)]
 impl PartialEq<&str> for DisplayDiscoveredModule<'_> {
     fn eq(&self, other: &&str) -> bool {
         self.to_string() == *other

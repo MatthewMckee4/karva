@@ -50,7 +50,7 @@ pub enum TestPath {
 }
 
 impl TestPath {
-    pub fn new(value: &str) -> Result<Self, TestPathError> {
+    pub(crate) fn new(value: &str) -> Result<Self, TestPathError> {
         if let Some(separator_pos) = value.rfind("::") {
             let file_part = &value[..separator_pos];
             let function_name = &value[separator_pos + 2..];
@@ -100,19 +100,6 @@ impl TestPath {
         match self {
             Self::File(path) | Self::Directory(path) | Self::Function { path, .. } => path,
         }
-    }
-
-    #[must_use]
-    pub fn function_name(&self) -> Option<&str> {
-        match self {
-            Self::Function { function_name, .. } => Some(function_name),
-            _ => None,
-        }
-    }
-
-    #[must_use]
-    pub const fn is_function(&self) -> bool {
-        matches!(self, Self::Function { .. })
     }
 }
 

@@ -12,7 +12,7 @@ pub struct DisplayDiagnostic<'a> {
 
 impl<'a> DisplayDiagnostic<'a> {
     #[must_use]
-    pub const fn new(diagnostic: &'a Diagnostic) -> Self {
+    pub(crate) const fn new(diagnostic: &'a Diagnostic) -> Self {
         Self { diagnostic }
     }
 }
@@ -35,7 +35,7 @@ pub struct DiagnosticInnerDisplay<'a> {
 
 impl<'a> DiagnosticInnerDisplay<'a> {
     #[must_use]
-    pub const fn new(diagnostic: &'a DiagnosticInner) -> Self {
+    pub(crate) const fn new(diagnostic: &'a DiagnosticInner) -> Self {
         Self { diagnostic }
     }
 }
@@ -60,7 +60,6 @@ impl std::fmt::Display for DiagnosticInnerDisplay<'_> {
                 DiagnosticErrorType::Known(error) => {
                     format!("error[{}]", to_kebab_case(error)).yellow()
                 }
-                DiagnosticErrorType::Unknown => "error".yellow(),
                 DiagnosticErrorType::Fixture(fixture_type) => match fixture_type {
                     FixtureDiagnosticType::Invalid => "error[invalid-fixture]".yellow(),
                 },
@@ -101,13 +100,13 @@ impl std::fmt::Display for DiagnosticInnerDisplay<'_> {
     }
 }
 
-pub struct SubDiagnosticDisplay<'a> {
+pub(crate) struct SubDiagnosticDisplay<'a> {
     diagnostic: &'a SubDiagnostic,
 }
 
 impl<'a> SubDiagnosticDisplay<'a> {
     #[must_use]
-    pub const fn new(diagnostic: &'a SubDiagnostic) -> Self {
+    pub(crate) const fn new(diagnostic: &'a SubDiagnostic) -> Self {
         Self { diagnostic }
     }
 }
@@ -119,11 +118,7 @@ impl std::fmt::Display for SubDiagnosticDisplay<'_> {
                 SubDiagnosticErrorType::Fixture(fixture_type) => match fixture_type {
                     FixtureSubDiagnosticType::NotFound(_) => "error (fixture-not-found)".yellow(),
                 },
-                SubDiagnosticErrorType::Unknown => "error".yellow(),
             },
-            SubDiagnosticSeverity::Warning(error) => {
-                format!("warning ({})", to_kebab_case(error)).yellow()
-            }
         };
 
         writeln!(f, "{diagnostic_type_label}: {}", self.diagnostic.message())?;
@@ -135,8 +130,8 @@ impl std::fmt::Display for SubDiagnosticDisplay<'_> {
 #[cfg(test)]
 mod test {
     use crate::diagnostic::{
-        Diagnostic, DiagnosticErrorType, DiagnosticInner, DiagnosticSeverity,
-        FixtureSubDiagnosticType, SubDiagnostic, SubDiagnosticErrorType, SubDiagnosticSeverity,
+        DiagnosticErrorType, DiagnosticInner, DiagnosticSeverity, FixtureSubDiagnosticType,
+        SubDiagnostic, SubDiagnosticErrorType, SubDiagnosticSeverity,
         TestCaseCollectionDiagnosticType, TestCaseDiagnosticType,
         diagnostic::FixtureDiagnosticType,
     };
@@ -230,7 +225,7 @@ mod test {
                 Some("Unknown error".to_string()),
                 Some("unknown.py:1".to_string()),
                 None,
-                DiagnosticSeverity::Error(DiagnosticErrorType::Unknown),
+                DiagnosticSeverity::Error(DiagnosticErrorType::Known("UnknownError".to_string())),
             );
 
             let display = diagnostic.display();
@@ -281,7 +276,7 @@ mod test {
                 None,
                 Some("test.py:1".to_string()),
                 None,
-                DiagnosticSeverity::Error(DiagnosticErrorType::Unknown),
+                DiagnosticSeverity::Error(DiagnosticErrorType::Known("UnknownError".to_string())),
             );
 
             let display = diagnostic.display();
@@ -297,7 +292,7 @@ mod test {
                 Some("Error with no location".to_string()),
                 None,
                 None,
-                DiagnosticSeverity::Error(DiagnosticErrorType::Unknown),
+                DiagnosticSeverity::Error(DiagnosticErrorType::Known("UnknownError".to_string())),
             );
 
             let display = diagnostic.display();
@@ -313,7 +308,7 @@ mod test {
                 None,
                 None,
                 None,
-                DiagnosticSeverity::Error(DiagnosticErrorType::Unknown),
+                DiagnosticSeverity::Error(DiagnosticErrorType::Known("UnknownError".to_string())),
             );
 
             let display = diagnostic.display();
@@ -377,190 +372,10 @@ mod test {
             let expected = "error (fixture-not-found): fixture 'my_fixture' not found\n";
             assert_eq!(output, expected);
         }
-
-        #[test]
-        fn test_unknown_error() {
-            let sub_diagnostic = SubDiagnostic::new(
-                "Unknown sub-diagnostic error".to_string(),
-                SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Unknown),
-            );
-
-            let display = sub_diagnostic.display();
-            let output = strip_ansi_codes(&display.to_string());
-
-            let expected = "error: Unknown sub-diagnostic error\n";
-            assert_eq!(output, expected);
-        }
-
-        #[test]
-        fn test_warning() {
-            let sub_diagnostic = SubDiagnostic::new(
-                "This is a sub-diagnostic warning".to_string(),
-                SubDiagnosticSeverity::Warning("TestWarning".to_string()),
-            );
-
-            let display = sub_diagnostic.display();
-            let output = strip_ansi_codes(&display.to_string());
-
-            let expected = "warning (test-warning): This is a sub-diagnostic warning\n";
-            assert_eq!(output, expected);
-        }
-
-        #[test]
-        fn test_kebab_case_conversion_in_sub_warning() {
-            let sub_diagnostic = SubDiagnostic::new(
-                "Warning message".to_string(),
-                SubDiagnosticSeverity::Warning("SomeComplexWarning".to_string()),
-            );
-
-            let display = sub_diagnostic.display();
-            let output = strip_ansi_codes(&display.to_string());
-
-            let expected = "warning (some-complex-warning): Warning message\n";
-            assert_eq!(output, expected);
-        }
-    }
-
-    mod display_diagnostic_tests {
-        use super::*;
-
-        #[test]
-        fn test_diagnostic_with_sub_diagnostics() {
-            let mut diagnostic = Diagnostic::new(
-                Some("Main error".to_string()),
-                Some("test.py:10".to_string()),
-                None,
-                DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                    "test_main".to_string(),
-                    TestCaseDiagnosticType::Collection(
-                        TestCaseCollectionDiagnosticType::FixtureNotFound,
-                    ),
-                )),
-            );
-
-            let sub_diagnostic1 = SubDiagnostic::new(
-                "fixture 'fixture1' not found".to_string(),
-                SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
-                    FixtureSubDiagnosticType::NotFound("fixture1".to_string()),
-                )),
-            );
-
-            let sub_diagnostic2 = SubDiagnostic::new(
-                "fixture 'fixture2' not found".to_string(),
-                SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
-                    FixtureSubDiagnosticType::NotFound("fixture1".to_string()),
-                )),
-            );
-
-            diagnostic.add_sub_diagnostic(sub_diagnostic1);
-            diagnostic.add_sub_diagnostic(sub_diagnostic2);
-
-            let display = diagnostic.display();
-            let output = strip_ansi_codes(&display.to_string());
-
-            let expected = "error[fixtures-not-found]: Main error\n --> test_main at test.py:10\nerror (fixture-not-found): fixture 'fixture1' not found\nerror (fixture-not-found): fixture 'fixture2' not found\n";
-            assert_eq!(output, expected);
-        }
-
-        #[test]
-        fn test_diagnostic_without_sub_diagnostics() {
-            let diagnostic = Diagnostic::new(
-                Some("Simple error".to_string()),
-                Some("simple.py:5".to_string()),
-                None,
-                DiagnosticSeverity::Error(DiagnosticErrorType::Unknown),
-            );
-
-            let display = diagnostic.display();
-            let output = strip_ansi_codes(&display.to_string());
-
-            let expected = "error: Simple error\n --> simple.py:5\n";
-            assert_eq!(output, expected);
-        }
-
-        #[test]
-        fn test_diagnostic_with_mixed_sub_diagnostics() {
-            let mut diagnostic = Diagnostic::new(
-                Some("Mixed error".to_string()),
-                Some("mixed.py:1".to_string()),
-                None,
-                DiagnosticSeverity::Warning("TestWarning".to_string()),
-            );
-
-            let sub_error = SubDiagnostic::new(
-                "Sub error".to_string(),
-                SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Unknown),
-            );
-
-            let sub_warning = SubDiagnostic::new(
-                "Sub warning".to_string(),
-                SubDiagnosticSeverity::Warning("SubWarning".to_string()),
-            );
-
-            diagnostic.add_sub_diagnostic(sub_error);
-            diagnostic.add_sub_diagnostic(sub_warning);
-
-            let display = diagnostic.display();
-            let output = strip_ansi_codes(&display.to_string());
-
-            let expected = "warning[test-warning]: Mixed error\n --> mixed.py:1\nerror: Sub error\nwarning (sub-warning): Sub warning\n";
-            assert_eq!(output, expected);
-        }
-
-        #[test]
-        fn test_unknown_error() {
-            let diagnostic = Diagnostic::unknown_error(
-                Some("Unknown error".to_string()),
-                Some("unknown.py:1".to_string()),
-            );
-
-            let display = diagnostic.display();
-            let output = strip_ansi_codes(&display.to_string());
-
-            let expected = "error: Unknown error\n --> unknown.py:1\n";
-            assert_eq!(output, expected);
-        }
     }
 
     mod edge_case_tests {
         use super::*;
-
-        #[test]
-        fn test_empty_strings() {
-            let diagnostic = DiagnosticInner::new(
-                Some(String::new()),
-                Some(String::new()),
-                Some(String::new()),
-                DiagnosticSeverity::Error(DiagnosticErrorType::Unknown),
-            );
-
-            let display = diagnostic.display();
-            let output = strip_ansi_codes(&display.to_string());
-
-            let expected = "error: \n --> \n\n";
-            assert_eq!(output, expected);
-        }
-
-        #[test]
-        fn test_long_strings() {
-            let long_message = "a".repeat(1000);
-            let long_location = "b".repeat(500);
-            let long_traceback = "c".repeat(2000);
-
-            let diagnostic = DiagnosticInner::new(
-                Some(long_message.clone()),
-                Some(long_location.clone()),
-                Some(long_traceback.clone()),
-                DiagnosticSeverity::Error(DiagnosticErrorType::Unknown),
-            );
-
-            let display = diagnostic.display();
-            let output = strip_ansi_codes(&display.to_string());
-
-            assert!(output.contains(&long_message));
-            assert!(output.contains(&long_location));
-            assert!(output.contains(&long_traceback));
-        }
 
         #[test]
         fn test_special_characters() {

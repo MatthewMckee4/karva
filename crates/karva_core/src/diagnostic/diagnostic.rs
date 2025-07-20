@@ -19,7 +19,7 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     #[must_use]
-    pub const fn new(
+    pub(crate) const fn new(
         message: Option<String>,
         location: Option<String>,
         traceback: Option<String>,
@@ -36,30 +36,21 @@ impl Diagnostic {
         }
     }
 
-    pub fn clear_sub_diagnostics(&mut self) {
+    pub(crate) fn clear_sub_diagnostics(&mut self) {
         self.sub_diagnostics.clear();
     }
 
-    pub fn add_sub_diagnostics(&mut self, sub_diagnostics: Vec<SubDiagnostic>) {
+    pub(crate) fn add_sub_diagnostics(&mut self, sub_diagnostics: Vec<SubDiagnostic>) {
         self.sub_diagnostics.extend(sub_diagnostics);
     }
 
-    pub fn add_sub_diagnostic(&mut self, sub_diagnostic: SubDiagnostic) {
-        self.sub_diagnostics.push(sub_diagnostic);
-    }
-
     #[must_use]
-    pub fn sub_diagnostics(&self) -> &[SubDiagnostic] {
+    pub(crate) fn sub_diagnostics(&self) -> &[SubDiagnostic] {
         &self.sub_diagnostics
     }
 
     #[must_use]
-    pub fn message(&self) -> Option<&str> {
-        self.inner.message.as_deref()
-    }
-
-    #[must_use]
-    pub const fn severity(&self) -> &DiagnosticSeverity {
+    pub(crate) const fn severity(&self) -> &DiagnosticSeverity {
         &self.inner.severity
     }
 
@@ -69,11 +60,11 @@ impl Diagnostic {
     }
 
     #[must_use]
-    pub const fn inner(&self) -> &DiagnosticInner {
+    pub(crate) const fn inner(&self) -> &DiagnosticInner {
         &self.inner
     }
 
-    pub fn from_py_err(
+    pub(crate) fn from_py_err(
         py: Python<'_>,
         error: &PyErr,
         message: Option<String>,
@@ -83,11 +74,11 @@ impl Diagnostic {
         Self::new(message, location, Some(get_traceback(py, error)), severity)
     }
 
-    pub fn from_test_fail(
+    pub(crate) fn from_test_fail(
         py: Python<'_>,
         error: &PyErr,
         test_case: &TestCase,
-        module: &DiscoveredModule<'_>,
+        module: &DiscoveredModule,
     ) -> Self {
         if error.is_instance_of::<pyo3::exceptions::PyAssertionError>(py) {
             return Self::new(
@@ -113,7 +104,7 @@ impl Diagnostic {
     }
 
     #[must_use]
-    pub fn invalid_path_error(error: &TestPathError) -> Self {
+    pub(crate) fn invalid_path_error(error: &TestPathError) -> Self {
         let path = error.path().display().to_string();
         Self::new(
             Some(format!("{error}")),
@@ -124,17 +115,11 @@ impl Diagnostic {
     }
 
     #[must_use]
-    pub const fn unknown_error(message: Option<String>, location: Option<String>) -> Self {
-        Self::new(
-            message,
-            location,
-            None,
-            DiagnosticSeverity::Error(DiagnosticErrorType::Unknown),
-        )
-    }
-
-    #[must_use]
-    pub fn warning(warning_type: &str, message: Option<String>, location: Option<String>) -> Self {
+    pub(crate) fn warning(
+        warning_type: &str,
+        message: Option<String>,
+        location: Option<String>,
+    ) -> Self {
         Self::new(
             message,
             location,
@@ -144,7 +129,7 @@ impl Diagnostic {
     }
 
     #[must_use]
-    pub const fn invalid_fixture(message: Option<String>, location: Option<String>) -> Self {
+    pub(crate) const fn invalid_fixture(message: Option<String>, location: Option<String>) -> Self {
         Self::new(
             message,
             location,
@@ -155,7 +140,7 @@ impl Diagnostic {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DiagnosticInner {
+pub(crate) struct DiagnosticInner {
     message: Option<String>,
     location: Option<String>,
     traceback: Option<String>,
@@ -165,7 +150,7 @@ pub struct DiagnosticInner {
 impl DiagnosticInner {
     #[cfg(test)]
     #[must_use]
-    pub const fn new(
+    pub(crate) const fn new(
         message: Option<String>,
         location: Option<String>,
         traceback: Option<String>,
@@ -180,46 +165,46 @@ impl DiagnosticInner {
     }
 
     #[must_use]
-    pub const fn display(&self) -> DiagnosticInnerDisplay<'_> {
+    pub(crate) const fn display(&self) -> DiagnosticInnerDisplay<'_> {
         DiagnosticInnerDisplay::new(self)
     }
 
     #[must_use]
-    pub fn message(&self) -> Option<&str> {
+    pub(crate) fn message(&self) -> Option<&str> {
         self.message.as_deref()
     }
 
     #[must_use]
-    pub fn location(&self) -> Option<&str> {
+    pub(crate) fn location(&self) -> Option<&str> {
         self.location.as_deref()
     }
 
     #[must_use]
-    pub fn traceback(&self) -> Option<&str> {
+    pub(crate) fn traceback(&self) -> Option<&str> {
         self.traceback.as_deref()
     }
 
     #[must_use]
-    pub const fn severity(&self) -> &DiagnosticSeverity {
+    pub(crate) const fn severity(&self) -> &DiagnosticSeverity {
         &self.severity
     }
 }
 
 // Diagnostic severity
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DiagnosticSeverity {
+pub(crate) enum DiagnosticSeverity {
     Error(DiagnosticErrorType),
     Warning(String),
 }
 
 impl DiagnosticSeverity {
     #[must_use]
-    pub const fn is_error(&self) -> bool {
+    pub(crate) const fn is_error(&self) -> bool {
         matches!(self, Self::Error(_))
     }
 
     #[must_use]
-    pub const fn is_test_fail(&self) -> bool {
+    pub(crate) const fn is_test_fail(&self) -> bool {
         matches!(
             self,
             Self::Error(DiagnosticErrorType::TestCase(
@@ -230,7 +215,7 @@ impl DiagnosticSeverity {
     }
 
     #[must_use]
-    pub const fn is_test_error(&self) -> bool {
+    pub(crate) const fn is_test_error(&self) -> bool {
         matches!(
             self,
             Self::Error(DiagnosticErrorType::TestCase(
@@ -245,26 +230,25 @@ impl DiagnosticSeverity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DiagnosticErrorType {
+pub(crate) enum DiagnosticErrorType {
     TestCase(String, TestCaseDiagnosticType),
     Fixture(FixtureDiagnosticType),
     Known(String),
-    Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TestCaseDiagnosticType {
+pub(crate) enum TestCaseDiagnosticType {
     Fail,
     Error(String),
     Collection(TestCaseCollectionDiagnosticType),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TestCaseCollectionDiagnosticType {
+pub(crate) enum TestCaseCollectionDiagnosticType {
     FixtureNotFound,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FixtureDiagnosticType {
+pub(crate) enum FixtureDiagnosticType {
     Invalid,
 }

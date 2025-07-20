@@ -4,8 +4,6 @@ use karva_project::{
 };
 use pyo3::{PyResult, Python, prelude::*, types::PyAnyMethods};
 use ruff_python_ast::PythonVersion;
-use ruff_source_file::{LineIndex, PositionEncoding};
-use ruff_text_size::TextSize;
 
 #[must_use]
 pub fn current_python_version() -> PythonVersion {
@@ -15,21 +13,14 @@ pub fn current_python_version() -> PythonVersion {
     }))
 }
 
-#[must_use]
-pub fn from_text_size(offset: TextSize, source: &str) -> (usize, usize) {
-    let index = LineIndex::from_source_text(source);
-    let location = index.source_location(offset, source, PositionEncoding::Utf8);
-    (location.line.get(), location.character_offset.get())
-}
-
-pub fn add_to_sys_path(py: &Python<'_>, path: &SystemPathBuf) -> PyResult<()> {
+pub(crate) fn add_to_sys_path(py: Python<'_>, path: &SystemPathBuf) -> PyResult<()> {
     let sys_path = py.import("sys")?;
     let sys_path = sys_path.getattr("path")?;
     sys_path.call_method1("append", (path.display().to_string(),))?;
     Ok(())
 }
 
-pub trait Upcast<T> {
+pub(crate) trait Upcast<T> {
     fn upcast(self) -> T;
 }
 
@@ -80,7 +71,7 @@ fn restore_output<'py>(py: Python<'py>, null_file: &Bound<'py, PyAny>) -> PyResu
     Ok(())
 }
 
-pub fn with_gil<F, R>(project: &Project, f: F) -> R
+pub(crate) fn with_gil<F, R>(project: &Project, f: F) -> R
 where
     F: for<'py> FnOnce(Python<'py>) -> R,
 {
@@ -94,7 +85,7 @@ where
     })
 }
 
-pub fn partition_iter<'a, T>(items: &[&'a T]) -> impl Iterator<Item = (&'a T, Vec<&'a T>)> {
+pub(crate) fn partition_iter<'a, T>(items: &[&'a T]) -> impl Iterator<Item = (&'a T, Vec<&'a T>)> {
     let mut parents_above_current_parent = items.to_vec();
     let mut i = items.len();
     std::iter::from_fn(move || {

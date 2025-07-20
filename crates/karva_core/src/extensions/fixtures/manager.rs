@@ -11,37 +11,37 @@ use crate::{
 };
 
 #[derive(Debug, Default)]
-pub struct FixtureCollection {
+pub(crate) struct FixtureCollection {
     fixtures: HashMap<String, Py<PyAny>>,
     finalizers: Vec<Finalizer>,
 }
 
 impl FixtureCollection {
-    pub fn insert_fixture(&mut self, fixture_name: String, fixture_return: Py<PyAny>) {
+    pub(crate) fn insert_fixture(&mut self, fixture_name: String, fixture_return: Py<PyAny>) {
         self.fixtures.insert(fixture_name, fixture_return);
     }
 
-    pub fn insert_finalizer(&mut self, finalizer: Finalizer) {
+    pub(crate) fn insert_finalizer(&mut self, finalizer: Finalizer) {
         self.finalizers.push(finalizer);
     }
 
-    pub fn iter_fixtures(&self) -> impl Iterator<Item = (&String, &Py<PyAny>)> {
+    pub(crate) fn iter_fixtures(&self) -> impl Iterator<Item = (&String, &Py<PyAny>)> {
         self.fixtures.iter()
     }
 
-    pub fn reset(&mut self) -> Finalizers {
+    pub(crate) fn reset(&mut self) -> Finalizers {
         self.fixtures.clear();
         Finalizers::new(self.finalizers.drain(..).collect())
     }
 
     #[cfg(test)]
-    pub fn contains_fixture(&self, fixture_name: &str) -> bool {
+    pub(crate) fn contains_fixture(&self, fixture_name: &str) -> bool {
         self.fixtures.contains_key(fixture_name)
     }
 }
 
 #[derive(Debug, Default)]
-pub struct FixtureManager {
+pub(crate) struct FixtureManager {
     session: FixtureCollection,
     module: FixtureCollection,
     package: FixtureCollection,
@@ -50,7 +50,7 @@ pub struct FixtureManager {
 
 impl FixtureManager {
     #[must_use]
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             session: FixtureCollection::default(),
             module: FixtureCollection::default(),
@@ -60,17 +60,17 @@ impl FixtureManager {
     }
 
     #[must_use]
-    pub fn get_fixture(&self, fixture_name: &str) -> Option<Py<PyAny>> {
+    pub(crate) fn get_fixture(&self, fixture_name: &str) -> Option<Py<PyAny>> {
         self.all_fixtures().get(fixture_name).cloned()
     }
 
     #[must_use]
-    pub fn contains_fixture(&self, fixture_name: &str) -> bool {
+    pub(crate) fn contains_fixture(&self, fixture_name: &str) -> bool {
         self.all_fixtures().contains_key(fixture_name)
     }
 
     #[must_use]
-    pub fn all_fixtures(&self) -> HashMap<String, Py<PyAny>> {
+    pub(crate) fn all_fixtures(&self) -> HashMap<String, Py<PyAny>> {
         let mut fixtures = HashMap::new();
         for self_fixtures in [&self.session, &self.module, &self.package, &self.function] {
             fixtures.extend(
@@ -82,7 +82,7 @@ impl FixtureManager {
         fixtures
     }
 
-    pub fn insert_fixture(&mut self, fixture_return: Py<PyAny>, fixture: &Fixture) {
+    pub(crate) fn insert_fixture(&mut self, fixture_return: Py<PyAny>, fixture: &Fixture) {
         match fixture.scope() {
             FixtureScope::Session => self
                 .session
@@ -99,7 +99,7 @@ impl FixtureManager {
         }
     }
 
-    pub fn insert_finalizer(&mut self, finalizer: Finalizer, scope: &FixtureScope) {
+    pub(crate) fn insert_finalizer(&mut self, finalizer: Finalizer, scope: &FixtureScope) {
         match scope {
             FixtureScope::Session => self.session.insert_finalizer(finalizer),
             FixtureScope::Module => self.module.insert_finalizer(finalizer),
@@ -117,7 +117,7 @@ impl FixtureManager {
     fn ensure_fixture_dependencies<'proj>(
         &mut self,
         py: Python<'_>,
-        parents: &[&'proj DiscoveredPackage<'proj>],
+        parents: &[&'proj DiscoveredPackage],
         current: &'proj dyn HasFixtures<'proj>,
         fixture: &Fixture,
     ) {
@@ -174,10 +174,10 @@ impl FixtureManager {
         }
     }
 
-    pub fn add_fixtures<'proj>(
+    pub(crate) fn add_fixtures<'proj>(
         &mut self,
         py: Python<'_>,
-        parents: &[&'proj DiscoveredPackage<'proj>],
+        parents: &[&'proj DiscoveredPackage],
         current: &'proj dyn HasFixtures<'proj>,
         scopes: &[FixtureScope],
         dependencies: &[&dyn RequiresFixtures],
@@ -189,19 +189,19 @@ impl FixtureManager {
         }
     }
 
-    pub fn reset_session_fixtures(&mut self) -> Finalizers {
+    pub(crate) fn reset_session_fixtures(&mut self) -> Finalizers {
         self.session.reset()
     }
 
-    pub fn reset_package_fixtures(&mut self) -> Finalizers {
+    pub(crate) fn reset_package_fixtures(&mut self) -> Finalizers {
         self.package.reset()
     }
 
-    pub fn reset_module_fixtures(&mut self) -> Finalizers {
+    pub(crate) fn reset_module_fixtures(&mut self) -> Finalizers {
         self.module.reset()
     }
 
-    pub fn reset_function_fixtures(&mut self) -> Finalizers {
+    pub(crate) fn reset_function_fixtures(&mut self) -> Finalizers {
         self.function.reset()
     }
 }

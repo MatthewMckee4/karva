@@ -7,13 +7,13 @@ use crate::extensions::tags::python::{PyTag, PyTestFunction};
 pub mod python;
 
 #[derive(Debug, Clone)]
-pub enum Tag {
+pub(crate) enum Tag {
     Parametrize(ParametrizeTag),
 }
 
 impl Tag {
     #[must_use]
-    pub fn from_py_tag(py_tag: &PyTag) -> Self {
+    pub(crate) fn from_py_tag(py_tag: &PyTag) -> Self {
         match py_tag {
             PyTag::Parametrize {
                 arg_names,
@@ -26,7 +26,7 @@ impl Tag {
     }
 
     #[must_use]
-    pub fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
+    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let name = py_mark.getattr("name").ok()?.extract::<String>().ok()?;
         if name == "parametrize" {
             ParametrizeTag::try_from_pytest_mark(py_mark).map(Self::Parametrize)
@@ -37,14 +37,14 @@ impl Tag {
 }
 
 #[derive(Debug, Clone)]
-pub struct ParametrizeTag {
-    pub arg_names: Vec<String>,
-    pub arg_values: Vec<Vec<PyObject>>,
+pub(crate) struct ParametrizeTag {
+    pub(crate) arg_names: Vec<String>,
+    pub(crate) arg_values: Vec<Vec<PyObject>>,
 }
 
 impl ParametrizeTag {
     #[must_use]
-    pub fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
+    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let args = py_mark.getattr("args").ok()?;
         if let Ok((arg_name, arg_values)) = args.extract::<(String, Vec<PyObject>)>() {
             Some(Self {
@@ -64,7 +64,7 @@ impl ParametrizeTag {
     }
 
     #[must_use]
-    pub fn each_arg_value(&self) -> Vec<HashMap<String, PyObject>> {
+    pub(crate) fn each_arg_value(&self) -> Vec<HashMap<String, PyObject>> {
         let total_combinations = self.arg_values.len();
         let mut param_args = Vec::with_capacity(total_combinations);
 
@@ -80,18 +80,13 @@ impl ParametrizeTag {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct Tags {
-    pub inner: Vec<Tag>,
+pub(crate) struct Tags {
+    inner: Vec<Tag>,
 }
 
 impl Tags {
     #[must_use]
-    pub const fn new(inner: Vec<Tag>) -> Self {
-        Self { inner }
-    }
-
-    #[must_use]
-    pub fn from_py_any(py: Python<'_>, py_test_function: &Py<PyAny>) -> Self {
+    pub(crate) fn from_py_any(py: Python<'_>, py_test_function: &Py<PyAny>) -> Self {
         if let Ok(py_test_function) = py_test_function.extract::<Py<PyTestFunction>>(py) {
             let mut tags = Vec::new();
             for tag in &py_test_function.borrow(py).tags.inner {
@@ -116,7 +111,10 @@ impl Tags {
     }
 
     #[must_use]
-    pub fn from_pytest_function(py: Python<'_>, py_test_function: &Py<PyAny>) -> Option<Self> {
+    pub(crate) fn from_pytest_function(
+        py: Python<'_>,
+        py_test_function: &Py<PyAny>,
+    ) -> Option<Self> {
         let mut tags = Vec::new();
         if let Ok(marks) = py_test_function.getattr(py, "pytestmark") {
             if let Ok(marks_list) = marks.extract::<Vec<Bound<'_, PyAny>>>(py) {
@@ -133,7 +131,7 @@ impl Tags {
     }
 
     #[must_use]
-    pub fn parametrize_args(&self) -> Vec<HashMap<String, PyObject>> {
+    pub(crate) fn parametrize_args(&self) -> Vec<HashMap<String, PyObject>> {
         let mut param_args: Vec<HashMap<String, PyObject>> = vec![HashMap::new()];
 
         for tag in &self.inner {

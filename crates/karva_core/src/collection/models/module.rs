@@ -8,31 +8,38 @@ use crate::{
 };
 
 #[derive(Default)]
-pub struct CollectedModule<'proj> {
+pub(crate) struct CollectedModule<'proj> {
     test_cases: Vec<(TestCase<'proj>, Option<Diagnostic>)>,
     finalizers: Finalizers,
 }
 
 impl<'proj> CollectedModule<'proj> {
     #[must_use]
-    pub fn total_test_cases(&self) -> usize {
+    pub(crate) fn total_test_cases(&self) -> usize {
         self.test_cases.len()
     }
 
-    pub fn add_test_cases(&mut self, test_cases: Vec<(TestCase<'proj>, Option<Diagnostic>)>) {
+    pub(crate) fn add_test_cases(
+        &mut self,
+        test_cases: Vec<(TestCase<'proj>, Option<Diagnostic>)>,
+    ) {
         self.test_cases.extend(test_cases);
     }
 
     #[must_use]
-    pub const fn finalizers(&self) -> &Finalizers {
+    pub(crate) const fn finalizers(&self) -> &Finalizers {
         &self.finalizers
     }
 
-    pub fn add_finalizers(&mut self, finalizers: Finalizers) {
+    pub(crate) fn add_finalizers(&mut self, finalizers: Finalizers) {
         self.finalizers.update(finalizers);
     }
 
-    pub fn run_with_reporter(&self, py: Python<'_>, reporter: &mut dyn Reporter) -> RunDiagnostics {
+    pub(crate) fn run_with_reporter(
+        &self,
+        py: Python<'_>,
+        reporter: &dyn Reporter,
+    ) -> RunDiagnostics {
         let mut diagnostics = RunDiagnostics::default();
 
         for (test_case, diagnostic) in &self.test_cases {

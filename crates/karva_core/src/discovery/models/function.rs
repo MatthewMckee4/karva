@@ -3,7 +3,7 @@ use std::{
     fmt::{self, Display},
 };
 
-use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
+use karva_project::path::SystemPathBuf;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
@@ -23,53 +23,37 @@ use crate::{
 
 /// Represents a single test function.
 #[derive(Clone)]
-pub struct TestFunction<'proj> {
-    project: &'proj Project,
+pub(crate) struct TestFunction {
     path: SystemPathBuf,
     function_definition: StmtFunctionDef,
 }
 
-impl HasFunctionDefinition for TestFunction<'_> {
+impl HasFunctionDefinition for TestFunction {
     fn function_definition(&self) -> &StmtFunctionDef {
         &self.function_definition
     }
 }
 
-impl<'proj> TestFunction<'proj> {
+impl TestFunction {
     #[must_use]
-    pub const fn new(
-        project: &'proj Project,
-        path: SystemPathBuf,
-        function_definition: StmtFunctionDef,
-    ) -> Self {
+    pub(crate) const fn new(path: SystemPathBuf, function_definition: StmtFunctionDef) -> Self {
         Self {
-            project,
             path,
             function_definition,
         }
     }
 
     #[must_use]
-    pub const fn path(&self) -> &SystemPathBuf {
-        &self.path
-    }
-
-    #[must_use]
-    pub fn name_str(&self) -> &str {
+    pub(crate) fn name_str(&self) -> &str {
         &self.function_definition.name
     }
 
     #[must_use]
-    pub fn name(&self) -> String {
+    pub(crate) fn name(&self) -> String {
         self.function_definition.name.to_string()
     }
 
-    #[must_use]
-    pub fn module_name(&self) -> Option<String> {
-        module_name(self.project.cwd(), &self.path)
-    }
-
-    pub fn display_with_line(&self, module: &DiscoveredModule<'_>) -> String {
+    pub(crate) fn display_with_line(&self, module: &DiscoveredModule) -> String {
         let line_index = module.line_index();
         let source_text = module.source_text();
         let start = self.function_definition.range.start();
@@ -77,10 +61,10 @@ impl<'proj> TestFunction<'proj> {
         format!("{}:{}", module.path().display(), line_number.line)
     }
 
-    pub fn collect<'a>(
+    pub(crate) fn collect<'a>(
         &'a self,
         py: Python<'_>,
-        module: &'a DiscoveredModule<'a>,
+        module: &'a DiscoveredModule,
         py_module: &Bound<'_, PyModule>,
         fixture_manager_func: &mut impl FnMut(
             &mut dyn FnMut(&mut FixtureManager) -> (TestCase<'a>, Option<Diagnostic>),
@@ -162,7 +146,7 @@ impl<'proj> TestFunction<'proj> {
         test_cases
     }
 
-    pub const fn display(&self, module_name: String) -> TestFunctionDisplay<'_> {
+    pub(crate) const fn display(&self, module_name: String) -> TestFunctionDisplay<'_> {
         TestFunctionDisplay {
             test_function: self,
             module_name,
@@ -170,8 +154,8 @@ impl<'proj> TestFunction<'proj> {
     }
 }
 
-pub struct TestFunctionDisplay<'proj> {
-    test_function: &'proj TestFunction<'proj>,
+pub(crate) struct TestFunctionDisplay<'proj> {
+    test_function: &'proj TestFunction,
     module_name: String,
 }
 
@@ -181,7 +165,7 @@ impl Display for TestFunctionDisplay<'_> {
     }
 }
 
-impl<'proj> Upcast<Vec<&'proj dyn RequiresFixtures>> for Vec<&'proj TestFunction<'proj>> {
+impl<'proj> Upcast<Vec<&'proj dyn RequiresFixtures>> for Vec<&'proj TestFunction> {
     fn upcast(self) -> Vec<&'proj dyn RequiresFixtures> {
         let mut result = Vec::with_capacity(self.len());
         for tc in self {
@@ -191,7 +175,7 @@ impl<'proj> Upcast<Vec<&'proj dyn RequiresFixtures>> for Vec<&'proj TestFunction
     }
 }
 
-impl<'proj> Upcast<Vec<&'proj dyn HasFunctionDefinition>> for Vec<&'proj TestFunction<'proj>> {
+impl<'proj> Upcast<Vec<&'proj dyn HasFunctionDefinition>> for Vec<&'proj TestFunction> {
     fn upcast(self) -> Vec<&'proj dyn HasFunctionDefinition> {
         let mut result = Vec::with_capacity(self.len());
         for tc in self {
@@ -201,7 +185,7 @@ impl<'proj> Upcast<Vec<&'proj dyn HasFunctionDefinition>> for Vec<&'proj TestFun
     }
 }
 
-impl std::fmt::Debug for TestFunction<'_> {
+impl std::fmt::Debug for TestFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}::{}", self.path.display(), self.name_str())
     }
@@ -229,7 +213,7 @@ mod tests {
 
         let test_case = session.test_functions()[0].clone();
 
-        assert_eq!(test_case.path(), &path);
+        assert_eq!(test_case.path, path);
         assert_eq!(test_case.name(), "test_function");
     }
 

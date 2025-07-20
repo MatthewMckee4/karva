@@ -10,16 +10,16 @@ use crate::{
 
 /// A package represents a single python directory.
 #[derive(Debug)]
-pub struct DiscoveredPackage<'proj> {
+pub(crate) struct DiscoveredPackage {
     path: SystemPathBuf,
-    modules: HashMap<SystemPathBuf, DiscoveredModule<'proj>>,
-    packages: HashMap<SystemPathBuf, DiscoveredPackage<'proj>>,
+    modules: HashMap<SystemPathBuf, DiscoveredModule>,
+    packages: HashMap<SystemPathBuf, DiscoveredPackage>,
     configuration_modules: HashSet<SystemPathBuf>,
 }
 
-impl<'proj> DiscoveredPackage<'proj> {
+impl DiscoveredPackage {
     #[must_use]
-    pub fn new(path: SystemPathBuf) -> Self {
+    pub(crate) fn new(path: SystemPathBuf) -> Self {
         Self {
             path,
             modules: HashMap::new(),
@@ -29,22 +29,23 @@ impl<'proj> DiscoveredPackage<'proj> {
     }
 
     #[must_use]
-    pub const fn path(&self) -> &SystemPathBuf {
+    pub(crate) const fn path(&self) -> &SystemPathBuf {
         &self.path
     }
 
     #[must_use]
-    pub const fn modules(&self) -> &HashMap<SystemPathBuf, DiscoveredModule<'proj>> {
+    pub(crate) const fn modules(&self) -> &HashMap<SystemPathBuf, DiscoveredModule> {
         &self.modules
     }
 
     #[must_use]
-    pub const fn packages(&self) -> &HashMap<SystemPathBuf, Self> {
+    pub(crate) const fn packages(&self) -> &HashMap<SystemPathBuf, Self> {
         &self.packages
     }
 
     #[must_use]
-    pub fn get_module(&self, path: &SystemPathBuf) -> Option<&DiscoveredModule<'proj>> {
+    #[cfg(test)]
+    pub(crate) fn get_module(&self, path: &SystemPathBuf) -> Option<&DiscoveredModule> {
         if let Some(module) = self.modules.get(path) {
             Some(module)
         } else {
@@ -58,7 +59,8 @@ impl<'proj> DiscoveredPackage<'proj> {
     }
 
     #[must_use]
-    pub fn get_package(&self, path: &SystemPathBuf) -> Option<&Self> {
+    #[cfg(test)]
+    pub(crate) fn get_package(&self, path: &SystemPathBuf) -> Option<&Self> {
         // Support nested paths: recursively search sub packages
         if let Some(package) = self.packages.get(path) {
             Some(package)
@@ -72,7 +74,7 @@ impl<'proj> DiscoveredPackage<'proj> {
         }
     }
 
-    pub fn add_module(&mut self, module: DiscoveredModule<'proj>) {
+    pub(crate) fn add_module(&mut self, module: DiscoveredModule) {
         if !module.path().starts_with(self.path()) {
             return;
         }
@@ -114,19 +116,19 @@ impl<'proj> DiscoveredPackage<'proj> {
             existing_package.add_module(module);
         } else {
             // If not there, create a new one
-            let mut new_package = DiscoveredPackage::new(intermediate_path);
+            let mut new_package = Self::new(intermediate_path);
             new_package.add_module(module);
             self.packages
                 .insert(new_package.path().clone(), new_package);
         }
     }
 
-    pub fn add_configuration_module(&mut self, module: DiscoveredModule<'proj>) {
+    pub(crate) fn add_configuration_module(&mut self, module: DiscoveredModule) {
         self.configuration_modules.insert(module.path().clone());
         self.add_module(module);
     }
 
-    pub fn add_package(&mut self, package: Self) {
+    pub(crate) fn add_package(&mut self, package: Self) {
         if !package.path().starts_with(self.path()) {
             return;
         }
@@ -156,7 +158,7 @@ impl<'proj> DiscoveredPackage<'proj> {
             existing_package.add_package(package);
         } else {
             // If not there, create a new one
-            let mut new_package = DiscoveredPackage::new(intermediate_path);
+            let mut new_package = Self::new(intermediate_path);
             new_package.add_package(package);
             self.packages
                 .insert(new_package.path().clone(), new_package);
@@ -164,7 +166,7 @@ impl<'proj> DiscoveredPackage<'proj> {
     }
 
     #[must_use]
-    pub fn total_test_functions(&self) -> usize {
+    pub(crate) fn total_test_functions(&self) -> usize {
         let mut total = 0;
         for module in self.modules.values() {
             total += module.total_test_functions();
@@ -175,7 +177,7 @@ impl<'proj> DiscoveredPackage<'proj> {
         total
     }
 
-    pub fn update(&mut self, package: Self) {
+    pub(crate) fn update(&mut self, package: Self) {
         for (_, module) in package.modules {
             self.add_module(module);
         }
@@ -189,7 +191,7 @@ impl<'proj> DiscoveredPackage<'proj> {
     }
 
     #[must_use]
-    pub fn test_functions(&self) -> Vec<&TestFunction<'proj>> {
+    pub(crate) fn test_functions(&self) -> Vec<&TestFunction> {
         let mut functions = self.direct_test_functions();
 
         for sub_package in self.packages.values() {
@@ -200,7 +202,7 @@ impl<'proj> DiscoveredPackage<'proj> {
     }
 
     #[must_use]
-    pub fn direct_test_functions(&self) -> Vec<&TestFunction<'proj>> {
+    pub(crate) fn direct_test_functions(&self) -> Vec<&TestFunction> {
         let mut functions = Vec::new();
 
         for module in self.modules.values() {
@@ -210,27 +212,9 @@ impl<'proj> DiscoveredPackage<'proj> {
         functions
     }
 
-    #[must_use]
-    pub fn contains_path(&self, path: &SystemPathBuf) -> bool {
-        for module in self.modules.values() {
-            if module.path() == path {
-                return true;
-            }
-        }
-        for package in self.packages.values() {
-            if package.path() == path {
-                return true;
-            }
-            if package.contains_path(path) {
-                return true;
-            }
-        }
-        false
-    }
-
     // TODO: Rename this
     #[must_use]
-    pub fn dependencies(&self) -> Vec<&dyn RequiresFixtures> {
+    pub(crate) fn dependencies(&self) -> Vec<&dyn RequiresFixtures> {
         let mut dependencies: Vec<&dyn RequiresFixtures> = Vec::new();
         let direct_test_functions: Vec<&dyn RequiresFixtures> =
             self.direct_test_functions().upcast();
@@ -244,14 +228,14 @@ impl<'proj> DiscoveredPackage<'proj> {
     }
 
     #[must_use]
-    pub fn configuration_modules(&self) -> Vec<&DiscoveredModule<'_>> {
+    pub(crate) fn configuration_modules(&self) -> Vec<&DiscoveredModule> {
         self.configuration_modules
             .iter()
             .filter_map(|path| self.modules.get(path))
             .collect()
     }
 
-    pub fn shrink(&mut self) {
+    pub(crate) fn shrink(&mut self) {
         self.modules.retain(|path, module| {
             if module.is_empty() {
                 self.configuration_modules.remove(path);
@@ -269,17 +253,18 @@ impl<'proj> DiscoveredPackage<'proj> {
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.modules.is_empty() && self.packages.is_empty()
     }
 
     #[must_use]
-    pub const fn display(&self) -> DisplayDiscoveredPackage<'_> {
+    #[cfg(test)]
+    pub(crate) const fn display(&self) -> DisplayDiscoveredPackage<'_> {
         DisplayDiscoveredPackage::new(self)
     }
 }
 
-impl<'proj> HasFixtures<'proj> for DiscoveredPackage<'proj> {
+impl<'proj> HasFixtures<'proj> for DiscoveredPackage {
     fn all_fixtures<'a: 'proj>(
         &'a self,
         test_cases: &[&dyn RequiresFixtures],
@@ -296,7 +281,7 @@ impl<'proj> HasFixtures<'proj> for DiscoveredPackage<'proj> {
     }
 }
 
-impl<'proj> HasFixtures<'proj> for &'proj DiscoveredPackage<'proj> {
+impl<'proj> HasFixtures<'proj> for &'proj DiscoveredPackage {
     fn all_fixtures<'a: 'proj>(
         &'a self,
         test_cases: &[&dyn RequiresFixtures],
@@ -305,22 +290,25 @@ impl<'proj> HasFixtures<'proj> for &'proj DiscoveredPackage<'proj> {
     }
 }
 
-pub struct DisplayDiscoveredPackage<'proj> {
-    package: &'proj DiscoveredPackage<'proj>,
+#[cfg(test)]
+pub(crate) struct DisplayDiscoveredPackage<'proj> {
+    package: &'proj DiscoveredPackage,
 }
 
+#[cfg(test)]
 impl<'proj> DisplayDiscoveredPackage<'proj> {
     #[must_use]
-    pub const fn new(package: &'proj DiscoveredPackage<'proj>) -> Self {
+    pub(crate) const fn new(package: &'proj DiscoveredPackage) -> Self {
         Self { package }
     }
 }
 
+#[cfg(test)]
 impl std::fmt::Display for DisplayDiscoveredPackage<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         fn write_tree(
             f: &mut std::fmt::Formatter<'_>,
-            package: &DiscoveredPackage<'_>,
+            package: &DiscoveredPackage,
             prefix: &str,
         ) -> std::fmt::Result {
             let mut entries = Vec::new();
@@ -381,18 +369,21 @@ impl std::fmt::Display for DisplayDiscoveredPackage<'_> {
     }
 }
 
+#[cfg(test)]
 impl std::fmt::Debug for DisplayDiscoveredPackage<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.package.display())
     }
 }
 
+#[cfg(test)]
 impl PartialEq<String> for DisplayDiscoveredPackage<'_> {
     fn eq(&self, other: &String) -> bool {
         self.to_string() == *other
     }
 }
 
+#[cfg(test)]
 impl PartialEq<&str> for DisplayDiscoveredPackage<'_> {
     fn eq(&self, other: &&str) -> bool {
         self.to_string() == *other

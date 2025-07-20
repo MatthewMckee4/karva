@@ -1,10 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
-    fmt::{self, Display},
     sync::LazyLock,
 };
 
-use karva_project::path::SystemPathBuf;
 use pyo3::{prelude::*, types::PyDict};
 use regex::Regex;
 
@@ -18,20 +16,20 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct TestCase<'proj> {
-    function: &'proj TestFunction<'proj>,
+pub(crate) struct TestCase<'proj> {
+    function: &'proj TestFunction,
     kwargs: HashMap<String, PyObject>,
     py_function: Py<PyAny>,
-    module: &'proj DiscoveredModule<'proj>,
+    module: &'proj DiscoveredModule,
     finalizers: Finalizers,
 }
 
 impl<'proj> TestCase<'proj> {
-    pub fn new(
-        function: &'proj TestFunction<'proj>,
+    pub(crate) fn new(
+        function: &'proj TestFunction,
         kwargs: HashMap<String, PyObject>,
         py_function: Py<PyAny>,
-        module: &'proj DiscoveredModule<'proj>,
+        module: &'proj DiscoveredModule,
     ) -> Self {
         Self {
             function,
@@ -43,29 +41,21 @@ impl<'proj> TestCase<'proj> {
     }
 
     #[must_use]
-    pub const fn function(&self) -> &TestFunction<'proj> {
+    pub(crate) const fn function(&self) -> &TestFunction {
         self.function
     }
 
-    pub fn add_finalizers(&mut self, finalizers: Finalizers) {
+    pub(crate) fn add_finalizers(&mut self, finalizers: Finalizers) {
         self.finalizers.update(finalizers);
     }
 
     #[must_use]
-    pub const fn finalizers(&self) -> &Finalizers {
+    pub(crate) const fn finalizers(&self) -> &Finalizers {
         &self.finalizers
     }
 
     #[must_use]
-    pub const fn display(&self) -> TestCaseDisplay<'_> {
-        TestCaseDisplay {
-            test_case: self,
-            module_path: self.module.path(),
-        }
-    }
-
-    #[must_use]
-    pub fn run(&self, py: Python<'_>, diagnostic: Option<Diagnostic>) -> RunDiagnostics {
+    pub(crate) fn run(&self, py: Python<'_>, diagnostic: Option<Diagnostic>) -> RunDiagnostics {
         let mut run_result = RunDiagnostics::default();
 
         let display = self
@@ -129,15 +119,12 @@ fn handle_missing_fixtures(
         .sub_diagnostics()
         .iter()
         .filter_map(|sd| {
-            if let SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
+            let SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
                 FixtureSubDiagnosticType::NotFound(fixture_name),
-            )) = sd.severity()
-            {
-                if missing_args.contains(fixture_name) {
-                    Some(sd.clone())
-                } else {
-                    None
-                }
+            )) = sd.severity();
+
+            if missing_args.contains(fixture_name) {
+                Some(sd.clone())
             } else {
                 None
             }
@@ -181,22 +168,6 @@ fn missing_arguments_from_error(err: &str) -> HashSet<String> {
             result
         },
     )
-}
-
-pub struct TestCaseDisplay<'proj> {
-    test_case: &'proj TestCase<'proj>,
-    module_path: &'proj SystemPathBuf,
-}
-
-impl Display for TestCaseDisplay<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}::{}",
-            self.module_path.display(),
-            self.test_case.function().name()
-        )
-    }
 }
 
 struct TestCaseLogger {

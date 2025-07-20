@@ -10,7 +10,7 @@ use karva_project::testing::TestEnv;
 use rstest::rstest;
 
 #[ctor::ctor]
-pub fn setup() {
+pub(crate) fn setup() {
     setup_module();
 }
 

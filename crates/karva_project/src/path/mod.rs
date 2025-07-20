@@ -1,4 +1,4 @@
-pub mod test_path;
+pub(crate) mod test_path;
 
 use std::path::{Component, Path, PathBuf};
 
