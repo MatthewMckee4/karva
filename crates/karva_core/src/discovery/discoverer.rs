@@ -12,11 +12,11 @@ use crate::{
     utils::add_to_sys_path,
 };
 
-pub struct Discoverer<'proj> {
+pub struct StandardDiscoverer<'proj> {
     project: &'proj Project,
 }
 
-impl<'proj> Discoverer<'proj> {
+impl<'proj> StandardDiscoverer<'proj> {
     #[must_use]
     pub const fn new(project: &'proj Project) -> Self {
         Self { project }
@@ -239,552 +239,352 @@ impl<'proj> Discoverer<'proj> {
 #[cfg(test)]
 mod tests {
 
-    use std::collections::{HashMap, HashSet};
-
+    use insta::{allow_duplicates, assert_snapshot};
     use karva_project::{project::ProjectOptions, testing::TestEnv, verbosity::VerbosityLevel};
 
     use super::*;
-    use crate::discovery::{StringModule, StringPackage};
 
     #[test]
     fn test_discover_files() {
-        let env = TestEnv::new();
-        let path = env.create_file("test.py", "def test_function(): pass");
+        let env = TestEnv::with_files([("<test>/test.py", "def test_function(): pass")]);
 
-        let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = Discoverer::new(&project);
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::from([(
-                    "test".to_string(),
-                    StringModule {
-                        test_cases: HashSet::from(["test_function".to_string()]),
-                        fixtures: HashSet::new(),
-                    },
-                )]),
-                packages: HashMap::new(),
-            }
-        );
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            └── <test>.test
+                ├── test_cases [test_function]
+                └── fixtures []
+        ");
         assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
     fn test_discover_files_with_directory() {
-        let env = TestEnv::new();
-        let path = env.create_dir("test_dir");
+        let env = TestEnv::with_files([
+            (
+                "<test>/test_dir/test_file1.py",
+                "def test_function1(): pass",
+            ),
+            ("<test>/test_dir/test_file2.py", "def function2(): pass"),
+        ]);
 
-        env.create_file(path.join("test_file1.py"), "def test_function1(): pass");
-        env.create_file(path.join("test_file2.py"), "def function2(): pass");
-
-        let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = Discoverer::new(&project);
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::from([(
-                    "test_dir".to_string(),
-                    StringPackage {
-                        modules: HashMap::from([(
-                            "test_file1".to_string(),
-                            StringModule {
-                                test_cases: HashSet::from(["test_function1".to_string(),]),
-                                fixtures: HashSet::new(),
-                            },
-                        )]),
-                        packages: HashMap::new(),
-                    }
-                )]),
-            }
-        );
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            └── <temp_dir>/<test>/test_dir/
+                └── <test>.test_dir.test_file1
+                    ├── test_cases [test_function1]
+                    └── fixtures []
+        ");
         assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
     fn test_discover_files_with_gitignore() {
-        let env = TestEnv::new();
-        let test_dir = env.create_test_dir();
-
-        env.create_file(test_dir.join("test_file1.py"), "def test_function1(): pass");
-        env.create_file(test_dir.join("test_file2.py"), "def test_function2(): pass");
-        env.create_file(test_dir.join(".gitignore"), "test_file2.py");
+        let env = TestEnv::with_files([
+            ("<test>/test_file1.py", "def test_function1(): pass"),
+            ("<test>/test_file2.py", "def test_function2(): pass"),
+            ("<test>/.gitignore", "test_file2.py"),
+        ]);
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let discoverer = Discoverer::new(&project);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::from([(
-                    env.relative_path(&test_dir).display().to_string(),
-                    StringPackage {
-                        modules: HashMap::from([(
-                            "test_file1".to_string(),
-                            StringModule {
-                                test_cases: HashSet::from(["test_function1".to_string()]),
-                                fixtures: HashSet::new(),
-                            },
-                        )]),
-                        packages: HashMap::new(),
-                    }
-                ),]),
-            }
-        );
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            └── <test>.test_file1
+                ├── test_cases [test_function1]
+                └── fixtures []
+        ");
         assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
     fn test_discover_files_with_nested_directories() {
-        let env = TestEnv::new();
-        let test_dir = env.create_test_dir();
-        env.create_dir(test_dir.join("nested"));
-        env.create_dir(test_dir.join("nested/deeper"));
+        let env = TestEnv::with_files([
+            ("<test>/test_file1.py", "def test_function1(): pass"),
+            ("<test>/nested/test_file2.py", "def test_function2(): pass"),
+            (
+                "<test>/nested/deeper/test_file3.py",
+                "def test_function3(): pass",
+            ),
+        ]);
 
-        env.create_file(test_dir.join("test_file1.py"), "def test_function1(): pass");
-        env.create_file(
-            test_dir.join("nested/test_file2.py"),
-            "def test_function2(): pass",
-        );
-        env.create_file(
-            test_dir.join("nested/deeper/test_file3.py"),
-            "def test_function3(): pass",
-        );
-
-        let project = Project::new(env.cwd(), vec![test_dir.clone()]);
-        let discoverer = Discoverer::new(&project);
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::from([(
-                    env.relative_path(&test_dir).display().to_string(),
-                    StringPackage {
-                        modules: HashMap::from([(
-                            "test_file1".to_string(),
-                            StringModule {
-                                test_cases: HashSet::from(["test_function1".to_string(),]),
-                                fixtures: HashSet::new(),
-                            },
-                        )]),
-                        packages: HashMap::from([(
-                            "nested".to_string(),
-                            StringPackage {
-                                modules: HashMap::from([(
-                                    "test_file2".to_string(),
-                                    StringModule {
-                                        test_cases: HashSet::from(["test_function2".to_string(),]),
-                                        fixtures: HashSet::new(),
-                                    },
-                                )]),
-                                packages: HashMap::from([(
-                                    "deeper".to_string(),
-                                    StringPackage {
-                                        modules: HashMap::from([(
-                                            "test_file3".to_string(),
-                                            StringModule {
-                                                test_cases: HashSet::from([
-                                                    "test_function3".to_string(),
-                                                ]),
-                                                fixtures: HashSet::new(),
-                                            },
-                                        )]),
-                                        packages: HashMap::new(),
-                                    }
-                                )]),
-                            }
-                        )]),
-                    }
-                )]),
-            }
-        );
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            ├── <test>.test_file1
+            │   ├── test_cases [test_function1]
+            │   └── fixtures []
+            └── <temp_dir>/<test>/nested/
+                ├── <test>.nested.test_file2
+                │   ├── test_cases [test_function2]
+                │   └── fixtures []
+                └── <temp_dir>/<test>/nested/deeper/
+                    └── <test>.nested.deeper.test_file3
+                        ├── test_cases [test_function3]
+                        └── fixtures []
+        ");
         assert_eq!(session.total_test_functions(), 3);
     }
 
     #[test]
     fn test_discover_files_with_multiple_test_functions() {
-        let env = TestEnv::new();
-        let path = env.create_file(
-            "test_file.py",
+        let env = TestEnv::with_files([(
+            "<test>/test_file.py",
             r"
 def test_function1(): pass
 def test_function2(): pass
 def test_function3(): pass
 def not_a_test(): pass
 ",
-        );
+        )]);
 
-        let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = Discoverer::new(&project);
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::from([(
-                    "test_file".to_string(),
-                    StringModule {
-                        test_cases: HashSet::from([
-                            "test_function1".to_string(),
-                            "test_function2".to_string(),
-                            "test_function3".to_string(),
-                        ]),
-                        fixtures: HashSet::new(),
-                    },
-                )]),
-                packages: HashMap::new(),
-            }
-        );
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            └── <test>.test_file
+                ├── test_cases [test_function1 test_function2 test_function3]
+                └── fixtures []
+        ");
         assert_eq!(session.total_test_functions(), 3);
     }
 
     #[test]
-    fn test_discover_files_with_nonexistent_function() {
-        let env = TestEnv::new();
-        let path = env.create_file("test_file.py", "def test_function1(): pass");
+    fn test_discover_files_with_non_existent_function() {
+        let env = TestEnv::with_files([("<test>/test_file.py", "def test_function1(): pass")]);
 
-        let project = Project::new(env.cwd(), vec![path.join("nonexistent_function")]);
-        let discoverer = Discoverer::new(&project);
+        let project = Project::new(env.cwd(), vec![SystemPathBuf::from("non_existent_path")]);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::new(),
-            }
-        );
+        assert_snapshot!(session.display(), @"");
         assert_eq!(session.total_test_functions(), 0);
     }
 
     #[test]
     fn test_discover_files_with_invalid_python() {
-        let env = TestEnv::new();
-        let path = env.create_file("test_file.py", "test_function1 = None");
+        let env = TestEnv::with_files([("<test>/test_file.py", "test_function1 = None")]);
 
-        let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = Discoverer::new(&project);
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::new(),
-            }
-        );
+        assert_snapshot!(session.display(), @"");
         assert_eq!(session.total_test_functions(), 0);
     }
 
     #[test]
     fn test_discover_files_with_custom_test_prefix() {
-        let env = TestEnv::new();
-        let path = env.create_file(
-            "test_file.py",
+        let env = TestEnv::with_files([(
+            "<test>/test_file.py",
             r"
 def check_function1(): pass
 def check_function2(): pass
 def test_function(): pass
 ",
-        );
+        )]);
 
-        let project = Project::new(env.cwd(), vec![path]).with_options(ProjectOptions::new(
+        let project = Project::new(env.cwd(), vec![env.cwd()]).with_options(ProjectOptions::new(
             "check".to_string(),
             VerbosityLevel::Default,
             false,
         ));
-        let discoverer = Discoverer::new(&project);
+
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::from([(
-                    "test_file".to_string(),
-                    StringModule {
-                        test_cases: HashSet::from([
-                            "check_function1".to_string(),
-                            "check_function2".to_string(),
-                        ]),
-                        fixtures: HashSet::new(),
-                    },
-                )]),
-                packages: HashMap::new(),
-            }
-        );
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            └── <test>.test_file
+                ├── test_cases [check_function1 check_function2]
+                └── fixtures []
+        ");
         assert_eq!(session.total_test_functions(), 2);
     }
 
     #[test]
     fn test_discover_files_with_multiple_paths() {
-        let env = TestEnv::new();
-        let file1 = env.create_file("test1.py", "def test_function1(): pass");
-        let file2 = env.create_file("test2.py", "def test_function2(): pass");
-        let test_dir = env.create_test_dir();
-        env.create_file(test_dir.join("test3.py"), "def test_function3(): pass");
+        let env = TestEnv::with_files([
+            ("<test>/test1.py", "def test_function1(): pass"),
+            ("<test>/test2.py", "def test_function2(): pass"),
+            ("<test>/tests/test3.py", "def test_function3(): pass"),
+        ]);
 
-        let project = Project::new(env.cwd(), vec![file1, file2, test_dir.clone()]);
-        let discoverer = Discoverer::new(&project);
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let path_1 = mapped_dir.join("test1.py");
+        let path_2 = mapped_dir.join("test2.py");
+        let path_3 = mapped_dir.join("tests/test3.py");
+
+        let project = Project::new(env.cwd(), vec![path_1, path_2, path_3]);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::from([
-                    (
-                        "test1".to_string(),
-                        StringModule {
-                            test_cases: HashSet::from(["test_function1".to_string(),]),
-                            fixtures: HashSet::new(),
-                        },
-                    ),
-                    (
-                        "test2".to_string(),
-                        StringModule {
-                            test_cases: HashSet::from(["test_function2".to_string(),]),
-                            fixtures: HashSet::new(),
-                        },
-                    )
-                ]),
-                packages: HashMap::from([(
-                    env.relative_path(&test_dir).display().to_string(),
-                    StringPackage {
-                        modules: HashMap::from([(
-                            "test3".to_string(),
-                            StringModule {
-                                test_cases: HashSet::from(["test_function3".to_string(),]),
-                                fixtures: HashSet::new(),
-                            },
-                        )]),
-                        packages: HashMap::new(),
-                    }
-                )]),
-            }
-        );
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            ├── <test>.test1
+            │   ├── test_cases [test_function1]
+            │   └── fixtures []
+            ├── <test>.test2
+            │   ├── test_cases [test_function2]
+            │   └── fixtures []
+            └── <temp_dir>/<test>/tests/
+                └── <test>.tests.test3
+                    ├── test_cases [test_function3]
+                    └── fixtures []
+        ");
         assert_eq!(session.total_test_functions(), 3);
     }
 
     #[test]
     fn test_paths_shadowed_by_other_paths_are_not_discovered_twice() {
-        let env = TestEnv::new();
-        let test_dir = env.create_test_dir();
-        let path = env.create_file(
-            test_dir.join("test_file.py"),
+        let env = TestEnv::with_files([(
+            "<test>/test_file.py",
             "def test_function(): pass\ndef test_function2(): pass",
-        );
+        )]);
 
-        let project = Project::new(env.cwd(), vec![path, test_dir.clone()]);
-        let discoverer = Discoverer::new(&project);
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let path_1 = mapped_dir.join("test_file.py");
+
+        let project = Project::new(env.cwd(), vec![mapped_dir.clone(), path_1]);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::from([(
-                    env.relative_path(&test_dir).display().to_string(),
-                    StringPackage {
-                        modules: HashMap::from([(
-                            "test_file".to_string(),
-                            StringModule {
-                                test_cases: HashSet::from([
-                                    "test_function".to_string(),
-                                    "test_function2".to_string(),
-                                ]),
-                                fixtures: HashSet::new(),
-                            },
-                        )]),
-                        packages: HashMap::new(),
-                    }
-                )]),
-            }
-        );
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            └── <test>.test_file
+                ├── test_cases [test_function test_function2]
+                └── fixtures []
+        ");
         assert_eq!(session.total_test_functions(), 2);
     }
 
     #[test]
     fn test_tests_same_name_different_module_are_discovered() {
-        let env = TestEnv::new();
-        let test_dir = env.create_test_dir();
-        let path = env.create_file(test_dir.join("test_file.py"), "def test_function(): pass");
-        let path2 = env.create_file(test_dir.join("test_file2.py"), "def test_function(): pass");
+        let env = TestEnv::with_files([
+            ("<test>/test_file.py", "def test_function(): pass"),
+            ("<test>/test_file2.py", "def test_function(): pass"),
+        ]);
 
-        let project = Project::new(env.cwd(), vec![path, path2]);
-        let discoverer = Discoverer::new(&project);
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let path_1 = mapped_dir.join("test_file.py");
+        let path_2 = mapped_dir.join("test_file2.py");
+
+        let project = Project::new(env.cwd(), vec![path_1, path_2]);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::from([(
-                    env.relative_path(&test_dir).display().to_string(),
-                    StringPackage {
-                        modules: HashMap::from([
-                            (
-                                "test_file".to_string(),
-                                StringModule {
-                                    test_cases: HashSet::from(["test_function".to_string(),]),
-                                    fixtures: HashSet::new(),
-                                },
-                            ),
-                            (
-                                "test_file2".to_string(),
-                                StringModule {
-                                    test_cases: HashSet::from(["test_function".to_string(),]),
-                                    fixtures: HashSet::new(),
-                                },
-                            )
-                        ]),
-                        packages: HashMap::new(),
-                    }
-                )]),
-            }
-        );
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            ├── <test>.test_file
+            │   ├── test_cases [test_function]
+            │   └── fixtures []
+            └── <test>.test_file2
+                ├── test_cases [test_function]
+                └── fixtures []
+        ");
         assert_eq!(session.total_test_functions(), 2);
     }
 
     #[test]
     fn test_discover_files_with_conftest_explicit_path() {
-        let env = TestEnv::new();
-        let test_dir = env.create_test_dir();
-        let conftest_path =
-            env.create_file(test_dir.join("conftest.py"), "def test_function(): pass");
-        env.create_file(test_dir.join("test_file.py"), "def test_function2(): pass");
+        let env = TestEnv::with_files([
+            ("<test>/conftest.py", "def test_function(): pass"),
+            ("<test>/test_file.py", "def test_function2(): pass"),
+        ]);
+
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let conftest_path = mapped_dir.join("conftest.py");
 
         let project = Project::new(env.cwd(), vec![conftest_path]);
-        let discoverer = Discoverer::new(&project);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::from([(
-                    env.relative_path(&test_dir).display().to_string(),
-                    StringPackage {
-                        modules: HashMap::from([(
-                            "conftest".to_string(),
-                            StringModule {
-                                test_cases: HashSet::from(["test_function".to_string(),]),
-                                fixtures: HashSet::new(),
-                            },
-                        )]),
-                        packages: HashMap::new(),
-                    }
-                )]),
-            }
-        );
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            └── <test>.conftest
+                ├── test_cases [test_function]
+                └── fixtures []
+        ");
         assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
     fn test_discover_files_with_conftest_parent_path_conftest_not_discovered() {
-        let env = TestEnv::new();
-        let test_dir = env.create_test_dir();
-        env.create_file(test_dir.join("conftest.py"), "def test_function(): pass");
-        env.create_file(test_dir.join("test_file.py"), "def test_function2(): pass");
+        let env = TestEnv::with_files([
+            ("<test>/conftest.py", "def test_function(): pass"),
+            ("<test>/test_file.py", "def test_function2(): pass"),
+        ]);
 
-        let project = Project::new(env.cwd(), vec![test_dir.clone()]);
-        let discoverer = Discoverer::new(&project);
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let conftest_path = mapped_dir.join("conftest.py");
+
+        let project = Project::new(env.cwd(), vec![conftest_path]);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::from([(
-                    env.relative_path(&test_dir).display().to_string(),
-                    StringPackage {
-                        modules: HashMap::from([(
-                            "test_file".to_string(),
-                            StringModule {
-                                test_cases: HashSet::from(["test_function2".to_string(),]),
-                                fixtures: HashSet::new(),
-                            },
-                        ),]),
-                        packages: HashMap::new(),
-                    }
-                )]),
-            }
-        );
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            └── <test>.conftest
+                ├── test_cases [test_function]
+                └── fixtures []
+        ");
         assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
     fn test_discover_files_with_cwd_path() {
-        let env = TestEnv::new();
-        let path = env.cwd();
-        let test_dir = env.create_test_dir();
-        env.create_file(test_dir.join("test_file.py"), "def test_function(): pass");
+        let env = TestEnv::with_files([("<test>/test_file.py", "def test_function(): pass")]);
+
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let path = mapped_dir.join("test_file.py");
 
         let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = Discoverer::new(&project);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::from([(
-                    env.relative_path(&test_dir).display().to_string(),
-                    StringPackage {
-                        modules: HashMap::from([(
-                            "test_file".to_string(),
-                            StringModule {
-                                test_cases: HashSet::from(["test_function".to_string(),]),
-                                fixtures: HashSet::new(),
-                            },
-                        )]),
-                        packages: HashMap::new(),
-                    }
-                )]),
-            }
-        );
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            └── <test>.test_file
+                ├── test_cases [test_function]
+                └── fixtures []
+        ");
         assert_eq!(session.total_test_functions(), 1);
     }
 
     #[test]
     fn test_discover_function_inside_function() {
-        let env = TestEnv::new();
-        let path = env.create_file(
-            "test_file.py",
-            "def test_function():
-    def test_function2(): pass",
-        );
+        let env = TestEnv::with_files([(
+            "<test>/test_file.py",
+            "def test_function(): def test_function2(): pass",
+        )]);
+
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let path = mapped_dir.join("test_file.py");
 
         let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = Discoverer::new(&project);
+        let discoverer = StandardDiscoverer::new(&project);
 
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::from([(
-                    "test_file".to_string(),
-                    StringModule {
-                        test_cases: HashSet::from(["test_function".to_string()]),
-                        fixtures: HashSet::new(),
-                    },
-                )]),
-                packages: HashMap::new(),
-            }
-        );
+        assert_snapshot!(session.display(), @"└── <temp_dir>/<test>/");
     }
 
     #[test]
     fn test_discover_fixture_in_same_file_in_root() {
-        let env = TestEnv::new();
-
-        let test_path = env.create_file(
-            "test_1.py",
+        let env = TestEnv::with_files([(
+            "<test>/test_1.py",
             r"
 import karva
 @karva.fixture(scope='function')
@@ -792,509 +592,311 @@ def x():
     return 1
 
 def test_1(x): pass",
-        );
+        )]);
+
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let test_path = mapped_dir.join("test_1.py");
 
         for path in [env.cwd(), test_path] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
-            assert_eq!(
-                session.display(),
-                StringPackage {
-                    modules: HashMap::from([(
-                        "test_1".to_string(),
-                        StringModule {
-                            test_cases: HashSet::from(["test_1".to_string(),]),
-                            fixtures: HashSet::from([("x".to_string(), "function".to_string())]),
-                        },
-                    )]),
-                    packages: HashMap::new(),
-                },
-            );
+            let (session, _) =
+                Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+
+            allow_duplicates!(assert_snapshot!(session.display(), @r"
+            └── <temp_dir>/<test>/
+                └── <test>.test_1
+                    ├── test_cases [test_1]
+                    └── fixtures [x]
+            "));
         }
     }
 
     #[test]
     fn test_discover_fixture_in_same_file_in_test_dir() {
-        let env = TestEnv::new();
-        let fixture = r"
+        let env = TestEnv::with_files([(
+            "<test>/tests/test_1.py",
+            r"
 import karva
 @karva.fixture(scope='function')
-def x():
-    return 1
-";
+def x(): return 1
+def test_1(x): pass",
+        )]);
 
-        let test_dir = env.create_test_dir();
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let test_dir = mapped_dir.join("tests");
+        let test_path = test_dir.join("test_1.py");
 
-        let test_path = env.create_file(
-            test_dir.join("test_1.py"),
-            &format!("{fixture}def test_1(x): pass\n"),
-        );
-
-        for path in [env.cwd(), test_dir.clone(), test_path] {
+        for path in [env.cwd(), test_dir, test_path] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
-            assert_eq!(
-                session.display(),
-                StringPackage {
-                    modules: HashMap::new(),
-                    packages: HashMap::from([(
-                        env.relative_path(&test_dir).display().to_string(),
-                        StringPackage {
-                            modules: HashMap::from([(
-                                "test_1".to_string(),
-                                StringModule {
-                                    test_cases: HashSet::from(["test_1".to_string(),]),
-                                    fixtures: HashSet::from([(
-                                        "x".to_string(),
-                                        "function".to_string()
-                                    )]),
-                                },
-                            )]),
-                            packages: HashMap::new(),
-                        }
-                    )]),
-                },
-            );
+            let (session, _) =
+                Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+            allow_duplicates!(assert_snapshot!(session.display(), @r"
+            └── <temp_dir>/<test>/
+                └── <temp_dir>/<test>/tests/
+                    └── <test>.tests.test_1
+                        ├── test_cases [test_1]
+                        └── fixtures [x]
+            "));
         }
     }
 
     #[test]
     fn test_discover_fixture_in_root_tests_in_test_dir() {
-        let env = TestEnv::new();
-        let fixture = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def x():
     return 1
-";
+",
+            ),
+            ("<test>/tests/test_1.py", "def test_1(x): pass"),
+        ]);
 
-        let test_dir = env.create_test_dir();
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let test_dir = mapped_dir.join("tests");
+        let test_path = test_dir.join("test_1.py");
 
-        env.create_file("conftest.py", fixture);
-
-        let test_path = env.create_file(test_dir.join("test_1.py"), "def test_1(x): pass\n");
-
-        for path in [env.cwd(), test_dir.clone(), test_path] {
+        for path in [env.cwd(), test_dir, test_path] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+            let (session, _) =
+                Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
-            assert_eq!(
-                session.display(),
-                StringPackage {
-                    modules: HashMap::from([(
-                        "conftest".to_string(),
-                        StringModule {
-                            test_cases: HashSet::new(),
-                            fixtures: HashSet::from([("x".to_string(), "function".to_string())]),
-                        },
-                    )]),
-                    packages: HashMap::from([(
-                        env.relative_path(&test_dir).display().to_string(),
-                        StringPackage {
-                            modules: HashMap::from([(
-                                "test_1".to_string(),
-                                StringModule {
-                                    test_cases: HashSet::from(["test_1".to_string(),]),
-                                    fixtures: HashSet::new(),
-                                },
-                            )]),
-                            packages: HashMap::new(),
-                        }
-                    )]),
-                },
-            );
+            allow_duplicates!(assert_snapshot!(session.display(), @r"
+            └── <temp_dir>/<test>/
+                ├── <test>.conftest
+                │   ├── test_cases []
+                │   └── fixtures [x]
+                └── <temp_dir>/<test>/tests/
+                    └── <test>.tests.test_1
+                        ├── test_cases [test_1]
+                        └── fixtures []
+            "));
         }
     }
 
     #[test]
     fn test_discover_fixture_in_root_tests_in_nested_dir() {
-        let env = TestEnv::new();
-        let fixture_x = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def x():
     return 1
-";
-
-        env.create_file("conftest.py", fixture_x);
-
-        let nested_dir = env.create_dir("nested_dir");
-
-        let fixture_y = r"
+",
+            ),
+            (
+                "<test>/nested_dir/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def y(x):
     return 2
-";
-
-        env.create_file(nested_dir.join("conftest.py"), fixture_y);
-
-        let more_nested_dir = nested_dir.join("more_nested_dir");
-
-        let fixture_z = r"
+",
+            ),
+            (
+                "<test>/nested_dir/more_nested_dir/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def z(x, y):
     return 3
-";
-
-        env.create_file(more_nested_dir.join("conftest.py"), fixture_z);
-
-        let even_more_nested_dir = more_nested_dir.join("even_more_nested_dir");
-
-        let fixture_w = r"
+",
+            ),
+            (
+                "<test>/nested_dir/more_nested_dir/even_more_nested_dir/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def w(x, y, z):
     return 4
-";
+",
+            ),
+            (
+                "<test>/nested_dir/more_nested_dir/even_more_nested_dir/test_1.py",
+                "def test_1(x): pass",
+            ),
+        ]);
 
-        env.create_file(even_more_nested_dir.join("conftest.py"), fixture_w);
-
-        let test_path = env.create_file(
-            even_more_nested_dir.join("test_1.py"),
-            "def test_1(x): pass\n",
-        );
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let nested_dir = mapped_dir.join("nested_dir");
+        let more_nested_dir = nested_dir.join("more_nested_dir");
+        let even_more_nested_dir = more_nested_dir.join("even_more_nested_dir");
+        let test_path = even_more_nested_dir.join("test_1.py");
 
         for path in [
             env.cwd(),
-            nested_dir.clone(),
-            more_nested_dir.clone(),
-            even_more_nested_dir.clone(),
+            nested_dir,
+            more_nested_dir,
+            even_more_nested_dir,
             test_path,
         ] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
-            assert_eq!(
-                session.display(),
-                StringPackage {
-                    modules: HashMap::from([(
-                        "conftest".to_string(),
-                        StringModule {
-                            test_cases: HashSet::new(),
-                            fixtures: HashSet::from([("x".to_string(), "function".to_string())]),
-                        },
-                    )]),
-                    packages: HashMap::from([(
-                        env.relative_path(&nested_dir).display().to_string(),
-                        StringPackage {
-                            modules: HashMap::from([(
-                                "conftest".to_string(),
-                                StringModule {
-                                    test_cases: HashSet::new(),
-                                    fixtures: HashSet::from([(
-                                        "y".to_string(),
-                                        "function".to_string()
-                                    )]),
-                                },
-                            )]),
-                            packages: HashMap::from([(
-                                more_nested_dir
-                                    .clone()
-                                    .strip_prefix(&nested_dir)
-                                    .unwrap()
-                                    .display()
-                                    .to_string(),
-                                StringPackage {
-                                    modules: HashMap::from([(
-                                        "conftest".to_string(),
-                                        StringModule {
-                                            test_cases: HashSet::new(),
-                                            fixtures: HashSet::from([(
-                                                "z".to_string(),
-                                                "function".to_string()
-                                            )]),
-                                        },
-                                    )]),
-                                    packages: HashMap::from([(
-                                        even_more_nested_dir
-                                            .clone()
-                                            .strip_prefix(&more_nested_dir)
-                                            .unwrap()
-                                            .display()
-                                            .to_string(),
-                                        StringPackage {
-                                            modules: HashMap::from([
-                                                (
-                                                    "conftest".to_string(),
-                                                    StringModule {
-                                                        test_cases: HashSet::new(),
-                                                        fixtures: HashSet::from([(
-                                                            "w".to_string(),
-                                                            "function".to_string()
-                                                        )]),
-                                                    },
-                                                ),
-                                                (
-                                                    "test_1".to_string(),
-                                                    StringModule {
-                                                        test_cases: HashSet::from([
-                                                            "test_1".to_string(),
-                                                        ]),
-                                                        fixtures: HashSet::new(),
-                                                    },
-                                                )
-                                            ]),
-                                            packages: HashMap::new(),
-                                        },
-                                    )]),
-                                },
-                            )]),
-                        },
-                    ),]),
-                },
-            );
+            let (session, _) =
+                Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+            allow_duplicates!(assert_snapshot!(session.display(), @r"
+            └── <temp_dir>/<test>/
+                ├── <test>.conftest
+                │   ├── test_cases []
+                │   └── fixtures [x]
+                └── <temp_dir>/<test>/nested_dir/
+                    ├── <test>.nested_dir.conftest
+                    │   ├── test_cases []
+                    │   └── fixtures [y]
+                    └── <temp_dir>/<test>/nested_dir/more_nested_dir/
+                        ├── <test>.nested_dir.more_nested_dir.conftest
+                        │   ├── test_cases []
+                        │   └── fixtures [z]
+                        └── <temp_dir>/<test>/nested_dir/more_nested_dir/even_more_nested_dir/
+                            ├── <test>.nested_dir.more_nested_dir.even_more_nested_dir.conftest
+                            │   ├── test_cases []
+                            │   └── fixtures [w]
+                            └── <test>.nested_dir.more_nested_dir.even_more_nested_dir.test_1
+                                ├── test_cases [test_1]
+                                └── fixtures []
+            "));
         }
     }
 
     #[test]
     fn test_discover_multiple_test_paths() {
-        let env = TestEnv::new();
+        let env = TestEnv::with_files([
+            ("<test>/tests/test_1.py", "def test_1(): pass"),
+            ("<test>/tests2/test_2.py", "def test_2(): pass"),
+            ("<test>/test_3.py", "def test_3(): pass"),
+        ]);
 
-        let test_dir_1 = env.create_test_dir();
-        env.create_file(test_dir_1.join("test_1.py"), "def test_1(): pass");
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let test_dir_1 = mapped_dir.join("tests");
+        let test_dir_2 = mapped_dir.join("tests2");
+        let test_file_3 = mapped_dir.join("test_3.py");
 
-        let test_dir_2 = env.create_dir("tests2");
-        env.create_file(test_dir_2.join("test_2.py"), "def test_2(): pass");
+        let project = Project::new(env.cwd(), vec![test_dir_1, test_dir_2, test_file_3]);
 
-        let test_file_3 = env.create_file("test_3.py", "def test_3(): pass");
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
-        let project = Project::new(
-            env.cwd(),
-            vec![test_dir_1.clone(), test_dir_2.clone(), test_file_3],
-        );
-
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
-
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::from([(
-                    "test_3".to_string(),
-                    StringModule {
-                        test_cases: HashSet::from(["test_3".to_string()]),
-                        fixtures: HashSet::new(),
-                    },
-                ),]),
-                packages: HashMap::from([
-                    (
-                        env.relative_path(&test_dir_1).display().to_string(),
-                        StringPackage {
-                            modules: HashMap::from([(
-                                "test_1".to_string(),
-                                StringModule {
-                                    test_cases: HashSet::from(["test_1".to_string()]),
-                                    fixtures: HashSet::new(),
-                                },
-                            ),]),
-                            packages: HashMap::new(),
-                        },
-                    ),
-                    (
-                        env.relative_path(&test_dir_2).display().to_string(),
-                        StringPackage {
-                            modules: HashMap::from([(
-                                "test_2".to_string(),
-                                StringModule {
-                                    test_cases: HashSet::from(["test_2".to_string()]),
-                                    fixtures: HashSet::new(),
-                                },
-                            ),]),
-                            packages: HashMap::new(),
-                        },
-                    ),
-                ]),
-            },
-        );
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            ├── <test>.test_3
+            │   ├── test_cases [test_3]
+            │   └── fixtures []
+            ├── <temp_dir>/<test>/tests/
+            │   └── <test>.tests.test_1
+            │       ├── test_cases [test_1]
+            │       └── fixtures []
+            └── <temp_dir>/<test>/tests2/
+                └── <test>.tests2.test_2
+                    ├── test_cases [test_2]
+                    └── fixtures []
+        ");
     }
 
     #[test]
     fn test_discover_doubly_nested_with_conftest_middle_path() {
-        let env = TestEnv::new();
-
-        let fixture = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def root_fixture():
     return 'from_root'
-";
+",
+            ),
+            (
+                "<test>/tests/middle_dir/deep_dir/test_nested.py",
+                "def test_with_fixture(root_fixture): pass\ndef test_without_fixture(): pass",
+            ),
+        ]);
 
-        let test_dir = env.create_test_dir();
-        env.create_file(test_dir.join("conftest.py"), fixture);
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let test_dir = mapped_dir.join("tests");
+        let middle_dir = test_dir.join("middle_dir");
 
-        let middle_dir = env.create_dir(test_dir.join("middle_dir"));
-        let deep_dir = env.create_dir(middle_dir.join("deep_dir"));
-        env.create_file(
-            deep_dir.join("test_nested.py"),
-            "def test_with_fixture(root_fixture): pass\ndef test_without_fixture(): pass",
-        );
+        let project = Project::new(env.cwd(), vec![middle_dir]);
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
-        let project = Project::new(env.cwd(), vec![middle_dir.clone()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
-
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::from([(
-                    env.relative_path(&test_dir).display().to_string(),
-                    StringPackage {
-                        modules: HashMap::from([(
-                            "conftest".to_string(),
-                            StringModule {
-                                test_cases: HashSet::new(),
-                                fixtures: HashSet::from([(
-                                    "root_fixture".to_string(),
-                                    "function".to_string()
-                                )]),
-                            },
-                        )]),
-                        packages: HashMap::from([(
-                            middle_dir
-                                .strip_prefix(test_dir)
-                                .unwrap()
-                                .display()
-                                .to_string(),
-                            StringPackage {
-                                modules: HashMap::new(),
-                                packages: HashMap::from([(
-                                    "deep_dir".to_string(),
-                                    StringPackage {
-                                        modules: HashMap::from([(
-                                            "test_nested".to_string(),
-                                            StringModule {
-                                                test_cases: HashSet::from([
-                                                    "test_with_fixture".to_string(),
-                                                    "test_without_fixture".to_string(),
-                                                ]),
-                                                fixtures: HashSet::new(),
-                                            },
-                                        )]),
-                                        packages: HashMap::new(),
-                                    },
-                                )]),
-                            },
-                        )]),
-                    },
-                )]),
-            },
-        );
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            └── <temp_dir>/<test>/tests/
+                ├── <test>.tests.conftest
+                │   ├── test_cases []
+                │   └── fixtures [root_fixture]
+                └── <temp_dir>/<test>/tests/middle_dir/
+                    └── <temp_dir>/<test>/tests/middle_dir/deep_dir/
+                        └── <test>.tests.middle_dir.deep_dir.test_nested
+                            ├── test_cases [test_with_fixture test_without_fixture]
+                            └── fixtures []
+        ");
         assert_eq!(session.total_test_functions(), 2);
     }
 
     #[test]
     #[ignore = "pytest is not supported in rust tests"]
     fn test_discover_pytest_fixture() {
-        let env = TestEnv::new();
-
-        let test_dir = env.create_test_dir();
-
-        let fixture = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import pytest
 
 @pytest.fixture
 def x():
     return 1
-";
+",
+            ),
+            ("<test>/tests/test_1.py", "def test_1(x): pass"),
+        ]);
 
-        env.create_file(test_dir.join("conftest.py"), fixture);
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let test_dir = mapped_dir.join("tests");
 
-        env.create_file(test_dir.join("test_1.py"), "def test_1(x): pass");
+        let project = Project::new(env.cwd(), vec![test_dir]);
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
-        let project = Project::new(env.cwd(), vec![test_dir.clone()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
-
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::from([(
-                    env.relative_path(&test_dir).display().to_string(),
-                    StringPackage {
-                        modules: HashMap::from([
-                            (
-                                "conftest".to_string(),
-                                StringModule {
-                                    test_cases: HashSet::new(),
-                                    fixtures: HashSet::from([(
-                                        "x".to_string(),
-                                        "function".to_string()
-                                    )]),
-                                },
-                            ),
-                            (
-                                "test_1".to_string(),
-                                StringModule {
-                                    test_cases: HashSet::from(["test_1".to_string()]),
-                                    fixtures: HashSet::new(),
-                                },
-                            )
-                        ]),
-                        packages: HashMap::new(),
-                    },
-                )]),
-            }
-        );
+        assert_snapshot!(session.display(), @"");
     }
 
     #[test]
     fn test_discover_generator_fixture() {
-        let env = TestEnv::new();
-
-        let test_dir = env.create_test_dir();
-
-        let fixture = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/conftest.py",
+                r"
 import karva
 
 @karva.fixture(scope='function')
 def x():
     yield 1
-";
+",
+            ),
+            ("<test>/test_1.py", "def test_1(x): pass"),
+        ]);
 
-        let conftest_path = env.create_file(test_dir.join("conftest.py"), fixture);
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let conftest_path = mapped_dir.join("conftest.py");
 
-        env.create_file(test_dir.join("test_1.py"), "def test_1(x): pass");
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
-        let project = Project::new(env.cwd(), vec![test_dir.clone()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let mapped_package = session.get_package(mapped_dir).unwrap();
 
-        let test_dir_name = env.relative_path(&test_dir).display().to_string();
-
-        assert_eq!(
-            session.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::from([(
-                    test_dir_name,
-                    StringPackage {
-                        modules: HashMap::from([
-                            (
-                                "test_1".to_string(),
-                                StringModule {
-                                    test_cases: HashSet::from(["test_1".to_string()]),
-                                    fixtures: HashSet::new(),
-                                },
-                            ),
-                            (
-                                "conftest".to_string(),
-                                StringModule {
-                                    test_cases: HashSet::new(),
-                                    fixtures: HashSet::from([(
-                                        "x".to_string(),
-                                        "function".to_string()
-                                    )]),
-                                },
-                            )
-                        ]),
-                        packages: HashMap::new(),
-                    }
-                )]),
-            }
-        );
+        assert_snapshot!(mapped_package.display(), @r"
+        ├── <test>.conftest
+        │   ├── test_cases []
+        │   └── fixtures [x]
+        └── <test>.test_1
+            ├── test_cases [test_1]
+            └── fixtures []
+        ");
 
         let test_1_module = session
             .packages()
-            .get(&test_dir)
+            .get(mapped_dir)
             .unwrap()
             .modules()
             .get(&conftest_path)
@@ -1307,15 +909,15 @@ def x():
 
     #[test]
     fn test_discovery_same_module_given_twice() {
-        let env = TestEnv::new();
+        let env = TestEnv::with_files([("<test>/tests/test_1.py", "def test_1(x): pass")]);
 
-        let test_dir = env.create_test_dir();
-
-        let path = env.create_file(test_dir.join("test_1.py"), "def test_1(x): pass");
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let test_dir = mapped_dir.join("tests");
+        let path = test_dir.join("test_1.py");
 
         let project = Project::new(env.cwd(), vec![path.clone(), path]);
 
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         assert_eq!(session.total_test_functions(), 1);
     }

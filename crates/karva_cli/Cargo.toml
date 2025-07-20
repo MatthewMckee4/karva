@@ -17,7 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 karva_core = { workspace = true }
-karva_project = { workspace = true }
+karva_project = { workspace = true, features = ["testing"] }
 
 ctrlc = { version = "3.4.4" }
 clap = { workspace = true, features = ["wrap_help"] }

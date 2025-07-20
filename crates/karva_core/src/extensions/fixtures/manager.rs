@@ -211,28 +211,32 @@ mod tests {
     use karva_project::{project::Project, testing::TestEnv};
 
     use super::*;
-    use crate::discovery::Discoverer;
+    use crate::discovery::StandardDiscoverer;
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_one_dependency() {
-        let env = TestEnv::new();
-        let tests_dir = env.create_test_dir();
-
-        env.create_file(
-            tests_dir.join("conftest.py"),
-            r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def x():
     return 1
 ",
-        );
-        let test_path = env.create_file(tests_dir.join("test_1.py"), "def test_1(x): pass");
+            ),
+            ("<test>/test_1.py", "def test_1(x): pass"),
+        ]);
+
+        let tests_dir = env.mapped_path("<test>").unwrap();
+
+        let test_path = tests_dir.join("test_1.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
 
-        let tests_package = session.get_package(&tests_dir).unwrap();
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+
+        let tests_package = session.get_package(tests_dir).unwrap();
 
         let test_module = tests_package.get_module(&test_path).unwrap();
 
@@ -255,28 +259,35 @@ def x():
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_two_dependencies() {
-        let env = TestEnv::new();
-        let fixture_x = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def x():
     return 2
-";
-        let fixture_y = r"
+",
+            ),
+            (
+                "<test>/tests/inner/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def y(x):
     return 1
-";
-        let tests_dir = env.create_test_dir();
-        let inner_dir = tests_dir.join("inner");
+",
+            ),
+            ("<test>/tests/inner/test_1.py", "def test_1(y): pass"),
+        ]);
 
-        env.create_file(tests_dir.join("conftest.py"), fixture_x);
-        env.create_file(inner_dir.join("conftest.py"), fixture_y);
-        let test_path = env.create_file(inner_dir.join("test_1.py"), "def test_1(y): pass");
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir = mapped_dir.join("tests");
+        let inner_dir = tests_dir.join("inner");
+        let test_path = inner_dir.join("test_1.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -304,8 +315,10 @@ def y(x):
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_two_dependencies_in_parent() {
-        let env = TestEnv::new();
-        let fixture_x = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def x():
@@ -313,16 +326,18 @@ def x():
 @karva.fixture(scope='function')
 def y(x):
     return 1
-";
+",
+            ),
+            ("<test>/tests/inner/test_1.py", "def test_1(y): pass"),
+        ]);
 
-        let tests_dir = env.create_test_dir();
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir = mapped_dir.join("tests");
         let inner_dir = tests_dir.join("inner");
-
-        env.create_file(tests_dir.join("conftest.py"), fixture_x);
-        let test_path = env.create_file(inner_dir.join("test_1.py"), "def test_1(y): pass");
+        let test_path = inner_dir.join("test_1.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -350,36 +365,45 @@ def y(x):
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies() {
-        let env = TestEnv::new();
-        let fixture_x = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def x():
     return 2
-";
-        let fixture_y = r"
+",
+            ),
+            (
+                "<test>/tests/inner/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def y(x):
     return 1
-";
-        let fixture_z = r"
+",
+            ),
+            (
+                "<test>/tests/inner/inner/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def z(y):
     return 3
-";
-        let tests_dir = env.create_test_dir();
+",
+            ),
+            ("<test>/tests/inner/inner/test_1.py", "def test_1(z): pass"),
+        ]);
+
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir = mapped_dir.join("tests");
         let inner_dir = tests_dir.join("inner");
         let inner_inner_dir = inner_dir.join("inner");
-
-        env.create_file(tests_dir.join("conftest.py"), fixture_x);
-        env.create_file(inner_dir.join("conftest.py"), fixture_y);
-        env.create_file(inner_inner_dir.join("conftest.py"), fixture_z);
-        let test_path = env.create_file(inner_inner_dir.join("test_1.py"), "def test_1(z): pass");
+        let test_path = inner_inner_dir.join("test_1.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -410,14 +434,19 @@ def z(y):
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_two_dependencies_different_scopes() {
-        let env = TestEnv::new();
-        let fixture_x = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='module')
 def x():
     return 2
-";
-        let fixture_y_z = r"
+",
+            ),
+            (
+                "<test>/tests/inner/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def y(x):
@@ -425,16 +454,18 @@ def y(x):
 @karva.fixture(scope='function')
 def z(x):
     return 1
-";
-        let tests_dir = env.create_test_dir();
-        let inner_dir = tests_dir.join("inner");
+",
+            ),
+            ("<test>/tests/inner/test_1.py", "def test_1(y, z): pass"),
+        ]);
 
-        env.create_file(tests_dir.join("conftest.py"), fixture_x);
-        env.create_file(inner_dir.join("conftest.py"), fixture_y_z);
-        let test_path = env.create_file(inner_dir.join("test_1.py"), "def test_1(y, z): pass");
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir = mapped_dir.join("tests");
+        let inner_dir = tests_dir.join("inner");
+        let test_path = inner_dir.join("test_1.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -463,36 +494,45 @@ def z(x):
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes() {
-        let env = TestEnv::new();
-        let fixture_x = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='session')
 def x():
     return 2
-";
-        let fixture_y = r"
+",
+            ),
+            (
+                "<test>/tests/inner/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='module')
 def y(x):
     return 1
-";
-        let fixture_z = r"
+",
+            ),
+            (
+                "<test>/tests/inner/inner/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def z(y):
     return 3
-";
-        let tests_dir = env.create_test_dir();
+",
+            ),
+            ("<test>/tests/inner/inner/test_1.py", "def test_1(z): pass"),
+        ]);
+
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir = mapped_dir.join("tests");
         let inner_dir = tests_dir.join("inner");
         let inner_inner_dir = inner_dir.join("inner");
-
-        env.create_file(tests_dir.join("conftest.py"), fixture_x);
-        env.create_file(inner_dir.join("conftest.py"), fixture_y);
-        env.create_file(inner_inner_dir.join("conftest.py"), fixture_z);
-        let test_path = env.create_file(inner_inner_dir.join("test_1.py"), "def test_1(z): pass");
+        let test_path = inner_inner_dir.join("test_1.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -524,9 +564,10 @@ def z(y):
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
      {
-        let env = TestEnv::new();
-
-        let fixtures = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='module')
 def x():
@@ -538,16 +579,18 @@ def y(x):
 @karva.fixture(scope='function')
 def z(x, y):
     return 1
-";
+",
+            ),
+            ("<test>/tests/inner/test_1.py", "def test_1(z): pass"),
+        ]);
 
-        let tests_dir = env.create_test_dir();
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir = mapped_dir.join("tests");
         let inner_dir = tests_dir.join("inner");
-
-        env.create_file(tests_dir.join("conftest.py"), fixtures);
-        let test_path = env.create_file(inner_dir.join("test_1.py"), "def test_1(z): pass");
+        let test_path = inner_dir.join("test_1.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -576,50 +619,54 @@ def z(x, y):
 
     #[test]
     fn test_fixture_manager_complex_nested_structure_with_session_fixtures() {
-        let env = TestEnv::new();
-
-        let root_fixtures = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='session')
 def database():
     return 'db_connection'
-";
-
-        let api_fixtures = r"
+",
+            ),
+            (
+                "<test>/tests/api/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='package')
 def api_client(database):
     return 'api_client'
-";
-
-        let user_fixtures = r"
+",
+            ),
+            (
+                "<test>/tests/api/users/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='module')
 def user(api_client):
     return 'test_user'
-";
-
-        let auth_fixtures = r"
+",
+            ),
+            (
+                "<test>/tests/api/users/test_user_auth.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def auth_token(user):
     return 'token123'
-";
 
-        let tests_dir = env.create_test_dir();
+def test_user_login(auth_token): pass",
+            ),
+        ]);
+
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir = mapped_dir.join("tests");
         let api_dir = tests_dir.join("api");
         let users_dir = api_dir.join("users");
-
-        env.create_file(tests_dir.join("conftest.py"), root_fixtures);
-        env.create_file(api_dir.join("conftest.py"), api_fixtures);
-        env.create_file(users_dir.join("conftest.py"), user_fixtures);
-        let test_path = env.create_file(
-            users_dir.join("test_user_auth.py"),
-            &format!("{auth_fixtures}\ndef test_user_login(auth_token): pass"),
-        );
+        let test_path = users_dir.join("test_user_auth.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let api_package = tests_package.get_package(&api_dir).unwrap();
@@ -652,48 +699,53 @@ def auth_token(user):
 
     #[test]
     fn test_fixture_manager_multiple_packages_same_level() {
-        let env = TestEnv::new();
-
-        let shared_fixtures = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='session')
 def config():
     return {'env': 'test'}
-";
-
-        let package_a_fixtures = r"
+",
+            ),
+            (
+                "<test>/tests/package_a/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='package')
 def service_a(config):
     return 'service_a'
-";
-
-        let package_b_fixtures = r"
+",
+            ),
+            (
+                "<test>/tests/package_b/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='package')
 def service_b(config):
     return 'service_b'
-";
+",
+            ),
+            (
+                "<test>/tests/package_a/test_a.py",
+                "def test_a(service_a): pass",
+            ),
+            (
+                "<test>/tests/package_b/test_b.py",
+                "def test_b(service_b): pass",
+            ),
+        ]);
 
-        let tests_dir = env.create_test_dir();
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir = mapped_dir.join("tests");
         let package_a_dir = tests_dir.join("package_a");
         let package_b_dir = tests_dir.join("package_b");
-
-        env.create_file(tests_dir.join("conftest.py"), shared_fixtures);
-        env.create_file(package_a_dir.join("conftest.py"), package_a_fixtures);
-        env.create_file(package_b_dir.join("conftest.py"), package_b_fixtures);
-
-        let test_a_path = env.create_file(
-            package_a_dir.join("test_a.py"),
-            "def test_a(service_a): pass",
-        );
-        let test_b_path = env.create_file(
-            package_b_dir.join("test_b.py"),
-            "def test_b(service_b): pass",
-        );
+        let test_a_path = package_a_dir.join("test_a.py");
+        let test_b_path = package_b_dir.join("test_b.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let package_a = tests_package.get_package(&package_a_dir).unwrap();
@@ -737,37 +789,40 @@ def service_b(config):
 
     #[test]
     fn test_fixture_manager_fixture_override_in_nested_packages() {
-        let env = TestEnv::new();
-
-        let root_fixtures = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def data():
     return 'root_data'
-";
-
-        let child_fixtures = r"
+",
+            ),
+            (
+                "<test>/tests/child/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def data():
     return 'child_data'
-";
+",
+            ),
+            ("<test>/tests/test_root.py", "def test_root(data): pass"),
+            (
+                "<test>/tests/child/test_child.py",
+                "def test_child(data): pass",
+            ),
+        ]);
 
-        let tests_dir = env.create_test_dir();
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir = mapped_dir.join("tests");
         let child_dir = tests_dir.join("child");
-
-        env.create_file(tests_dir.join("conftest.py"), root_fixtures);
-        env.create_file(child_dir.join("conftest.py"), child_fixtures);
-
-        let root_test_path =
-            env.create_file(tests_dir.join("test_root.py"), "def test_root(data): pass");
-        let child_test_path = env.create_file(
-            child_dir.join("test_child.py"),
-            "def test_child(data): pass",
-        );
+        let root_test_path = tests_dir.join("test_root.py");
+        let child_test_path = child_dir.join("test_child.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let child_package = tests_package.get_package(&child_dir).unwrap();
@@ -804,9 +859,10 @@ def data():
 
     #[test]
     fn test_fixture_manager_multiple_dependent_fixtures_same_scope() {
-        let env = TestEnv::new();
-
-        let fixtures = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def base():
@@ -820,17 +876,20 @@ def derived_b(base):
 @karva.fixture(scope='function')
 def combined(derived_a, derived_b):
     return f'{derived_a}_{derived_b}'
-";
+",
+            ),
+            (
+                "<test>/tests/test_combined.py",
+                "def test_combined(combined): pass",
+            ),
+        ]);
 
-        let tests_dir = env.create_test_dir();
-        env.create_file(tests_dir.join("conftest.py"), fixtures);
-        let test_path = env.create_file(
-            tests_dir.join("test_combined.py"),
-            "def test_combined(combined): pass",
-        );
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir = mapped_dir.join("tests");
+        let test_path = tests_dir.join("test_combined.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
@@ -856,58 +915,68 @@ def combined(derived_a, derived_b):
 
     #[test]
     fn test_fixture_manager_deep_nesting_five_levels() {
-        let env = TestEnv::new();
-
-        let level1_fixtures = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='session')
 def level1():
     return 'l1'
-";
-        let level2_fixtures = r"
+",
+            ),
+            (
+                "<test>/tests/level2/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='package')
 def level2(level1):
     return 'l2'
-";
-
-        let level3_fixtures = r"
+",
+            ),
+            (
+                "<test>/tests/level2/level3/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='module')
 def level3(level2):
     return 'l3'
-";
-
-        let level4_fixtures = r"
+",
+            ),
+            (
+                "<test>/tests/level2/level3/level4/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def level4(level3):
     return 'l4'
-";
-
-        let level5_fixtures = r"
+",
+            ),
+            (
+                "<test>/tests/level2/level3/level4/level5/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def level5(level4):
     return 'l5'
-";
+",
+            ),
+            (
+                "<test>/tests/level2/level3/level4/level5/test_deep.py",
+                "def test_deep(level5): pass",
+            ),
+        ]);
 
-        let tests_dir = env.create_test_dir();
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir = mapped_dir.join("tests");
         let l2_dir = tests_dir.join("level2");
         let l3_dir = l2_dir.join("level3");
         let l4_dir = l3_dir.join("level4");
         let l5_dir = l4_dir.join("level5");
-
-        env.create_file(tests_dir.join("conftest.py"), level1_fixtures);
-        env.create_file(l2_dir.join("conftest.py"), level2_fixtures);
-        env.create_file(l3_dir.join("conftest.py"), level3_fixtures);
-        env.create_file(l4_dir.join("conftest.py"), level4_fixtures);
-        env.create_file(l5_dir.join("conftest.py"), level5_fixtures);
-
-        let test_path = env.create_file(l5_dir.join("test_deep.py"), "def test_deep(level5): pass");
+        let test_path = l5_dir.join("test_deep.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         let l1_package = session.get_package(&tests_dir).unwrap();
         let l2_package = l1_package.get_package(&l2_dir).unwrap();
@@ -944,52 +1013,58 @@ def level5(level4):
 
     #[test]
     fn test_fixture_manager_cross_package_dependencies() {
-        let env = TestEnv::new();
-
-        let root_fixtures = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='session')
 def utils():
     return 'shared_utils'
-";
-        let package_a_fixtures = r"
+",
+            ),
+            (
+                "<test>/tests/package_a/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='package')
 def service_a(utils):
     return f'service_a_{utils}'
-";
-
-        let package_b_fixtures = r"
+",
+            ),
+            (
+                "<test>/tests/package_b/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='package')
 def service_b(utils):
     return f'service_b_{utils}'
-";
-
-        let package_c_fixtures = r"
+",
+            ),
+            (
+                "<test>/tests/package_c/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def integration_service(service_a, service_b):
     return f'integration_{service_a}_{service_b}'
-";
+",
+            ),
+            (
+                "<test>/tests/package_c/test_integration.py",
+                "def test_integration(integration_service): pass",
+            ),
+        ]);
 
-        let tests_dir = env.create_test_dir();
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir = mapped_dir.join("tests");
         let package_a_dir = tests_dir.join("package_a");
         let package_b_dir = tests_dir.join("package_b");
         let package_c_dir = tests_dir.join("package_c");
-
-        env.create_file(tests_dir.join("conftest.py"), root_fixtures);
-        env.create_file(package_a_dir.join("conftest.py"), package_a_fixtures);
-        env.create_file(package_b_dir.join("conftest.py"), package_b_fixtures);
-        env.create_file(package_c_dir.join("conftest.py"), package_c_fixtures);
-
-        let test_path = env.create_file(
-            package_c_dir.join("test_integration.py"),
-            "def test_integration(integration_service): pass",
-        );
+        let test_path = package_c_dir.join("test_integration.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let package_a = tests_package.get_package(&package_a_dir).unwrap();
@@ -1039,9 +1114,10 @@ def integration_service(service_a, service_b):
 
     #[test]
     fn test_fixture_manager_multiple_tests_same_module() {
-        let env = TestEnv::new();
-
-        let fixtures = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='module')
 def module_fixture():
@@ -1050,18 +1126,23 @@ import karva
 @karva.fixture(scope='function')
 def function_fixture(module_fixture):
     return 'function_data'
-";
+",
+            ),
+            (
+                "<test>/tests/test_multiple.py",
+                "
+def test_one(function_fixture): pass
+def test_two(function_fixture): pass
+def test_three(module_fixture): pass",
+            ),
+        ]);
 
-        let tests_dir = env.create_test_dir();
-        env.create_file(tests_dir.join("conftest.py"), fixtures);
-
-        let test_path = env.create_file(
-            tests_dir.join("test_multiple.py"),
-            "def test_one(function_fixture): pass\ndef test_two(function_fixture): pass\ndef test_three(module_fixture): pass",
-        );
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir = mapped_dir.join("tests");
+        let test_path = tests_dir.join("test_multiple.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
@@ -1088,9 +1169,10 @@ def function_fixture(module_fixture):
 
     #[test]
     fn test_fixture_manager_complex_dependency_chain_with_multiple_branches() {
-        let env = TestEnv::new();
-
-        let fixtures = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='session')
 def root():
@@ -1110,19 +1192,20 @@ def branch_b2(branch_b1):
 @karva.fixture(scope='function')
 def converged(branch_a2, branch_b2):
     return f'{branch_a2}_{branch_b2}'
+",
+            ),
+            (
+                "<test>/tests/test_converged.py",
+                "def test_converged(converged): pass",
+            ),
+        ]);
 
-";
-
-        let tests_dir = env.create_test_dir();
-        env.create_file(tests_dir.join("conftest.py"), fixtures);
-
-        let test_path = env.create_file(
-            tests_dir.join("test_converged.py"),
-            "def test_converged(converged): pass",
-        );
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir = mapped_dir.join("tests");
+        let test_path = tests_dir.join("test_converged.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
@@ -1155,9 +1238,10 @@ def converged(branch_a2, branch_b2):
 
     #[test]
     fn test_fixture_manager_reset_functions() {
-        let env = TestEnv::new();
-
-        let fixtures = r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='session')
 def session_fixture():
@@ -1171,21 +1255,25 @@ def module_fixture():
 @karva.fixture(scope='function')
 def function_fixture():
     return 'function'
-";
+",
+            ),
+            (
+                "<test>/tests/test_reset.py",
+                "def test_reset(session_fixture, package_fixture, module_fixture, function_fixture): pass",
+            ),
+        ]);
 
-        let tests_dir = env.create_test_dir();
-        env.create_file(tests_dir.join("conftest.py"), fixtures);
-
-        let test_path = env.create_file(
-            tests_dir.join("test_reset.py"),
-            "def test_reset(session_fixture, package_fixture, module_fixture, function_fixture): pass",
-        );
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir = mapped_dir.join("tests");
+        let test_path = tests_dir.join("test_reset.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| Discoverer::new(&project).discover(py));
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
+
         let test_module = tests_package.get_module(&test_path).unwrap();
+
         let test_function = test_module.get_test_function("test_reset").unwrap();
 
         Python::with_gil(|py| {

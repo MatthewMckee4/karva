@@ -3,15 +3,10 @@ use std::{
     process::Command,
 };
 
-use anyhow::Context;
-use insta::{allow_duplicates, internals::SettingsBindDropGuard};
+use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
-use karva_core::{
-    diagnostic::reporter::DummyReporter,
-    runner::{RunDiagnostics, TestRunner},
-    testing::setup_module,
-};
-use karva_project::{project::Project, testing::TestEnv};
+use karva_core::testing::setup_module;
+use karva_project::testing::TestEnv;
 use rstest::rstest;
 
 #[ctor::ctor]
@@ -21,23 +16,13 @@ pub fn setup() {
 
 struct IntegrationTestEnv {
     test_env: TestEnv,
-    _settings_scope: SettingsBindDropGuard,
 }
 
 impl IntegrationTestEnv {
     fn new() -> Self {
         let test_env = TestEnv::new();
 
-        let mut settings = insta::Settings::clone_current();
-        settings.add_filter(&tempdir_filter(&test_env.cwd()), "<temp_dir>/");
-        settings.add_filter(r#"\\(\w\w|\s|\.|")"#, "/$1");
-
-        let settings_scope = settings.bind_to_scope();
-
-        Self {
-            test_env,
-            _settings_scope: settings_scope,
-        }
+        Self { test_env }
     }
 
     fn karva_bin(&self) -> PathBuf {
@@ -50,19 +35,19 @@ impl IntegrationTestEnv {
     }
 
     fn with_files<'a>(files: impl IntoIterator<Item = (&'a str, &'a str)>) -> anyhow::Result<Self> {
-        let case = Self::new();
+        let mut case = Self::new();
         case.write_files(files)?;
         Ok(case)
     }
 
     fn with_file(path: impl AsRef<Path>, content: &str) -> anyhow::Result<Self> {
-        let case = Self::new();
+        let mut case = Self::new();
         case.write_file(path, content)?;
         Ok(case)
     }
 
     fn write_files<'a>(
-        &self,
+        &mut self,
         files: impl IntoIterator<Item = (&'a str, &'a str)>,
     ) -> anyhow::Result<()> {
         for (path, content) in files {
@@ -72,18 +57,8 @@ impl IntegrationTestEnv {
         Ok(())
     }
 
-    fn write_file(&self, path: impl AsRef<Path>, content: &str) -> anyhow::Result<()> {
-        let path = path.as_ref();
-        let path = self.test_env.cwd().join(path);
-
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create directory `{}`", parent.display()))?;
-        }
-        std::fs::write(&path, &*ruff_python_trivia::textwrap::dedent(content))
-            .with_context(|| format!("Failed to write file `{path}`", path = path.display()))?;
-
-        Ok(())
+    fn write_file(&mut self, path: impl AsRef<Path>, content: &str) -> anyhow::Result<()> {
+        self.test_env.write_file(path, content)
     }
 
     fn command(&self) -> Command {
@@ -97,94 +72,32 @@ impl IntegrationTestEnv {
         command.args(args);
         command
     }
-
-    fn run(&self) -> RunDiagnostics {
-        self.run_with_path(self.test_env.cwd())
-    }
-
-    fn run_with_path(&self, path: impl AsRef<Path>) -> RunDiagnostics {
-        let project = Project::new(self.test_env.cwd(), vec![path.as_ref().to_path_buf()]);
-        project.test_with_reporter(&mut DummyReporter)
-    }
-}
-
-fn assert_test_counts(result: &RunDiagnostics, snapshot: &str) {
-    let passed_tests = snapshot.lines().find_map(|line| {
-        line.strip_prefix("Passed tests: ")
-            .and_then(|n| n.split_whitespace().next())
-            .and_then(|n| n.parse::<u32>().ok())
-    });
-    let failed_tests = snapshot.lines().find_map(|line| {
-        line.strip_prefix("Failed tests: ")
-            .and_then(|n| n.split_whitespace().next())
-            .and_then(|n| n.parse::<u32>().ok())
-    });
-    let errors = snapshot.lines().find_map(|line| {
-        line.strip_prefix("Errored tests: ")
-            .and_then(|n| n.split_whitespace().next())
-            .and_then(|n| n.parse::<u32>().ok())
-    });
-
-    if let Some(passed_tests) = passed_tests {
-        assert_eq!(
-            passed_tests,
-            u32::try_from(result.stats().passed()).unwrap(),
-            "Passed tests count mismatch"
-        );
-    }
-    if let Some(failed_tests) = failed_tests {
-        assert_eq!(
-            failed_tests,
-            u32::try_from(result.stats().failed()).unwrap(),
-            "Failed tests count mismatch"
-        );
-    }
-    if let Some(errors) = errors {
-        assert_eq!(
-            errors,
-            u32::try_from(result.stats().errored()).unwrap(),
-            "Errored tests count mismatch"
-        );
-    }
 }
 
 macro_rules! run_with_path_and_snapshot {
     // Pattern 1: Just case and snapshot with @
     ($case:expr, @$snapshot:literal $(,)?) => {{
-        let result = $case.run();
-        assert_test_counts(&result, $snapshot);
         allow_duplicates!(assert_cmd_snapshot!(
             $case.command(),
             @$snapshot
         ));
-        result
     }};
 
     // Pattern 2: Case with args and snapshot with @
     ($case:expr, &$args:expr, @$snapshot:literal $(,)?) => {{
-        let result = $case.run();
-        assert_test_counts(&result, $snapshot);
         allow_duplicates!(assert_cmd_snapshot!(
             $case.command_with_args(&$args),
             @$snapshot
         ));
-        result
     }};
 
     // Pattern 3: Case with args (no brackets) and snapshot with @
     ($case:expr, $args:expr, @$snapshot:literal $(,)?) => {{
-        let result = $case.run();
-        assert_test_counts(&result, $snapshot);
         allow_duplicates!(assert_cmd_snapshot!(
             $case.command_with_args($args),
             @$snapshot
         ));
-        result
     }};
-}
-
-fn tempdir_filter(path: &Path) -> String {
-    format!(r"{}\\?/?", regex::escape(path.to_str().unwrap()))
 }
 
 #[test]
