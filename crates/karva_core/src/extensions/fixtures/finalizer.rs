@@ -29,7 +29,7 @@ impl Finalizers {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Finalizer {
     fixture_name: String,
     fixture_return: Py<PyAny>,

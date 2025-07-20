@@ -19,7 +19,7 @@ impl TestCaseCollector {
     ) -> CollectedPackage<'a> {
         tracing::info!("Collecting test cases");
 
-        let mut fixture_manager = FixtureManager::new();
+        let mut fixture_manager = FixtureManager::new(None, FixtureScope::Session);
 
         let upcast_test_cases: Vec<&dyn RequiresFixtures> = session.test_functions().upcast();
 
@@ -33,9 +33,9 @@ impl TestCaseCollector {
             upcast_test_cases.as_slice(),
         );
 
-        let package_collected = Self::collect_package(py, session, &[], &mut fixture_manager);
+        let package_collected = Self::collect_package(py, session, &[], &fixture_manager);
 
-        session_collected.add_finalizers(fixture_manager.reset_session_fixtures());
+        session_collected.add_finalizers(fixture_manager.reset_fixtures());
 
         session_collected.add_collected_package(package_collected);
 
@@ -48,7 +48,7 @@ impl TestCaseCollector {
         py_module: &Bound<'_, PyModule>,
         module: &'a DiscoveredModule,
         parents: &[&DiscoveredPackage],
-        fixture_manager: &mut FixtureManager,
+        fixture_manager: FixtureManager,
     ) -> Vec<(TestCase<'a>, Option<Diagnostic>)> {
         let mut get_function_fixture_manager =
             |f: &mut dyn FnMut(&mut FixtureManager) -> (TestCase<'a>, Option<Diagnostic>)| {

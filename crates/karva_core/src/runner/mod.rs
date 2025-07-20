@@ -40,10 +40,14 @@ impl<'proj> StandardTestRunner<'proj> {
 
         let total_test_cases = collected_session.total_test_cases();
 
+        let total_modules = collected_session.total_modules();
+
         tracing::info!(
-            "Discovered {} test{}",
+            "Discovered {} test{} in {} module{}",
             total_test_cases,
             if total_test_cases == 1 { "" } else { "s" },
+            total_modules,
+            if total_modules == 1 { "" } else { "s" },
         );
 
         let mut diagnostics = RunDiagnostics::default();
@@ -54,7 +58,7 @@ impl<'proj> StandardTestRunner<'proj> {
             return diagnostics;
         }
 
-        reporter.set(total_test_cases);
+        reporter.set(total_modules);
 
         with_gil(self.project, |py| {
             diagnostics.update(&collected_session.run_with_reporter(self.project, py, reporter));
