@@ -6,3 +6,7 @@ pub mod runner;
 pub mod utils;
 
 pub mod testing;
+
+pub use diagnostic::reporter::{DummyReporter, Reporter};
+pub use runner::TestRunner;
+pub use utils::current_python_version;

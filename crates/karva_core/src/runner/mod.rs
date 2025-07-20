@@ -1,4 +1,4 @@
-use karva_project::project::Project;
+use karva_project::Project;
 #[cfg(test)]
 use karva_project::testing::TestEnv;
 
@@ -11,7 +11,7 @@ use crate::{
 
 mod diagnostic;
 
-pub use diagnostic::{DiagnosticStats, RunDiagnostics};
+pub(crate) use diagnostic::RunDiagnostics;
 
 pub trait TestRunner {
     fn test(&self) -> RunDiagnostics {
@@ -20,13 +20,13 @@ pub trait TestRunner {
     fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics;
 }
 
-pub struct StandardTestRunner<'proj> {
+pub(crate) struct StandardTestRunner<'proj> {
     project: &'proj Project,
 }
 
 impl<'proj> StandardTestRunner<'proj> {
     #[must_use]
-    pub const fn new(project: &'proj Project) -> Self {
+    pub(crate) const fn new(project: &'proj Project) -> Self {
         Self { project }
     }
 
@@ -91,7 +91,10 @@ mod tests {
     use karva_project::{path::SystemPathBuf, testing::TestEnv};
 
     use super::*;
-    use crate::diagnostic::{Diagnostic, DiagnosticSeverity};
+    use crate::{
+        diagnostic::{Diagnostic, DiagnosticSeverity},
+        runner::diagnostic::DiagnosticStats,
+    };
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
@@ -119,7 +122,7 @@ def z(x, y):
 
         let result = env.test();
 
-        assert!(result.has_no_diagnostics(), "{result:?}");
+        assert!(result.passed(), "{result:?}");
     }
 
     #[test]
@@ -139,7 +142,7 @@ def x():
 
         let result = env.test();
 
-        assert!(result.has_no_diagnostics(), "{result:?}");
+        assert!(result.passed(), "{result:?}");
     }
 
     #[test]
@@ -333,7 +336,7 @@ def test_fixture_generator(fixture_generator):
         assert_eq!(result.diagnostics().len(), 1);
         let first_diagnostic = &result.diagnostics()[0];
         assert_eq!(
-            first_diagnostic.message(),
+            first_diagnostic.inner().message(),
             Some("Failed to reset fixture fixture_generator")
         );
         assert_eq!(

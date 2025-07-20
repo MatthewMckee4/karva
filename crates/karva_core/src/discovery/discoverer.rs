@@ -1,7 +1,7 @@
 use ignore::WalkBuilder;
 use karva_project::{
+    Project,
     path::{SystemPathBuf, TestPath},
-    project::Project,
     utils::is_python_file,
 };
 use pyo3::prelude::*;
@@ -12,24 +12,24 @@ use crate::{
     utils::add_to_sys_path,
 };
 
-pub struct StandardDiscoverer<'proj> {
+pub(crate) struct StandardDiscoverer<'proj> {
     project: &'proj Project,
 }
 
 impl<'proj> StandardDiscoverer<'proj> {
     #[must_use]
-    pub const fn new(project: &'proj Project) -> Self {
+    pub(crate) const fn new(project: &'proj Project) -> Self {
         Self { project }
     }
 
     #[must_use]
-    pub fn discover(self, py: Python<'_>) -> (DiscoveredPackage<'proj>, Vec<Diagnostic>) {
+    pub(crate) fn discover(self, py: Python<'_>) -> (DiscoveredPackage, Vec<Diagnostic>) {
         let mut session_package = DiscoveredPackage::new(self.project.cwd().clone());
 
         let mut discovery_diagnostics = Vec::new();
         let cwd = self.project.cwd();
 
-        if add_to_sys_path(&py, cwd).is_err() {
+        if add_to_sys_path(py, cwd).is_err() {
             return (session_package, discovery_diagnostics);
         }
 
@@ -115,7 +115,7 @@ impl<'proj> StandardDiscoverer<'proj> {
         path: &SystemPathBuf,
         discovery_diagnostics: &mut Vec<Diagnostic>,
         configuration_only: bool,
-    ) -> Option<DiscoveredModule<'proj>> {
+    ) -> Option<DiscoveredModule> {
         tracing::debug!("Discovering file: {}", path.display());
 
         if !is_python_file(path) {
@@ -147,7 +147,7 @@ impl<'proj> StandardDiscoverer<'proj> {
         &self,
         py: Python<'_>,
         path: &SystemPathBuf,
-        session_package: &mut DiscoveredPackage<'proj>,
+        session_package: &mut DiscoveredPackage,
         discovery_diagnostics: &mut Vec<Diagnostic>,
     ) -> Option<()> {
         let mut current_path = if path.is_dir() {
@@ -178,7 +178,7 @@ impl<'proj> StandardDiscoverer<'proj> {
     fn discover_directory(
         &self,
         py: Python<'_>,
-        package: &mut DiscoveredPackage<'proj>,
+        package: &mut DiscoveredPackage,
         discovery_diagnostics: &mut Vec<Diagnostic>,
         configuration_only: bool,
     ) {

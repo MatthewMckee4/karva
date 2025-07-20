@@ -7,11 +7,7 @@ use std::{
 use anyhow::{Context, Result};
 use clap::Parser;
 use colored::Colorize;
-use karva_core::{
-    diagnostic::reporter::{DummyReporter, Reporter},
-    runner::TestRunner,
-    utils::current_python_version,
-};
+use karva_core::{DummyReporter, Reporter, TestRunner, current_python_version};
 use karva_project::{
     path::absolute,
     project::{Project, ProjectMetadata},
@@ -162,7 +158,7 @@ impl ExitStatus {
 #[derive(Default)]
 struct ProgressReporter(Option<indicatif::ProgressBar>);
 
-impl karva_core::diagnostic::reporter::Reporter for ProgressReporter {
+impl Reporter for ProgressReporter {
     fn set(&mut self, n: usize) {
         let progress = indicatif::ProgressBar::new(n as u64);
         progress.set_style(

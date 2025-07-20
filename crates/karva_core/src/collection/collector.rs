@@ -9,11 +9,14 @@ use crate::{
 };
 
 #[derive(Default)]
-pub struct TestCaseCollector;
+pub(crate) struct TestCaseCollector;
 
 impl TestCaseCollector {
     #[must_use]
-    pub fn collect<'a>(py: Python<'_>, session: &'a DiscoveredPackage<'a>) -> CollectedPackage<'a> {
+    pub(crate) fn collect<'a>(
+        py: Python<'_>,
+        session: &'a DiscoveredPackage,
+    ) -> CollectedPackage<'a> {
         tracing::info!("Collecting test cases");
 
         let mut fixture_manager = FixtureManager::new();
@@ -41,10 +44,10 @@ impl TestCaseCollector {
 
     fn collect_test_function<'a>(
         py: Python<'_>,
-        test_function: &'a TestFunction<'a>,
+        test_function: &'a TestFunction,
         py_module: &Bound<'_, PyModule>,
-        module: &'a DiscoveredModule<'a>,
-        parents: &[&DiscoveredPackage<'_>],
+        module: &'a DiscoveredModule,
+        parents: &[&DiscoveredPackage],
         fixture_manager: &mut FixtureManager,
     ) -> Vec<(TestCase<'a>, Option<Diagnostic>)> {
         let mut get_function_fixture_manager =
@@ -83,8 +86,8 @@ impl TestCaseCollector {
     #[allow(clippy::unused_self)]
     fn collect_module<'a>(
         py: Python<'_>,
-        module: &'a DiscoveredModule<'a>,
-        parents: &[&DiscoveredPackage<'_>],
+        module: &'a DiscoveredModule,
+        parents: &[&DiscoveredPackage],
         fixture_manager: &mut FixtureManager,
     ) -> CollectedModule<'a> {
         let mut module_collected = CollectedModule::default();
@@ -152,8 +155,8 @@ impl TestCaseCollector {
 
     fn collect_package<'a>(
         py: Python<'_>,
-        package: &'a DiscoveredPackage<'a>,
-        parents: &[&DiscoveredPackage<'_>],
+        package: &'a DiscoveredPackage,
+        parents: &[&DiscoveredPackage],
         fixture_manager: &mut FixtureManager,
     ) -> CollectedPackage<'a> {
         let mut package_collected = CollectedPackage::default();

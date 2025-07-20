@@ -5,3 +5,5 @@ pub mod verbosity;
 
 #[cfg(feature = "testing")]
 pub mod testing;
+
+pub use project::Project;

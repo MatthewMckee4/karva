@@ -4,7 +4,7 @@ use karva_benchmark::{
     TRUE_ASSERTIONS, TestCase,
     criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main},
 };
-use karva_core::{diagnostic::reporter::DummyReporter, runner::TestRunner, testing::setup_module};
+use karva_core::{DummyReporter, TestRunner, testing::setup_module};
 use karva_project::{path::absolute, project::Project};
 
 fn create_test_cases() -> Vec<TestCase> {

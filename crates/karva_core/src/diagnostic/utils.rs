@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-pub fn get_traceback(py: Python<'_>, error: &PyErr) -> String {
+pub(crate) fn get_traceback(py: Python<'_>, error: &PyErr) -> String {
     if let Some(traceback) = error.traceback(py) {
         let traceback_str = traceback.format().unwrap_or_default();
         if traceback_str.is_empty() {
@@ -16,14 +16,14 @@ pub fn get_traceback(py: Python<'_>, error: &PyErr) -> String {
     }
 }
 
-pub fn get_type_name(py: Python<'_>, error: &PyErr) -> String {
+pub(crate) fn get_type_name(py: Python<'_>, error: &PyErr) -> String {
     error
         .get_type(py)
         .name()
         .map_or_else(|_| "Unknown".to_string(), |name| name.to_string())
 }
 
-pub fn to_kebab_case(input: &str) -> String {
+pub(crate) fn to_kebab_case(input: &str) -> String {
     input
         .chars()
         .enumerate()
@@ -37,7 +37,7 @@ pub fn to_kebab_case(input: &str) -> String {
 }
 
 // Simplified traceback filtering that removes unnecessary traceback headers
-pub fn filter_traceback(traceback: &str) -> String {
+pub(crate) fn filter_traceback(traceback: &str) -> String {
     let lines: Vec<&str> = traceback.lines().collect();
     let mut filtered = String::new();
 

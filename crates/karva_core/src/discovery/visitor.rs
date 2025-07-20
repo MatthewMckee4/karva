@@ -12,8 +12,8 @@ use crate::{
     extensions::fixtures::{Fixture, is_fixture_function},
 };
 
-pub struct FunctionDefinitionVisitor<'proj, 'b> {
-    discovered_functions: Vec<TestFunction<'proj>>,
+pub(crate) struct FunctionDefinitionVisitor<'proj, 'b> {
+    discovered_functions: Vec<TestFunction>,
     fixture_definitions: Vec<Fixture>,
     project: &'proj Project,
     module_path: SystemPathBuf,
@@ -23,7 +23,7 @@ pub struct FunctionDefinitionVisitor<'proj, 'b> {
 }
 
 impl<'proj, 'b> FunctionDefinitionVisitor<'proj, 'b> {
-    pub fn new(
+    pub(crate) fn new(
         py: Python<'b>,
         project: &'proj Project,
         module_path: SystemPathBuf,
@@ -79,7 +79,6 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_> {
                 .starts_with(self.project.options().test_prefix())
             {
                 self.discovered_functions.push(TestFunction::new(
-                    self.project,
                     self.module_path.clone(),
                     function_def.clone(),
                 ));
@@ -95,17 +94,17 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_> {
 }
 
 #[derive(Debug)]
-pub struct DiscoveredFunctions<'a> {
-    pub functions: Vec<TestFunction<'a>>,
-    pub fixtures: Vec<Fixture>,
+pub(crate) struct DiscoveredFunctions {
+    pub(crate) functions: Vec<TestFunction>,
+    pub(crate) fixtures: Vec<Fixture>,
 }
 
 #[must_use]
-pub fn discover<'proj>(
+pub(crate) fn discover(
     py: Python<'_>,
-    module: &DiscoveredModule<'proj>,
-    project: &'proj Project,
-) -> (DiscoveredFunctions<'proj>, Vec<Diagnostic>) {
+    module: &DiscoveredModule,
+    project: &Project,
+) -> (DiscoveredFunctions, Vec<Diagnostic>) {
     let Ok(mut visitor) = FunctionDefinitionVisitor::new(py, project, module.path().clone()) else {
         return (
             DiscoveredFunctions {
@@ -129,8 +128,8 @@ pub fn discover<'proj>(
 }
 
 #[must_use]
-pub fn parsed_module(
-    module: &DiscoveredModule<'_>,
+pub(crate) fn parsed_module(
+    module: &DiscoveredModule,
     python_version: PythonVersion,
 ) -> Parsed<ModModule> {
     let mode = Mode::Module;
@@ -143,7 +142,7 @@ pub fn parsed_module(
 }
 
 #[derive(Default)]
-pub struct GeneratorFunctionVisitor {
+pub(crate) struct GeneratorFunctionVisitor {
     is_generator: bool,
 }
 
