@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{
     collection::{CollectedModule, CollectedPackage, TestCase},
@@ -41,6 +42,7 @@ impl TestCaseCollector {
         session_collected
     }
 
+    #[allow(clippy::unused_self)]
     fn collect_test_function<'a>(
         py: Python<'_>,
         test_function: &'a TestFunction,
@@ -50,7 +52,8 @@ impl TestCaseCollector {
         fixture_manager: &FixtureManager,
     ) -> Vec<(TestCase<'a>, Option<Diagnostic>)> {
         let get_function_fixture_manager =
-            |f: &dyn Fn(&FixtureManager) -> (TestCase<'a>, Option<Diagnostic>)| {
+            |inner_py: Python<'_>,
+             f: &dyn Fn(&FixtureManager) -> (TestCase<'a>, Option<Diagnostic>)| {
                 let mut function_fixture_manager =
                     FixtureManager::new(Some(fixture_manager), FixtureScope::Function);
                 let test_cases = [test_function].to_vec();
@@ -58,7 +61,7 @@ impl TestCaseCollector {
 
                 for (parent, parents_above_current_parent) in partition_iter(parents) {
                     function_fixture_manager.add_fixtures(
-                        py,
+                        inner_py,
                         &parents_above_current_parent,
                         parent,
                         &[FixtureScope::Function],
@@ -67,7 +70,7 @@ impl TestCaseCollector {
                 }
 
                 function_fixture_manager.add_fixtures(
-                    py,
+                    inner_py,
                     parents,
                     module,
                     &[FixtureScope::Function],
@@ -81,7 +84,7 @@ impl TestCaseCollector {
                 (collected_test_case, diagnostic)
             };
 
-        test_function.collect(py, module, py_module, &get_function_fixture_manager)
+        test_function.collect(py, module, py_module, get_function_fixture_manager)
     }
 
     #[allow(clippy::unused_self)]
@@ -141,22 +144,28 @@ impl TestCaseCollector {
 
         let mut module_test_cases = Vec::new();
 
-        module
-            .test_functions()
-            .iter()
-            .map(|function| {
-                Self::collect_test_function(
-                    py,
-                    function,
-                    &py_module,
-                    module,
-                    parents,
-                    &module_fixture_manager,
-                )
-            })
-            .for_each(|test_case| {
-                module_test_cases.extend(test_case);
-            });
+        py.allow_threads(|| {
+            module
+                .test_functions()
+                .par_iter()
+                .map(|function| {
+                    Python::with_gil(|inner_py| {
+                        Self::collect_test_function(
+                            inner_py,
+                            function,
+                            &py_module,
+                            module,
+                            parents,
+                            &module_fixture_manager,
+                        )
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .into_iter()
+        .for_each(|test_case| {
+            module_test_cases.extend(test_case);
+        });
 
         module_collected.add_test_cases(module_test_cases);
         module_collected.add_finalizers(module_fixture_manager.reset_fixtures());

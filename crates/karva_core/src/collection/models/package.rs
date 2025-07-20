@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{
     collection::CollectedModule, diagnostic::reporter::Reporter, extensions::fixtures::Finalizers,
@@ -54,17 +55,31 @@ impl<'proj> CollectedPackage<'proj> {
     pub(crate) fn run_with_reporter(
         &self,
         py: Python<'_>,
-        reporter: &mut dyn Reporter,
+        reporter: &dyn Reporter,
     ) -> RunDiagnostics {
         let mut diagnostics = RunDiagnostics::default();
 
-        for module in &self.modules {
-            diagnostics.update(&module.run_with_reporter(py, reporter));
-        }
+        py.allow_threads(|| {
+            self.modules
+                .par_iter()
+                .map(|module| {
+                    Python::with_gil(|inner_py| module.run_with_reporter(inner_py, reporter))
+                })
+                .collect::<Vec<_>>()
+        })
+        .iter()
+        .for_each(|result| diagnostics.update(result));
 
-        for package in &self.packages {
-            diagnostics.update(&package.run_with_reporter(py, reporter));
-        }
+        py.allow_threads(|| {
+            self.packages
+                .par_iter()
+                .map(|package| {
+                    Python::with_gil(|inner_py| package.run_with_reporter(inner_py, reporter))
+                })
+                .collect::<Vec<_>>()
+        })
+        .iter()
+        .for_each(|result| diagnostics.update(result));
 
         diagnostics.add_diagnostics(self.finalizers.run(py));
 

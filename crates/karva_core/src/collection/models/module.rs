@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{
     collection::TestCase,
@@ -47,16 +48,24 @@ impl<'proj> CollectedModule<'proj> {
     ) -> RunDiagnostics {
         let mut diagnostics = RunDiagnostics::default();
 
-        self.test_cases
-            .iter()
-            .map(|(test_case, diagnostic)| {
-                let mut result = test_case.run(py, diagnostic.clone());
-                result.add_diagnostics(test_case.finalizers().run(py));
-                result
-            })
-            .for_each(|result| {
-                diagnostics.update(&result);
-            });
+        if self.test_cases.is_empty() {
+            return diagnostics;
+        }
+
+        py.allow_threads(|| {
+            self.test_cases
+                .par_iter()
+                .map(|(test_case, diagnostic)| {
+                    Python::with_gil(|inner_py| {
+                        let mut result = test_case.run(inner_py, diagnostic.clone());
+                        result.add_diagnostics(test_case.finalizers().run(inner_py));
+                        result
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .iter()
+        .for_each(|result| diagnostics.update(result));
 
         reporter.report();
 
