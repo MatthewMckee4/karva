@@ -46,6 +46,11 @@ impl RunDiagnostics {
     }
 
     #[must_use]
+    pub fn has_no_diagnostics(&self) -> bool {
+        self.diagnostics.is_empty()
+    }
+
+    #[must_use]
     pub fn test_results(&self) -> &[Diagnostic] {
         &self.diagnostics
     }
@@ -161,25 +166,21 @@ impl std::fmt::Display for DisplayRunDiagnostics<'_> {
 }
 #[cfg(test)]
 mod tests {
-    use karva_project::{project::Project, testing::TestEnv};
+    use karva_project::testing::TestEnv;
 
-    use crate::runner::{StandardTestRunner, TestRunner};
+    use crate::runner::TestRunner;
 
     #[test]
     fn test_runner_with_passing_test() {
-        let env = TestEnv::new();
-        env.create_file(
-            "test_pass.py",
+        let env = TestEnv::with_files([(
+            "<test>/test_pass.py",
             r"
 def test_simple_pass():
     assert True
 ",
-        );
+        )]);
 
-        let project = Project::new(env.cwd(), vec![env.temp_path("test_pass.py")]);
-        let runner = StandardTestRunner::new(&project);
-
-        let result = runner.test();
+        let result = env.test();
 
         assert_eq!(result.stats().total(), 1);
         assert_eq!(result.stats().passed(), 1);
@@ -189,19 +190,15 @@ def test_simple_pass():
 
     #[test]
     fn test_runner_with_failing_test() {
-        let env = TestEnv::new();
-        env.create_file(
-            "test_fail.py",
+        let env = TestEnv::with_files([(
+            "<test>/test_fail.py",
             r#"
 def test_simple_fail():
     assert False, "This test should fail"
 "#,
-        );
+        )]);
 
-        let project = Project::new(env.cwd(), vec![env.temp_path("test_fail.py")]);
-        let runner = StandardTestRunner::new(&project);
-
-        let result = runner.test();
+        let result = env.test();
 
         assert_eq!(result.stats().total(), 1);
         assert_eq!(result.stats().passed(), 0);
@@ -211,19 +208,15 @@ def test_simple_fail():
 
     #[test]
     fn test_runner_with_error_test() {
-        let env = TestEnv::new();
-        env.create_file(
-            "test_error.py",
+        let env = TestEnv::with_files([(
+            "<test>/test_error.py",
             r#"
 def test_simple_error():
     raise ValueError("This is an error")
 "#,
-        );
+        )]);
 
-        let project = Project::new(env.cwd(), vec![env.temp_path("test_error.py")]);
-        let runner = StandardTestRunner::new(&project);
-
-        let result = runner.test();
+        let result = env.test();
 
         assert_eq!(result.stats().total(), 1);
         assert_eq!(result.stats().passed(), 0);
@@ -233,9 +226,8 @@ def test_simple_error():
 
     #[test]
     fn test_runner_with_multiple_tests() {
-        let env = TestEnv::new();
-        env.create_file(
-            "test_mixed.py",
+        let env = TestEnv::with_files([(
+            "<test>/test_mixed.py",
             r#"def test_pass():
     assert True
 
@@ -245,12 +237,9 @@ def test_fail():
 def test_error():
     raise ValueError("This is an error")
 "#,
-        );
+        )]);
 
-        let project = Project::new(env.cwd(), vec![env.temp_path("test_mixed.py")]);
-        let runner = StandardTestRunner::new(&project);
-
-        let result = runner.test();
+        let result = env.test();
 
         assert_eq!(result.stats().total(), 3);
         assert_eq!(result.stats().passed(), 1);

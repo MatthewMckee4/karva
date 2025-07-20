@@ -27,7 +27,8 @@ regex = { workspace = true }
 tempfile = { workspace = true }
 regex = { workspace = true }
 ctor = { workspace = true }
-
+karva_project = { workspace = true, features = ["testing"] }
+insta = { workspace = true, features = ["filters"] }
 
 [lints]
 workspace = true

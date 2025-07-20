@@ -94,6 +94,7 @@ impl<'proj> TestFunction<'proj> {
         let Ok(py_function) = py_module.getattr(self.function_definition.name.to_string()) else {
             return Vec::new();
         };
+
         let py_function = py_function.as_unbound();
 
         let required_fixture_names = self.get_required_fixture_names();
@@ -213,17 +214,17 @@ mod tests {
     use pyo3::prelude::*;
 
     use crate::{
-        discovery::Discoverer,
+        discovery::StandardDiscoverer,
         extensions::fixtures::{HasFunctionDefinition, RequiresFixtures},
     };
 
     #[test]
     fn test_case_construction_and_getters() {
-        let env = TestEnv::new();
+        let env = TestEnv::with_files([("<test>/test.py", "def test_function(): pass")]);
         let path = env.create_file("test.py", "def test_function(): pass");
 
         let project = Project::new(env.cwd(), vec![path.clone()]);
-        let discoverer = Discoverer::new(&project);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
         let test_case = session.test_functions()[0].clone();
@@ -234,14 +235,13 @@ mod tests {
 
     #[test]
     fn test_case_with_fixtures() {
-        let env = TestEnv::new();
-        let path = env.create_file(
-            "test.py",
+        let env = TestEnv::with_files([(
+            "<test>/test.py",
             "def test_with_fixtures(fixture1, fixture2): pass",
-        );
+        )]);
 
-        let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = Discoverer::new(&project);
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
         let test_case = session.test_functions()[0].clone();
@@ -258,20 +258,25 @@ mod tests {
 
     #[test]
     fn test_case_display() {
-        let env = TestEnv::new();
-        let path = env.create_file("test.py", "def test_display(): pass");
+        let env = TestEnv::with_files([("<test>/test.py", "def test_display(): pass")]);
 
-        let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = Discoverer::new(&project);
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+
+        let tests_package = session.get_package(mapped_dir).unwrap();
+
+        let test_module = tests_package
+            .get_module(&mapped_dir.join("test.py"))
+            .unwrap();
 
         let test_case = session.test_functions()[0].clone();
 
         assert_eq!(
-            test_case
-                .display(session.modules().values().next().unwrap().name().unwrap())
-                .to_string(),
-            "test::test_display"
+            test_case.display(test_module.name().unwrap()).to_string(),
+            format!("{}::test_display", test_module.name().unwrap())
         );
     }
 }

@@ -1,9 +1,11 @@
 use karva_project::project::Project;
+#[cfg(test)]
+use karva_project::testing::TestEnv;
 
 use crate::{
     collection::TestCaseCollector,
     diagnostic::reporter::{DummyReporter, Reporter},
-    discovery::Discoverer,
+    discovery::StandardDiscoverer,
     utils::with_gil,
 };
 
@@ -12,7 +14,9 @@ mod diagnostic;
 pub use diagnostic::{DiagnosticStats, RunDiagnostics};
 
 pub trait TestRunner {
-    fn test(&self) -> RunDiagnostics;
+    fn test(&self) -> RunDiagnostics {
+        self.test_with_reporter(&mut DummyReporter)
+    }
     fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics;
 }
 
@@ -28,7 +32,7 @@ impl<'proj> StandardTestRunner<'proj> {
 
     fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
         let (session, discovery_diagnostics) = with_gil(self.project, |py| {
-            Discoverer::new(self.project).discover(py)
+            StandardDiscoverer::new(self.project).discover(py)
         });
 
         let collected_session =
@@ -61,23 +65,23 @@ impl<'proj> StandardTestRunner<'proj> {
 }
 
 impl TestRunner for StandardTestRunner<'_> {
-    fn test(&self) -> RunDiagnostics {
-        self.test_impl(&mut DummyReporter)
-    }
-
     fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
         self.test_impl(reporter)
     }
 }
 
 impl TestRunner for Project {
-    fn test(&self) -> RunDiagnostics {
-        let test_runner = StandardTestRunner::new(self);
-        test_runner.test()
-    }
-
     fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
         let test_runner = StandardTestRunner::new(self);
+        test_runner.test_with_reporter(reporter)
+    }
+}
+
+#[cfg(test)]
+impl TestRunner for TestEnv {
+    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
+        let project = Project::new(self.cwd(), vec![self.cwd()]);
+        let test_runner = StandardTestRunner::new(&project);
         test_runner.test_with_reporter(reporter)
     }
 }
@@ -92,14 +96,10 @@ mod tests {
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
      {
-        let env = TestEnv::new();
-
-        let tests_dir = env.create_test_dir();
-        let inner_dir = tests_dir.join("inner");
-
-        env.create_file(
-            tests_dir.join("conftest.py"),
-            r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='function')
 def x():
@@ -112,51 +112,42 @@ def y(x):
 @karva.fixture(scope='function')
 def z(x, y):
     return 1
-",
-        );
-        env.create_file(inner_dir.join("test_1.py"), "def test_1(z): pass");
+            ",
+            ),
+            ("<test>/inner/test_file.py", "def test_1(z): pass"),
+        ]);
 
-        let project = Project::new(env.cwd(), vec![tests_dir]);
+        let result = env.test();
 
-        let test_runner = StandardTestRunner::new(&project);
-
-        let diagnostics = test_runner.test();
-
-        assert_eq!(diagnostics.diagnostics().len(), 0);
+        assert!(result.has_no_diagnostics(), "{result:?}");
     }
 
     #[test]
     fn test_runner_given_nested_path() {
-        let env = TestEnv::new();
-
-        let tests_dir = env.create_test_dir();
-        env.create_file(
-            tests_dir.join("conftest.py"),
-            r"
+        let env = TestEnv::with_files([
+            (
+                "<test>/conftest.py",
+                r"
 import karva
 @karva.fixture(scope='module')
 def x():
     return 1
-",
-        );
-        let test_file = env.create_file(tests_dir.join("test_1.py"), "def test_1(x): pass");
+            ",
+            ),
+            ("<test>/test_file.py", "def test_1(x): pass"),
+        ]);
 
-        let project = Project::new(env.cwd(), vec![test_file]);
+        let result = env.test();
 
-        let test_runner = StandardTestRunner::new(&project);
-
-        let diagnostics = test_runner.test();
-
-        assert_eq!(diagnostics.diagnostics().len(), 0);
+        assert!(result.has_no_diagnostics(), "{result:?}");
     }
 
     #[test]
     fn test_parametrize_with_fixture() {
-        let env = TestEnv::new();
-        let test_dir = env.create_test_dir();
-        env.create_file(
-            test_dir.join("test_parametrize_fixture.py"),
-            r#"import karva
+        let env = TestEnv::with_file(
+            "<test>/test_file.py",
+            r#"
+import karva
 
 @karva.fixture
 def fixture_value():
@@ -168,24 +159,21 @@ def test_parametrize_with_fixture(a, fixture_value):
     assert fixture_value == 42"#,
         );
 
-        let project = Project::new(env.cwd(), vec![test_dir]);
-
-        let result = project.test_with_reporter(&mut DummyReporter);
+        let result = env.test();
 
         let mut expected_stats = DiagnosticStats::default();
-        expected_stats.add_passed();
-        expected_stats.add_passed();
-        expected_stats.add_passed();
-        assert_eq!(*result.stats(), expected_stats);
+
+        for _ in 0..3 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats, "{result:?}");
     }
 
     #[test]
     fn test_parametrize_with_fixture_parametrize_priority() {
-        let env = TestEnv::new();
-
-        let test_dir = env.create_test_dir();
-        env.create_file(
-            test_dir.join("test_parametrize_fixture.py"),
+        let env = TestEnv::with_file(
+            "<test>/test_file.py",
             r#"import karva
 
 @karva.fixture
@@ -197,24 +185,21 @@ def test_parametrize_with_fixture(a):
     assert a > 0"#,
         );
 
-        let project = Project::new(env.cwd(), vec![test_dir]);
-
-        let result = project.test_with_reporter(&mut DummyReporter);
+        let result = env.test();
 
         let mut expected_stats = DiagnosticStats::default();
-        expected_stats.add_passed();
-        expected_stats.add_passed();
-        expected_stats.add_passed();
-        assert_eq!(*result.stats(), expected_stats);
+
+        for _ in 0..3 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats, "{result:?}");
     }
 
     #[test]
     fn test_parametrize_two_decorators() {
-        let env = TestEnv::new();
-
-        let test_dir = env.create_test_dir();
-        env.create_file(
-            test_dir.join("test_parametrize_fixture.py"),
+        let env = TestEnv::with_file(
+            "<test>/test_file.py",
             r#"import karva
 
 @karva.tags.parametrize("a", [1, 2])
@@ -224,27 +209,23 @@ def test_function(a: int, b: int):
 "#,
         );
 
-        let project = Project::new(env.cwd(), vec![test_dir]);
-
-        let result = project.test_with_reporter(&mut DummyReporter);
+        let result = env.test();
 
         let mut expected_stats = DiagnosticStats::default();
-        expected_stats.add_passed();
-        expected_stats.add_passed();
-        expected_stats.add_passed();
-        expected_stats.add_passed();
+
+        for _ in 0..4 {
+            expected_stats.add_passed();
+        }
+
         assert_eq!(*result.stats(), expected_stats);
-        assert!(result.passed());
     }
 
     #[test]
     fn test_parametrize_three_decorators() {
-        let env = TestEnv::new();
-
-        let test_dir = env.create_test_dir();
-        env.create_file(
-            test_dir.join("test_parametrize_fixture.py"),
-            r#"import karva
+        let env = TestEnv::with_file(
+            "<test>/test_file.py",
+            r#"
+import karva
 
 @karva.tags.parametrize("a", [1, 2])
 @karva.tags.parametrize("b", [1, 2])
@@ -254,26 +235,23 @@ def test_function(a: int, b: int, c: int):
 "#,
         );
 
-        let project = Project::new(env.cwd(), vec![test_dir]);
-
-        let result = project.test_with_reporter(&mut DummyReporter);
+        let result = env.test();
 
         let mut expected_stats = DiagnosticStats::default();
+
         for _ in 0..8 {
             expected_stats.add_passed();
         }
-        assert_eq!(*result.stats(), expected_stats);
-        assert!(result.passed());
+
+        assert_eq!(*result.stats(), expected_stats, "{result:?}");
     }
 
     #[test]
     fn test_fixture_generator() {
-        let env = TestEnv::new();
-
-        let test_dir = env.create_test_dir();
-        env.create_file(
-            test_dir.join("test_fixture_generator.py"),
-            r"import karva
+        let env = TestEnv::with_file(
+            "<test>/test_file.py",
+            r"
+import karva
 
 @karva.fixture
 def fixture_generator():
@@ -284,23 +262,19 @@ def test_fixture_generator(fixture_generator):
 ",
         );
 
-        let project = Project::new(env.cwd(), vec![test_dir]);
-
-        let result = project.test_with_reporter(&mut DummyReporter);
+        let result = env.test();
 
         let mut expected_stats = DiagnosticStats::default();
+
         expected_stats.add_passed();
-        assert_eq!(*result.stats(), expected_stats);
-        assert!(result.passed());
+
+        assert_eq!(*result.stats(), expected_stats, "{result:?}");
     }
 
     #[test]
     fn test_fixture_generator_two_yields() {
-        let env = TestEnv::new();
-
-        let test_dir = env.create_test_dir();
-        env.create_file(
-            test_dir.join("test_fixture_generator.py"),
+        let env = TestEnv::with_file(
+            "<test>/test_file.py",
             r"import karva
 
 @karva.fixture
@@ -313,13 +287,14 @@ def test_fixture_generator(fixture_generator):
 ",
         );
 
-        let project = Project::new(env.cwd(), vec![test_dir]);
-
-        let result = project.test_with_reporter(&mut DummyReporter);
+        let result = env.test();
 
         let mut expected_stats = DiagnosticStats::default();
+
         expected_stats.add_passed();
-        assert_eq!(*result.stats(), expected_stats);
+
+        assert_eq!(*result.stats(), expected_stats, "{result:?}");
+
         assert_eq!(result.diagnostics().len(), 1);
         let first_diagnostic = &result.diagnostics()[0];
         let expected_diagnostic = Diagnostic::warning(
@@ -327,16 +302,14 @@ def test_fixture_generator(fixture_generator):
             Some("Fixture fixture_generator had more than one yield statement".to_string()),
             None,
         );
+
         assert_eq!(*first_diagnostic, expected_diagnostic);
     }
 
     #[test]
     fn test_fixture_generator_fail_in_teardown() {
-        let env = TestEnv::new();
-
-        let test_dir = env.create_test_dir();
-        env.create_file(
-            test_dir.join("test_fixture_generator.py"),
+        let env = TestEnv::with_file(
+            "<test>/test_file.py",
             r#"import karva
 
 @karva.fixture
@@ -349,13 +322,14 @@ def test_fixture_generator(fixture_generator):
 "#,
         );
 
-        let project = Project::new(env.cwd(), vec![test_dir]);
-
-        let result = project.test_with_reporter(&mut DummyReporter);
+        let result = env.test();
 
         let mut expected_stats = DiagnosticStats::default();
+
         expected_stats.add_passed();
-        assert_eq!(*result.stats(), expected_stats);
+
+        assert_eq!(*result.stats(), expected_stats, "{result:?}");
+
         assert_eq!(result.diagnostics().len(), 1);
         let first_diagnostic = &result.diagnostics()[0];
         assert_eq!(
@@ -370,11 +344,8 @@ def test_fixture_generator(fixture_generator):
 
     #[test]
     fn test_fixture_with_name_parameter() {
-        let env = TestEnv::new();
-
-        let test_dir = env.create_test_dir();
-        env.create_file(
-            test_dir.join("test_fixture_with_name_parameter.py"),
+        let env = TestEnv::with_file(
+            "<test>/test_file.py",
             r#"import karva
 
 @karva.fixture(name="fixture_name")
@@ -386,22 +357,19 @@ def test_fixture_with_name_parameter(fixture_name):
 "#,
         );
 
-        let project = Project::new(env.cwd(), vec![test_dir]);
-
-        let result = project.test_with_reporter(&mut DummyReporter);
+        let result = env.test();
 
         let mut expected_stats = DiagnosticStats::default();
+
         expected_stats.add_passed();
-        assert_eq!(*result.stats(), expected_stats);
+
+        assert_eq!(*result.stats(), expected_stats, "{result:?}");
     }
 
     #[test]
     fn test_fixture_is_different_in_different_functions() {
-        let env = TestEnv::new();
-
-        let test_dir = env.create_test_dir();
-        env.create_file(
-            test_dir.join("test_fixture_is_different_in_different_functions.py"),
+        let env = TestEnv::with_file(
+            "<test>/test_file.py",
             r"import karva
 
 class TestEnv:
@@ -422,13 +390,14 @@ def test_fixture_2(fixture):
 ",
         );
 
-        let project = Project::new(env.cwd(), vec![test_dir]);
-
-        let result = project.test_with_reporter(&mut DummyReporter);
+        let result = env.test();
 
         let mut expected_stats = DiagnosticStats::default();
-        expected_stats.add_passed();
-        expected_stats.add_passed();
-        assert_eq!(*result.stats(), expected_stats);
+
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats, "{result:?}");
     }
 }
