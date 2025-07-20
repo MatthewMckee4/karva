@@ -34,6 +34,7 @@ impl FixtureCollection {
         Finalizers::new(self.finalizers.drain(..).collect())
     }
 
+    #[cfg(test)]
     pub(crate) fn contains_fixture(&self, fixture_name: &str) -> bool {
         self.fixtures.contains_key(fixture_name)
     }
@@ -49,7 +50,7 @@ pub(crate) struct FixtureManager<'a> {
 
 impl<'a> FixtureManager<'a> {
     #[must_use]
-    pub(crate) fn new(parent: Option<&'a FixtureManager<'a>>, scope: FixtureScope) -> Self {
+    pub(crate) fn new(parent: Option<&'a Self>, scope: FixtureScope) -> Self {
         Self {
             parent,
             collection: FixtureCollection::default(),
@@ -58,11 +59,7 @@ impl<'a> FixtureManager<'a> {
     }
 
     #[must_use]
-    pub(crate) fn scope(&self) -> &FixtureScope {
-        &self.scope
-    }
-
-    #[must_use]
+    #[cfg(test)]
     pub(crate) fn contains_fixture_at_scope(
         &self,
         fixture_name: &str,
@@ -73,18 +70,12 @@ impl<'a> FixtureManager<'a> {
         } else {
             self.parent
                 .as_ref()
-                .map(|p| p.contains_fixture_at_scope(fixture_name, scope))
-                .unwrap_or(false)
+                .is_some_and(|p| p.contains_fixture_at_scope(fixture_name, scope))
         }
     }
 
     pub(crate) fn contains_fixture(&self, fixture_name: &str) -> bool {
         self.all_fixtures().contains_key(fixture_name)
-    }
-
-    #[must_use]
-    pub(crate) fn parent(&self) -> Option<&FixtureManager<'a>> {
-        self.parent.as_ref()
     }
 
     #[must_use]
@@ -111,9 +102,7 @@ impl<'a> FixtureManager<'a> {
             self.collection
                 .insert_fixture(fixture.name().to_string(), fixture_return);
         } else {
-            if let Some(parent) = &mut self.parent {
-                parent.insert_fixture(fixture_return, fixture);
-            }
+            // We should not reach this
         }
     }
 
@@ -121,9 +110,7 @@ impl<'a> FixtureManager<'a> {
         if self.scope == *scope {
             self.collection.insert_finalizer(finalizer);
         } else {
-            if let Some(parent) = &mut self.parent {
-                parent.insert_finalizer(finalizer, scope);
-            }
+            // We should not reach this
         }
     }
 
@@ -458,6 +445,7 @@ import karva
 @karva.fixture(scope='function')
 def y(x):
     return 1
+
 @karva.fixture(scope='function')
 def z(x):
     return 1
@@ -482,10 +470,24 @@ def z(x):
 
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
-        Python::with_gil(|py| {
-            let mut manager = FixtureManager::new(None, FixtureScope::Function);
+        let y_fixture = inner_package.get_fixture("y").unwrap();
+        let z_fixture = inner_package.get_fixture("z").unwrap();
 
-            manager.add_fixtures(
+        Python::with_gil(|py| {
+            let mut test_module_fixture_manager = FixtureManager::new(None, FixtureScope::Module);
+
+            test_module_fixture_manager.add_fixtures(
+                py,
+                &[],
+                tests_package,
+                &[FixtureScope::Module],
+                &[y_fixture, z_fixture],
+            );
+
+            let mut function_fixture_manager =
+                FixtureManager::new(Some(&test_module_fixture_manager), FixtureScope::Function);
+
+            function_fixture_manager.add_fixtures(
                 py,
                 &[tests_package],
                 inner_package,
@@ -493,9 +495,9 @@ def z(x):
                 &[first_test_function],
             );
 
-            assert!(manager.contains_fixture_at_scope("x", &FixtureScope::Module));
-            assert!(manager.contains_fixture_at_scope("y", &FixtureScope::Function));
-            assert!(manager.contains_fixture_at_scope("z", &FixtureScope::Function));
+            assert!(test_module_fixture_manager.contains_fixture("x"));
+            assert!(function_fixture_manager.contains_fixture("y"));
+            assert!(function_fixture_manager.contains_fixture("z"));
         });
     }
 
@@ -551,10 +553,35 @@ def z(y):
 
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
-        Python::with_gil(|py| {
-            let mut manager = FixtureManager::new(None, FixtureScope::Function);
+        let y_fixture = inner_package.get_fixture("y").unwrap();
+        let z_fixture = inner_inner_package.get_fixture("z").unwrap();
 
-            manager.add_fixtures(
+        Python::with_gil(|py| {
+            let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
+
+            session_fixture_manager.add_fixtures(
+                py,
+                &[],
+                tests_package,
+                &[FixtureScope::Session],
+                &[y_fixture],
+            );
+
+            let mut module_fixture_manager =
+                FixtureManager::new(Some(&session_fixture_manager), FixtureScope::Module);
+
+            module_fixture_manager.add_fixtures(
+                py,
+                &[tests_package],
+                inner_package,
+                &[FixtureScope::Module],
+                &[z_fixture],
+            );
+
+            let mut function_fixture_manager =
+                FixtureManager::new(Some(&module_fixture_manager), FixtureScope::Function);
+
+            function_fixture_manager.add_fixtures(
                 py,
                 &[tests_package, inner_package],
                 inner_inner_package,
@@ -562,9 +589,9 @@ def z(y):
                 &[first_test_function],
             );
 
-            assert!(manager.contains_fixture_at_scope("x", &FixtureScope::Session));
-            assert!(manager.contains_fixture_at_scope("y", &FixtureScope::Module));
-            assert!(manager.contains_fixture_at_scope("z", &FixtureScope::Function));
+            assert!(session_fixture_manager.contains_fixture("x"));
+            assert!(module_fixture_manager.contains_fixture("y"));
+            assert!(function_fixture_manager.contains_fixture("z"));
         });
     }
 
@@ -579,6 +606,7 @@ import karva
 @karva.fixture(scope='module')
 def x():
     return 1
+
 @karva.fixture(scope='function')
 def y(x):
     return 1
@@ -607,20 +635,34 @@ def z(x, y):
 
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
-        Python::with_gil(|py| {
-            let mut manager = FixtureManager::new(None, FixtureScope::Function);
+        let y_fixture = tests_package.get_fixture("y").unwrap();
+        let z_fixture = tests_package.get_fixture("z").unwrap();
 
-            manager.add_fixtures(
+        Python::with_gil(|py| {
+            let mut module_fixture_manager = FixtureManager::new(None, FixtureScope::Module);
+
+            module_fixture_manager.add_fixtures(
                 py,
                 &[],
                 tests_package,
-                &[FixtureScope::Function, FixtureScope::Module],
-                &[first_test_function],
+                &[FixtureScope::Module],
+                &[y_fixture],
             );
 
-            assert!(manager.contains_fixture_at_scope("x", &FixtureScope::Module));
-            assert!(manager.contains_fixture_at_scope("y", &FixtureScope::Function));
-            assert!(manager.contains_fixture_at_scope("z", &FixtureScope::Function));
+            let mut function_fixture_manager =
+                FixtureManager::new(Some(&module_fixture_manager), FixtureScope::Function);
+
+            function_fixture_manager.add_fixtures(
+                py,
+                &[],
+                tests_package,
+                &[FixtureScope::Function],
+                &[y_fixture, z_fixture, first_test_function],
+            );
+
+            assert!(module_fixture_manager.contains_fixture("x"));
+            assert!(function_fixture_manager.contains_fixture("y"));
+            assert!(function_fixture_manager.contains_fixture("z"));
         });
     }
 
@@ -679,28 +721,61 @@ def test_user_login(auth_token): pass",
         let api_package = tests_package.get_package(&api_dir).unwrap();
         let users_package = api_package.get_package(&users_dir).unwrap();
         let test_module = users_package.get_module(&test_path).unwrap();
+
         let test_function = test_module.get_test_function("test_user_login").unwrap();
 
-        Python::with_gil(|py| {
-            let mut manager = FixtureManager::new(None, FixtureScope::Function);
+        let api_client_fixture = api_package.get_fixture("api_client").unwrap();
+        let user_fixture = users_package.get_fixture("user").unwrap();
+        let auth_token_fixture = test_module.get_fixture("auth_token").unwrap();
 
-            manager.add_fixtures(
+        Python::with_gil(|py| {
+            let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
+
+            session_fixture_manager.add_fixtures(
+                py,
+                &[],
+                tests_package,
+                &[FixtureScope::Session],
+                &[api_client_fixture],
+            );
+
+            let mut package_fixture_manager =
+                FixtureManager::new(Some(&session_fixture_manager), FixtureScope::Package);
+
+            package_fixture_manager.add_fixtures(
+                py,
+                &[tests_package],
+                api_package,
+                &[FixtureScope::Package],
+                &[user_fixture],
+            );
+
+            let mut module_fixture_manager =
+                FixtureManager::new(Some(&package_fixture_manager), FixtureScope::Module);
+
+            module_fixture_manager.add_fixtures(
+                py,
+                &[],
+                users_package,
+                &[FixtureScope::Module],
+                &[auth_token_fixture],
+            );
+
+            let mut function_fixture_manager =
+                FixtureManager::new(Some(&module_fixture_manager), FixtureScope::Function);
+
+            function_fixture_manager.add_fixtures(
                 py,
                 &[tests_package, api_package, users_package],
                 test_module,
-                &[
-                    FixtureScope::Session,
-                    FixtureScope::Package,
-                    FixtureScope::Module,
-                    FixtureScope::Function,
-                ],
+                &[FixtureScope::Function],
                 &[test_function],
             );
 
-            assert!(manager.contains_fixture_at_scope("api_client", &FixtureScope::Package));
-            assert!(manager.contains_fixture_at_scope("user", &FixtureScope::Module));
-            assert!(manager.contains_fixture_at_scope("auth_token", &FixtureScope::Function));
-            assert!(manager.contains_fixture_at_scope("database", &FixtureScope::Session));
+            assert!(session_fixture_manager.contains_fixture("database"));
+            assert!(package_fixture_manager.contains_fixture("api_client"));
+            assert!(module_fixture_manager.contains_fixture("user"));
+            assert!(function_fixture_manager.contains_fixture("auth_token"));
         });
     }
 
@@ -764,33 +839,42 @@ def service_b(config):
         let test_a = module_a.get_test_function("test_a").unwrap();
         let test_b = module_b.get_test_function("test_b").unwrap();
 
-        Python::with_gil(|py| {
-            let mut manager = FixtureManager::new(None, FixtureScope::Function);
+        let service_a_fixture = package_a.get_fixture("service_a").unwrap();
+        let service_b_fixture = package_b.get_fixture("service_b").unwrap();
 
-            manager.add_fixtures(
+        Python::with_gil(|py| {
+            let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
+
+            session_fixture_manager.add_fixtures(
+                py,
+                &[],
+                tests_package,
+                &[FixtureScope::Session],
+                &[service_a_fixture, service_b_fixture],
+            );
+
+            let mut package_fixture_manager =
+                FixtureManager::new(Some(&session_fixture_manager), FixtureScope::Package);
+
+            package_fixture_manager.add_fixtures(
                 py,
                 &[tests_package],
                 package_a,
-                &[FixtureScope::Session, FixtureScope::Package],
+                &[FixtureScope::Package],
                 &[test_a],
             );
 
-            assert!(manager.contains_fixture_at_scope("config", &FixtureScope::Session));
-            assert!(manager.contains_fixture_at_scope("service_a", &FixtureScope::Package));
-
-            manager.reset_fixtures();
-
-            manager.add_fixtures(
+            package_fixture_manager.add_fixtures(
                 py,
                 &[tests_package],
                 package_b,
-                &[FixtureScope::Session, FixtureScope::Package],
+                &[FixtureScope::Package],
                 &[test_b],
             );
 
-            assert!(manager.contains_fixture_at_scope("config", &FixtureScope::Session));
-            assert!(manager.contains_fixture_at_scope("service_b", &FixtureScope::Package));
-            assert!(!manager.contains_fixture_at_scope("service_a", &FixtureScope::Package));
+            assert!(session_fixture_manager.contains_fixture("config"));
+            assert!(package_fixture_manager.contains_fixture("service_a"));
+            assert!(package_fixture_manager.contains_fixture("service_b"));
         });
     }
 
@@ -924,7 +1008,7 @@ def combined(derived_a, derived_b):
     fn test_fixture_manager_deep_nesting_five_levels() {
         let env = TestEnv::with_files([
             (
-                "<test>/tests/conftest.py",
+                "<test>/level1/conftest.py",
                 r"
 import karva
 @karva.fixture(scope='session')
@@ -933,7 +1017,7 @@ def level1():
 ",
             ),
             (
-                "<test>/tests/level2/conftest.py",
+                "<test>/level1/level2/conftest.py",
                 r"
 import karva
 @karva.fixture(scope='package')
@@ -942,7 +1026,7 @@ def level2(level1):
 ",
             ),
             (
-                "<test>/tests/level2/level3/conftest.py",
+                "<test>/level1/level2/level3/conftest.py",
                 r"
 import karva
 @karva.fixture(scope='module')
@@ -951,7 +1035,7 @@ def level3(level2):
 ",
             ),
             (
-                "<test>/tests/level2/level3/level4/conftest.py",
+                "<test>/level1/level2/level3/level4/conftest.py",
                 r"
 import karva
 @karva.fixture(scope='function')
@@ -960,7 +1044,7 @@ def level4(level3):
 ",
             ),
             (
-                "<test>/tests/level2/level3/level4/level5/conftest.py",
+                "<test>/level1/level2/level3/level4/level5/conftest.py",
                 r"
 import karva
 @karva.fixture(scope='function')
@@ -969,14 +1053,14 @@ def level5(level4):
 ",
             ),
             (
-                "<test>/tests/level2/level3/level4/level5/test_deep.py",
+                "<test>/level1/level2/level3/level4/level5/test_deep.py",
                 "def test_deep(level5): pass",
             ),
         ]);
 
         let mapped_dir = env.mapped_path("<test>").unwrap();
-        let tests_dir = mapped_dir.join("tests");
-        let l2_dir = tests_dir.join("level2");
+        let l1_dir = mapped_dir.join("level1");
+        let l2_dir = l1_dir.join("level2");
         let l3_dir = l2_dir.join("level3");
         let l4_dir = l3_dir.join("level4");
         let l5_dir = l4_dir.join("level5");
@@ -985,7 +1069,7 @@ def level5(level4):
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
-        let l1_package = session.get_package(&tests_dir).unwrap();
+        let l1_package = session.get_package(&l1_dir).unwrap();
         let l2_package = l1_package.get_package(&l2_dir).unwrap();
         let l3_package = l2_package.get_package(&l3_dir).unwrap();
         let l4_package = l3_package.get_package(&l4_dir).unwrap();
@@ -994,130 +1078,59 @@ def level5(level4):
         let test_module = l5_package.get_module(&test_path).unwrap();
         let test_function = test_module.get_test_function("test_deep").unwrap();
 
-        Python::with_gil(|py| {
-            let mut manager = FixtureManager::new(None, FixtureScope::Function);
+        let l2_fixture = l2_package.get_fixture("level2").unwrap();
+        let l3_fixture = l3_package.get_fixture("level3").unwrap();
+        let l4_fixture = l4_package.get_fixture("level4").unwrap();
+        let l5_fixture = l5_package.get_fixture("level5").unwrap();
 
-            manager.add_fixtures(
+        Python::with_gil(|py| {
+            let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
+
+            session_fixture_manager.add_fixtures(
+                py,
+                &[],
+                l1_package,
+                &[FixtureScope::Session],
+                &[l2_fixture],
+            );
+            let mut package_fixture_manager =
+                FixtureManager::new(Some(&session_fixture_manager), FixtureScope::Package);
+
+            package_fixture_manager.add_fixtures(
+                py,
+                &[l1_package],
+                l2_package,
+                &[FixtureScope::Package],
+                &[l3_fixture],
+            );
+
+            let mut module_fixture_manager =
+                FixtureManager::new(Some(&package_fixture_manager), FixtureScope::Module);
+
+            module_fixture_manager.add_fixtures(
+                py,
+                &[l1_package, l2_package],
+                l3_package,
+                &[FixtureScope::Module],
+                &[l4_fixture],
+            );
+
+            let mut function_fixture_manager =
+                FixtureManager::new(Some(&module_fixture_manager), FixtureScope::Function);
+
+            function_fixture_manager.add_fixtures(
                 py,
                 &[l1_package, l2_package, l3_package, l4_package],
                 l5_package,
-                &[
-                    FixtureScope::Session,
-                    FixtureScope::Package,
-                    FixtureScope::Module,
-                    FixtureScope::Function,
-                ],
-                &[test_function],
+                &[FixtureScope::Function],
+                &[l5_fixture, test_function],
             );
 
-            assert!(manager.contains_fixture_at_scope("level1", &FixtureScope::Session));
-            assert!(manager.contains_fixture_at_scope("level2", &FixtureScope::Package));
-            assert!(manager.contains_fixture_at_scope("level3", &FixtureScope::Module));
-            assert!(manager.contains_fixture_at_scope("level4", &FixtureScope::Function));
-            assert!(manager.contains_fixture_at_scope("level5", &FixtureScope::Function));
-        });
-    }
-
-    #[test]
-    fn test_fixture_manager_cross_package_dependencies() {
-        let env = TestEnv::with_files([
-            (
-                "<test>/tests/conftest.py",
-                r"
-import karva
-@karva.fixture(scope='session')
-def utils():
-    return 'shared_utils'
-",
-            ),
-            (
-                "<test>/tests/package_a/conftest.py",
-                r"
-import karva
-@karva.fixture(scope='package')
-def service_a(utils):
-    return f'service_a_{utils}'
-",
-            ),
-            (
-                "<test>/tests/package_b/conftest.py",
-                r"
-import karva
-@karva.fixture(scope='package')
-def service_b(utils):
-    return f'service_b_{utils}'
-",
-            ),
-            (
-                "<test>/tests/package_c/conftest.py",
-                r"
-import karva
-@karva.fixture(scope='function')
-def integration_service(service_a, service_b):
-    return f'integration_{service_a}_{service_b}'
-",
-            ),
-            (
-                "<test>/tests/package_c/test_integration.py",
-                "def test_integration(integration_service): pass",
-            ),
-        ]);
-
-        let mapped_dir = env.mapped_path("<test>").unwrap();
-        let tests_dir = mapped_dir.join("tests");
-        let package_a_dir = tests_dir.join("package_a");
-        let package_b_dir = tests_dir.join("package_b");
-        let package_c_dir = tests_dir.join("package_c");
-        let test_path = package_c_dir.join("test_integration.py");
-
-        let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
-
-        let tests_package = session.get_package(&tests_dir).unwrap();
-        let package_a = tests_package.get_package(&package_a_dir).unwrap();
-        let package_b = tests_package.get_package(&package_b_dir).unwrap();
-        let package_c = tests_package.get_package(&package_c_dir).unwrap();
-
-        let test_module = package_c.get_module(&test_path).unwrap();
-        let test_function = test_module.get_test_function("test_integration").unwrap();
-
-        Python::with_gil(|py| {
-            let mut manager = FixtureManager::new(None, FixtureScope::Function);
-
-            manager.add_fixtures(
-                py,
-                &[tests_package],
-                package_a,
-                &[FixtureScope::Session, FixtureScope::Package],
-                &[],
-            );
-
-            manager.add_fixtures(
-                py,
-                &[tests_package],
-                package_b,
-                &[FixtureScope::Session, FixtureScope::Package],
-                &[],
-            );
-
-            manager.add_fixtures(
-                py,
-                &[tests_package],
-                package_c,
-                &[
-                    FixtureScope::Session,
-                    FixtureScope::Package,
-                    FixtureScope::Function,
-                ],
-                &[test_function],
-            );
-
-            assert!(manager.contains_fixture_at_scope("utils", &FixtureScope::Session));
-            assert!(manager.contains_fixture_at_scope("service_a", &FixtureScope::Package));
-            assert!(manager.contains_fixture_at_scope("service_b", &FixtureScope::Package));
-            assert!(
-                manager.contains_fixture_at_scope("integration_service", &FixtureScope::Function)
-            );
+            assert!(session_fixture_manager.contains_fixture("level1"));
+            assert!(package_fixture_manager.contains_fixture("level2"));
+            assert!(module_fixture_manager.contains_fixture("level3"));
+            assert!(function_fixture_manager.contains_fixture("level4"));
+            assert!(function_fixture_manager.contains_fixture("level5"));
         });
     }
 
@@ -1131,7 +1144,7 @@ import karva
 @karva.fixture(scope='module')
 def module_fixture():
     return 'module_data'
-import karva
+
 @karva.fixture(scope='function')
 def function_fixture(module_fixture):
     return 'function_data'
@@ -1161,18 +1174,29 @@ def test_three(module_fixture): pass",
         let test_three = test_module.get_test_function("test_three").unwrap();
 
         Python::with_gil(|py| {
-            let mut manager = FixtureManager::new(None, FixtureScope::Function);
+            let mut module_fixture_manager = FixtureManager::new(None, FixtureScope::Module);
 
-            manager.add_fixtures(
+            module_fixture_manager.add_fixtures(
                 py,
                 &[],
                 tests_package,
-                &[FixtureScope::Module, FixtureScope::Function],
+                &[FixtureScope::Module],
                 &[test_one, test_two, test_three],
             );
 
-            assert!(manager.contains_fixture_at_scope("module_fixture", &FixtureScope::Module));
-            assert!(manager.contains_fixture_at_scope("function_fixture", &FixtureScope::Function));
+            let mut function_fixture_manager =
+                FixtureManager::new(Some(&module_fixture_manager), FixtureScope::Function);
+
+            function_fixture_manager.add_fixtures(
+                py,
+                &[tests_package],
+                tests_package,
+                &[FixtureScope::Function],
+                &[test_one, test_two, test_three],
+            );
+
+            assert!(module_fixture_manager.contains_fixture("module_fixture"));
+            assert!(function_fixture_manager.contains_fixture("function_fixture"));
         });
     }
 
@@ -1183,21 +1207,27 @@ def test_three(module_fixture): pass",
                 "<test>/tests/conftest.py",
                 r"
 import karva
+
 @karva.fixture(scope='session')
 def root():
     return 'root'
+
 @karva.fixture(scope='package')
 def branch_a1(root):
     return f'{root}_a1'
+
 @karva.fixture(scope='module')
 def branch_a2(branch_a1):
     return f'{branch_a1}_a2'
+
 @karva.fixture(scope='package')
 def branch_b1(root):
     return f'{root}_b1'
+
 @karva.fixture(scope='module')
 def branch_b2(branch_b1):
     return f'{branch_b1}_b2'
+
 @karva.fixture(scope='function')
 def converged(branch_a2, branch_b2):
     return f'{branch_a2}_{branch_b2}'
@@ -1220,28 +1250,62 @@ def converged(branch_a2, branch_b2):
         let test_module = tests_package.get_module(&test_path).unwrap();
         let test_function = test_module.get_test_function("test_converged").unwrap();
 
-        Python::with_gil(|py| {
-            let mut manager = FixtureManager::new(None, FixtureScope::Function);
+        let branch_a1_fixture = tests_package.get_fixture("branch_a1").unwrap();
+        let branch_b1_fixture = tests_package.get_fixture("branch_b1").unwrap();
+        let branch_a2_fixture = tests_package.get_fixture("branch_a2").unwrap();
+        let branch_b2_fixture = tests_package.get_fixture("branch_b2").unwrap();
+        let converged_fixture = tests_package.get_fixture("converged").unwrap();
 
-            manager.add_fixtures(
+        Python::with_gil(|py| {
+            let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
+
+            session_fixture_manager.add_fixtures(
                 py,
                 &[],
                 tests_package,
-                &[
-                    FixtureScope::Session,
-                    FixtureScope::Package,
-                    FixtureScope::Module,
-                    FixtureScope::Function,
-                ],
+                &[FixtureScope::Session],
+                &[branch_a1_fixture, branch_b1_fixture],
+            );
+
+            let mut package_fixture_manager =
+                FixtureManager::new(Some(&session_fixture_manager), FixtureScope::Package);
+
+            package_fixture_manager.add_fixtures(
+                py,
+                &[tests_package],
+                tests_package,
+                &[FixtureScope::Package],
+                &[branch_a2_fixture, branch_b2_fixture],
+            );
+
+            let mut module_fixture_manager =
+                FixtureManager::new(Some(&package_fixture_manager), FixtureScope::Module);
+
+            module_fixture_manager.add_fixtures(
+                py,
+                &[tests_package],
+                tests_package,
+                &[FixtureScope::Module],
+                &[converged_fixture],
+            );
+
+            let mut function_fixture_manager =
+                FixtureManager::new(Some(&module_fixture_manager), FixtureScope::Function);
+
+            function_fixture_manager.add_fixtures(
+                py,
+                &[tests_package],
+                tests_package,
+                &[FixtureScope::Function],
                 &[test_function],
             );
 
-            assert!(manager.contains_fixture_at_scope("root", &FixtureScope::Session));
-            assert!(manager.contains_fixture_at_scope("branch_a1", &FixtureScope::Package));
-            assert!(manager.contains_fixture_at_scope("branch_b1", &FixtureScope::Package));
-            assert!(manager.contains_fixture_at_scope("branch_a2", &FixtureScope::Module));
-            assert!(manager.contains_fixture_at_scope("branch_b2", &FixtureScope::Module));
-            assert!(manager.contains_fixture_at_scope("converged", &FixtureScope::Function));
+            assert!(session_fixture_manager.contains_fixture("root"));
+            assert!(package_fixture_manager.contains_fixture("branch_a1"));
+            assert!(package_fixture_manager.contains_fixture("branch_b1"));
+            assert!(module_fixture_manager.contains_fixture("branch_a2"));
+            assert!(module_fixture_manager.contains_fixture("branch_b2"));
+            assert!(function_fixture_manager.contains_fixture("converged"));
         });
     }
 
@@ -1255,12 +1319,15 @@ import karva
 @karva.fixture(scope='session')
 def session_fixture():
     return 'session'
+
 @karva.fixture(scope='package')
 def package_fixture():
     return 'package'
+
 @karva.fixture(scope='module')
 def module_fixture():
     return 'module'
+
 @karva.fixture(scope='function')
 def function_fixture():
     return 'function'
@@ -1286,42 +1353,77 @@ def function_fixture():
         let test_function = test_module.get_test_function("test_reset").unwrap();
 
         Python::with_gil(|py| {
-            let mut manager = FixtureManager::new(None, FixtureScope::Function);
+            let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
 
-            manager.add_fixtures(
+            session_fixture_manager.add_fixtures(
                 py,
                 &[],
                 tests_package,
-                &[
-                    FixtureScope::Session,
-                    FixtureScope::Package,
-                    FixtureScope::Module,
-                    FixtureScope::Function,
-                ],
+                &[FixtureScope::Session],
                 &[test_function],
             );
 
-            assert!(manager.contains_fixture_at_scope("session_fixture", &FixtureScope::Session));
-            assert!(manager.contains_fixture_at_scope("package_fixture", &FixtureScope::Package));
-            assert!(manager.contains_fixture_at_scope("module_fixture", &FixtureScope::Module));
-            assert!(manager.contains_fixture_at_scope("function_fixture", &FixtureScope::Function));
+            let mut package_fixture_manager =
+                FixtureManager::new(Some(&session_fixture_manager), FixtureScope::Package);
 
-            manager.reset_fixtures();
-            assert!(
-                !manager.contains_fixture_at_scope("function_fixture", &FixtureScope::Function)
+            package_fixture_manager.add_fixtures(
+                py,
+                &[tests_package],
+                tests_package,
+                &[FixtureScope::Package],
+                &[test_function],
             );
-            assert!(manager.contains_fixture_at_scope("module_fixture", &FixtureScope::Module));
 
-            manager.reset_fixtures();
-            assert!(!manager.contains_fixture_at_scope("module_fixture", &FixtureScope::Module));
-            assert!(manager.contains_fixture_at_scope("package_fixture", &FixtureScope::Package));
+            let mut module_fixture_manager =
+                FixtureManager::new(Some(&package_fixture_manager), FixtureScope::Module);
 
-            manager.reset_fixtures();
-            assert!(!manager.contains_fixture_at_scope("package_fixture", &FixtureScope::Package));
-            assert!(manager.contains_fixture_at_scope("session_fixture", &FixtureScope::Session));
+            module_fixture_manager.add_fixtures(
+                py,
+                &[tests_package],
+                tests_package,
+                &[FixtureScope::Module],
+                &[test_function],
+            );
 
-            manager.reset_fixtures();
-            assert!(!manager.contains_fixture_at_scope("session_fixture", &FixtureScope::Session));
+            let mut function_fixture_manager =
+                FixtureManager::new(Some(&module_fixture_manager), FixtureScope::Function);
+
+            function_fixture_manager.add_fixtures(
+                py,
+                &[tests_package],
+                tests_package,
+                &[FixtureScope::Function],
+                &[test_function],
+            );
+
+            assert!(session_fixture_manager.contains_fixture("session_fixture"));
+            assert!(package_fixture_manager.contains_fixture("package_fixture"));
+            assert!(module_fixture_manager.contains_fixture("module_fixture"));
+            assert!(function_fixture_manager.contains_fixture("function_fixture"));
+
+            function_fixture_manager.reset_fixtures();
+            assert!(
+                !function_fixture_manager
+                    .contains_fixture_at_scope("function_fixture", &FixtureScope::Function)
+            );
+
+            module_fixture_manager.reset_fixtures();
+            assert!(
+                !module_fixture_manager
+                    .contains_fixture_at_scope("module_fixture", &FixtureScope::Module)
+            );
+
+            package_fixture_manager.reset_fixtures();
+            assert!(
+                !package_fixture_manager
+                    .contains_fixture_at_scope("package_fixture", &FixtureScope::Package)
+            );
+
+            session_fixture_manager.reset_fixtures();
+            assert!(
+                !session_fixture_manager
+                    .contains_fixture_at_scope("session_fixture", &FixtureScope::Session)
+            );
         });
     }
 }

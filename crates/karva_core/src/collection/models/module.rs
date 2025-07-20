@@ -1,13 +1,10 @@
-use karva_project::Project;
 use pyo3::prelude::*;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{
     collection::TestCase,
     diagnostic::{Diagnostic, reporter::Reporter},
     extensions::fixtures::Finalizers,
     runner::RunDiagnostics,
-    utils::with_gil,
 };
 
 #[derive(Default)]
@@ -45,29 +42,21 @@ impl<'proj> CollectedModule<'proj> {
 
     pub(crate) fn run_with_reporter(
         &self,
-        project: &Project,
         py: Python<'_>,
         reporter: &dyn Reporter,
     ) -> RunDiagnostics {
         let mut diagnostics = RunDiagnostics::default();
 
-        py.allow_threads(|| {
-            let results = self
-                .test_cases
-                .par_iter()
-                .map(|(test_case, diagnostic)| {
-                    with_gil(project, |inner_py| {
-                        let mut result = test_case.run(inner_py, diagnostic.clone());
-                        result.add_diagnostics(test_case.finalizers().run(inner_py));
-                        result
-                    })
-                })
-                .collect::<Vec<_>>();
-
-            for result in results {
+        self.test_cases
+            .iter()
+            .map(|(test_case, diagnostic)| {
+                let mut result = test_case.run(py, diagnostic.clone());
+                result.add_diagnostics(test_case.finalizers().run(py));
+                result
+            })
+            .for_each(|result| {
                 diagnostics.update(&result);
-            }
-        });
+            });
 
         reporter.report();
 

@@ -65,9 +65,9 @@ impl TestFunction {
         &'a self,
         py: Python<'_>,
         module: &'a DiscoveredModule,
-        py_module: &Bound<'_, PyModule>,
-        fixture_manager_func: &mut impl FnMut(
-            &mut dyn FnMut(&mut FixtureManager) -> (TestCase<'a>, Option<Diagnostic>),
+        py_module: &Py<PyModule>,
+        fixture_manager_func: &impl Fn(
+            &dyn Fn(&FixtureManager) -> (TestCase<'a>, Option<Diagnostic>),
         ) -> (TestCase<'a>, Option<Diagnostic>),
     ) -> Vec<(TestCase<'a>, Option<Diagnostic>)> {
         tracing::info!(
@@ -75,22 +75,21 @@ impl TestFunction {
             self.function_definition.name
         );
 
-        let Ok(py_function) = py_module.getattr(self.function_definition.name.to_string()) else {
+        let Ok(py_function) = py_module.getattr(py, self.function_definition.name.to_string())
+        else {
             return Vec::new();
         };
-
-        let py_function = py_function.as_unbound();
 
         let required_fixture_names = self.get_required_fixture_names();
 
         if required_fixture_names.is_empty() {
             return vec![(
-                TestCase::new(self, HashMap::new(), py_function.clone(), module),
+                TestCase::new(self, HashMap::new(), py_function, module),
                 None,
             )];
         }
 
-        let tags = Tags::from_py_any(py, py_function);
+        let tags = Tags::from_py_any(py, &py_function);
         let mut parametrize_args = tags.parametrize_args();
 
         // Ensure that we collect at least one test case (no parametrization)
@@ -101,7 +100,7 @@ impl TestFunction {
         let mut test_cases = Vec::with_capacity(parametrize_args.len());
 
         for params in parametrize_args {
-            let mut f = |fixture_manager: &mut FixtureManager| {
+            let f = |fixture_manager: &FixtureManager| {
                 let num_required_fixtures = required_fixture_names.len();
                 let mut fixture_diagnostics = Vec::with_capacity(num_required_fixtures);
                 let mut required_fixtures = HashMap::with_capacity(num_required_fixtures);
@@ -140,7 +139,7 @@ impl TestFunction {
                 )
             };
 
-            test_cases.push(fixture_manager_func(&mut f));
+            test_cases.push(fixture_manager_func(&f));
         }
 
         test_cases
