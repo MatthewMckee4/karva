@@ -10,6 +10,7 @@ from typing import (
 )
 
 _ScopeName: TypeAlias = Literal["session", "package", "module", "function"]
+_Scope: TypeAlias = _ScopeName | Callable[[str], _ScopeName]
 
 _T = TypeVar("_T")
 _P = ParamSpec("_P")
@@ -33,10 +34,23 @@ def fixture(func: Callable[_P, _T]) -> FixtureFunctionDefinition[_P, _T]: ...
 def fixture(
     func: None = ...,
     *,
-    scope: _ScopeName = "function",
+    scope: _Scope = "function",
     name: str | None = ...,
     auto_use: bool = ...,
-) -> Callable[[Callable[_P, _T]], FixtureFunctionDefinition[_P, _T]]: ...
+) -> Callable[[Callable[_P, _T]], FixtureFunctionDefinition[_P, _T]]:
+    """Decorator for a fixture function.
+
+    Args:
+        func: The fixture function.
+        scope: The scope of the fixture.
+            This can either be a string value or a callable that takes the fixture
+            name and returns a string value.
+        name: The name of the fixture.
+        auto_use: Whether to automatically use the fixture.
+
+    Returns:
+        _description_
+    """
 
 class TestFunction(Generic[_P, _T]):
     def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T: ...
