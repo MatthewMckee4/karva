@@ -231,7 +231,7 @@ mod test {
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected = "error: Unknown error\n --> unknown.py:1\n";
+            let expected = "error[unknown-error]: Unknown error\n --> unknown.py:1\n";
             assert_eq!(output, expected);
         }
 
@@ -282,7 +282,7 @@ mod test {
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected = "error\n --> test.py:1\n";
+            let expected = "error[unknown-error]\n --> test.py:1\n";
             assert_eq!(output, expected);
         }
 
@@ -298,7 +298,7 @@ mod test {
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected = "error: Error with no location\n";
+            let expected = "error[unknown-error]: Error with no location\n";
             assert_eq!(output, expected);
         }
 
@@ -314,7 +314,7 @@ mod test {
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected = "error\n";
+            let expected = "error[unknown-error]\n";
             assert_eq!(output, expected);
         }
 
