@@ -27,5 +27,9 @@ format:
     cargo sort
 
 # Run benchmarks
-benchmark: build
+pytest-benchmark: build
     cd scripts/benchmark && uv sync --all-extras --no-install-project && uv pip install -e ../../ && uv run main.py --iterations {{ITERATIONS}} --num-tests {{NUM_TESTS}} --run-test
+
+benchmark:
+    cargo codspeed build --features codspeed -p karva_benchmark
+    cargo codspeed run

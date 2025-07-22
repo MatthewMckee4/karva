@@ -91,24 +91,6 @@ fn bench_project(benchmark: &ProjectBenchmark, criterion: &mut Criterion) {
         }
     }
 
-    // Set LD_LIBRARY_PATH to the Python venv's lib directory for the benchmark
-    use std::env;
-
-    let python_path = benchmark.installed_project.python_path();
-
-    // Prepend to LD_LIBRARY_PATH if it exists, otherwise set it
-    let python_path_str = python_path.to_str().expect("Non-UTF8 venv lib path");
-    if let Some(current) = env::var_os("LD_LIBRARY_PATH") {
-        let mut new_val = python_path_str.to_owned();
-        new_val.push(':');
-        new_val.push_str(&current.to_string_lossy());
-        eprintln!("Setting LD_LIBRARY_PATH to {new_val}");
-        unsafe { env::set_var("LD_LIBRARY_PATH", new_val) };
-    } else {
-        eprintln!("Setting LD_LIBRARY_PATH to {python_path_str}");
-        unsafe { env::set_var("LD_LIBRARY_PATH", python_path_str) };
-    }
-
     let mut group = criterion.benchmark_group("project");
 
     group.sampling_mode(karva_benchmark::criterion::SamplingMode::Flat);

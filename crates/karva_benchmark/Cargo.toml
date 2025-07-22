@@ -23,6 +23,8 @@ ruff_python_ast = { workspace = true }
 tracing = { workspace = true }
 karva_project = { workspace = true, features = ["testing"] }
 tempfile = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 karva_project = { workspace = true }
