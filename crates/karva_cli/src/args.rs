@@ -8,7 +8,7 @@ use crate::logging::Verbosity;
 #[command(version)]
 pub struct Args {
     #[command(subcommand)]
-    pub command: Command,
+    pub(crate) command: Command,
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -44,7 +44,7 @@ pub struct TestCommand {
 }
 
 impl TestCommand {
-    pub fn into_options(self) -> ProjectOptions {
+    pub(crate) fn into_options(self) -> ProjectOptions {
         ProjectOptions::new(self.test_prefix, self.verbosity.level(), self.show_output)
     }
 }

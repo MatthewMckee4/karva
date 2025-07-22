@@ -7,13 +7,13 @@ use crate::extensions::{
 
 #[cfg(test)]
 #[ctor::ctor]
-pub fn setup() {
+pub(crate) fn setup() {
     setup_module();
 }
 
 pub fn setup_module() {
     #[pymodule]
-    pub fn karva(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    pub(crate) fn karva(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_function(wrap_pyfunction!(fixture_decorator, m)?)?;
         m.add_class::<FixtureFunctionMarker>()?;
         m.add_class::<FixtureFunctionDefinition>()?;

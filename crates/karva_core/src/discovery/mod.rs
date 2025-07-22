@@ -2,10 +2,10 @@ pub mod discoverer;
 pub mod models;
 pub mod visitor;
 
-pub use discoverer::Discoverer;
-pub use models::{
+pub(crate) use discoverer::StandardDiscoverer;
+pub(crate) use models::{
     function::{TestFunction, TestFunctionDisplay},
-    module::{DiscoveredModule, ModuleType, StringModule},
-    package::{DiscoveredPackage, StringPackage},
+    module::{DiscoveredModule, ModuleType},
+    package::DiscoveredPackage,
 };
-pub use visitor::{FunctionDefinitionVisitor, discover};
+pub(crate) use visitor::discover;

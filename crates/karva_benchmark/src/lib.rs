@@ -74,9 +74,9 @@ impl TestCase {
     pub fn path(&self) -> PathBuf {
         PathBuf::from(file!())
             .parent()
-            .unwrap()
+            .expect("Failed to get parent of file")
             .parent()
-            .unwrap()
+            .expect("Failed to get parent of file")
             .join("resources")
             .join(self.name())
     }

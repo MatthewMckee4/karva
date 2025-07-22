@@ -10,31 +10,22 @@ pub struct RunDiagnostics {
 
 impl RunDiagnostics {
     #[must_use]
-    pub const fn diagnostics(&self) -> &Vec<Diagnostic> {
+    #[cfg(test)]
+    pub(crate) const fn diagnostics(&self) -> &Vec<Diagnostic> {
         &self.diagnostics
     }
 
-    pub fn add_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
+    pub(crate) fn add_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
         for diagnostic in diagnostics {
             self.add_diagnostic(diagnostic);
         }
     }
 
-    pub fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
-        let severity = diagnostic.severity();
-        if severity.is_test_fail() {
-            self.stats.add_failed();
-        } else if severity.is_test_error() {
-            self.stats.add_errored();
-        }
+    pub(crate) fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
         self.diagnostics.push(diagnostic);
     }
 
-    pub const fn add_stats(&mut self, stats: &DiagnosticStats) {
-        self.stats.update(stats);
-    }
-
-    pub fn update(&mut self, other: &Self) {
+    pub(crate) fn update(&mut self, other: &Self) {
         for diagnostic in other.diagnostics.clone() {
             self.diagnostics.push(diagnostic);
         }
@@ -52,16 +43,11 @@ impl RunDiagnostics {
     }
 
     #[must_use]
-    pub fn test_results(&self) -> &[Diagnostic] {
-        &self.diagnostics
-    }
-
-    #[must_use]
     pub const fn stats(&self) -> &DiagnosticStats {
         &self.stats
     }
 
-    pub const fn stats_mut(&mut self) -> &mut DiagnosticStats {
+    pub(crate) const fn stats_mut(&mut self) -> &mut DiagnosticStats {
         &mut self.stats
     }
 
@@ -84,7 +70,7 @@ pub struct DiagnosticStats {
 }
 
 impl DiagnosticStats {
-    pub const fn update(&mut self, other: &Self) {
+    pub(crate) const fn update(&mut self, other: &Self) {
         self.total += other.total();
         self.passed += other.passed();
         self.failed += other.failed();
@@ -97,31 +83,31 @@ impl DiagnosticStats {
     }
 
     #[must_use]
-    pub const fn passed(&self) -> usize {
+    pub(crate) const fn passed(&self) -> usize {
         self.passed
     }
 
     #[must_use]
-    pub const fn failed(&self) -> usize {
+    pub(crate) const fn failed(&self) -> usize {
         self.failed
     }
 
     #[must_use]
-    pub const fn errored(&self) -> usize {
+    pub(crate) const fn errored(&self) -> usize {
         self.errored
     }
 
-    pub const fn add_failed(&mut self) {
+    pub(crate) const fn add_failed(&mut self) {
         self.failed += 1;
         self.total += 1;
     }
 
-    pub const fn add_errored(&mut self) {
+    pub(crate) const fn add_errored(&mut self) {
         self.errored += 1;
         self.total += 1;
     }
 
-    pub const fn add_passed(&mut self) {
+    pub(crate) const fn add_passed(&mut self) {
         self.passed += 1;
         self.total += 1;
     }
@@ -132,7 +118,7 @@ pub struct DisplayRunDiagnostics<'a> {
 }
 
 impl<'a> DisplayRunDiagnostics<'a> {
-    pub const fn new(diagnostics: &'a RunDiagnostics) -> Self {
+    pub(crate) const fn new(diagnostics: &'a RunDiagnostics) -> Self {
         Self { diagnostics }
     }
 
@@ -167,25 +153,21 @@ impl std::fmt::Display for DisplayRunDiagnostics<'_> {
 }
 #[cfg(test)]
 mod tests {
-    use karva_project::{project::Project, tests::TestEnv};
+    use karva_project::testing::TestEnv;
 
-    use crate::runner::{StandardTestRunner, TestRunner};
+    use crate::runner::TestRunner;
 
     #[test]
     fn test_runner_with_passing_test() {
-        let env = TestEnv::new();
-        env.create_file(
-            "test_pass.py",
+        let env = TestEnv::with_files([(
+            "<test>/test_pass.py",
             r"
 def test_simple_pass():
     assert True
 ",
-        );
+        )]);
 
-        let project = Project::new(env.cwd(), vec![env.temp_path("test_pass.py")]);
-        let runner = StandardTestRunner::new(&project);
-
-        let result = runner.test();
+        let result = env.test();
 
         assert_eq!(result.stats().total(), 1);
         assert_eq!(result.stats().passed(), 1);
@@ -195,19 +177,15 @@ def test_simple_pass():
 
     #[test]
     fn test_runner_with_failing_test() {
-        let env = TestEnv::new();
-        env.create_file(
-            "test_fail.py",
+        let env = TestEnv::with_files([(
+            "<test>/test_fail.py",
             r#"
 def test_simple_fail():
     assert False, "This test should fail"
 "#,
-        );
+        )]);
 
-        let project = Project::new(env.cwd(), vec![env.temp_path("test_fail.py")]);
-        let runner = StandardTestRunner::new(&project);
-
-        let result = runner.test();
+        let result = env.test();
 
         assert_eq!(result.stats().total(), 1);
         assert_eq!(result.stats().passed(), 0);
@@ -217,19 +195,15 @@ def test_simple_fail():
 
     #[test]
     fn test_runner_with_error_test() {
-        let env = TestEnv::new();
-        env.create_file(
-            "test_error.py",
+        let env = TestEnv::with_files([(
+            "<test>/test_error.py",
             r#"
 def test_simple_error():
     raise ValueError("This is an error")
 "#,
-        );
+        )]);
 
-        let project = Project::new(env.cwd(), vec![env.temp_path("test_error.py")]);
-        let runner = StandardTestRunner::new(&project);
-
-        let result = runner.test();
+        let result = env.test();
 
         assert_eq!(result.stats().total(), 1);
         assert_eq!(result.stats().passed(), 0);
@@ -239,9 +213,8 @@ def test_simple_error():
 
     #[test]
     fn test_runner_with_multiple_tests() {
-        let env = TestEnv::new();
-        env.create_file(
-            "test_mixed.py",
+        let env = TestEnv::with_files([(
+            "<test>/test_mixed.py",
             r#"def test_pass():
     assert True
 
@@ -251,12 +224,9 @@ def test_fail():
 def test_error():
     raise ValueError("This is an error")
 "#,
-        );
+        )]);
 
-        let project = Project::new(env.cwd(), vec![env.temp_path("test_mixed.py")]);
-        let runner = StandardTestRunner::new(&project);
-
-        let result = runner.test();
+        let result = env.test();
 
         assert_eq!(result.stats().total(), 3);
         assert_eq!(result.stats().passed(), 1);

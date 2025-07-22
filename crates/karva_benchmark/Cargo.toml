@@ -21,7 +21,7 @@ codspeed-criterion-compat = { workspace = true, default-features = false, option
 criterion = { workspace = true, default-features = false }
 ruff_python_ast = { workspace = true }
 tracing = { workspace = true }
-karva_project = { workspace = true }
+karva_project = { workspace = true, features = ["testing"] }
 tempfile = { workspace = true }
 
 [dev-dependencies]

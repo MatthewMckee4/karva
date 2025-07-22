@@ -1,9 +1,9 @@
-# Karva (0.1.3)
+# Karva (0.1.4)
 
 A Python test framework, written in Rust.
 
 <div align="center">
-  <img src="docs/assets/benchmark_results.svg" alt="Benchmark results" width="70%">
+  <img src="https://raw.githubusercontent.com/MatthewMckee4/karva/main/docs/assets/benchmark_results.svg" alt="Benchmark results" width="70%">
 </div>
 
 ## About Karva
@@ -82,11 +82,14 @@ uv run karva test tests/test.py
 Provides the following output:
 
 ```bash
-fail[assertion-failed] in tests/test.py
+fail[assertion-failed]
+ --> test_fail at tests/test.py:5
  | File "tests/test.py", line 6, in test_fail
  |   assert False, "This test should fail"
-error[value-error] in tests/test.py
- | File "/tests/test.py", line 10, in test_error
+
+error[value-error]
+ --> test_error at tests/test.py:9
+ | File "tests/test.py", line 10, in test_error
  |   raise ValueError("This is an error")
 
 Passed tests: 1

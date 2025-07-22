@@ -3,18 +3,17 @@ use std::fmt::Display;
 use pyo3::{prelude::*, types::PyTuple};
 use ruff_python_ast::{Decorator, Expr, StmtFunctionDef};
 
-mod extractor;
-mod finalizer;
-mod manager;
+pub mod extractor;
+pub mod finalizer;
+pub mod manager;
+
 pub mod python;
 
-pub use finalizer::{Finalizer, Finalizers};
-pub use manager::FixtureManager;
-
-use crate::discovery::visitor::is_generator_function;
+pub(crate) use finalizer::{Finalizer, Finalizers};
+pub(crate) use manager::FixtureManager;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub enum FixtureScope {
+pub(crate) enum FixtureScope {
     #[default]
     Function,
     Module,
@@ -47,7 +46,7 @@ impl Display for FixtureScope {
     }
 }
 
-pub struct Fixture {
+pub(crate) struct Fixture {
     name: String,
     function_def: StmtFunctionDef,
     scope: FixtureScope,
@@ -58,7 +57,7 @@ pub struct Fixture {
 
 impl Fixture {
     #[must_use]
-    pub const fn new(
+    pub(crate) const fn new(
         name: String,
         function_def: StmtFunctionDef,
         scope: FixtureScope,
@@ -77,26 +76,26 @@ impl Fixture {
     }
 
     #[must_use]
-    pub fn name(&self) -> &str {
+    pub(crate) fn name(&self) -> &str {
         &self.name
     }
 
     #[must_use]
-    pub const fn scope(&self) -> &FixtureScope {
+    pub(crate) const fn scope(&self) -> &FixtureScope {
         &self.scope
     }
 
     #[must_use]
-    pub const fn is_generator(&self) -> bool {
+    pub(crate) const fn is_generator(&self) -> bool {
         self.is_generator
     }
 
     #[must_use]
-    pub const fn auto_use(&self) -> bool {
+    pub(crate) const fn auto_use(&self) -> bool {
         self.auto_use
     }
 
-    pub fn call<'a>(
+    pub(crate) fn call<'a>(
         &self,
         py: Python<'a>,
         fixture_manager: &mut FixtureManager,
@@ -109,7 +108,7 @@ impl Fixture {
             }
         }
         let args = PyTuple::new(py, required_fixtures)?;
-        if self.is_generator {
+        if self.is_generator() {
             let function_return = self.function.call(py, args.clone(), None)?;
 
             let finalizer = Finalizer::new(self.name().to_string(), function_return.clone());
@@ -126,15 +125,14 @@ impl Fixture {
         }
     }
 
-    pub fn try_from_function(
+    pub(crate) fn try_from_function(
         function_definition: &StmtFunctionDef,
         py_module: &Bound<'_, PyModule>,
+        is_generator_function: bool,
     ) -> Result<Option<Self>, String> {
         let function = py_module
             .getattr(function_definition.name.to_string())
             .map_err(|e| e.to_string())?;
-
-        let is_generator_function = is_generator_function(function_definition);
 
         let try_karva = extractor::try_from_karva_function(
             function_definition,
@@ -174,7 +172,7 @@ impl std::fmt::Debug for Fixture {
     }
 }
 
-pub trait HasFunctionDefinition {
+pub(crate) trait HasFunctionDefinition {
     #[must_use]
     fn get_required_fixture_names(&self) -> Vec<String> {
         let mut required_fixtures = Vec::new();
@@ -191,7 +189,7 @@ pub trait HasFunctionDefinition {
     fn function_definition(&self) -> &StmtFunctionDef;
 }
 
-pub trait RequiresFixtures: std::fmt::Debug {
+pub(crate) trait RequiresFixtures: std::fmt::Debug {
     #[must_use]
     fn uses_fixture(&self, fixture_name: &str) -> bool {
         self.required_fixtures().contains(&fixture_name.to_string())
@@ -207,7 +205,7 @@ impl<T: HasFunctionDefinition + std::fmt::Debug> RequiresFixtures for T {
     }
 }
 
-pub fn is_fixture_function(val: &StmtFunctionDef) -> bool {
+pub(crate) fn is_fixture_function(val: &StmtFunctionDef) -> bool {
     val.decorator_list.iter().any(is_fixture)
 }
 
@@ -228,7 +226,7 @@ fn is_fixture(decorator: &Decorator) -> bool {
 ///
 /// For example, if we are in a test module, we want to get all fixtures used in the test module.
 /// If we are in a package, we want to get all fixtures used in the package from the configuration module.
-pub trait HasFixtures<'proj>: std::fmt::Debug {
+pub(crate) trait HasFixtures<'proj>: std::fmt::Debug {
     fn fixtures<'a: 'proj>(
         &'a self,
         scope: &[FixtureScope],

@@ -39,7 +39,7 @@ notify = { version = "8.0.0" }
 pretty_assertions = { version = "1.4.1" }
 pyo3 = { version = "0.25.1", features = ["auto-initialize"] }
 rand = { version = "0.9.1" }
-regex = "1"
+regex = { version = "1.11.1" }
 rstest = { version = "0.18" }
 ruff_python_ast = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_python_parser = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
@@ -65,6 +65,11 @@ unexpected_cfgs = { level = "warn", check-cfg = ["cfg(codspeed)"] }
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
+correctness = { level = "warn", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
 
 missing_errors_doc = "allow"
 print_stdout = "warn"
@@ -74,3 +79,4 @@ significant_drop_tightening = "allow"
 format_push_string = "allow"
 mutable_key_type = "allow"
 similar_names = "allow"
+cmp_owned = "allow"

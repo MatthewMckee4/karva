@@ -10,7 +10,6 @@ use tracing_subscriber::{
     registry::LookupSpan,
 };
 
-/// Logging flags to `#[command(flatten)]` into your CLI
 #[derive(clap::Args, Debug, Clone, Default, PartialEq, Eq)]
 #[command(about = None, long_about = None)]
 pub struct Verbosity {

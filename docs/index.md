@@ -1,7 +1,7 @@
-# Karva (0.1.3)
+# Karva (0.1.4)
 
 A Python test framework, written in Rust.
 
 <div align="center">
-  <img src="assets/benchmark_results.svg" alt="Benchmark results" width="70%">
+  <img src="https://raw.githubusercontent.com/MatthewMckee4/karva/main/docs/assets/benchmark_results.svg" alt="Benchmark results" width="70%">
 </div>

@@ -12,7 +12,7 @@ fn get_attribute<'a>(function: Bound<'a, PyAny>, attributes: &[&str]) -> Option<
     Some(current.clone())
 }
 
-pub fn try_from_pytest_function(
+pub(crate) fn try_from_pytest_function(
     function_definition: &StmtFunctionDef,
     function: &Bound<'_, PyAny>,
     is_generator_function: bool,
@@ -52,7 +52,7 @@ pub fn try_from_pytest_function(
     )))
 }
 
-pub fn try_from_karva_function(
+pub(crate) fn try_from_karva_function(
     function_def: &StmtFunctionDef,
     function: &Bound<'_, PyAny>,
     is_generator_function: bool,
@@ -64,7 +64,9 @@ pub fn try_from_karva_function(
         return Ok(None);
     };
 
-    let py_function_borrow = py_function.borrow_mut();
+    let Ok(py_function_borrow) = py_function.try_borrow_mut() else {
+        return Ok(None);
+    };
 
     let scope = py_function_borrow.scope.clone();
     let name = py_function_borrow.name.clone();

@@ -17,7 +17,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use karva_project::{path::SystemPathBuf, tests::find_karva_wheel};
+use karva_project::{path::SystemPathBuf, testing::find_karva_wheel};
 use ruff_python_ast::PythonVersion;
 use tempfile::TempDir;
 

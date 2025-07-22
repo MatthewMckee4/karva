@@ -1,100 +1,109 @@
-use pyo3::{prelude::*, types::PyTuple};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::LazyLock,
+};
+
+use pyo3::{prelude::*, types::PyDict};
+use regex::Regex;
 
 use crate::{
-    diagnostic::Diagnostic,
-    discovery::{TestFunction, TestFunctionDisplay},
+    diagnostic::{
+        Diagnostic, FixtureSubDiagnosticType, SubDiagnosticErrorType, SubDiagnosticSeverity,
+    },
+    discovery::{DiscoveredModule, TestFunction, TestFunctionDisplay},
     extensions::fixtures::Finalizers,
     runner::RunDiagnostics,
 };
 
 #[derive(Debug)]
-pub struct TestCase<'proj> {
-    function: &'proj TestFunction<'proj>,
-    args: Vec<PyObject>,
+pub(crate) struct TestCase<'proj> {
+    function: &'proj TestFunction,
+    kwargs: HashMap<String, PyObject>,
     py_function: Py<PyAny>,
-    module_name: String,
+    module: &'proj DiscoveredModule,
     finalizers: Finalizers,
 }
 
 impl<'proj> TestCase<'proj> {
-    pub fn new(
-        function: &'proj TestFunction<'proj>,
-        args: Vec<PyObject>,
+    pub(crate) fn new(
+        function: &'proj TestFunction,
+        kwargs: HashMap<String, PyObject>,
         py_function: Py<PyAny>,
-        module_name: String,
+        module: &'proj DiscoveredModule,
     ) -> Self {
         Self {
             function,
-            args,
+            kwargs,
             py_function,
-            module_name,
+            module,
             finalizers: Finalizers::default(),
         }
     }
 
     #[must_use]
-    pub const fn function(&self) -> &TestFunction<'proj> {
+    pub(crate) const fn function(&self) -> &TestFunction {
         self.function
     }
 
-    #[must_use]
-    pub fn args(&self) -> &[PyObject] {
-        &self.args
-    }
-
-    pub fn add_finalizers(&mut self, finalizers: Finalizers) {
+    pub(crate) fn add_finalizers(&mut self, finalizers: Finalizers) {
         self.finalizers.update(finalizers);
     }
 
     #[must_use]
-    pub const fn finalizers(&self) -> &Finalizers {
+    pub(crate) const fn finalizers(&self) -> &Finalizers {
         &self.finalizers
     }
 
     #[must_use]
-    pub fn run(&self, py: Python<'_>) -> RunDiagnostics {
+    pub(crate) fn run(&self, py: Python<'_>, diagnostic: Option<Diagnostic>) -> RunDiagnostics {
         let mut run_result = RunDiagnostics::default();
 
-        if self.args.is_empty() {
-            match self.py_function.call0(py) {
-                Ok(_) => {
-                    run_result.stats_mut().add_passed();
-                }
-                Err(err) => {
-                    run_result.add_diagnostic(Diagnostic::from_test_fail(py, &err, self));
-                }
-            }
-        } else {
-            let test_function_arguments = PyTuple::new(py, self.args.clone());
+        let display = self
+            .function
+            .display(self.module.path().display().to_string());
 
-            match test_function_arguments {
-                Ok(args) => {
-                    let display = self.function.display(self.module_name.clone());
-                    let logger = TestCaseLogger::new(&display, args.clone());
-                    logger.log_running();
-                    match self.py_function.call1(py, args) {
-                        Ok(_) => {
-                            logger.log_passed();
-                            run_result.stats_mut().add_passed();
-                        }
-                        Err(err) => {
-                            let diagnostic = Diagnostic::from_test_fail(py, &err, self);
-                            let error_type = diagnostic.severity();
-                            if error_type.is_test_fail() {
-                                logger.log_failed();
-                            } else if error_type.is_test_error() {
-                                logger.log_errored();
-                            }
-                            run_result.add_diagnostic(diagnostic);
-                        }
-                    }
+        let (case_call_result, logger) = if self.kwargs.is_empty() {
+            let logger = TestCaseLogger::new(&display, None);
+            logger.log_running();
+            (self.py_function.call0(py), logger)
+        } else {
+            let kwargs = PyDict::new(py);
+
+            for (key, value) in &self.kwargs {
+                let _ = kwargs.set_item(key, value);
+            }
+            let logger = TestCaseLogger::new(&display, Some(&self.kwargs));
+            logger.log_running();
+            (self.py_function.call(py, (), Some(&kwargs)), logger)
+        };
+
+        match case_call_result {
+            Ok(_) => {
+                logger.log_passed();
+                run_result.stats_mut().add_passed();
+            }
+            Err(err) => {
+                let diagnostic = diagnostic.map_or_else(
+                    || Diagnostic::from_test_fail(py, &err, self, self.module),
+                    |input_diagnostic| {
+                        let missing_args = missing_arguments_from_error(&err.to_string());
+                        handle_missing_fixtures(&missing_args, input_diagnostic).unwrap_or_else(
+                            || Diagnostic::from_test_fail(py, &err, self, self.module),
+                        )
+                    },
+                );
+
+                let error_type = diagnostic.severity();
+
+                if error_type.is_test_fail() {
+                    logger.log_failed();
+                    run_result.stats_mut().add_failed();
+                } else if error_type.is_test_error() {
+                    logger.log_errored();
+                    run_result.stats_mut().add_errored();
                 }
-                Err(err) => {
-                    run_result.add_diagnostic(Diagnostic::unknown_error(
-                        err.to_string(),
-                        Some(self.function.display(self.module_name.clone()).to_string()),
-                    ));
-                }
+
+                run_result.add_diagnostic(diagnostic);
             }
         }
 
@@ -102,34 +111,91 @@ impl<'proj> TestCase<'proj> {
     }
 }
 
-struct TestCaseLogger<'a> {
-    function: &'a TestFunctionDisplay<'a>,
-    args: Bound<'a, PyTuple>,
+fn handle_missing_fixtures(
+    missing_args: &HashSet<String>,
+    mut diagnostic: Diagnostic,
+) -> Option<Diagnostic> {
+    let sub_diagnostics: Vec<_> = diagnostic
+        .sub_diagnostics()
+        .iter()
+        .filter_map(|sd| {
+            let SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
+                FixtureSubDiagnosticType::NotFound(fixture_name),
+            )) = sd.severity();
+
+            if missing_args.contains(fixture_name) {
+                Some(sd.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    diagnostic.clear_sub_diagnostics();
+    if sub_diagnostics.is_empty() {
+        None
+    } else {
+        diagnostic.add_sub_diagnostics(sub_diagnostics);
+        Some(diagnostic)
+    }
 }
 
-impl<'a> TestCaseLogger<'a> {
-    #[must_use]
-    const fn new(function: &'a TestFunctionDisplay<'a>, args: Bound<'a, PyTuple>) -> Self {
-        Self { function, args }
-    }
+// Pre-compile regexes at startup for better performance
+static RE_MULTI: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"missing \d+ required positional arguments?: (.+)").unwrap());
 
+static RE_SINGLE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"missing 1 required positional argument: '([^']+)'").unwrap());
+
+fn missing_arguments_from_error(err: &str) -> HashSet<String> {
+    RE_MULTI.captures(err).map_or_else(
+        || {
+            RE_SINGLE.captures(err).map_or_else(HashSet::new, |caps| {
+                HashSet::from([caps.get(1).unwrap().as_str().to_string()])
+            })
+        },
+        |caps| {
+            // The group is something like: "'y' and 'z'" or "'x', 'y', and 'z'"
+            let args_str = caps.get(1).unwrap().as_str();
+            let args_str = args_str.replace(" and ", ", ");
+            let mut result = HashSet::new();
+            for part in args_str.split(',') {
+                let trimmed = part.trim();
+                if trimmed.len() > 2 && trimmed.starts_with('\'') && trimmed.ends_with('\'') {
+                    result.insert(trimmed[1..trimmed.len() - 1].to_string());
+                }
+            }
+            result
+        },
+    )
+}
+
+struct TestCaseLogger {
+    test_name: String,
+}
+
+impl TestCaseLogger {
     #[must_use]
-    fn test_name(&self) -> String {
-        if self.args.is_empty() {
-            self.function.to_string()
-        } else {
-            let args_str = self
-                .args
-                .iter()
-                .map(|a| format!("{a:?}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("{} [{args_str}]", self.function)
-        }
+    fn new(function: &TestFunctionDisplay<'_>, kwargs: Option<&HashMap<String, PyObject>>) -> Self {
+        let test_name = kwargs.map_or_else(
+            || function.to_string(),
+            |kwargs| {
+                let mut args_str = String::new();
+                for (i, (key, value)) in kwargs.iter().enumerate() {
+                    if i > 0 {
+                        args_str.push_str(", ");
+                    }
+                    args_str.push_str(&format!("{key}={value:?}"));
+                }
+                format!("{function} [{args_str}]")
+            },
+        );
+
+        Self { test_name }
     }
 
     fn log(&self, status: &str) {
-        tracing::info!("{:<8} | {}", status, self.test_name());
+        tracing::info!("{:<8} | {}", status, self.test_name);
     }
 
     fn log_running(&self) {
@@ -146,5 +212,27 @@ impl<'a> TestCaseLogger<'a> {
 
     fn log_errored(&self) {
         self.log("errored");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_missing_arguments_from_error() {
+        let err = "missing 2 required positional arguments: 'a' and 'b'";
+        let missing_args = missing_arguments_from_error(err);
+        assert_eq!(
+            missing_args,
+            HashSet::from([String::from("a"), String::from("b")])
+        );
+    }
+
+    #[test]
+    fn test_missing_arguments_from_error_single() {
+        let err = "missing 1 required positional argument: 'a'";
+        let missing_args = missing_arguments_from_error(err);
+        assert_eq!(missing_args, HashSet::from([String::from("a")]));
     }
 }

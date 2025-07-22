@@ -1,19 +1,19 @@
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
 use pyo3::{prelude::*, types::PyModule};
 use ruff_python_ast::{
-    Expr, ModModule, PythonVersion, Stmt, StmtFunctionDef,
+    Expr, ModModule, PythonVersion, Stmt,
     visitor::source_order::{self, SourceOrderVisitor},
 };
 use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
 use crate::{
     diagnostic::Diagnostic,
-    discovery::TestFunction,
+    discovery::{DiscoveredModule, TestFunction},
     extensions::fixtures::{Fixture, is_fixture_function},
 };
 
-pub struct FunctionDefinitionVisitor<'proj, 'b> {
-    discovered_functions: Vec<TestFunction<'proj>>,
+pub(crate) struct FunctionDefinitionVisitor<'proj, 'b> {
+    discovered_functions: Vec<TestFunction>,
     fixture_definitions: Vec<Fixture>,
     project: &'proj Project,
     module_path: SystemPathBuf,
@@ -23,14 +23,17 @@ pub struct FunctionDefinitionVisitor<'proj, 'b> {
 }
 
 impl<'proj, 'b> FunctionDefinitionVisitor<'proj, 'b> {
-    pub fn new(
+    pub(crate) fn new(
         py: Python<'b>,
         project: &'proj Project,
         module_path: SystemPathBuf,
-    ) -> PyResult<Self> {
-        let module_name = module_name(project.cwd(), &module_path);
+    ) -> Result<Self, String> {
+        let module_name =
+            module_name(project.cwd(), &module_path).ok_or("Failed to get module name")?;
 
-        let py_module = py.import(module_name)?;
+        let py_module = py
+            .import(module_name)
+            .map_err(|_| "Failed to import module")?;
 
         Ok(Self {
             discovered_functions: Vec::new(),
@@ -53,12 +56,19 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_> {
             }
             self.inside_function = true;
             if is_fixture_function(function_def) {
-                match Fixture::try_from_function(function_def, &self.py_module) {
+                let mut generator_function_visitor = GeneratorFunctionVisitor::default();
+                source_order::walk_body(&mut generator_function_visitor, &function_def.body);
+                let is_generator_function = generator_function_visitor.is_generator;
+                match Fixture::try_from_function(
+                    function_def,
+                    &self.py_module,
+                    is_generator_function,
+                ) {
                     Ok(Some(fixture_def)) => self.fixture_definitions.push(fixture_def),
                     Ok(None) => {}
                     Err(e) => {
                         self.diagnostics.push(Diagnostic::invalid_fixture(
-                            e,
+                            Some(e),
                             Some(self.module_path.display().to_string()),
                         ));
                     }
@@ -69,7 +79,6 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_> {
                 .starts_with(self.project.options().test_prefix())
             {
                 self.discovered_functions.push(TestFunction::new(
-                    self.project,
                     self.module_path.clone(),
                     function_def.clone(),
                 ));
@@ -85,18 +94,18 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_> {
 }
 
 #[derive(Debug)]
-pub struct DiscoveredFunctions<'a> {
-    pub functions: Vec<TestFunction<'a>>,
-    pub fixtures: Vec<Fixture>,
+pub(crate) struct DiscoveredFunctions {
+    pub(crate) functions: Vec<TestFunction>,
+    pub(crate) fixtures: Vec<Fixture>,
 }
 
 #[must_use]
-pub fn discover<'proj>(
+pub(crate) fn discover(
     py: Python<'_>,
-    module_path: &SystemPathBuf,
-    project: &'proj Project,
-) -> (DiscoveredFunctions<'proj>, Vec<Diagnostic>) {
-    let Ok(mut visitor) = FunctionDefinitionVisitor::new(py, project, module_path.clone()) else {
+    module: &DiscoveredModule,
+    project: &Project,
+) -> (DiscoveredFunctions, Vec<Diagnostic>) {
+    let Ok(mut visitor) = FunctionDefinitionVisitor::new(py, project, module.path().clone()) else {
         return (
             DiscoveredFunctions {
                 functions: Vec::new(),
@@ -106,7 +115,7 @@ pub fn discover<'proj>(
         );
     };
 
-    let parsed = parsed_module(module_path, project.metadata().python_version());
+    let parsed = parsed_module(module, project.metadata().python_version());
     visitor.visit_body(&parsed.syntax().body);
 
     (
@@ -119,28 +128,28 @@ pub fn discover<'proj>(
 }
 
 #[must_use]
-pub fn parsed_module(path: &SystemPathBuf, python_version: PythonVersion) -> Parsed<ModModule> {
+pub(crate) fn parsed_module(
+    module: &DiscoveredModule,
+    python_version: PythonVersion,
+) -> Parsed<ModModule> {
     let mode = Mode::Module;
     let options = ParseOptions::from(mode).with_target_version(python_version);
-    let source = source_text(path);
+    let source = module.source_text();
 
     parse_unchecked(&source, options)
         .try_into_module()
         .expect("PySourceType always parses into a module")
 }
 
-#[must_use]
-pub fn source_text(path: &SystemPathBuf) -> String {
-    std::fs::read_to_string(path).unwrap()
+#[derive(Default)]
+pub(crate) struct GeneratorFunctionVisitor {
+    is_generator: bool,
 }
 
-pub fn is_generator_function(function_def: &StmtFunctionDef) -> bool {
-    for stmt in &function_def.body {
-        if let Stmt::Expr(expr) = stmt {
-            if let Expr::Yield(_) | Expr::YieldFrom(_) = *expr.value {
-                return true;
-            }
+impl SourceOrderVisitor<'_> for GeneratorFunctionVisitor {
+    fn visit_expr(&mut self, expr: &'_ Expr) {
+        if let Expr::Yield(_) | Expr::YieldFrom(_) = *expr {
+            self.is_generator = true;
         }
     }
-    false
 }

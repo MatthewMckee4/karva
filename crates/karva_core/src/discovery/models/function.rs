@@ -3,13 +3,17 @@ use std::{
     fmt::{self, Display},
 };
 
-use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
+use karva_project::path::SystemPathBuf;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
     collection::TestCase,
-    diagnostic::Diagnostic,
+    diagnostic::{
+        Diagnostic, DiagnosticErrorType, DiagnosticSeverity, SubDiagnostic,
+        TestCaseCollectionDiagnosticType, TestCaseDiagnosticType,
+    },
+    discovery::DiscoveredModule,
     extensions::{
         fixtures::{FixtureManager, HasFunctionDefinition, RequiresFixtures},
         tags::Tags,
@@ -19,129 +23,130 @@ use crate::{
 
 /// Represents a single test function.
 #[derive(Clone)]
-pub struct TestFunction<'proj> {
-    project: &'proj Project,
+pub(crate) struct TestFunction {
     path: SystemPathBuf,
     function_definition: StmtFunctionDef,
 }
 
-impl HasFunctionDefinition for TestFunction<'_> {
+impl HasFunctionDefinition for TestFunction {
     fn function_definition(&self) -> &StmtFunctionDef {
         &self.function_definition
     }
 }
 
-impl<'proj> TestFunction<'proj> {
+impl TestFunction {
     #[must_use]
-    pub const fn new(
-        project: &'proj Project,
-        path: SystemPathBuf,
-        function_definition: StmtFunctionDef,
-    ) -> Self {
+    pub(crate) const fn new(path: SystemPathBuf, function_definition: StmtFunctionDef) -> Self {
         Self {
-            project,
             path,
             function_definition,
         }
     }
 
     #[must_use]
-    pub const fn path(&self) -> &SystemPathBuf {
-        &self.path
+    pub(crate) fn name_str(&self) -> &str {
+        &self.function_definition.name
     }
 
     #[must_use]
-    pub fn name(&self) -> String {
+    pub(crate) fn name(&self) -> String {
         self.function_definition.name.to_string()
     }
 
-    #[must_use]
-    pub fn module_name(&self) -> String {
-        module_name(self.project.cwd(), &self.path)
+    pub(crate) fn display_with_line(&self, module: &DiscoveredModule) -> String {
+        let line_index = module.line_index();
+        let source_text = module.source_text();
+        let start = self.function_definition.range.start();
+        let line_number = line_index.line_column(start, &source_text);
+        format!("{}:{}", module.path().display(), line_number.line)
     }
 
-    pub fn collect<'a>(
+    pub(crate) fn collect<'a>(
         &'a self,
         py: Python<'_>,
+        module: &'a DiscoveredModule,
         py_module: &Bound<'_, PyModule>,
         fixture_manager_func: &mut impl FnMut(
-            &mut dyn FnMut(&mut FixtureManager) -> Result<TestCase<'a>, Diagnostic>,
-        ) -> Result<TestCase<'a>, Diagnostic>,
-    ) -> Vec<Result<TestCase<'a>, Diagnostic>> {
-        tracing::info!("Collecting test cases for function: {}", self.name());
-        let mut test_cases: Vec<Result<TestCase<'a>, Diagnostic>> = Vec::new();
+            &mut dyn FnMut(&mut FixtureManager) -> (TestCase<'a>, Option<Diagnostic>),
+        ) -> (TestCase<'a>, Option<Diagnostic>),
+    ) -> Vec<(TestCase<'a>, Option<Diagnostic>)> {
+        tracing::info!(
+            "Collecting test cases for function: {}",
+            self.function_definition.name
+        );
 
-        let name = self.function_definition().name.to_string();
-
-        let Ok(py_function) = py_module.getattr(name) else {
-            return test_cases;
+        let Ok(py_function) = py_module.getattr(self.function_definition.name.to_string()) else {
+            return Vec::new();
         };
+
         let py_function = py_function.as_unbound();
 
-        let module_name = self.module_name();
-
         let required_fixture_names = self.get_required_fixture_names();
+
         if required_fixture_names.is_empty() {
-            test_cases.push(Ok(TestCase::new(
-                self,
-                vec![],
-                py_function.clone(),
-                module_name,
-            )));
-        } else {
-            // The function requires fixtures or parameters, so we need to try to extract them from the test case.
-            let tags = Tags::from_py_any(py, py_function);
-            let mut param_args = tags.parametrize_args();
+            return vec![(
+                TestCase::new(self, HashMap::new(), py_function.clone(), module),
+                None,
+            )];
+        }
 
-            // Ensure that there is at least one set of parameters.
-            if param_args.is_empty() {
-                param_args.push(HashMap::new());
-            }
+        let tags = Tags::from_py_any(py, py_function);
+        let mut parametrize_args = tags.parametrize_args();
 
-            for params in param_args {
-                let mut f = |fixture_manager: &mut FixtureManager| {
-                    let mut fixture_diagnostics = Vec::new();
+        // Ensure that we collect at least one test case (no parametrization)
+        if parametrize_args.is_empty() {
+            parametrize_args.push(HashMap::new());
+        }
 
-                    let required_fixtures = required_fixture_names
-                        .iter()
-                        .filter_map(|fixture| {
-                            if let Some(fixture) = params.get(fixture) {
-                                return Some(fixture.clone());
-                            }
+        let mut test_cases = Vec::with_capacity(parametrize_args.len());
 
-                            if let Some(fixture) = fixture_manager.get_fixture(fixture) {
-                                return Some(fixture);
-                            }
+        for params in parametrize_args {
+            let mut f = |fixture_manager: &mut FixtureManager| {
+                let num_required_fixtures = required_fixture_names.len();
+                let mut fixture_diagnostics = Vec::with_capacity(num_required_fixtures);
+                let mut required_fixtures = HashMap::with_capacity(num_required_fixtures);
 
-                            fixture_diagnostics.push(Diagnostic::fixture_not_found(
-                                fixture,
-                                Some(self.path.display().to_string()),
-                            ));
-                            None
-                        })
-                        .collect::<Vec<_>>();
-
-                    // There are some not found fixtures.
-                    if fixture_diagnostics.is_empty() {
-                        Ok(TestCase::new(
-                            self,
-                            required_fixtures,
-                            py_function.clone(),
-                            module_name.clone(),
-                        ))
+                for fixture_name in &required_fixture_names {
+                    if let Some(fixture) = params.get(fixture_name) {
+                        required_fixtures.insert(fixture_name.clone(), fixture.clone());
+                    } else if let Some(fixture) = fixture_manager.get_fixture(fixture_name) {
+                        required_fixtures.insert(fixture_name.clone(), fixture);
                     } else {
-                        Err(Diagnostic::from_test_diagnostics(fixture_diagnostics))
+                        fixture_diagnostics.push(SubDiagnostic::fixture_not_found(fixture_name));
                     }
+                }
+
+                let diagnostic = if fixture_diagnostics.is_empty() {
+                    None
+                } else {
+                    let mut diagnostic = Diagnostic::new(
+                        Some(format!("Fixture(s) not found for {}", self.name())),
+                        Some(self.display_with_line(module)),
+                        None,
+                        DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
+                            self.name(),
+                            TestCaseDiagnosticType::Collection(
+                                TestCaseCollectionDiagnosticType::FixtureNotFound,
+                            ),
+                        )),
+                    );
+                    diagnostic.add_sub_diagnostics(fixture_diagnostics);
+                    Some(diagnostic)
                 };
 
-                test_cases.push(fixture_manager_func(&mut f));
-            }
+                (
+                    TestCase::new(self, required_fixtures, py_function.clone(), module),
+                    diagnostic,
+                )
+            };
+
+            test_cases.push(fixture_manager_func(&mut f));
         }
 
         test_cases
     }
 
-    pub const fn display(&self, module_name: String) -> TestFunctionDisplay<'_> {
+    pub(crate) const fn display(&self, module_name: String) -> TestFunctionDisplay<'_> {
         TestFunctionDisplay {
             test_function: self,
             module_name,
@@ -149,8 +154,8 @@ impl<'proj> TestFunction<'proj> {
     }
 }
 
-pub struct TestFunctionDisplay<'proj> {
-    test_function: &'proj TestFunction<'proj>,
+pub(crate) struct TestFunctionDisplay<'proj> {
+    test_function: &'proj TestFunction,
     module_name: String,
 }
 
@@ -160,64 +165,67 @@ impl Display for TestFunctionDisplay<'_> {
     }
 }
 
-impl<'proj> Upcast<Vec<&'proj dyn RequiresFixtures>> for Vec<&'proj TestFunction<'proj>> {
+impl<'proj> Upcast<Vec<&'proj dyn RequiresFixtures>> for Vec<&'proj TestFunction> {
     fn upcast(self) -> Vec<&'proj dyn RequiresFixtures> {
-        self.into_iter()
-            .map(|tc| tc as &dyn RequiresFixtures)
-            .collect()
+        let mut result = Vec::with_capacity(self.len());
+        for tc in self {
+            result.push(tc as &dyn RequiresFixtures);
+        }
+        result
     }
 }
 
-impl<'proj> Upcast<Vec<&'proj dyn HasFunctionDefinition>> for Vec<&'proj TestFunction<'proj>> {
+impl<'proj> Upcast<Vec<&'proj dyn HasFunctionDefinition>> for Vec<&'proj TestFunction> {
     fn upcast(self) -> Vec<&'proj dyn HasFunctionDefinition> {
-        self.into_iter()
-            .map(|tc| tc as &dyn HasFunctionDefinition)
-            .collect()
+        let mut result = Vec::with_capacity(self.len());
+        for tc in self {
+            result.push(tc as &dyn HasFunctionDefinition);
+        }
+        result
     }
 }
 
-impl std::fmt::Debug for TestFunction<'_> {
+impl std::fmt::Debug for TestFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}::{}", self.path.display(), self.name())
+        write!(f, "{}::{}", self.path.display(), self.name_str())
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use karva_project::{project::Project, tests::TestEnv};
+    use karva_project::{project::Project, testing::TestEnv};
     use pyo3::prelude::*;
 
     use crate::{
-        discovery::Discoverer,
+        discovery::StandardDiscoverer,
         extensions::fixtures::{HasFunctionDefinition, RequiresFixtures},
     };
 
     #[test]
     fn test_case_construction_and_getters() {
-        let env = TestEnv::new();
+        let env = TestEnv::with_files([("<test>/test.py", "def test_function(): pass")]);
         let path = env.create_file("test.py", "def test_function(): pass");
 
         let project = Project::new(env.cwd(), vec![path.clone()]);
-        let discoverer = Discoverer::new(&project);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
         let test_case = session.test_functions()[0].clone();
 
-        assert_eq!(test_case.path(), &path);
+        assert_eq!(test_case.path, path);
         assert_eq!(test_case.name(), "test_function");
     }
 
     #[test]
     fn test_case_with_fixtures() {
-        let env = TestEnv::new();
-        let path = env.create_file(
-            "test.py",
+        let env = TestEnv::with_files([(
+            "<test>/test.py",
             "def test_with_fixtures(fixture1, fixture2): pass",
-        );
+        )]);
 
-        let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = Discoverer::new(&project);
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
         let test_case = session.test_functions()[0].clone();
@@ -234,20 +242,27 @@ mod tests {
 
     #[test]
     fn test_case_display() {
-        let env = TestEnv::new();
-        let path = env.create_file("test.py", "def test_display(): pass");
+        let env = TestEnv::with_files([("<test>/test.py", "def test_display(): pass")]);
 
-        let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = Discoverer::new(&project);
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+
+        let tests_package = session.get_package(mapped_dir).unwrap();
+
+        let test_module = tests_package
+            .get_module(&mapped_dir.join("test.py"))
+            .unwrap();
 
         let test_case = session.test_functions()[0].clone();
 
         assert_eq!(
             test_case
-                .display(session.modules().values().next().unwrap().name())
+                .display(test_module.name().to_string())
                 .to_string(),
-            "test::test_display"
+            format!("{}::test_display", test_module.name())
         );
     }
 }

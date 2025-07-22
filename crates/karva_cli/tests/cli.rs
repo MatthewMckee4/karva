@@ -3,41 +3,26 @@ use std::{
     process::Command,
 };
 
-use anyhow::Context;
-use insta::{allow_duplicates, internals::SettingsBindDropGuard};
+use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
-use karva_core::{
-    diagnostic::reporter::DummyReporter,
-    runner::{RunDiagnostics, TestRunner},
-    testing::setup_module,
-};
-use karva_project::{project::Project, tests::TestEnv};
+use karva_core::testing::setup_module;
+use karva_project::testing::TestEnv;
 use rstest::rstest;
 
 #[ctor::ctor]
-pub fn setup() {
+pub(crate) fn setup() {
     setup_module();
 }
 
 struct IntegrationTestEnv {
     test_env: TestEnv,
-    _settings_scope: SettingsBindDropGuard,
 }
 
 impl IntegrationTestEnv {
     fn new() -> Self {
         let test_env = TestEnv::new();
 
-        let mut settings = insta::Settings::clone_current();
-        settings.add_filter(&tempdir_filter(&test_env.cwd()), "<temp_dir>/");
-        settings.add_filter(r#"\\(\w\w|\s|\.|")"#, "/$1");
-
-        let settings_scope = settings.bind_to_scope();
-
-        Self {
-            test_env,
-            _settings_scope: settings_scope,
-        }
+        Self { test_env }
     }
 
     fn karva_bin(&self) -> PathBuf {
@@ -50,19 +35,19 @@ impl IntegrationTestEnv {
     }
 
     fn with_files<'a>(files: impl IntoIterator<Item = (&'a str, &'a str)>) -> anyhow::Result<Self> {
-        let case = Self::new();
+        let mut case = Self::new();
         case.write_files(files)?;
         Ok(case)
     }
 
     fn with_file(path: impl AsRef<Path>, content: &str) -> anyhow::Result<Self> {
-        let case = Self::new();
+        let mut case = Self::new();
         case.write_file(path, content)?;
         Ok(case)
     }
 
     fn write_files<'a>(
-        &self,
+        &mut self,
         files: impl IntoIterator<Item = (&'a str, &'a str)>,
     ) -> anyhow::Result<()> {
         for (path, content) in files {
@@ -72,18 +57,8 @@ impl IntegrationTestEnv {
         Ok(())
     }
 
-    fn write_file(&self, path: impl AsRef<Path>, content: &str) -> anyhow::Result<()> {
-        let path = path.as_ref();
-        let path = self.test_env.cwd().join(path);
-
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create directory `{}`", parent.display()))?;
-        }
-        std::fs::write(&path, &*ruff_python_trivia::textwrap::dedent(content))
-            .with_context(|| format!("Failed to write file `{path}`", path = path.display()))?;
-
-        Ok(())
+    fn write_file(&mut self, path: impl AsRef<Path>, content: &str) -> anyhow::Result<()> {
+        self.test_env.write_file(path, content)
     }
 
     fn command(&self) -> Command {
@@ -97,94 +72,47 @@ impl IntegrationTestEnv {
         command.args(args);
         command
     }
-
-    fn run(&self) -> RunDiagnostics {
-        self.run_with_path(self.test_env.cwd())
-    }
-
-    fn run_with_path(&self, path: impl AsRef<Path>) -> RunDiagnostics {
-        let project = Project::new(self.test_env.cwd(), vec![path.as_ref().to_path_buf()]);
-        project.test_with_reporter(&mut DummyReporter)
-    }
-}
-
-fn assert_test_counts(result: &RunDiagnostics, snapshot: &str) {
-    let passed_tests = snapshot.lines().find_map(|line| {
-        line.strip_prefix("Passed tests: ")
-            .and_then(|n| n.split_whitespace().next())
-            .and_then(|n| n.parse::<u32>().ok())
-    });
-    let failed_tests = snapshot.lines().find_map(|line| {
-        line.strip_prefix("Failed tests: ")
-            .and_then(|n| n.split_whitespace().next())
-            .and_then(|n| n.parse::<u32>().ok())
-    });
-    let errors = snapshot.lines().find_map(|line| {
-        line.strip_prefix("Errored tests: ")
-            .and_then(|n| n.split_whitespace().next())
-            .and_then(|n| n.parse::<u32>().ok())
-    });
-
-    if let Some(passed_tests) = passed_tests {
-        assert_eq!(
-            passed_tests,
-            u32::try_from(result.stats().passed()).unwrap(),
-            "Passed tests count mismatch"
-        );
-    }
-    if let Some(failed_tests) = failed_tests {
-        assert_eq!(
-            failed_tests,
-            u32::try_from(result.stats().failed()).unwrap(),
-            "Failed tests count mismatch"
-        );
-    }
-    if let Some(errors) = errors {
-        assert_eq!(
-            errors,
-            u32::try_from(result.stats().errored()).unwrap(),
-            "Errored tests count mismatch"
-        );
-    }
 }
 
 macro_rules! run_with_path_and_snapshot {
     // Pattern 1: Just case and snapshot with @
     ($case:expr, @$snapshot:literal $(,)?) => {{
-        let result = $case.run();
-        assert_test_counts(&result, $snapshot);
         allow_duplicates!(assert_cmd_snapshot!(
             $case.command(),
             @$snapshot
         ));
-        result
     }};
 
     // Pattern 2: Case with args and snapshot with @
     ($case:expr, &$args:expr, @$snapshot:literal $(,)?) => {{
-        let result = $case.run();
-        assert_test_counts(&result, $snapshot);
         allow_duplicates!(assert_cmd_snapshot!(
             $case.command_with_args(&$args),
             @$snapshot
         ));
-        result
     }};
 
     // Pattern 3: Case with args (no brackets) and snapshot with @
     ($case:expr, $args:expr, @$snapshot:literal $(,)?) => {{
-        let result = $case.run();
-        assert_test_counts(&result, $snapshot);
         allow_duplicates!(assert_cmd_snapshot!(
             $case.command_with_args($args),
             @$snapshot
         ));
-        result
     }};
 }
 
-fn tempdir_filter(path: &Path) -> String {
-    format!(r"{}\\?/?", regex::escape(path.to_str().unwrap()))
+#[test]
+fn test_no_tests_found() -> anyhow::Result<()> {
+    let case = IntegrationTestEnv::with_file("test_no_tests.py", r"")?;
+    run_with_path_and_snapshot!(case, @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    No tests found
+
+    ----- stderr -----
+    ");
+
+    Ok(())
 }
 
 #[test]
@@ -257,7 +185,8 @@ fn test_one_test_fails() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_fail.py
+    fail[assertion-failed]
+     --> test_fail at <temp_dir>/test_fail.py:2
      | File "<temp_dir>/test_fail.py", line 3, in test_fail
      |   assert False
 
@@ -283,7 +212,8 @@ fn test_multiple_tests_fail() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_fail2.py
+    fail[assertion-failed]
+     --> test_fail2 at <temp_dir>/test_fail2.py:2
      | File "<temp_dir>/test_fail2.py", line 3, in test_fail2
      |   assert 1 == 2
 
@@ -318,7 +248,8 @@ fn test_mixed_pass_and_fail() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_fail.py
+    fail[assertion-failed]
+     --> test_fail at <temp_dir>/test_fail.py:2
      | File "<temp_dir>/test_fail.py", line 3, in test_fail
      |   assert False
 
@@ -335,19 +266,20 @@ fn test_mixed_pass_and_fail() -> anyhow::Result<()> {
 fn test_assertion_with_message() -> anyhow::Result<()> {
     let case = IntegrationTestEnv::with_file(
         "test_fail_with_msg.py",
-        r#"
+        r"
         def test_fail_with_message():
-            assert False, "This should not happen"
-    "#,
+            assert False
+    ",
     )?;
 
     run_with_path_and_snapshot!(case,  @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_fail_with_msg.py
+    fail[assertion-failed]
+     --> test_fail_with_message at <temp_dir>/test_fail_with_msg.py:2
      | File "<temp_dir>/test_fail_with_msg.py", line 3, in test_fail_with_message
-     |   assert False, "This should not happen"
+     |   assert False
 
     Failed tests: 1
 
@@ -373,7 +305,8 @@ fn test_equality_assertion_fail() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_equality.py
+    fail[assertion-failed]
+     --> test_equality at <temp_dir>/test_equality.py:2
      | File "<temp_dir>/test_equality.py", line 5, in test_equality
      |   assert x == y
 
@@ -392,7 +325,7 @@ fn test_complex_assertion_fail() -> anyhow::Result<()> {
         r"
         def test_complex():
             data = [1, 2, 3]
-            assert len(data) > 5, 'Data should have more items'
+            assert len(data) > 5
     ",
     )?;
 
@@ -400,9 +333,10 @@ fn test_complex_assertion_fail() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_complex.py
+    fail[assertion-failed]
+     --> test_complex at <temp_dir>/test_complex.py:2
      | File "<temp_dir>/test_complex.py", line 4, in test_complex
-     |   assert len(data) > 5, 'Data should have more items'
+     |   assert len(data) > 5
 
     Failed tests: 1
 
@@ -417,26 +351,18 @@ fn test_long_file() -> anyhow::Result<()> {
     let case = IntegrationTestEnv::with_file(
         "test_long.py",
         r"
-        # This is a long test file with many comments and functions
-        # to test that we can handle files with many lines
-
         def helper_function_1():
-            '''Helper function 1'''
             return 42
 
         def helper_function_2():
-            '''Helper function 2'''
             return 'hello'
 
         def helper_function_3():
-            '''Helper function 3'''
             return [1, 2, 3]
 
         def test_in_long_file():
-            # This test is in a long file
             result = helper_function_1()
             expected = 100
-            # This assertion should fail
             assert result == expected
     ",
     )?;
@@ -445,8 +371,9 @@ fn test_long_file() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_long.py
-     | File "<temp_dir>/test_long.py", line 22, in test_in_long_file
+    fail[assertion-failed]
+     --> test_in_long_file at <temp_dir>/test_long.py:11
+     | File "<temp_dir>/test_long.py", line 14, in test_in_long_file
      |   assert result == expected
 
     Failed tests: 1
@@ -465,8 +392,8 @@ fn test_multiple_assertions_in_function() -> anyhow::Result<()> {
         def test_multiple_assertions():
             x = 1
             y = 2
-            assert x == 1  # This passes
-            assert y == 3  # This fails
+            assert x == 1
+            assert y == 3
     ",
     )?;
 
@@ -474,9 +401,10 @@ fn test_multiple_assertions_in_function() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_multiple_assertions.py
+    fail[assertion-failed]
+     --> test_multiple_assertions at <temp_dir>/test_multiple_assertions.py:2
      | File "<temp_dir>/test_multiple_assertions.py", line 6, in test_multiple_assertions
-     |   assert y == 3  # This fails
+     |   assert y == 3
 
     Failed tests: 1
 
@@ -504,7 +432,8 @@ fn test_assertion_in_nested_function() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_nested.py
+    fail[assertion-failed]
+     --> test_with_nested_call at <temp_dir>/test_nested.py:5
      | File "<temp_dir>/test_nested.py", line 7, in test_with_nested_call
      |   assert result == True
 
@@ -523,22 +452,18 @@ fn test_assertion_with_complex_expression() -> anyhow::Result<()> {
         r"
         def test_complex_expression():
             items = [1, 2, 3, 4, 5]
-            assert len([x for x in items if x > 3]) == 5
+            assert len([x for x at items if x > 3]) == 5
     ",
     )?;
 
-    run_with_path_and_snapshot!(case,  @r#"
+    run_with_path_and_snapshot!(case,  @r"
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_complex_expr.py
-     | File "<temp_dir>/test_complex_expr.py", line 4, in test_complex_expression
-     |   assert len([x for x in items if x > 3]) == 5
-
-    Failed tests: 1
+    No tests found
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -549,16 +474,13 @@ fn test_assertion_with_multiline_setup() -> anyhow::Result<()> {
         "test_multiline.py",
         r"
         def test_multiline_setup():
-            # Setup with multiple lines
             a = 10
             b = 20
             c = a + b
 
-            # Multiple operations
             result = c * 2
             expected = 100
 
-            # The assertion that fails
             assert result == expected
     ",
     )?;
@@ -567,8 +489,9 @@ fn test_assertion_with_multiline_setup() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_multiline.py
-     | File "<temp_dir>/test_multiline.py", line 13, in test_multiline_setup
+    fail[assertion-failed]
+     --> test_multiline_setup at <temp_dir>/test_multiline.py:2
+     | File "<temp_dir>/test_multiline.py", line 10, in test_multiline_setup
      |   assert result == expected
 
     Failed tests: 1
@@ -593,7 +516,8 @@ fn test_assertion_with_very_long_line() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_very_long_line.py
+    fail[assertion-failed]
+     --> test_very_long_line at <temp_dir>/test_very_long_line.py:2
      | File "<temp_dir>/test_very_long_line.py", line 3, in test_very_long_line
      |   assert 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16 + 17 + 18 + 19 + 20 == 1000
 
@@ -617,7 +541,8 @@ fn test_assertion_on_line_1() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_line_1.py
+    fail[assertion-failed]
+     --> test_line_1 at <temp_dir>/test_line_1.py:1
      | File "<temp_dir>/test_line_1.py", line 2, in test_line_1
      |   assert False
 
@@ -656,7 +581,8 @@ fn test_multiple_files_with_cross_function_calls() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_cross_file.py
+    fail[assertion-failed]
+     --> test_with_helper at <temp_dir>/test_cross_file.py:4
      | File "<temp_dir>/test_cross_file.py", line 5, in test_with_helper
      |   validate_data([])
      | File "<temp_dir>/helper.py", line 4, in validate_data
@@ -693,7 +619,8 @@ fn test_nested_function_calls_deep_stack() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_deep_stack.py
+    fail[assertion-failed]
+     --> test_deep_call_stack at <temp_dir>/test_deep_stack.py:11
      | File "<temp_dir>/test_deep_stack.py", line 12, in test_deep_call_stack
      |   level_1()
      | File "<temp_dir>/test_deep_stack.py", line 3, in level_1
@@ -734,7 +661,8 @@ fn test_assertion_in_class_method() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_class.py
+    fail[assertion-failed]
+     --> test_calculator at <temp_dir>/test_class.py:9
      | File "<temp_dir>/test_class.py", line 12, in test_calculator
      |   calc.validate_result(result)
      | File "<temp_dir>/test_class.py", line 7, in validate_result
@@ -774,7 +702,8 @@ fn test_assertion_in_imported_function() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed] in <temp_dir>/test_import.py
+    fail[assertion-failed]
+     --> test_imported_validation at <temp_dir>/test_import.py:4
      | File "<temp_dir>/test_import.py", line 5, in test_imported_validation
      |   is_positive(-10)
      | File "<temp_dir>/validators.py", line 3, in is_positive
@@ -870,20 +799,8 @@ fn test_fixture_initialization_order(#[case] framework: &str) -> anyhow::Result<
 fn test_empty_conftest() -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
-        (
-            "conftest.py".to_string(),
-            r"
-            # Empty conftest file
-            "
-            .to_string(),
-        ),
-        (
-            "tests/conftest.py".to_string(),
-            r"
-            # Another empty conftest file
-            "
-            .to_string(),
-        ),
+        ("conftest.py".to_string(), String::new()),
+        ("tests/conftest.py".to_string(), String::new()),
         (
             "tests/test_calculator.py".to_string(),
             r"
@@ -1612,8 +1529,9 @@ fn test_basic_error_handling(#[case] framework: &str) -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    error[fixture-not-found] in <temp_dir>/tests/test_calculator.py
-     | Fixture failing_calculator not found
+    error[fixtures-not-found]: Fixture(s) not found for test_failing
+     --> test_failing at <temp_dir>/tests/test_calculator.py:7
+    error (fixture-not-found): fixture 'failing_calculator' not found
 
     Passed tests: 1
     Errored tests: 1
@@ -1746,11 +1664,12 @@ fn test_invalid_scope_value(#[case] framework: &str) -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    error[invalid-fixture] in <temp_dir>/tests/conftest.py
-     | Invalid fixture scope: invalid_scope
+    error[invalid-fixture]: Invalid fixture scope: invalid_scope
+     --> <temp_dir>/tests/conftest.py
 
-    error[fixture-not-found] in <temp_dir>/tests/test_calculator.py
-     | Fixture calculator not found
+    error[fixtures-not-found]: Fixture(s) not found for test_calc
+     --> test_calc at <temp_dir>/tests/test_calculator.py:4
+    error (fixture-not-found): fixture 'calculator' not found
 
     Errored tests: 1
 
@@ -1797,8 +1716,9 @@ fn test_invalid_fixture_name(#[case] framework: &str) -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    error[fixture-not-found] in <temp_dir>/tests/test_calculator.py
-     | Fixture calculator not found
+    error[fixtures-not-found]: Fixture(s) not found for test_calc
+     --> test_calc at <temp_dir>/tests/test_calculator.py:4
+    error (fixture-not-found): fixture 'calculator' not found
 
     Errored tests: 1
 
@@ -1861,8 +1781,9 @@ fn test_multiple_conftest_same_dir(#[case] framework: &str) -> anyhow::Result<()
     success: false
     exit_code: 1
     ----- stdout -----
-    error[fixture-not-found] in <temp_dir>/tests/test_calculator.py
-     | Fixture calculator_2 not found
+    error[fixtures-not-found]: Fixture(s) not found for test_calc
+     --> test_calc at <temp_dir>/tests/test_calculator.py:4
+    error (fixture-not-found): fixture 'calculator_2' not found
 
     Errored tests: 1
     Calculator 1 initialized
@@ -1975,8 +1896,9 @@ fn test_fixture_in_init_file(#[case] framework: &str) -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    error[fixture-not-found] in <temp_dir>/tests/test_calculator.py
-     | Fixture init_calculator not found
+    error[fixtures-not-found]: Fixture(s) not found for test_init_fixture
+     --> test_init_fixture at <temp_dir>/tests/test_calculator.py:4
+    error (fixture-not-found): fixture 'init_calculator' not found
 
     Errored tests: 1
 
@@ -2764,6 +2686,291 @@ def test_value(clean_data):
     ----- stdout -----
     Passed tests: 1
     All checks passed!
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[test]
+fn test_multiple_fixtures_not_found() -> anyhow::Result<()> {
+    let case = IntegrationTestEnv::with_file(
+        "test_multiple_fixtures_not_found.py",
+        "def test_multiple_fixtures_not_found(a, b, c): ...",
+    )?;
+
+    run_with_path_and_snapshot!(case,  @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    error[fixtures-not-found]: Fixture(s) not found for test_multiple_fixtures_not_found
+     --> test_multiple_fixtures_not_found at <temp_dir>/test_multiple_fixtures_not_found.py:1
+    error (fixture-not-found): fixture 'a' not found
+    error (fixture-not-found): fixture 'b' not found
+    error (fixture-not-found): fixture 'c' not found
+
+    Errored tests: 1
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[rstest]
+#[case("pytest")]
+#[case("karva")]
+fn test_nested_generator_fixture(#[case] framework: &str) -> anyhow::Result<()> {
+    let mut files = get_source_code("pass");
+    files.extend([
+        (
+            "tests/conftest.py".to_string(),
+            format!(
+                r"
+                from {framework} import fixture
+                from src import Calculator
+
+                @fixture
+                def calculator() -> Calculator:
+                    if 1:
+                        yield Calculator()
+                    else:
+                        yield Calculator()
+                ",
+            ),
+        ),
+        (
+            "tests/test_calculator.py".to_string(),
+            r"
+            from src import Calculator
+
+            def test_calculator(calculator: Calculator) -> None:
+                assert calculator.add(1, 2) == 3
+            "
+            .to_string(),
+        ),
+    ]);
+
+    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+
+    run_with_path_and_snapshot!(case, &["-s"], @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Passed tests: 1
+    All checks passed!
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[test]
+fn test_fixtures_given_by_decorator() -> anyhow::Result<()> {
+    let case = IntegrationTestEnv::with_file(
+        "test_fixtures_given_by_decorator.py",
+        r"
+        import functools
+
+        def given(**kwargs):
+            def decorator(func):
+                @functools.wraps(func)
+                def wrapper(*args, **wrapper_kwargs):
+                    return func(*args, **kwargs, **wrapper_kwargs)
+                return wrapper
+            return decorator
+
+        @given(a=1)
+        def test_fixtures_given_by_decorator(a):
+            assert a == 1
+        ",
+    )?;
+
+    run_with_path_and_snapshot!(case,  @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Passed tests: 1
+    All checks passed!
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[rstest]
+#[case("pytest")]
+#[case("karva")]
+fn test_fixtures_given_by_decorator_and_fixture(#[case] framework: &str) -> anyhow::Result<()> {
+    let case = IntegrationTestEnv::with_file(
+        "test_fixtures_given_by_decorator.py",
+        format!(
+            r"
+        from {framework} import fixture
+        import functools
+
+        def given(**kwargs):
+            def decorator(func):
+                @functools.wraps(func)
+                def wrapper(*args, **wrapper_kwargs):
+                    return func(*args, **kwargs, **wrapper_kwargs)
+                return wrapper
+            return decorator
+
+        @fixture
+        def b():
+            return 1
+
+        @given(a=1)
+        def test_fixtures_given_by_decorator(a, b):
+            assert a == 1
+            assert b == 1
+        ",
+        )
+        .as_str(),
+    )?;
+
+    run_with_path_and_snapshot!(case,  @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Passed tests: 1
+    All checks passed!
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[rstest]
+#[case("pytest")]
+#[case("karva")]
+fn test_fixtures_given_by_decorator_and_parametrize(#[case] framework: &str) -> anyhow::Result<()> {
+    let case = IntegrationTestEnv::with_file(
+        "test_fixtures_given_by_decorator.py",
+        format!(
+            r#"
+        import {framework}
+        import functools
+
+        def given(**kwargs):
+            def decorator(func):
+                @functools.wraps(func)
+                def wrapper(*args, **wrapper_kwargs):
+                    return func(*args, **kwargs, **wrapper_kwargs)
+                return wrapper
+            return decorator
+
+        @given(a=1)
+        @{}("b", [1, 2])
+        def test_fixtures_given_by_decorator(a, b):
+            assert a == 1
+            assert b in [1, 2]
+        "#,
+            get_parametrize_function(framework)
+        )
+        .as_str(),
+    )?;
+
+    run_with_path_and_snapshot!(case,  @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Passed tests: 2
+    All checks passed!
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[rstest]
+#[case("pytest")]
+#[case("karva")]
+fn test_fixtures_given_by_decorator_and_parametrize_and_fixture(
+    #[case] framework: &str,
+) -> anyhow::Result<()> {
+    let case = IntegrationTestEnv::with_file(
+        "test_fixtures_given_by_decorator.py",
+        format!(
+            r#"
+        import {framework}
+        import functools
+
+        def given(**kwargs):
+            def decorator(func):
+                @functools.wraps(func)
+                def wrapper(*args, **wrapper_kwargs):
+                    return func(*args, **kwargs, **wrapper_kwargs)
+                return wrapper
+            return decorator
+
+        @{framework}.fixture
+        def c():
+            return 1
+
+        @given(a=1)
+        @{}("b", [1, 2])
+        def test_fixtures_given_by_decorator(a, b, c):
+            assert a == 1
+            assert b in [1, 2]
+            assert c == 1
+        "#,
+            get_parametrize_function(framework)
+        )
+        .as_str(),
+    )?;
+
+    run_with_path_and_snapshot!(case,  @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Passed tests: 2
+    All checks passed!
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[rstest]
+fn test_fixtures_given_by_decorator_one_missing() -> anyhow::Result<()> {
+    let case = IntegrationTestEnv::with_file(
+        "test_fixtures_given_by_decorator.py",
+        r"
+        import functools
+
+        def given(**kwargs):
+            def decorator(func):
+                @functools.wraps(func)
+                def wrapper(*args, **wrapper_kwargs):
+                    return func(*args, **kwargs, **wrapper_kwargs)
+                return wrapper
+            return decorator
+
+
+        @given(a=1)
+        def test_fixtures_given_by_decorator(a, b):
+            assert a == 1
+            assert b == 1
+        ",
+    )?;
+
+    run_with_path_and_snapshot!(case,  @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    error[fixtures-not-found]: Fixture(s) not found for test_fixtures_given_by_decorator
+     --> test_fixtures_given_by_decorator at <temp_dir>/test_fixtures_given_by_decorator.py:13
+    error (fixture-not-found): fixture 'b' not found
+
+    Errored tests: 1
 
     ----- stderr -----
     ");

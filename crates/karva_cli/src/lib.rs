@@ -7,11 +7,7 @@ use std::{
 use anyhow::{Context, Result};
 use clap::Parser;
 use colored::Colorize;
-use karva_core::{
-    diagnostic::reporter::{DummyReporter, Reporter},
-    runner::TestRunner,
-    utils::current_python_version,
-};
+use karva_core::{DummyReporter, Reporter, TestRunner, current_python_version};
 use karva_project::{
     path::absolute,
     project::{Project, ProjectMetadata},
@@ -68,8 +64,12 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
 pub(crate) fn version() -> Result<()> {
     let mut stdout = BufWriter::new(io::stdout().lock());
-    let version_info = crate::version::version();
-    writeln!(stdout, "karva {}", &version_info)?;
+    if let Some(version_info) = crate::version::version() {
+        writeln!(stdout, "karva {}", &version_info)?;
+    } else {
+        writeln!(stdout, "Failed to get karva version")?;
+    }
+
     Ok(())
 }
 
@@ -118,7 +118,10 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     write!(stdout, "{}", result.display())?;
 
-    if passed {
+    if result.stats().total() == 0 {
+        writeln!(stdout, "{}", "No tests found".yellow().bold())?;
+        return Ok(ExitStatus::Failure);
+    } else if passed {
         writeln!(stdout, "{}", "All checks passed!".green().bold())?;
 
         return Ok(ExitStatus::Success);
@@ -155,14 +158,14 @@ impl ExitStatus {
 #[derive(Default)]
 struct ProgressReporter(Option<indicatif::ProgressBar>);
 
-impl karva_core::diagnostic::reporter::Reporter for ProgressReporter {
+impl Reporter for ProgressReporter {
     fn set(&mut self, n: usize) {
         let progress = indicatif::ProgressBar::new(n as u64);
         progress.set_style(
             indicatif::ProgressStyle::with_template(
                 r"{msg:10.dim} {bar:60.green/dim} {pos}/{len} tests",
             )
-            .unwrap()
+            .expect("Failed to create progress style")
             .progress_chars("--"),
         );
         progress.set_message("Testing");

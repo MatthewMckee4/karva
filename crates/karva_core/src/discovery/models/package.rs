@@ -1,28 +1,27 @@
 use std::collections::{HashMap, HashSet};
 
-use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
+use karva_project::path::SystemPathBuf;
 
 use crate::{
-    discovery::{DiscoveredModule, ModuleType, StringModule, TestFunction},
+    discovery::{DiscoveredModule, ModuleType, TestFunction},
     extensions::fixtures::{Fixture, HasFixtures, RequiresFixtures},
     utils::Upcast,
 };
 
 /// A package represents a single python directory.
-pub struct DiscoveredPackage<'proj> {
+#[derive(Debug)]
+pub(crate) struct DiscoveredPackage {
     path: SystemPathBuf,
-    project: &'proj Project,
-    modules: HashMap<SystemPathBuf, DiscoveredModule<'proj>>,
-    packages: HashMap<SystemPathBuf, DiscoveredPackage<'proj>>,
+    modules: HashMap<SystemPathBuf, DiscoveredModule>,
+    packages: HashMap<SystemPathBuf, DiscoveredPackage>,
     configuration_modules: HashSet<SystemPathBuf>,
 }
 
-impl<'proj> DiscoveredPackage<'proj> {
+impl DiscoveredPackage {
     #[must_use]
-    pub fn new(path: SystemPathBuf, project: &'proj Project) -> Self {
+    pub(crate) fn new(path: SystemPathBuf) -> Self {
         Self {
             path,
-            project,
             modules: HashMap::new(),
             packages: HashMap::new(),
             configuration_modules: HashSet::new(),
@@ -30,37 +29,63 @@ impl<'proj> DiscoveredPackage<'proj> {
     }
 
     #[must_use]
-    pub const fn path(&self) -> &SystemPathBuf {
+    pub(crate) const fn path(&self) -> &SystemPathBuf {
         &self.path
     }
 
     #[must_use]
-    pub const fn modules(&self) -> &HashMap<SystemPathBuf, DiscoveredModule<'proj>> {
+    pub(crate) const fn modules(&self) -> &HashMap<SystemPathBuf, DiscoveredModule> {
         &self.modules
     }
 
     #[must_use]
-    pub const fn packages(&self) -> &HashMap<SystemPathBuf, Self> {
+    pub(crate) const fn packages(&self) -> &HashMap<SystemPathBuf, Self> {
         &self.packages
     }
 
     #[must_use]
-    pub fn get_module(&self, path: &SystemPathBuf) -> Option<&DiscoveredModule<'proj>> {
-        self.modules.get(path)
+    #[cfg(test)]
+    pub(crate) fn get_module(&self, path: &SystemPathBuf) -> Option<&DiscoveredModule> {
+        if let Some(module) = self.modules.get(path) {
+            Some(module)
+        } else {
+            for subpackage in self.packages.values() {
+                if let Some(found) = subpackage.get_module(path) {
+                    return Some(found);
+                }
+            }
+            None
+        }
     }
 
     #[must_use]
-    pub fn get_package(&self, path: &SystemPathBuf) -> Option<&Self> {
-        self.packages.get(path)
+    #[cfg(test)]
+    pub(crate) fn get_package(&self, path: &SystemPathBuf) -> Option<&Self> {
+        // Support nested paths: recursively search sub packages
+        if let Some(package) = self.packages.get(path) {
+            Some(package)
+        } else {
+            for subpackage in self.packages.values() {
+                if let Some(found) = subpackage.get_package(path) {
+                    return Some(found);
+                }
+            }
+            None
+        }
     }
 
-    pub fn add_module(&mut self, module: DiscoveredModule<'proj>) {
+    pub(crate) fn add_module(&mut self, module: DiscoveredModule) {
         if !module.path().starts_with(self.path()) {
             return;
         }
 
         // If the module path equals our path, add directly to modules
-        if *module.path().parent().unwrap() == **self.path() {
+        if *module
+            .path()
+            .parent()
+            .expect("Failed to get parent of module path")
+            == **self.path()
+        {
             if let Some(existing_module) = self.modules.get_mut(module.path()) {
                 existing_module.update(module);
             } else {
@@ -73,7 +98,10 @@ impl<'proj> DiscoveredPackage<'proj> {
         }
 
         // Chop off the current path from the start
-        let relative_path = module.path().strip_prefix(self.path()).unwrap();
+        let relative_path = module
+            .path()
+            .strip_prefix(self.path())
+            .expect("Failed to strip prefix");
         let components: Vec<_> = relative_path.components().collect();
 
         if components.is_empty() {
@@ -88,19 +116,19 @@ impl<'proj> DiscoveredPackage<'proj> {
             existing_package.add_module(module);
         } else {
             // If not there, create a new one
-            let mut new_package = DiscoveredPackage::new(intermediate_path, self.project);
+            let mut new_package = Self::new(intermediate_path);
             new_package.add_module(module);
             self.packages
                 .insert(new_package.path().clone(), new_package);
         }
     }
 
-    pub fn add_configuration_module(&mut self, module: DiscoveredModule<'proj>) {
+    pub(crate) fn add_configuration_module(&mut self, module: DiscoveredModule) {
         self.configuration_modules.insert(module.path().clone());
         self.add_module(module);
     }
 
-    pub fn add_package(&mut self, package: Self) {
+    pub(crate) fn add_package(&mut self, package: Self) {
         if !package.path().starts_with(self.path()) {
             return;
         }
@@ -112,7 +140,10 @@ impl<'proj> DiscoveredPackage<'proj> {
         }
 
         // Chop off the current path from the start
-        let relative_path = package.path().strip_prefix(self.path()).unwrap();
+        let relative_path = package
+            .path()
+            .strip_prefix(self.path())
+            .expect("Failed to strip prefix");
         let components: Vec<_> = relative_path.components().collect();
 
         if components.is_empty() {
@@ -127,7 +158,7 @@ impl<'proj> DiscoveredPackage<'proj> {
             existing_package.add_package(package);
         } else {
             // If not there, create a new one
-            let mut new_package = DiscoveredPackage::new(intermediate_path, self.project);
+            let mut new_package = Self::new(intermediate_path);
             new_package.add_package(package);
             self.packages
                 .insert(new_package.path().clone(), new_package);
@@ -135,7 +166,7 @@ impl<'proj> DiscoveredPackage<'proj> {
     }
 
     #[must_use]
-    pub fn total_test_functions(&self) -> usize {
+    pub(crate) fn total_test_functions(&self) -> usize {
         let mut total = 0;
         for module in self.modules.values() {
             total += module.total_test_functions();
@@ -146,7 +177,7 @@ impl<'proj> DiscoveredPackage<'proj> {
         total
     }
 
-    pub fn update(&mut self, package: Self) {
+    pub(crate) fn update(&mut self, package: Self) {
         for (_, module) in package.modules {
             self.add_module(module);
         }
@@ -160,7 +191,7 @@ impl<'proj> DiscoveredPackage<'proj> {
     }
 
     #[must_use]
-    pub fn test_functions(&self) -> Vec<&TestFunction<'proj>> {
+    pub(crate) fn test_functions(&self) -> Vec<&TestFunction> {
         let mut functions = self.direct_test_functions();
 
         for sub_package in self.packages.values() {
@@ -171,7 +202,7 @@ impl<'proj> DiscoveredPackage<'proj> {
     }
 
     #[must_use]
-    pub fn direct_test_functions(&self) -> Vec<&TestFunction<'proj>> {
+    pub(crate) fn direct_test_functions(&self) -> Vec<&TestFunction> {
         let mut functions = Vec::new();
 
         for module in self.modules.values() {
@@ -181,27 +212,9 @@ impl<'proj> DiscoveredPackage<'proj> {
         functions
     }
 
-    #[must_use]
-    pub fn contains_path(&self, path: &SystemPathBuf) -> bool {
-        for module in self.modules.values() {
-            if module.path() == path {
-                return true;
-            }
-        }
-        for package in self.packages.values() {
-            if package.path() == path {
-                return true;
-            }
-            if package.contains_path(path) {
-                return true;
-            }
-        }
-        false
-    }
-
     // TODO: Rename this
     #[must_use]
-    pub fn dependencies(&self) -> Vec<&dyn RequiresFixtures> {
+    pub(crate) fn dependencies(&self) -> Vec<&dyn RequiresFixtures> {
         let mut dependencies: Vec<&dyn RequiresFixtures> = Vec::new();
         let direct_test_functions: Vec<&dyn RequiresFixtures> =
             self.direct_test_functions().upcast();
@@ -215,14 +228,14 @@ impl<'proj> DiscoveredPackage<'proj> {
     }
 
     #[must_use]
-    pub fn configuration_modules(&self) -> Vec<&DiscoveredModule<'_>> {
+    pub(crate) fn configuration_modules(&self) -> Vec<&DiscoveredModule> {
         self.configuration_modules
             .iter()
             .filter_map(|path| self.modules.get(path))
             .collect()
     }
 
-    pub fn shrink(&mut self) {
+    pub(crate) fn shrink(&mut self) {
         self.modules.retain(|path, module| {
             if module.is_empty() {
                 self.configuration_modules.remove(path);
@@ -240,38 +253,18 @@ impl<'proj> DiscoveredPackage<'proj> {
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.modules.is_empty() && self.packages.is_empty()
     }
 
     #[must_use]
-    pub fn display(&self) -> StringPackage {
-        let mut modules = HashMap::new();
-        let mut packages = HashMap::new();
-
-        for module in self.modules().values() {
-            modules.insert(module_name(self.path(), module.path()), module.into());
-        }
-
-        for subpackage in self.packages().values() {
-            packages.insert(
-                module_name(self.path(), subpackage.path()),
-                subpackage.display(),
-            );
-        }
-
-        StringPackage { modules, packages }
+    #[cfg(test)]
+    pub(crate) const fn display(&self) -> DisplayDiscoveredPackage<'_> {
+        DisplayDiscoveredPackage::new(self)
     }
 }
 
-impl std::fmt::Debug for DiscoveredPackage<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let string_package: StringPackage = self.display();
-        write!(f, "{string_package:?}")
-    }
-}
-
-impl<'proj> HasFixtures<'proj> for DiscoveredPackage<'proj> {
+impl<'proj> HasFixtures<'proj> for DiscoveredPackage {
     fn all_fixtures<'a: 'proj>(
         &'a self,
         test_cases: &[&dyn RequiresFixtures],
@@ -288,7 +281,7 @@ impl<'proj> HasFixtures<'proj> for DiscoveredPackage<'proj> {
     }
 }
 
-impl<'proj> HasFixtures<'proj> for &'proj DiscoveredPackage<'proj> {
+impl<'proj> HasFixtures<'proj> for &'proj DiscoveredPackage {
     fn all_fixtures<'a: 'proj>(
         &'a self,
         test_cases: &[&dyn RequiresFixtures],
@@ -297,35 +290,122 @@ impl<'proj> HasFixtures<'proj> for &'proj DiscoveredPackage<'proj> {
     }
 }
 
-#[derive(Debug)]
-pub struct StringPackage {
-    pub modules: HashMap<String, StringModule>,
-    pub packages: HashMap<String, StringPackage>,
+#[cfg(test)]
+pub(crate) struct DisplayDiscoveredPackage<'proj> {
+    package: &'proj DiscoveredPackage,
 }
 
-impl PartialEq for StringPackage {
-    fn eq(&self, other: &Self) -> bool {
-        self.modules == other.modules && self.packages == other.packages
+#[cfg(test)]
+impl<'proj> DisplayDiscoveredPackage<'proj> {
+    #[must_use]
+    pub(crate) const fn new(package: &'proj DiscoveredPackage) -> Self {
+        Self { package }
     }
 }
 
-impl Eq for StringPackage {}
+#[cfg(test)]
+impl std::fmt::Display for DisplayDiscoveredPackage<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn write_tree(
+            f: &mut std::fmt::Formatter<'_>,
+            package: &DiscoveredPackage,
+            prefix: &str,
+        ) -> std::fmt::Result {
+            let mut entries = Vec::new();
+
+            // Add modules first (sorted by name)
+            let mut modules: Vec<_> = package.modules().values().collect();
+            modules.sort_by_key(|m| m.name());
+
+            for module in modules {
+                entries.push(("module", module.display().to_string()));
+            }
+
+            // Add packages (sorted by name)
+            let mut packages: Vec<_> = package.packages().iter().collect();
+            packages.sort_by_key(|(name, _)| name.display().to_string());
+
+            for (name, _) in &packages {
+                entries.push(("package", name.display().to_string()));
+            }
+
+            // To properly draw the tree branches, we need to propagate the prefix and branch state recursively,
+            // and only use the "branch" for the first line of each entry, with subsequent lines indented.
+            let total = entries.len();
+            for (i, (kind, name)) in entries.into_iter().enumerate() {
+                let is_last_entry = i == total - 1;
+                let branch = if is_last_entry {
+                    "└── "
+                } else {
+                    "├── "
+                };
+                let child_prefix = if is_last_entry { "    " } else { "│   " };
+
+                match kind {
+                    "module" => {
+                        // For modules, extend the vertical branches down for all but the last entry.
+                        let mut lines = name.lines();
+                        if let Some(first_line) = lines.next() {
+                            writeln!(f, "{prefix}{branch}{first_line}")?;
+                        }
+                        for line in lines {
+                            // If this is not the last entry, extend the branch down with '│   ', else just indent.
+                            writeln!(f, "{prefix}{child_prefix}{line}")?;
+                        }
+                    }
+                    "package" => {
+                        writeln!(f, "{prefix}{branch}{name}/")?;
+                        let subpackage = &package.packages()[&SystemPathBuf::from(name)];
+                        // For subpackages, propagate the child_prefix so that vertical branches are extended.
+                        write_tree(f, subpackage, &format!("{prefix}{child_prefix}"))?;
+                    }
+                    _ => {}
+                }
+            }
+            Ok(())
+        }
+
+        write_tree(f, self.package, "")
+    }
+}
+
+#[cfg(test)]
+impl std::fmt::Debug for DisplayDiscoveredPackage<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.package.display())
+    }
+}
+
+#[cfg(test)]
+impl PartialEq<String> for DisplayDiscoveredPackage<'_> {
+    fn eq(&self, other: &String) -> bool {
+        self.to_string() == *other
+    }
+}
+
+#[cfg(test)]
+impl PartialEq<&str> for DisplayDiscoveredPackage<'_> {
+    fn eq(&self, other: &&str) -> bool {
+        self.to_string() == *other
+    }
+}
 
 #[cfg(test)]
 mod tests {
-    use karva_project::tests::TestEnv;
+    use insta::assert_snapshot;
+    use karva_project::{project::Project, testing::TestEnv};
 
     use super::*;
 
     #[test]
     fn test_update_package() {
-        let env = TestEnv::new();
+        let env = TestEnv::with_files([("<test>/test_1.py", "")]);
 
-        let tests_dir = env.create_test_dir();
+        let tests_dir = env.mapped_path("<test>").unwrap();
 
         let project = Project::new(env.cwd(), vec![tests_dir.clone()]);
 
-        let mut package = DiscoveredPackage::new(env.cwd(), &project);
+        let mut package = DiscoveredPackage::new(env.cwd());
 
         package.add_module(DiscoveredModule::new(
             &project,
@@ -333,131 +413,100 @@ mod tests {
             ModuleType::Test,
         ));
 
-        assert_eq!(
-            package.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::from([(
-                    env.relative_path(&tests_dir).display().to_string(),
-                    StringPackage {
-                        modules: HashMap::from([(
-                            "test_1".to_string(),
-                            StringModule::from(&DiscoveredModule::new(
-                                &project,
-                                &tests_dir.join("test_1.py"),
-                                ModuleType::Test
-                            ))
-                        )]),
-                        packages: HashMap::new(),
-                    }
-                )]),
-            }
-        );
+        assert_snapshot!(package.display().to_string(), @r"
+        └── <temp_dir>/<test>/
+            └── <test>.test_1
+                ├── test_cases []
+                └── fixtures []
+        ");
     }
 
     #[test]
-    fn add_module_different_start_path() {
-        let env = TestEnv::new();
+    fn test_add_module_different_start_path() {
+        let env = TestEnv::with_files([("<test>/test_1.py", ""), ("<test2>/test_1.py", "")]);
 
-        let tests_dir = env.create_test_dir();
+        let tests_dir = env.mapped_path("<test>").unwrap();
+        let tests_dir_2 = env.mapped_path("<test2>").unwrap();
 
-        let project = Project::new(env.cwd(), vec![tests_dir.clone()]);
+        let project = Project::new(env.cwd(), vec![tests_dir.clone(), tests_dir_2.clone()]);
 
-        let mut package = DiscoveredPackage::new(tests_dir, &project);
-
-        let module_dir = env.create_test_dir();
-
-        let module =
-            DiscoveredModule::new(&project, &module_dir.join("test_1.py"), ModuleType::Test);
-
-        package.add_module(module);
-
-        assert_eq!(
-            package.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::new(),
-            }
-        );
-    }
-
-    #[test]
-    fn add_module_already_in_package() {
-        let env = TestEnv::new();
-
-        let tests_dir = env.create_test_dir();
-
-        let project = Project::new(env.cwd(), vec![tests_dir.clone()]);
-
-        let mut package = DiscoveredPackage::new(env.cwd(), &project);
+        let mut package = DiscoveredPackage::new(tests_dir.clone());
 
         let module =
             DiscoveredModule::new(&project, &tests_dir.join("test_1.py"), ModuleType::Test);
 
         package.add_module(module);
 
-        let module_1 =
-            DiscoveredModule::new(&project, &tests_dir.join("test_1.py"), ModuleType::Test);
-
-        package.add_module(module_1);
-
-        assert_eq!(
-            package.display(),
-            StringPackage {
-                modules: HashMap::new(),
-                packages: HashMap::from([(
-                    env.relative_path(&tests_dir).display().to_string(),
-                    StringPackage {
-                        modules: HashMap::from([(
-                            "test_1".to_string(),
-                            StringModule::from(&DiscoveredModule::new(
-                                &project,
-                                &tests_dir.join("test_1.py"),
-                                ModuleType::Test
-                            ))
-                        )]),
-                        packages: HashMap::new(),
-                    }
-                )]),
-            }
-        );
+        assert_snapshot!(package.display().to_string(), @r"
+        └── <test>.test_1
+            ├── test_cases []
+            └── fixtures []
+        ");
     }
 
     #[test]
-    fn add_configuration_module() {
-        let env = TestEnv::new();
+    fn test_add_module_already_in_package() {
+        let env = TestEnv::with_files([("<test>/test_1.py", "")]);
 
-        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let mapped_test_dir = env.mapped_path("<test>").unwrap();
 
-        let mut package = DiscoveredPackage::new(env.cwd(), &project);
+        let project = Project::new(env.cwd(), vec![mapped_test_dir.clone()]);
+
+        let mut package = DiscoveredPackage::new(env.cwd());
 
         let module = DiscoveredModule::new(
             &project,
-            &env.cwd().join("conftest.py"),
-            ModuleType::Configuration,
+            &mapped_test_dir.join("test_1.py"),
+            ModuleType::Test,
         );
 
         package.add_module(module);
 
-        assert_eq!(
-            package.display(),
-            StringPackage {
-                modules: HashMap::from([(
-                    "conftest".to_string(),
-                    StringModule::from(&DiscoveredModule::new(
-                        &project,
-                        &env.cwd().join("conftest.py"),
-                        ModuleType::Configuration
-                    ))
-                )]),
-                packages: HashMap::new(),
-            }
+        let module_1 = DiscoveredModule::new(
+            &project,
+            &mapped_test_dir.join("test_1.py"),
+            ModuleType::Test,
         );
 
-        assert_eq!(package.configuration_modules().len(), 1);
+        package.add_module(module_1);
+
+        assert_snapshot!(package.display().to_string(), @r"
+        └── <temp_dir>/<test>/
+            └── <test>.test_1
+                ├── test_cases []
+                └── fixtures []
+        ");
+    }
+
+    #[test]
+    fn test_add_configuration_module() {
+        let env = TestEnv::with_files([("<test>/conftest.py", "")]);
+
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+
+        let conftest_path = mapped_dir.join("conftest.py");
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+
+        let mut package = DiscoveredPackage::new(env.cwd());
+
+        let module = DiscoveredModule::new(&project, &conftest_path, ModuleType::Configuration);
+
+        package.add_module(module);
+
+        let test_package = package.get_package(mapped_dir).unwrap();
+
+        assert_snapshot!(package.display().to_string(), @r"
+        └── <temp_dir>/<test>/
+            └── <test>.conftest
+                ├── test_cases []
+                └── fixtures []
+        ");
+
+        assert_eq!(test_package.configuration_modules().len(), 1);
         assert_eq!(
-            package.configuration_modules()[0].path(),
-            &env.cwd().join("conftest.py")
+            test_package.configuration_modules()[0].path(),
+            &conftest_path
         );
     }
 }

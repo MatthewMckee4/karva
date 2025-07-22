@@ -11,13 +11,13 @@ pub fn is_python_file(path: &SystemPathBuf) -> bool {
 ///
 /// Panics if the path is not a valid UTF-8 path.
 #[must_use]
-pub fn module_name(cwd: &SystemPathBuf, path: &SystemPathBuf) -> String {
-    let relative_path = path.strip_prefix(cwd).unwrap();
+pub fn module_name(cwd: &SystemPathBuf, path: &SystemPathBuf) -> Option<String> {
+    let relative_path = path.strip_prefix(cwd).ok()?;
     let components: Vec<_> = relative_path
         .components()
         .map(|c| c.as_os_str().to_string_lossy().to_string())
         .collect();
-    components.join(".").trim_end_matches(".py").to_string()
+    Some(components.join(".").trim_end_matches(".py").to_string())
 }
 
 #[cfg(test)]
@@ -30,7 +30,7 @@ mod tests {
     fn test_module_name() {
         assert_eq!(
             module_name(&SystemPathBuf::from("/"), &SystemPathBuf::from("/test.py")),
-            "test"
+            Some("test".to_string())
         );
     }
 
@@ -42,7 +42,7 @@ mod tests {
                 &SystemPathBuf::from("/"),
                 &SystemPathBuf::from("/test_dir/test.py")
             ),
-            "test_dir.test"
+            Some("test_dir.test".to_string())
         );
     }
 
@@ -54,7 +54,7 @@ mod tests {
                 &SystemPathBuf::from("/"),
                 &SystemPathBuf::from("/tests/test.py")
             ),
-            "tests.test"
+            Some("tests.test".to_string())
         );
     }
 
@@ -69,7 +69,7 @@ mod tests {
                     &SystemPathBuf::from("/home/user/project"),
                     &SystemPathBuf::from("/home/user/project/src/module/test.py")
                 ),
-                "src.module.test"
+                Some("src.module.test".to_string())
             );
         }
     }
@@ -85,7 +85,7 @@ mod tests {
                     &SystemPathBuf::from("C:\\Users\\user\\project"),
                     &SystemPathBuf::from("C:\\Users\\user\\project\\src\\module\\test.py")
                 ),
-                "src.module.test"
+                Some("src.module.test".to_string())
             );
         }
     }

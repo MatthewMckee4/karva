@@ -1,9 +1,7 @@
-use std::{
-    collections::HashSet,
-    fmt::{self, Display},
-};
+use std::fmt::{self, Display};
 
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
+use ruff_source_file::LineIndex;
 
 use crate::{
     discovery::TestFunction,
@@ -11,70 +9,84 @@ use crate::{
 };
 
 /// A module represents a single python file.
-pub struct DiscoveredModule<'proj> {
+#[derive(Debug)]
+pub(crate) struct DiscoveredModule {
     path: SystemPathBuf,
-    project: &'proj Project,
-    test_functions: Vec<TestFunction<'proj>>,
+    test_functions: Vec<TestFunction>,
     fixtures: Vec<Fixture>,
     r#type: ModuleType,
+    name: String,
 }
 
-impl<'proj> DiscoveredModule<'proj> {
+impl DiscoveredModule {
     #[must_use]
-    pub fn new(project: &'proj Project, path: &SystemPathBuf, module_type: ModuleType) -> Self {
+    pub(crate) fn new(project: &Project, path: &SystemPathBuf, module_type: ModuleType) -> Self {
         Self {
             path: path.clone(),
-            project,
             test_functions: Vec::new(),
             fixtures: Vec::new(),
             r#type: module_type,
+            name: module_name(project.cwd(), path).expect("Module has no name"),
         }
     }
 
     #[must_use]
-    pub const fn path(&self) -> &SystemPathBuf {
+    pub(crate) const fn path(&self) -> &SystemPathBuf {
         &self.path
     }
 
     #[must_use]
-    pub fn name(&self) -> String {
-        module_name(self.project.cwd(), &self.path)
+    pub(crate) fn name(&self) -> &str {
+        &self.name
     }
 
     #[must_use]
-    pub const fn module_type(&self) -> ModuleType {
+    pub(crate) const fn module_type(&self) -> ModuleType {
         self.r#type
     }
 
     #[must_use]
-    pub fn test_functions(&self) -> Vec<&TestFunction<'proj>> {
+    pub(crate) fn test_functions(&self) -> Vec<&TestFunction> {
         self.test_functions.iter().collect()
     }
 
-    pub fn set_test_functions(&mut self, test_cases: Vec<TestFunction<'proj>>) {
+    pub(crate) fn set_test_functions(&mut self, test_cases: Vec<TestFunction>) {
         self.test_functions = test_cases;
     }
 
     #[must_use]
-    pub fn get_test_function(&self, name: &str) -> Option<&TestFunction<'proj>> {
+    #[cfg(test)]
+    pub(crate) fn get_test_function(&self, name: &str) -> Option<&TestFunction> {
         self.test_functions.iter().find(|tc| tc.name() == name)
     }
 
     #[must_use]
-    pub fn fixtures(&self) -> Vec<&Fixture> {
+    #[cfg(test)]
+    pub(crate) fn fixtures(&self) -> Vec<&Fixture> {
         self.fixtures.iter().collect()
     }
 
-    pub fn set_fixtures(&mut self, fixtures: Vec<Fixture>) {
+    pub(crate) fn set_fixtures(&mut self, fixtures: Vec<Fixture>) {
         self.fixtures = fixtures;
     }
 
     #[must_use]
-    pub fn total_test_functions(&self) -> usize {
+    pub(crate) fn total_test_functions(&self) -> usize {
         self.test_functions.len()
     }
 
-    pub fn update(&mut self, module: Self) {
+    #[must_use]
+    pub(crate) fn source_text(&self) -> String {
+        std::fs::read_to_string(self.path()).expect("Failed to read source file")
+    }
+
+    #[must_use]
+    pub(crate) fn line_index(&self) -> LineIndex {
+        let source_text = self.source_text();
+        LineIndex::from_source_text(&source_text)
+    }
+
+    pub(crate) fn update(&mut self, module: Self) {
         if self.path == module.path {
             for test_case in module.test_functions {
                 if !self
@@ -99,7 +111,7 @@ impl<'proj> DiscoveredModule<'proj> {
     }
 
     #[must_use]
-    pub fn dependencies(&self) -> Vec<&dyn RequiresFixtures> {
+    pub(crate) fn dependencies(&self) -> Vec<&dyn RequiresFixtures> {
         let mut deps = Vec::new();
         for tc in &self.test_functions {
             deps.push(tc as &dyn RequiresFixtures);
@@ -111,12 +123,18 @@ impl<'proj> DiscoveredModule<'proj> {
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.test_functions.is_empty() && self.fixtures.is_empty()
+    }
+
+    #[must_use]
+    #[cfg(test)]
+    pub(crate) const fn display(&self) -> DisplayDiscoveredModule<'_> {
+        DisplayDiscoveredModule::new(self)
     }
 }
 
-impl<'proj> HasFixtures<'proj> for DiscoveredModule<'proj> {
+impl<'proj> HasFixtures<'proj> for DiscoveredModule {
     fn all_fixtures<'a: 'proj>(
         &'a self,
         test_cases: &[&dyn RequiresFixtures],
@@ -141,30 +159,23 @@ impl<'proj> HasFixtures<'proj> for DiscoveredModule<'proj> {
     }
 }
 
-impl Display for DiscoveredModule<'_> {
+impl Display for DiscoveredModule {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name())
-    }
-}
-
-impl std::fmt::Debug for DiscoveredModule<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let string_module: StringModule = self.into();
-        write!(f, "{string_module:?}")
     }
 }
 
 /// The type of module.
 /// This is used to differentiation between files that contain only test functions and files that contain only configuration functions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ModuleType {
+pub(crate) enum ModuleType {
     Test,
     Configuration,
 }
 
 impl ModuleType {
     #[must_use]
-    pub fn from_path(path: &SystemPathBuf) -> Self {
+    pub(crate) fn from_path(path: &SystemPathBuf) -> Self {
         if path
             .file_name()
             .is_some_and(|file_name| file_name == "conftest.py")
@@ -176,21 +187,90 @@ impl ModuleType {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct StringModule {
-    pub test_cases: HashSet<String>,
-    pub fixtures: HashSet<(String, String)>,
+#[cfg(test)]
+pub(crate) struct DisplayDiscoveredModule<'proj> {
+    module: &'proj DiscoveredModule,
 }
 
-impl From<&'_ DiscoveredModule<'_>> for StringModule {
-    fn from(module: &'_ DiscoveredModule<'_>) -> Self {
-        Self {
-            test_cases: module.test_functions().iter().map(|tc| tc.name()).collect(),
-            fixtures: module
-                .all_fixtures(&[])
-                .into_iter()
-                .map(|f| (f.name().to_string(), f.scope().to_string()))
-                .collect(),
+#[cfg(test)]
+impl<'proj> DisplayDiscoveredModule<'proj> {
+    #[must_use]
+    pub(crate) const fn new(module: &'proj DiscoveredModule) -> Self {
+        Self { module }
+    }
+}
+
+#[cfg(test)]
+impl std::fmt::Display for DisplayDiscoveredModule<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = self.module.name();
+        write!(f, "{name}\n├── test_cases [")?;
+        let test_cases = self.module.test_functions();
+        for (i, test) in test_cases.iter().enumerate() {
+            if i > 0 {
+                write!(f, " ")?;
+            }
+            write!(f, "{}", test.name())?;
         }
+        write!(f, "]\n└── fixtures [")?;
+        let fixtures = self.module.fixtures();
+        for (i, fixture) in fixtures.iter().enumerate() {
+            if i > 0 {
+                write!(f, " ")?;
+            }
+            write!(f, "{}", fixture.name())?;
+        }
+        write!(f, "]")?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+impl std::fmt::Debug for DisplayDiscoveredModule<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.module.display())
+    }
+}
+
+#[cfg(test)]
+impl PartialEq<String> for DisplayDiscoveredModule<'_> {
+    fn eq(&self, other: &String) -> bool {
+        self.to_string() == *other
+    }
+}
+#[cfg(test)]
+impl PartialEq<&str> for DisplayDiscoveredModule<'_> {
+    fn eq(&self, other: &&str) -> bool {
+        self.to_string() == *other
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use insta::assert_snapshot;
+    use karva_project::{project::Project, testing::TestEnv};
+    use pyo3::prelude::*;
+
+    use crate::discovery::StandardDiscoverer;
+
+    #[test]
+    fn test_display_discovered_module() {
+        let env = TestEnv::with_files([("<test>/test.py", "def test_display(): pass")]);
+
+        let mapped_dir = env.mapped_path("<test>").unwrap();
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+
+        let test_module = session.get_module(&mapped_dir.join("test.py")).unwrap();
+
+        assert_snapshot!(
+            test_module.display().to_string(),
+            @r"
+            <test>.test
+            ├── test_cases [test_display]
+            └── fixtures []
+            "
+        );
     }
 }
