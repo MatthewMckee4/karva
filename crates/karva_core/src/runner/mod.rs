@@ -42,7 +42,7 @@ impl<'proj> StandardTestRunner<'proj> {
             let total_modules = collected_session.total_modules();
 
             tracing::info!(
-                "Discovered {} test{} in {} module{}",
+                "Collected {} test{} in {} module{}",
                 total_test_cases,
                 if total_test_cases == 1 { "" } else { "s" },
                 total_modules,
@@ -52,10 +52,6 @@ impl<'proj> StandardTestRunner<'proj> {
             let mut diagnostics = RunDiagnostics::default();
 
             diagnostics.add_diagnostics(discovery_diagnostics);
-
-            if total_test_cases == 0 {
-                return diagnostics;
-            }
 
             reporter.set(total_modules);
 

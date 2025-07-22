@@ -5,7 +5,7 @@ use crate::{
     runner::RunDiagnostics,
 };
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct CollectedPackage<'proj> {
     finalizers: Finalizers,
     modules: Vec<CollectedModule<'proj>>,

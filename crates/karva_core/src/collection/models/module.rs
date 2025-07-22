@@ -7,10 +7,11 @@ use crate::{
     runner::RunDiagnostics,
 };
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct CollectedModule<'proj> {
     test_cases: Vec<(TestCase<'proj>, Option<Diagnostic>)>,
     finalizers: Finalizers,
+    diagnostics: Vec<Diagnostic>,
 }
 
 impl<'proj> CollectedModule<'proj> {
@@ -40,6 +41,10 @@ impl<'proj> CollectedModule<'proj> {
         self.finalizers.update(finalizers);
     }
 
+    pub(crate) fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
+        self.diagnostics.push(diagnostic);
+    }
+
     pub(crate) fn run_with_reporter(
         &self,
         py: Python<'_>,
@@ -47,9 +52,7 @@ impl<'proj> CollectedModule<'proj> {
     ) -> RunDiagnostics {
         let mut diagnostics = RunDiagnostics::default();
 
-        if self.test_cases.is_empty() {
-            return diagnostics;
-        }
+        diagnostics.add_diagnostics(self.diagnostics.clone());
 
         self.test_cases.iter().for_each(|(test_case, diagnostic)| {
             let mut result = test_case.run(py, diagnostic.clone());
@@ -57,7 +60,9 @@ impl<'proj> CollectedModule<'proj> {
             diagnostics.update(&result);
         });
 
-        reporter.report();
+        if !self.test_cases.is_empty() {
+            reporter.report();
+        }
 
         diagnostics.add_diagnostics(self.finalizers().run(py));
 

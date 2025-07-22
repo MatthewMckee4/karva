@@ -140,6 +140,23 @@ impl TestCaseCollector {
             return module_collected;
         };
 
+        // If the __file__ attribute from the Python module and the module.file() don't match, add a warning
+        let py_module_file = py_module.getattr("__file__");
+        if let Ok(py_file) = py_module_file {
+            if let Ok(py_file_str) = py_file.extract::<&str>() {
+                let rust_module_file = module.path().display().to_string();
+                if py_file_str != rust_module_file {
+                    module_collected.add_diagnostic(Diagnostic::warning(
+                        "ModuleFileMismatch",
+                        Some(format!(
+                            "Imported module from {py_file_str:?} does not match the discovered module file {rust_module_file:?}"
+                        )),
+                        Some(rust_module_file),
+                    ));
+                }
+            }
+        }
+
         let py_module = py_module.unbind();
 
         let mut module_test_cases = Vec::new();
@@ -168,6 +185,7 @@ impl TestCaseCollector {
         });
 
         module_collected.add_test_cases(module_test_cases);
+
         module_collected.add_finalizers(module_fixture_manager.reset_fixtures());
 
         module_collected
