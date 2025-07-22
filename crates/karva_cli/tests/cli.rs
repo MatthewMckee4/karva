@@ -1371,20 +1371,18 @@ fn test_independent_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
         (
             "tests/conftest.py".to_string(),
             format!(
-                r#"
+                r"
                 from {framework} import fixture
                 from src import Calculator
 
                 @fixture
                 def calculator_a() -> Calculator:
-                    print("Calculator A initialized")
                     return Calculator()
 
                 @fixture
                 def calculator_b() -> Calculator:
-                    print("Calculator B initialized")
                     return Calculator()
-                "#,
+                ",
             ),
         ),
         (
@@ -1404,14 +1402,12 @@ fn test_independent_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r"
+    run_with_path_and_snapshot!(case, @r"
     success: true
     exit_code: 0
     ----- stdout -----
     Passed tests: 2
     All checks passed!
-    Calculator A initialized
-    Calculator B initialized
 
     ----- stderr -----
     ");

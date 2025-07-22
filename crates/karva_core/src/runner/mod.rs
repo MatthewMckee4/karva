@@ -31,36 +31,34 @@ impl<'proj> StandardTestRunner<'proj> {
     }
 
     fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
-        let (session, discovery_diagnostics) = with_gil(self.project, |py| {
-            StandardDiscoverer::new(self.project).discover(py)
-        });
-
-        let collected_session =
-            with_gil(self.project, |py| TestCaseCollector::collect(py, &session));
-
-        let total_test_cases = collected_session.total_test_cases();
-
-        tracing::info!(
-            "Discovered {} test{}",
-            total_test_cases,
-            if total_test_cases == 1 { "" } else { "s" },
-        );
-
-        let mut diagnostics = RunDiagnostics::default();
-
-        diagnostics.add_diagnostics(discovery_diagnostics);
-
-        if total_test_cases == 0 {
-            return diagnostics;
-        }
-
-        reporter.set(total_test_cases);
-
         with_gil(self.project, |py| {
-            diagnostics.update(&collected_session.run_with_reporter(py, reporter));
-        });
+            let (session, discovery_diagnostics) =
+                StandardDiscoverer::new(self.project).discover(py);
 
-        diagnostics
+            let collected_session = TestCaseCollector::collect(py, &session);
+
+            let total_test_cases = collected_session.total_test_cases();
+
+            let total_modules = collected_session.total_modules();
+
+            tracing::info!(
+                "Collected {} test{} in {} module{}",
+                total_test_cases,
+                if total_test_cases == 1 { "" } else { "s" },
+                total_modules,
+                if total_modules == 1 { "" } else { "s" },
+            );
+
+            let mut diagnostics = RunDiagnostics::default();
+
+            diagnostics.add_diagnostics(discovery_diagnostics);
+
+            reporter.set(total_modules);
+
+            diagnostics.update(&collected_session.run_with_reporter(py, reporter));
+
+            diagnostics
+        })
     }
 }
 

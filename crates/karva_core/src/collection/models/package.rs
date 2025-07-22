@@ -5,7 +5,7 @@ use crate::{
     runner::RunDiagnostics,
 };
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct CollectedPackage<'proj> {
     finalizers: Finalizers,
     modules: Vec<CollectedModule<'proj>>,
@@ -37,20 +37,34 @@ impl<'proj> CollectedPackage<'proj> {
         total
     }
 
+    #[must_use]
+    pub(crate) fn total_modules(&self) -> usize {
+        let mut total = 0;
+        for module in &self.modules {
+            if !module.test_cases().is_empty() {
+                total += 1;
+            }
+        }
+        for package in &self.packages {
+            total += package.total_modules();
+        }
+        total
+    }
+
     pub(crate) fn run_with_reporter(
         &self,
         py: Python<'_>,
-        reporter: &mut dyn Reporter,
+        reporter: &dyn Reporter,
     ) -> RunDiagnostics {
         let mut diagnostics = RunDiagnostics::default();
 
-        for module in &self.modules {
-            diagnostics.update(&module.run_with_reporter(py, reporter));
-        }
+        self.modules
+            .iter()
+            .for_each(|module| diagnostics.update(&module.run_with_reporter(py, reporter)));
 
-        for package in &self.packages {
-            diagnostics.update(&package.run_with_reporter(py, reporter));
-        }
+        self.packages
+            .iter()
+            .for_each(|package| diagnostics.update(&package.run_with_reporter(py, reporter)));
 
         diagnostics.add_diagnostics(self.finalizers.run(py));
 

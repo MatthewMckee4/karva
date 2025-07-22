@@ -5,6 +5,7 @@ use std::{
 
 use karva_project::path::SystemPathBuf;
 use pyo3::prelude::*;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
@@ -65,32 +66,33 @@ impl TestFunction {
         &'a self,
         py: Python<'_>,
         module: &'a DiscoveredModule,
-        py_module: &Bound<'_, PyModule>,
-        fixture_manager_func: &mut impl FnMut(
-            &mut dyn FnMut(&mut FixtureManager) -> (TestCase<'a>, Option<Diagnostic>),
-        ) -> (TestCase<'a>, Option<Diagnostic>),
+        py_module: &Py<PyModule>,
+        fixture_manager_func: impl Fn(
+            Python<'_>,
+            &dyn Fn(&FixtureManager<'_>) -> (TestCase<'a>, Option<Diagnostic>),
+        ) -> (TestCase<'a>, Option<Diagnostic>)
+        + Sync,
     ) -> Vec<(TestCase<'a>, Option<Diagnostic>)> {
         tracing::info!(
             "Collecting test cases for function: {}",
             self.function_definition.name
         );
 
-        let Ok(py_function) = py_module.getattr(self.function_definition.name.to_string()) else {
+        let Ok(py_function) = py_module.getattr(py, self.function_definition.name.to_string())
+        else {
             return Vec::new();
         };
-
-        let py_function = py_function.as_unbound();
 
         let required_fixture_names = self.get_required_fixture_names();
 
         if required_fixture_names.is_empty() {
             return vec![(
-                TestCase::new(self, HashMap::new(), py_function.clone(), module),
+                TestCase::new(self, HashMap::new(), py_function, module),
                 None,
             )];
         }
 
-        let tags = Tags::from_py_any(py, py_function);
+        let tags = Tags::from_py_any(py, &py_function);
         let mut parametrize_args = tags.parametrize_args();
 
         // Ensure that we collect at least one test case (no parametrization)
@@ -100,48 +102,56 @@ impl TestFunction {
 
         let mut test_cases = Vec::with_capacity(parametrize_args.len());
 
-        for params in parametrize_args {
-            let mut f = |fixture_manager: &mut FixtureManager| {
-                let num_required_fixtures = required_fixture_names.len();
-                let mut fixture_diagnostics = Vec::with_capacity(num_required_fixtures);
-                let mut required_fixtures = HashMap::with_capacity(num_required_fixtures);
+        py.allow_threads(|| {
+            parametrize_args
+                .par_iter()
+                .map(|params| {
+                    let f = |fixture_manager: &FixtureManager| {
+                        let num_required_fixtures = required_fixture_names.len();
+                        let mut fixture_diagnostics = Vec::with_capacity(num_required_fixtures);
+                        let mut required_fixtures = HashMap::with_capacity(num_required_fixtures);
 
-                for fixture_name in &required_fixture_names {
-                    if let Some(fixture) = params.get(fixture_name) {
-                        required_fixtures.insert(fixture_name.clone(), fixture.clone());
-                    } else if let Some(fixture) = fixture_manager.get_fixture(fixture_name) {
-                        required_fixtures.insert(fixture_name.clone(), fixture);
-                    } else {
-                        fixture_diagnostics.push(SubDiagnostic::fixture_not_found(fixture_name));
-                    }
-                }
+                        for fixture_name in &required_fixture_names {
+                            if let Some(fixture) = params.get(fixture_name) {
+                                required_fixtures.insert(fixture_name.clone(), fixture.clone());
+                            } else if let Some(fixture) = fixture_manager.get_fixture(fixture_name)
+                            {
+                                required_fixtures.insert(fixture_name.clone(), fixture);
+                            } else {
+                                fixture_diagnostics
+                                    .push(SubDiagnostic::fixture_not_found(fixture_name));
+                            }
+                        }
 
-                let diagnostic = if fixture_diagnostics.is_empty() {
-                    None
-                } else {
-                    let mut diagnostic = Diagnostic::new(
-                        Some(format!("Fixture(s) not found for {}", self.name())),
-                        Some(self.display_with_line(module)),
-                        None,
-                        DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                            self.name(),
-                            TestCaseDiagnosticType::Collection(
-                                TestCaseCollectionDiagnosticType::FixtureNotFound,
-                            ),
-                        )),
-                    );
-                    diagnostic.add_sub_diagnostics(fixture_diagnostics);
-                    Some(diagnostic)
-                };
+                        let diagnostic = if fixture_diagnostics.is_empty() {
+                            None
+                        } else {
+                            let mut diagnostic = Diagnostic::new(
+                                Some(format!("Fixture(s) not found for {}", self.name())),
+                                Some(self.display_with_line(module)),
+                                None,
+                                DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
+                                    self.name(),
+                                    TestCaseDiagnosticType::Collection(
+                                        TestCaseCollectionDiagnosticType::FixtureNotFound,
+                                    ),
+                                )),
+                            );
+                            diagnostic.add_sub_diagnostics(fixture_diagnostics);
+                            Some(diagnostic)
+                        };
 
-                (
-                    TestCase::new(self, required_fixtures, py_function.clone(), module),
-                    diagnostic,
-                )
-            };
-
-            test_cases.push(fixture_manager_func(&mut f));
-        }
+                        (
+                            TestCase::new(self, required_fixtures, py_function.clone(), module),
+                            diagnostic,
+                        )
+                    };
+                    Python::with_gil(|inner_py| fixture_manager_func(inner_py, &f))
+                })
+                .collect::<Vec<_>>()
+        })
+        .into_iter()
+        .for_each(|result| test_cases.push(result));
 
         test_cases
     }

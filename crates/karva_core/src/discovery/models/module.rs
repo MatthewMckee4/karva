@@ -111,7 +111,7 @@ impl DiscoveredModule {
     }
 
     #[must_use]
-    pub(crate) fn dependencies(&self) -> Vec<&dyn RequiresFixtures> {
+    pub(crate) fn all_requires_fixtures(&self) -> Vec<&dyn RequiresFixtures> {
         let mut deps = Vec::new();
         for tc in &self.test_functions {
             deps.push(tc as &dyn RequiresFixtures);

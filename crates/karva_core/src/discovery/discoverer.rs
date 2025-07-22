@@ -29,7 +29,7 @@ impl<'proj> StandardDiscoverer<'proj> {
         let mut discovery_diagnostics = Vec::new();
         let cwd = self.project.cwd();
 
-        if add_to_sys_path(py, cwd).is_err() {
+        if add_to_sys_path(py, cwd, 0).is_err() {
             return (session_package, discovery_diagnostics);
         }
 

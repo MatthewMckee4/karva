@@ -13,10 +13,11 @@ pub fn current_python_version() -> PythonVersion {
     }))
 }
 
-pub(crate) fn add_to_sys_path(py: Python<'_>, path: &SystemPathBuf) -> PyResult<()> {
+// Add the path to the python sys.path list at the given index
+pub(crate) fn add_to_sys_path(py: Python<'_>, path: &SystemPathBuf, index: isize) -> PyResult<()> {
     let sys_path = py.import("sys")?;
     let sys_path = sys_path.getattr("path")?;
-    sys_path.call_method1("append", (path.display().to_string(),))?;
+    sys_path.call_method1("insert", (index, path.display().to_string()))?;
     Ok(())
 }
 
