@@ -58,11 +58,8 @@ impl<'proj> CollectedModule<'proj> {
             let mut result = test_case.run(py, diagnostic.clone());
             result.add_diagnostics(test_case.finalizers().run(py));
             diagnostics.update(&result);
-        });
-
-        if !self.test_cases.is_empty() {
             reporter.report();
-        }
+        });
 
         diagnostics.add_diagnostics(self.finalizers().run(py));
 

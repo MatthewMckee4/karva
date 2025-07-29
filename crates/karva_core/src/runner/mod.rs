@@ -53,7 +53,7 @@ impl<'proj> StandardTestRunner<'proj> {
 
             diagnostics.add_diagnostics(discovery_diagnostics);
 
-            reporter.set(total_modules);
+            reporter.set(total_test_cases);
 
             diagnostics.update(&collected_session.run_with_reporter(py, reporter));
 
