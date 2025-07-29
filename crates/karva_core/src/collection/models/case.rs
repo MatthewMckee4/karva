@@ -63,7 +63,7 @@ impl<'proj> TestCase<'proj> {
             .display(self.module.path().display().to_string());
 
         let (case_call_result, logger) = if self.kwargs.is_empty() {
-            let logger = TestCaseLogger::new(&display, None);
+            let logger = TestCaseLogger::new(py, &display, None);
             logger.log_running();
             (self.py_function.call0(py), logger)
         } else {
@@ -72,7 +72,7 @@ impl<'proj> TestCase<'proj> {
             for (key, value) in &self.kwargs {
                 let _ = kwargs.set_item(key, value);
             }
-            let logger = TestCaseLogger::new(&display, Some(&self.kwargs));
+            let logger = TestCaseLogger::new(py, &display, Some(&self.kwargs));
             logger.log_running();
             (self.py_function.call(py, (), Some(&kwargs)), logger)
         };
@@ -176,7 +176,11 @@ struct TestCaseLogger {
 
 impl TestCaseLogger {
     #[must_use]
-    fn new(function: &TestFunctionDisplay<'_>, kwargs: Option<&HashMap<String, PyObject>>) -> Self {
+    fn new(
+        py: Python<'_>,
+        function: &TestFunctionDisplay<'_>,
+        kwargs: Option<&HashMap<String, PyObject>>,
+    ) -> Self {
         let test_name = kwargs.map_or_else(
             || function.to_string(),
             |kwargs| {
@@ -185,7 +189,9 @@ impl TestCaseLogger {
                     if i > 0 {
                         args_str.push_str(", ");
                     }
-                    args_str.push_str(&format!("{key}={value:?}"));
+                    if let Ok(value) = value.downcast_bound::<PyAny>(py) {
+                        args_str.push_str(&format!("{key}={value:?}"));
+                    }
                 }
                 format!("{function} [{args_str}]")
             },
