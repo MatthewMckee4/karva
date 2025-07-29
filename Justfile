@@ -1,5 +1,3 @@
-ITERATIONS := "1"
-NUM_TESTS := "10000"
 N := "1000"
 
 # Build the project
@@ -27,5 +25,5 @@ format:
     cargo sort
 
 # Run benchmarks
-benchmark: build
-    cd scripts/benchmark && uv sync --all-extras --no-install-project && uv pip install -e ../../ && uv run main.py --iterations {{ITERATIONS}} --num-tests {{NUM_TESTS}} --run-test
+benchmark iterations: build
+    cd scripts/benchmark && uv sync --all-extras --no-install-project && uv pip install -e ../../ && uv run main.py --iterations {{iterations}} --num-tests 10000 --run-test

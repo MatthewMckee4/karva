@@ -1,5 +1,4 @@
 use pyo3::prelude::*;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{
     collection::{CollectedModule, CollectedPackage, TestCase},
@@ -161,27 +160,15 @@ impl TestCaseCollector {
 
         let mut module_test_cases = Vec::new();
 
-        py.allow_threads(|| {
-            module
-                .test_functions()
-                .par_iter()
-                .map(|function| {
-                    Python::with_gil(|inner_py| {
-                        Self::collect_test_function(
-                            inner_py,
-                            function,
-                            &py_module,
-                            module,
-                            parents,
-                            &module_fixture_manager,
-                        )
-                    })
-                })
-                .collect::<Vec<_>>()
-        })
-        .into_iter()
-        .for_each(|test_case| {
-            module_test_cases.extend(test_case);
+        module.test_functions().iter().for_each(|function| {
+            module_test_cases.extend(Self::collect_test_function(
+                py,
+                function,
+                &py_module,
+                module,
+                parents,
+                &module_fixture_manager,
+            ));
         });
 
         module_collected.add_test_cases(module_test_cases);

@@ -22,7 +22,6 @@ ruff_text_size = { workspace = true }
 tracing = { workspace = true }
 ignore = { workspace = true }
 regex = { workspace = true }
-rayon = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
