@@ -98,7 +98,7 @@ impl<'a> FixtureManager<'a> {
     }
 
     pub(crate) fn insert_fixture(&mut self, fixture_return: Py<PyAny>, fixture: &Fixture) {
-        if self.scope == *fixture.scope() {
+        if self.scope <= *fixture.scope() {
             self.collection
                 .insert_fixture(fixture.name().to_string(), fixture_return);
         } else {
@@ -107,7 +107,7 @@ impl<'a> FixtureManager<'a> {
     }
 
     pub(crate) fn insert_finalizer(&mut self, finalizer: Finalizer, scope: &FixtureScope) {
-        if self.scope == *scope {
+        if self.scope <= *scope {
             self.collection.insert_finalizer(finalizer);
         } else {
             // We should not reach this

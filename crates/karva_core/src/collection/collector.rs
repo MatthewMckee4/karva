@@ -148,7 +148,7 @@ impl TestCaseCollector {
                     module_collected.add_diagnostic(Diagnostic::warning(
                         "ModuleFileMismatch",
                         Some(format!(
-                            "Imported module from {py_file_str:?} does not match the discovered module file {rust_module_file:?}"
+                            "Imported module from {py_file_str:#?} does not match the discovered module file {rust_module_file:#?}"
                         )),
                         Some(rust_module_file),
                     ));

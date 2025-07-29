@@ -21,6 +21,22 @@ pub(crate) enum FixtureScope {
     Session,
 }
 
+impl PartialOrd for FixtureScope {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        const fn rank(scope: &FixtureScope) -> usize {
+            match scope {
+                FixtureScope::Function => 0,
+                FixtureScope::Module => 1,
+                FixtureScope::Package => 2,
+                FixtureScope::Session => 3,
+            }
+        }
+        let self_rank = rank(self);
+        let other_rank = rank(other);
+        Some(self_rank.cmp(&other_rank))
+    }
+}
+
 impl TryFrom<String> for FixtureScope {
     type Error = String;
 

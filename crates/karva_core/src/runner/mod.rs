@@ -501,4 +501,132 @@ def test_fixture_2(fixture):
 
         assert_eq!(*result.stats(), expected_stats);
     }
+
+    #[test]
+    fn test_fixture_from_current_package_session_scope() {
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
+import karva
+@karva.fixture(scope='session')
+def x():
+    return 1
+            ",
+            ),
+            ("<test>/tests/test_file.py", "def test_1(x): pass"),
+        ]);
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_fixture_from_current_package_function_scope() {
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
+import karva
+@karva.fixture
+def x():
+    return 1
+            ",
+            ),
+            ("<test>/tests/test_file.py", "def test_1(x): pass"),
+        ]);
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_finalizer_from_current_package_session_scope() {
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
+import karva
+
+arr = []
+
+@karva.fixture(scope='session')
+def x():
+    yield 1
+    arr.append(1)
+            ",
+            ),
+            (
+                "<test>/tests/test_file.py",
+                r"
+from .conftest import arr
+
+def test_1(x):
+    assert len(arr) == 0
+
+def test_2(x):
+    assert len(arr) == 0
+",
+            ),
+        ]);
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_finalizer_from_current_package_function_scope() {
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
+import karva
+
+arr = []
+
+@karva.fixture
+def x():
+    yield 1
+    arr.append(1)
+            ",
+            ),
+            (
+                "<test>/tests/test_file.py",
+                r"
+from .conftest import arr
+
+def test_1(x):
+    assert len(arr) == 0
+
+def test_2(x):
+    assert len(arr) == 1
+",
+            ),
+        ]);
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
 }
