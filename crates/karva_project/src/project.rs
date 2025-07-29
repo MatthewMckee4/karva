@@ -27,15 +27,22 @@ pub struct ProjectOptions {
     test_prefix: String,
     verbosity: VerbosityLevel,
     show_output: bool,
+    no_ignore: bool,
 }
 
 impl ProjectOptions {
     #[must_use]
-    pub const fn new(test_prefix: String, verbosity: VerbosityLevel, show_output: bool) -> Self {
+    pub const fn new(
+        test_prefix: String,
+        verbosity: VerbosityLevel,
+        show_output: bool,
+        no_ignore: bool,
+    ) -> Self {
         Self {
             test_prefix,
             verbosity,
             show_output,
+            no_ignore,
         }
     }
 
@@ -53,6 +60,11 @@ impl ProjectOptions {
     pub const fn show_output(&self) -> bool {
         self.show_output
     }
+
+    #[must_use]
+    pub const fn no_ignore(&self) -> bool {
+        self.no_ignore
+    }
 }
 
 impl Default for ProjectOptions {
@@ -61,6 +73,7 @@ impl Default for ProjectOptions {
             test_prefix: "test".to_string(),
             verbosity: VerbosityLevel::default(),
             show_output: false,
+            no_ignore: false,
         }
     }
 }

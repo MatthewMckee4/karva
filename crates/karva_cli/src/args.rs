@@ -41,10 +41,22 @@ pub struct TestCommand {
 
     #[clap(short = 's', long, help = "Show Python stdout during test execution")]
     pub(crate) show_output: bool,
+
+    #[clap(
+        long,
+        help = "When set, .gitignore files will not be respected.",
+        default_value = "false"
+    )]
+    pub(crate) no_ignore: bool,
 }
 
 impl TestCommand {
     pub(crate) fn into_options(self) -> ProjectOptions {
-        ProjectOptions::new(self.test_prefix, self.verbosity.level(), self.show_output)
+        ProjectOptions::new(
+            self.test_prefix,
+            self.verbosity.level(),
+            self.show_output,
+            !self.no_ignore,
+        )
     }
 }

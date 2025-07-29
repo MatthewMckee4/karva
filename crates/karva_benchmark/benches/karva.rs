@@ -8,7 +8,8 @@ use karva_benchmark::{
 use karva_core::{DummyReporter, TestRunner, testing::setup_module};
 use karva_project::{
     path::{SystemPathBuf, absolute},
-    project::Project,
+    project::{Project, ProjectOptions},
+    verbosity::VerbosityLevel,
 };
 use ruff_python_ast::PythonVersion;
 
@@ -76,7 +77,16 @@ impl<'a> ProjectBenchmark<'a> {
             .map(|path| absolute(path, self.installed_project.path()))
             .collect();
 
-        Project::new(self.installed_project.path(), absolute_test_paths)
+        Project::new(
+            self.installed_project.path().to_path_buf(),
+            absolute_test_paths,
+        )
+        .with_options(ProjectOptions::new(
+            "test".to_string(),
+            VerbosityLevel::Default,
+            false,
+            true,
+        ))
     }
 }
 
@@ -109,7 +119,7 @@ fn affect(criterion: &mut Criterion) {
         repository: "https://github.com/MatthewMckee4/affect",
         commit: "803cc916b492378a8ad8966e747cac3325e11b5f",
         paths: vec![SystemPathBuf::from("tests")],
-        dependencies: vec!["pydantic", "pydantic-settings", "pytest"],
+        dependencies: vec!["pydantic", "pydantic-settings"],
         python_version: PythonVersion::PY313,
     });
 

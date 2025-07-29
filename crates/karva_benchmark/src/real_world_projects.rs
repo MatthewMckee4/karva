@@ -121,8 +121,8 @@ impl<'a> InstalledProject<'a> {
     }
 
     #[must_use]
-    pub fn path(&self) -> PathBuf {
-        self.path.join(self.config.name)
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
     #[must_use]

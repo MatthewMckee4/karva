@@ -157,11 +157,16 @@ impl<'proj> StandardDiscoverer<'proj> {
         };
 
         loop {
-            let mut package = DiscoveredPackage::new(current_path.clone());
-
-            self.discover_directory(py, &mut package, discovery_diagnostics, true);
-
-            session_package.add_package(package);
+            let conftest_path = current_path.join("conftest.py");
+            if conftest_path.exists() {
+                let mut package = DiscoveredPackage::new(current_path.clone());
+                if let Some(module) =
+                    self.discover_test_file(py, &conftest_path, discovery_diagnostics, true)
+                {
+                    package.add_configuration_module(module);
+                }
+                session_package.add_package(package);
+            }
 
             if current_path == *self.project.cwd() {
                 break;
@@ -190,6 +195,17 @@ impl<'proj> StandardDiscoverer<'proj> {
             .require_git(false)
             .git_global(false)
             .parents(true)
+            .git_ignore(!self.project.options().no_ignore())
+            .types({
+                let mut types = ignore::types::TypesBuilder::new();
+                types.add("python", "*.py").unwrap();
+                types.select("python");
+                types.build().unwrap()
+            })
+            .filter_entry(|entry| {
+                let file_name = entry.file_name();
+                file_name != "__pycache__"
+            })
             .build();
 
         for entry in walker {
@@ -416,6 +432,7 @@ def test_function(): pass
             "check".to_string(),
             VerbosityLevel::Default,
             false,
+            true,
         ));
 
         let discoverer = StandardDiscoverer::new(&project);
