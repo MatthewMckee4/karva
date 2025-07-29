@@ -99,7 +99,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     })?;
 
     let mut reporter: Box<dyn Reporter> =
-        if !project.options().verbosity().is_default() && !project.options().show_output() {
+        if project.options().verbosity().is_default() && !project.options().show_output() {
             Box::new(ProgressReporter::default())
         } else {
             Box::new(DummyReporter)

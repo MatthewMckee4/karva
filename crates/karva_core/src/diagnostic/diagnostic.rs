@@ -80,9 +80,13 @@ impl Diagnostic {
         test_case: &TestCase,
         module: &DiscoveredModule,
     ) -> Self {
+        let message = {
+            let msg = error.value(py).to_string();
+            if msg.is_empty() { None } else { Some(msg) }
+        };
         if error.is_instance_of::<pyo3::exceptions::PyAssertionError>(py) {
             return Self::new(
-                None,
+                message,
                 Some(test_case.function().display_with_line(module)),
                 Some(get_traceback(py, error)),
                 DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
@@ -94,7 +98,7 @@ impl Diagnostic {
         Self::from_py_err(
             py,
             error,
-            None,
+            message,
             Some(test_case.function().display_with_line(module)),
             DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
                 test_case.function().name(),
