@@ -19,6 +19,7 @@ pub(crate) struct FunctionDefinitionVisitor<'proj, 'b> {
     module_path: SystemPathBuf,
     diagnostics: Vec<Diagnostic>,
     py_module: Bound<'b, PyModule>,
+    py: Python<'b>,
     inside_function: bool,
 }
 
@@ -43,6 +44,7 @@ impl<'proj, 'b> FunctionDefinitionVisitor<'proj, 'b> {
             diagnostics: Vec::new(),
             py_module,
             inside_function: false,
+            py,
         })
     }
 }
@@ -60,6 +62,7 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_> {
                 source_order::walk_body(&mut generator_function_visitor, &function_def.body);
                 let is_generator_function = generator_function_visitor.is_generator;
                 match Fixture::try_from_function(
+                    self.py,
                     function_def,
                     &self.py_module,
                     is_generator_function,

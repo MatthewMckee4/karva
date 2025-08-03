@@ -87,6 +87,7 @@ impl TestRunner for TestEnv {
 #[cfg(test)]
 mod tests {
     use karva_project::{path::SystemPathBuf, testing::TestEnv};
+    use rstest::rstest;
 
     use super::*;
     use crate::{
@@ -623,6 +624,113 @@ def test_2(x):
         let result = env.test();
 
         let mut expected_stats = DiagnosticStats::default();
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_discover_pytest_fixture() {
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
+import pytest
+
+@pytest.fixture
+def x():
+    return 1
+",
+            ),
+            ("<test>/tests/test_1.py", "def test_1(x): pass"),
+        ]);
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[rstest]
+    #[case("pytest")]
+    #[case("karva")]
+    fn test_dynamic_fixture_scope_session_scope(#[case] framework: &str) {
+        let env = TestEnv::with_file(
+            "<test>/test_dynamic_scope.py",
+            &format!(
+                r#"
+from {framework} import fixture
+
+def dynamic_scope(fixture_name, config):
+    if fixture_name.endswith("_session"):
+        return "session"
+    return "function"
+
+@fixture(scope=dynamic_scope)
+def x_session():
+    return []
+
+def test_1(x_session):
+    x_session.append(1)
+    assert x_session == [1]
+
+def test_2(x_session):
+    x_session.append(2)
+    assert x_session == [1, 2]
+    "#,
+            ),
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[rstest]
+    #[case("pytest")]
+    #[case("karva")]
+    fn test_dynamic_fixture_scope_function_scope(#[case] framework: &str) {
+        let env = TestEnv::with_file(
+            "<test>/test_dynamic_scope.py",
+            &format!(
+                r#"
+from {framework} import fixture
+
+def dynamic_scope(fixture_name, config):
+    if fixture_name.endswith("_function"):
+        return "function"
+    return "function"
+
+@fixture(scope=dynamic_scope)
+def x_function():
+    return []
+
+def test_1(x_function):
+    x_function.append(1)
+    assert x_function == [1]
+
+def test_2(x_function):
+    x_function.append(2)
+    assert x_function == [2]
+    "#,
+            ),
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
         for _ in 0..2 {
             expected_stats.add_passed();
         }
