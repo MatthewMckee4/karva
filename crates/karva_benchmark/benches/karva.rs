@@ -5,7 +5,7 @@ use karva_benchmark::{
     criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main},
     real_world_projects::{InstalledProject, RealWorldProject},
 };
-use karva_core::{DummyReporter, TestRunner, testing::setup_module};
+use karva_core::{DummyReporter, TestRunner};
 use karva_project::{
     path::{SystemPathBuf, absolute},
     project::{Project, ProjectOptions},
@@ -29,8 +29,6 @@ fn benchmark_karva(criterion: &mut Criterion) {
     let mut group = criterion.benchmark_group("karva");
 
     group.sample_size(10);
-
-    setup_module();
 
     let root = {
         let env_cwd = std::env::current_dir()
