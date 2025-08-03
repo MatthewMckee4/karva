@@ -24,7 +24,6 @@ ignore = { workspace = true }
 regex = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
 regex = { workspace = true }
 ctor = { workspace = true }
 karva_project = { workspace = true, features = ["testing"] }

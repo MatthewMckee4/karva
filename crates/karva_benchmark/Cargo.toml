@@ -19,10 +19,16 @@ harness = false
 anyhow = { workspace = true }
 codspeed-criterion-compat = { workspace = true, default-features = false, optional = true }
 criterion = { workspace = true, default-features = false }
+ruff_python_ast = { workspace = true }
+tracing = { workspace = true }
+karva_project = { workspace = true, features = ["testing"] }
+tempfile = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
-karva_core = { workspace = true }
 karva_project = { workspace = true }
+karva_core = { workspace = true }
 
 [lints]
 workspace = true

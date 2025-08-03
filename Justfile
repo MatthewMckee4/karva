@@ -26,6 +26,10 @@ format:
     cargo +nightly fmt
     cargo sort
 
-# Run benchmarks
-benchmark iterations: build
+pytest-benchmark iterations: build
     cd scripts/benchmark && uv sync --all-extras --no-install-project && uv pip install -e ../../ && uv run main.py --iterations {{iterations}} --num-tests 10000 --run-test
+
+# Run benchmarks
+benchmark:
+    cargo codspeed build --features codspeed -p karva_benchmark
+    cargo codspeed run

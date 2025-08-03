@@ -931,6 +931,11 @@ dependencies = [
  "criterion",
  "karva_core",
  "karva_project",
+ "ruff_python_ast",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -953,7 +958,6 @@ dependencies = [
  "regex",
  "rstest",
  "ruff_python_trivia",
- "tempfile",
  "tracing",
  "tracing-flame",
  "tracing-subscriber",
@@ -977,7 +981,6 @@ dependencies = [
  "ruff_python_parser",
  "ruff_source_file",
  "ruff_text_size",
- "tempfile",
  "tracing",
 ]
 

@@ -12,14 +12,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - uses: actions/setup-python@v3
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
+
       - name: Install Rustfmt nightly
         run: |
           rustup component add rustfmt --toolchain nightly
+
       - uses: pre-commit/action@v3.0.1
 
   cargo-test:
@@ -32,23 +36,29 @@ jobs:
         python-version: ["3.11"]
     steps:
       - uses: actions/checkout@v4
+
       - name: Update Rust toolchain
         run: rustup update
+
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
+
       - name: Set up Python
         uses: actions/setup-python@v4
         id: setup-python
         with:
           python-version: ${{ matrix.python-version }}
+
       - name: Install Python dependencies
         run: |
           pip install pytest
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           command: build
+
       - name: Run tests
         env:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
@@ -64,11 +74,14 @@ jobs:
         os: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
+
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
+
       - name: Install Dependencies
         run: uv sync --group docs --no-install-project
+
       - name: Build docs
         run: uv run --no-project mkdocs build
 
@@ -77,51 +90,85 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v3
-      - name: Generate resources
-        run: python crates/karva_benchmark/resources/generate.py
+
       - uses: moonrepo/setup-rust@v1
         with:
           channel: stable
           cache-target: release
           bins: cargo-codspeed
-      - name: "Build benchmarks"
-        run: cargo codspeed build --features codspeed -p karva_benchmark
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        id: setup-python
+        with:
+          python-version: 3.13
+
+      - name: Delete .gitignore
+        run: rm -f .gitignore
+
+      - uses: astral-sh/setup-uv@v5
+        id: setup-uv
+        with:
+          python-version: 3.13
+
+      - name: Build wheels
+        run: |
+          uv venv
+          uv pip install maturin pytest
+          uv run --no-project maturin build
+
+      - name: Generate resources
+        run: uv run --no-project crates/karva_benchmark/resources/generate.py
+
+      - name: Build benchmarks
+        env:
+          PYO3_PYTHON: ${{ env.VIRTUAL_ENV }}/bin/python
+        run: uv run --no-project cargo codspeed build --features codspeed -p karva_benchmark
+
       - name: Run benchmarks
+        env:
+          PYO3_PYTHON: ${{ env.VIRTUAL_ENV }}/bin/python
         uses: CodSpeedHQ/action@v3
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
-          run: cargo codspeed run
+          run: uv run --no-project cargo codspeed run
 
   coverage:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: moonrepo/setup-rust@v1
         with:
           channel: stable
           cache-target: release
           bins: cargo-tarpaulin
+
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: 3.11
+
       - name: Set up Python
         uses: actions/setup-python@v4
         id: setup-python
         with:
           python-version: 3.11
+
       - name: Install Python dependencies
         run: |
           pip install pytest
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           command: build
+
       - name: Generate code coverage
         env:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         run: |
           cargo +nightly tarpaulin
+
       - name: Upload to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -137,19 +184,23 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
+
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
+
       - name: Setup karva environment
         run: |
           uv venv
           uv pip install pytest
+
       - name: Setup integration test environment
         run: |
           cd ${{ matrix.folder }}
           uv venv
           uv sync
           uv pip install -e ../../
+
       - name: Run karva test
         run: |
           cd ${{ matrix.folder }}
