@@ -113,7 +113,7 @@ jobs:
           uv run --no-project maturin build
 
       - name: Generate resources
-        run: uv run crates/karva_benchmark/resources/generate.py
+        run: uv run --no-project crates/karva_benchmark/resources/generate.py
 
       - name: Build benchmarks
         env:
