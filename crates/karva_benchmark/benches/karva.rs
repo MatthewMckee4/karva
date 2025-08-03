@@ -1,3 +1,5 @@
+use std::sync::Once;
+
 use anyhow::Context;
 use karva_benchmark::{
     FIXTURES, LARGE_LIST_COMPREHENSION, LARGE_SUMMATION, MATH, PARAMETRIZE, STRING_CONCATENATION,
@@ -5,7 +7,7 @@ use karva_benchmark::{
     criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main},
     real_world_projects::{InstalledProject, RealWorldProject},
 };
-use karva_core::{DummyReporter, TestRunner};
+use karva_core::{DummyReporter, TestRunner, testing::setup_module};
 use karva_project::{
     path::{SystemPathBuf, absolute},
     project::{Project, ProjectOptions},
@@ -25,10 +27,20 @@ fn create_test_cases() -> Vec<TestCase> {
     ]
 }
 
+static SETUP_MODULE_ONCE: Once = Once::new();
+
+fn setup_module_once() {
+    SETUP_MODULE_ONCE.call_once(|| {
+        setup_module();
+    });
+}
+
 fn benchmark_karva(criterion: &mut Criterion) {
     let mut group = criterion.benchmark_group("karva");
 
     group.sample_size(10);
+
+    setup_module_once();
 
     let root = {
         let env_cwd = std::env::current_dir()
@@ -46,13 +58,7 @@ fn benchmark_karva(criterion: &mut Criterion) {
             |b, case| {
                 b.iter(|| {
                     let cwd = absolute(case.path().parent().unwrap(), &root);
-                    let project = Project::new(cwd.clone(), [absolute(case.name(), &cwd)].to_vec())
-                        .with_options(ProjectOptions::new(
-                            "test".to_string(),
-                            VerbosityLevel::Default,
-                            false,
-                            true,
-                        ));
+                    let project = Project::new(cwd.clone(), [absolute(case.name(), &cwd)].to_vec());
                     let runner_result = project.test_with_reporter(&mut DummyReporter);
                     assert!(runner_result.passed());
                 });
@@ -100,6 +106,8 @@ fn bench_project(benchmark: &ProjectBenchmark, criterion: &mut Criterion) {
 
         assert!(result.stats().total() > 0, "{:#?}", result.diagnostics());
     }
+
+    setup_module_once();
 
     let mut group = criterion.benchmark_group("project");
 
