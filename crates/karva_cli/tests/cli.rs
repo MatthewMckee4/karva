@@ -62,7 +62,9 @@ impl IntegrationTestEnv {
     }
 
     fn command(&self) -> Command {
-        let mut command = Command::new(self.karva_bin());
+        let karva_bin = self.karva_bin();
+        eprintln!("karva_bin: {}", karva_bin.display());
+        let mut command = Command::new(karva_bin);
         command.current_dir(self.test_env.cwd()).arg("test");
         command
     }
