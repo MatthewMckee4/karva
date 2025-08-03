@@ -93,10 +93,10 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: 3.11
-      - name: Install Python dependencies
-        run: |
-          uv venv
-          uv pip install pytest
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
       - name: "Build benchmarks"
         run: uv run --no-project cargo codspeed build --features codspeed -p karva_benchmark
       - name: Run benchmarks

@@ -119,7 +119,7 @@ fn affect(criterion: &mut Criterion) {
         repository: "https://github.com/MatthewMckee4/affect",
         commit: "803cc916b492378a8ad8966e747cac3325e11b5f",
         paths: vec![SystemPathBuf::from("tests")],
-        dependencies: vec!["pydantic", "pydantic-settings"],
+        dependencies: vec!["pydantic", "pydantic-settings", "pytest"],
         python_version: PythonVersion::PY313,
     });
 
