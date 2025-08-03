@@ -650,8 +650,6 @@ def x():
 
         let mut expected_stats = DiagnosticStats::default();
 
-        println!("{:?}", result.diagnostics());
-
         expected_stats.add_passed();
 
         assert_eq!(*result.stats(), expected_stats);
