@@ -94,11 +94,7 @@ fn bench_project(benchmark: &ProjectBenchmark, criterion: &mut Criterion) {
     fn test_project(project: &Project) {
         let result = project.test_with_reporter(&mut DummyReporter);
 
-        assert!(result.stats().total() > 0);
-
-        for diagnostic in result.iter() {
-            eprintln!("{}", diagnostic.display());
-        }
+        assert!(result.stats().total() > 0, "{:#?}", result.diagnostics());
     }
 
     let mut group = criterion.benchmark_group("project");
@@ -120,7 +116,7 @@ fn affect(criterion: &mut Criterion) {
         commit: "803cc916b492378a8ad8966e747cac3325e11b5f",
         paths: vec![SystemPathBuf::from("tests")],
         dependencies: vec!["pydantic", "pydantic-settings", "pytest"],
-        python_version: PythonVersion::PY311,
+        python_version: PythonVersion::PY313,
     });
 
     bench_project(&benchmark, criterion);

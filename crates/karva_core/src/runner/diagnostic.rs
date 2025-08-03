@@ -10,8 +10,7 @@ pub struct RunDiagnostics {
 
 impl RunDiagnostics {
     #[must_use]
-    #[cfg(test)]
-    pub(crate) const fn diagnostics(&self) -> &Vec<Diagnostic> {
+    pub const fn diagnostics(&self) -> &Vec<Diagnostic> {
         &self.diagnostics
     }
 
