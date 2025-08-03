@@ -22,6 +22,7 @@ ruff_text_size = { workspace = true }
 tracing = { workspace = true }
 ignore = { workspace = true }
 regex = { workspace = true }
+indexmap = { workspace = true }
 
 [dev-dependencies]
 regex = { workspace = true }

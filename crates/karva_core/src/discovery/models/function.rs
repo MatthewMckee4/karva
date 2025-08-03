@@ -142,7 +142,7 @@ impl TestFunction {
                     if let Some(fixture) = params.get(fixture_name) {
                         required_fixtures.insert(fixture_name.clone(), fixture.clone());
                     } else if let Some(fixture) =
-                        fixture_manager.get_fixture_with_name(fixture_name)
+                        fixture_manager.get_fixture_with_name(fixture_name, None)
                     {
                         required_fixtures.insert(fixture_name.clone(), fixture);
                     } else {
@@ -179,22 +179,20 @@ impl TestFunction {
         test_cases
     }
 
-    pub(crate) const fn display(&self, module_name: String) -> TestFunctionDisplay<'_> {
+    pub(crate) const fn display(&self) -> TestFunctionDisplay<'_> {
         TestFunctionDisplay {
             test_function: self,
-            module_name,
         }
     }
 }
 
 pub(crate) struct TestFunctionDisplay<'proj> {
     test_function: &'proj TestFunction,
-    module_name: String,
 }
 
 impl Display for TestFunctionDisplay<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}::{}", self.module_name, self.test_function.name())
+        write!(f, "{}", self.test_function.name())
     }
 }
 
@@ -298,9 +296,7 @@ mod tests {
         let test_case = session.test_functions()[0];
 
         assert_eq!(
-            test_case
-                .display(test_module.name().to_string())
-                .to_string(),
+            test_case.display().to_string(),
             format!("{}::test_display", test_module.name())
         );
     }

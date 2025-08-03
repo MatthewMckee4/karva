@@ -220,7 +220,7 @@ impl std::fmt::Display for DisplayDiscoveredModule<'_> {
             if i > 0 {
                 write!(f, " ")?;
             }
-            write!(f, "{}", test.name())?;
+            write!(f, "{}", test.name().function_name())?;
         }
         write!(f, "]\n└── fixtures [")?;
         let fixtures = self.module.fixtures();
@@ -228,7 +228,7 @@ impl std::fmt::Display for DisplayDiscoveredModule<'_> {
             if i > 0 {
                 write!(f, " ")?;
             }
-            write!(f, "{}", fixture.name())?;
+            write!(f, "{}", fixture.name().function_name())?;
         }
         write!(f, "]")?;
         Ok(())

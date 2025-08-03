@@ -153,11 +153,14 @@ impl Fixture {
         let mut required_fixtures = Vec::new();
 
         for name in self.get_required_fixture_names(py) {
-            if let Some(fixture) = fixture_manager.get_fixture_with_name(&name) {
+            if let Some(fixture) =
+                fixture_manager.get_fixture_with_name(&name, Some(self.name.module()))
+            {
                 required_fixtures.push(fixture.clone().into_bound(py));
             }
         }
         let args = PyTuple::new(py, required_fixtures)?;
+
         if self.is_generator() {
             let function_return = self.function.call(py, args.clone(), None)?;
 

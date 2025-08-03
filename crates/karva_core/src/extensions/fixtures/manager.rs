@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use indexmap::IndexMap;
 use pyo3::{prelude::*, types::PyAny};
 
 use crate::{
@@ -13,7 +12,7 @@ use crate::{
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct FixtureCollection {
-    fixtures: HashMap<FunctionName, Py<PyAny>>,
+    fixtures: IndexMap<FunctionName, Py<PyAny>>,
     finalizers: Vec<Finalizer>,
 }
 
@@ -26,15 +25,12 @@ impl FixtureCollection {
         self.finalizers.push(finalizer);
     }
 
-    pub(crate) fn iter_fixtures(&self) -> impl Iterator<Item = (&FunctionName, &Py<PyAny>)> {
-        self.fixtures.iter()
-    }
-
     pub(crate) fn reset(&mut self) -> Finalizers {
         self.fixtures.clear();
         Finalizers::new(self.finalizers.drain(..).collect())
     }
 
+    #[cfg(test)]
     pub(crate) fn contains_fixture_with_name(&self, fixture_name: &str) -> bool {
         self.fixtures
             .iter()
@@ -76,6 +72,7 @@ impl<'a> FixtureManager<'a> {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn contains_fixture_with_name(&self, fixture_name: &str) -> bool {
         if self.collection.contains_fixture_with_name(fixture_name) {
             return true;
@@ -96,17 +93,22 @@ impl<'a> FixtureManager<'a> {
     }
 
     #[must_use]
-    pub(crate) fn get_fixture_with_name(&self, fixture_name: &str) -> Option<Py<PyAny>> {
-        if let Some((_, fixture)) = self
-            .collection
-            .iter_fixtures()
-            .find(|(name, _)| name.function_name() == fixture_name)
-        {
+    pub(crate) fn get_fixture_with_name(
+        &self,
+        fixture_name: &str,
+        exclude_module: Option<&str>,
+    ) -> Option<Py<PyAny>> {
+        if let Some((_, fixture)) = self.collection.fixtures.iter().rev().find(|(name, _)| {
+            name.function_name() == fixture_name
+                && exclude_module.is_none_or(|exclude_module| name.module() != exclude_module)
+        }) {
             return Some(fixture.clone());
         }
-        self.parent
-            .as_ref()
-            .map_or_else(|| None, |parent| parent.get_fixture_with_name(fixture_name))
+
+        self.parent.as_ref().map_or_else(
+            || None,
+            |parent| parent.get_fixture_with_name(fixture_name, exclude_module),
+        )
     }
 
     pub(crate) fn insert_fixture(&mut self, fixture_return: Py<PyAny>, fixture: &Fixture) {
@@ -153,11 +155,14 @@ impl<'a> FixtureManager<'a> {
 
         for dependency in &current_dependencies {
             let mut found = false;
-            for fixture in &current_all_fixtures {
-                if fixture.name().function_name() == dependency {
-                    self.ensure_fixture_dependencies(py, parents, current, fixture);
-                    found = true;
-                    break;
+            for dep_fixture in &current_all_fixtures {
+                if dep_fixture.name().function_name() == dependency {
+                    // Avoid infinite recursion by not processing the same fixture we're currently on
+                    if dep_fixture.name() != fixture.name() {
+                        self.ensure_fixture_dependencies(py, parents, current, dep_fixture);
+                        found = true;
+                        break;
+                    }
                 }
             }
 
@@ -168,15 +173,15 @@ impl<'a> FixtureManager<'a> {
                     let parent_fixture = (*parent).get_fixture(py, dependency);
 
                     if let Some(parent_fixture) = parent_fixture {
-                        self.ensure_fixture_dependencies(
-                            py,
-                            &parents_above_current_parent,
-                            parent,
-                            parent_fixture,
-                        );
-                    }
-                    if self.contains_fixture_with_name(dependency) {
-                        break;
+                        if parent_fixture.name() != fixture.name() {
+                            self.ensure_fixture_dependencies(
+                                py,
+                                &parents_above_current_parent,
+                                parent,
+                                parent_fixture,
+                            );
+                            break;
+                        }
                     }
                 }
             }

@@ -86,7 +86,7 @@ impl TestRunner for TestEnv {
 
 #[cfg(test)]
 mod tests {
-    use karva_project::{path::SystemPathBuf, testing::TestEnv};
+    use karva_project::{path::SystemPathBuf, testing::TestEnv, utils::module_name};
     use rstest::rstest;
 
     use super::*;
@@ -295,13 +295,18 @@ def test_fixture_generator(fixture_generator):
 
         expected_stats.add_passed();
 
+        let module_name_path = env.mapped_path("<test>").unwrap().join("test_file.py");
+        let module_name = module_name(&env.cwd(), &module_name_path).unwrap();
+
         assert_eq!(*result.stats(), expected_stats, "{result:?}");
 
         assert_eq!(result.diagnostics().len(), 1);
         let first_diagnostic = &result.diagnostics()[0];
         let expected_diagnostic = Diagnostic::warning(
             "fixture-error",
-            Some("Fixture fixture_generator had more than one yield statement".to_string()),
+            Some(format!(
+                "Fixture {module_name}::fixture_generator had more than one yield statement"
+            )),
             None,
         );
 
@@ -330,13 +335,16 @@ def test_fixture_generator(fixture_generator):
 
         expected_stats.add_passed();
 
+        let module_name_path = env.mapped_path("<test>").unwrap().join("test_file.py");
+        let module_name = module_name(&env.cwd(), &module_name_path).unwrap();
+
         assert_eq!(*result.stats(), expected_stats, "{result:?}");
 
         assert_eq!(result.diagnostics().len(), 1);
         let first_diagnostic = &result.diagnostics()[0];
         assert_eq!(
             first_diagnostic.inner().message(),
-            Some("Failed to reset fixture fixture_generator")
+            Some(format!("Failed to reset fixture {module_name}::fixture_generator").as_str()),
         );
         assert_eq!(
             first_diagnostic.severity(),
