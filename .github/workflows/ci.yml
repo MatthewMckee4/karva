@@ -117,12 +117,12 @@ jobs:
 
       - name: Build benchmarks
         env:
-          PYO3_PYTHON: ${{ env.VIRTUAL_ENV }}
+          PYO3_PYTHON: ${{ env.VIRTUAL_ENV }}/bin/python
         run: uv run --no-project cargo codspeed build --features codspeed -p karva_benchmark
 
       - name: Run benchmarks
         env:
-          PYO3_PYTHON: ${{ env.VIRTUAL_ENV }}
+          PYO3_PYTHON: ${{ env.VIRTUAL_ENV }}/bin/python
         uses: CodSpeedHQ/action@v3
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
