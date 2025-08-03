@@ -85,6 +85,11 @@ jobs:
           channel: stable
           cache-target: release
           bins: cargo-codspeed
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: 3.11
+      - name: Install Python dependencies
+        run: uv pip install pytest
       - name: "Build benchmarks"
         run: cargo codspeed build --features codspeed -p karva_benchmark
       - name: Run benchmarks
