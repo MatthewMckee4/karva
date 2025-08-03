@@ -26,8 +26,8 @@ format:
     cargo +nightly fmt
     cargo sort
 
-pytest-benchmark: build
-    cd scripts/benchmark && uv sync --all-extras --no-install-project && uv pip install -e ../../ && uv run main.py --iterations {{ITERATIONS}} --num-tests {{NUM_TESTS}} --run-test
+pytest-benchmark iterations: build
+    cd scripts/benchmark && uv sync --all-extras --no-install-project && uv pip install -e ../../ && uv run main.py --iterations {{iterations}} --num-tests 10000 --run-test
 
 # Run benchmarks
 benchmark:
