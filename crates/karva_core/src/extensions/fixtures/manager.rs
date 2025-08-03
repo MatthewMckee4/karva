@@ -134,10 +134,10 @@ impl<'a> FixtureManager<'a> {
 
         // To ensure we can call the current fixture, we must first look at all of its dependencies,
         // and resolve them first.
-        let current_dependencies = fixture.required_fixtures();
+        let current_dependencies = fixture.required_fixtures(py);
 
         // We need to get all of the fixtures in the current scope.
-        let current_all_fixtures = current.all_fixtures(&[]);
+        let current_all_fixtures = current.all_fixtures(py, &[]);
 
         for dependency in &current_dependencies {
             let mut found = false;
@@ -153,7 +153,7 @@ impl<'a> FixtureManager<'a> {
             // So we must try the parent scopes.
             if !found {
                 for (parent, parents_above_current_parent) in partition_iter(parents) {
-                    let parent_fixture = (*parent).get_fixture(dependency);
+                    let parent_fixture = (*parent).get_fixture(py, dependency);
 
                     if let Some(parent_fixture) = parent_fixture {
                         self.ensure_fixture_dependencies(
@@ -188,7 +188,7 @@ impl<'a> FixtureManager<'a> {
         scopes: &[FixtureScope],
         dependencies: &[&dyn RequiresFixtures],
     ) {
-        let fixtures = current.fixtures(scopes, dependencies);
+        let fixtures = current.fixtures(py, scopes, dependencies);
 
         for fixture in fixtures {
             self.ensure_fixture_dependencies(py, parents, current, fixture);
@@ -470,10 +470,10 @@ def z(x):
 
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
-        let y_fixture = inner_package.get_fixture("y").unwrap();
-        let z_fixture = inner_package.get_fixture("z").unwrap();
-
         Python::with_gil(|py| {
+            let y_fixture = inner_package.get_fixture(py, "y").unwrap();
+            let z_fixture = inner_package.get_fixture(py, "z").unwrap();
+
             let mut test_module_fixture_manager = FixtureManager::new(None, FixtureScope::Module);
 
             test_module_fixture_manager.add_fixtures(
@@ -553,10 +553,10 @@ def z(y):
 
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
-        let y_fixture = inner_package.get_fixture("y").unwrap();
-        let z_fixture = inner_inner_package.get_fixture("z").unwrap();
-
         Python::with_gil(|py| {
+            let y_fixture = inner_package.get_fixture(py, "y").unwrap();
+            let z_fixture = inner_inner_package.get_fixture(py, "z").unwrap();
+
             let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
 
             session_fixture_manager.add_fixtures(
@@ -635,10 +635,10 @@ def z(x, y):
 
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
-        let y_fixture = tests_package.get_fixture("y").unwrap();
-        let z_fixture = tests_package.get_fixture("z").unwrap();
-
         Python::with_gil(|py| {
+            let y_fixture = tests_package.get_fixture(py, "y").unwrap();
+            let z_fixture = tests_package.get_fixture(py, "z").unwrap();
+
             let mut module_fixture_manager = FixtureManager::new(None, FixtureScope::Module);
 
             module_fixture_manager.add_fixtures(
@@ -724,11 +724,11 @@ def test_user_login(auth_token): pass",
 
         let test_function = test_module.get_test_function("test_user_login").unwrap();
 
-        let api_client_fixture = api_package.get_fixture("api_client").unwrap();
-        let user_fixture = users_package.get_fixture("user").unwrap();
-        let auth_token_fixture = test_module.get_fixture("auth_token").unwrap();
-
         Python::with_gil(|py| {
+            let api_client_fixture = api_package.get_fixture(py, "api_client").unwrap();
+            let user_fixture = users_package.get_fixture(py, "user").unwrap();
+            let auth_token_fixture = test_module.get_fixture(py, "auth_token").unwrap();
+
             let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
 
             session_fixture_manager.add_fixtures(
@@ -839,10 +839,10 @@ def service_b(config):
         let test_a = module_a.get_test_function("test_a").unwrap();
         let test_b = module_b.get_test_function("test_b").unwrap();
 
-        let service_a_fixture = package_a.get_fixture("service_a").unwrap();
-        let service_b_fixture = package_b.get_fixture("service_b").unwrap();
-
         Python::with_gil(|py| {
+            let service_a_fixture = package_a.get_fixture(py, "service_a").unwrap();
+            let service_b_fixture = package_b.get_fixture(py, "service_b").unwrap();
+
             let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
 
             session_fixture_manager.add_fixtures(
@@ -1078,12 +1078,12 @@ def level5(level4):
         let test_module = l5_package.get_module(&test_path).unwrap();
         let test_function = test_module.get_test_function("test_deep").unwrap();
 
-        let l2_fixture = l2_package.get_fixture("level2").unwrap();
-        let l3_fixture = l3_package.get_fixture("level3").unwrap();
-        let l4_fixture = l4_package.get_fixture("level4").unwrap();
-        let l5_fixture = l5_package.get_fixture("level5").unwrap();
-
         Python::with_gil(|py| {
+            let l2_fixture = l2_package.get_fixture(py, "level2").unwrap();
+            let l3_fixture = l3_package.get_fixture(py, "level3").unwrap();
+            let l4_fixture = l4_package.get_fixture(py, "level4").unwrap();
+            let l5_fixture = l5_package.get_fixture(py, "level5").unwrap();
+
             let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
 
             session_fixture_manager.add_fixtures(
@@ -1250,13 +1250,13 @@ def converged(branch_a2, branch_b2):
         let test_module = tests_package.get_module(&test_path).unwrap();
         let test_function = test_module.get_test_function("test_converged").unwrap();
 
-        let branch_a1_fixture = tests_package.get_fixture("branch_a1").unwrap();
-        let branch_b1_fixture = tests_package.get_fixture("branch_b1").unwrap();
-        let branch_a2_fixture = tests_package.get_fixture("branch_a2").unwrap();
-        let branch_b2_fixture = tests_package.get_fixture("branch_b2").unwrap();
-        let converged_fixture = tests_package.get_fixture("converged").unwrap();
-
         Python::with_gil(|py| {
+            let branch_a1_fixture = tests_package.get_fixture(py, "branch_a1").unwrap();
+            let branch_b1_fixture = tests_package.get_fixture(py, "branch_b1").unwrap();
+            let branch_a2_fixture = tests_package.get_fixture(py, "branch_a2").unwrap();
+            let branch_b2_fixture = tests_package.get_fixture(py, "branch_b2").unwrap();
+            let converged_fixture = tests_package.get_fixture(py, "converged").unwrap();
+
             let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
 
             session_fixture_manager.add_fixtures(

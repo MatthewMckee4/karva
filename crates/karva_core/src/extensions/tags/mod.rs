@@ -9,6 +9,7 @@ pub mod python;
 #[derive(Debug, Clone)]
 pub(crate) enum Tag {
     Parametrize(ParametrizeTag),
+    UseFixtures(UseFixturesTag),
 }
 
 impl Tag {
@@ -22,6 +23,9 @@ impl Tag {
                 arg_names: arg_names.clone(),
                 arg_values: arg_values.clone(),
             }),
+            PyTag::UseFixtures { fixture_names } => Self::UseFixtures(UseFixturesTag {
+                fixture_names: fixture_names.clone(),
+            }),
         }
     }
 
@@ -30,6 +34,8 @@ impl Tag {
         let name = py_mark.getattr("name").ok()?.extract::<String>().ok()?;
         if name == "parametrize" {
             ParametrizeTag::try_from_pytest_mark(py_mark).map(Self::Parametrize)
+        } else if name == "usefixtures" {
+            UseFixturesTag::try_from_pytest_mark(py_mark).map(Self::UseFixtures)
         } else {
             None
         }
@@ -76,6 +82,33 @@ impl ParametrizeTag {
             param_args.push(current_parameratisation);
         }
         param_args
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct UseFixturesTag {
+    pub(crate) fixture_names: Vec<String>,
+}
+
+impl UseFixturesTag {
+    #[must_use]
+    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
+        let args = py_mark.getattr("args").ok()?;
+        args.extract::<Vec<String>>().map_or_else(
+            |_| {
+                args.extract::<String>().map_or(None, |fixture_name| {
+                    Some(Self {
+                        fixture_names: vec![fixture_name],
+                    })
+                })
+            },
+            |fixture_names| Some(Self { fixture_names }),
+        )
+    }
+
+    #[must_use]
+    pub(crate) fn fixture_names(&self) -> &[String] {
+        &self.fixture_names
     }
 }
 
@@ -135,19 +168,32 @@ impl Tags {
         let mut param_args: Vec<HashMap<String, PyObject>> = vec![HashMap::new()];
 
         for tag in &self.inner {
-            let Tag::Parametrize(parametrize_tag) = tag;
-            let current_values = parametrize_tag.each_arg_value();
-            let mut new_param_args = Vec::with_capacity(param_args.len() * current_values.len());
-            for existing_params in &param_args {
-                for new_params in &current_values {
-                    let mut combined_params = existing_params.clone();
-                    combined_params.extend(new_params.clone());
-                    new_param_args.push(combined_params);
+            if let Tag::Parametrize(parametrize_tag) = tag {
+                let current_values = parametrize_tag.each_arg_value();
+                let mut new_param_args =
+                    Vec::with_capacity(param_args.len() * current_values.len());
+                for existing_params in &param_args {
+                    for new_params in &current_values {
+                        let mut combined_params = existing_params.clone();
+                        combined_params.extend(new_params.clone());
+                        new_param_args.push(combined_params);
+                    }
                 }
+                param_args = new_param_args;
             }
-            param_args = new_param_args;
         }
         param_args
+    }
+
+    #[must_use]
+    pub(crate) fn use_fixtures_names(&self) -> Vec<String> {
+        let mut fixture_names = Vec::new();
+        for tag in &self.inner {
+            if let Tag::UseFixtures(use_fixtures_tag) = tag {
+                fixture_names.extend_from_slice(use_fixtures_tag.fixture_names());
+            }
+        }
+        fixture_names
     }
 }
 
@@ -161,6 +207,8 @@ impl Iterator for Tags {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use pyo3::{ffi::c_str, prelude::*, types::PyDict};
 
     use super::*;
@@ -297,6 +345,137 @@ def test_parametrize(a):
                         expected_parametrize_args[i][&key.to_string()]
                     );
                 }
+            }
+        });
+    }
+
+    #[test]
+    fn test_use_fixtures_names_single() {
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+            Python::run(
+                py,
+                c_str!(
+                    r#"
+import karva
+
+@karva.tags.use_fixtures("my_fixture")
+def test_function():
+    pass
+                "#
+                ),
+                None,
+                Some(&locals),
+            )
+            .unwrap();
+
+            let test_function = locals.get_item("test_function").unwrap().unwrap();
+            let test_function = test_function.as_unbound();
+            let tags = Tags::from_py_any(py, test_function);
+
+            let fixture_names = tags.use_fixtures_names();
+            assert_eq!(fixture_names, vec!["my_fixture"]);
+        });
+    }
+
+    #[test]
+    fn test_use_fixtures_names_multiple() {
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+            Python::run(
+                py,
+                c_str!(
+                    r#"
+import karva
+
+@karva.tags.use_fixtures("fixture1", "fixture2", "fixture3")
+def test_function():
+    pass
+                "#
+                ),
+                None,
+                Some(&locals),
+            )
+            .unwrap();
+
+            let test_function = locals.get_item("test_function").unwrap().unwrap();
+            let test_function = test_function.as_unbound();
+            let tags = Tags::from_py_any(py, test_function);
+
+            let fixture_names = tags.use_fixtures_names();
+            assert_eq!(fixture_names, vec!["fixture1", "fixture2", "fixture3"]);
+        });
+    }
+
+    #[test]
+    fn test_use_fixtures_names_multiple_tags() {
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+            Python::run(
+                py,
+                c_str!(
+                    r#"
+import karva
+
+@karva.tags.use_fixtures("fixture1", "fixture2")
+@karva.tags.use_fixtures("fixture3")
+def test_function():
+    pass
+                "#
+                ),
+                None,
+                Some(&locals),
+            )
+            .unwrap();
+
+            let test_function = locals.get_item("test_function").unwrap().unwrap();
+            let test_function = test_function.as_unbound();
+            let tags = Tags::from_py_any(py, test_function);
+
+            let fixture_names: HashSet<_> = tags.use_fixtures_names().into_iter().collect();
+            let expected: HashSet<_> = ["fixture1", "fixture2", "fixture3"]
+                .iter()
+                .copied()
+                .map(String::from)
+                .collect();
+            assert_eq!(fixture_names, expected);
+        });
+    }
+
+    #[test]
+    fn test_pytest_usefixtures_tag() {
+        Python::with_gil(|py| {
+            let mark = py.eval(
+                c_str!(r#"type('Mark', (), {'name': 'usefixtures', 'args': ['fixture1', 'fixture2']})()"#),
+                None,
+                None
+            ).unwrap();
+
+            let tag = Tag::try_from_pytest_mark(&mark);
+            assert!(tag.is_some());
+            if let Tag::UseFixtures(use_fixtures_tag) = tag.unwrap() {
+                assert_eq!(use_fixtures_tag.fixture_names(), &["fixture1", "fixture2"]);
+            }
+        });
+    }
+
+    #[test]
+    fn test_pytest_usefixtures_single_fixture() {
+        Python::with_gil(|py| {
+            let mark = py
+                .eval(
+                    c_str!(
+                        r#"type('Mark', (), {'name': 'usefixtures', 'args': 'single_fixture'})()"#
+                    ),
+                    None,
+                    None,
+                )
+                .unwrap();
+
+            let tag = Tag::try_from_pytest_mark(&mark);
+            assert!(tag.is_some());
+            if let Tag::UseFixtures(use_fixtures_tag) = tag.unwrap() {
+                assert_eq!(use_fixtures_tag.fixture_names(), &["single_fixture"]);
             }
         });
     }

@@ -1,6 +1,7 @@
 use std::fmt::{self, Display};
 
 use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
+use pyo3::Python;
 use ruff_source_file::LineIndex;
 
 use crate::{
@@ -52,6 +53,10 @@ impl DiscoveredModule {
 
     pub(crate) fn set_test_functions(&mut self, test_cases: Vec<TestFunction>) {
         self.test_functions = test_cases;
+    }
+
+    pub(crate) fn filter_test_functions(&mut self, name: &str) {
+        self.test_functions.retain(|tc| tc.name() == name);
     }
 
     #[must_use]
@@ -137,6 +142,7 @@ impl DiscoveredModule {
 impl<'proj> HasFixtures<'proj> for DiscoveredModule {
     fn all_fixtures<'a: 'proj>(
         &'a self,
+        py: Python<'_>,
         test_cases: &[&dyn RequiresFixtures],
     ) -> Vec<&'proj Fixture> {
         if test_cases.is_empty() {
@@ -150,7 +156,7 @@ impl<'proj> HasFixtures<'proj> for DiscoveredModule {
                 if f.auto_use() {
                     true
                 } else {
-                    test_cases.iter().any(|tc| tc.uses_fixture(f.name()))
+                    test_cases.iter().any(|tc| tc.uses_fixture(py, f.name()))
                 }
             })
             .collect();
