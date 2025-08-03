@@ -122,7 +122,7 @@ fn affect(criterion: &mut Criterion) {
     bench_project(&benchmark, criterion);
 }
 
-criterion_group!(karva, benchmark_karva);
 criterion_group!(project, affect);
+criterion_group!(karva, benchmark_karva);
 
-criterion_main!(karva, project);
+criterion_main!(project, karva);

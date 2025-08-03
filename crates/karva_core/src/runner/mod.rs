@@ -35,7 +35,12 @@ impl<'proj> StandardTestRunner<'proj> {
             let (session, discovery_diagnostics) =
                 StandardDiscoverer::new(self.project).discover(py);
 
+            eprintln!("{discovery_diagnostics:#?}");
+            eprintln!("{session:#?}");
+
             let collected_session = TestCaseCollector::collect(py, &session);
+
+            eprintln!("{collected_session:#?}");
 
             let total_test_cases = collected_session.total_test_cases();
 

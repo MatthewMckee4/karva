@@ -248,7 +248,6 @@ fn clone_repository(repo_url: &str, target_dir: &Path, commit: &str) -> Result<(
 
 /// Install dependencies using uv with date constraints
 fn install_dependencies(checkout: &Checkout) -> Result<()> {
-    // Check if uv is available
     let uv_check = Command::new("uv")
         .arg("--version")
         .output()
@@ -285,7 +284,6 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
 
     let karva_wheel = find_karva_wheel().unwrap();
 
-    // Install dependencies with date constraint in the isolated environment
     let mut cmd = Command::new("uv");
     cmd.args(["pip", "install", "--python", venv_path.to_str().unwrap()])
         .args(&checkout.project().dependencies)
@@ -301,7 +299,6 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    // Install the package
     let mut cmd = Command::new("uv");
     cmd.args(["pip", "install", "--python", venv_path.to_str().unwrap()])
         .arg("-e")
@@ -317,7 +314,6 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    // Run `uv pip list` and print its output
     let mut cmd = Command::new("uv");
     cmd.args(["pip", "list", "--python", venv_path.to_str().unwrap()]);
 
