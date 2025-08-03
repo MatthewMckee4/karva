@@ -111,14 +111,10 @@ jobs:
         with:
           python-version: 3.13
 
-      - name: Install Python dependencies
-        run: |
-          uv pip install pytest
-
       - name: Build wheels
         run: |
           uv venv
-          uv pip install maturin
+          uv pip install maturin pytest
           uv run --no-project maturin build
           uv pip install -e .
 
