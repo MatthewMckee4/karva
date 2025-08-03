@@ -850,7 +850,6 @@ def root_fixture():
     }
 
     #[test]
-    #[ignore = "pytest is not supported in rust tests"]
     fn test_discover_pytest_fixture() {
         let env = TestEnv::with_files([
             (
@@ -872,7 +871,16 @@ def x():
         let project = Project::new(env.cwd(), vec![test_dir]);
         let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
-        assert_snapshot!(session.display(), @"");
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            └── <temp_dir>/<test>/tests/
+                ├── <test>.tests.conftest
+                │   ├── test_cases []
+                │   └── fixtures [x]
+                └── <test>.tests.test_1
+                    ├── test_cases [test_1]
+                    └── fixtures []
+        ");
     }
 
     #[test]

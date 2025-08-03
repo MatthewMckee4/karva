@@ -629,4 +629,29 @@ def test_2(x):
 
         assert_eq!(*result.stats(), expected_stats);
     }
+
+    #[test]
+    fn test_discover_pytest_fixture() {
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
+import pytest
+
+@pytest.fixture
+def x():
+    return 1
+",
+            ),
+            ("<test>/tests/test_1.py", "def test_1(x): pass"),
+        ]);
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
 }
