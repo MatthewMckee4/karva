@@ -74,16 +74,9 @@ impl<'proj> StandardDiscoverer<'proj> {
                             );
 
                             if let Some(mut module) = module {
-                                let test_functions = module.test_functions();
+                                module.filter_test_functions(function_name);
 
-                                let filtered_functions: Vec<_> = test_functions
-                                    .into_iter()
-                                    .filter(|func| func.name() == *function_name)
-                                    .cloned()
-                                    .collect();
-
-                                if !filtered_functions.is_empty() {
-                                    module.set_test_functions(filtered_functions);
+                                if !module.test_functions().is_empty() {
                                     session_package.add_module(module);
                                 }
                             }

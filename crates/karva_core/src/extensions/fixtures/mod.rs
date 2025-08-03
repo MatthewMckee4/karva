@@ -150,7 +150,7 @@ impl Fixture {
     ) -> PyResult<Bound<'a, PyAny>> {
         let mut required_fixtures = Vec::new();
 
-        for name in self.get_required_fixture_names() {
+        for name in self.get_required_fixture_names(py) {
             if let Some(fixture) = fixture_manager.get_fixture(&name) {
                 required_fixtures.push(fixture.clone().into_bound(py));
             }
@@ -212,8 +212,8 @@ impl Fixture {
 }
 
 impl HasFunctionDefinition for Fixture {
-    fn function_definition(&self) -> &StmtFunctionDef {
-        &self.function_def
+    fn get_required_fixture_names(&self, py: Python<'_>) -> Vec<String> {
+        self.function_def.get_required_fixture_names(py)
     }
 }
 
@@ -225,34 +225,33 @@ impl std::fmt::Debug for Fixture {
 
 pub(crate) trait HasFunctionDefinition {
     #[must_use]
-    fn get_required_fixture_names(&self) -> Vec<String> {
+    fn get_required_fixture_names(&self, py: Python<'_>) -> Vec<String>;
+}
+
+impl HasFunctionDefinition for StmtFunctionDef {
+    fn get_required_fixture_names(&self, _py: Python<'_>) -> Vec<String> {
         let mut required_fixtures = Vec::new();
-        for parameter in self
-            .function_definition()
-            .parameters
-            .iter_non_variadic_params()
-        {
+        for parameter in self.parameters.iter_non_variadic_params() {
             required_fixtures.push(parameter.parameter.name.as_str().to_string());
         }
         required_fixtures
     }
-
-    fn function_definition(&self) -> &StmtFunctionDef;
 }
 
 pub(crate) trait RequiresFixtures: std::fmt::Debug {
     #[must_use]
-    fn uses_fixture(&self, fixture_name: &str) -> bool {
-        self.required_fixtures().contains(&fixture_name.to_string())
+    fn uses_fixture(&self, py: Python<'_>, fixture_name: &str) -> bool {
+        self.required_fixtures(py)
+            .contains(&fixture_name.to_string())
     }
 
     #[must_use]
-    fn required_fixtures(&self) -> Vec<String>;
+    fn required_fixtures(&self, py: Python<'_>) -> Vec<String>;
 }
 
 impl<T: HasFunctionDefinition + std::fmt::Debug> RequiresFixtures for T {
-    fn required_fixtures(&self) -> Vec<String> {
-        self.get_required_fixture_names()
+    fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
+        self.get_required_fixture_names(py)
     }
 }
 
@@ -280,11 +279,12 @@ fn is_fixture(decorator: &Decorator) -> bool {
 pub(crate) trait HasFixtures<'proj>: std::fmt::Debug {
     fn fixtures<'a: 'proj>(
         &'a self,
+        py: Python<'_>,
         scope: &[FixtureScope],
         test_cases: &[&dyn RequiresFixtures],
     ) -> Vec<&'proj Fixture> {
         let mut fixtures = Vec::new();
-        for fixture in self.all_fixtures(test_cases) {
+        for fixture in self.all_fixtures(py, test_cases) {
             if scope.contains(fixture.scope()) {
                 fixtures.push(fixture);
             }
@@ -292,14 +292,19 @@ pub(crate) trait HasFixtures<'proj>: std::fmt::Debug {
         fixtures
     }
 
-    fn get_fixture<'a: 'proj>(&'a self, fixture_name: &str) -> Option<&'proj Fixture> {
-        self.all_fixtures(&[])
+    fn get_fixture<'a: 'proj>(
+        &'a self,
+        py: Python<'_>,
+        fixture_name: &str,
+    ) -> Option<&'proj Fixture> {
+        self.all_fixtures(py, &[])
             .into_iter()
             .find(|fixture| fixture.name() == fixture_name)
     }
 
     fn all_fixtures<'a: 'proj>(
         &'a self,
+        py: Python<'_>,
         test_cases: &[&dyn RequiresFixtures],
     ) -> Vec<&'proj Fixture>;
 }

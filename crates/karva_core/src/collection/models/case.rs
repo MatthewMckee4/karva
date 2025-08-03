@@ -11,7 +11,7 @@ use crate::{
         Diagnostic, FixtureSubDiagnosticType, SubDiagnosticErrorType, SubDiagnosticSeverity,
     },
     discovery::{DiscoveredModule, TestFunction, TestFunctionDisplay},
-    extensions::fixtures::Finalizers,
+    extensions::fixtures::{Finalizers, HasFunctionDefinition},
     runner::RunDiagnostics,
 };
 
@@ -69,8 +69,10 @@ impl<'proj> TestCase<'proj> {
         } else {
             let kwargs = PyDict::new(py);
 
-            for (key, value) in &self.kwargs {
-                let _ = kwargs.set_item(key, value);
+            for key in self.function.definition().get_required_fixture_names(py) {
+                if let Some(value) = self.kwargs.get(&key) {
+                    let _ = kwargs.set_item(key, value);
+                }
             }
             let logger = TestCaseLogger::new(py, &display, Some(&self.kwargs));
             logger.log_running();

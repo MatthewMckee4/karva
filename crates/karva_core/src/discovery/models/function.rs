@@ -22,24 +22,37 @@ use crate::{
 };
 
 /// Represents a single test function.
-#[derive(Clone)]
 pub(crate) struct TestFunction {
     path: SystemPathBuf,
     function_definition: StmtFunctionDef,
+    py_function: Py<PyAny>,
 }
 
 impl HasFunctionDefinition for TestFunction {
-    fn function_definition(&self) -> &StmtFunctionDef {
-        &self.function_definition
+    fn get_required_fixture_names(&self, py: Python<'_>) -> Vec<String> {
+        let mut required_fixtures = self.function_definition.get_required_fixture_names(py);
+
+        if let Some(tags) =
+            Tags::from_py_any(py, &self.py_function, Some(&self.function_definition))
+        {
+            required_fixtures.extend(tags.use_fixtures_names());
+        }
+
+        required_fixtures
     }
 }
 
 impl TestFunction {
     #[must_use]
-    pub(crate) const fn new(path: SystemPathBuf, function_definition: StmtFunctionDef) -> Self {
+    pub(crate) const fn new(
+        path: SystemPathBuf,
+        function_definition: StmtFunctionDef,
+        py_function: Py<PyAny>,
+    ) -> Self {
         Self {
             path,
             function_definition,
+            py_function,
         }
     }
 
@@ -51,6 +64,11 @@ impl TestFunction {
     #[must_use]
     pub(crate) fn name(&self) -> String {
         self.function_definition.name.to_string()
+    }
+
+    #[must_use]
+    pub(crate) const fn definition(&self) -> &StmtFunctionDef {
+        &self.function_definition
     }
 
     pub(crate) fn display_with_line(&self, module: &DiscoveredModule) -> String {
@@ -82,7 +100,15 @@ impl TestFunction {
             return Vec::new();
         };
 
-        let required_fixture_names = self.get_required_fixture_names();
+        let mut required_fixture_names = self.get_required_fixture_names(py);
+
+        let tags = Tags::from_py_any(py, &py_function, Some(&self.function_definition));
+
+        if let Some(tags) = &tags {
+            let use_fixtures_names = tags.use_fixtures_names();
+
+            required_fixture_names.extend(use_fixtures_names);
+        }
 
         if required_fixture_names.is_empty() {
             return vec![(
@@ -91,8 +117,11 @@ impl TestFunction {
             )];
         }
 
-        let tags = Tags::from_py_any(py, &py_function);
-        let mut parametrize_args = tags.parametrize_args();
+        let mut parametrize_args = Vec::new();
+
+        if let Some(tags) = &tags {
+            parametrize_args.extend(tags.parametrize_args());
+        }
 
         // Ensure that we collect at least one test case (no parametrization)
         if parametrize_args.is_empty() {
@@ -211,7 +240,7 @@ mod tests {
         let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        let test_case = session.test_functions()[0].clone();
+        let test_case = session.test_functions()[0];
 
         assert_eq!(test_case.path, path);
         assert_eq!(test_case.name(), "test_function");
@@ -219,25 +248,27 @@ mod tests {
 
     #[test]
     fn test_case_with_fixtures() {
-        let env = TestEnv::with_files([(
-            "<test>/test.py",
-            "def test_with_fixtures(fixture1, fixture2): pass",
-        )]);
+        Python::with_gil(|py| {
+            let env = TestEnv::with_files([(
+                "<test>/test.py",
+                "def test_with_fixtures(fixture1, fixture2): pass",
+            )]);
 
-        let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+            let project = Project::new(env.cwd(), vec![env.cwd()]);
+            let discoverer = StandardDiscoverer::new(&project);
+            let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
-        let test_case = session.test_functions()[0].clone();
+            let test_case = session.test_functions()[0];
 
-        let required_fixtures = test_case.get_required_fixture_names();
-        assert_eq!(required_fixtures.len(), 2);
-        assert!(required_fixtures.contains(&"fixture1".to_string()));
-        assert!(required_fixtures.contains(&"fixture2".to_string()));
+            let required_fixtures = test_case.get_required_fixture_names(py);
+            assert_eq!(required_fixtures.len(), 2);
+            assert!(required_fixtures.contains(&"fixture1".to_string()));
+            assert!(required_fixtures.contains(&"fixture2".to_string()));
 
-        assert!(test_case.uses_fixture("fixture1"));
-        assert!(test_case.uses_fixture("fixture2"));
-        assert!(!test_case.uses_fixture("nonexistent"));
+            assert!(test_case.uses_fixture(py, "fixture1"));
+            assert!(test_case.uses_fixture(py, "fixture2"));
+            assert!(!test_case.uses_fixture(py, "nonexistent"));
+        });
     }
 
     #[test]
@@ -256,7 +287,7 @@ mod tests {
             .get_module(&mapped_dir.join("test.py"))
             .unwrap();
 
-        let test_case = session.test_functions()[0].clone();
+        let test_case = session.test_functions()[0];
 
         assert_eq!(
             test_case

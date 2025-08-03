@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use karva_project::path::SystemPathBuf;
+use pyo3::prelude::*;
 
 #[cfg(test)]
 use crate::discovery::TestFunction;
@@ -260,12 +261,13 @@ impl DiscoveredPackage {
 impl<'proj> HasFixtures<'proj> for DiscoveredPackage {
     fn all_fixtures<'a: 'proj>(
         &'a self,
+        py: Python<'_>,
         test_cases: &[&dyn RequiresFixtures],
     ) -> Vec<&'proj Fixture> {
         let mut fixtures = Vec::new();
 
         for module in self.configuration_modules() {
-            let module_fixtures = module.all_fixtures(test_cases);
+            let module_fixtures = module.all_fixtures(py, test_cases);
 
             fixtures.extend(module_fixtures);
         }
@@ -277,9 +279,10 @@ impl<'proj> HasFixtures<'proj> for DiscoveredPackage {
 impl<'proj> HasFixtures<'proj> for &'proj DiscoveredPackage {
     fn all_fixtures<'a: 'proj>(
         &'a self,
+        py: Python<'_>,
         test_cases: &[&dyn RequiresFixtures],
     ) -> Vec<&'proj Fixture> {
-        (*self).all_fixtures(test_cases)
+        (*self).all_fixtures(py, test_cases)
     }
 }
 

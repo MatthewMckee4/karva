@@ -13,6 +13,8 @@ pub enum PyTag {
         arg_names: Vec<String>,
         arg_values: Vec<Vec<PyObject>>,
     },
+    #[pyo3(name = "use_fixtures")]
+    UseFixtures { fixture_names: Vec<String> },
 }
 
 #[pymethods]
@@ -21,6 +23,7 @@ impl PyTag {
     pub fn name(&self) -> String {
         match self {
             Self::Parametrize { .. } => "parametrize".to_string(),
+            Self::UseFixtures { .. } => "use_fixtures".to_string(),
         }
     }
 }
@@ -64,6 +67,29 @@ impl PyTags {
                 "Expected a string or a list of strings for the arg_names, and a list of lists of objects for the arg_values",
             ))
         }
+    }
+
+    #[classmethod]
+    #[pyo3(signature = (*fixture_names))]
+    pub fn use_fixtures(
+        _cls: &Bound<'_, PyType>,
+        fixture_names: &Bound<'_, PyTuple>,
+    ) -> PyResult<Self> {
+        let mut names = Vec::new();
+        for item in fixture_names.iter() {
+            if let Ok(name) = item.extract::<String>() {
+                names.push(name);
+            } else {
+                return Err(PyErr::new::<PyTypeError, _>(
+                    "Expected a string or a list of strings for fixture names",
+                ));
+            }
+        }
+        Ok(Self {
+            inner: vec![PyTag::UseFixtures {
+                fixture_names: names,
+            }],
+        })
     }
 
     #[pyo3(signature = (f, /))]
@@ -146,24 +172,26 @@ mod tests {
             let tags = PyTags::parametrize(cls, &arg_names, &arg_values).unwrap();
             assert_eq!(tags.inner.len(), 1);
             assert_eq!(tags.inner[0].name(), "parametrize");
-            let PyTag::Parametrize {
+            if let PyTag::Parametrize {
                 arg_names,
                 arg_values,
-            } = &tags.inner[0];
-            assert_eq!(arg_names, &vec!["a"]);
-            assert_eq!(arg_values.len(), 3);
-            assert_eq!(
-                arg_values[0].first().unwrap().extract::<i32>(py).unwrap(),
-                1
-            );
-            assert_eq!(
-                arg_values[1].first().unwrap().extract::<i32>(py).unwrap(),
-                2
-            );
-            assert_eq!(
-                arg_values[2].first().unwrap().extract::<i32>(py).unwrap(),
-                3
-            );
+            } = &tags.inner[0]
+            {
+                assert_eq!(arg_names, &vec!["a"]);
+                assert_eq!(arg_values.len(), 3);
+                assert_eq!(
+                    arg_values[0].first().unwrap().extract::<i32>(py).unwrap(),
+                    1
+                );
+                assert_eq!(
+                    arg_values[1].first().unwrap().extract::<i32>(py).unwrap(),
+                    2
+                );
+                assert_eq!(
+                    arg_values[2].first().unwrap().extract::<i32>(py).unwrap(),
+                    3
+                );
+            }
         });
     }
 
@@ -187,18 +215,20 @@ mod tests {
             let tags = PyTags::parametrize(cls, &arg_names, &arg_values).unwrap();
             assert_eq!(tags.inner.len(), 1);
             assert_eq!(tags.inner[0].name(), "parametrize");
-            let PyTag::Parametrize {
+            if let PyTag::Parametrize {
                 arg_names,
                 arg_values,
-            } = &tags.inner[0];
-            assert_eq!(arg_names, &vec!["a", "b"]);
-            assert_eq!(arg_values.len(), 2);
-            assert_eq!(arg_values[0].len(), 2);
-            assert_eq!(arg_values[0][0].extract::<i32>(py).unwrap(), 1);
-            assert_eq!(arg_values[0][1].extract::<i32>(py).unwrap(), 2);
-            assert_eq!(arg_values[1].len(), 2);
-            assert_eq!(arg_values[1][0].extract::<i32>(py).unwrap(), 3);
-            assert_eq!(arg_values[1][1].extract::<i32>(py).unwrap(), 4);
+            } = &tags.inner[0]
+            {
+                assert_eq!(arg_names, &vec!["a", "b"]);
+                assert_eq!(arg_values.len(), 2);
+                assert_eq!(arg_values[0].len(), 2);
+                assert_eq!(arg_values[0][0].extract::<i32>(py).unwrap(), 1);
+                assert_eq!(arg_values[0][1].extract::<i32>(py).unwrap(), 2);
+                assert_eq!(arg_values[1].len(), 2);
+                assert_eq!(arg_values[1][0].extract::<i32>(py).unwrap(), 3);
+                assert_eq!(arg_values[1][1].extract::<i32>(py).unwrap(), 4);
+            }
         });
     }
 
@@ -253,6 +283,131 @@ def test_function(a):
             let args = PyTuple::new(py, [1]).unwrap();
 
             test_function.call1(&args).unwrap();
+        });
+    }
+
+    #[test]
+    fn test_use_fixtures_single_fixture() {
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+            Python::run(
+                py,
+                c_str!("import karva;tags = karva.tags"),
+                None,
+                Some(&locals),
+            )
+            .unwrap();
+
+            let binding = locals.get_item("tags").unwrap().unwrap();
+            let cls = binding.downcast::<PyType>().unwrap();
+
+            let binding = py.eval(c_str!("('my_fixture',)"), None, None).unwrap();
+            let fixture_names = binding.downcast::<PyTuple>().unwrap();
+            let tags = PyTags::use_fixtures(cls, fixture_names).unwrap();
+            assert_eq!(tags.inner.len(), 1);
+            assert_eq!(tags.inner[0].name(), "use_fixtures");
+            if let PyTag::UseFixtures { fixture_names } = &tags.inner[0] {
+                assert_eq!(fixture_names, &vec!["my_fixture"]);
+            }
+        });
+    }
+
+    #[test]
+    fn test_use_fixtures_multiple_fixtures() {
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+            Python::run(
+                py,
+                c_str!("import karva;tags = karva.tags"),
+                None,
+                Some(&locals),
+            )
+            .unwrap();
+
+            let binding = locals.get_item("tags").unwrap().unwrap();
+            let cls = binding.downcast::<PyType>().unwrap();
+
+            let binding = py
+                .eval(c_str!("('fixture1', 'fixture2', 'fixture3')"), None, None)
+                .unwrap();
+            let fixture_names = binding.downcast::<PyTuple>().unwrap();
+            let tags = PyTags::use_fixtures(cls, fixture_names).unwrap();
+            assert_eq!(tags.inner.len(), 1);
+            assert_eq!(tags.inner[0].name(), "use_fixtures");
+            if let PyTag::UseFixtures { fixture_names } = &tags.inner[0] {
+                assert_eq!(fixture_names, &vec!["fixture1", "fixture2", "fixture3"]);
+            }
+        });
+    }
+
+    #[test]
+    fn test_use_fixtures_invalid_args() {
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+            Python::run(
+                py,
+                c_str!("import karva;tags = karva.tags"),
+                None,
+                Some(&locals),
+            )
+            .unwrap();
+
+            let binding = locals.get_item("tags").unwrap().unwrap();
+            let cls = binding.downcast::<PyType>().unwrap();
+
+            // Create a Python class whose __str__ raises an exception, and use an instance as fixture name
+            Python::run(
+                py,
+                c_str!(
+                    r#"
+class BadStr:
+    def __str__(self):
+        raise Exception("fail str")
+bad_tuple = (BadStr(),)
+"#
+                ),
+                None,
+                Some(&locals),
+            )
+            .unwrap();
+            let binding = locals.get_item("bad_tuple").unwrap().unwrap();
+            let fixture_names = binding.downcast::<PyTuple>().unwrap();
+            let result = PyTags::use_fixtures(cls, fixture_names);
+            assert!(result.is_err());
+            assert_eq!(
+                result.unwrap_err().to_string(),
+                "TypeError: Expected a string or a list of strings for fixture names"
+            );
+        });
+    }
+
+    #[test]
+    fn test_use_fixtures_decorator() {
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+
+            py.run(
+                c_str!(
+                    r#"
+import karva
+
+@karva.tags.use_fixtures('fixture1', 'fixture2')
+def test_function():
+    pass
+            "#
+                ),
+                None,
+                Some(&locals),
+            )
+            .unwrap();
+
+            let test_function = locals.get_item("test_function").unwrap().unwrap();
+            let test_function = test_function.downcast::<PyTestFunction>().unwrap();
+
+            assert_eq!(test_function.borrow().tags.inner.len(), 1);
+            if let PyTag::UseFixtures { fixture_names } = &test_function.borrow().tags.inner[0] {
+                assert_eq!(fixture_names, &vec!["fixture1", "fixture2"]);
+            }
         });
     }
 }
