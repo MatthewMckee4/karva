@@ -98,18 +98,13 @@ jobs:
           bins: cargo-codspeed
 
       - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: 3.13
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        id: setup-python
+        id: setup-uv
         with:
           python-version: 3.13
 
       - name: Install Python dependencies
         run: |
-          pip install pytest
+          uv pip install pytest
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -117,12 +112,16 @@ jobs:
           command: build
 
       - name: Generate resources
-        run: python crates/karva_benchmark/resources/generate.py
+        run: uv run crates/karva_benchmark/resources/generate.py
 
-      - name: "Build benchmarks"
+      - name: Build benchmarks
+        env:
+          PYO3_PYTHON: ${{ steps.setup-uv.outputs.python-path }}
         run: uv run --no-project cargo codspeed build --features codspeed -p karva_benchmark
 
       - name: Run benchmarks
+        env:
+          PYO3_PYTHON: ${{ steps.setup-uv.outputs.python-path }}
         uses: CodSpeedHQ/action@v3
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
