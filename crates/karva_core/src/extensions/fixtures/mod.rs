@@ -12,13 +12,18 @@ pub mod python;
 pub(crate) use finalizer::{Finalizer, Finalizers};
 pub(crate) use manager::FixtureManager;
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum FixtureScope {
-    #[default]
     Function,
     Module,
     Package,
     Session,
+}
+
+impl Default for FixtureScope {
+    fn default() -> Self {
+        Self::Function
+    }
 }
 
 impl PartialOrd for FixtureScope {
@@ -60,6 +65,33 @@ impl Display for FixtureScope {
             Self::Function => write!(f, "function"),
         }
     }
+}
+
+/// Resolve a dynamic scope function to a concrete `FixtureScope`
+pub(crate) fn resolve_dynamic_scope(
+    py: Python<'_>,
+    scope_fn: &Bound<'_, PyAny>,
+    fixture_name: &str,
+) -> Result<FixtureScope, String> {
+    let kwargs = pyo3::types::PyDict::new(py);
+    kwargs
+        .set_item("fixture_name", fixture_name)
+        .map_err(|e| format!("Failed to set fixture_name: {e}"))?;
+
+    // TODO: Support config
+    kwargs
+        .set_item("config", py.None())
+        .map_err(|e| format!("Failed to set config: {e}"))?;
+
+    let result = scope_fn
+        .call((), Some(&kwargs))
+        .map_err(|e| format!("Failed to call dynamic scope function: {e}"))?;
+
+    let scope_str = result
+        .extract::<String>()
+        .map_err(|e| format!("Dynamic scope function must return a string: {e}"))?;
+
+    FixtureScope::try_from(scope_str)
 }
 
 pub(crate) struct Fixture {
@@ -142,6 +174,7 @@ impl Fixture {
     }
 
     pub(crate) fn try_from_function(
+        py: Python<'_>,
         function_definition: &StmtFunctionDef,
         py_module: &Bound<'_, PyModule>,
         is_generator_function: bool,
@@ -151,6 +184,7 @@ impl Fixture {
             .map_err(|e| e.to_string())?;
 
         let try_karva = extractor::try_from_karva_function(
+            py,
             function_definition,
             &function,
             is_generator_function,
@@ -163,6 +197,7 @@ impl Fixture {
         };
 
         let try_pytest = extractor::try_from_pytest_function(
+            py,
             function_definition,
             &function,
             is_generator_function,
@@ -287,5 +322,60 @@ mod tests {
         assert_eq!(FixtureScope::Module.to_string(), "module");
         assert_eq!(FixtureScope::Package.to_string(), "package");
         assert_eq!(FixtureScope::Session.to_string(), "session");
+    }
+
+    #[test]
+    fn test_resolve_dynamic_scope() {
+        Python::with_gil(|py| {
+            let func = py.eval(c"lambda **kwargs: 'session'", None, None).unwrap();
+
+            let resolved = resolve_dynamic_scope(py, &func, "test_fixture").unwrap();
+            assert_eq!(resolved, FixtureScope::Session);
+        });
+    }
+
+    #[test]
+    fn test_resolve_dynamic_scope_with_fixture_name() {
+        Python::with_gil(|py| {
+            let func = py.eval(
+                c"lambda **kwargs: 'session' if kwargs.get('fixture_name') == 'important_fixture' else 'function'",
+                None,
+                None
+            ).unwrap();
+
+            let resolved_important = resolve_dynamic_scope(py, &func, "important_fixture").unwrap();
+            assert_eq!(resolved_important, FixtureScope::Session);
+
+            let resolved_normal = resolve_dynamic_scope(py, &func, "normal_fixture").unwrap();
+            assert_eq!(resolved_normal, FixtureScope::Function);
+        });
+    }
+
+    #[test]
+    fn test_resolve_dynamic_scope_invalid_return() {
+        Python::with_gil(|py| {
+            let func = py
+                .eval(c"lambda **kwargs: 'invalid_scope'", None, None)
+                .unwrap();
+
+            let result = resolve_dynamic_scope(py, &func, "test_fixture");
+            assert!(result.is_err());
+            assert!(result.unwrap_err().contains("Invalid fixture scope"));
+        });
+    }
+
+    #[test]
+    fn test_resolve_dynamic_scope_exception() {
+        Python::with_gil(|py| {
+            let func = py.eval(c"lambda **kwargs: 1/0", None, None).unwrap();
+
+            let result = resolve_dynamic_scope(py, &func, "test_fixture");
+            assert!(result.is_err());
+            assert!(
+                result
+                    .unwrap_err()
+                    .contains("Failed to call dynamic scope function")
+            );
+        });
     }
 }

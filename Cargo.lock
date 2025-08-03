@@ -972,6 +972,7 @@ dependencies = [
  "karva_project",
  "pyo3",
  "regex",
+ "rstest",
  "ruff_python_ast",
  "ruff_python_parser",
  "ruff_source_file",

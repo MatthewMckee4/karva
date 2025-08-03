@@ -1,7 +1,9 @@
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::extensions::fixtures::{Fixture, FixtureScope, python::FixtureFunctionDefinition};
+use crate::extensions::fixtures::{
+    Fixture, FixtureScope, python::FixtureFunctionDefinition, resolve_dynamic_scope,
+};
 
 fn get_attribute<'a>(function: Bound<'a, PyAny>, attributes: &[&str]) -> Option<Bound<'a, PyAny>> {
     let mut current = function;
@@ -13,6 +15,7 @@ fn get_attribute<'a>(function: Bound<'a, PyAny>, attributes: &[&str]) -> Option<
 }
 
 pub(crate) fn try_from_pytest_function(
+    py: Python<'_>,
     function_definition: &StmtFunctionDef,
     function: &Bound<'_, PyAny>,
     is_generator_function: bool,
@@ -42,10 +45,12 @@ pub(crate) fn try_from_pytest_function(
         found_name.to_string()
     };
 
+    let fixture_scope = fixture_scope(py, &scope, &name)?;
+
     Ok(Some(Fixture::new(
         name,
         function_definition.clone(),
-        FixtureScope::try_from(scope.to_string())?,
+        fixture_scope,
         auto_use.extract::<bool>().unwrap_or(false),
         function.into(),
         is_generator_function,
@@ -53,6 +58,7 @@ pub(crate) fn try_from_pytest_function(
 }
 
 pub(crate) fn try_from_karva_function(
+    py: Python<'_>,
     function_def: &StmtFunctionDef,
     function: &Bound<'_, PyAny>,
     is_generator_function: bool,
@@ -68,16 +74,32 @@ pub(crate) fn try_from_karva_function(
         return Ok(None);
     };
 
-    let scope = py_function_borrow.scope.clone();
+    let scope_obj = py_function_borrow.scope.clone();
     let name = py_function_borrow.name.clone();
     let auto_use = py_function_borrow.auto_use;
+
+    let fixture_scope = fixture_scope(py, scope_obj.bind(py), &name)?;
 
     Ok(Some(Fixture::new(
         name,
         function_def.clone(),
-        FixtureScope::try_from(scope)?,
+        fixture_scope,
         auto_use,
         py_function.into(),
         is_generator_function,
     )))
+}
+
+fn fixture_scope(
+    py: Python<'_>,
+    scope_obj: &Bound<'_, PyAny>,
+    name: &str,
+) -> Result<FixtureScope, String> {
+    if scope_obj.is_callable() {
+        resolve_dynamic_scope(py, scope_obj, name)
+    } else if let Ok(scope_str) = scope_obj.extract::<String>() {
+        FixtureScope::try_from(scope_str)
+    } else {
+        Err("Scope must be either a string or a callable".to_string())
+    }
 }
