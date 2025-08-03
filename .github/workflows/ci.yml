@@ -107,9 +107,10 @@ jobs:
           uv pip install pytest
 
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          command: build
+        run: |
+          uv venv
+          uv pip install maturin
+          uv run maturin build
 
       - name: Generate resources
         run: uv run crates/karva_benchmark/resources/generate.py
