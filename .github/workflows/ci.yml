@@ -121,7 +121,7 @@ jobs:
         env:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         run: |
-          cargo +nightly tarpaulin --out Xml
+          cargo +nightly tarpaulin
       - name: Upload to Codecov
         uses: codecov/codecov-action@v5
         with:
