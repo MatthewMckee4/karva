@@ -85,6 +85,11 @@ jobs:
           channel: stable
           cache-target: release
           bins: cargo-codspeed
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        id: setup-python
+        with:
+          python-version: 3.11
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: 3.11
