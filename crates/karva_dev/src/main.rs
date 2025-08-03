@@ -25,12 +25,19 @@ struct Args {
 enum Command {
     /// Generate CLI reference.
     GenerateCliReference(generate_cli_reference::Args),
+    /// Generate all developer documentation and references.
+    GenerateAll,
 }
 
 fn main() -> Result<ExitCode> {
     let Args { command } = Args::parse();
     match command {
         Command::GenerateCliReference(args) => generate_cli_reference::main(&args)?,
+        Command::GenerateAll => {
+            generate_cli_reference::main(&generate_cli_reference::Args {
+                mode: generate_cli_reference::Mode::Write,
+            })?;
+        }
     }
     Ok(ExitCode::SUCCESS)
 }
