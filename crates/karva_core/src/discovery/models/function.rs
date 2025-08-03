@@ -32,9 +32,11 @@ impl HasFunctionDefinition for TestFunction {
     fn get_required_fixture_names(&self, py: Python<'_>) -> Vec<String> {
         let mut required_fixtures = self.function_definition.get_required_fixture_names(py);
 
-        let tags = Tags::from_py_any(py, &self.py_function);
-
-        required_fixtures.extend(tags.use_fixtures_names());
+        if let Some(tags) =
+            Tags::from_py_any(py, &self.py_function, Some(&self.function_definition))
+        {
+            required_fixtures.extend(tags.use_fixtures_names());
+        }
 
         required_fixtures
     }
@@ -100,11 +102,13 @@ impl TestFunction {
 
         let mut required_fixture_names = self.get_required_fixture_names(py);
 
-        let tags = Tags::from_py_any(py, &py_function);
+        let tags = Tags::from_py_any(py, &py_function, Some(&self.function_definition));
 
-        let use_fixtures_names = tags.use_fixtures_names();
+        if let Some(tags) = &tags {
+            let use_fixtures_names = tags.use_fixtures_names();
 
-        required_fixture_names.extend(use_fixtures_names);
+            required_fixture_names.extend(use_fixtures_names);
+        }
 
         if required_fixture_names.is_empty() {
             return vec![(
@@ -113,7 +117,11 @@ impl TestFunction {
             )];
         }
 
-        let mut parametrize_args = tags.parametrize_args();
+        let mut parametrize_args = Vec::new();
+
+        if let Some(tags) = &tags {
+            parametrize_args.extend(tags.parametrize_args());
+        }
 
         // Ensure that we collect at least one test case (no parametrization)
         if parametrize_args.is_empty() {

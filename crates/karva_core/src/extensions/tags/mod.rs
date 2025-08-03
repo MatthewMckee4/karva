@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use pyo3::prelude::*;
+use ruff_python_ast::StmtFunctionDef;
 
 use crate::extensions::tags::python::{PyTag, PyTestFunction};
 
@@ -119,28 +120,36 @@ pub(crate) struct Tags {
 
 impl Tags {
     #[must_use]
-    pub(crate) fn from_py_any(py: Python<'_>, py_test_function: &Py<PyAny>) -> Self {
-        if let Ok(py_test_function) = py_test_function.extract::<Py<PyTestFunction>>(py) {
+    pub(crate) fn from_py_any(
+        py: Python<'_>,
+        py_function: &Py<PyAny>,
+        function_definition: Option<&StmtFunctionDef>,
+    ) -> Option<Self> {
+        if function_definition.is_some_and(|def| def.decorator_list.is_empty()) {
+            return None;
+        }
+
+        if let Ok(py_test_function) = py_function.extract::<Py<PyTestFunction>>(py) {
             let mut tags = Vec::new();
             for tag in &py_test_function.borrow(py).tags.inner {
                 tags.push(Tag::from_py_tag(tag));
             }
-            return Self { inner: tags };
-        } else if let Ok(wrapped) = py_test_function.getattr(py, "__wrapped__") {
+            return Some(Self { inner: tags });
+        } else if let Ok(wrapped) = py_function.getattr(py, "__wrapped__") {
             if let Ok(py_wrapped_function) = wrapped.extract::<Py<PyTestFunction>>(py) {
                 let mut tags = Vec::new();
                 for tag in &py_wrapped_function.borrow(py).tags.inner {
                     tags.push(Tag::from_py_tag(tag));
                 }
-                return Self { inner: tags };
+                return Some(Self { inner: tags });
             }
         }
 
-        if let Some(tags) = Self::from_pytest_function(py, py_test_function) {
-            return tags;
+        if let Some(tags) = Self::from_pytest_function(py, py_function) {
+            return Some(tags);
         }
 
-        Self::default()
+        None
     }
 
     #[must_use]
@@ -237,7 +246,7 @@ def test_parametrize(a):
 
             let test_function = test_function.as_unbound();
 
-            let tags = Tags::from_py_any(py, test_function);
+            let tags = Tags::from_py_any(py, test_function, None).unwrap();
 
             let expected_parametrize_args = [
                 HashMap::from([(String::from("a"), 1)]),
@@ -280,7 +289,7 @@ def test_parametrize(a, b):
 
             let test_function = test_function.as_unbound();
 
-            let tags = Tags::from_py_any(py, test_function);
+            let tags = Tags::from_py_any(py, test_function, None).unwrap();
 
             let expected_parametrize_args = [
                 HashMap::from([(String::from("a"), 1), (String::from("b"), 4)]),
@@ -324,7 +333,7 @@ def test_parametrize(a):
 
             let test_function = test_function.as_unbound();
 
-            let tags = Tags::from_py_any(py, test_function);
+            let tags = Tags::from_py_any(py, test_function, None).unwrap();
 
             let expected_parametrize_args = [
                 HashMap::from([(String::from("a"), 1), (String::from("b"), 4)]),
@@ -371,7 +380,7 @@ def test_function():
 
             let test_function = locals.get_item("test_function").unwrap().unwrap();
             let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function);
+            let tags = Tags::from_py_any(py, test_function, None).unwrap();
 
             let fixture_names = tags.use_fixtures_names();
             assert_eq!(fixture_names, vec!["my_fixture"]);
@@ -400,7 +409,7 @@ def test_function():
 
             let test_function = locals.get_item("test_function").unwrap().unwrap();
             let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function);
+            let tags = Tags::from_py_any(py, test_function, None).unwrap();
 
             let fixture_names = tags.use_fixtures_names();
             assert_eq!(fixture_names, vec!["fixture1", "fixture2", "fixture3"]);
@@ -430,7 +439,7 @@ def test_function():
 
             let test_function = locals.get_item("test_function").unwrap().unwrap();
             let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function);
+            let tags = Tags::from_py_any(py, test_function, None).unwrap();
 
             let fixture_names: HashSet<_> = tags.use_fixtures_names().into_iter().collect();
             let expected: HashSet<_> = ["fixture1", "fixture2", "fixture3"]
