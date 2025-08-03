@@ -31,36 +31,34 @@ impl<'proj> StandardTestRunner<'proj> {
     }
 
     fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
-        let (session, discovery_diagnostics) = with_gil(self.project, |py| {
-            StandardDiscoverer::new(self.project).discover(py)
-        });
-
-        let collected_session =
-            with_gil(self.project, |py| TestCaseCollector::collect(py, &session));
-
-        let total_test_cases = collected_session.total_test_cases();
-
-        tracing::info!(
-            "Discovered {} test{}",
-            total_test_cases,
-            if total_test_cases == 1 { "" } else { "s" },
-        );
-
-        let mut diagnostics = RunDiagnostics::default();
-
-        diagnostics.add_diagnostics(discovery_diagnostics);
-
-        if total_test_cases == 0 {
-            return diagnostics;
-        }
-
-        reporter.set(total_test_cases);
-
         with_gil(self.project, |py| {
-            diagnostics.update(&collected_session.run_with_reporter(py, reporter));
-        });
+            let (session, discovery_diagnostics) =
+                StandardDiscoverer::new(self.project).discover(py);
 
-        diagnostics
+            let collected_session = TestCaseCollector::collect(py, &session);
+
+            let total_test_cases = collected_session.total_test_cases();
+
+            let total_modules = collected_session.total_modules();
+
+            tracing::info!(
+                "Collected {} test{} in {} module{}",
+                total_test_cases,
+                if total_test_cases == 1 { "" } else { "s" },
+                total_modules,
+                if total_modules == 1 { "" } else { "s" },
+            );
+
+            let mut diagnostics = RunDiagnostics::default();
+
+            diagnostics.add_diagnostics(discovery_diagnostics);
+
+            reporter.set(total_test_cases);
+
+            diagnostics.update(&collected_session.run_with_reporter(py, reporter));
+
+            diagnostics
+        })
     }
 }
 
@@ -89,6 +87,7 @@ impl TestRunner for TestEnv {
 #[cfg(test)]
 mod tests {
     use karva_project::{path::SystemPathBuf, testing::TestEnv};
+    use rstest::rstest;
 
     use super::*;
     use crate::{
@@ -497,6 +496,639 @@ def test_fixture_2(fixture):
 
         let mut expected_stats = DiagnosticStats::default();
 
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_fixture_from_current_package_session_scope() {
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
+import karva
+@karva.fixture(scope='session')
+def x():
+    return 1
+            ",
+            ),
+            ("<test>/tests/test_file.py", "def test_1(x): pass"),
+        ]);
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_fixture_from_current_package_function_scope() {
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
+import karva
+@karva.fixture
+def x():
+    return 1
+            ",
+            ),
+            ("<test>/tests/test_file.py", "def test_1(x): pass"),
+        ]);
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_finalizer_from_current_package_session_scope() {
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
+import karva
+
+arr = []
+
+@karva.fixture(scope='session')
+def x():
+    yield 1
+    arr.append(1)
+            ",
+            ),
+            (
+                "<test>/tests/test_file.py",
+                r"
+from .conftest import arr
+
+def test_1(x):
+    assert len(arr) == 0
+
+def test_2(x):
+    assert len(arr) == 0
+",
+            ),
+        ]);
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_finalizer_from_current_package_function_scope() {
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
+import karva
+
+arr = []
+
+@karva.fixture
+def x():
+    yield 1
+    arr.append(1)
+            ",
+            ),
+            (
+                "<test>/tests/test_file.py",
+                r"
+from .conftest import arr
+
+def test_1(x):
+    assert len(arr) == 0
+
+def test_2(x):
+    assert len(arr) == 1
+",
+            ),
+        ]);
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_discover_pytest_fixture() {
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
+import pytest
+
+@pytest.fixture
+def x():
+    return 1
+",
+            ),
+            ("<test>/tests/test_1.py", "def test_1(x): pass"),
+        ]);
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[rstest]
+    #[case("pytest")]
+    #[case("karva")]
+    fn test_dynamic_fixture_scope_session_scope(#[case] framework: &str) {
+        let env = TestEnv::with_file(
+            "<test>/test_dynamic_scope.py",
+            &format!(
+                r#"
+from {framework} import fixture
+
+def dynamic_scope(fixture_name, config):
+    if fixture_name.endswith("_session"):
+        return "session"
+    return "function"
+
+@fixture(scope=dynamic_scope)
+def x_session():
+    return []
+
+def test_1(x_session):
+    x_session.append(1)
+    assert x_session == [1]
+
+def test_2(x_session):
+    x_session.append(2)
+    assert x_session == [1, 2]
+    "#,
+            ),
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[rstest]
+    #[case("pytest")]
+    #[case("karva")]
+    fn test_dynamic_fixture_scope_function_scope(#[case] framework: &str) {
+        let env = TestEnv::with_file(
+            "<test>/test_dynamic_scope.py",
+            &format!(
+                r#"
+from {framework} import fixture
+
+def dynamic_scope(fixture_name, config):
+    if fixture_name.endswith("_function"):
+        return "function"
+    return "function"
+
+@fixture(scope=dynamic_scope)
+def x_function():
+    return []
+
+def test_1(x_function):
+    x_function.append(1)
+    assert x_function == [1]
+
+def test_2(x_function):
+    x_function.append(2)
+    assert x_function == [2]
+    "#,
+            ),
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_use_fixtures_single_fixture() {
+        let env = TestEnv::with_file(
+            "<test>/test_use_fixtures.py",
+            r#"
+import karva
+
+arr = []
+
+@karva.fixture
+def setup_fixture():
+    arr.append(1)
+
+@karva.tags.use_fixtures("setup_fixture")
+def test_with_use_fixture():
+    assert arr == [1]
+"#,
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_use_fixtures_multiple_fixtures() {
+        let env = TestEnv::with_file(
+            "<test>/test_use_fixtures.py",
+            r#"
+import karva
+
+arr = []
+
+@karva.fixture
+def fixture1():
+    arr.append(1)
+
+@karva.fixture
+def fixture2():
+    arr.append(2)
+
+@karva.tags.use_fixtures("fixture1", "fixture2")
+def test_with_multiple_use_fixtures():
+    assert arr == [1, 2]
+"#,
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_use_fixtures_combined_with_parameter_fixtures() {
+        let env = TestEnv::with_file(
+            "<test>/test_use_fixtures.py",
+            r#"
+import karva
+
+@karva.fixture
+def setup_fixture():
+    return "setup_value"
+
+@karva.fixture
+def param_fixture():
+    return "param_value"
+
+@karva.tags.use_fixtures("setup_fixture")
+def test_combined_fixtures(param_fixture):
+    # Both setup_fixture (from use_fixtures) and param_fixture (from parameters) should be resolved
+    assert True
+"#,
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_use_fixtures_with_parametrize() {
+        let env = TestEnv::with_file(
+            "<test>/test_use_fixtures.py",
+            r#"
+import karva
+
+arr = []
+
+@karva.fixture
+def setup_fixture():
+    arr.append(1)
+
+@karva.tags.use_fixtures("setup_fixture")
+@karva.tags.parametrize("value", [1, 2, 3])
+def test_use_fixtures_with_parametrize(value):
+    assert value > 0
+    # Fixtures are called before any run
+    assert arr == [1, 1, 1]
+"#,
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+        for _ in 0..3 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_use_fixtures_multiple_decorators() {
+        let env = TestEnv::with_file(
+            "<test>/test_use_fixtures.py",
+            r#"
+import karva
+
+arr = []
+
+@karva.fixture
+def fixture1():
+    arr.append(1)
+
+@karva.fixture
+def fixture2():
+    arr.append(2)
+
+@karva.tags.use_fixtures("fixture1")
+@karva.tags.use_fixtures("fixture2")
+def test_multiple_use_fixtures_decorators():
+    assert arr == [1, 2]
+"#,
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_use_fixtures_fixture_not_found_but_not_used() {
+        let env = TestEnv::with_file(
+            "<test>/test_use_fixtures.py",
+            r#"
+import karva
+
+@karva.tags.use_fixtures("nonexistent_fixture")
+def test_missing_fixture():
+    assert True
+"#,
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_use_fixtures_generator_fixture() {
+        let env = TestEnv::with_file(
+            "<test>/test_use_fixtures.py",
+            r#"
+import karva
+
+arr = []
+
+@karva.fixture
+def generator_fixture():
+    arr.append(1)
+    yield 1
+
+@karva.tags.use_fixtures("generator_fixture")
+def test_use_fixtures_with_generator():
+    assert arr == [1]
+"#,
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_use_fixtures_session_scope() {
+        let env = TestEnv::with_files([(
+            "<test>/test_use_fixtures.py",
+            r#"
+import karva
+
+arr = []
+
+@karva.fixture(scope='session')
+def session_fixture():
+    arr.append(1)
+
+@karva.tags.use_fixtures("session_fixture")
+def test_session_1():
+    assert arr == [1]
+
+@karva.tags.use_fixtures("session_fixture")
+def test_session_2():
+    assert arr == [1]
+"#,
+        )]);
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_use_fixtures_mixed_with_normal_fixtures() {
+        let env = TestEnv::with_files([
+            (
+                "<test>/conftest.py",
+                r#"
+import karva
+
+@karva.fixture
+def shared_fixture():
+    return "shared_value"
+
+@karva.fixture
+def use_fixture_only():
+    return "use_only_value"
+"#,
+            ),
+            (
+                "<test>/test_use_fixtures.py",
+                r#"
+import karva
+
+@karva.tags.use_fixtures("use_fixture_only")
+def test_mixed_fixtures(shared_fixture):
+    assert shared_fixture == "shared_value"
+"#,
+            ),
+        ]);
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_pytest_mark_usefixtures_single_fixture() {
+        let env = TestEnv::with_file(
+            "<test>/test_pytest_use_fixtures.py",
+            r#"
+import pytest
+
+arr = []
+
+@pytest.fixture
+def setup_fixture():
+    arr.append(1)
+
+@pytest.mark.usefixtures("setup_fixture")
+def test_with_pytest_use_fixture():
+    assert arr == [1]
+"#,
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_pytest_mark_usefixtures_multiple_fixtures() {
+        let env = TestEnv::with_file(
+            "<test>/test_pytest_use_fixtures.py",
+            r#"
+import pytest
+
+arr = []
+
+@pytest.fixture
+def fixture1():
+    arr.append(1)
+
+@pytest.fixture
+def fixture2():
+    arr.append(2)
+
+@pytest.mark.usefixtures("fixture1", "fixture2")
+def test_with_multiple_pytest_use_fixtures():
+    assert arr == [1, 2]
+"#,
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_pytest_mark_usefixtures_with_parametrize() {
+        let env = TestEnv::with_file(
+            "<test>/test_pytest_use_fixtures.py",
+            r#"
+import pytest
+
+arr = []
+
+@pytest.fixture
+def setup_fixture():
+    arr.append(1)
+
+@pytest.mark.usefixtures("setup_fixture")
+@pytest.mark.parametrize("value", [1, 2, 3])
+def test_pytest_use_fixtures_with_parametrize(value):
+    assert value > 0
+    # Fixtures are called before any run
+    assert arr == [1, 1, 1]
+"#,
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+        for _ in 0..3 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_pytest_mark_usefixtures_session_scope() {
+        let env = TestEnv::with_files([(
+            "<test>/test_pytest_use_fixtures.py",
+            r#"
+import pytest
+
+arr = []
+
+@pytest.fixture(scope='session')
+def session_fixture():
+    arr.append(1)
+
+@pytest.mark.usefixtures("session_fixture")
+def test_pytest_session_1():
+    assert arr == [1]
+
+@pytest.mark.usefixtures("session_fixture")
+def test_pytest_session_2():
+    assert arr == [1]
+"#,
+        )]);
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
         for _ in 0..2 {
             expected_stats.add_passed();
         }

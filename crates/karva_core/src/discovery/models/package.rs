@@ -1,11 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
 use karva_project::path::SystemPathBuf;
+use pyo3::prelude::*;
 
+#[cfg(test)]
+use crate::discovery::TestFunction;
 use crate::{
-    discovery::{DiscoveredModule, ModuleType, TestFunction},
+    discovery::{DiscoveredModule, ModuleType},
     extensions::fixtures::{Fixture, HasFixtures, RequiresFixtures},
-    utils::Upcast,
 };
 
 /// A package represents a single python directory.
@@ -191,38 +193,30 @@ impl DiscoveredPackage {
     }
 
     #[must_use]
+    #[cfg(test)]
     pub(crate) fn test_functions(&self) -> Vec<&TestFunction> {
-        let mut functions = self.direct_test_functions();
-
-        for sub_package in self.packages.values() {
-            functions.extend(sub_package.test_functions());
-        }
-
-        functions
-    }
-
-    #[must_use]
-    pub(crate) fn direct_test_functions(&self) -> Vec<&TestFunction> {
         let mut functions = Vec::new();
-
         for module in self.modules.values() {
             functions.extend(module.test_functions());
         }
-
+        for package in self.packages.values() {
+            functions.extend(package.test_functions());
+        }
         functions
     }
 
     // TODO: Rename this
     #[must_use]
-    pub(crate) fn dependencies(&self) -> Vec<&dyn RequiresFixtures> {
+    pub(crate) fn all_requires_fixtures(&self) -> Vec<&dyn RequiresFixtures> {
         let mut dependencies: Vec<&dyn RequiresFixtures> = Vec::new();
-        let direct_test_functions: Vec<&dyn RequiresFixtures> =
-            self.direct_test_functions().upcast();
 
-        for configuration_module in self.configuration_modules() {
-            dependencies.extend(configuration_module.dependencies());
+        for module in self.modules.values() {
+            dependencies.extend(module.all_requires_fixtures());
         }
-        dependencies.extend(direct_test_functions);
+
+        for package in self.packages.values() {
+            dependencies.extend(package.all_requires_fixtures());
+        }
 
         dependencies
     }
@@ -267,12 +261,13 @@ impl DiscoveredPackage {
 impl<'proj> HasFixtures<'proj> for DiscoveredPackage {
     fn all_fixtures<'a: 'proj>(
         &'a self,
+        py: Python<'_>,
         test_cases: &[&dyn RequiresFixtures],
     ) -> Vec<&'proj Fixture> {
         let mut fixtures = Vec::new();
 
         for module in self.configuration_modules() {
-            let module_fixtures = module.all_fixtures(test_cases);
+            let module_fixtures = module.all_fixtures(py, test_cases);
 
             fixtures.extend(module_fixtures);
         }
@@ -284,9 +279,10 @@ impl<'proj> HasFixtures<'proj> for DiscoveredPackage {
 impl<'proj> HasFixtures<'proj> for &'proj DiscoveredPackage {
     fn all_fixtures<'a: 'proj>(
         &'a self,
+        py: Python<'_>,
         test_cases: &[&dyn RequiresFixtures],
     ) -> Vec<&'proj Fixture> {
-        (*self).all_fixtures(test_cases)
+        (*self).all_fixtures(py, test_cases)
     }
 }
 

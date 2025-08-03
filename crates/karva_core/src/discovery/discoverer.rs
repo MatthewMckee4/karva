@@ -29,7 +29,7 @@ impl<'proj> StandardDiscoverer<'proj> {
         let mut discovery_diagnostics = Vec::new();
         let cwd = self.project.cwd();
 
-        if add_to_sys_path(py, cwd).is_err() {
+        if add_to_sys_path(py, cwd, 0).is_err() {
             return (session_package, discovery_diagnostics);
         }
 
@@ -74,16 +74,9 @@ impl<'proj> StandardDiscoverer<'proj> {
                             );
 
                             if let Some(mut module) = module {
-                                let test_functions = module.test_functions();
+                                module.filter_test_functions(function_name);
 
-                                let filtered_functions: Vec<_> = test_functions
-                                    .into_iter()
-                                    .filter(|func| func.name() == *function_name)
-                                    .cloned()
-                                    .collect();
-
-                                if !filtered_functions.is_empty() {
-                                    module.set_test_functions(filtered_functions);
+                                if !module.test_functions().is_empty() {
                                     session_package.add_module(module);
                                 }
                             }
@@ -867,7 +860,6 @@ def root_fixture():
     }
 
     #[test]
-    #[ignore = "pytest is not supported in rust tests"]
     fn test_discover_pytest_fixture() {
         let env = TestEnv::with_files([
             (
@@ -889,7 +881,16 @@ def x():
         let project = Project::new(env.cwd(), vec![test_dir]);
         let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
 
-        assert_snapshot!(session.display(), @"");
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            └── <temp_dir>/<test>/tests/
+                ├── <test>.tests.conftest
+                │   ├── test_cases []
+                │   └── fixtures [x]
+                └── <test>.tests.test_1
+                    ├── test_cases [test_1]
+                    └── fixtures []
+        ");
     }
 
     #[test]

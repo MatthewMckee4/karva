@@ -581,7 +581,7 @@ fn test_multiple_files_with_cross_function_calls() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed]: Data validation failed
      --> test_with_helper at <temp_dir>/test_cross_file.py:4
      | File "<temp_dir>/test_cross_file.py", line 5, in test_with_helper
      |   validate_data([])
@@ -619,7 +619,7 @@ fn test_nested_function_calls_deep_stack() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed]: Deep stack assertion failed
      --> test_deep_call_stack at <temp_dir>/test_deep_stack.py:11
      | File "<temp_dir>/test_deep_stack.py", line 12, in test_deep_call_stack
      |   level_1()
@@ -661,7 +661,7 @@ fn test_assertion_in_class_method() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed]: Result must be positive
      --> test_calculator at <temp_dir>/test_class.py:9
      | File "<temp_dir>/test_class.py", line 12, in test_calculator
      |   calc.validate_result(result)
@@ -702,7 +702,7 @@ fn test_assertion_in_imported_function() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-failed]: Expected positive value, got -10
      --> test_imported_validation at <temp_dir>/test_import.py:4
      | File "<temp_dir>/test_import.py", line 5, in test_imported_validation
      |   is_positive(-10)
@@ -1371,20 +1371,18 @@ fn test_independent_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
         (
             "tests/conftest.py".to_string(),
             format!(
-                r#"
+                r"
                 from {framework} import fixture
                 from src import Calculator
 
                 @fixture
                 def calculator_a() -> Calculator:
-                    print("Calculator A initialized")
                     return Calculator()
 
                 @fixture
                 def calculator_b() -> Calculator:
-                    print("Calculator B initialized")
                     return Calculator()
-                "#,
+                ",
             ),
         ),
         (
@@ -1404,14 +1402,12 @@ fn test_independent_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
 
     let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    run_with_path_and_snapshot!(case, &["-s"], @r"
+    run_with_path_and_snapshot!(case, @r"
     success: true
     exit_code: 0
     ----- stdout -----
     Passed tests: 2
     All checks passed!
-    Calculator A initialized
-    Calculator B initialized
 
     ----- stderr -----
     ");

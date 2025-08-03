@@ -19,6 +19,7 @@ pub(crate) struct FunctionDefinitionVisitor<'proj, 'b> {
     module_path: SystemPathBuf,
     diagnostics: Vec<Diagnostic>,
     py_module: Bound<'b, PyModule>,
+    py: Python<'b>,
     inside_function: bool,
 }
 
@@ -43,6 +44,7 @@ impl<'proj, 'b> FunctionDefinitionVisitor<'proj, 'b> {
             diagnostics: Vec::new(),
             py_module,
             inside_function: false,
+            py,
         })
     }
 }
@@ -57,9 +59,13 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_> {
             self.inside_function = true;
             if is_fixture_function(function_def) {
                 let mut generator_function_visitor = GeneratorFunctionVisitor::default();
+
                 source_order::walk_body(&mut generator_function_visitor, &function_def.body);
+
                 let is_generator_function = generator_function_visitor.is_generator;
+
                 match Fixture::try_from_function(
+                    self.py,
                     function_def,
                     &self.py_module,
                     is_generator_function,
@@ -78,10 +84,13 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_> {
                 .to_string()
                 .starts_with(self.project.options().test_prefix())
             {
-                self.discovered_functions.push(TestFunction::new(
-                    self.module_path.clone(),
-                    function_def.clone(),
-                ));
+                if let Ok(py_function) = self.py_module.getattr(function_def.name.to_string()) {
+                    self.discovered_functions.push(TestFunction::new(
+                        self.module_path.clone(),
+                        function_def.clone(),
+                        py_function.unbind(),
+                    ));
+                }
             }
             source_order::walk_stmt(self, stmt);
 

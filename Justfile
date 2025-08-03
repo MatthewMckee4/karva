@@ -1,5 +1,3 @@
-ITERATIONS := "1"
-NUM_TESTS := "10000"
 N := "1000"
 
 # Build the project
@@ -9,8 +7,10 @@ build:
 # Run tests
 test *args:
     @rm -f target/wheels/*.whl
+    uv venv --clear
+    uv pip install maturin pytest
     uv run --no-project maturin build
-    cargo test {{args}}
+    uv run cargo test {{args}}
 
 # Build documentation
 docs:
@@ -26,10 +26,10 @@ format:
     cargo +nightly fmt
     cargo sort
 
-# Run benchmarks
 pytest-benchmark: build
     cd scripts/benchmark && uv sync --all-extras --no-install-project && uv pip install -e ../../ && uv run main.py --iterations {{ITERATIONS}} --num-tests {{NUM_TESTS}} --run-test
 
+# Run benchmarks
 benchmark:
     cargo codspeed build --features codspeed -p karva_benchmark
     cargo codspeed run
