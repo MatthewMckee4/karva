@@ -3,7 +3,6 @@ use std::{
     fmt::{self, Display},
 };
 
-use karva_project::path::SystemPathBuf;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
@@ -18,14 +17,15 @@ use crate::{
         fixtures::{FixtureManager, HasFunctionDefinition, RequiresFixtures},
         tags::Tags,
     },
+    name::FunctionName,
     utils::Upcast,
 };
 
 /// Represents a single test function.
 pub(crate) struct TestFunction {
-    path: SystemPathBuf,
     function_definition: StmtFunctionDef,
     py_function: Py<PyAny>,
+    name: FunctionName,
 }
 
 impl HasFunctionDefinition for TestFunction {
@@ -44,26 +44,28 @@ impl HasFunctionDefinition for TestFunction {
 
 impl TestFunction {
     #[must_use]
-    pub(crate) const fn new(
-        path: SystemPathBuf,
+    pub(crate) fn new(
+        module_name: String,
         function_definition: StmtFunctionDef,
         py_function: Py<PyAny>,
     ) -> Self {
+        let name = FunctionName::new(function_definition.name.to_string(), module_name);
+
         Self {
-            path,
             function_definition,
             py_function,
+            name,
         }
     }
 
     #[must_use]
-    pub(crate) fn name_str(&self) -> &str {
-        &self.function_definition.name
+    pub(crate) const fn name(&self) -> &FunctionName {
+        &self.name
     }
 
     #[must_use]
-    pub(crate) fn name(&self) -> String {
-        self.function_definition.name.to_string()
+    pub(crate) fn function_name(&self) -> &str {
+        &self.function_definition.name
     }
 
     #[must_use]
@@ -139,7 +141,9 @@ impl TestFunction {
                 for fixture_name in &required_fixture_names {
                     if let Some(fixture) = params.get(fixture_name) {
                         required_fixtures.insert(fixture_name.clone(), fixture.clone());
-                    } else if let Some(fixture) = fixture_manager.get_fixture(fixture_name) {
+                    } else if let Some(fixture) =
+                        fixture_manager.get_fixture_with_name(fixture_name)
+                    {
                         required_fixtures.insert(fixture_name.clone(), fixture);
                     } else {
                         fixture_diagnostics.push(SubDiagnostic::fixture_not_found(fixture_name));
@@ -154,7 +158,7 @@ impl TestFunction {
                         Some(self.display_with_line(module)),
                         None,
                         DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                            self.name(),
+                            self.name().to_string(),
                             TestCaseDiagnosticType::Collection(
                                 TestCaseCollectionDiagnosticType::FixtureNotFound,
                             ),
@@ -216,7 +220,7 @@ impl<'proj> Upcast<Vec<&'proj dyn HasFunctionDefinition>> for Vec<&'proj TestFun
 
 impl std::fmt::Debug for TestFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}::{}", self.path.display(), self.name_str())
+        write!(f, "{}", self.name())
     }
 }
 
@@ -236,14 +240,18 @@ mod tests {
         let env = TestEnv::with_files([("<test>/test.py", "def test_function(): pass")]);
         let path = env.create_file("test.py", "def test_function(): pass");
 
-        let project = Project::new(env.cwd(), vec![path.clone()]);
+        let project = Project::new(env.cwd(), vec![path]);
         let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::with_gil(|py| discoverer.discover(py));
 
         let test_case = session.test_functions()[0];
 
-        assert_eq!(test_case.path, path);
-        assert_eq!(test_case.name(), "test_function");
+        assert!(
+            test_case
+                .name()
+                .to_string()
+                .ends_with("test::test_function")
+        );
     }
 
     #[test]

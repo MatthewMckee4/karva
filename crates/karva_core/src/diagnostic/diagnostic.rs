@@ -90,7 +90,7 @@ impl Diagnostic {
                 Some(test_case.function().display_with_line(module)),
                 Some(get_traceback(py, error)),
                 DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                    test_case.function().name(),
+                    test_case.function().name().to_string(),
                     TestCaseDiagnosticType::Fail,
                 )),
             );
@@ -101,7 +101,7 @@ impl Diagnostic {
             message,
             Some(test_case.function().display_with_line(module)),
             DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                test_case.function().name(),
+                test_case.function().name().to_string(),
                 TestCaseDiagnosticType::Error(get_type_name(py, error)),
             )),
         )

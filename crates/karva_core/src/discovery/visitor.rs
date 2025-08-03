@@ -21,6 +21,7 @@ pub(crate) struct FunctionDefinitionVisitor<'proj, 'b> {
     py_module: Bound<'b, PyModule>,
     py: Python<'b>,
     inside_function: bool,
+    module_name: String,
 }
 
 impl<'proj, 'b> FunctionDefinitionVisitor<'proj, 'b> {
@@ -33,7 +34,7 @@ impl<'proj, 'b> FunctionDefinitionVisitor<'proj, 'b> {
             module_name(project.cwd(), &module_path).ok_or("Failed to get module name")?;
 
         let py_module = py
-            .import(module_name)
+            .import(&module_name)
             .map_err(|_| "Failed to import module")?;
 
         Ok(Self {
@@ -45,6 +46,7 @@ impl<'proj, 'b> FunctionDefinitionVisitor<'proj, 'b> {
             py_module,
             inside_function: false,
             py,
+            module_name,
         })
     }
 }
@@ -68,6 +70,7 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_> {
                     self.py,
                     function_def,
                     &self.py_module,
+                    &self.module_name,
                     is_generator_function,
                 ) {
                     Ok(Some(fixture_def)) => self.fixture_definitions.push(fixture_def),
@@ -86,7 +89,7 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_> {
             {
                 if let Ok(py_function) = self.py_module.getattr(function_def.name.to_string()) {
                     self.discovered_functions.push(TestFunction::new(
-                        self.module_path.clone(),
+                        self.module_name.clone(),
                         function_def.clone(),
                         py_function.unbind(),
                     ));

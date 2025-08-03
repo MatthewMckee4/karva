@@ -1135,4 +1135,56 @@ def test_pytest_session_2():
 
         assert_eq!(*result.stats(), expected_stats);
     }
+
+    #[test]
+    fn test_fixture_override_in_test_modules() {
+        let env = TestEnv::with_files([
+            (
+                "<test>/tests/conftest.py",
+                r"
+import karva
+
+@karva.fixture
+def username():
+    return 'username'
+",
+            ),
+            (
+                "<test>/tests/test_something.py",
+                r"
+import karva
+
+@karva.fixture
+def username(username):
+    return 'overridden-' + username
+
+def test_username(username):
+    assert username == 'overridden-username'
+",
+            ),
+            (
+                "<test>/tests/test_something_else.py",
+                r"
+import karva
+
+@karva.fixture
+def username(username):
+    return 'overridden-else-' + username
+
+def test_username(username):
+    assert username == 'overridden-else-username'
+",
+            ),
+        ]);
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
 }

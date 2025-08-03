@@ -76,7 +76,7 @@ impl TestEnv {
                 "--directory",
                 project_path.to_str().unwrap(),
             ],
-            vec!["uv", "venv", venv_path.to_str().unwrap()],
+            vec!["uv", "venv", venv_path.to_str().unwrap(), "-p", "3.13"],
             vec![
                 "uv",
                 "pip",
