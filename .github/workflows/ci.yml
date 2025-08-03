@@ -110,7 +110,7 @@ jobs:
         run: |
           uv venv
           uv pip install maturin
-          uv run maturin build
+          uv run --no-project maturin build
 
       - name: Generate resources
         run: uv run crates/karva_benchmark/resources/generate.py
