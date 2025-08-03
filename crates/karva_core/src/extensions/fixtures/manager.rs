@@ -35,7 +35,6 @@ impl FixtureCollection {
         Finalizers::new(self.finalizers.drain(..).collect())
     }
 
-    #[cfg(test)]
     pub(crate) fn contains_fixture_with_name(&self, fixture_name: &str) -> bool {
         self.fixtures
             .iter()
@@ -78,36 +77,36 @@ impl<'a> FixtureManager<'a> {
     }
 
     pub(crate) fn contains_fixture_with_name(&self, fixture_name: &str) -> bool {
-        self.all_fixtures()
-            .iter()
-            .any(|(name, _)| name.function_name() == fixture_name)
+        if self.collection.contains_fixture_with_name(fixture_name) {
+            return true;
+        }
+        self.parent
+            .as_ref()
+            .is_some_and(|parent| parent.contains_fixture_with_name(fixture_name))
     }
 
     #[must_use]
     pub(crate) fn get_fixture(&self, fixture_name: &FunctionName) -> Option<Py<PyAny>> {
-        self.all_fixtures().get(fixture_name).cloned()
+        if let Some(fixture) = self.collection.fixtures.get(fixture_name) {
+            return Some(fixture.clone());
+        }
+        self.parent
+            .as_ref()
+            .map_or_else(|| None, |parent| parent.get_fixture(fixture_name))
     }
 
     #[must_use]
     pub(crate) fn get_fixture_with_name(&self, fixture_name: &str) -> Option<Py<PyAny>> {
-        self.all_fixtures()
-            .iter()
+        if let Some((_, fixture)) = self
+            .collection
+            .iter_fixtures()
             .find(|(name, _)| name.function_name() == fixture_name)
-            .map(|(_, v)| v.clone())
-    }
-
-    #[must_use]
-    pub(crate) fn all_fixtures(&self) -> HashMap<FunctionName, Py<PyAny>> {
-        let mut fixtures = HashMap::new();
-        if let Some(parent) = &self.parent {
-            fixtures.extend(parent.all_fixtures());
+        {
+            return Some(fixture.clone());
         }
-        fixtures.extend(
-            self.collection
-                .iter_fixtures()
-                .map(|(k, v)| (k.clone(), v.clone())),
-        );
-        fixtures
+        self.parent
+            .as_ref()
+            .map_or_else(|| None, |parent| parent.get_fixture_with_name(fixture_name))
     }
 
     pub(crate) fn insert_fixture(&mut self, fixture_return: Py<PyAny>, fixture: &Fixture) {
