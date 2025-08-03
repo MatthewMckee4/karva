@@ -62,9 +62,7 @@ impl IntegrationTestEnv {
     }
 
     fn command(&self) -> Command {
-        let karva_bin = self.karva_bin();
-        eprintln!("karva_bin: {}", karva_bin.display());
-        let mut command = Command::new(karva_bin);
+        let mut command = Command::new(self.karva_bin());
         command.current_dir(self.test_env.cwd()).arg("test");
         command
     }
@@ -188,7 +186,7 @@ fn test_one_test_fails() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]
-     --> test_fail::test_fail at <temp_dir>/test_fail.py:2
+     --> test_fail at <temp_dir>/test_fail.py:2
      | File "<temp_dir>/test_fail.py", line 3, in test_fail
      |   assert False
 
@@ -215,7 +213,7 @@ fn test_multiple_tests_fail() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]
-     --> test_fail2::test_fail2 at <temp_dir>/test_fail2.py:2
+     --> test_fail2 at <temp_dir>/test_fail2.py:2
      | File "<temp_dir>/test_fail2.py", line 3, in test_fail2
      |   assert 1 == 2
 
@@ -251,7 +249,7 @@ fn test_mixed_pass_and_fail() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]
-     --> test_fail::test_fail at <temp_dir>/test_fail.py:2
+     --> test_fail at <temp_dir>/test_fail.py:2
      | File "<temp_dir>/test_fail.py", line 3, in test_fail
      |   assert False
 
@@ -279,7 +277,7 @@ fn test_assertion_with_message() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]
-     --> test_fail_with_msg::test_fail_with_message at <temp_dir>/test_fail_with_msg.py:2
+     --> test_fail_with_message at <temp_dir>/test_fail_with_msg.py:2
      | File "<temp_dir>/test_fail_with_msg.py", line 3, in test_fail_with_message
      |   assert False
 
@@ -308,7 +306,7 @@ fn test_equality_assertion_fail() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]
-     --> test_equality::test_equality at <temp_dir>/test_equality.py:2
+     --> test_equality at <temp_dir>/test_equality.py:2
      | File "<temp_dir>/test_equality.py", line 5, in test_equality
      |   assert x == y
 
@@ -336,7 +334,7 @@ fn test_complex_assertion_fail() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]
-     --> test_complex::test_complex at <temp_dir>/test_complex.py:2
+     --> test_complex at <temp_dir>/test_complex.py:2
      | File "<temp_dir>/test_complex.py", line 4, in test_complex
      |   assert len(data) > 5
 
@@ -374,7 +372,7 @@ fn test_long_file() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]
-     --> test_long::test_in_long_file at <temp_dir>/test_long.py:11
+     --> test_in_long_file at <temp_dir>/test_long.py:11
      | File "<temp_dir>/test_long.py", line 14, in test_in_long_file
      |   assert result == expected
 
@@ -404,7 +402,7 @@ fn test_multiple_assertions_in_function() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]
-     --> test_multiple_assertions::test_multiple_assertions at <temp_dir>/test_multiple_assertions.py:2
+     --> test_multiple_assertions at <temp_dir>/test_multiple_assertions.py:2
      | File "<temp_dir>/test_multiple_assertions.py", line 6, in test_multiple_assertions
      |   assert y == 3
 
@@ -435,7 +433,7 @@ fn test_assertion_in_nested_function() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]
-     --> test_nested::test_with_nested_call at <temp_dir>/test_nested.py:5
+     --> test_with_nested_call at <temp_dir>/test_nested.py:5
      | File "<temp_dir>/test_nested.py", line 7, in test_with_nested_call
      |   assert result == True
 
@@ -492,7 +490,7 @@ fn test_assertion_with_multiline_setup() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]
-     --> test_multiline::test_multiline_setup at <temp_dir>/test_multiline.py:2
+     --> test_multiline_setup at <temp_dir>/test_multiline.py:2
      | File "<temp_dir>/test_multiline.py", line 10, in test_multiline_setup
      |   assert result == expected
 
@@ -519,7 +517,7 @@ fn test_assertion_with_very_long_line() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]
-     --> test_very_long_line::test_very_long_line at <temp_dir>/test_very_long_line.py:2
+     --> test_very_long_line at <temp_dir>/test_very_long_line.py:2
      | File "<temp_dir>/test_very_long_line.py", line 3, in test_very_long_line
      |   assert 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16 + 17 + 18 + 19 + 20 == 1000
 
@@ -544,7 +542,7 @@ fn test_assertion_on_line_1() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]
-     --> test_line_1::test_line_1 at <temp_dir>/test_line_1.py:1
+     --> test_line_1 at <temp_dir>/test_line_1.py:1
      | File "<temp_dir>/test_line_1.py", line 2, in test_line_1
      |   assert False
 
@@ -584,7 +582,7 @@ fn test_multiple_files_with_cross_function_calls() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]: Data validation failed
-     --> test_cross_file::test_with_helper at <temp_dir>/test_cross_file.py:4
+     --> test_with_helper at <temp_dir>/test_cross_file.py:4
      | File "<temp_dir>/test_cross_file.py", line 5, in test_with_helper
      |   validate_data([])
      | File "<temp_dir>/helper.py", line 4, in validate_data
@@ -622,7 +620,7 @@ fn test_nested_function_calls_deep_stack() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]: Deep stack assertion failed
-     --> test_deep_stack::test_deep_call_stack at <temp_dir>/test_deep_stack.py:11
+     --> test_deep_call_stack at <temp_dir>/test_deep_stack.py:11
      | File "<temp_dir>/test_deep_stack.py", line 12, in test_deep_call_stack
      |   level_1()
      | File "<temp_dir>/test_deep_stack.py", line 3, in level_1
@@ -664,7 +662,7 @@ fn test_assertion_in_class_method() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]: Result must be positive
-     --> test_class::test_calculator at <temp_dir>/test_class.py:9
+     --> test_calculator at <temp_dir>/test_class.py:9
      | File "<temp_dir>/test_class.py", line 12, in test_calculator
      |   calc.validate_result(result)
      | File "<temp_dir>/test_class.py", line 7, in validate_result
@@ -705,7 +703,7 @@ fn test_assertion_in_imported_function() -> anyhow::Result<()> {
     exit_code: 1
     ----- stdout -----
     fail[assertion-failed]: Expected positive value, got -10
-     --> test_import::test_imported_validation at <temp_dir>/test_import.py:4
+     --> test_imported_validation at <temp_dir>/test_import.py:4
      | File "<temp_dir>/test_import.py", line 5, in test_imported_validation
      |   is_positive(-10)
      | File "<temp_dir>/validators.py", line 3, in is_positive
@@ -1527,8 +1525,8 @@ fn test_basic_error_handling(#[case] framework: &str) -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    error[fixtures-not-found]: Fixture(s) not found for tests.test_calculator::test_failing
-     --> tests.test_calculator::test_failing at <temp_dir>/tests/test_calculator.py:7
+    error[fixtures-not-found]: Fixture(s) not found for test_failing
+     --> test_failing at <temp_dir>/tests/test_calculator.py:7
     error (fixture-not-found): fixture 'failing_calculator' not found
 
     Passed tests: 1
@@ -1665,8 +1663,8 @@ fn test_invalid_scope_value(#[case] framework: &str) -> anyhow::Result<()> {
     error[invalid-fixture]: Invalid fixture scope: invalid_scope
      --> <temp_dir>/tests/conftest.py
 
-    error[fixtures-not-found]: Fixture(s) not found for tests.test_calculator::test_calc
-     --> tests.test_calculator::test_calc at <temp_dir>/tests/test_calculator.py:4
+    error[fixtures-not-found]: Fixture(s) not found for test_calc
+     --> test_calc at <temp_dir>/tests/test_calculator.py:4
     error (fixture-not-found): fixture 'calculator' not found
 
     Errored tests: 1
@@ -1714,8 +1712,8 @@ fn test_invalid_fixture_name(#[case] framework: &str) -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    error[fixtures-not-found]: Fixture(s) not found for tests.test_calculator::test_calc
-     --> tests.test_calculator::test_calc at <temp_dir>/tests/test_calculator.py:4
+    error[fixtures-not-found]: Fixture(s) not found for test_calc
+     --> test_calc at <temp_dir>/tests/test_calculator.py:4
     error (fixture-not-found): fixture 'calculator' not found
 
     Errored tests: 1
@@ -1779,8 +1777,8 @@ fn test_multiple_conftest_same_dir(#[case] framework: &str) -> anyhow::Result<()
     success: false
     exit_code: 1
     ----- stdout -----
-    error[fixtures-not-found]: Fixture(s) not found for tests.test_calculator::test_calc
-     --> tests.test_calculator::test_calc at <temp_dir>/tests/test_calculator.py:4
+    error[fixtures-not-found]: Fixture(s) not found for test_calc
+     --> test_calc at <temp_dir>/tests/test_calculator.py:4
     error (fixture-not-found): fixture 'calculator_2' not found
 
     Errored tests: 1
@@ -1894,8 +1892,8 @@ fn test_fixture_in_init_file(#[case] framework: &str) -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    error[fixtures-not-found]: Fixture(s) not found for tests.test_calculator::test_init_fixture
-     --> tests.test_calculator::test_init_fixture at <temp_dir>/tests/test_calculator.py:4
+    error[fixtures-not-found]: Fixture(s) not found for test_init_fixture
+     --> test_init_fixture at <temp_dir>/tests/test_calculator.py:4
     error (fixture-not-found): fixture 'init_calculator' not found
 
     Errored tests: 1
@@ -2702,8 +2700,8 @@ fn test_multiple_fixtures_not_found() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    error[fixtures-not-found]: Fixture(s) not found for test_multiple_fixtures_not_found::test_multiple_fixtures_not_found
-     --> test_multiple_fixtures_not_found::test_multiple_fixtures_not_found at <temp_dir>/test_multiple_fixtures_not_found.py:1
+    error[fixtures-not-found]: Fixture(s) not found for test_multiple_fixtures_not_found
+     --> test_multiple_fixtures_not_found at <temp_dir>/test_multiple_fixtures_not_found.py:1
     error (fixture-not-found): fixture 'a' not found
     error (fixture-not-found): fixture 'b' not found
     error (fixture-not-found): fixture 'c' not found
@@ -2964,8 +2962,8 @@ fn test_fixtures_given_by_decorator_one_missing() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    error[fixtures-not-found]: Fixture(s) not found for test_fixtures_given_by_decorator::test_fixtures_given_by_decorator
-     --> test_fixtures_given_by_decorator::test_fixtures_given_by_decorator at <temp_dir>/test_fixtures_given_by_decorator.py:13
+    error[fixtures-not-found]: Fixture(s) not found for test_fixtures_given_by_decorator
+     --> test_fixtures_given_by_decorator at <temp_dir>/test_fixtures_given_by_decorator.py:13
     error (fixture-not-found): fixture 'b' not found
 
     Errored tests: 1
