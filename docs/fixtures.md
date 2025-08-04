@@ -143,6 +143,8 @@ def test():
 
 ## Overriding fixtures
 
+We can _override_ fixtures by giving them the same name. When overriding them we can also use them as arguments.
+
 **conftest.py**
 
 ```py
