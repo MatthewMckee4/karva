@@ -12,6 +12,13 @@ test *args:
     uv run --no-project maturin build
     uv run --no-project cargo test {{args}}
 
+cov:
+    @rm -f target/wheels/*.whl
+    uv venv --clear -p 3.13
+    uv pip install maturin pytest
+    uv run --no-project maturin build
+    uv run --no-project cargo +nightly tarpaulin --out Html -p karva_core -p karva_project
+
 # Build documentation
 docs:
     uv run --no-project mkdocs build

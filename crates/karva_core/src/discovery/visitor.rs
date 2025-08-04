@@ -30,12 +30,11 @@ impl<'proj, 'b> FunctionDefinitionVisitor<'proj, 'b> {
         project: &'proj Project,
         module_path: SystemPathBuf,
     ) -> Result<Self, String> {
-        let module_name =
-            module_name(project.cwd(), &module_path).ok_or("Failed to get module name")?;
+        let module_name = module_name(project.cwd(), &module_path)?;
 
         let py_module = py
             .import(&module_name)
-            .map_err(|_| "Failed to import module")?;
+            .map_err(|e| format!("Failed to import module {e}"))?;
 
         Ok(Self {
             discovered_functions: Vec::new(),
@@ -117,14 +116,18 @@ pub(crate) fn discover(
     module: &DiscoveredModule,
     project: &Project,
 ) -> (DiscoveredFunctions, Vec<Diagnostic>) {
-    let Ok(mut visitor) = FunctionDefinitionVisitor::new(py, project, module.path().clone()) else {
-        return (
-            DiscoveredFunctions {
-                functions: Vec::new(),
-                fixtures: Vec::new(),
-            },
-            vec![],
-        );
+    let mut visitor = match FunctionDefinitionVisitor::new(py, project, module.path().clone()) {
+        Ok(visitor) => visitor,
+        Err(e) => {
+            tracing::debug!("Failed to create discovery module: {e}");
+            return (
+                DiscoveredFunctions {
+                    functions: Vec::new(),
+                    fixtures: Vec::new(),
+                },
+                vec![],
+            );
+        }
     };
 
     let parsed = parsed_module(module, project.metadata().python_version());
