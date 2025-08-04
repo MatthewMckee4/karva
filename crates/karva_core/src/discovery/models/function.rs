@@ -108,7 +108,7 @@ impl TestFunction {
 
         if let Some(tags) = &tags {
             let use_fixtures_names = tags.use_fixtures_names();
-
+            required_fixture_names.reserve(use_fixtures_names.len());
             required_fixture_names.extend(use_fixtures_names);
         }
 
@@ -119,11 +119,7 @@ impl TestFunction {
             )];
         }
 
-        let mut parametrize_args = Vec::new();
-
-        if let Some(tags) = &tags {
-            parametrize_args.extend(tags.parametrize_args());
-        }
+        let mut parametrize_args = tags.as_ref().map_or_else(Vec::new, Tags::parametrize_args);
 
         // Ensure that we collect at least one test case (no parametrization)
         if parametrize_args.is_empty() {

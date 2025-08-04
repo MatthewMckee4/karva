@@ -183,8 +183,12 @@ impl Tags {
                     Vec::with_capacity(param_args.len() * current_values.len());
                 for existing_params in &param_args {
                     for new_params in &current_values {
-                        let mut combined_params = existing_params.clone();
-                        combined_params.extend(new_params.clone());
+                        let mut combined_params =
+                            HashMap::with_capacity(existing_params.len() + new_params.len());
+                        combined_params
+                            .extend(existing_params.iter().map(|(k, v)| (k.clone(), v.clone())));
+                        combined_params
+                            .extend(new_params.iter().map(|(k, v)| (k.clone(), v.clone())));
                         new_param_args.push(combined_params);
                     }
                 }
