@@ -50,6 +50,17 @@ If you wanted it to only create the fixture once you should use the `session` sc
 
 The fixture is created once per test session.
 
+### Dynamic Scope
+
+A dynamic scope is given as a function that returns a valid scope string.
+
+```py
+def dynamic_scope(fixture_name, config):
+    return "module"
+```
+
+Currently, we do not support config and that value is passed as `None`. The `fixture_name` argument is a string.
+
 ## Dependent fixtures
 
 We support fixtures that depend on other fixtures.
@@ -101,6 +112,72 @@ def add_data():
 
 def test_value():
     assert data.get('value')
+```
+
+## Other ways to use fixtures
+
+Seen [here](https://docs.pytest.org/en/7.1.x/how-to/fixtures.html#use-fixtures-in-classes-and-modules-with-usefixtures) in pytest.
+
+You can wrap your test function with a decorator specifying what fixtures you would like to call before running the function.
+
+This is technically a tag, but we reference it here has it refers to fixtures.
+
+```py
+import karva
+
+@karva.fixture
+def x():
+    # Do something
+    return ...
+
+@karva.fixture
+def y():
+    # Do something
+    yield ...
+    # Do something else
+
+@karva.tags.use_fixtures("x", "y")
+def test():
+    # Do something
+```
+
+## Overriding fixtures
+
+We can _override_ fixtures by giving them the same name. When overriding them we can also use them as arguments.
+
+**conftest.py**
+
+```py
+import pytest
+
+@pytest.fixture
+def username():
+    return 'username'
+
+```
+
+**test_something.py**
+
+```py
+def test_username(username):
+    assert username == 'username'
+```
+
+**subfolder/conftest.py**
+
+```py
+import pytest
+
+@pytest.fixture
+def username(username):
+    return 'overridden-' + username
+```
+
+**subfolder/test_something_else.py**
+
+```py
+def test_username(username):
+    assert username == 'overridden-username'
 ```
 
 ## Example
