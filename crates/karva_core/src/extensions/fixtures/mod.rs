@@ -154,7 +154,7 @@ impl Fixture {
 
         for name in self.get_required_fixture_names(py) {
             if let Some(fixture) =
-                fixture_manager.get_fixture_with_name(&name, Some(self.name.module()))
+                fixture_manager.get_fixture_with_name(&name, Some(&[self.name()]))
             {
                 required_fixtures.push(fixture.clone().into_bound(py));
             }

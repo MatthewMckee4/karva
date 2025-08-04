@@ -92,22 +92,25 @@ impl<'a> FixtureManager<'a> {
             .map_or_else(|| None, |parent| parent.get_fixture(fixture_name))
     }
 
+    // Get a single fixture with a given name.
+    //
+    // We can optionally exclude specific function names from the search.
     #[must_use]
     pub(crate) fn get_fixture_with_name(
         &self,
         fixture_name: &str,
-        exclude_module: Option<&str>,
+        exclude: Option<&[&FunctionName]>,
     ) -> Option<Py<PyAny>> {
         if let Some((_, fixture)) = self.collection.fixtures.iter().rev().find(|(name, _)| {
             name.function_name() == fixture_name
-                && exclude_module.is_none_or(|exclude_module| name.module() != exclude_module)
+                && exclude.is_none_or(|exclude| !exclude.contains(name))
         }) {
             return Some(fixture.clone());
         }
 
         self.parent.as_ref().map_or_else(
             || None,
-            |parent| parent.get_fixture_with_name(fixture_name, exclude_module),
+            |parent| parent.get_fixture_with_name(fixture_name, exclude),
         )
     }
 
