@@ -12,10 +12,6 @@ impl FunctionName {
     pub(crate) fn function_name(&self) -> &str {
         &self.name
     }
-
-    pub(crate) fn module(&self) -> &str {
-        &self.module
-    }
 }
 
 impl std::fmt::Display for FunctionName {
