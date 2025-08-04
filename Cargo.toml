@@ -24,6 +24,7 @@ crossbeam = { version = "0.8.4" }
 ctor = "0.4.2"
 dunce = { version = "1.0.5" }
 ignore = { version = "0.4.23" }
+indexmap = { version = "2.10.0" }
 indicatif = { version = "0.17.8" }
 insta = { version = "1.35.1" }
 insta-cmd = { version = "0.6.0" }

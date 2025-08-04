@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use indexmap::IndexMap;
 use pyo3::{prelude::*, types::PyAny};
 
 use crate::{
@@ -7,26 +6,23 @@ use crate::{
     extensions::fixtures::{
         Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, RequiresFixtures,
     },
+    name::FunctionName,
     utils::partition_iter,
 };
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct FixtureCollection {
-    fixtures: HashMap<String, Py<PyAny>>,
+    fixtures: IndexMap<FunctionName, Py<PyAny>>,
     finalizers: Vec<Finalizer>,
 }
 
 impl FixtureCollection {
-    pub(crate) fn insert_fixture(&mut self, fixture_name: String, fixture_return: Py<PyAny>) {
+    pub(crate) fn insert_fixture(&mut self, fixture_name: FunctionName, fixture_return: Py<PyAny>) {
         self.fixtures.insert(fixture_name, fixture_return);
     }
 
     pub(crate) fn insert_finalizer(&mut self, finalizer: Finalizer) {
         self.finalizers.push(finalizer);
-    }
-
-    pub(crate) fn iter_fixtures(&self) -> impl Iterator<Item = (&String, &Py<PyAny>)> {
-        self.fixtures.iter()
     }
 
     pub(crate) fn reset(&mut self) -> Finalizers {
@@ -35,8 +31,10 @@ impl FixtureCollection {
     }
 
     #[cfg(test)]
-    pub(crate) fn contains_fixture(&self, fixture_name: &str) -> bool {
-        self.fixtures.contains_key(fixture_name)
+    pub(crate) fn contains_fixture_with_name(&self, fixture_name: &str) -> bool {
+        self.fixtures
+            .iter()
+            .any(|(name, _)| name.function_name() == fixture_name)
     }
 }
 
@@ -60,47 +58,66 @@ impl<'a> FixtureManager<'a> {
 
     #[must_use]
     #[cfg(test)]
-    pub(crate) fn contains_fixture_at_scope(
+    pub(crate) fn contains_fixture_with_name_at_scope(
         &self,
         fixture_name: &str,
         scope: &FixtureScope,
     ) -> bool {
         if self.scope == *scope {
-            self.collection.contains_fixture(fixture_name)
+            self.collection.contains_fixture_with_name(fixture_name)
         } else {
             self.parent
                 .as_ref()
-                .is_some_and(|p| p.contains_fixture_at_scope(fixture_name, scope))
+                .is_some_and(|p| p.contains_fixture_with_name_at_scope(fixture_name, scope))
         }
     }
 
-    pub(crate) fn contains_fixture(&self, fixture_name: &str) -> bool {
-        self.all_fixtures().contains_key(fixture_name)
-    }
-
-    #[must_use]
-    pub(crate) fn get_fixture(&self, fixture_name: &str) -> Option<Py<PyAny>> {
-        self.all_fixtures().get(fixture_name).cloned()
-    }
-
-    #[must_use]
-    pub(crate) fn all_fixtures(&self) -> HashMap<String, Py<PyAny>> {
-        let mut fixtures = HashMap::new();
-        if let Some(parent) = &self.parent {
-            fixtures.extend(parent.all_fixtures());
+    #[cfg(test)]
+    pub(crate) fn contains_fixture_with_name(&self, fixture_name: &str) -> bool {
+        if self.collection.contains_fixture_with_name(fixture_name) {
+            return true;
         }
-        fixtures.extend(
-            self.collection
-                .iter_fixtures()
-                .map(|(k, v)| (k.clone(), v.clone())),
-        );
-        fixtures
+        self.parent
+            .as_ref()
+            .is_some_and(|parent| parent.contains_fixture_with_name(fixture_name))
+    }
+
+    #[must_use]
+    pub(crate) fn get_fixture(&self, fixture_name: &FunctionName) -> Option<Py<PyAny>> {
+        if let Some(fixture) = self.collection.fixtures.get(fixture_name) {
+            return Some(fixture.clone());
+        }
+        self.parent
+            .as_ref()
+            .map_or_else(|| None, |parent| parent.get_fixture(fixture_name))
+    }
+
+    // Get a single fixture with a given name.
+    //
+    // We can optionally exclude specific function names from the search.
+    #[must_use]
+    pub(crate) fn get_fixture_with_name(
+        &self,
+        fixture_name: &str,
+        exclude: Option<&[&FunctionName]>,
+    ) -> Option<Py<PyAny>> {
+        if let Some((_, fixture)) = self.collection.fixtures.iter().rev().find(|(name, _)| {
+            name.function_name() == fixture_name
+                && exclude.is_none_or(|exclude| !exclude.contains(name))
+        }) {
+            return Some(fixture.clone());
+        }
+
+        self.parent.as_ref().map_or_else(
+            || None,
+            |parent| parent.get_fixture_with_name(fixture_name, exclude),
+        )
     }
 
     pub(crate) fn insert_fixture(&mut self, fixture_return: Py<PyAny>, fixture: &Fixture) {
         if self.scope <= *fixture.scope() {
             self.collection
-                .insert_fixture(fixture.name().to_string(), fixture_return);
+                .insert_fixture(fixture.name().clone(), fixture_return);
         } else {
             // We should not reach this
         }
@@ -141,11 +158,14 @@ impl<'a> FixtureManager<'a> {
 
         for dependency in &current_dependencies {
             let mut found = false;
-            for fixture in &current_all_fixtures {
-                if fixture.name() == dependency {
-                    self.ensure_fixture_dependencies(py, parents, current, fixture);
-                    found = true;
-                    break;
+            for dep_fixture in &current_all_fixtures {
+                if dep_fixture.name().function_name() == dependency {
+                    // Avoid infinite recursion by not processing the same fixture we're currently on
+                    if dep_fixture.name() != fixture.name() {
+                        self.ensure_fixture_dependencies(py, parents, current, dep_fixture);
+                        found = true;
+                        break;
+                    }
                 }
             }
 
@@ -156,15 +176,15 @@ impl<'a> FixtureManager<'a> {
                     let parent_fixture = (*parent).get_fixture(py, dependency);
 
                     if let Some(parent_fixture) = parent_fixture {
-                        self.ensure_fixture_dependencies(
-                            py,
-                            &parents_above_current_parent,
-                            parent,
-                            parent_fixture,
-                        );
-                    }
-                    if self.contains_fixture(dependency) {
-                        break;
+                        if parent_fixture.name() != fixture.name() {
+                            self.ensure_fixture_dependencies(
+                                py,
+                                &parents_above_current_parent,
+                                parent,
+                                parent_fixture,
+                            );
+                            break;
+                        }
                     }
                 }
             }
@@ -247,7 +267,7 @@ def x():
                 &[first_test_function],
             );
 
-            assert!(manager.contains_fixture("x"));
+            assert!(manager.contains_fixture_with_name("x"));
         });
     }
 
@@ -302,8 +322,8 @@ def y(x):
                 &[first_test_function],
             );
 
-            assert!(manager.contains_fixture("x"));
-            assert!(manager.contains_fixture("y"));
+            assert!(manager.contains_fixture_with_name("x"));
+            assert!(manager.contains_fixture_with_name("y"));
         });
     }
 
@@ -352,8 +372,8 @@ def y(x):
                 &[first_test_function],
             );
 
-            assert!(manager.contains_fixture("x"));
-            assert!(manager.contains_fixture("y"));
+            assert!(manager.contains_fixture_with_name("x"));
+            assert!(manager.contains_fixture_with_name("y"));
         });
     }
 
@@ -420,9 +440,9 @@ def z(y):
                 &[first_test_function],
             );
 
-            assert!(manager.contains_fixture("x"));
-            assert!(manager.contains_fixture("y"));
-            assert!(manager.contains_fixture("z"));
+            assert!(manager.contains_fixture_with_name("x"));
+            assert!(manager.contains_fixture_with_name("y"));
+            assert!(manager.contains_fixture_with_name("z"));
         });
     }
 
@@ -495,9 +515,9 @@ def z(x):
                 &[first_test_function],
             );
 
-            assert!(test_module_fixture_manager.contains_fixture("x"));
-            assert!(function_fixture_manager.contains_fixture("y"));
-            assert!(function_fixture_manager.contains_fixture("z"));
+            assert!(test_module_fixture_manager.contains_fixture_with_name("x"));
+            assert!(function_fixture_manager.contains_fixture_with_name("y"));
+            assert!(function_fixture_manager.contains_fixture_with_name("z"));
         });
     }
 
@@ -589,9 +609,9 @@ def z(y):
                 &[first_test_function],
             );
 
-            assert!(session_fixture_manager.contains_fixture("x"));
-            assert!(module_fixture_manager.contains_fixture("y"));
-            assert!(function_fixture_manager.contains_fixture("z"));
+            assert!(session_fixture_manager.contains_fixture_with_name("x"));
+            assert!(module_fixture_manager.contains_fixture_with_name("y"));
+            assert!(function_fixture_manager.contains_fixture_with_name("z"));
         });
     }
 
@@ -660,9 +680,9 @@ def z(x, y):
                 &[y_fixture, z_fixture, first_test_function],
             );
 
-            assert!(module_fixture_manager.contains_fixture("x"));
-            assert!(function_fixture_manager.contains_fixture("y"));
-            assert!(function_fixture_manager.contains_fixture("z"));
+            assert!(module_fixture_manager.contains_fixture_with_name("x"));
+            assert!(function_fixture_manager.contains_fixture_with_name("y"));
+            assert!(function_fixture_manager.contains_fixture_with_name("z"));
         });
     }
 
@@ -772,10 +792,10 @@ def test_user_login(auth_token): pass",
                 &[test_function],
             );
 
-            assert!(session_fixture_manager.contains_fixture("database"));
-            assert!(package_fixture_manager.contains_fixture("api_client"));
-            assert!(module_fixture_manager.contains_fixture("user"));
-            assert!(function_fixture_manager.contains_fixture("auth_token"));
+            assert!(session_fixture_manager.contains_fixture_with_name("database"));
+            assert!(package_fixture_manager.contains_fixture_with_name("api_client"));
+            assert!(module_fixture_manager.contains_fixture_with_name("user"));
+            assert!(function_fixture_manager.contains_fixture_with_name("auth_token"));
         });
     }
 
@@ -872,9 +892,9 @@ def service_b(config):
                 &[test_b],
             );
 
-            assert!(session_fixture_manager.contains_fixture("config"));
-            assert!(package_fixture_manager.contains_fixture("service_a"));
-            assert!(package_fixture_manager.contains_fixture("service_b"));
+            assert!(session_fixture_manager.contains_fixture_with_name("config"));
+            assert!(package_fixture_manager.contains_fixture_with_name("service_a"));
+            assert!(package_fixture_manager.contains_fixture_with_name("service_b"));
         });
     }
 
@@ -944,7 +964,7 @@ def data():
                 &[child_test],
             );
 
-            assert!(manager.contains_fixture_at_scope("data", &FixtureScope::Function));
+            assert!(manager.contains_fixture_with_name_at_scope("data", &FixtureScope::Function));
         });
     }
 
@@ -997,10 +1017,16 @@ def combined(derived_a, derived_b):
                 &[test_function],
             );
 
-            assert!(manager.contains_fixture_at_scope("base", &FixtureScope::Function));
-            assert!(manager.contains_fixture_at_scope("derived_a", &FixtureScope::Function));
-            assert!(manager.contains_fixture_at_scope("derived_b", &FixtureScope::Function));
-            assert!(manager.contains_fixture_at_scope("combined", &FixtureScope::Function));
+            assert!(manager.contains_fixture_with_name_at_scope("base", &FixtureScope::Function));
+            assert!(
+                manager.contains_fixture_with_name_at_scope("derived_a", &FixtureScope::Function)
+            );
+            assert!(
+                manager.contains_fixture_with_name_at_scope("derived_b", &FixtureScope::Function)
+            );
+            assert!(
+                manager.contains_fixture_with_name_at_scope("combined", &FixtureScope::Function)
+            );
         });
     }
 
@@ -1126,11 +1152,11 @@ def level5(level4):
                 &[l5_fixture, test_function],
             );
 
-            assert!(session_fixture_manager.contains_fixture("level1"));
-            assert!(package_fixture_manager.contains_fixture("level2"));
-            assert!(module_fixture_manager.contains_fixture("level3"));
-            assert!(function_fixture_manager.contains_fixture("level4"));
-            assert!(function_fixture_manager.contains_fixture("level5"));
+            assert!(session_fixture_manager.contains_fixture_with_name("level1"));
+            assert!(package_fixture_manager.contains_fixture_with_name("level2"));
+            assert!(module_fixture_manager.contains_fixture_with_name("level3"));
+            assert!(function_fixture_manager.contains_fixture_with_name("level4"));
+            assert!(function_fixture_manager.contains_fixture_with_name("level5"));
         });
     }
 
@@ -1195,8 +1221,8 @@ def test_three(module_fixture): pass",
                 &[test_one, test_two, test_three],
             );
 
-            assert!(module_fixture_manager.contains_fixture("module_fixture"));
-            assert!(function_fixture_manager.contains_fixture("function_fixture"));
+            assert!(module_fixture_manager.contains_fixture_with_name("module_fixture"));
+            assert!(function_fixture_manager.contains_fixture_with_name("function_fixture"));
         });
     }
 
@@ -1300,12 +1326,12 @@ def converged(branch_a2, branch_b2):
                 &[test_function],
             );
 
-            assert!(session_fixture_manager.contains_fixture("root"));
-            assert!(package_fixture_manager.contains_fixture("branch_a1"));
-            assert!(package_fixture_manager.contains_fixture("branch_b1"));
-            assert!(module_fixture_manager.contains_fixture("branch_a2"));
-            assert!(module_fixture_manager.contains_fixture("branch_b2"));
-            assert!(function_fixture_manager.contains_fixture("converged"));
+            assert!(session_fixture_manager.contains_fixture_with_name("root"));
+            assert!(package_fixture_manager.contains_fixture_with_name("branch_a1"));
+            assert!(package_fixture_manager.contains_fixture_with_name("branch_b1"));
+            assert!(module_fixture_manager.contains_fixture_with_name("branch_a2"));
+            assert!(module_fixture_manager.contains_fixture_with_name("branch_b2"));
+            assert!(function_fixture_manager.contains_fixture_with_name("converged"));
         });
     }
 
@@ -1396,33 +1422,35 @@ def function_fixture():
                 &[test_function],
             );
 
-            assert!(session_fixture_manager.contains_fixture("session_fixture"));
-            assert!(package_fixture_manager.contains_fixture("package_fixture"));
-            assert!(module_fixture_manager.contains_fixture("module_fixture"));
-            assert!(function_fixture_manager.contains_fixture("function_fixture"));
+            assert!(session_fixture_manager.contains_fixture_with_name("session_fixture"));
+            assert!(package_fixture_manager.contains_fixture_with_name("package_fixture"));
+            assert!(module_fixture_manager.contains_fixture_with_name("module_fixture"));
+            assert!(function_fixture_manager.contains_fixture_with_name("function_fixture"));
 
             function_fixture_manager.reset_fixtures();
             assert!(
-                !function_fixture_manager
-                    .contains_fixture_at_scope("function_fixture", &FixtureScope::Function)
+                !function_fixture_manager.contains_fixture_with_name_at_scope(
+                    "function_fixture",
+                    &FixtureScope::Function
+                )
             );
 
             module_fixture_manager.reset_fixtures();
             assert!(
                 !module_fixture_manager
-                    .contains_fixture_at_scope("module_fixture", &FixtureScope::Module)
+                    .contains_fixture_with_name_at_scope("module_fixture", &FixtureScope::Module)
             );
 
             package_fixture_manager.reset_fixtures();
             assert!(
                 !package_fixture_manager
-                    .contains_fixture_at_scope("package_fixture", &FixtureScope::Package)
+                    .contains_fixture_with_name_at_scope("package_fixture", &FixtureScope::Package)
             );
 
             session_fixture_manager.reset_fixtures();
             assert!(
                 !session_fixture_manager
-                    .contains_fixture_at_scope("session_fixture", &FixtureScope::Session)
+                    .contains_fixture_with_name_at_scope("session_fixture", &FixtureScope::Session)
             );
         });
     }

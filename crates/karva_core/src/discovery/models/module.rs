@@ -56,13 +56,15 @@ impl DiscoveredModule {
     }
 
     pub(crate) fn filter_test_functions(&mut self, name: &str) {
-        self.test_functions.retain(|tc| tc.name() == name);
+        self.test_functions.retain(|tc| tc.function_name() == name);
     }
 
     #[must_use]
     #[cfg(test)]
     pub(crate) fn get_test_function(&self, name: &str) -> Option<&TestFunction> {
-        self.test_functions.iter().find(|tc| tc.name() == name)
+        self.test_functions
+            .iter()
+            .find(|tc| tc.function_name() == name)
     }
 
     #[must_use]
@@ -156,7 +158,9 @@ impl<'proj> HasFixtures<'proj> for DiscoveredModule {
                 if f.auto_use() {
                     true
                 } else {
-                    test_cases.iter().any(|tc| tc.uses_fixture(py, f.name()))
+                    test_cases
+                        .iter()
+                        .any(|tc| tc.uses_fixture(py, f.name().function_name()))
                 }
             })
             .collect();
@@ -216,7 +220,7 @@ impl std::fmt::Display for DisplayDiscoveredModule<'_> {
             if i > 0 {
                 write!(f, " ")?;
             }
-            write!(f, "{}", test.name())?;
+            write!(f, "{}", test.name().function_name())?;
         }
         write!(f, "]\n└── fixtures [")?;
         let fixtures = self.module.fixtures();
@@ -224,7 +228,7 @@ impl std::fmt::Display for DisplayDiscoveredModule<'_> {
             if i > 0 {
                 write!(f, " ")?;
             }
-            write!(f, "{}", fixture.name())?;
+            write!(f, "{}", fixture.name().function_name())?;
         }
         write!(f, "]")?;
         Ok(())

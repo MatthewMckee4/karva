@@ -1,8 +1,11 @@
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::extensions::fixtures::{
-    Fixture, FixtureScope, python::FixtureFunctionDefinition, resolve_dynamic_scope,
+use crate::{
+    extensions::fixtures::{
+        Fixture, FixtureScope, python::FixtureFunctionDefinition, resolve_dynamic_scope,
+    },
+    name::FunctionName,
 };
 
 fn get_attribute<'a>(function: Bound<'a, PyAny>, attributes: &[&str]) -> Option<Bound<'a, PyAny>> {
@@ -18,6 +21,7 @@ pub(crate) fn try_from_pytest_function(
     py: Python<'_>,
     function_definition: &StmtFunctionDef,
     function: &Bound<'_, PyAny>,
+    module_name: &str,
     is_generator_function: bool,
 ) -> Result<Option<Fixture>, String> {
     let Some(found_name) = get_attribute(function.clone(), &["_fixture_function_marker", "name"])
@@ -48,7 +52,7 @@ pub(crate) fn try_from_pytest_function(
     let fixture_scope = fixture_scope(py, &scope, &name)?;
 
     Ok(Some(Fixture::new(
-        name,
+        FunctionName::new(name, module_name.to_string()),
         function_definition.clone(),
         fixture_scope,
         auto_use.extract::<bool>().unwrap_or(false),
@@ -61,6 +65,7 @@ pub(crate) fn try_from_karva_function(
     py: Python<'_>,
     function_def: &StmtFunctionDef,
     function: &Bound<'_, PyAny>,
+    module_name: &str,
     is_generator_function: bool,
 ) -> Result<Option<Fixture>, String> {
     let Ok(py_function) = function
@@ -81,7 +86,7 @@ pub(crate) fn try_from_karva_function(
     let fixture_scope = fixture_scope(py, scope_obj.bind(py), &name)?;
 
     Ok(Some(Fixture::new(
-        name,
+        FunctionName::new(name, module_name.to_string()),
         function_def.clone(),
         fixture_scope,
         auto_use,

@@ -33,7 +33,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.11"]
+        python-version: ["3.13"]
     steps:
       - uses: actions/checkout@v4
 
@@ -146,13 +146,13 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
         with:
-          python-version: 3.11
+          python-version: 3.13
 
       - name: Set up Python
         uses: actions/setup-python@v4
         id: setup-python
         with:
-          python-version: 3.11
+          python-version: 3.13
 
       - name: Install Python dependencies
         run: |

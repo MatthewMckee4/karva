@@ -2,6 +2,7 @@ pub mod collection;
 pub mod diagnostic;
 pub mod discovery;
 pub mod extensions;
+pub mod name;
 pub mod runner;
 pub mod utils;
 

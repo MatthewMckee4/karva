@@ -58,9 +58,7 @@ impl<'proj> TestCase<'proj> {
     pub(crate) fn run(&self, py: Python<'_>, diagnostic: Option<Diagnostic>) -> RunDiagnostics {
         let mut run_result = RunDiagnostics::default();
 
-        let display = self
-            .function
-            .display(self.module.path().display().to_string());
+        let display = self.function.display();
 
         let (case_call_result, logger) = if self.kwargs.is_empty() {
             let logger = TestCaseLogger::new(py, &display, None);

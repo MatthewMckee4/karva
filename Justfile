@@ -7,10 +7,10 @@ build:
 # Run tests
 test *args:
     @rm -f target/wheels/*.whl
-    uv venv --clear
+    uv venv --clear -p 3.13
     uv pip install maturin pytest
     uv run --no-project maturin build
-    uv run cargo test {{args}}
+    uv run --no-project cargo test {{args}}
 
 # Build documentation
 docs:

@@ -12,6 +12,8 @@ pub mod python;
 pub(crate) use finalizer::{Finalizer, Finalizers};
 pub(crate) use manager::FixtureManager;
 
+use crate::name::FunctionName;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum FixtureScope {
     Function,
@@ -95,7 +97,7 @@ pub(crate) fn resolve_dynamic_scope(
 }
 
 pub(crate) struct Fixture {
-    name: String,
+    name: FunctionName,
     function_def: StmtFunctionDef,
     scope: FixtureScope,
     auto_use: bool,
@@ -106,7 +108,7 @@ pub(crate) struct Fixture {
 impl Fixture {
     #[must_use]
     pub(crate) const fn new(
-        name: String,
+        name: FunctionName,
         function_def: StmtFunctionDef,
         scope: FixtureScope,
         auto_use: bool,
@@ -124,7 +126,7 @@ impl Fixture {
     }
 
     #[must_use]
-    pub(crate) fn name(&self) -> &str {
+    pub(crate) const fn name(&self) -> &FunctionName {
         &self.name
     }
 
@@ -151,11 +153,14 @@ impl Fixture {
         let mut required_fixtures = Vec::new();
 
         for name in self.get_required_fixture_names(py) {
-            if let Some(fixture) = fixture_manager.get_fixture(&name) {
+            if let Some(fixture) =
+                fixture_manager.get_fixture_with_name(&name, Some(&[self.name()]))
+            {
                 required_fixtures.push(fixture.clone().into_bound(py));
             }
         }
         let args = PyTuple::new(py, required_fixtures)?;
+
         if self.is_generator() {
             let function_return = self.function.call(py, args.clone(), None)?;
 
@@ -177,6 +182,7 @@ impl Fixture {
         py: Python<'_>,
         function_definition: &StmtFunctionDef,
         py_module: &Bound<'_, PyModule>,
+        module_name: &str,
         is_generator_function: bool,
     ) -> Result<Option<Self>, String> {
         let function = py_module
@@ -187,6 +193,7 @@ impl Fixture {
             py,
             function_definition,
             &function,
+            module_name,
             is_generator_function,
         );
 
@@ -200,6 +207,7 @@ impl Fixture {
             py,
             function_definition,
             &function,
+            module_name,
             is_generator_function,
         );
 
@@ -219,7 +227,7 @@ impl HasFunctionDefinition for Fixture {
 
 impl std::fmt::Debug for Fixture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Fixture(name: {}, scope: {})", self.name, self.scope)
+        write!(f, "Fixture(name: {}, scope: {})", self.name(), self.scope)
     }
 }
 
@@ -299,7 +307,7 @@ pub(crate) trait HasFixtures<'proj>: std::fmt::Debug {
     ) -> Option<&'proj Fixture> {
         self.all_fixtures(py, &[])
             .into_iter()
-            .find(|fixture| fixture.name() == fixture_name)
+            .find(|fixture| fixture.name().function_name() == fixture_name)
     }
 
     fn all_fixtures<'a: 'proj>(
