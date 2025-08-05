@@ -162,16 +162,18 @@ impl Fixture {
         let args = PyTuple::new(py, required_fixtures)?;
 
         if self.is_generator() {
-            let function_return = self.function.call(py, args.clone(), None)?;
+            let mut generator = self
+                .function
+                .bind(py)
+                .call(args.clone(), None)?
+                .downcast_into()?;
 
-            let finalizer = Finalizer::new(self.name().to_string(), function_return.clone());
+            let finalizer = Finalizer::new(self.name().to_string(), generator.clone().unbind());
             fixture_manager.insert_finalizer(finalizer, self.scope());
 
-            let self_return = function_return
-                .call_method1(py, "__next__", args)
-                .map(|r| r.into_bound(py))?;
-
-            Ok(self_return)
+            generator
+                .next()
+                .expect("generator should yield at least once")
         } else {
             let function_return = self.function.call(py, args, None);
             function_return.map(|r| r.into_bound(py))
