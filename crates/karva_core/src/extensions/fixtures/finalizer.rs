@@ -1,4 +1,4 @@
-use pyo3::prelude::*;
+use pyo3::{prelude::*, types::PyIterator};
 
 use crate::diagnostic::Diagnostic;
 
@@ -32,12 +32,12 @@ impl Finalizers {
 #[derive(Debug, Clone)]
 pub(crate) struct Finalizer {
     fixture_name: String,
-    fixture_return: Py<PyAny>,
+    fixture_return: Py<PyIterator>,
 }
 
 impl Finalizer {
     #[must_use]
-    pub(crate) const fn new(fixture_name: String, fixture_return: Py<PyAny>) -> Self {
+    pub(crate) const fn new(fixture_name: String, fixture_return: Py<PyIterator>) -> Self {
         Self {
             fixture_name,
             fixture_return,
@@ -46,7 +46,8 @@ impl Finalizer {
 
     #[must_use]
     pub(crate) fn run(&self, py: Python<'_>) -> Option<Diagnostic> {
-        match self.fixture_return.call_method0(py, "__next__") {
+        let mut generator = self.fixture_return.bind(py).clone();
+        match generator.next()? {
             Ok(_) => Some(Diagnostic::warning(
                 "fixture-error",
                 Some(format!(
@@ -55,17 +56,11 @@ impl Finalizer {
                 )),
                 None,
             )),
-            Err(e) => {
-                if e.is_instance_of::<pyo3::exceptions::PyStopIteration>(py) {
-                    None
-                } else {
-                    Some(Diagnostic::warning(
-                        "fixture-error",
-                        Some(format!("Failed to reset fixture {}", self.fixture_name)),
-                        None,
-                    ))
-                }
-            }
+            Err(_) => Some(Diagnostic::warning(
+                "fixture-error",
+                Some(format!("Failed to reset fixture {}", self.fixture_name)),
+                None,
+            )),
         }
     }
 }
