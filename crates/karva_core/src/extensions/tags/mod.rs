@@ -11,6 +11,7 @@ pub mod python;
 pub(crate) enum Tag {
     Parametrize(ParametrizeTag),
     UseFixtures(UseFixturesTag),
+    Skip,
 }
 
 impl Tag {
@@ -33,12 +34,11 @@ impl Tag {
     #[must_use]
     pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let name = py_mark.getattr("name").ok()?.extract::<String>().ok()?;
-        if name == "parametrize" {
-            ParametrizeTag::try_from_pytest_mark(py_mark).map(Self::Parametrize)
-        } else if name == "usefixtures" {
-            UseFixturesTag::try_from_pytest_mark(py_mark).map(Self::UseFixtures)
-        } else {
-            None
+        match name.as_str() {
+            "parametrize" => ParametrizeTag::try_from_pytest_mark(py_mark).map(Self::Parametrize),
+            "usefixtures" => UseFixturesTag::try_from_pytest_mark(py_mark).map(Self::UseFixtures),
+            "skip" => Some(Self::Skip),
+            _ => None,
         }
     }
 }
@@ -203,6 +203,10 @@ impl Tags {
             }
         }
         fixture_names
+    }
+
+    pub(crate) fn skip(&self) -> bool {
+        self.inner.iter().any(|tag| matches!(tag, Tag::Skip))
     }
 }
 
@@ -486,6 +490,56 @@ def test_function():
             if let Tag::UseFixtures(use_fixtures_tag) = tag.unwrap() {
                 assert_eq!(use_fixtures_tag.fixture_names(), &["single_fixture"]);
             }
+        });
+    }
+
+    #[test]
+    fn test_pytest_skip_without_reason() {
+        Python::with_gil(|py| {
+            let mark = py
+                .eval(
+                    c_str!(r#"type('Mark', (), {'name': 'skip', 'args': (), 'kwargs': {} })()"#),
+                    None,
+                    None,
+                )
+                .unwrap();
+
+            let tag = Tag::try_from_pytest_mark(&mark);
+            assert!(matches!(tag, Some(Tag::Skip)));
+        });
+    }
+
+    #[test]
+    fn test_pytest_skip_with_reason() {
+        Python::with_gil(|py| {
+            let mark_args = py
+                .eval(
+                    c_str!(
+                        r#"type('Mark', (), {'name': 'skip', 'args': ('reason'), 'kwargs': {} })()"#
+                    ),
+                    None,
+                    None,
+                )
+                .unwrap();
+            assert!(matches!(
+                Tag::try_from_pytest_mark(&mark_args),
+                Some(Tag::Skip)
+            ));
+
+            let mark_kwargs = py
+                .eval(
+                    c_str!(
+                        r#"type('Mark', (), {'name': 'skip', 'args': (), 'kwargs': {'reason': 'reason'} })()"#
+                    ),
+                    None,
+                    None,
+                )
+                .unwrap();
+
+            assert!(matches!(
+                Tag::try_from_pytest_mark(&mark_kwargs),
+                Some(Tag::Skip)
+            ));
         });
     }
 }

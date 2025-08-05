@@ -106,6 +106,12 @@ impl TestFunction {
 
         let tags = Tags::from_py_any(py, &py_function, Some(&self.function_definition));
 
+        if let Some(tags) = &tags
+            && tags.skip()
+        {
+            return Vec::new();
+        }
+
         if let Some(tags) = &tags {
             let use_fixtures_names = tags.use_fixtures_names();
 
