@@ -6,7 +6,7 @@ use ruff_source_file::LineIndex;
 
 use crate::{
     discovery::TestFunction,
-    extensions::fixtures::{Fixture, HasFixtures, RequiresFixtures},
+    extensions::fixtures::{Fixture, HasFixtures, UsesFixtures},
 };
 
 /// A module represents a single python file.
@@ -118,13 +118,13 @@ impl DiscoveredModule {
     }
 
     #[must_use]
-    pub(crate) fn all_requires_fixtures(&self) -> Vec<&dyn RequiresFixtures> {
+    pub(crate) fn all_uses_fixtures(&self) -> Vec<&dyn UsesFixtures> {
         let mut deps = Vec::new();
         for tc in &self.test_functions {
-            deps.push(tc as &dyn RequiresFixtures);
+            deps.push(tc as &dyn UsesFixtures);
         }
         for f in &self.fixtures {
-            deps.push(f as &dyn RequiresFixtures);
+            deps.push(f as &dyn UsesFixtures);
         }
         deps
     }
@@ -145,7 +145,7 @@ impl<'proj> HasFixtures<'proj> for DiscoveredModule {
     fn all_fixtures<'a: 'proj>(
         &'a self,
         py: Python<'_>,
-        test_cases: &[&dyn RequiresFixtures],
+        test_cases: &[&dyn UsesFixtures],
     ) -> Vec<&'proj Fixture> {
         if test_cases.is_empty() {
             return self.fixtures.iter().collect();

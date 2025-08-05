@@ -5,11 +5,17 @@ use crate::{
     runner::RunDiagnostics,
 };
 
+/// A collected package represents a single Python package with its test cases and finalizers.
 #[derive(Default, Debug)]
 pub(crate) struct CollectedPackage<'proj> {
-    finalizers: Finalizers,
+    /// The modules in the package.
     modules: Vec<CollectedModule<'proj>>,
+
+    /// The sub-packages in the package.
     packages: Vec<CollectedPackage<'proj>>,
+
+    /// Finalizers to run after the package is executed.
+    finalizers: Finalizers,
 }
 
 impl<'proj> CollectedPackage<'proj> {
@@ -25,6 +31,7 @@ impl<'proj> CollectedPackage<'proj> {
         self.finalizers.update(finalizers);
     }
 
+    /// Count the number of test cases in the package.
     #[must_use]
     pub(crate) fn total_test_cases(&self) -> usize {
         let mut total = 0;
@@ -37,6 +44,7 @@ impl<'proj> CollectedPackage<'proj> {
         total
     }
 
+    /// Count the number of modules in the package that have test cases.
     #[must_use]
     pub(crate) fn total_modules(&self) -> usize {
         let mut total = 0;

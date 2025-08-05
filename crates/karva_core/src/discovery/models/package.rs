@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 use crate::discovery::TestFunction;
 use crate::{
     discovery::{DiscoveredModule, ModuleType},
-    extensions::fixtures::{Fixture, HasFixtures, RequiresFixtures},
+    extensions::fixtures::{Fixture, HasFixtures, UsesFixtures},
 };
 
 /// A package represents a single python directory.
@@ -63,7 +63,6 @@ impl DiscoveredPackage {
     #[must_use]
     #[cfg(test)]
     pub(crate) fn get_package(&self, path: &SystemPathBuf) -> Option<&Self> {
-        // Support nested paths: recursively search sub packages
         if let Some(package) = self.packages.get(path) {
             Some(package)
         } else {
@@ -76,18 +75,19 @@ impl DiscoveredPackage {
         }
     }
 
+    /// Add a module to this package.
+    ///
+    /// If the module path does not start with our path, do nothing.
+    ///
+    /// If the module path equals our path, use update method.
+    ///
+    /// Otherwise, strip the current path from the start and add the module to the appropriate sub-package.
     pub(crate) fn add_module(&mut self, module: DiscoveredModule) {
         if !module.path().starts_with(self.path()) {
             return;
         }
 
-        // If the module path equals our path, add directly to modules
-        if *module
-            .path()
-            .parent()
-            .expect("Failed to get parent of module path")
-            == **self.path()
-        {
+        if module.path().parent().is_some_and(|p| p == self.path()) {
             if let Some(existing_module) = self.modules.get_mut(module.path()) {
                 existing_module.update(module);
             } else {
@@ -99,11 +99,10 @@ impl DiscoveredPackage {
             return;
         }
 
-        // Chop off the current path from the start
-        let relative_path = module
-            .path()
-            .strip_prefix(self.path())
-            .expect("Failed to strip prefix");
+        let Ok(relative_path) = module.path().strip_prefix(self.path()) else {
+            return;
+        };
+
         let components: Vec<_> = relative_path.components().collect();
 
         if components.is_empty() {
@@ -113,11 +112,9 @@ impl DiscoveredPackage {
         let first_component = components[0];
         let intermediate_path = self.path().join(first_component);
 
-        // Try to find existing sub-package and use add_module method
         if let Some(existing_package) = self.packages.get_mut(&intermediate_path) {
             existing_package.add_module(module);
         } else {
-            // If not there, create a new one
             let mut new_package = Self::new(intermediate_path);
             new_package.add_module(module);
             self.packages
@@ -130,22 +127,25 @@ impl DiscoveredPackage {
         self.add_module(module);
     }
 
+    /// Add a package to this package.
+    ///
+    /// If the package path equals our path, use update method.
+    ///
+    /// Otherwise, strip the current path from the start and add the package to the appropriate sub-package.
     pub(crate) fn add_package(&mut self, package: Self) {
         if !package.path().starts_with(self.path()) {
             return;
         }
 
-        // If the package path equals our path, use update method
         if package.path() == self.path() {
             self.update(package);
             return;
         }
 
-        // Chop off the current path from the start
-        let relative_path = package
-            .path()
-            .strip_prefix(self.path())
-            .expect("Failed to strip prefix");
+        let Ok(relative_path) = package.path().strip_prefix(self.path()) else {
+            return;
+        };
+
         let components: Vec<_> = relative_path.components().collect();
 
         if components.is_empty() {
@@ -155,11 +155,9 @@ impl DiscoveredPackage {
         let first_component = components[0];
         let intermediate_path = self.path().join(first_component);
 
-        // Try to find existing sub-package and use add_package method
         if let Some(existing_package) = self.packages.get_mut(&intermediate_path) {
             existing_package.add_package(package);
         } else {
-            // If not there, create a new one
             let mut new_package = Self::new(intermediate_path);
             new_package.add_package(package);
             self.packages
@@ -205,17 +203,17 @@ impl DiscoveredPackage {
         functions
     }
 
-    // TODO: Rename this
+    /// Get all the test functions and fixtures that are used in this package.
     #[must_use]
-    pub(crate) fn all_requires_fixtures(&self) -> Vec<&dyn RequiresFixtures> {
-        let mut dependencies: Vec<&dyn RequiresFixtures> = Vec::new();
+    pub(crate) fn all_uses_fixtures(&self) -> Vec<&dyn UsesFixtures> {
+        let mut dependencies: Vec<&dyn UsesFixtures> = Vec::new();
 
         for module in self.modules.values() {
-            dependencies.extend(module.all_requires_fixtures());
+            dependencies.extend(module.all_uses_fixtures());
         }
 
         for package in self.packages.values() {
-            dependencies.extend(package.all_requires_fixtures());
+            dependencies.extend(package.all_uses_fixtures());
         }
 
         dependencies
@@ -229,6 +227,7 @@ impl DiscoveredPackage {
             .collect()
     }
 
+    /// Remove empty modules and packages.
     pub(crate) fn shrink(&mut self) {
         self.modules.retain(|path, module| {
             if module.is_empty() {
@@ -262,7 +261,7 @@ impl<'proj> HasFixtures<'proj> for DiscoveredPackage {
     fn all_fixtures<'a: 'proj>(
         &'a self,
         py: Python<'_>,
-        test_cases: &[&dyn RequiresFixtures],
+        test_cases: &[&dyn UsesFixtures],
     ) -> Vec<&'proj Fixture> {
         let mut fixtures = Vec::new();
 
@@ -280,7 +279,7 @@ impl<'proj> HasFixtures<'proj> for &'proj DiscoveredPackage {
     fn all_fixtures<'a: 'proj>(
         &'a self,
         py: Python<'_>,
-        test_cases: &[&dyn RequiresFixtures],
+        test_cases: &[&dyn UsesFixtures],
     ) -> Vec<&'proj Fixture> {
         (*self).all_fixtures(py, test_cases)
     }
@@ -309,7 +308,6 @@ impl std::fmt::Display for DisplayDiscoveredPackage<'_> {
         ) -> std::fmt::Result {
             let mut entries = Vec::new();
 
-            // Add modules first (sorted by name)
             let mut modules: Vec<_> = package.modules().values().collect();
             modules.sort_by_key(|m| m.name());
 
@@ -317,7 +315,6 @@ impl std::fmt::Display for DisplayDiscoveredPackage<'_> {
                 entries.push(("module", module.display().to_string()));
             }
 
-            // Add packages (sorted by name)
             let mut packages: Vec<_> = package.packages().iter().collect();
             packages.sort_by_key(|(name, _)| name.display().to_string());
 
@@ -325,8 +322,6 @@ impl std::fmt::Display for DisplayDiscoveredPackage<'_> {
                 entries.push(("package", name.display().to_string()));
             }
 
-            // To properly draw the tree branches, we need to propagate the prefix and branch state recursively,
-            // and only use the "branch" for the first line of each entry, with subsequent lines indented.
             let total = entries.len();
             for (i, (kind, name)) in entries.into_iter().enumerate() {
                 let is_last_entry = i == total - 1;
@@ -339,20 +334,17 @@ impl std::fmt::Display for DisplayDiscoveredPackage<'_> {
 
                 match kind {
                     "module" => {
-                        // For modules, extend the vertical branches down for all but the last entry.
                         let mut lines = name.lines();
                         if let Some(first_line) = lines.next() {
                             writeln!(f, "{prefix}{branch}{first_line}")?;
                         }
                         for line in lines {
-                            // If this is not the last entry, extend the branch down with '│   ', else just indent.
                             writeln!(f, "{prefix}{child_prefix}{line}")?;
                         }
                     }
                     "package" => {
                         writeln!(f, "{prefix}{branch}{name}/")?;
                         let subpackage = &package.packages()[&SystemPathBuf::from(name)];
-                        // For subpackages, propagate the child_prefix so that vertical branches are extended.
                         write_tree(f, subpackage, &format!("{prefix}{child_prefix}"))?;
                     }
                     _ => {}

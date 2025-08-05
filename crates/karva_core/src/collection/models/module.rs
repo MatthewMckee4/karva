@@ -7,10 +7,16 @@ use crate::{
     runner::RunDiagnostics,
 };
 
+/// A collected module represents a single Python module with its test cases and finalizers.
 #[derive(Default, Debug)]
 pub(crate) struct CollectedModule<'proj> {
+    /// The test cases in the module.
     test_cases: Vec<(TestCase<'proj>, Option<Diagnostic>)>,
+
+    /// Finalizers to run after the module is executed.
     finalizers: Finalizers,
+
+    /// Diagnostics received from the module collection.
     diagnostics: Vec<Diagnostic>,
 }
 

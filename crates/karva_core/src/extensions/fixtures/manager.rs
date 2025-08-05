@@ -4,7 +4,7 @@ use pyo3::{prelude::*, types::PyAny};
 use crate::{
     discovery::DiscoveredPackage,
     extensions::fixtures::{
-        Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, RequiresFixtures,
+        Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, UsesFixtures,
     },
     name::FunctionName,
     utils::partition_iter,
@@ -151,7 +151,7 @@ impl<'a> FixtureManager<'a> {
 
         // To ensure we can call the current fixture, we must first look at all of its dependencies,
         // and resolve them first.
-        let current_dependencies = fixture.required_fixtures(py);
+        let current_dependencies = fixture.dependant_fixtures(py);
 
         // We need to get all of the fixtures in the current scope.
         let current_all_fixtures = current.all_fixtures(py, &[]);
@@ -200,13 +200,16 @@ impl<'a> FixtureManager<'a> {
         }
     }
 
+    /// Add fixtures with the current scope to the fixture manager.
+    ///
+    /// This will ensure that all of the dependencies of the given fixtures are called first.
     pub(crate) fn add_fixtures<'proj>(
         &mut self,
         py: Python<'_>,
         parents: &[&'proj DiscoveredPackage],
         current: &'proj dyn HasFixtures<'proj>,
         scopes: &[FixtureScope],
-        dependencies: &[&dyn RequiresFixtures],
+        dependencies: &[&dyn UsesFixtures],
     ) {
         let fixtures = current.fixtures(py, scopes, dependencies);
 

@@ -4,7 +4,7 @@ use crate::{
     collection::{CollectedModule, CollectedPackage, TestCase},
     diagnostic::Diagnostic,
     discovery::{DiscoveredModule, DiscoveredPackage, TestFunction},
-    extensions::fixtures::{FixtureManager, FixtureScope, RequiresFixtures},
+    extensions::fixtures::{FixtureManager, FixtureScope, UsesFixtures},
     utils::{Upcast, partition_iter},
 };
 
@@ -20,7 +20,7 @@ impl TestCaseCollector {
 
         let mut fixture_manager = FixtureManager::new(None, FixtureScope::Session);
 
-        let upcast_test_cases = session.all_requires_fixtures();
+        let upcast_test_cases = session.all_uses_fixtures();
 
         let mut session_collected = CollectedPackage::default();
 
@@ -56,7 +56,7 @@ impl TestCaseCollector {
                 let mut function_fixture_manager =
                     FixtureManager::new(Some(fixture_manager), FixtureScope::Function);
                 let test_cases = [test_function].to_vec();
-                let upcast_test_cases: Vec<&dyn RequiresFixtures> = test_cases.upcast();
+                let upcast_test_cases: Vec<&dyn UsesFixtures> = test_cases.upcast();
 
                 for (parent, parents_above_current_parent) in partition_iter(parents) {
                     function_fixture_manager.add_fixtures(
@@ -98,7 +98,7 @@ impl TestCaseCollector {
             return module_collected;
         }
 
-        let module_test_cases = module.all_requires_fixtures();
+        let module_test_cases = module.all_uses_fixtures();
 
         if module_test_cases.is_empty() {
             return module_collected;
@@ -190,7 +190,7 @@ impl TestCaseCollector {
             return package_collected;
         }
 
-        let package_test_cases = package.all_requires_fixtures();
+        let package_test_cases = package.all_uses_fixtures();
 
         let mut package_fixture_manager =
             FixtureManager::new(Some(fixture_manager), FixtureScope::Package);

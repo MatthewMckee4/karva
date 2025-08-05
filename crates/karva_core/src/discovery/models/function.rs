@@ -14,7 +14,7 @@ use crate::{
     },
     discovery::DiscoveredModule,
     extensions::{
-        fixtures::{FixtureManager, HasFunctionDefinition, RequiresFixtures},
+        fixtures::{FixtureManager, UsesFixtures},
         tags::Tags,
     },
     name::FunctionName,
@@ -28,9 +28,9 @@ pub(crate) struct TestFunction {
     name: FunctionName,
 }
 
-impl HasFunctionDefinition for TestFunction {
-    fn get_required_fixture_names(&self, py: Python<'_>) -> Vec<String> {
-        let mut required_fixtures = self.function_definition.get_required_fixture_names(py);
+impl UsesFixtures for TestFunction {
+    fn dependant_fixtures(&self, py: Python<'_>) -> Vec<String> {
+        let mut required_fixtures = self.function_definition.dependant_fixtures(py);
 
         if let Some(tags) =
             Tags::from_py_any(py, &self.py_function, Some(&self.function_definition))
@@ -102,7 +102,7 @@ impl TestFunction {
             return Vec::new();
         };
 
-        let mut required_fixture_names = self.get_required_fixture_names(py);
+        let mut required_fixture_names = self.dependant_fixtures(py);
 
         let tags = Tags::from_py_any(py, &py_function, Some(&self.function_definition));
 
@@ -196,21 +196,11 @@ impl Display for TestFunctionDisplay<'_> {
     }
 }
 
-impl<'proj> Upcast<Vec<&'proj dyn RequiresFixtures>> for Vec<&'proj TestFunction> {
-    fn upcast(self) -> Vec<&'proj dyn RequiresFixtures> {
+impl<'proj> Upcast<Vec<&'proj dyn UsesFixtures>> for Vec<&'proj TestFunction> {
+    fn upcast(self) -> Vec<&'proj dyn UsesFixtures> {
         let mut result = Vec::with_capacity(self.len());
         for tc in self {
-            result.push(tc as &dyn RequiresFixtures);
-        }
-        result
-    }
-}
-
-impl<'proj> Upcast<Vec<&'proj dyn HasFunctionDefinition>> for Vec<&'proj TestFunction> {
-    fn upcast(self) -> Vec<&'proj dyn HasFunctionDefinition> {
-        let mut result = Vec::with_capacity(self.len());
-        for tc in self {
-            result.push(tc as &dyn HasFunctionDefinition);
+            result.push(tc as &dyn UsesFixtures);
         }
         result
     }
@@ -228,10 +218,7 @@ mod tests {
     use karva_project::{project::Project, testing::TestEnv};
     use pyo3::prelude::*;
 
-    use crate::{
-        discovery::StandardDiscoverer,
-        extensions::fixtures::{HasFunctionDefinition, RequiresFixtures},
-    };
+    use crate::{discovery::StandardDiscoverer, extensions::fixtures::UsesFixtures};
 
     #[test]
     fn test_case_construction_and_getters() {
@@ -266,7 +253,7 @@ mod tests {
 
             let test_case = session.test_functions()[0];
 
-            let required_fixtures = test_case.get_required_fixture_names(py);
+            let required_fixtures = test_case.dependant_fixtures(py);
             assert_eq!(required_fixtures.len(), 2);
             assert!(required_fixtures.contains(&"fixture1".to_string()));
             assert!(required_fixtures.contains(&"fixture2".to_string()));

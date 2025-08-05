@@ -11,16 +11,26 @@ use crate::{
         Diagnostic, FixtureSubDiagnosticType, SubDiagnosticErrorType, SubDiagnosticSeverity,
     },
     discovery::{DiscoveredModule, TestFunction, TestFunctionDisplay},
-    extensions::fixtures::{Finalizers, HasFunctionDefinition},
+    extensions::fixtures::{Finalizers, UsesFixtures},
     runner::RunDiagnostics,
 };
 
+/// A test case represents a single test function invocation with a set of arguments.
 #[derive(Debug)]
 pub(crate) struct TestCase<'proj> {
+    /// The test function to run.
     function: &'proj TestFunction,
+
+    /// The arguments to pass to the test function.
     kwargs: HashMap<String, PyObject>,
+
+    /// The Python function to call.
     py_function: Py<PyAny>,
+
+    /// The module containing the test function.
     module: &'proj DiscoveredModule,
+
+    /// Finalizers to run after the test case is executed.
     finalizers: Finalizers,
 }
 
@@ -67,7 +77,7 @@ impl<'proj> TestCase<'proj> {
         } else {
             let kwargs = PyDict::new(py);
 
-            for key in self.function.definition().get_required_fixture_names(py) {
+            for key in self.function.definition().dependant_fixtures(py) {
                 if let Some(value) = self.kwargs.get(&key) {
                     let _ = kwargs.set_item(key, value);
                 }
@@ -111,6 +121,12 @@ impl<'proj> TestCase<'proj> {
     }
 }
 
+/// Handle missing fixtures.
+///
+/// If the diagnostic has a sub-diagnostic with a fixture not found error, and the missing fixture is in the set of missing arguments,
+/// return the diagnostic with the sub-diagnostic removed.
+///
+/// Otherwise, return None.
 fn handle_missing_fixtures(
     missing_args: &HashSet<String>,
     mut diagnostic: Diagnostic,
@@ -140,13 +156,17 @@ fn handle_missing_fixtures(
     }
 }
 
-// Pre-compile regexes at startup for better performance
 static RE_MULTI: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"missing \d+ required positional arguments?: (.+)").unwrap());
 
 static RE_SINGLE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"missing 1 required positional argument: '([^']+)'").unwrap());
 
+/// Extract missing arguments from a test function error.
+///
+/// If the error is of the form "missing 1 required positional argument: 'a'", return a set with "a".
+///
+/// If the error is of the form "missing 2 required positional arguments: 'a' and 'b'", return a set with "a" and "b".
 fn missing_arguments_from_error(err: &str) -> HashSet<String> {
     RE_MULTI.captures(err).map_or_else(
         || {
@@ -155,7 +175,6 @@ fn missing_arguments_from_error(err: &str) -> HashSet<String> {
             })
         },
         |caps| {
-            // The group is something like: "'y' and 'z'" or "'x', 'y', and 'z'"
             let args_str = caps.get(1).unwrap().as_str();
             let args_str = args_str.replace(" and ", ", ");
             let mut result = HashSet::new();
@@ -170,6 +189,7 @@ fn missing_arguments_from_error(err: &str) -> HashSet<String> {
     )
 }
 
+/// Log the status of a test case.
 struct TestCaseLogger {
     test_name: String,
 }
