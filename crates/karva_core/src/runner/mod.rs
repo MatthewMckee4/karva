@@ -696,9 +696,7 @@ def x():
     }
 
     #[rstest]
-    #[case("pytest")]
-    #[case("karva")]
-    fn test_dynamic_fixture_scope_session_scope(#[case] framework: &str) {
+    fn test_dynamic_fixture_scope_session_scope(#[values("pytest", "karva")] framework: &str) {
         let env = TestEnv::with_file(
             "<test>/test_dynamic_scope.py",
             &format!(
@@ -737,9 +735,7 @@ def test_2(x_session):
     }
 
     #[rstest]
-    #[case("pytest")]
-    #[case("karva")]
-    fn test_dynamic_fixture_scope_function_scope(#[case] framework: &str) {
+    fn test_dynamic_fixture_scope_function_scope(#[values("pytest", "karva")] framework: &str) {
         let env = TestEnv::with_file(
             "<test>/test_dynamic_scope.py",
             &format!(
@@ -1223,6 +1219,177 @@ def test_username(username):
         for _ in 0..2 {
             expected_stats.add_passed();
         }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_fixtures_given_by_decorator() {
+        let env = TestEnv::with_file(
+            "<test>/test_fixtures_given_by_decorator.py",
+            r"
+import functools
+
+def given(**kwargs):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **wrapper_kwargs):
+            return func(*args, **kwargs, **wrapper_kwargs)
+        return wrapper
+    return decorator
+
+@given(a=1)
+def test_fixtures_given_by_decorator(a):
+    assert a == 1
+",
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_fixtures_given_by_decorator_and_fixture() {
+        let env = TestEnv::with_file(
+            "<test>/test_fixtures_given_by_decorator.py",
+            r"
+import karva
+import functools
+
+def given(**kwargs):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **wrapper_kwargs):
+            return func(*args, **kwargs, **wrapper_kwargs)
+        return wrapper
+    return decorator
+
+@karva.fixture
+def b():
+    return 1
+
+@given(a=1)
+def test_fixtures_given_by_decorator(a, b):
+    assert a == 1
+    assert b == 1
+",
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_fixtures_given_by_decorator_and_parametrize() {
+        let env = TestEnv::with_file(
+            "<test>/test_fixtures_given_by_decorator.py",
+            r#"
+import karva
+import functools
+
+def given(**kwargs):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **wrapper_kwargs):
+            return func(*args, **kwargs, **wrapper_kwargs)
+        return wrapper
+    return decorator
+
+@given(a=1)
+@karva.tags.parametrize("b", [1, 2])
+def test_fixtures_given_by_decorator(a, b):
+    assert a == 1
+    assert b in [1, 2]
+"#,
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_fixtures_given_by_decorator_and_parametrize_and_fixture() {
+        let env = TestEnv::with_file(
+            "<test>/test_fixtures_given_by_decorator.py",
+            r#"
+import karva
+import functools
+
+def given(**kwargs):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **wrapper_kwargs):
+            return func(*args, **kwargs, **wrapper_kwargs)
+        return wrapper
+    return decorator
+
+@karva.fixture
+def c():
+    return 1
+
+@given(a=1)
+@karva.tags.parametrize("b", [1, 2])
+def test_fixtures_given_by_decorator(a, b, c):
+    assert a == 1
+    assert b in [1, 2]
+    assert c == 1
+"#,
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_fixtures_given_by_decorator_one_missing() {
+        let env = TestEnv::with_file(
+            "<test>/test_fixtures_given_by_decorator.py",
+            r"
+import functools
+
+def given(**kwargs):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **wrapper_kwargs):
+            return func(*args, **kwargs, **wrapper_kwargs)
+        return wrapper
+    return decorator
+
+@given(a=1)
+def test_fixtures_given_by_decorator(a, b):
+    assert a == 1
+    assert b == 1
+",
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+        expected_stats.add_errored();
 
         assert_eq!(*result.stats(), expected_stats);
     }

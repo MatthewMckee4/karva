@@ -718,9 +718,9 @@ fn test_assertion_in_imported_function() -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_fixture_initialization_order(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_fixture_initialization_order(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -838,9 +838,7 @@ fn get_parametrize_function(package: &str) -> String {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_parametrize(#[case] package: &str) -> anyhow::Result<()> {
+fn test_parametrize(#[values("pytest", "karva")] package: &str) -> anyhow::Result<()> {
     let case = IntegrationTestEnv::with_file(
         "test_parametrize.py",
         &format!(
@@ -905,9 +903,7 @@ fn get_source_code(constructor_body: &str) -> Vec<(String, String)> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_function_scopes(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_function_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("print('Calculator initialized')");
     files.extend([
         (
@@ -956,9 +952,7 @@ fn test_function_scopes(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_module_scopes(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_module_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("print('Calculator initialized')");
     files.extend([
         (
@@ -1006,9 +1000,7 @@ fn test_module_scopes(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_package_scopes(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_package_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("print('Calculator initialized')");
     files.extend([
         (
@@ -1063,9 +1055,7 @@ fn test_package_scopes(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_session_scopes(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_session_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("print('Calculator initialized')");
     files.extend([
         (
@@ -1130,9 +1120,7 @@ fn test_session_scopes(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_mixed_scopes(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_mixed_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -1192,9 +1180,7 @@ fn test_mixed_scopes(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_fixture_across_files(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_fixture_across_files(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -1250,9 +1236,7 @@ fn test_fixture_across_files(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_named_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_named_fixtures(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("print('Named calculator initialized')");
     files.extend([
         (
@@ -1297,9 +1281,7 @@ fn test_named_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_nested_package_scopes(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_nested_package_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -1363,9 +1345,7 @@ fn test_nested_package_scopes(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_independent_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_independent_fixtures(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -1416,9 +1396,9 @@ fn test_independent_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_multiple_files_independent_fixtures(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_multiple_files_independent_fixtures(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -1481,9 +1461,7 @@ fn test_multiple_files_independent_fixtures(#[case] framework: &str) -> anyhow::
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_basic_error_handling(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_basic_error_handling(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -1540,9 +1518,9 @@ fn test_basic_error_handling(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_different_scopes_independent(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_different_scopes_independent(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -1624,9 +1602,7 @@ fn test_different_scopes_independent(#[case] framework: &str) -> anyhow::Result<
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_invalid_scope_value(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_invalid_scope_value(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -1676,9 +1652,7 @@ fn test_invalid_scope_value(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_invalid_fixture_name(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_invalid_fixture_name(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -1725,9 +1699,9 @@ fn test_invalid_fixture_name(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_multiple_conftest_same_dir(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_multiple_conftest_same_dir(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -1791,9 +1765,9 @@ fn test_multiple_conftest_same_dir(#[case] framework: &str) -> anyhow::Result<()
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_very_deep_directory_structure(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_very_deep_directory_structure(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -1855,9 +1829,7 @@ fn test_very_deep_directory_structure(#[case] framework: &str) -> anyhow::Result
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_fixture_in_init_file(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_fixture_in_init_file(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -1905,9 +1877,9 @@ fn test_fixture_in_init_file(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_same_fixture_name_different_types(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_same_fixture_name_different_types(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -1973,9 +1945,7 @@ fn test_same_fixture_name_different_types(#[case] framework: &str) -> anyhow::Re
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_fixture_dependencies(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_fixture_dependencies(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("print('Calculator initialized')");
     files.extend([
         (
@@ -2035,9 +2005,9 @@ fn test_fixture_dependencies(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_dependent_fixtures_different_scopes(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_dependent_fixtures_different_scopes(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -2118,9 +2088,9 @@ fn test_dependent_fixtures_different_scopes(#[case] framework: &str) -> anyhow::
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_complex_dependency_chain(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_complex_dependency_chain(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -2186,9 +2156,9 @@ fn test_complex_dependency_chain(#[case] framework: &str) -> anyhow::Result<()> 
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_mixed_scope_dependencies(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_mixed_scope_dependencies(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -2259,9 +2229,7 @@ fn test_mixed_scope_dependencies(#[case] framework: &str) -> anyhow::Result<()> 
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_diamond_dependency(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_diamond_dependency(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -2327,9 +2295,7 @@ fn test_diamond_dependency(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_generator_fixture(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_generator_fixture(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -2375,9 +2341,9 @@ fn test_generator_fixture(#[case] framework: &str) -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_fixture_called_for_each_parametrization(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_fixture_called_for_each_parametrization(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -2438,9 +2404,9 @@ fn test_fixture_called_for_each_parametrization(#[case] framework: &str) -> anyh
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_fixture_finalizer_called_after_test(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_fixture_finalizer_called_after_test(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -2490,9 +2456,9 @@ fn test_fixture_finalizer_called_after_test(#[case] framework: &str) -> anyhow::
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_fixture_finalizer_called_at_correct_time(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_fixture_finalizer_called_at_correct_time(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -2604,9 +2570,7 @@ fn get_auto_use_kw(framework: &str) -> &str {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_auto_use_fixture(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let auto_use_kw = get_auto_use_kw(framework);
 
     let test_code = format!(
@@ -2650,9 +2614,9 @@ def test_string_and_int(order, first_entry):
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_fixture_order_respects_scope(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_fixture_order_respects_scope(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
     let auto_use_kw = get_auto_use_kw(framework);
 
     let test_code = format!(
@@ -2715,9 +2679,9 @@ fn test_multiple_fixtures_not_found() -> anyhow::Result<()> {
 }
 
 #[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_nested_generator_fixture(#[case] framework: &str) -> anyhow::Result<()> {
+fn test_nested_generator_fixture(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
     let mut files = get_source_code("pass");
     files.extend([
         (
@@ -2756,217 +2720,6 @@ fn test_nested_generator_fixture(#[case] framework: &str) -> anyhow::Result<()> 
     ----- stdout -----
     Passed tests: 1
     All checks passed!
-
-    ----- stderr -----
-    ");
-
-    Ok(())
-}
-
-#[test]
-fn test_fixtures_given_by_decorator() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
-        "test_fixtures_given_by_decorator.py",
-        r"
-        import functools
-
-        def given(**kwargs):
-            def decorator(func):
-                @functools.wraps(func)
-                def wrapper(*args, **wrapper_kwargs):
-                    return func(*args, **kwargs, **wrapper_kwargs)
-                return wrapper
-            return decorator
-
-        @given(a=1)
-        def test_fixtures_given_by_decorator(a):
-            assert a == 1
-        ",
-    )?;
-
-    run_with_path_and_snapshot!(case,  @r"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-    Passed tests: 1
-    All checks passed!
-
-    ----- stderr -----
-    ");
-
-    Ok(())
-}
-
-#[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_fixtures_given_by_decorator_and_fixture(#[case] framework: &str) -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
-        "test_fixtures_given_by_decorator.py",
-        format!(
-            r"
-        from {framework} import fixture
-        import functools
-
-        def given(**kwargs):
-            def decorator(func):
-                @functools.wraps(func)
-                def wrapper(*args, **wrapper_kwargs):
-                    return func(*args, **kwargs, **wrapper_kwargs)
-                return wrapper
-            return decorator
-
-        @fixture
-        def b():
-            return 1
-
-        @given(a=1)
-        def test_fixtures_given_by_decorator(a, b):
-            assert a == 1
-            assert b == 1
-        ",
-        )
-        .as_str(),
-    )?;
-
-    run_with_path_and_snapshot!(case,  @r"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-    Passed tests: 1
-    All checks passed!
-
-    ----- stderr -----
-    ");
-
-    Ok(())
-}
-
-#[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_fixtures_given_by_decorator_and_parametrize(#[case] framework: &str) -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
-        "test_fixtures_given_by_decorator.py",
-        format!(
-            r#"
-        import {framework}
-        import functools
-
-        def given(**kwargs):
-            def decorator(func):
-                @functools.wraps(func)
-                def wrapper(*args, **wrapper_kwargs):
-                    return func(*args, **kwargs, **wrapper_kwargs)
-                return wrapper
-            return decorator
-
-        @given(a=1)
-        @{}("b", [1, 2])
-        def test_fixtures_given_by_decorator(a, b):
-            assert a == 1
-            assert b in [1, 2]
-        "#,
-            get_parametrize_function(framework)
-        )
-        .as_str(),
-    )?;
-
-    run_with_path_and_snapshot!(case,  @r"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-    Passed tests: 2
-    All checks passed!
-
-    ----- stderr -----
-    ");
-
-    Ok(())
-}
-
-#[rstest]
-#[case("pytest")]
-#[case("karva")]
-fn test_fixtures_given_by_decorator_and_parametrize_and_fixture(
-    #[case] framework: &str,
-) -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
-        "test_fixtures_given_by_decorator.py",
-        format!(
-            r#"
-        import {framework}
-        import functools
-
-        def given(**kwargs):
-            def decorator(func):
-                @functools.wraps(func)
-                def wrapper(*args, **wrapper_kwargs):
-                    return func(*args, **kwargs, **wrapper_kwargs)
-                return wrapper
-            return decorator
-
-        @{framework}.fixture
-        def c():
-            return 1
-
-        @given(a=1)
-        @{}("b", [1, 2])
-        def test_fixtures_given_by_decorator(a, b, c):
-            assert a == 1
-            assert b in [1, 2]
-            assert c == 1
-        "#,
-            get_parametrize_function(framework)
-        )
-        .as_str(),
-    )?;
-
-    run_with_path_and_snapshot!(case,  @r"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-    Passed tests: 2
-    All checks passed!
-
-    ----- stderr -----
-    ");
-
-    Ok(())
-}
-
-#[rstest]
-fn test_fixtures_given_by_decorator_one_missing() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
-        "test_fixtures_given_by_decorator.py",
-        r"
-        import functools
-
-        def given(**kwargs):
-            def decorator(func):
-                @functools.wraps(func)
-                def wrapper(*args, **wrapper_kwargs):
-                    return func(*args, **kwargs, **wrapper_kwargs)
-                return wrapper
-            return decorator
-
-
-        @given(a=1)
-        def test_fixtures_given_by_decorator(a, b):
-            assert a == 1
-            assert b == 1
-        ",
-    )?;
-
-    run_with_path_and_snapshot!(case,  @r"
-    success: false
-    exit_code: 1
-    ----- stdout -----
-    error[fixtures-not-found]: Fixture(s) not found for test_fixtures_given_by_decorator::test_fixtures_given_by_decorator
-     --> test_fixtures_given_by_decorator::test_fixtures_given_by_decorator at <temp_dir>/test_fixtures_given_by_decorator.py:13
-    error (fixture-not-found): fixture 'b' not found
-
-    Errored tests: 1
 
     ----- stderr -----
     ");
