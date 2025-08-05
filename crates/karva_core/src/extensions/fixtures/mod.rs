@@ -223,7 +223,13 @@ impl Fixture {
 
 impl std::fmt::Debug for Fixture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Fixture(name: {}, scope: {})", self.name(), self.scope)
+        write!(
+            f,
+            "Fixture(name: {}, scope: {}, auto_use: {})",
+            self.name(),
+            self.scope(),
+            self.auto_use()
+        )
     }
 }
 
@@ -278,12 +284,12 @@ pub(crate) trait HasFixtures<'proj>: std::fmt::Debug {
     fn fixtures<'a: 'proj>(
         &'a self,
         py: Python<'_>,
-        scope: &[FixtureScope],
+        scopes: &[FixtureScope],
         test_cases: &[&dyn UsesFixtures],
     ) -> Vec<&'proj Fixture> {
         let mut fixtures = Vec::new();
         for fixture in self.all_fixtures(py, test_cases) {
-            if scope.contains(fixture.scope()) {
+            if scopes.contains(fixture.scope()) {
                 fixtures.push(fixture);
             }
         }

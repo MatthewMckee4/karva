@@ -129,23 +129,23 @@ impl TestFunction {
 
         let required_fixture_names = self.collect_required_fixtures(py, &py_function);
 
-        // Handle simple case with no fixtures
-        if required_fixture_names.is_empty() {
-            return vec![(
-                TestCase::new(self, HashMap::new(), py_function, module),
-                None,
-            )];
+        let parametrize_args = self.collect_parametrize_args(py, &py_function);
+        let mut test_cases = Vec::with_capacity(parametrize_args.len());
+
+        for params in parametrize_args {
+            let test_case_creator = |fixture_manager: &FixtureManager| {
+                self.resolve_fixtures_for_test_case(
+                    module,
+                    &py_function,
+                    &required_fixture_names,
+                    &params,
+                    fixture_manager,
+                )
+            };
+            test_cases.push(fixture_manager_func(py, &test_case_creator));
         }
 
-        let parametrize_args = self.collect_parametrize_args(py, &py_function);
-        self.create_test_cases_with_fixtures(
-            py,
-            module,
-            &py_function,
-            &required_fixture_names,
-            &parametrize_args,
-            fixture_manager_func,
-        )
+        test_cases
     }
 
     /// Collects all required fixture names from function parameters and tags.
@@ -177,38 +177,6 @@ impl TestFunction {
         }
 
         parametrize_args
-    }
-
-    /// Creates test cases with fixture resolution for each parameter combination.
-    fn create_test_cases_with_fixtures<'a>(
-        &'a self,
-        py: Python<'_>,
-        module: &'a DiscoveredModule,
-        py_function: &Py<PyAny>,
-        required_fixture_names: &[String],
-        parametrize_args: &[HashMap<String, Py<PyAny>>],
-        fixture_manager_func: impl Fn(
-            Python<'_>,
-            &dyn Fn(&FixtureManager<'_>) -> (TestCase<'a>, Option<Diagnostic>),
-        ) -> (TestCase<'a>, Option<Diagnostic>)
-        + Sync,
-    ) -> Vec<(TestCase<'a>, Option<Diagnostic>)> {
-        let mut test_cases = Vec::with_capacity(parametrize_args.len());
-
-        for params in parametrize_args {
-            let test_case_creator = |fixture_manager: &FixtureManager| {
-                self.resolve_fixtures_for_test_case(
-                    module,
-                    py_function,
-                    required_fixture_names,
-                    params,
-                    fixture_manager,
-                )
-            };
-            test_cases.push(fixture_manager_func(py, &test_case_creator));
-        }
-
-        test_cases
     }
 
     /// Resolves fixtures for a single test case and creates appropriate diagnostics.

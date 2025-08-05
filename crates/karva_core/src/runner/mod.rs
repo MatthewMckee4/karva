@@ -95,6 +95,14 @@ mod tests {
         runner::diagnostic::DiagnosticStats,
     };
 
+    fn get_auto_use_kw(framework: &str) -> &str {
+        match framework {
+            "pytest" => "autouse",
+            "karva" => "auto_use",
+            _ => panic!("Invalid framework"),
+        }
+    }
+
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
      {
@@ -1390,6 +1398,82 @@ def test_fixtures_given_by_decorator(a, b):
 
         let mut expected_stats = DiagnosticStats::default();
         expected_stats.add_errored();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[rstest]
+    fn test_function_scope_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
+        let env = TestEnv::with_file(
+            "<test>/test_function_scope_auto_use_fixture.py",
+            format!(
+                r#"
+import {framework}
+
+arr = []
+
+@{framework}.fixture(scope="function", {auto_use_kw}=True)
+def auto_function_fixture():
+    arr.append(1)
+    yield
+    arr.append(2)
+
+def test_something():
+    assert arr == [1, 1]
+
+def test_something_else():
+    assert arr == [1, 1, 2]
+"#,
+                auto_use_kw = get_auto_use_kw(framework),
+            )
+            .as_str(),
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[rstest]
+    fn test_module_scope_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
+        let env = TestEnv::with_file(
+            "<test>/test_function_scope_auto_use_fixture.py",
+            format!(
+                r#"
+import {framework}
+
+arr = []
+
+@{framework}.fixture(scope="module", {auto_use_kw}=True)
+def auto_function_fixture():
+    arr.append(1)
+    yield
+    arr.append(2)
+
+def test_something():
+    assert arr == [1]
+
+def test_something_else():
+    assert arr == [1]
+"#,
+                auto_use_kw = get_auto_use_kw(framework),
+            )
+            .as_str(),
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
 
         assert_eq!(*result.stats(), expected_stats);
     }
