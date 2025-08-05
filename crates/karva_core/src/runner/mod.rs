@@ -1441,7 +1441,10 @@ def test_something_else():
     }
 
     #[rstest]
-    fn test_module_scope_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
+    fn test_scope_auto_use_fixture(
+        #[values("pytest", "karva")] framework: &str,
+        #[values("module", "package", "session")] scope: &str,
+    ) {
         let env = TestEnv::with_file(
             "<test>/test_function_scope_auto_use_fixture.py",
             format!(
@@ -1450,7 +1453,7 @@ import {framework}
 
 arr = []
 
-@{framework}.fixture(scope="module", {auto_use_kw}=True)
+@{framework}.fixture(scope="{scope}", {auto_use_kw}=True)
 def auto_function_fixture():
     arr.append(1)
     yield
