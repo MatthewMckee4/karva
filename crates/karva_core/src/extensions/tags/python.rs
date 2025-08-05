@@ -115,10 +115,6 @@ impl PyTags {
             "Expected a Tags, TestCase, or Tag object",
         ))
     }
-
-    pub fn __iter__(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        self.inner.clone().into_py_any(py)
-    }
 }
 
 #[derive(Debug)]

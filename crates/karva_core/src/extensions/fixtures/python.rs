@@ -24,7 +24,6 @@ impl FixtureFunctionMarker {
         name: Option<String>,
         auto_use: bool,
     ) -> Self {
-        // If no scope is provided, default to "function"
         let scope =
             scope.unwrap_or_else(|| "function".to_string().into_pyobject(py).unwrap().into());
 
