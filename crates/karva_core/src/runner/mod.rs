@@ -665,9 +665,7 @@ def x():
     }
 
     #[rstest]
-    #[case("pytest")]
-    #[case("karva")]
-    fn test_dynamic_fixture_scope_session_scope(#[case] framework: &str) {
+    fn test_dynamic_fixture_scope_session_scope(#[values("pytest", "karva")] framework: &str) {
         let env = TestEnv::with_file(
             "<test>/test_dynamic_scope.py",
             &format!(
@@ -706,9 +704,7 @@ def test_2(x_session):
     }
 
     #[rstest]
-    #[case("pytest")]
-    #[case("karva")]
-    fn test_dynamic_fixture_scope_function_scope(#[case] framework: &str) {
+    fn test_dynamic_fixture_scope_function_scope(#[values("pytest", "karva")] framework: &str) {
         let env = TestEnv::with_file(
             "<test>/test_dynamic_scope.py",
             &format!(
