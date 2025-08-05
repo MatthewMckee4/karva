@@ -17,15 +17,22 @@ use crate::{
         fixtures::{FixtureManager, UsesFixtures},
         tags::Tags,
     },
-    name::FunctionName,
+    name::QualifiedFunctionName,
     utils::Upcast,
 };
 
-/// Represents a single test function.
+/// Represents a single test function discovered from Python source code.
+///
+/// This structure bridges the gap between Rust's AST representation and Python's
+/// runtime objects, maintaining both the parsed function definition and the actual
+/// Python function object for execution.
 pub(crate) struct TestFunction {
+    /// The parsed AST representation of the function from ruff
     function_definition: StmtFunctionDef,
+    /// The actual Python function object that can be called
     py_function: Py<PyAny>,
-    name: FunctionName,
+    /// Qualified name including module path for unique identification
+    name: QualifiedFunctionName,
 }
 
 impl UsesFixtures for TestFunction {
@@ -49,7 +56,7 @@ impl TestFunction {
         function_definition: StmtFunctionDef,
         py_function: Py<PyAny>,
     ) -> Self {
-        let name = FunctionName::new(function_definition.name.to_string(), module_name);
+        let name = QualifiedFunctionName::new(function_definition.name.to_string(), module_name);
 
         Self {
             function_definition,
@@ -59,7 +66,7 @@ impl TestFunction {
     }
 
     #[must_use]
-    pub(crate) const fn name(&self) -> &FunctionName {
+    pub(crate) const fn name(&self) -> &QualifiedFunctionName {
         &self.name
     }
 
@@ -73,6 +80,10 @@ impl TestFunction {
         &self.function_definition
     }
 
+    /// Creates a display string showing the function's file location and line number.
+    ///
+    /// This is particularly useful for error reporting and debugging, providing
+    /// precise location information for test functions.
     pub(crate) fn display_with_line(&self, module: &DiscoveredModule) -> String {
         let line_index = module.line_index();
         let source_text = module.source_text();
@@ -81,6 +92,20 @@ impl TestFunction {
         format!("{}:{}", module.path().display(), line_number.line)
     }
 
+    /// Collects test cases from this function, resolving fixtures and handling parametrization.
+    ///
+    /// This method is responsible for the complex process of converting a discovered test function
+    /// into executable test cases. It handles fixture resolution, parametrization via tags,
+    /// and creates the appropriate number of test cases based on parameter combinations.
+    ///
+    /// # Arguments
+    /// * `py` - Python interpreter instance
+    /// * `module` - The module containing this function
+    /// * `py_module` - The Python module object
+    /// * `fixture_manager_func` - Callback to create fixture managers for test execution
+    ///
+    /// # Returns
+    /// A vector of test cases paired with optional diagnostics for any issues encountered
     pub(crate) fn collect<'a>(
         &'a self,
         py: Python<'_>,
@@ -102,16 +127,9 @@ impl TestFunction {
             return Vec::new();
         };
 
-        let mut required_fixture_names = self.dependant_fixtures(py);
+        let required_fixture_names = self.collect_required_fixtures(py, &py_function);
 
-        let tags = Tags::from_py_any(py, &py_function, Some(&self.function_definition));
-
-        if let Some(tags) = &tags {
-            let use_fixtures_names = tags.use_fixtures_names();
-
-            required_fixture_names.extend(use_fixtures_names);
-        }
-
+        // Handle simple case with no fixtures
         if required_fixture_names.is_empty() {
             return vec![(
                 TestCase::new(self, HashMap::new(), py_function, module),
@@ -119,64 +137,140 @@ impl TestFunction {
             )];
         }
 
+        let parametrize_args = self.collect_parametrize_args(py, &py_function);
+        self.create_test_cases_with_fixtures(
+            py,
+            module,
+            &py_function,
+            &required_fixture_names,
+            &parametrize_args,
+            fixture_manager_func,
+        )
+    }
+
+    /// Collects all required fixture names from function parameters and tags.
+    fn collect_required_fixtures(&self, py: Python<'_>, py_function: &Py<PyAny>) -> Vec<String> {
+        let mut required_fixture_names = self.dependant_fixtures(py);
+
+        if let Some(tags) = Tags::from_py_any(py, py_function, Some(&self.function_definition)) {
+            required_fixture_names.extend(tags.use_fixtures_names());
+        }
+
+        required_fixture_names
+    }
+
+    /// Collects parametrization arguments from function tags.
+    fn collect_parametrize_args(
+        &self,
+        py: Python<'_>,
+        py_function: &Py<PyAny>,
+    ) -> Vec<HashMap<String, Py<PyAny>>> {
         let mut parametrize_args = Vec::new();
 
-        if let Some(tags) = &tags {
+        if let Some(tags) = Tags::from_py_any(py, py_function, Some(&self.function_definition)) {
             parametrize_args.extend(tags.parametrize_args());
         }
 
-        // Ensure that we collect at least one test case (no parametrization)
+        // Ensure at least one test case exists (no parametrization)
         if parametrize_args.is_empty() {
             parametrize_args.push(HashMap::new());
         }
 
+        parametrize_args
+    }
+
+    /// Creates test cases with fixture resolution for each parameter combination.
+    fn create_test_cases_with_fixtures<'a>(
+        &'a self,
+        py: Python<'_>,
+        module: &'a DiscoveredModule,
+        py_function: &Py<PyAny>,
+        required_fixture_names: &[String],
+        parametrize_args: &[HashMap<String, Py<PyAny>>],
+        fixture_manager_func: impl Fn(
+            Python<'_>,
+            &dyn Fn(&FixtureManager<'_>) -> (TestCase<'a>, Option<Diagnostic>),
+        ) -> (TestCase<'a>, Option<Diagnostic>)
+        + Sync,
+    ) -> Vec<(TestCase<'a>, Option<Diagnostic>)> {
         let mut test_cases = Vec::with_capacity(parametrize_args.len());
 
-        for params in &parametrize_args {
-            let f = |fixture_manager: &FixtureManager| {
-                let num_required_fixtures = required_fixture_names.len();
-                let mut fixture_diagnostics = Vec::with_capacity(num_required_fixtures);
-                let mut required_fixtures = HashMap::with_capacity(num_required_fixtures);
-
-                for fixture_name in &required_fixture_names {
-                    if let Some(fixture) = params.get(fixture_name) {
-                        required_fixtures.insert(fixture_name.clone(), fixture.clone());
-                    } else if let Some(fixture) =
-                        fixture_manager.get_fixture_with_name(fixture_name, None)
-                    {
-                        required_fixtures.insert(fixture_name.clone(), fixture);
-                    } else {
-                        fixture_diagnostics.push(SubDiagnostic::fixture_not_found(fixture_name));
-                    }
-                }
-
-                let diagnostic = if fixture_diagnostics.is_empty() {
-                    None
-                } else {
-                    let mut diagnostic = Diagnostic::new(
-                        Some(format!("Fixture(s) not found for {}", self.name())),
-                        Some(self.display_with_line(module)),
-                        None,
-                        DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                            self.name().to_string(),
-                            TestCaseDiagnosticType::Collection(
-                                TestCaseCollectionDiagnosticType::FixtureNotFound,
-                            ),
-                        )),
-                    );
-                    diagnostic.add_sub_diagnostics(fixture_diagnostics);
-                    Some(diagnostic)
-                };
-
-                (
-                    TestCase::new(self, required_fixtures, py_function.clone(), module),
-                    diagnostic,
+        for params in parametrize_args {
+            let test_case_creator = |fixture_manager: &FixtureManager| {
+                self.resolve_fixtures_for_test_case(
+                    module,
+                    py_function,
+                    required_fixture_names,
+                    params,
+                    fixture_manager,
                 )
             };
-            test_cases.push(fixture_manager_func(py, &f));
+            test_cases.push(fixture_manager_func(py, &test_case_creator));
         }
 
         test_cases
+    }
+
+    /// Resolves fixtures for a single test case and creates appropriate diagnostics.
+    fn resolve_fixtures_for_test_case<'a>(
+        &'a self,
+        module: &'a DiscoveredModule,
+        py_function: &Py<PyAny>,
+        required_fixture_names: &[String],
+        params: &HashMap<String, Py<PyAny>>,
+        fixture_manager: &FixtureManager,
+    ) -> (TestCase<'a>, Option<Diagnostic>) {
+        let num_required_fixtures = required_fixture_names.len();
+        let mut fixture_diagnostics = Vec::with_capacity(num_required_fixtures);
+        let mut resolved_fixtures = HashMap::with_capacity(num_required_fixtures);
+
+        // Resolve each required fixture
+        for fixture_name in required_fixture_names {
+            if let Some(fixture_value) = params.get(fixture_name) {
+                // Use parametrized value if available
+                resolved_fixtures.insert(fixture_name.clone(), fixture_value.clone());
+            } else if let Some(fixture_value) =
+                fixture_manager.get_fixture_with_name(fixture_name, None)
+            {
+                // Use fixture from manager
+                resolved_fixtures.insert(fixture_name.clone(), fixture_value);
+            } else {
+                // Fixture not found - record diagnostic
+                fixture_diagnostics.push(SubDiagnostic::fixture_not_found(fixture_name));
+            }
+        }
+
+        let diagnostic = self.create_fixture_diagnostic(module, fixture_diagnostics);
+
+        (
+            TestCase::new(self, resolved_fixtures, py_function.clone(), module),
+            diagnostic,
+        )
+    }
+
+    /// Creates a diagnostic for missing fixtures, if any.
+    fn create_fixture_diagnostic(
+        &self,
+        module: &DiscoveredModule,
+        fixture_diagnostics: Vec<SubDiagnostic>,
+    ) -> Option<Diagnostic> {
+        if fixture_diagnostics.is_empty() {
+            None
+        } else {
+            let mut diagnostic = Diagnostic::new(
+                Some(format!("Fixture(s) not found for {}", self.name())),
+                Some(self.display_with_line(module)),
+                None,
+                DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
+                    self.name().to_string(),
+                    TestCaseDiagnosticType::Collection(
+                        TestCaseCollectionDiagnosticType::FixtureNotFound,
+                    ),
+                )),
+            );
+            diagnostic.add_sub_diagnostics(fixture_diagnostics);
+            Some(diagnostic)
+        }
     }
 
     pub(crate) const fn display(&self) -> TestFunctionDisplay<'_> {

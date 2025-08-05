@@ -12,7 +12,7 @@ pub mod python;
 pub(crate) use finalizer::{Finalizer, Finalizers};
 pub(crate) use manager::FixtureManager;
 
-use crate::name::FunctionName;
+use crate::name::QualifiedFunctionName;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum FixtureScope {
@@ -97,7 +97,7 @@ pub(crate) fn resolve_dynamic_scope(
 }
 
 pub(crate) struct Fixture {
-    name: FunctionName,
+    name: QualifiedFunctionName,
     function_def: StmtFunctionDef,
     scope: FixtureScope,
     auto_use: bool,
@@ -108,7 +108,7 @@ pub(crate) struct Fixture {
 impl Fixture {
     #[must_use]
     pub(crate) const fn new(
-        name: FunctionName,
+        name: QualifiedFunctionName,
         function_def: StmtFunctionDef,
         scope: FixtureScope,
         auto_use: bool,
@@ -126,7 +126,7 @@ impl Fixture {
     }
 
     #[must_use]
-    pub(crate) const fn name(&self) -> &FunctionName {
+    pub(crate) const fn name(&self) -> &QualifiedFunctionName {
         &self.name
     }
 
