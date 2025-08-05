@@ -273,53 +273,26 @@ def test_fixture_generator(fixture_generator):
         assert_eq!(*result.stats(), expected_stats, "{result:?}");
     }
 
-    #[test]
-    fn test_fixture_generator_with_second_fixture() {
+    #[rstest]
+    fn test_fixture_generator_with_second_fixture(#[values("karva", "pytest")] framework: &str) {
         let env = TestEnv::with_file(
             "<test>/test_file.py",
-            r"
-import karva
+            &format!(
+                r"
+import {framework}
 
-@karva.fixture
+@{framework}.fixture
 def first_fixture():
     pass
 
-@karva.fixture
+@{framework}.fixture
 def fixture_generator(first_fixture):
     yield 1
 
 def test_fixture_generator(fixture_generator):
     assert fixture_generator == 1
-",
-        );
-
-        let result = env.test();
-
-        let mut expected_stats = DiagnosticStats::default();
-
-        expected_stats.add_passed();
-
-        assert_eq!(*result.stats(), expected_stats, "{result:?}");
-    }
-
-    #[test]
-    fn test_pytest_fixture_generator_with_second_fixture() {
-        let env = TestEnv::with_file(
-            "<test>/test_file.py",
-            r"
-import pytest
-
-@pytest.fixture
-def first_fixture():
-    pass
-
-@pytest.fixture
-def fixture_generator(first_fixture):
-    yield 1
-
-def test_fixture_generator(fixture_generator):
-    assert fixture_generator == 1
-",
+"
+            ),
         );
 
         let result = env.test();
