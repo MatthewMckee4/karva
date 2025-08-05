@@ -4,20 +4,31 @@ use pyo3::{prelude::*, types::PyAny};
 use crate::{
     discovery::DiscoveredPackage,
     extensions::fixtures::{
-        Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, RequiresFixtures,
+        Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, UsesFixtures,
     },
-    name::FunctionName,
-    utils::partition_iter,
+    name::QualifiedFunctionName,
+    utils::create_hierarchy_iterator,
 };
 
+/// Collection of fixtures and their finalizers for a specific scope.
+///
+/// This structure manages the lifecycle of fixtures within a particular scope,
+/// storing both the fixture values and any cleanup functions (finalizers) that
+/// need to be executed when the scope ends.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct FixtureCollection {
-    fixtures: IndexMap<FunctionName, Py<PyAny>>,
+    /// Map of fixture names to their resolved Python values
+    fixtures: IndexMap<QualifiedFunctionName, Py<PyAny>>,
+    /// List of cleanup functions to execute when this collection is reset
     finalizers: Vec<Finalizer>,
 }
 
 impl FixtureCollection {
-    pub(crate) fn insert_fixture(&mut self, fixture_name: FunctionName, fixture_return: Py<PyAny>) {
+    pub(crate) fn insert_fixture(
+        &mut self,
+        fixture_name: QualifiedFunctionName,
+        fixture_return: Py<PyAny>,
+    ) {
         self.fixtures.insert(fixture_name, fixture_return);
     }
 
@@ -25,6 +36,10 @@ impl FixtureCollection {
         self.finalizers.push(finalizer);
     }
 
+    /// Clears all fixtures and returns finalizers for cleanup.
+    ///
+    /// This method is called when a scope ends to ensure proper cleanup
+    /// of resources allocated by fixtures.
     pub(crate) fn reset(&mut self) -> Finalizers {
         self.fixtures.clear();
         Finalizers::new(self.finalizers.drain(..).collect())
@@ -38,11 +53,19 @@ impl FixtureCollection {
     }
 }
 
-// We use one [`FixtureManager`] for each scope.
+/// Manages fixtures for a specific scope in the test execution hierarchy.
+///
+/// The `FixtureManager` follows a hierarchical structure where each manager
+/// can have a parent, allowing fixture resolution to traverse up the scope
+/// chain (function -> module -> package -> session). This enables proper
+/// fixture inheritance and dependency resolution across different test scopes.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct FixtureManager<'a> {
+    /// Reference to the parent manager in the scope hierarchy
     parent: Option<&'a FixtureManager<'a>>,
+    /// The actual fixtures and finalizers for this scope
     collection: FixtureCollection,
+    /// The scope level this manager is responsible for
     scope: FixtureScope,
 }
 
@@ -83,7 +106,7 @@ impl<'a> FixtureManager<'a> {
     }
 
     #[must_use]
-    pub(crate) fn get_fixture(&self, fixture_name: &FunctionName) -> Option<Py<PyAny>> {
+    pub(crate) fn get_fixture(&self, fixture_name: &QualifiedFunctionName) -> Option<Py<PyAny>> {
         if let Some(fixture) = self.collection.fixtures.get(fixture_name) {
             return Some(fixture.clone());
         }
@@ -99,7 +122,7 @@ impl<'a> FixtureManager<'a> {
     pub(crate) fn get_fixture_with_name(
         &self,
         fixture_name: &str,
-        exclude: Option<&[&FunctionName]>,
+        exclude: Option<&[&QualifiedFunctionName]>,
     ) -> Option<Py<PyAny>> {
         if let Some((_, fixture)) = self.collection.fixtures.iter().rev().find(|(name, _)| {
             name.function_name() == fixture_name
@@ -131,12 +154,17 @@ impl<'a> FixtureManager<'a> {
         }
     }
 
-    // TODO: This is a bit of a mess.
-    // This used to ensure that all of the given dependencies (fixtures) have been called.
-    // This first starts with finding all dependencies of the given fixtures, and resolving and calling them first.
-    //
-    // We take the parents to ensure that if the dependent fixtures are not in the current scope,
-    // we can still look for them in the parents.
+    /// Recursively resolves and executes fixture dependencies.
+    ///
+    /// This method ensures that all dependencies of a fixture are resolved and executed
+    /// before the fixture itself is called. It performs a depth-first traversal of the
+    /// dependency graph, checking both the current scope and parent scopes for required fixtures.
+    ///
+    /// # Arguments
+    /// * `py` - Python interpreter instance
+    /// * `parents` - Array of parent packages in the scope hierarchy
+    /// * `current` - The current scope that contains fixtures
+    /// * `fixture` - The fixture whose dependencies need to be resolved
     fn ensure_fixture_dependencies<'proj>(
         &mut self,
         py: Python<'_>,
@@ -151,7 +179,7 @@ impl<'a> FixtureManager<'a> {
 
         // To ensure we can call the current fixture, we must first look at all of its dependencies,
         // and resolve them first.
-        let current_dependencies = fixture.required_fixtures(py);
+        let current_dependencies = fixture.dependant_fixtures(py);
 
         // We need to get all of the fixtures in the current scope.
         let current_all_fixtures = current.all_fixtures(py, &[]);
@@ -172,7 +200,7 @@ impl<'a> FixtureManager<'a> {
             // We did not find the dependency in the current scope.
             // So we must try the parent scopes.
             if !found {
-                for (parent, parents_above_current_parent) in partition_iter(parents) {
+                for (parent, parents_above_current_parent) in create_hierarchy_iterator(parents) {
                     let parent_fixture = (*parent).get_fixture(py, dependency);
 
                     if let Some(parent_fixture) = parent_fixture {
@@ -200,13 +228,16 @@ impl<'a> FixtureManager<'a> {
         }
     }
 
+    /// Add fixtures with the current scope to the fixture manager.
+    ///
+    /// This will ensure that all of the dependencies of the given fixtures are called first.
     pub(crate) fn add_fixtures<'proj>(
         &mut self,
         py: Python<'_>,
         parents: &[&'proj DiscoveredPackage],
         current: &'proj dyn HasFixtures<'proj>,
         scopes: &[FixtureScope],
-        dependencies: &[&dyn RequiresFixtures],
+        dependencies: &[&dyn UsesFixtures],
     ) {
         let fixtures = current.fixtures(py, scopes, dependencies);
 

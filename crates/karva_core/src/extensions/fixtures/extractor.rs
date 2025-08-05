@@ -5,7 +5,7 @@ use crate::{
     extensions::fixtures::{
         Fixture, FixtureScope, python::FixtureFunctionDefinition, resolve_dynamic_scope,
     },
-    name::FunctionName,
+    name::QualifiedFunctionName,
 };
 
 fn get_attribute<'a>(function: Bound<'a, PyAny>, attributes: &[&str]) -> Option<Bound<'a, PyAny>> {
@@ -52,7 +52,7 @@ pub(crate) fn try_from_pytest_function(
     let fixture_scope = fixture_scope(py, &scope, &name)?;
 
     Ok(Some(Fixture::new(
-        FunctionName::new(name, module_name.to_string()),
+        QualifiedFunctionName::new(name, module_name.to_string()),
         function_definition.clone(),
         fixture_scope,
         auto_use.extract::<bool>().unwrap_or(false),
@@ -86,7 +86,7 @@ pub(crate) fn try_from_karva_function(
     let fixture_scope = fixture_scope(py, scope_obj.bind(py), &name)?;
 
     Ok(Some(Fixture::new(
-        FunctionName::new(name, module_name.to_string()),
+        QualifiedFunctionName::new(name, module_name.to_string()),
         function_def.clone(),
         fixture_scope,
         auto_use,

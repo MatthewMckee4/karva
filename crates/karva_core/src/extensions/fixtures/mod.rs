@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use pyo3::{prelude::*, types::PyTuple};
-use ruff_python_ast::{Decorator, Expr, StmtFunctionDef};
+use ruff_python_ast::{Expr, StmtFunctionDef};
 
 pub mod extractor;
 pub mod finalizer;
@@ -12,7 +12,7 @@ pub mod python;
 pub(crate) use finalizer::{Finalizer, Finalizers};
 pub(crate) use manager::FixtureManager;
 
-use crate::name::FunctionName;
+use crate::name::QualifiedFunctionName;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum FixtureScope {
@@ -97,7 +97,7 @@ pub(crate) fn resolve_dynamic_scope(
 }
 
 pub(crate) struct Fixture {
-    name: FunctionName,
+    name: QualifiedFunctionName,
     function_def: StmtFunctionDef,
     scope: FixtureScope,
     auto_use: bool,
@@ -108,7 +108,7 @@ pub(crate) struct Fixture {
 impl Fixture {
     #[must_use]
     pub(crate) const fn new(
-        name: FunctionName,
+        name: QualifiedFunctionName,
         function_def: StmtFunctionDef,
         scope: FixtureScope,
         auto_use: bool,
@@ -126,7 +126,7 @@ impl Fixture {
     }
 
     #[must_use]
-    pub(crate) const fn name(&self) -> &FunctionName {
+    pub(crate) const fn name(&self) -> &QualifiedFunctionName {
         &self.name
     }
 
@@ -152,7 +152,7 @@ impl Fixture {
     ) -> PyResult<Bound<'a, PyAny>> {
         let mut required_fixtures = Vec::new();
 
-        for name in self.get_required_fixture_names(py) {
+        for name in self.dependant_fixtures(py) {
             if let Some(fixture) =
                 fixture_manager.get_fixture_with_name(&name, Some(&[self.name()]))
             {
@@ -221,25 +221,26 @@ impl Fixture {
     }
 }
 
-impl HasFunctionDefinition for Fixture {
-    fn get_required_fixture_names(&self, py: Python<'_>) -> Vec<String> {
-        self.function_def.get_required_fixture_names(py)
-    }
-}
-
 impl std::fmt::Debug for Fixture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Fixture(name: {}, scope: {})", self.name(), self.scope)
     }
 }
 
-pub(crate) trait HasFunctionDefinition {
+/// This trait is used to represent an object that may require fixtures to be called before it is run.
+pub(crate) trait UsesFixtures: std::fmt::Debug {
     #[must_use]
-    fn get_required_fixture_names(&self, py: Python<'_>) -> Vec<String>;
+    fn uses_fixture(&self, py: Python<'_>, fixture_name: &str) -> bool {
+        self.dependant_fixtures(py)
+            .contains(&fixture_name.to_string())
+    }
+
+    #[must_use]
+    fn dependant_fixtures(&self, py: Python<'_>) -> Vec<String>;
 }
 
-impl HasFunctionDefinition for StmtFunctionDef {
-    fn get_required_fixture_names(&self, _py: Python<'_>) -> Vec<String> {
+impl UsesFixtures for StmtFunctionDef {
+    fn dependant_fixtures(&self, _py: Python<'_>) -> Vec<String> {
         let mut required_fixtures = Vec::new();
         for parameter in self.parameters.iter_non_variadic_params() {
             required_fixtures.push(parameter.parameter.name.as_str().to_string());
@@ -248,36 +249,23 @@ impl HasFunctionDefinition for StmtFunctionDef {
     }
 }
 
-pub(crate) trait RequiresFixtures: std::fmt::Debug {
-    #[must_use]
-    fn uses_fixture(&self, py: Python<'_>, fixture_name: &str) -> bool {
-        self.required_fixtures(py)
-            .contains(&fixture_name.to_string())
-    }
-
-    #[must_use]
-    fn required_fixtures(&self, py: Python<'_>) -> Vec<String>;
-}
-
-impl<T: HasFunctionDefinition + std::fmt::Debug> RequiresFixtures for T {
-    fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
-        self.get_required_fixture_names(py)
+impl UsesFixtures for Fixture {
+    fn dependant_fixtures(&self, py: Python<'_>) -> Vec<String> {
+        self.function_def.dependant_fixtures(py)
     }
 }
 
 pub(crate) fn is_fixture_function(val: &StmtFunctionDef) -> bool {
-    val.decorator_list.iter().any(is_fixture)
+    val.decorator_list
+        .iter()
+        .any(|decorator| is_fixture(&decorator.expression))
 }
 
-fn is_fixture(decorator: &Decorator) -> bool {
-    match &decorator.expression {
+fn is_fixture(expr: &Expr) -> bool {
+    match expr {
         Expr::Name(name) => name.id == "fixture",
         Expr::Attribute(attr) => attr.attr.id == "fixture",
-        Expr::Call(call) => match call.func.as_ref() {
-            Expr::Name(name) => name.id == "fixture",
-            Expr::Attribute(attr) => attr.attr.id == "fixture",
-            _ => false,
-        },
+        Expr::Call(call) => is_fixture(call.func.as_ref()),
         _ => false,
     }
 }
@@ -291,7 +279,7 @@ pub(crate) trait HasFixtures<'proj>: std::fmt::Debug {
         &'a self,
         py: Python<'_>,
         scope: &[FixtureScope],
-        test_cases: &[&dyn RequiresFixtures],
+        test_cases: &[&dyn UsesFixtures],
     ) -> Vec<&'proj Fixture> {
         let mut fixtures = Vec::new();
         for fixture in self.all_fixtures(py, test_cases) {
@@ -315,7 +303,7 @@ pub(crate) trait HasFixtures<'proj>: std::fmt::Debug {
     fn all_fixtures<'a: 'proj>(
         &'a self,
         py: Python<'_>,
-        test_cases: &[&dyn RequiresFixtures],
+        test_cases: &[&dyn UsesFixtures],
     ) -> Vec<&'proj Fixture>;
 }
 

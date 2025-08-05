@@ -4,13 +4,23 @@ use crate::{
     collection::{CollectedModule, CollectedPackage, TestCase},
     diagnostic::Diagnostic,
     discovery::{DiscoveredModule, DiscoveredPackage, TestFunction},
-    extensions::fixtures::{FixtureManager, FixtureScope, RequiresFixtures},
-    utils::{Upcast, partition_iter},
+    extensions::fixtures::{FixtureManager, FixtureScope, UsesFixtures},
+    utils::{Upcast, create_hierarchy_iterator},
 };
 
+/// Collects and processes test cases from discovered test functions.
+///
+/// The `TestCaseCollector` is responsible for the complex process of converting
+/// discovered test functions into executable test cases. This involves resolving
+/// fixture dependencies, setting up the proper scope hierarchy, and handling
+/// test parametrization.
 pub(crate) struct TestCaseCollector;
 
 impl TestCaseCollector {
+    /// Collects all test cases from a discovered test session.
+    ///
+    /// This is the main entry point for test collection. It creates a session-level
+    /// fixture manager and recursively processes all packages, modules, and test functions.
     #[must_use]
     pub(crate) fn collect<'a>(
         py: Python<'_>,
@@ -20,7 +30,7 @@ impl TestCaseCollector {
 
         let mut fixture_manager = FixtureManager::new(None, FixtureScope::Session);
 
-        let upcast_test_cases = session.all_requires_fixtures();
+        let upcast_test_cases = session.all_uses_fixtures();
 
         let mut session_collected = CollectedPackage::default();
 
@@ -41,6 +51,11 @@ impl TestCaseCollector {
         session_collected
     }
 
+    /// Collects test cases from a single test function with fixture resolution.
+    ///
+    /// This method creates a function-scoped fixture manager and delegates to the
+    /// test function's collect method. It handles the complex fixture hierarchy
+    /// setup required for proper dependency injection.
     #[allow(clippy::unused_self)]
     fn collect_test_function<'a>(
         py: Python<'_>,
@@ -50,40 +65,46 @@ impl TestCaseCollector {
         parents: &[&DiscoveredPackage],
         fixture_manager: &FixtureManager,
     ) -> Vec<(TestCase<'a>, Option<Diagnostic>)> {
-        let get_function_fixture_manager =
-            |inner_py: Python<'_>,
-             f: &dyn Fn(&FixtureManager) -> (TestCase<'a>, Option<Diagnostic>)| {
-                let mut function_fixture_manager =
-                    FixtureManager::new(Some(fixture_manager), FixtureScope::Function);
-                let test_cases = [test_function].to_vec();
-                let upcast_test_cases: Vec<&dyn RequiresFixtures> = test_cases.upcast();
+        // Create a closure that sets up function-scoped fixtures for test execution
+        let create_function_fixture_manager = |inner_py: Python<'_>,
+                                               test_case_creator: &dyn Fn(
+            &FixtureManager,
+        ) -> (
+            TestCase<'a>,
+            Option<Diagnostic>,
+        )| {
+            let mut function_fixture_manager =
+                FixtureManager::new(Some(fixture_manager), FixtureScope::Function);
+            let test_cases = [test_function].to_vec();
+            let upcast_test_cases: Vec<&dyn UsesFixtures> = test_cases.upcast();
 
-                for (parent, parents_above_current_parent) in partition_iter(parents) {
-                    function_fixture_manager.add_fixtures(
-                        inner_py,
-                        &parents_above_current_parent,
-                        parent,
-                        &[FixtureScope::Function],
-                        upcast_test_cases.as_slice(),
-                    );
-                }
-
+            for (parent, parents_above_current_parent) in create_hierarchy_iterator(parents) {
                 function_fixture_manager.add_fixtures(
                     inner_py,
-                    parents,
-                    module,
+                    &parents_above_current_parent,
+                    parent,
                     &[FixtureScope::Function],
                     upcast_test_cases.as_slice(),
                 );
+            }
 
-                let (mut collected_test_case, diagnostic) = f(&function_fixture_manager);
+            function_fixture_manager.add_fixtures(
+                inner_py,
+                parents,
+                module,
+                &[FixtureScope::Function],
+                upcast_test_cases.as_slice(),
+            );
 
-                collected_test_case.add_finalizers(function_fixture_manager.reset_fixtures());
+            let (mut collected_test_case, diagnostic) =
+                test_case_creator(&function_fixture_manager);
 
-                (collected_test_case, diagnostic)
-            };
+            collected_test_case.add_finalizers(function_fixture_manager.reset_fixtures());
 
-        test_function.collect(py, module, py_module, get_function_fixture_manager)
+            (collected_test_case, diagnostic)
+        };
+
+        test_function.collect(py, module, py_module, create_function_fixture_manager)
     }
 
     #[allow(clippy::unused_self)]
@@ -98,7 +119,7 @@ impl TestCaseCollector {
             return module_collected;
         }
 
-        let module_test_cases = module.all_requires_fixtures();
+        let module_test_cases = module.all_uses_fixtures();
 
         if module_test_cases.is_empty() {
             return module_collected;
@@ -107,7 +128,7 @@ impl TestCaseCollector {
         let mut module_fixture_manager =
             FixtureManager::new(Some(fixture_manager), FixtureScope::Module);
 
-        for (parent, parents_above_current_parent) in partition_iter(parents) {
+        for (parent, parents_above_current_parent) in create_hierarchy_iterator(parents) {
             module_fixture_manager.add_fixtures(
                 py,
                 &parents_above_current_parent,
@@ -190,12 +211,12 @@ impl TestCaseCollector {
             return package_collected;
         }
 
-        let package_test_cases = package.all_requires_fixtures();
+        let package_test_cases = package.all_uses_fixtures();
 
         let mut package_fixture_manager =
             FixtureManager::new(Some(fixture_manager), FixtureScope::Package);
 
-        for (parent, parents_above_current_parent) in partition_iter(parents) {
+        for (parent, parents_above_current_parent) in create_hierarchy_iterator(parents) {
             package_fixture_manager.add_fixtures(
                 py,
                 &parents_above_current_parent,
