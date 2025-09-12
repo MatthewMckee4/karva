@@ -104,10 +104,10 @@ macro_rules! run_with_path_and_snapshot {
 fn test_no_tests_found() -> anyhow::Result<()> {
     let case = IntegrationTestEnv::with_file("test_no_tests.py", r"")?;
     run_with_path_and_snapshot!(case, @r"
-    success: false
-    exit_code: 1
+    success: true
+    exit_code: 0
     ----- stdout -----
-    No tests found
+    test result: ok. 0 passed; 0 failed
 
     ----- stderr -----
     ");
@@ -129,8 +129,7 @@ fn test_one_test_passes() -> anyhow::Result<()> {
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 1
-    All checks passed!
+    test result: ok. 1 passed; 0 failed
 
     ----- stderr -----
     ");
@@ -162,8 +161,7 @@ fn test_two_tests_pass() -> anyhow::Result<()> {
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 2
-    All checks passed!
+    test result: ok. 2 passed; 0 failed
 
     ----- stderr -----
     ");
@@ -185,12 +183,12 @@ fn test_one_test_fails() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-error]
      --> test_fail::test_fail at <temp_dir>/test_fail.py:2
      | File "<temp_dir>/test_fail.py", line 3, in test_fail
      |   assert False
 
-    Failed tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -212,12 +210,12 @@ fn test_multiple_tests_fail() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-error]
      --> test_fail2::test_fail2 at <temp_dir>/test_fail2.py:2
      | File "<temp_dir>/test_fail2.py", line 3, in test_fail2
      |   assert 1 == 2
 
-    Failed tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -248,13 +246,12 @@ fn test_mixed_pass_and_fail() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-error]
      --> test_fail::test_fail at <temp_dir>/test_fail.py:2
      | File "<temp_dir>/test_fail.py", line 3, in test_fail
      |   assert False
 
-    Passed tests: 1
-    Failed tests: 1
+    test result: FAILED. 1 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -276,12 +273,12 @@ fn test_assertion_with_message() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-error]
      --> test_fail_with_msg::test_fail_with_message at <temp_dir>/test_fail_with_msg.py:2
      | File "<temp_dir>/test_fail_with_msg.py", line 3, in test_fail_with_message
      |   assert False
 
-    Failed tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -305,12 +302,12 @@ fn test_equality_assertion_fail() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-error]
      --> test_equality::test_equality at <temp_dir>/test_equality.py:2
      | File "<temp_dir>/test_equality.py", line 5, in test_equality
      |   assert x == y
 
-    Failed tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -333,12 +330,12 @@ fn test_complex_assertion_fail() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-error]
      --> test_complex::test_complex at <temp_dir>/test_complex.py:2
      | File "<temp_dir>/test_complex.py", line 4, in test_complex
      |   assert len(data) > 5
 
-    Failed tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -371,12 +368,12 @@ fn test_long_file() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-error]
      --> test_long::test_in_long_file at <temp_dir>/test_long.py:11
      | File "<temp_dir>/test_long.py", line 14, in test_in_long_file
      |   assert result == expected
 
-    Failed tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -401,12 +398,12 @@ fn test_multiple_assertions_in_function() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-error]
      --> test_multiple_assertions::test_multiple_assertions at <temp_dir>/test_multiple_assertions.py:2
      | File "<temp_dir>/test_multiple_assertions.py", line 6, in test_multiple_assertions
      |   assert y == 3
 
-    Failed tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -432,12 +429,12 @@ fn test_assertion_in_nested_function() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-error]
      --> test_nested::test_with_nested_call at <temp_dir>/test_nested.py:5
      | File "<temp_dir>/test_nested.py", line 7, in test_with_nested_call
      |   assert result == True
 
-    Failed tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -457,10 +454,10 @@ fn test_assertion_with_complex_expression() -> anyhow::Result<()> {
     )?;
 
     run_with_path_and_snapshot!(case,  @r"
-    success: false
-    exit_code: 1
+    success: true
+    exit_code: 0
     ----- stdout -----
-    No tests found
+    test result: ok. 0 passed; 0 failed
 
     ----- stderr -----
     ");
@@ -489,12 +486,12 @@ fn test_assertion_with_multiline_setup() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-error]
      --> test_multiline::test_multiline_setup at <temp_dir>/test_multiline.py:2
      | File "<temp_dir>/test_multiline.py", line 10, in test_multiline_setup
      |   assert result == expected
 
-    Failed tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -516,12 +513,12 @@ fn test_assertion_with_very_long_line() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-error]
      --> test_very_long_line::test_very_long_line at <temp_dir>/test_very_long_line.py:2
      | File "<temp_dir>/test_very_long_line.py", line 3, in test_very_long_line
      |   assert 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16 + 17 + 18 + 19 + 20 == 1000
 
-    Failed tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -541,12 +538,12 @@ fn test_assertion_on_line_1() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]
+    fail[assertion-error]
      --> test_line_1::test_line_1 at <temp_dir>/test_line_1.py:1
      | File "<temp_dir>/test_line_1.py", line 2, in test_line_1
      |   assert False
 
-    Failed tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -581,14 +578,14 @@ fn test_multiple_files_with_cross_function_calls() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]: Data validation failed
+    fail[assertion-error]: Data validation failed
      --> test_cross_file::test_with_helper at <temp_dir>/test_cross_file.py:4
      | File "<temp_dir>/test_cross_file.py", line 5, in test_with_helper
      |   validate_data([])
      | File "<temp_dir>/helper.py", line 4, in validate_data
      |   assert False, 'Data validation failed'
 
-    Failed tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -619,7 +616,7 @@ fn test_nested_function_calls_deep_stack() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]: Deep stack assertion failed
+    fail[assertion-error]: Deep stack assertion failed
      --> test_deep_stack::test_deep_call_stack at <temp_dir>/test_deep_stack.py:11
      | File "<temp_dir>/test_deep_stack.py", line 12, in test_deep_call_stack
      |   level_1()
@@ -630,7 +627,7 @@ fn test_nested_function_calls_deep_stack() -> anyhow::Result<()> {
      | File "<temp_dir>/test_deep_stack.py", line 9, in level_3
      |   assert 1 == 2, 'Deep stack assertion failed'
 
-    Failed tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -661,14 +658,14 @@ fn test_assertion_in_class_method() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]: Result must be positive
+    fail[assertion-error]: Result must be positive
      --> test_class::test_calculator at <temp_dir>/test_class.py:9
      | File "<temp_dir>/test_class.py", line 12, in test_calculator
      |   calc.validate_result(result)
      | File "<temp_dir>/test_class.py", line 7, in validate_result
      |   assert result > 0, 'Result must be positive'
 
-    Failed tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -702,14 +699,14 @@ fn test_assertion_in_imported_function() -> anyhow::Result<()> {
     success: false
     exit_code: 1
     ----- stdout -----
-    fail[assertion-failed]: Expected positive value, got -10
+    fail[assertion-error]: Expected positive value, got -10
      --> test_import::test_imported_validation at <temp_dir>/test_import.py:4
      | File "<temp_dir>/test_import.py", line 5, in test_imported_validation
      |   is_positive(-10)
      | File "<temp_dir>/validators.py", line 3, in is_positive
      |   assert value > 0, f'Expected positive value, got {value}'
 
-    Failed tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     "#);
@@ -781,8 +778,7 @@ fn test_fixture_initialization_order(
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 1
-    All checks passed!
+    test result: ok. 1 passed; 0 failed
     Session calculator initialized
     Package calculator initialized
     Module calculator initialized
@@ -816,15 +812,14 @@ fn test_empty_conftest() -> anyhow::Result<()> {
 
     let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
-    assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r"
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 1
-    All checks passed!
+    test result: ok. 1 passed; 0 failed
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -862,8 +857,7 @@ fn test_parametrize(#[values("pytest", "karva")] package: &str) -> anyhow::Resul
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 3
-    All checks passed!
+    test result: ok. 3 passed; 0 failed
 
     ----- stderr -----
     ");
@@ -896,6 +890,9 @@ fn get_source_code(constructor_body: &str) -> Vec<(String, String)> {
 
                     def divide(self, a: int, b: int) -> float:
                         return a / b
+
+                    def __repr__(self) -> str:
+                        return 'Calculator'
                 ",
             ),
         ),
@@ -940,8 +937,7 @@ fn test_function_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow:
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 2
-    All checks passed!
+    test result: ok. 2 passed; 0 failed
     Calculator initialized
     Calculator initialized
 
@@ -989,8 +985,7 @@ fn test_module_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow::R
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 2
-    All checks passed!
+    test result: ok. 2 passed; 0 failed
     Calculator initialized
 
     ----- stderr -----
@@ -1044,8 +1039,7 @@ fn test_package_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow::
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 2
-    All checks passed!
+    test result: ok. 2 passed; 0 failed
     Calculator initialized
 
     ----- stderr -----
@@ -1109,8 +1103,7 @@ fn test_session_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow::
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 3
-    All checks passed!
+    test result: ok. 3 passed; 0 failed
     Calculator initialized
 
     ----- stderr -----
@@ -1167,8 +1160,7 @@ fn test_mixed_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow::Re
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 3
-    All checks passed!
+    test result: ok. 3 passed; 0 failed
     Session calculator initialized
     Function calculator initialized
     Function calculator initialized
@@ -1225,8 +1217,7 @@ fn test_fixture_across_files(#[values("pytest", "karva")] framework: &str) -> an
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 2
-    All checks passed!
+    test result: ok. 2 passed; 0 failed
     Package calculator initialized
 
     ----- stderr -----
@@ -1270,8 +1261,7 @@ fn test_named_fixtures(#[values("pytest", "karva")] framework: &str) -> anyhow::
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 1
-    All checks passed!
+    test result: ok. 1 passed; 0 failed
     Named calculator initialized
 
     ----- stderr -----
@@ -1333,8 +1323,7 @@ fn test_nested_package_scopes(#[values("pytest", "karva")] framework: &str) -> a
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 2
-    All checks passed!
+    test result: ok. 2 passed; 0 failed
     Calculator initialized
     Package calculator initialized
 
@@ -1386,8 +1375,7 @@ fn test_independent_fixtures(#[values("pytest", "karva")] framework: &str) -> an
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 2
-    All checks passed!
+    test result: ok. 2 passed; 0 failed
 
     ----- stderr -----
     ");
@@ -1449,8 +1437,7 @@ fn test_multiple_files_independent_fixtures(
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 4
-    All checks passed!
+    test result: ok. 4 passed; 0 failed
     Multiply calculator initialized
     Multiply calculator initialized
 
@@ -1505,10 +1492,9 @@ fn test_basic_error_handling(#[values("pytest", "karva")] framework: &str) -> an
     ----- stdout -----
     error[fixtures-not-found]: Fixture(s) not found for tests.test_calculator::test_failing
      --> tests.test_calculator::test_failing at <temp_dir>/tests/test_calculator.py:7
-    error (fixture-not-found): fixture 'failing_calculator' not found
+    error[fixture-not-found]: fixture 'failing_calculator' not found
 
-    Passed tests: 1
-    Errored tests: 1
+    test result: FAILED. 1 passed; 1 failed
     Working calculator initialized
 
     ----- stderr -----
@@ -1589,8 +1575,7 @@ fn test_different_scopes_independent(
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 3
-    All checks passed!
+    test result: ok. 3 passed; 0 failed
     Session calculator initialized
     Package calculator initialized
     Module calculator initialized
@@ -1641,9 +1626,9 @@ fn test_invalid_scope_value(#[values("pytest", "karva")] framework: &str) -> any
 
     error[fixtures-not-found]: Fixture(s) not found for tests.test_calculator::test_calc
      --> tests.test_calculator::test_calc at <temp_dir>/tests/test_calculator.py:4
-    error (fixture-not-found): fixture 'calculator' not found
+    error[fixture-not-found]: fixture 'calculator' not found
 
-    Errored tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     ");
@@ -1688,9 +1673,9 @@ fn test_invalid_fixture_name(#[values("pytest", "karva")] framework: &str) -> an
     ----- stdout -----
     error[fixtures-not-found]: Fixture(s) not found for tests.test_calculator::test_calc
      --> tests.test_calculator::test_calc at <temp_dir>/tests/test_calculator.py:4
-    error (fixture-not-found): fixture 'calculator' not found
+    error[fixture-not-found]: fixture 'calculator' not found
 
-    Errored tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     ");
@@ -1753,9 +1738,9 @@ fn test_multiple_conftest_same_dir(
     ----- stdout -----
     error[fixtures-not-found]: Fixture(s) not found for tests.test_calculator::test_calc
      --> tests.test_calculator::test_calc at <temp_dir>/tests/test_calculator.py:4
-    error (fixture-not-found): fixture 'calculator_2' not found
+    error[fixture-not-found]: fixture 'calculator_2' not found
 
-    Errored tests: 1
+    test result: FAILED. 0 passed; 1 failed
     Calculator 1 initialized
 
     ----- stderr -----
@@ -1817,8 +1802,7 @@ fn test_very_deep_directory_structure(
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 1
-    All checks passed!
+    test result: ok. 1 passed; 0 failed
     Root calculator initialized
     Deep calculator initialized
 
@@ -1866,9 +1850,9 @@ fn test_fixture_in_init_file(#[values("pytest", "karva")] framework: &str) -> an
     ----- stdout -----
     error[fixtures-not-found]: Fixture(s) not found for tests.test_calculator::test_init_fixture
      --> tests.test_calculator::test_init_fixture at <temp_dir>/tests/test_calculator.py:4
-    error (fixture-not-found): fixture 'init_calculator' not found
+    error[fixture-not-found]: fixture 'init_calculator' not found
 
-    Errored tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     ");
@@ -1935,8 +1919,7 @@ fn test_same_fixture_name_different_types(
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 2
-    All checks passed!
+    test result: ok. 2 passed; 0 failed
 
     ----- stderr -----
     ");
@@ -1989,8 +1972,7 @@ fn test_fixture_dependencies(#[values("pytest", "karva")] framework: &str) -> an
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 2
-    All checks passed!
+    test result: ok. 2 passed; 0 failed
     Calculator fixture initialized
     Calculator initialized
     Calculator with value fixture initialized
@@ -2075,8 +2057,7 @@ fn test_dependent_fixtures_different_scopes(
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 2
-    All checks passed!
+    test result: ok. 2 passed; 0 failed
     Session calculator initialized
     Package calculator initialized
     Module calculator initialized
@@ -2142,8 +2123,7 @@ fn test_complex_dependency_chain(
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 1
-    All checks passed!
+    test result: ok. 1 passed; 0 failed
     Base calculator initialized
     Add calculator initialized
     Multiply calculator initialized
@@ -2215,8 +2195,7 @@ fn test_mixed_scope_dependencies(
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 2
-    All checks passed!
+    test result: ok. 2 passed; 0 failed
     Session base initialized
     Package calc initialized
     Function calc initialized
@@ -2281,8 +2260,7 @@ fn test_diamond_dependency(#[values("pytest", "karva")] framework: &str) -> anyh
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 1
-    All checks passed!
+    test result: ok. 1 passed; 0 failed
     Base calc initialized
     Left calc initialized
     Right calc initialized
@@ -2330,8 +2308,7 @@ fn test_generator_fixture(#[values("pytest", "karva")] framework: &str) -> anyho
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 1
-    All checks passed!
+    test result: ok. 1 passed; 0 failed
     Generator fixture teardown
 
     ----- stderr -----
@@ -2391,8 +2368,7 @@ fn test_fixture_called_for_each_parametrization(
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 3
-    All checks passed!
+    test result: ok. 3 passed; 0 failed
     Calculator initialized
     Calculator initialized
     Calculator initialized
@@ -2443,8 +2419,7 @@ fn test_fixture_finalizer_called_after_test(
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 1
-    All checks passed!
+    test result: ok. 1 passed; 0 failed
     Calculator initialized
     Test function called
     Calculator finalizer called
@@ -2499,8 +2474,7 @@ fn test_fixture_finalizer_called_at_correct_time(
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 2
-    All checks passed!
+    test result: ok. 2 passed; 0 failed
     Calculator initialized
     Calculator initialized
     Test function called
@@ -2524,16 +2498,15 @@ fn test_stdout_is_captured_and_displayed() -> anyhow::Result<()> {
         ",
     )?;
 
-    assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r#"
+    assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r"
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 1
-    All checks passed!
+    test result: ok. 1 passed; 0 failed
     Hello, world!
 
     ----- stderr -----
-    "#);
+    ");
 
     Ok(())
 }
@@ -2552,8 +2525,7 @@ fn test_stdout_is_captured_and_displayed_with_args() -> anyhow::Result<()> {
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 1
-    All checks passed!
+    test result: ok. 1 passed; 0 failed
 
     ----- stderr -----
     ");
@@ -2604,8 +2576,7 @@ def test_string_and_int(order, first_entry):
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 2
-    All checks passed!
+    test result: ok. 2 passed; 0 failed
 
     ----- stderr -----
     ");
@@ -2644,8 +2615,7 @@ def test_value(clean_data):
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 1
-    All checks passed!
+    test result: ok. 1 passed; 0 failed
 
     ----- stderr -----
     ");
@@ -2666,11 +2636,11 @@ fn test_multiple_fixtures_not_found() -> anyhow::Result<()> {
     ----- stdout -----
     error[fixtures-not-found]: Fixture(s) not found for test_multiple_fixtures_not_found::test_multiple_fixtures_not_found
      --> test_multiple_fixtures_not_found::test_multiple_fixtures_not_found at <temp_dir>/test_multiple_fixtures_not_found.py:1
-    error (fixture-not-found): fixture 'a' not found
-    error (fixture-not-found): fixture 'b' not found
-    error (fixture-not-found): fixture 'c' not found
+    error[fixture-not-found]: fixture 'a' not found
+    error[fixture-not-found]: fixture 'b' not found
+    error[fixture-not-found]: fixture 'c' not found
 
-    Errored tests: 1
+    test result: FAILED. 0 passed; 1 failed
 
     ----- stderr -----
     ");
@@ -2718,8 +2688,7 @@ fn test_nested_generator_fixture(
     success: true
     exit_code: 0
     ----- stdout -----
-    Passed tests: 1
-    All checks passed!
+    test result: ok. 1 passed; 0 failed
 
     ----- stderr -----
     ");

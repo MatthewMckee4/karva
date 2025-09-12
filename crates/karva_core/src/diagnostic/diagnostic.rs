@@ -6,7 +6,7 @@ use crate::{
     diagnostic::{
         render::{DiagnosticInnerDisplay, DisplayDiagnostic},
         sub_diagnostic::SubDiagnostic,
-        utils::{get_traceback, get_type_name},
+        utils::{get_traceback, get_type_name, to_kebab_case},
     },
     discovery::DiscoveredModule,
 };
@@ -64,16 +64,6 @@ impl Diagnostic {
         &self.inner
     }
 
-    pub(crate) fn from_py_err(
-        py: Python<'_>,
-        error: &PyErr,
-        message: Option<String>,
-        location: Option<String>,
-        severity: DiagnosticSeverity,
-    ) -> Self {
-        Self::new(message, location, Some(get_traceback(py, error)), severity)
-    }
-
     pub(crate) fn from_test_fail(
         py: Python<'_>,
         error: &PyErr,
@@ -84,26 +74,16 @@ impl Diagnostic {
             let msg = error.value(py).to_string();
             if msg.is_empty() { None } else { Some(msg) }
         };
-        if error.is_instance_of::<pyo3::exceptions::PyAssertionError>(py) {
-            return Self::new(
-                message,
-                Some(test_case.function().display_with_line(module)),
-                Some(get_traceback(py, error)),
-                DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                    test_case.function().name().to_string(),
-                    TestCaseDiagnosticType::Fail,
-                )),
-            );
-        }
-        Self::from_py_err(
-            py,
-            error,
+        Self::new(
             message,
             Some(test_case.function().display_with_line(module)),
-            DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                test_case.function().name().to_string(),
-                TestCaseDiagnosticType::Error(get_type_name(py, error)),
-            )),
+            Some(get_traceback(py, error)),
+            DiagnosticSeverity::Error(DiagnosticErrorType::TestCase {
+                test_name: test_case.function().name().to_string(),
+                diagnostic_type: TestCaseDiagnosticType::Fail(to_kebab_case(&get_type_name(
+                    py, error,
+                ))),
+            }),
         )
     }
 
@@ -209,41 +189,23 @@ impl DiagnosticSeverity {
 
     #[must_use]
     pub(crate) const fn is_test_fail(&self) -> bool {
-        matches!(
-            self,
-            Self::Error(DiagnosticErrorType::TestCase(
-                _,
-                TestCaseDiagnosticType::Fail
-            ))
-        )
-    }
-
-    #[must_use]
-    pub(crate) const fn is_test_error(&self) -> bool {
-        matches!(
-            self,
-            Self::Error(DiagnosticErrorType::TestCase(
-                _,
-                TestCaseDiagnosticType::Error(_)
-                    | TestCaseDiagnosticType::Collection(
-                        TestCaseCollectionDiagnosticType::FixtureNotFound
-                    )
-            ))
-        )
+        matches!(self, Self::Error(DiagnosticErrorType::TestCase { .. }))
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DiagnosticErrorType {
-    TestCase(String, TestCaseDiagnosticType),
+    TestCase {
+        test_name: String,
+        diagnostic_type: TestCaseDiagnosticType,
+    },
     Fixture(FixtureDiagnosticType),
     Known(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum TestCaseDiagnosticType {
-    Fail,
-    Error(String),
+    Fail(String),
     Collection(TestCaseCollectionDiagnosticType),
 }
 

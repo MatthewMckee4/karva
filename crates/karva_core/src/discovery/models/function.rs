@@ -229,12 +229,12 @@ impl TestFunction {
                 Some(format!("Fixture(s) not found for {}", self.name())),
                 Some(self.display_with_line(module)),
                 None,
-                DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                    self.name().to_string(),
-                    TestCaseDiagnosticType::Collection(
+                DiagnosticSeverity::Error(DiagnosticErrorType::TestCase {
+                    test_name: self.name().to_string(),
+                    diagnostic_type: TestCaseDiagnosticType::Collection(
                         TestCaseCollectionDiagnosticType::FixtureNotFound,
                     ),
-                )),
+                }),
             );
             diagnostic.add_sub_diagnostics(fixture_diagnostics);
             Some(diagnostic)

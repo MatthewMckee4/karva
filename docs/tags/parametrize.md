@@ -24,8 +24,7 @@ INFO running  | test_parametrize::test_function [2]
 INFO passed   | test_parametrize::test_function [2]
 INFO running  | test_parametrize::test_function [3]
 INFO passed   | test_parametrize::test_function [3]
-Passed tests: 3
-All checks passed!
+test result: PASSED. 3 passed
 ```
 
 We can also parametrize multiple arguments:
@@ -49,8 +48,7 @@ INFO running  | test_parametrize::test_function [2, 5]
 INFO passed   | test_parametrize::test_function [2, 5]
 INFO running  | test_parametrize::test_function [3, 6]
 INFO passed   | test_parametrize::test_function [3, 6]
-Passed tests: 3
-All checks passed!
+test result: PASSED. 3 passed
 ```
 
 We can also mix fixtures and parametrize:
@@ -76,8 +74,7 @@ INFO running  | test_parametrize::test_function [1, 1]
 INFO passed   | test_parametrize::test_function [1, 1]
 INFO running  | test_parametrize::test_function [2, 1]
 INFO passed   | test_parametrize::test_function [2, 1]
-Passed tests: 2
-All checks passed!
+test result: PASSED. 2 passed
 ```
 
 We can also use multiple decorators:
@@ -106,8 +103,7 @@ INFO running  | test_parametrize::test_function [1, 2]
 INFO passed   | test_parametrize::test_function [1, 2]
 INFO running  | test_parametrize::test_function [2, 2]
 INFO passed   | test_parametrize::test_function [2, 2]
-Passed tests: 4
-All checks passed!
+test result: PASSED. 4 passed
 ```
 
 We can also still use pytest's `parametrize` decorator:
@@ -129,6 +125,5 @@ INFO running  | test_parametrize::test_function [1]
 INFO passed   | test_parametrize::test_function [1]
 INFO running  | test_parametrize::test_function [2]
 INFO passed   | test_parametrize::test_function [2]
-Passed tests: 2
-All checks passed!
+test result: PASSED. 2 passed
 ```

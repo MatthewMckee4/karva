@@ -1397,7 +1397,7 @@ def test_fixtures_given_by_decorator(a, b):
         let result = env.test();
 
         let mut expected_stats = DiagnosticStats::default();
-        expected_stats.add_errored();
+        expected_stats.add_failed();
 
         assert_eq!(*result.stats(), expected_stats);
     }
