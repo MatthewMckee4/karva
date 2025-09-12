@@ -103,6 +103,14 @@ mod tests {
         }
     }
 
+    fn get_skip_function(framework: &str) -> &str {
+        match framework {
+            "pytest" => "pytest.mark.skip",
+            "karva" => "karva.tags.skip",
+            _ => panic!("Invalid framework"),
+        }
+    }
+
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
      {
@@ -1477,6 +1485,31 @@ def test_something_else():
         for _ in 0..2 {
             expected_stats.add_passed();
         }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[rstest]
+    fn test_skip(#[values("karva", "pytest")] framework: &str) {
+        let env = TestEnv::with_file(
+            "<test>/test_skip.py",
+            &format!(
+                r#"
+    import {framework}
+
+    {skip_function}("Test is skipped")
+    def test_skip():
+        assert False
+    "#,
+                skip_function = get_skip_function(framework),
+            ),
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_skipped();
 
         assert_eq!(*result.stats(), expected_stats);
     }
