@@ -82,7 +82,9 @@ impl<'proj> TestCase<'proj> {
 
             if let Some(skip_reason) = &self.skip {
                 logger.log_skipped(skip_reason.reason());
+
                 run_result.stats_mut().add_skipped();
+
                 return run_result;
             }
 
@@ -101,6 +103,7 @@ impl<'proj> TestCase<'proj> {
 
             if let Some(skip_reason) = &self.skip {
                 logger.log_skipped(skip_reason.reason());
+
                 run_result.stats_mut().add_skipped();
 
                 return run_result;
