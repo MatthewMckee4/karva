@@ -47,7 +47,7 @@ impl std::fmt::Display for DiagnosticInnerDisplay<'_> {
                 DiagnosticErrorType::TestCase {
                     diagnostic_type, ..
                 } => match diagnostic_type {
-                    TestCaseDiagnosticType::Fail => "fail[assertion-failed]".red(),
+                    TestCaseDiagnosticType::Fail(error) => format!("fail[{error}]").red(),
                     TestCaseDiagnosticType::Collection(test_case_collection_type) => {
                         match test_case_collection_type {
                             TestCaseCollectionDiagnosticType::FixtureNotFound => {
@@ -142,6 +142,7 @@ mod test {
 
     mod diagnostic_inner_display_tests {
         use super::*;
+        use crate::diagnostic::utils::to_kebab_case;
 
         #[test]
         fn test_test_case_fail() {
@@ -151,18 +152,18 @@ mod test {
                 Some("Traceback info".to_string()),
                 DiagnosticSeverity::Error(DiagnosticErrorType::TestCase {
                     test_name: "test_example".to_string(),
-                    diagnostic_type: TestCaseDiagnosticType::Fail,
+                    diagnostic_type: TestCaseDiagnosticType::Fail(to_kebab_case("SomeError")),
                 }),
             );
 
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            insta::assert_snapshot!(output, @r###"
-            fail[assertion-failed]: Test assertion failed
+            insta::assert_snapshot!(output, @r"
+            fail[some-error]: Test assertion failed
              --> test_example at test_example.py:10
             Traceback info
-            "###);
+            ");
         }
 
         #[test]
@@ -357,7 +358,7 @@ mod test {
         #[test]
         fn test_special_characters() {
             let diagnostic = DiagnosticInner::new(
-                Some("Error with special chars: \n\t\"'\\".to_string()),
+                Some("Error with special chars:\n\t\"'\\".to_string()),
                 Some("file with spaces.py:10".to_string()),
                 None,
                 DiagnosticSeverity::Error(DiagnosticErrorType::Known("SpecialError".to_string())),

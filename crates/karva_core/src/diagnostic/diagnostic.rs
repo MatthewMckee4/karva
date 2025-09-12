@@ -6,7 +6,7 @@ use crate::{
     diagnostic::{
         render::{DiagnosticInnerDisplay, DisplayDiagnostic},
         sub_diagnostic::SubDiagnostic,
-        utils::get_traceback,
+        utils::{get_traceback, get_type_name, to_kebab_case},
     },
     discovery::DiscoveredModule,
 };
@@ -80,7 +80,9 @@ impl Diagnostic {
             Some(get_traceback(py, error)),
             DiagnosticSeverity::Error(DiagnosticErrorType::TestCase {
                 test_name: test_case.function().name().to_string(),
-                diagnostic_type: TestCaseDiagnosticType::Fail,
+                diagnostic_type: TestCaseDiagnosticType::Fail(to_kebab_case(&get_type_name(
+                    py, error,
+                ))),
             }),
         )
     }
@@ -203,7 +205,7 @@ pub(crate) enum DiagnosticErrorType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum TestCaseDiagnosticType {
-    Fail,
+    Fail(String),
     Collection(TestCaseCollectionDiagnosticType),
 }
 
