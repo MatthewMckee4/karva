@@ -41,7 +41,7 @@ impl UsesFixtures for TestFunction {
 
         let tags = Tags::from_py_any(py, &self.py_function, Some(&self.function_definition));
 
-        required_fixtures.extend(tags.use_fixtures_names());
+        required_fixtures.extend(tags.required_fixtures_names());
 
         required_fixtures
     }
@@ -129,7 +129,7 @@ impl TestFunction {
 
         let tags = Tags::from_py_any(py, &py_function, Some(&self.function_definition));
 
-        required_fixture_names.extend(tags.use_fixtures_names());
+        required_fixture_names.extend(tags.required_fixtures_names());
 
         let mut parametrize_args = tags.parametrize_args();
 
