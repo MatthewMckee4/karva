@@ -1,4 +1,4 @@
-use colored::{Color, Colorize};
+use colored::Colorize;
 
 use crate::diagnostic::Diagnostic;
 
@@ -65,7 +65,6 @@ pub struct DiagnosticStats {
     total: usize,
     passed: usize,
     failed: usize,
-    errored: usize,
 }
 
 impl DiagnosticStats {
@@ -73,12 +72,15 @@ impl DiagnosticStats {
         self.total += other.total();
         self.passed += other.passed();
         self.failed += other.failed();
-        self.errored += other.errored();
     }
 
     #[must_use]
     pub const fn total(&self) -> usize {
         self.total
+    }
+
+    pub const fn is_success(&self) -> bool {
+        self.failed == 0
     }
 
     #[must_use]
@@ -91,18 +93,8 @@ impl DiagnosticStats {
         self.failed
     }
 
-    #[must_use]
-    pub(crate) const fn errored(&self) -> usize {
-        self.errored
-    }
-
     pub(crate) const fn add_failed(&mut self) {
         self.failed += 1;
-        self.total += 1;
-    }
-
-    pub(crate) const fn add_errored(&mut self) {
-        self.errored += 1;
         self.total += 1;
     }
 
@@ -120,116 +112,22 @@ impl<'a> DisplayRunDiagnostics<'a> {
     pub(crate) const fn new(diagnostics: &'a RunDiagnostics) -> Self {
         Self { diagnostics }
     }
-
-    fn log_test_count(f: &mut std::fmt::Formatter<'_>, label: &str, count: usize, color: Color) {
-        if count > 0 {
-            let _ = writeln!(
-                f,
-                "{} {}",
-                label.color(color),
-                count.to_string().color(color)
-            );
-        }
-    }
 }
 
 impl std::fmt::Display for DisplayRunDiagnostics<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let stats = self.diagnostics.stats();
 
-        if stats.total() > 0 {
-            for (label, num, color) in [
-                ("Passed tests:", stats.passed(), Color::Green),
-                ("Failed tests:", stats.failed(), Color::Red),
-                ("Errored tests:", stats.errored(), Color::Yellow),
-            ] {
-                Self::log_test_count(f, label, num, color);
-            }
+        let success = stats.passed();
+
+        write!(f, "test result: ")?;
+
+        if success == stats.total() {
+            write!(f, "{}", "ok".green())?;
+        } else {
+            write!(f, "{}", "FAILED".red())?;
         }
 
-        Ok(())
-    }
-}
-#[cfg(test)]
-mod tests {
-    use karva_project::testing::TestEnv;
-
-    use crate::runner::TestRunner;
-
-    #[test]
-    fn test_runner_with_passing_test() {
-        let env = TestEnv::with_files([(
-            "<test>/test_pass.py",
-            r"
-def test_simple_pass():
-    assert True
-",
-        )]);
-
-        let result = env.test();
-
-        assert_eq!(result.stats().total(), 1);
-        assert_eq!(result.stats().passed(), 1);
-        assert_eq!(result.stats().failed(), 0);
-        assert_eq!(result.stats().errored(), 0);
-    }
-
-    #[test]
-    fn test_runner_with_failing_test() {
-        let env = TestEnv::with_files([(
-            "<test>/test_fail.py",
-            r#"
-def test_simple_fail():
-    assert False, "This test should fail"
-"#,
-        )]);
-
-        let result = env.test();
-
-        assert_eq!(result.stats().total(), 1);
-        assert_eq!(result.stats().passed(), 0);
-        assert_eq!(result.stats().failed(), 1);
-        assert_eq!(result.stats().errored(), 0);
-    }
-
-    #[test]
-    fn test_runner_with_error_test() {
-        let env = TestEnv::with_files([(
-            "<test>/test_error.py",
-            r#"
-def test_simple_error():
-    raise ValueError("This is an error")
-"#,
-        )]);
-
-        let result = env.test();
-
-        assert_eq!(result.stats().total(), 1);
-        assert_eq!(result.stats().passed(), 0);
-        assert_eq!(result.stats().failed(), 0);
-        assert_eq!(result.stats().errored(), 1);
-    }
-
-    #[test]
-    fn test_runner_with_multiple_tests() {
-        let env = TestEnv::with_files([(
-            "<test>/test_mixed.py",
-            r#"def test_pass():
-    assert True
-
-def test_fail():
-    assert False, "This test should fail"
-
-def test_error():
-    raise ValueError("This is an error")
-"#,
-        )]);
-
-        let result = env.test();
-
-        assert_eq!(result.stats().total(), 3);
-        assert_eq!(result.stats().passed(), 1);
-        assert_eq!(result.stats().failed(), 1);
-        assert_eq!(result.stats().errored(), 1);
+        writeln!(f, ". {} passed; {} failed", stats.passed(), stats.failed())
     }
 }

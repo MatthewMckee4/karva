@@ -44,11 +44,10 @@ impl std::fmt::Display for DiagnosticInnerDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let diagnostic_type_label = match self.diagnostic.severity() {
             DiagnosticSeverity::Error(error_type) => match error_type {
-                DiagnosticErrorType::TestCase(_, test_case_type) => match test_case_type {
+                DiagnosticErrorType::TestCase {
+                    diagnostic_type, ..
+                } => match diagnostic_type {
                     TestCaseDiagnosticType::Fail => "fail[assertion-failed]".red(),
-                    TestCaseDiagnosticType::Error(error) => {
-                        format!("error[{}]", to_kebab_case(error)).yellow()
-                    }
                     TestCaseDiagnosticType::Collection(test_case_collection_type) => {
                         match test_case_collection_type {
                             TestCaseCollectionDiagnosticType::FixtureNotFound => {
@@ -70,8 +69,8 @@ impl std::fmt::Display for DiagnosticInnerDisplay<'_> {
         };
 
         let function_name = match self.diagnostic.severity() {
-            DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(function_name, _)) => {
-                Some(function_name)
+            DiagnosticSeverity::Error(DiagnosticErrorType::TestCase { test_name, .. }) => {
+                Some(test_name)
             }
             _ => None,
         };
@@ -116,7 +115,7 @@ impl std::fmt::Display for SubDiagnosticDisplay<'_> {
         let diagnostic_type_label = match self.diagnostic.severity() {
             SubDiagnosticSeverity::Error(error_type) => match error_type {
                 SubDiagnosticErrorType::Fixture(fixture_type) => match fixture_type {
-                    FixtureSubDiagnosticType::NotFound(_) => "error (fixture-not-found)".yellow(),
+                    FixtureSubDiagnosticType::NotFound(_) => "error[fixture-not-found]".yellow(),
                 },
             },
         };
@@ -150,36 +149,20 @@ mod test {
                 Some("Test assertion failed".to_string()),
                 Some("test_example.py:10".to_string()),
                 Some("Traceback info".to_string()),
-                DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                    "test_example".to_string(),
-                    TestCaseDiagnosticType::Fail,
-                )),
+                DiagnosticSeverity::Error(DiagnosticErrorType::TestCase {
+                    test_name: "test_example".to_string(),
+                    diagnostic_type: TestCaseDiagnosticType::Fail,
+                }),
             );
 
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected = "fail[assertion-failed]: Test assertion failed\n --> test_example at test_example.py:10\nTraceback info\n";
-            assert_eq!(output, expected);
-        }
-
-        #[test]
-        fn test_test_case_error() {
-            let diagnostic = DiagnosticInner::new(
-                Some("RuntimeError occurred".to_string()),
-                Some("test_example.py:15".to_string()),
-                None,
-                DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                    "test_runtime_error".to_string(),
-                    TestCaseDiagnosticType::Error("RuntimeError".to_string()),
-                )),
-            );
-
-            let display = diagnostic.display();
-            let output = strip_ansi_codes(&display.to_string());
-
-            let expected = "error[runtime-error]: RuntimeError occurred\n --> test_runtime_error at test_example.py:15\n";
-            assert_eq!(output, expected);
+            insta::assert_snapshot!(output, @r###"
+            fail[assertion-failed]: Test assertion failed
+             --> test_example at test_example.py:10
+            Traceback info
+            "###);
         }
 
         #[test]
@@ -188,19 +171,21 @@ mod test {
                 Some("Fixture not found".to_string()),
                 Some("test_example.py:20".to_string()),
                 None,
-                DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                    "test_with_fixture".to_string(),
-                    TestCaseDiagnosticType::Collection(
+                DiagnosticSeverity::Error(DiagnosticErrorType::TestCase {
+                    test_name: "test_with_fixture".to_string(),
+                    diagnostic_type: TestCaseDiagnosticType::Collection(
                         TestCaseCollectionDiagnosticType::FixtureNotFound,
                     ),
-                )),
+                }),
             );
 
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected = "error[fixtures-not-found]: Fixture not found\n --> test_with_fixture at test_example.py:20\n";
-            assert_eq!(output, expected);
+            insta::assert_snapshot!(output, @r###"
+            error[fixtures-not-found]: Fixture not found
+             --> test_with_fixture at test_example.py:20
+            "###);
         }
 
         #[test]
@@ -215,8 +200,10 @@ mod test {
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected = "error[invalid-path]: Known error occurred\n --> file.py:5\n";
-            assert_eq!(output, expected);
+            insta::assert_snapshot!(output, @r###"
+            error[invalid-path]: Known error occurred
+             --> file.py:5
+            "###);
         }
 
         #[test]
@@ -231,8 +218,10 @@ mod test {
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected = "error[unknown-error]: Unknown error\n --> unknown.py:1\n";
-            assert_eq!(output, expected);
+            insta::assert_snapshot!(output, @r###"
+            error[unknown-error]: Unknown error
+             --> unknown.py:1
+            "###);
         }
 
         #[test]
@@ -249,9 +238,10 @@ mod test {
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected =
-                "error[invalid-fixture]: Invalid fixture definition\n --> conftest.py:10\n";
-            assert_eq!(output, expected);
+            insta::assert_snapshot!(output, @r###"
+            error[invalid-fixture]: Invalid fixture definition
+             --> conftest.py:10
+            "###);
         }
 
         #[test]
@@ -266,8 +256,10 @@ mod test {
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected = "warning[deprecation-warning]: This is a warning\n --> warning.py:5\n";
-            assert_eq!(output, expected);
+            insta::assert_snapshot!(output, @r###"
+            warning[deprecation-warning]: This is a warning
+             --> warning.py:5
+            "###);
         }
 
         #[test]
@@ -282,8 +274,10 @@ mod test {
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected = "error[unknown-error]\n --> test.py:1\n";
-            assert_eq!(output, expected);
+            insta::assert_snapshot!(output, @r###"
+            error[unknown-error]
+             --> test.py:1
+            "###);
         }
 
         #[test]
@@ -298,8 +292,9 @@ mod test {
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected = "error[unknown-error]: Error with no location\n";
-            assert_eq!(output, expected);
+            insta::assert_snapshot!(output, @r###"
+            error[unknown-error]: Error with no location
+            "###);
         }
 
         #[test]
@@ -314,27 +309,9 @@ mod test {
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected = "error[unknown-error]\n";
-            assert_eq!(output, expected);
-        }
-
-        #[test]
-        fn test_kebab_case_conversion_in_error() {
-            let diagnostic = DiagnosticInner::new(
-                Some("Error message".to_string()),
-                None,
-                None,
-                DiagnosticSeverity::Error(DiagnosticErrorType::TestCase(
-                    "test_func".to_string(),
-                    TestCaseDiagnosticType::Error("ValueError".to_string()),
-                )),
-            );
-
-            let display = diagnostic.display();
-            let output = strip_ansi_codes(&display.to_string());
-
-            let expected = "error[value-error]: Error message\n";
-            assert_eq!(output, expected);
+            insta::assert_snapshot!(output, @r###"
+            error[unknown-error]
+            "###);
         }
 
         #[test]
@@ -349,8 +326,9 @@ mod test {
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected = "warning[deprecation-warning]: Warning message\n";
-            assert_eq!(output, expected);
+            insta::assert_snapshot!(output, @r###"
+            warning[deprecation-warning]: Warning message
+            "###);
         }
     }
 
@@ -369,8 +347,7 @@ mod test {
             let display = sub_diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected = "error (fixture-not-found): fixture 'my_fixture' not found\n";
-            assert_eq!(output, expected);
+            insta::assert_snapshot!(output, @"error[fixture-not-found]: fixture 'my_fixture' not found");
         }
     }
 
@@ -389,8 +366,11 @@ mod test {
             let display = diagnostic.display();
             let output = strip_ansi_codes(&display.to_string());
 
-            let expected = "error[special-error]: Error with special chars: \n\t\"'\\\n --> file with spaces.py:10\n";
-            assert_eq!(output, expected);
+            insta::assert_snapshot!(output, @r#"
+            error[special-error]: Error with special chars:
+            	"'\
+             --> file with spaces.py:10
+            "#);
         }
     }
 }

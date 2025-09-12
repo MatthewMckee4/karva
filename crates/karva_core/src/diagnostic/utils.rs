@@ -16,13 +16,6 @@ pub(crate) fn get_traceback(py: Python<'_>, error: &PyErr) -> String {
     }
 }
 
-pub(crate) fn get_type_name(py: Python<'_>, error: &PyErr) -> String {
-    error
-        .get_type(py)
-        .name()
-        .map_or_else(|_| "Unknown".to_string(), |name| name.to_string())
-}
-
 pub(crate) fn to_kebab_case(input: &str) -> String {
     input
         .chars()

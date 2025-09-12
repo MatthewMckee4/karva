@@ -108,9 +108,6 @@ impl<'proj> TestCase<'proj> {
                 if error_type.is_test_fail() {
                     logger.log_failed();
                     run_result.stats_mut().add_failed();
-                } else if error_type.is_test_error() {
-                    logger.log_errored();
-                    run_result.stats_mut().add_errored();
                 }
 
                 run_result.add_diagnostic(diagnostic);
@@ -234,10 +231,6 @@ impl TestCaseLogger {
 
     fn log_failed(&self) {
         self.log("failed");
-    }
-
-    fn log_errored(&self) {
-        self.log("errored");
     }
 }
 
