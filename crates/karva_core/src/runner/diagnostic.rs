@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use colored::Colorize;
 
 use crate::diagnostic::Diagnostic;
@@ -60,47 +62,70 @@ impl RunDiagnostics {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
+pub enum DiagnosticKind {
+    Passed,
+    Failed,
+    Skipped,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DiagnosticStats {
-    total: usize,
-    passed: usize,
-    failed: usize,
+    inner: HashMap<DiagnosticKind, usize>,
 }
 
 impl DiagnosticStats {
-    pub(crate) const fn update(&mut self, other: &Self) {
-        self.total += other.total();
-        self.passed += other.passed();
-        self.failed += other.failed();
+    pub(crate) fn update(&mut self, other: &Self) {
+        for (kind, count) in &other.inner {
+            self.inner
+                .entry(*kind)
+                .and_modify(|v| *v += count)
+                .or_insert(*count);
+        }
     }
 
     #[must_use]
-    pub const fn total(&self) -> usize {
-        self.total
+    pub fn total(&self) -> usize {
+        self.inner.values().sum()
     }
 
-    pub const fn is_success(&self) -> bool {
-        self.failed == 0
+    pub fn is_success(&self) -> bool {
+        self.failed() == 0
+    }
+
+    fn get(&self, kind: DiagnosticKind) -> usize {
+        self.inner.get(&kind).copied().unwrap_or(0)
     }
 
     #[must_use]
-    pub(crate) const fn passed(&self) -> usize {
-        self.passed
+    pub(crate) fn passed(&self) -> usize {
+        self.get(DiagnosticKind::Passed)
     }
 
     #[must_use]
-    pub(crate) const fn failed(&self) -> usize {
-        self.failed
+    pub(crate) fn failed(&self) -> usize {
+        self.get(DiagnosticKind::Failed)
     }
 
-    pub(crate) const fn add_failed(&mut self) {
-        self.failed += 1;
-        self.total += 1;
+    #[must_use]
+    pub(crate) fn skipped(&self) -> usize {
+        self.get(DiagnosticKind::Skipped)
     }
 
-    pub(crate) const fn add_passed(&mut self) {
-        self.passed += 1;
-        self.total += 1;
+    fn add(&mut self, kind: DiagnosticKind) {
+        self.inner.entry(kind).and_modify(|v| *v += 1).or_insert(1);
+    }
+
+    pub(crate) fn add_failed(&mut self) {
+        self.add(DiagnosticKind::Failed);
+    }
+
+    pub(crate) fn add_passed(&mut self) {
+        self.add(DiagnosticKind::Passed);
+    }
+
+    pub(crate) fn add_skipped(&mut self) {
+        self.add(DiagnosticKind::Skipped);
     }
 }
 
@@ -128,6 +153,12 @@ impl std::fmt::Display for DisplayRunDiagnostics<'_> {
             write!(f, "{}", "FAILED".red())?;
         }
 
-        writeln!(f, ". {} passed; {} failed", stats.passed(), stats.failed())
+        writeln!(
+            f,
+            ". {} passed; {} failed; {} skipped",
+            stats.passed(),
+            stats.failed(),
+            stats.skipped()
+        )
     }
 }

@@ -11,7 +11,10 @@ use crate::{
         Diagnostic, FixtureSubDiagnosticType, SubDiagnosticErrorType, SubDiagnosticSeverity,
     },
     discovery::{DiscoveredModule, TestFunction, TestFunctionDisplay},
-    extensions::fixtures::{Finalizers, UsesFixtures},
+    extensions::{
+        fixtures::{Finalizers, UsesFixtures},
+        tags::SkipTag,
+    },
     runner::RunDiagnostics,
 };
 
@@ -32,6 +35,8 @@ pub(crate) struct TestCase<'proj> {
 
     /// Finalizers to run after the test case is executed.
     finalizers: Finalizers,
+
+    skip: Option<SkipTag>,
 }
 
 impl<'proj> TestCase<'proj> {
@@ -40,6 +45,7 @@ impl<'proj> TestCase<'proj> {
         kwargs: HashMap<String, PyObject>,
         py_function: Py<PyAny>,
         module: &'proj DiscoveredModule,
+        skip: Option<SkipTag>,
     ) -> Self {
         Self {
             function,
@@ -47,6 +53,7 @@ impl<'proj> TestCase<'proj> {
             py_function,
             module,
             finalizers: Finalizers::default(),
+            skip,
         }
     }
 
@@ -72,6 +79,15 @@ impl<'proj> TestCase<'proj> {
 
         let (case_call_result, logger) = if self.kwargs.is_empty() {
             let logger = TestCaseLogger::new(py, &display, None);
+
+            if let Some(skip_reason) = &self.skip {
+                logger.log_skipped(skip_reason.reason());
+
+                run_result.stats_mut().add_skipped();
+
+                return run_result;
+            }
+
             logger.log_running();
             (self.py_function.call0(py), logger)
         } else {
@@ -82,7 +98,17 @@ impl<'proj> TestCase<'proj> {
                     let _ = kwargs.set_item(key, value);
                 }
             }
+
             let logger = TestCaseLogger::new(py, &display, Some(&self.kwargs));
+
+            if let Some(skip_reason) = &self.skip {
+                logger.log_skipped(skip_reason.reason());
+
+                run_result.stats_mut().add_skipped();
+
+                return run_result;
+            }
+
             logger.log_running();
             (self.py_function.call(py, (), Some(&kwargs)), logger)
         };
@@ -217,20 +243,29 @@ impl TestCaseLogger {
         Self { test_name }
     }
 
-    fn log(&self, status: &str) {
-        tracing::info!("{:<8} | {}", status, self.test_name);
+    fn log(&self, status: &str, message: Option<&str>) {
+        tracing::info!(
+            "{:<8} | {}{}",
+            status,
+            self.test_name,
+            message.map_or_else(String::new, |message| format!(" - {message}"))
+        );
     }
 
     fn log_running(&self) {
-        self.log("running");
+        self.log("running", None);
     }
 
     fn log_passed(&self) {
-        self.log("passed");
+        self.log("passed", None);
     }
 
     fn log_failed(&self) {
-        self.log("failed");
+        self.log("failed", None);
+    }
+
+    fn log_skipped(&self, reason: Option<&str>) {
+        self.log("skipped", reason);
     }
 }
 

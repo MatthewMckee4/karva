@@ -39,11 +39,9 @@ impl UsesFixtures for TestFunction {
     fn dependant_fixtures(&self, py: Python<'_>) -> Vec<String> {
         let mut required_fixtures = self.function_definition.dependant_fixtures(py);
 
-        if let Some(tags) =
-            Tags::from_py_any(py, &self.py_function, Some(&self.function_definition))
-        {
-            required_fixtures.extend(tags.use_fixtures_names());
-        }
+        let tags = Tags::from_py_any(py, &self.py_function, Some(&self.function_definition));
+
+        required_fixtures.extend(tags.use_fixtures_names());
 
         required_fixtures
     }
@@ -127,9 +125,19 @@ impl TestFunction {
             return Vec::new();
         };
 
-        let required_fixture_names = self.collect_required_fixtures(py, &py_function);
+        let mut required_fixture_names = self.dependant_fixtures(py);
 
-        let parametrize_args = self.collect_parametrize_args(py, &py_function);
+        let tags = Tags::from_py_any(py, &py_function, Some(&self.function_definition));
+
+        required_fixture_names.extend(tags.use_fixtures_names());
+
+        let mut parametrize_args = tags.parametrize_args();
+
+        // Ensure at least one test case exists (no parametrization)
+        if parametrize_args.is_empty() {
+            parametrize_args.push(HashMap::new());
+        }
+
         let mut test_cases = Vec::with_capacity(parametrize_args.len());
 
         for params in parametrize_args {
@@ -140,43 +148,13 @@ impl TestFunction {
                     &required_fixture_names,
                     &params,
                     fixture_manager,
+                    &tags,
                 )
             };
             test_cases.push(fixture_manager_func(py, &test_case_creator));
         }
 
         test_cases
-    }
-
-    /// Collects all required fixture names from function parameters and tags.
-    fn collect_required_fixtures(&self, py: Python<'_>, py_function: &Py<PyAny>) -> Vec<String> {
-        let mut required_fixture_names = self.dependant_fixtures(py);
-
-        if let Some(tags) = Tags::from_py_any(py, py_function, Some(&self.function_definition)) {
-            required_fixture_names.extend(tags.use_fixtures_names());
-        }
-
-        required_fixture_names
-    }
-
-    /// Collects parametrization arguments from function tags.
-    fn collect_parametrize_args(
-        &self,
-        py: Python<'_>,
-        py_function: &Py<PyAny>,
-    ) -> Vec<HashMap<String, Py<PyAny>>> {
-        let mut parametrize_args = Vec::new();
-
-        if let Some(tags) = Tags::from_py_any(py, py_function, Some(&self.function_definition)) {
-            parametrize_args.extend(tags.parametrize_args());
-        }
-
-        // Ensure at least one test case exists (no parametrization)
-        if parametrize_args.is_empty() {
-            parametrize_args.push(HashMap::new());
-        }
-
-        parametrize_args
     }
 
     /// Resolves fixtures for a single test case and creates appropriate diagnostics.
@@ -187,6 +165,7 @@ impl TestFunction {
         required_fixture_names: &[String],
         params: &HashMap<String, Py<PyAny>>,
         fixture_manager: &FixtureManager,
+        tags: &Tags,
     ) -> (TestCase<'a>, Option<Diagnostic>) {
         let num_required_fixtures = required_fixture_names.len();
         let mut fixture_diagnostics = Vec::with_capacity(num_required_fixtures);
@@ -211,7 +190,13 @@ impl TestFunction {
         let diagnostic = self.create_fixture_diagnostic(module, fixture_diagnostics);
 
         (
-            TestCase::new(self, resolved_fixtures, py_function.clone(), module),
+            TestCase::new(
+                self,
+                resolved_fixtures,
+                py_function.clone(),
+                module,
+                tags.skip_tag(),
+            ),
             diagnostic,
         )
     }

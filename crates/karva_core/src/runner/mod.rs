@@ -103,6 +103,14 @@ mod tests {
         }
     }
 
+    fn get_skip_function(framework: &str) -> &str {
+        match framework {
+            "pytest" => "pytest.mark.skip",
+            "karva" => "karva.tags.skip",
+            _ => panic!("Invalid framework"),
+        }
+    }
+
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
      {
@@ -1447,7 +1455,7 @@ def test_something_else():
     ) {
         let env = TestEnv::with_file(
             "<test>/test_function_scope_auto_use_fixture.py",
-            format!(
+            &format!(
                 r#"
 import {framework}
 
@@ -1466,8 +1474,7 @@ def test_something_else():
     assert arr == [1]
 "#,
                 auto_use_kw = get_auto_use_kw(framework),
-            )
-            .as_str(),
+            ),
         );
 
         let result = env.test();
@@ -1477,6 +1484,109 @@ def test_something_else():
         for _ in 0..2 {
             expected_stats.add_passed();
         }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[rstest]
+    fn test_skip(#[values("pytest", "karva")] framework: &str) {
+        let env = TestEnv::with_file(
+            "<test>/test_skip.py",
+            &format!(
+                r"
+        import {framework}
+
+        @{decorator}('This test is skipped with decorator')
+        def test_1():
+            assert False
+
+        ",
+                decorator = get_skip_function(framework)
+            ),
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_skipped();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[rstest]
+    fn test_skip_keyword(#[values("pytest", "karva")] framework: &str) {
+        let env = TestEnv::with_file(
+            "<test>/test_skip.py",
+            &format!(
+                r"
+        import {framework}
+
+        @{decorator}(reason='This test is skipped with decorator')
+        def test_1():
+            assert False
+
+        ",
+                decorator = get_skip_function(framework)
+            ),
+        );
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_skipped();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[rstest]
+    fn test_skip_functionality_no_reason(#[values("pytest", "karva")] framework: &str) {
+        let env = TestEnv::with_file(
+            "<test>/test_skip.py",
+            &format!(
+                r"
+        import {framework}
+
+        @{decorator}
+        def test_1():
+            assert False
+
+        ",
+                decorator = get_skip_function(framework)
+            ),
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_skipped();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[rstest]
+    fn test_skip_reason_function_call(#[values("pytest", "karva")] framework: &str) {
+        let env = TestEnv::with_file(
+            "<test>/test_skip.py",
+            &format!(
+                r"
+        import {framework}
+
+        @{decorator}()
+        def test_1():
+            assert False
+
+        ",
+                decorator = get_skip_function(framework)
+            ),
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_skipped();
 
         assert_eq!(*result.stats(), expected_stats);
     }

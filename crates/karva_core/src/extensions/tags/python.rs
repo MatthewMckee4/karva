@@ -13,8 +13,12 @@ pub enum PyTag {
         arg_names: Vec<String>,
         arg_values: Vec<Vec<PyObject>>,
     },
+
     #[pyo3(name = "use_fixtures")]
     UseFixtures { fixture_names: Vec<String> },
+
+    #[pyo3(name = "skip")]
+    Skip { reason: Option<String> },
 }
 
 #[pymethods]
@@ -24,6 +28,7 @@ impl PyTag {
         match self {
             Self::Parametrize { .. } => "parametrize".to_string(),
             Self::UseFixtures { .. } => "use_fixtures".to_string(),
+            Self::Skip { .. } => "skip".to_string(),
         }
     }
 }
@@ -90,6 +95,37 @@ impl PyTags {
                 fixture_names: names,
             }],
         })
+    }
+
+    #[classmethod]
+    #[pyo3(signature = (reason = None))]
+    pub fn skip(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        reason: Option<PyObject>,
+    ) -> PyResult<PyObject> {
+        if let Some(reason) = reason {
+            if reason.extract::<Py<PyFunction>>(py).is_ok() {
+                return PyTestFunction {
+                    tags: Self {
+                        inner: vec![PyTag::Skip { reason: None }],
+                    },
+                    function: reason,
+                }
+                .into_py_any(py);
+            } else if let Ok(reason) = reason.extract::<String>(py) {
+                return Self {
+                    inner: vec![PyTag::Skip {
+                        reason: Some(reason),
+                    }],
+                }
+                .into_py_any(py);
+            }
+        }
+        Self {
+            inner: vec![PyTag::Skip { reason: None }],
+        }
+        .into_py_any(py)
     }
 
     #[pyo3(signature = (f, /))]

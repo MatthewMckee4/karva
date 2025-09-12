@@ -11,6 +11,7 @@ pub mod python;
 pub(crate) enum Tag {
     Parametrize(ParametrizeTag),
     UseFixtures(UseFixturesTag),
+    Skip(SkipTag),
 }
 
 impl Tag {
@@ -27,26 +28,28 @@ impl Tag {
             PyTag::UseFixtures { fixture_names } => Self::UseFixtures(UseFixturesTag {
                 fixture_names: fixture_names.clone(),
             }),
+            PyTag::Skip { reason } => Self::Skip(SkipTag {
+                reason: reason.clone(),
+            }),
         }
     }
 
     #[must_use]
     pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let name = py_mark.getattr("name").ok()?.extract::<String>().ok()?;
-        if name == "parametrize" {
-            ParametrizeTag::try_from_pytest_mark(py_mark).map(Self::Parametrize)
-        } else if name == "usefixtures" {
-            UseFixturesTag::try_from_pytest_mark(py_mark).map(Self::UseFixtures)
-        } else {
-            None
+        match name.as_str() {
+            "parametrize" => ParametrizeTag::try_from_pytest_mark(py_mark).map(Self::Parametrize),
+            "usefixtures" => UseFixturesTag::try_from_pytest_mark(py_mark).map(Self::UseFixtures),
+            "skip" => SkipTag::try_from_pytest_mark(py_mark).map(Self::Skip),
+            _ => None,
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct ParametrizeTag {
-    pub(crate) arg_names: Vec<String>,
-    pub(crate) arg_values: Vec<Vec<PyObject>>,
+    arg_names: Vec<String>,
+    arg_values: Vec<Vec<PyObject>>,
 }
 
 impl ParametrizeTag {
@@ -88,7 +91,7 @@ impl ParametrizeTag {
 
 #[derive(Debug, Clone)]
 pub(crate) struct UseFixturesTag {
-    pub(crate) fixture_names: Vec<String>,
+    fixture_names: Vec<String>,
 }
 
 impl UseFixturesTag {
@@ -105,6 +108,43 @@ impl UseFixturesTag {
     }
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct SkipTag {
+    reason: Option<String>,
+}
+
+impl SkipTag {
+    #[must_use]
+    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
+        let args = py_mark.getattr("args").ok()?;
+        let kwargs = py_mark.getattr("kwargs").ok()?;
+
+        // Try to get reason from kwargs first
+        if let Ok(reason) = kwargs.get_item("reason") {
+            if let Ok(reason_str) = reason.extract::<String>() {
+                return Some(Self {
+                    reason: Some(reason_str),
+                });
+            }
+        }
+
+        // Try to get reason from first positional argument
+        if let Ok(args_tuple) = args.extract::<(String,)>() {
+            return Some(Self {
+                reason: Some(args_tuple.0),
+            });
+        }
+
+        // No reason provided, use empty string
+        Some(Self { reason: None })
+    }
+
+    #[must_use]
+    pub(crate) fn reason(&self) -> Option<&str> {
+        self.reason.as_deref()
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Tags {
     inner: Vec<Tag>,
@@ -116,9 +156,9 @@ impl Tags {
         py: Python<'_>,
         py_function: &Py<PyAny>,
         function_definition: Option<&StmtFunctionDef>,
-    ) -> Option<Self> {
+    ) -> Self {
         if function_definition.is_some_and(|def| def.decorator_list.is_empty()) {
-            return None;
+            return Self::default();
         }
 
         if let Ok(py_test_function) = py_function.extract::<Py<PyTestFunction>>(py) {
@@ -126,22 +166,22 @@ impl Tags {
             for tag in &py_test_function.borrow(py).tags.inner {
                 tags.push(Tag::from_py_tag(tag));
             }
-            return Some(Self { inner: tags });
+            return Self { inner: tags };
         } else if let Ok(wrapped) = py_function.getattr(py, "__wrapped__") {
             if let Ok(py_wrapped_function) = wrapped.extract::<Py<PyTestFunction>>(py) {
                 let mut tags = Vec::new();
                 for tag in &py_wrapped_function.borrow(py).tags.inner {
                     tags.push(Tag::from_py_tag(tag));
                 }
-                return Some(Self { inner: tags });
+                return Self { inner: tags };
             }
         }
 
         if let Some(tags) = Self::from_pytest_function(py, py_function) {
-            return Some(tags);
+            return tags;
         }
 
-        None
+        Self::default()
     }
 
     #[must_use]
@@ -195,6 +235,16 @@ impl Tags {
             }
         }
         fixture_names
+    }
+
+    #[must_use]
+    pub(crate) fn skip_tag(&self) -> Option<SkipTag> {
+        for tag in &self.inner {
+            if let Tag::Skip(skip_tag) = tag {
+                return Some(skip_tag.clone());
+            }
+        }
+        None
     }
 }
 
@@ -251,7 +301,7 @@ def test_parametrize(arg1):
 
             let test_function = locals.get_item("test_parametrize").unwrap().unwrap();
             let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None).unwrap();
+            let tags = Tags::from_py_any(py, test_function, None);
 
             let expected_parametrize_args = [
                 HashMap::from([(String::from("arg1"), 1)]),
@@ -290,7 +340,7 @@ def test_parametrize(arg1, arg2):
 
             let test_function = locals.get_item("test_parametrize").unwrap().unwrap();
             let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None).unwrap();
+            let tags = Tags::from_py_any(py, test_function, None);
 
             let expected_parametrize_args = [
                 HashMap::from([(String::from("arg1"), 1), (String::from("arg2"), 4)]),
@@ -331,7 +381,7 @@ def test_parametrize(arg1):
 
             let test_function = locals.get_item("test_parametrize").unwrap().unwrap();
             let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None).unwrap();
+            let tags = Tags::from_py_any(py, test_function, None);
 
             let expected_parametrize_args = [
                 HashMap::from([(String::from("arg1"), 1), (String::from("arg2"), 4)]),
@@ -376,7 +426,7 @@ def test_function():
 
             let test_function = locals.get_item("test_function").unwrap().unwrap();
             let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None).unwrap();
+            let tags = Tags::from_py_any(py, test_function, None);
 
             let fixture_names = tags.use_fixtures_names();
             assert_eq!(fixture_names, vec!["my_fixture"]);
@@ -403,7 +453,7 @@ def test_function():
 
             let test_function = locals.get_item("test_function").unwrap().unwrap();
             let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None).unwrap();
+            let tags = Tags::from_py_any(py, test_function, None);
 
             let fixture_names = tags.use_fixtures_names();
             assert_eq!(fixture_names, vec!["fixture1", "fixture2", "fixture3"]);
@@ -432,7 +482,7 @@ def test_function():
 
             let test_function = locals.get_item("test_function").unwrap().unwrap();
             let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None).unwrap();
+            let tags = Tags::from_py_any(py, test_function, None);
 
             let fixture_names: HashSet<_> = tags.use_fixtures_names().into_iter().collect();
             let expected: HashSet<_> = ["fixture1", "fixture2", "fixture3"]
@@ -464,7 +514,7 @@ def test_parametrize(arg1):
 
             let test_function = locals.get_item("test_parametrize").unwrap().unwrap();
             let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None).unwrap();
+            let tags = Tags::from_py_any(py, test_function, None);
 
             let parametrize_args = tags.parametrize_args();
             assert_eq!(parametrize_args.len(), 0);
@@ -493,7 +543,7 @@ def test_function(arg1):
 
             let test_function = locals.get_item("test_function").unwrap().unwrap();
             let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None).unwrap();
+            let tags = Tags::from_py_any(py, test_function, None);
 
             let parametrize_args = tags.parametrize_args();
             assert_eq!(parametrize_args.len(), 2);
@@ -523,7 +573,7 @@ def test_parametrize(arg1):
 
             let test_function = locals.get_item("test_parametrize").unwrap().unwrap();
             let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None).unwrap();
+            let tags = Tags::from_py_any(py, test_function, None);
 
             let parametrize_args = tags.parametrize_args();
             assert_eq!(parametrize_args.len(), 4);
@@ -557,7 +607,7 @@ def test_function():
             let test_function = test_function.as_unbound();
             let tags = Tags::from_py_any(py, test_function, None);
 
-            assert!(tags.is_none());
+            assert!(tags.inner.is_empty());
         });
     }
 
@@ -581,7 +631,7 @@ def test_parametrize(arg1):
 
             let test_function = locals.get_item("test_parametrize").unwrap().unwrap();
             let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None).unwrap();
+            let tags = Tags::from_py_any(py, test_function, None);
 
             let parametrize_args = tags.parametrize_args();
             assert_eq!(parametrize_args.len(), 3);
@@ -596,8 +646,69 @@ def test_parametrize(arg1):
     }
 
     #[rstest]
-    #[ignore = "skip mark is not yet supported"]
-    fn test_skip_mark(#[values("karva", "pytest")] framework: &str) {
+    fn test_skip_mark_with_reason_kwarg(#[values("pytest")] framework: &str) {
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+            let code = format!(
+                r#"
+import {}
+
+{}(reason="Not implemented yet")
+def test_skipped():
+    pass
+                "#,
+                framework,
+                get_skip_decorator(framework)
+            );
+
+            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
+
+            let test_function = locals.get_item("test_skipped").unwrap().unwrap();
+            let test_function = test_function.as_unbound();
+            let tags = Tags::from_py_any(py, test_function, None);
+
+            assert_eq!(tags.inner.len(), 1);
+            if let Tag::Skip(skip_tag) = &tags.inner[0] {
+                assert_eq!(skip_tag.reason(), Some("Not implemented yet"));
+            } else {
+                panic!("Expected Skip tag");
+            }
+        });
+    }
+
+    #[rstest]
+    fn test_skip_mark_with_positional_reason(#[values("pytest")] framework: &str) {
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+            let code = format!(
+                r#"
+import {}
+
+{}("some reason")
+def test_skipped():
+    pass
+                "#,
+                framework,
+                get_skip_decorator(framework)
+            );
+
+            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
+
+            let test_function = locals.get_item("test_skipped").unwrap().unwrap();
+            let test_function = test_function.as_unbound();
+            let tags = Tags::from_py_any(py, test_function, None);
+
+            assert_eq!(tags.inner.len(), 1);
+            if let Tag::Skip(skip_tag) = &tags.inner[0] {
+                assert_eq!(skip_tag.reason(), Some("some reason"));
+            } else {
+                panic!("Expected Skip tag");
+            }
+        });
+    }
+
+    #[rstest]
+    fn test_skip_mark_without_reason(#[values("pytest")] framework: &str) {
         Python::with_gil(|py| {
             let locals = PyDict::new(py);
             let code = format!(
@@ -618,7 +729,12 @@ def test_skipped():
             let test_function = test_function.as_unbound();
             let tags = Tags::from_py_any(py, test_function, None);
 
-            assert!(tags.is_some(), "Skip tag should be detected once supported");
+            assert_eq!(tags.inner.len(), 1);
+            if let Tag::Skip(skip_tag) = &tags.inner[0] {
+                assert_eq!(skip_tag.reason(), None);
+            } else {
+                panic!("Expected Skip tag");
+            }
         });
     }
 }
