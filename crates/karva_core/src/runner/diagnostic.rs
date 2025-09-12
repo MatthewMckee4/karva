@@ -118,11 +118,11 @@ impl std::fmt::Display for DisplayRunDiagnostics<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let stats = self.diagnostics.stats();
 
-        let success = stats.passed();
+        let success = stats.is_success();
 
         write!(f, "test result: ")?;
 
-        if success == stats.total() {
+        if success {
             write!(f, "{}", "ok".green())?;
         } else {
             write!(f, "{}", "FAILED".red())?;
