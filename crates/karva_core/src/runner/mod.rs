@@ -1495,12 +1495,12 @@ def test_something_else():
             "<test>/test_skip.py",
             &format!(
                 r#"
-    import {framework}
+import {framework}
 
-    {skip_function}("Test is skipped")
-    def test_skip():
-        assert False
-    "#,
+@{skip_function}("Test is skipped")
+def test_skip():
+    assert False
+"#,
                 skip_function = get_skip_function(framework),
             ),
         );

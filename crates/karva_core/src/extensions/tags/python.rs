@@ -99,10 +99,33 @@ impl PyTags {
 
     #[classmethod]
     #[pyo3(signature = (reason = None))]
-    pub fn skip(_cls: &Bound<'_, PyType>, reason: Option<String>) -> PyResult<Self> {
-        Ok(Self {
-            inner: vec![PyTag::Skip { reason }],
-        })
+    pub fn skip(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        reason: Option<PyObject>,
+    ) -> PyResult<PyObject> {
+        if let Some(reason) = reason {
+            if reason.extract::<Py<PyFunction>>(py).is_ok() {
+                return PyTestFunction {
+                    tags: Self {
+                        inner: vec![PyTag::Skip { reason: None }],
+                    },
+                    function: reason,
+                }
+                .into_py_any(py);
+            } else if let Ok(reason) = reason.extract::<String>(py) {
+                return Self {
+                    inner: vec![PyTag::Skip {
+                        reason: Some(reason),
+                    }],
+                }
+                .into_py_any(py);
+            }
+        }
+        Self {
+            inner: vec![PyTag::Skip { reason: None }],
+        }
+        .into_py_any(py)
     }
 
     #[pyo3(signature = (f, /))]
@@ -416,84 +439,6 @@ def test_function():
             assert_eq!(test_function.borrow().tags.inner.len(), 1);
             if let PyTag::UseFixtures { fixture_names } = &test_function.borrow().tags.inner[0] {
                 assert_eq!(fixture_names, &vec!["fixture1", "fixture2"]);
-            }
-        });
-    }
-
-    #[test]
-    fn test_skip_with_reason() {
-        Python::with_gil(|py| {
-            let locals = PyDict::new(py);
-            Python::run(
-                py,
-                c_str!("import karva;tags = karva.tags"),
-                None,
-                Some(&locals),
-            )
-            .unwrap();
-
-            let binding = locals.get_item("tags").unwrap().unwrap();
-            let cls = binding.downcast::<PyType>().unwrap();
-
-            let tags = PyTags::skip(cls, Some("Not implemented yet".to_string())).unwrap();
-            assert_eq!(tags.inner.len(), 1);
-            assert_eq!(tags.inner[0].name(), "skip");
-            if let PyTag::Skip { reason } = &tags.inner[0] {
-                assert_eq!(reason, &Some("Not implemented yet".to_string()));
-            }
-        });
-    }
-
-    #[test]
-    fn test_skip_without_reason() {
-        Python::with_gil(|py| {
-            let locals = PyDict::new(py);
-            Python::run(
-                py,
-                c_str!("import karva;tags = karva.tags"),
-                None,
-                Some(&locals),
-            )
-            .unwrap();
-
-            let binding = locals.get_item("tags").unwrap().unwrap();
-            let cls = binding.downcast::<PyType>().unwrap();
-
-            let tags = PyTags::skip(cls, None).unwrap();
-            assert_eq!(tags.inner.len(), 1);
-            assert_eq!(tags.inner[0].name(), "skip");
-            if let PyTag::Skip { reason } = &tags.inner[0] {
-                assert_eq!(reason, &None);
-            }
-        });
-    }
-
-    #[test]
-    fn test_skip_decorator() {
-        Python::with_gil(|py| {
-            let locals = PyDict::new(py);
-
-            py.run(
-                c_str!(
-                    r#"
-import karva
-
-@karva.tags.skip("Work in progress")
-def test_function():
-    pass
-                "#
-                ),
-                None,
-                Some(&locals),
-            )
-            .unwrap();
-
-            let test_function = locals.get_item("test_function").unwrap().unwrap();
-            let test_function = test_function.downcast::<PyTestFunction>().unwrap();
-
-            assert_eq!(test_function.borrow().tags.inner.len(), 1);
-            if let PyTag::Skip { reason } = &test_function.borrow().tags.inner[0] {
-                assert_eq!(reason, &Some("Work in progress".to_string()));
             }
         });
     }

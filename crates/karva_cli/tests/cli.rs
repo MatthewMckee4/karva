@@ -2699,26 +2699,19 @@ fn test_nested_generator_fixture(
 #[rstest]
 fn test_skip_functionality(#[values("pytest", "karva")] framework: &str) -> anyhow::Result<()> {
     let decorator = if framework == "pytest" {
-        "@pytest.mark.skip"
+        "pytest.mark.skip"
     } else {
-        "@karva.tags.skip"
+        "karva.tags.skip"
     };
 
     let test_code = format!(
         r"
 import {framework}
 
-{decorator}('This test is skipped with decorator')
-def test1():
+@{decorator}('This test is skipped with decorator')
+def test_1():
     assert False
 
-{decorator}(reason='This test is skipped with reason')
-def test2():
-    assert False
-
-{decorator}
-def test3():
-    assert False
 ",
     );
 
@@ -2728,7 +2721,112 @@ def test3():
     success: true
     exit_code: 0
     ----- stdout -----
-    test result: ok. 0 passed; 0 failed; 3 skipped
+    test result: ok. 0 passed; 0 failed; 1 skipped
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[rstest]
+fn test_skip_functionality_keyword(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
+    let decorator = if framework == "pytest" {
+        "pytest.mark.skip"
+    } else {
+        "karva.tags.skip"
+    };
+
+    let test_code = format!(
+        r"
+import {framework}
+
+@{decorator}(reason='This test is skipped with decorator')
+def test_1():
+    assert False
+
+",
+    );
+
+    let case = IntegrationTestEnv::with_file("test_skip.py", &test_code)?;
+
+    run_with_path_and_snapshot!(case, @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test result: ok. 0 passed; 0 failed; 1 skipped
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[rstest]
+fn test_skip_functionality_no_reason(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
+    let decorator = if framework == "pytest" {
+        "pytest.mark.skip"
+    } else {
+        "karva.tags.skip"
+    };
+
+    let test_code = format!(
+        r"
+import {framework}
+
+@{decorator}
+def test_1():
+    assert False
+
+",
+    );
+
+    let case = IntegrationTestEnv::with_file("test_skip.py", &test_code)?;
+
+    run_with_path_and_snapshot!(case, @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test result: ok. 0 passed; 0 failed; 1 skipped
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[rstest]
+fn test_skip_functionality_no_reason_function_call(
+    #[values("pytest", "karva")] framework: &str,
+) -> anyhow::Result<()> {
+    let decorator = if framework == "pytest" {
+        "pytest.mark.skip"
+    } else {
+        "karva.tags.skip"
+    };
+
+    let test_code = format!(
+        r"
+import {framework}
+
+@{decorator}()
+def test_1():
+    assert False
+
+",
+    );
+
+    let case = IntegrationTestEnv::with_file("test_skip.py", &test_code)?;
+
+    run_with_path_and_snapshot!(case, @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test result: ok. 0 passed; 0 failed; 1 skipped
 
     ----- stderr -----
     ");
