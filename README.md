@@ -87,7 +87,7 @@ fail[assertion-failed]: This test should fail
  | File "tests/test.py", line 6, in test_fail
  |   assert False, "This test should fail"
 
-fail[assertion-failed]: This is an error
+fail[value-error]: This is an error
  --> tests.test::test_error at tests/test.py:9
  | File "tests/test.py", line 10, in test_error
  |   raise ValueError("This is an error")
