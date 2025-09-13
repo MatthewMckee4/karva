@@ -7,6 +7,7 @@ use crate::extensions::tags::python::{PyTag, PyTestFunction};
 
 pub mod python;
 
+/// Represents a decorator function in Python that can be used to extend the functionality of a test.
 #[derive(Debug, Clone)]
 pub(crate) enum Tag {
     Parametrize(ParametrizeTag),
@@ -15,6 +16,7 @@ pub(crate) enum Tag {
 }
 
 impl Tag {
+    /// Converts a Python Tag into an internal Tag.
     #[must_use]
     pub(crate) fn from_py_tag(py_tag: &PyTag) -> Self {
         match py_tag {
@@ -34,6 +36,9 @@ impl Tag {
         }
     }
 
+    /// Converts a Pytest mark into an internal Tag.
+    ///
+    /// This is used to allow Pytest marks to be used as Karva tags.
     #[must_use]
     pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let name = py_mark.getattr("name").ok()?.extract::<String>().ok()?;
@@ -46,9 +51,17 @@ impl Tag {
     }
 }
 
+/// Represents different argument names and values that can be given to a test.
+///
+/// This is most useful to repeat a test multiple times with different arguments instead of duplicating the test.
 #[derive(Debug, Clone)]
 pub(crate) struct ParametrizeTag {
+    /// The names of the arguments
+    ///
+    /// These are used as keyword argument names for the test function.
     arg_names: Vec<String>,
+
+    /// The values associated with each argument name.
     arg_values: Vec<Vec<PyObject>>,
 }
 
@@ -73,6 +86,9 @@ impl ParametrizeTag {
         }
     }
 
+    /// Returns each parameterize case.
+    ///
+    /// Each [`HashMap`] is used as keyword arguments for the test function.
     #[must_use]
     pub(crate) fn each_arg_value(&self) -> Vec<HashMap<String, PyObject>> {
         let total_combinations = self.arg_values.len();
@@ -89,8 +105,13 @@ impl ParametrizeTag {
     }
 }
 
+/// Represents required fixtures that should be called before a test function is run.
+///
+/// These fixtures are not specified as arguments as the function does not directly need them.
+/// But they are still called.
 #[derive(Debug, Clone)]
 pub(crate) struct UseFixturesTag {
+    /// The names of the fixtures to be called.
     fixture_names: Vec<String>,
 }
 
@@ -108,6 +129,9 @@ impl UseFixturesTag {
     }
 }
 
+/// Represents a test that should be skipped.
+///
+/// A given reason will be logged if given.
 #[derive(Debug, Clone)]
 pub(crate) struct SkipTag {
     reason: Option<String>,
@@ -116,10 +140,8 @@ pub(crate) struct SkipTag {
 impl SkipTag {
     #[must_use]
     pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
-        let args = py_mark.getattr("args").ok()?;
         let kwargs = py_mark.getattr("kwargs").ok()?;
 
-        // Try to get reason from kwargs first
         if let Ok(reason) = kwargs.get_item("reason") {
             if let Ok(reason_str) = reason.extract::<String>() {
                 return Some(Self {
@@ -128,14 +150,14 @@ impl SkipTag {
             }
         }
 
-        // Try to get reason from first positional argument
+        let args = py_mark.getattr("args").ok()?;
+
         if let Ok(args_tuple) = args.extract::<(String,)>() {
             return Some(Self {
                 reason: Some(args_tuple.0),
             });
         }
 
-        // No reason provided, use empty string
         Some(Self { reason: None })
     }
 
@@ -145,6 +167,9 @@ impl SkipTag {
     }
 }
 
+/// Represents a collection of tags associated with a test function.
+///
+/// This means we can collect tags and use them all for the same function.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Tags {
     inner: Vec<Tag>,
@@ -204,6 +229,9 @@ impl Tags {
         Some(Self { inner: tags })
     }
 
+    /// Return all parametrizations
+    ///
+    /// This function ensures that if we have multiple parametrize tags, we combine them together.
     #[must_use]
     pub(crate) fn parametrize_args(&self) -> Vec<HashMap<String, PyObject>> {
         let mut param_args: Vec<HashMap<String, PyObject>> = vec![HashMap::new()];
@@ -226,8 +254,9 @@ impl Tags {
         param_args
     }
 
+    /// Get all required fixture names for the given test.
     #[must_use]
-    pub(crate) fn use_fixtures_names(&self) -> Vec<String> {
+    pub(crate) fn required_fixtures_names(&self) -> Vec<String> {
         let mut fixture_names = Vec::new();
         for tag in &self.inner {
             if let Tag::UseFixtures(use_fixtures_tag) = tag {
@@ -237,6 +266,7 @@ impl Tags {
         fixture_names
     }
 
+    /// Return the skip tag if it exists.
     #[must_use]
     pub(crate) fn skip_tag(&self) -> Option<SkipTag> {
         for tag in &self.inner {
@@ -428,7 +458,7 @@ def test_function():
             let test_function = test_function.as_unbound();
             let tags = Tags::from_py_any(py, test_function, None);
 
-            let fixture_names = tags.use_fixtures_names();
+            let fixture_names = tags.required_fixtures_names();
             assert_eq!(fixture_names, vec!["my_fixture"]);
         });
     }
@@ -455,7 +485,7 @@ def test_function():
             let test_function = test_function.as_unbound();
             let tags = Tags::from_py_any(py, test_function, None);
 
-            let fixture_names = tags.use_fixtures_names();
+            let fixture_names = tags.required_fixtures_names();
             assert_eq!(fixture_names, vec!["fixture1", "fixture2", "fixture3"]);
         });
     }
@@ -484,7 +514,7 @@ def test_function():
             let test_function = test_function.as_unbound();
             let tags = Tags::from_py_any(py, test_function, None);
 
-            let fixture_names: HashSet<_> = tags.use_fixtures_names().into_iter().collect();
+            let fixture_names: HashSet<_> = tags.required_fixtures_names().into_iter().collect();
             let expected: HashSet<_> = ["fixture1", "fixture2", "fixture3"]
                 .iter()
                 .copied()
@@ -548,7 +578,7 @@ def test_function(arg1):
             let parametrize_args = tags.parametrize_args();
             assert_eq!(parametrize_args.len(), 2);
 
-            let fixture_names = tags.use_fixtures_names();
+            let fixture_names = tags.required_fixtures_names();
             assert_eq!(fixture_names, vec!["my_fixture"]);
         });
     }

@@ -1590,4 +1590,114 @@ def test_something_else():
 
         assert_eq!(*result.stats(), expected_stats);
     }
+
+    #[rstest]
+    fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
+        let env = TestEnv::with_file(
+            "<test>/test_nested_generator_fixture.py",
+            &format!(
+                r"
+                from {framework} import fixture
+
+                class Calculator:
+                    def add(self, a: int, b: int) -> int:
+                        return a + b
+
+                @fixture
+                def calculator() -> Calculator:
+                    if 1:
+                        yield Calculator()
+                    else:
+                        yield Calculator()
+
+                def test_calculator(calculator: Calculator) -> None:
+                    assert calculator.add(1, 2) == 3
+                "
+            ),
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[rstest]
+    fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &str) {
+        let env = TestEnv::with_file(
+            "<test>/test_nested_generator_fixture.py",
+            &format!(
+                r"
+                from {framework} import fixture
+
+                data = {{}}
+
+                @fixture(scope='module')
+                def clean_data():
+                    data.clear()
+
+                @fixture({auto_use_kw}=True)
+                def add_data():
+                    data.update(value=True)
+
+                def test_value(clean_data):
+                    assert data.get('value')
+                ",
+                auto_use_kw = get_auto_use_kw(framework)
+            ),
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[rstest]
+    fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
+        let env = TestEnv::with_file(
+            "<test>/test_nested_generator_fixture.py",
+            &format!(
+                r#"
+                from {framework} import fixture
+
+                @fixture
+                def first_entry():
+                    return "a"
+
+                @fixture
+                def order(first_entry):
+                    return []
+
+                @fixture({auto_use_kw}=True)
+                def append_first(order, first_entry):
+                    return order.append(first_entry)
+
+                def test_string_only(order, first_entry):
+                    assert order == [first_entry]
+
+                def test_string_and_int(order, first_entry):
+                    order.append(2)
+                    assert order == [first_entry, 2]
+                "#,
+                auto_use_kw = get_auto_use_kw(framework)
+            ),
+        );
+
+        let result = env.test();
+
+        let mut expected_stats = DiagnosticStats::default();
+
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
 }

@@ -2,6 +2,7 @@ use pyo3::{prelude::*, types::PyIterator};
 
 use crate::diagnostic::Diagnostic;
 
+/// Represents a collection of finalizers.
 #[derive(Debug, Default)]
 pub(crate) struct Finalizers {
     finalizers: Vec<Finalizer>,
@@ -29,6 +30,13 @@ impl Finalizers {
     }
 }
 
+/// Represents a generator function that can be used to run the finalizer section of a fixture.
+///
+/// ```py
+/// def fixture():
+///     yield
+///     # Finalizer logic here
+/// ```
 #[derive(Debug, Clone)]
 pub(crate) struct Finalizer {
     fixture_name: String,
