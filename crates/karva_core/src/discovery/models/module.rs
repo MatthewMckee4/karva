@@ -188,9 +188,8 @@ pub(crate) enum ModuleType {
     Configuration,
 }
 
-impl ModuleType {
-    #[must_use]
-    pub(crate) fn from_path(path: &SystemPathBuf) -> Self {
+impl From<&SystemPathBuf> for ModuleType {
+    fn from(path: &SystemPathBuf) -> Self {
         if path
             .file_name()
             .is_some_and(|file_name| file_name == "conftest.py")
@@ -199,6 +198,12 @@ impl ModuleType {
         } else {
             Self::Test
         }
+    }
+}
+
+impl From<SystemPathBuf> for ModuleType {
+    fn from(path: SystemPathBuf) -> Self {
+        Self::from(&path)
     }
 }
 

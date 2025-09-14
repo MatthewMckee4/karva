@@ -103,9 +103,7 @@ impl<'proj> StandardDiscoverer<'proj> {
             return (None, Vec::new());
         }
 
-        let module_type = ModuleType::from_path(path);
-
-        let mut module = DiscoveredModule::new(self.project, path, module_type);
+        let mut module = DiscoveredModule::new(self.project, path, path.into());
 
         let (discovered, diagnostics) = discover(py, path, self.project);
 
@@ -116,7 +114,7 @@ impl<'proj> StandardDiscoverer<'proj> {
         module = module.with_fixtures(discovered.fixtures);
 
         if module.is_empty() {
-            return (None, Vec::new());
+            return (None, diagnostics);
         }
 
         (Some(module), diagnostics)
@@ -219,7 +217,7 @@ impl<'proj> StandardDiscoverer<'proj> {
                         self.process_python_file(py, configuration_only, &current_path);
 
                     if let Some(module) = module {
-                        match module.module_type() {
+                        match current_path.into() {
                             ModuleType::Test => package.add_module(module),
                             ModuleType::Configuration => package.add_configuration_module(module),
                         }
@@ -263,11 +261,12 @@ impl<'proj> StandardDiscoverer<'proj> {
         configuration_only: bool,
         current_path: &SystemPathBuf,
     ) -> (Option<DiscoveredModule>, Vec<Diagnostic>) {
-        match ModuleType::from_path(current_path) {
+        match current_path.into() {
             ModuleType::Test => {
                 if configuration_only {
                     return (None, Vec::new());
                 }
+
                 self.discover_test_file(py, current_path, false)
             }
             ModuleType::Configuration => self.discover_test_file(py, current_path, true),
