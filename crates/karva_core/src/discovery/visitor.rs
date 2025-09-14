@@ -8,7 +8,7 @@ use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
 use crate::{
     diagnostic::Diagnostic,
-    discovery::{DiscoveredModule, TestFunction},
+    discovery::TestFunction,
     extensions::fixtures::{Fixture, is_fixture_function},
 };
 
@@ -28,9 +28,9 @@ impl<'proj, 'b> FunctionDefinitionVisitor<'proj, 'b> {
     pub(crate) fn new(
         py: Python<'b>,
         project: &'proj Project,
-        module_path: SystemPathBuf,
+        module_path: &SystemPathBuf,
     ) -> Result<Self, String> {
-        let module_name = module_name(project.cwd(), &module_path)?;
+        let module_name = module_name(project.cwd(), module_path)?;
 
         let py_module = py
             .import(&module_name)
@@ -40,7 +40,7 @@ impl<'proj, 'b> FunctionDefinitionVisitor<'proj, 'b> {
             discovered_functions: Vec::new(),
             fixture_definitions: Vec::new(),
             project,
-            module_path,
+            module_path: module_path.clone(),
             diagnostics: Vec::new(),
             py_module,
             inside_function: false,
@@ -113,10 +113,10 @@ pub(crate) struct DiscoveredFunctions {
 #[must_use]
 pub(crate) fn discover(
     py: Python<'_>,
-    module: &DiscoveredModule,
+    path: &SystemPathBuf,
     project: &Project,
 ) -> (DiscoveredFunctions, Vec<Diagnostic>) {
-    let mut visitor = match FunctionDefinitionVisitor::new(py, project, module.path().clone()) {
+    let mut visitor = match FunctionDefinitionVisitor::new(py, project, path) {
         Ok(visitor) => visitor,
         Err(e) => {
             tracing::debug!("Failed to create discovery module: {e}");
@@ -130,7 +130,7 @@ pub(crate) fn discover(
         }
     };
 
-    let parsed = parsed_module(module, project.metadata().python_version());
+    let parsed = parsed_module(path, project.metadata().python_version());
     visitor.visit_body(&parsed.syntax().body);
 
     (
@@ -144,12 +144,12 @@ pub(crate) fn discover(
 
 #[must_use]
 pub(crate) fn parsed_module(
-    module: &DiscoveredModule,
+    path: &SystemPathBuf,
     python_version: PythonVersion,
 ) -> Parsed<ModModule> {
     let mode = Mode::Module;
     let options = ParseOptions::from(mode).with_target_version(python_version);
-    let source = module.source_text();
+    let source = std::fs::read_to_string(path).expect("Failed to read source file");
 
     parse_unchecked(&source, options)
         .try_into_module()
