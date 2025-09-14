@@ -8,6 +8,7 @@ nav:
   - Fixtures: fixtures.md
   - Tags:
       - Parametrize: tags/parametrize.md
+      - Skip: tags/skip.md
   - CLI: cli.md
 
 theme:
