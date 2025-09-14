@@ -21,10 +21,13 @@ cov:
 
 # Build documentation
 docs:
+    uv venv --clear -p 3.13
+    uv sync --group docs --no-install-project
     uv run --no-project mkdocs build
 
 # Serve documentation locally
 docs-serve:
+    uv venv --clear -p 3.13
     uv sync --group docs --no-install-project
     uv run --no-project mkdocs serve
 
