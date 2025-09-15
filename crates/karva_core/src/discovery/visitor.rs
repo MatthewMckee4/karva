@@ -112,7 +112,7 @@ pub(crate) struct DiscoveredFunctions {
 
 #[must_use]
 pub(crate) fn discover(
-    py: Python<'_>,
+    py: Python,
     path: &SystemPathBuf,
     project: &Project,
 ) -> (DiscoveredFunctions, Vec<Diagnostic>) {
