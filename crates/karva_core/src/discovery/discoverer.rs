@@ -2,7 +2,6 @@ use ignore::WalkBuilder;
 use karva_project::{
     Project,
     path::{SystemPathBuf, TestPath},
-    utils::is_python_file,
 };
 use pyo3::prelude::*;
 
@@ -27,6 +26,7 @@ impl<'proj> StandardDiscoverer<'proj> {
         let mut session_package = DiscoveredPackage::new(self.project.cwd().clone());
 
         let mut discovery_diagnostics = Vec::new();
+
         let cwd = self.project.cwd();
 
         if add_to_sys_path(py, cwd, 0).is_err() {
@@ -40,55 +40,43 @@ impl<'proj> StandardDiscoverer<'proj> {
                 Ok(path) => {
                     match &path {
                         TestPath::File(path) => {
-                            let module = self.discover_test_file(
-                                py,
-                                path,
-                                &mut discovery_diagnostics,
-                                false,
-                            );
+                            let (module, diagnostics) =
+                                self.discover_test_file(py, path, DiscoveryMode::All);
 
-                            if let Some(module) = module {
-                                session_package.add_module(module);
-                            }
+                            session_package.add_module(module);
+
+                            discovery_diagnostics.extend(diagnostics);
                         }
                         TestPath::Directory(path) => {
-                            let mut package = DiscoveredPackage::new(path.clone());
+                            let (package, diagnostics) =
+                                self.discover_directory(py, path, DiscoveryMode::All);
 
-                            self.discover_directory(
-                                py,
-                                &mut package,
-                                &mut discovery_diagnostics,
-                                false,
-                            );
                             session_package.add_package(package);
+
+                            discovery_diagnostics.extend(diagnostics);
                         }
                         TestPath::Function {
                             path,
                             function_name,
                         } => {
-                            let module = self.discover_test_file(
-                                py,
-                                path,
-                                &mut discovery_diagnostics,
-                                false,
-                            );
+                            let (mut module, diagnostics) =
+                                self.discover_test_file(py, path, DiscoveryMode::All);
 
-                            if let Some(mut module) = module {
-                                module.filter_test_functions(function_name);
+                            module.filter_test_functions(function_name);
 
-                                if !module.test_functions().is_empty() {
-                                    session_package.add_module(module);
-                                }
+                            if !module.test_functions().is_empty() {
+                                session_package.add_module(module);
                             }
+
+                            discovery_diagnostics.extend(diagnostics);
                         }
                     }
 
-                    self.add_parent_configuration_packages(
+                    discovery_diagnostics.extend(self.add_parent_configuration_packages(
                         py,
                         path.path(),
                         &mut session_package,
-                        &mut discovery_diagnostics,
-                    );
+                    ));
                 }
                 Err(e) => {
                     discovery_diagnostics.push(Diagnostic::invalid_path_error(&e));
@@ -104,70 +92,67 @@ impl<'proj> StandardDiscoverer<'proj> {
     // Parse and run discovery on a single file
     fn discover_test_file(
         &self,
-        py: Python<'_>,
+        py: Python,
         path: &SystemPathBuf,
-        discovery_diagnostics: &mut Vec<Diagnostic>,
-        configuration_only: bool,
-    ) -> Option<DiscoveredModule> {
-        tracing::debug!("Discovering file: {}", path.display());
+        discovery_mode: DiscoveryMode,
+    ) -> (DiscoveredModule, Vec<Diagnostic>) {
+        let (discovered, diagnostics) = discover(py, path, self.project);
 
-        if !is_python_file(path) {
-            return None;
+        let mut module = DiscoveredModule::new(self.project, path, path.into());
+
+        if !discovery_mode.is_configuration_only() {
+            module = module.with_test_functions(discovered.functions);
         }
 
-        let module_type = ModuleType::from_path(path);
+        module = module.with_fixtures(discovered.fixtures);
 
-        let mut module = DiscoveredModule::new(self.project, path, module_type);
-
-        let (discovered, diagnostics) = discover(py, &module, self.project);
-
-        if !configuration_only {
-            module.set_test_functions(discovered.functions);
-        }
-        module.set_fixtures(discovered.fixtures);
-
-        discovery_diagnostics.extend(diagnostics);
-
-        if module.is_empty() {
-            return None;
-        }
-
-        Some(module)
+        (module, diagnostics)
     }
 
     // This should look from the parent of path to the cwd for configuration files
     fn add_parent_configuration_packages(
         &self,
-        py: Python<'_>,
+        py: Python,
         path: &SystemPathBuf,
         session_package: &mut DiscoveredPackage,
-        discovery_diagnostics: &mut Vec<Diagnostic>,
-    ) -> Option<()> {
+    ) -> Vec<Diagnostic> {
         let mut current_path = if path.is_dir() {
             path.clone()
         } else {
-            path.parent()?.to_path_buf()
+            match path.parent() {
+                Some(parent) => parent.to_path_buf(),
+                None => return Vec::new(),
+            }
         };
+
+        let mut diagnostics = Vec::new();
 
         loop {
             let conftest_path = current_path.join("conftest.py");
             if conftest_path.exists() {
                 let mut package = DiscoveredPackage::new(current_path.clone());
-                if let Some(module) =
-                    self.discover_test_file(py, &conftest_path, discovery_diagnostics, true)
-                {
-                    package.add_configuration_module(module);
-                }
+
+                let (module, sub_diagnostics) =
+                    self.discover_test_file(py, &conftest_path, DiscoveryMode::ConfigurationOnly);
+
+                package.add_configuration_module(module);
+
                 session_package.add_package(package);
+
+                diagnostics.extend(sub_diagnostics);
             }
 
             if current_path == *self.project.cwd() {
                 break;
             }
-            current_path = current_path.parent()?.to_path_buf();
+
+            current_path = match current_path.parent() {
+                Some(parent) => parent.to_path_buf(),
+                None => break,
+            };
         }
 
-        Some(())
+        diagnostics
     }
 
     /// Discovers test files and packages within a directory.
@@ -175,25 +160,22 @@ impl<'proj> StandardDiscoverer<'proj> {
     /// This method recursively walks through a directory structure to find Python
     /// test files and subdirectories. It respects .gitignore files and filters
     /// out common non-test directories like __pycache__.
-    ///
-    /// # Arguments
-    /// * `py` - Python interpreter instance
-    /// * `package` - The package to add discovered modules to
-    /// * `discovery_diagnostics` - List to collect any discovery errors
-    /// * `configuration_only` - If true, only discover configuration files (conftest.py)
     fn discover_directory(
         &self,
-        py: Python<'_>,
-        package: &mut DiscoveredPackage,
-        discovery_diagnostics: &mut Vec<Diagnostic>,
-        configuration_only: bool,
-    ) {
-        tracing::debug!("Discovering directory: {}", package.path().display());
+        py: Python,
+        path: &SystemPathBuf,
+        discovery_mode: DiscoveryMode,
+    ) -> (DiscoveredPackage, Vec<Diagnostic>) {
+        let walker = self.create_directory_walker(path);
 
-        let walker = self.create_directory_walker(package.path());
+        let mut package = DiscoveredPackage::new(path.clone());
+
+        let mut diagnostics = Vec::new();
 
         for entry in walker {
-            let Ok(entry) = entry else { continue };
+            let Ok(entry) = entry else {
+                continue;
+            };
             let current_path = SystemPathBuf::from(entry.path());
 
             // Skip the package directory itself
@@ -201,15 +183,46 @@ impl<'proj> StandardDiscoverer<'proj> {
                 continue;
             }
 
-            self.process_directory_entry(
-                py,
-                package,
-                discovery_diagnostics,
-                configuration_only,
-                &entry,
-                &current_path,
-            );
+            match entry.file_type() {
+                Some(file_type) if file_type.is_dir() => {
+                    if discovery_mode.is_configuration_only() {
+                        continue;
+                    }
+
+                    let (subpackage, sub_package_diagnostics) =
+                        self.discover_directory(py, &current_path, discovery_mode);
+
+                    package.add_package(subpackage);
+                    diagnostics.extend(sub_package_diagnostics);
+                }
+                Some(file_type) if file_type.is_file() => match (&current_path).into() {
+                    ModuleType::Test => {
+                        if discovery_mode.is_configuration_only() {
+                            continue;
+                        }
+
+                        let (module, module_diagnostics) =
+                            self.discover_test_file(py, &current_path, DiscoveryMode::All);
+
+                        package.add_module(module);
+                        diagnostics.extend(module_diagnostics);
+                    }
+                    ModuleType::Configuration => {
+                        let (module, module_diagnostics) = self.discover_test_file(
+                            py,
+                            &current_path,
+                            DiscoveryMode::ConfigurationOnly,
+                        );
+
+                        package.add_configuration_module(module);
+                        diagnostics.extend(module_diagnostics);
+                    }
+                },
+                _ => {}
+            }
         }
+
+        (package, diagnostics)
     }
 
     /// Creates a configured directory walker for Python file discovery.
@@ -233,91 +246,17 @@ impl<'proj> StandardDiscoverer<'proj> {
             })
             .build()
     }
+}
 
-    /// Processes a single directory entry (file or subdirectory).
-    fn process_directory_entry(
-        &self,
-        py: Python<'_>,
-        package: &mut DiscoveredPackage,
-        discovery_diagnostics: &mut Vec<Diagnostic>,
-        configuration_only: bool,
-        entry: &ignore::DirEntry,
-        current_path: &SystemPathBuf,
-    ) {
-        match entry.file_type() {
-            Some(file_type) if file_type.is_dir() => {
-                self.process_subdirectory(
-                    py,
-                    package,
-                    discovery_diagnostics,
-                    configuration_only,
-                    current_path,
-                );
-            }
-            Some(file_type) if file_type.is_file() => {
-                self.process_python_file(
-                    py,
-                    package,
-                    discovery_diagnostics,
-                    configuration_only,
-                    current_path,
-                );
-            }
-            _ => {}
-        }
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DiscoveryMode {
+    All,
+    ConfigurationOnly,
+}
 
-    /// Processes a subdirectory by recursively discovering its contents.
-    fn process_subdirectory(
-        &self,
-        py: Python<'_>,
-        package: &mut DiscoveredPackage,
-        discovery_diagnostics: &mut Vec<Diagnostic>,
-        configuration_only: bool,
-        current_path: &SystemPathBuf,
-    ) {
-        if configuration_only {
-            return;
-        }
-
-        let mut subpackage = DiscoveredPackage::new(current_path.clone());
-        self.discover_directory(
-            py,
-            &mut subpackage,
-            discovery_diagnostics,
-            configuration_only,
-        );
-        package.add_package(subpackage);
-    }
-
-    /// Processes a Python file based on its type (test or configuration).
-    fn process_python_file(
-        &self,
-        py: Python<'_>,
-        package: &mut DiscoveredPackage,
-        discovery_diagnostics: &mut Vec<Diagnostic>,
-        configuration_only: bool,
-        current_path: &SystemPathBuf,
-    ) {
-        match ModuleType::from_path(current_path) {
-            ModuleType::Test => {
-                if configuration_only {
-                    return;
-                }
-                if let Some(module) =
-                    self.discover_test_file(py, current_path, discovery_diagnostics, false)
-                {
-                    package.add_module(module);
-                }
-            }
-            ModuleType::Configuration => {
-                if let Some(module) =
-                    self.discover_test_file(py, current_path, discovery_diagnostics, true)
-                {
-                    package.add_configuration_module(module);
-                }
-            }
-        }
+impl DiscoveryMode {
+    pub const fn is_configuration_only(self) -> bool {
+        matches!(self, Self::ConfigurationOnly)
     }
 }
 

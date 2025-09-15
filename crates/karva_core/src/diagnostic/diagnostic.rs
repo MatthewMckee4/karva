@@ -89,10 +89,9 @@ impl Diagnostic {
 
     #[must_use]
     pub(crate) fn invalid_path_error(error: &TestPathError) -> Self {
-        let path = error.path().display().to_string();
         Self::new(
             Some(format!("{error}")),
-            Some(path),
+            None,
             None,
             DiagnosticSeverity::Error(DiagnosticErrorType::Known("invalid-path".to_string())),
         )

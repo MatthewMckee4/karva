@@ -2590,3 +2590,42 @@ def test_1():
 
     Ok(())
 }
+
+#[test]
+fn test_text_file_in_directory() -> anyhow::Result<()> {
+    let case = IntegrationTestEnv::with_files([
+        ("test_sample.py", "def test_sample(): assert True"),
+        ("random.txt", "pass"),
+    ])?;
+
+    run_with_path_and_snapshot!(case, @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test result: ok. 1 passed; 0 failed; 0 skipped
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}
+
+#[test]
+fn test_just_text_file_() -> anyhow::Result<()> {
+    let case = IntegrationTestEnv::with_file("random.txt", "pass")?;
+
+    assert_cmd_snapshot!(
+        case.command_with_args(&["random.txt"]),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    error[invalid-path]: Path `<temp_dir>/random.txt` has a wrong file extension
+
+    test result: ok. 0 passed; 0 failed; 0 skipped
+
+    ----- stderr -----
+    ");
+
+    Ok(())
+}

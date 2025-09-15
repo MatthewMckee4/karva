@@ -87,6 +87,10 @@ impl DiscoveredPackage {
             return;
         }
 
+        if module.is_empty() {
+            return;
+        }
+
         if module.path().parent().is_some_and(|p| p == self.path()) {
             if let Some(existing_module) = self.modules.get_mut(module.path()) {
                 existing_module.update(module);
@@ -375,126 +379,5 @@ impl PartialEq<String> for DisplayDiscoveredPackage<'_> {
 impl PartialEq<&str> for DisplayDiscoveredPackage<'_> {
     fn eq(&self, other: &&str) -> bool {
         self.to_string() == *other
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use insta::assert_snapshot;
-    use karva_project::{project::Project, testing::TestEnv};
-
-    use super::*;
-
-    #[test]
-    fn test_update_package() {
-        let env = TestEnv::with_files([("<test>/test_1.py", "")]);
-
-        let tests_dir = env.mapped_path("<test>").unwrap();
-
-        let project = Project::new(env.cwd(), vec![tests_dir.clone()]);
-
-        let mut package = DiscoveredPackage::new(env.cwd());
-
-        package.add_module(DiscoveredModule::new(
-            &project,
-            &tests_dir.join("test_1.py"),
-            ModuleType::Test,
-        ));
-
-        assert_snapshot!(package.display().to_string(), @r"
-        └── <temp_dir>/<test>/
-            └── <test>.test_1
-                ├── test_cases []
-                └── fixtures []
-        ");
-    }
-
-    #[test]
-    fn test_add_module_different_start_path() {
-        let env = TestEnv::with_files([("<test>/test_1.py", ""), ("<test2>/test_1.py", "")]);
-
-        let tests_dir = env.mapped_path("<test>").unwrap();
-        let tests_dir_2 = env.mapped_path("<test2>").unwrap();
-
-        let project = Project::new(env.cwd(), vec![tests_dir.clone(), tests_dir_2.clone()]);
-
-        let mut package = DiscoveredPackage::new(tests_dir.clone());
-
-        let module =
-            DiscoveredModule::new(&project, &tests_dir.join("test_1.py"), ModuleType::Test);
-
-        package.add_module(module);
-
-        assert_snapshot!(package.display().to_string(), @r"
-        └── <test>.test_1
-            ├── test_cases []
-            └── fixtures []
-        ");
-    }
-
-    #[test]
-    fn test_add_module_already_in_package() {
-        let env = TestEnv::with_files([("<test>/test_1.py", "")]);
-
-        let mapped_test_dir = env.mapped_path("<test>").unwrap();
-
-        let project = Project::new(env.cwd(), vec![mapped_test_dir.clone()]);
-
-        let mut package = DiscoveredPackage::new(env.cwd());
-
-        let module = DiscoveredModule::new(
-            &project,
-            &mapped_test_dir.join("test_1.py"),
-            ModuleType::Test,
-        );
-
-        package.add_module(module);
-
-        let module_1 = DiscoveredModule::new(
-            &project,
-            &mapped_test_dir.join("test_1.py"),
-            ModuleType::Test,
-        );
-
-        package.add_module(module_1);
-
-        assert_snapshot!(package.display().to_string(), @r"
-        └── <temp_dir>/<test>/
-            └── <test>.test_1
-                ├── test_cases []
-                └── fixtures []
-        ");
-    }
-
-    #[test]
-    fn test_add_configuration_module() {
-        let env = TestEnv::with_files([("<test>/conftest.py", "")]);
-
-        let mapped_dir = env.mapped_path("<test>").unwrap();
-
-        let conftest_path = mapped_dir.join("conftest.py");
-
-        let project = Project::new(env.cwd(), vec![env.cwd()]);
-
-        let mut package = DiscoveredPackage::new(env.cwd());
-
-        let module = DiscoveredModule::new(&project, &conftest_path, ModuleType::Configuration);
-
-        package.add_module(module);
-
-        let test_package = package.get_package(mapped_dir).unwrap();
-
-        assert_snapshot!(package.display().to_string(), @r"
-        └── <temp_dir>/<test>/
-            └── <test>.conftest
-                ├── test_cases []
-                └── fixtures []
-        ");
-
-        assert_eq!(test_package.configuration_modules().len(), 1);
-        assert_eq!(
-            test_package.configuration_modules()[0].path(),
-            &conftest_path
-        );
     }
 }

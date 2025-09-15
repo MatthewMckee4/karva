@@ -15,8 +15,9 @@ pub(crate) struct DiscoveredModule {
     path: SystemPathBuf,
     test_functions: Vec<TestFunction>,
     fixtures: Vec<Fixture>,
-    r#type: ModuleType,
+    type_: ModuleType,
     name: String,
+    source_text: String,
 }
 
 impl DiscoveredModule {
@@ -26,8 +27,9 @@ impl DiscoveredModule {
             path: path.clone(),
             test_functions: Vec::new(),
             fixtures: Vec::new(),
-            r#type: module_type,
+            type_: module_type,
             name: module_name(project.cwd(), path).expect("Module has no name"),
+            source_text: std::fs::read_to_string(path).expect("Failed to read source file"),
         }
     }
 
@@ -43,7 +45,7 @@ impl DiscoveredModule {
 
     #[must_use]
     pub(crate) const fn module_type(&self) -> ModuleType {
-        self.r#type
+        self.type_
     }
 
     #[must_use]
@@ -51,8 +53,11 @@ impl DiscoveredModule {
         self.test_functions.iter().collect()
     }
 
-    pub(crate) fn set_test_functions(&mut self, test_cases: Vec<TestFunction>) {
-        self.test_functions = test_cases;
+    pub(crate) fn with_test_functions(self, test_functions: Vec<TestFunction>) -> Self {
+        Self {
+            test_functions,
+            ..self
+        }
     }
 
     pub(crate) fn filter_test_functions(&mut self, name: &str) {
@@ -73,8 +78,8 @@ impl DiscoveredModule {
         self.fixtures.iter().collect()
     }
 
-    pub(crate) fn set_fixtures(&mut self, fixtures: Vec<Fixture>) {
-        self.fixtures = fixtures;
+    pub(crate) fn with_fixtures(self, fixtures: Vec<Fixture>) -> Self {
+        Self { fixtures, ..self }
     }
 
     #[must_use]
@@ -83,14 +88,14 @@ impl DiscoveredModule {
     }
 
     #[must_use]
-    pub(crate) fn source_text(&self) -> String {
-        std::fs::read_to_string(self.path()).expect("Failed to read source file")
+    pub(crate) const fn source_text(&self) -> &String {
+        &self.source_text
     }
 
     #[must_use]
     pub(crate) fn line_index(&self) -> LineIndex {
         let source_text = self.source_text();
-        LineIndex::from_source_text(&source_text)
+        LineIndex::from_source_text(source_text)
     }
 
     pub(crate) fn update(&mut self, module: Self) {
@@ -183,9 +188,8 @@ pub(crate) enum ModuleType {
     Configuration,
 }
 
-impl ModuleType {
-    #[must_use]
-    pub(crate) fn from_path(path: &SystemPathBuf) -> Self {
+impl From<&SystemPathBuf> for ModuleType {
+    fn from(path: &SystemPathBuf) -> Self {
         if path
             .file_name()
             .is_some_and(|file_name| file_name == "conftest.py")

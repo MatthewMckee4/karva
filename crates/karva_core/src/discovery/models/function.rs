@@ -86,7 +86,7 @@ impl TestFunction {
         let line_index = module.line_index();
         let source_text = module.source_text();
         let start = self.function_definition.range.start();
-        let line_number = line_index.line_column(start, &source_text);
+        let line_number = line_index.line_column(start, source_text);
         format!("{}:{}", module.path().display(), line_number.line)
     }
 
