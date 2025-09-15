@@ -201,12 +201,6 @@ impl From<&SystemPathBuf> for ModuleType {
     }
 }
 
-impl From<SystemPathBuf> for ModuleType {
-    fn from(path: SystemPathBuf) -> Self {
-        Self::from(&path)
-    }
-}
-
 #[cfg(test)]
 pub(crate) struct DisplayDiscoveredModule<'proj> {
     module: &'proj DiscoveredModule,
