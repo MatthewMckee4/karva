@@ -165,7 +165,7 @@ impl Fixture {
                 .function
                 .bind(py)
                 .call(args.clone(), None)?
-                .downcast_into()?;
+                .cast_into()?;
 
             let finalizer = Finalizer::new(self.name().to_string(), generator.clone().unbind());
             fixture_manager.insert_finalizer(finalizer, self.scope());
@@ -274,7 +274,7 @@ impl Fixture {
     ) -> Result<Option<Self>, String> {
         let Ok(py_function) = function
             .clone()
-            .downcast_into::<python::FixtureFunctionDefinition>()
+            .cast_into::<python::FixtureFunctionDefinition>()
         else {
             return Ok(None);
         };
@@ -437,7 +437,7 @@ mod tests {
 
     #[test]
     fn test_resolve_dynamic_scope() {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let func = py.eval(c"lambda **kwargs: 'session'", None, None).unwrap();
 
             let resolved = resolve_dynamic_scope(py, &func, "test_fixture").unwrap();
@@ -447,7 +447,7 @@ mod tests {
 
     #[test]
     fn test_resolve_dynamic_scope_with_fixture_name() {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let func = py.eval(
                 c"lambda **kwargs: 'session' if kwargs.get('fixture_name') == 'important_fixture' else 'function'",
                 None,
@@ -464,7 +464,7 @@ mod tests {
 
     #[test]
     fn test_resolve_dynamic_scope_invalid_return() {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let func = py
                 .eval(c"lambda **kwargs: 'invalid_scope'", None, None)
                 .unwrap();
@@ -477,7 +477,7 @@ mod tests {
 
     #[test]
     fn test_resolve_dynamic_scope_exception() {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let func = py.eval(c"lambda **kwargs: 1/0", None, None).unwrap();
 
             let result = resolve_dynamic_scope(py, &func, "test_fixture");

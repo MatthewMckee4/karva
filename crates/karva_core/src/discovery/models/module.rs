@@ -274,7 +274,7 @@ mod tests {
         let mapped_dir = env.mapped_path("<test>").unwrap();
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let test_module = session.get_module(&mapped_dir.join("test.py")).unwrap();
 

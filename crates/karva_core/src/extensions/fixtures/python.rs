@@ -6,7 +6,7 @@ use pyo3::{
 #[pyclass]
 pub struct FixtureFunctionMarker {
     #[pyo3(get, set)]
-    pub scope: PyObject,
+    pub scope: Py<PyAny>,
     #[pyo3(get, set)]
     pub name: Option<String>,
     #[pyo3(get, set)]
@@ -20,7 +20,7 @@ impl FixtureFunctionMarker {
     #[must_use]
     pub fn new(
         py: Python<'_>,
-        scope: Option<PyObject>,
+        scope: Option<Py<PyAny>>,
         name: Option<String>,
         auto_use: bool,
     ) -> Self {
@@ -37,7 +37,7 @@ impl FixtureFunctionMarker {
     pub fn __call__(
         &self,
         py: Python<'_>,
-        function: PyObject,
+        function: Py<PyAny>,
     ) -> PyResult<FixtureFunctionDefinition> {
         let func_name = if let Some(ref name) = self.name {
             name.clone()
@@ -62,17 +62,17 @@ pub struct FixtureFunctionDefinition {
     #[pyo3(get, set)]
     pub name: String,
     #[pyo3(get, set)]
-    pub scope: PyObject,
+    pub scope: Py<PyAny>,
     #[pyo3(get, set)]
     pub auto_use: bool,
-    pub function: PyObject,
+    pub function: Py<PyAny>,
 }
 
 #[pymethods]
 impl FixtureFunctionDefinition {
     #[new]
     #[must_use]
-    pub const fn new(function: PyObject, name: String, scope: PyObject, auto_use: bool) -> Self {
+    pub const fn new(function: Py<PyAny>, name: String, scope: Py<PyAny>, auto_use: bool) -> Self {
         Self {
             name,
             scope,
@@ -87,7 +87,7 @@ impl FixtureFunctionDefinition {
         py: Python<'_>,
         args: &Bound<'_, PyTuple>,
         kwargs: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         self.function.call(py, args, kwargs)
     }
 }
@@ -96,11 +96,11 @@ impl FixtureFunctionDefinition {
 #[pyo3(signature = (func=None, *, scope=None, name=None, auto_use=false))]
 pub fn fixture_decorator(
     py: Python<'_>,
-    func: Option<PyObject>,
-    scope: Option<PyObject>,
+    func: Option<Py<PyAny>>,
+    scope: Option<Py<PyAny>>,
     name: Option<&str>,
     auto_use: bool,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let marker = FixtureFunctionMarker::new(py, scope, name.map(String::from), auto_use);
     if let Some(f) = func {
         let fixture_def = marker.__call__(py, f)?;
