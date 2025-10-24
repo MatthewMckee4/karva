@@ -33,7 +33,19 @@ To run the cli on a test file, run:
 cargo run test tests/test_add.py
 ```
 
-For many common commands, you can use the `just` tool to run them.
+Annoyingly, you need a global python with pytest installed.
+
+We have had many issues with local development using `uv` virtual environments with pytest installed, but this does not always work well.
+
+So make sure you have python installed on your system, and pytest globally installed for that python version too.
+
+To verify you have everything installed correctly, run:
+
+```bash
+python -c "import pytest;print('pytest installed')"
+```
+
+Then you can run the tests with:
 
 ```bash
 just test
