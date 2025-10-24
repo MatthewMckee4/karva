@@ -17,7 +17,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use karva_project::testing::find_karva_wheel;
+use karva_test::find_karva_wheel;
 use ruff_python_ast::PythonVersion;
 
 fn global_venv_path() -> PathBuf {

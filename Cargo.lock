@@ -958,6 +958,7 @@ dependencies = [
  "criterion",
  "karva_core",
  "karva_project",
+ "karva_test",
  "ruff_python_ast",
  "serde",
  "serde_json",
@@ -982,6 +983,7 @@ dependencies = [
  "insta-cmd",
  "karva_core",
  "karva_project",
+ "karva_test",
  "regex",
  "rstest",
  "ruff_python_trivia",
@@ -1002,6 +1004,7 @@ dependencies = [
  "indexmap",
  "insta",
  "karva_project",
+ "karva_test",
  "pyo3",
  "regex",
  "rstest",
@@ -1031,13 +1034,24 @@ dependencies = [
  "anyhow",
  "camino",
  "dunce",
+ "karva_test",
+ "rand 0.9.2",
+ "ruff_python_ast",
+ "ruff_python_trivia",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "karva_test"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "dunce",
  "insta",
  "rand 0.9.2",
  "regex",
- "ruff_python_ast",
  "ruff_python_trivia",
  "tempfile",
- "tracing-subscriber",
 ]
 
 [[package]]

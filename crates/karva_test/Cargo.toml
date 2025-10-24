@@ -1,5 +1,5 @@
 [package]
-name = "karva_project"
+name = "karva_test"
 version = "0.0.0"
 
 edition = { workspace = true }
@@ -11,16 +11,13 @@ authors = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
-camino = { workspace = true }
-ruff_python_ast = { workspace = true }
-rand = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
-ruff_python_trivia = { workspace = true }
+tempfile = { workspace = true }
+insta = { workspace = true, features = ["filters"]}
+regex = { workspace = true }
 anyhow = { workspace = true }
+ruff_python_trivia = { workspace = true }
+rand = { workspace = true }
 dunce = { workspace = true }
-
-[dev-dependencies]
-karva_test = { workspace = true }
 
 [lints]
 workspace = true

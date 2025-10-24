@@ -1,6 +1,6 @@
 use karva_project::Project;
 #[cfg(test)]
-use karva_project::testing::TestEnv;
+use karva_test::TestContext;
 
 use crate::{
     collection::TestCaseCollector,
@@ -76,7 +76,7 @@ impl TestRunner for Project {
 }
 
 #[cfg(test)]
-impl TestRunner for TestEnv {
+impl TestRunner for TestContext {
     fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
         let project = Project::new(self.cwd(), vec![self.cwd()]);
         let test_runner = StandardTestRunner::new(&project);
@@ -88,7 +88,7 @@ impl TestRunner for TestEnv {
 mod tests {
     use std::path::PathBuf;
 
-    use karva_project::{testing::TestEnv, utils::module_name};
+    use karva_project::utils::module_name;
     use rstest::rstest;
 
     use super::*;
@@ -116,7 +116,7 @@ mod tests {
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
      {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/conftest.py",
                 r"
@@ -144,7 +144,7 @@ def z(x, y):
 
     #[test]
     fn test_runner_given_nested_path() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/conftest.py",
                 r"
@@ -164,7 +164,7 @@ def x():
 
     #[test]
     fn test_parametrize_with_fixture() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_file.py",
             r#"
 import karva
@@ -192,7 +192,7 @@ def test_parametrize_with_fixture(a, fixture_value):
 
     #[test]
     fn test_parametrize_with_fixture_parametrize_priority() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_file.py",
             r#"import karva
 
@@ -218,7 +218,7 @@ def test_parametrize_with_fixture(a):
 
     #[test]
     fn test_parametrize_two_decorators() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_file.py",
             r#"import karva
 
@@ -242,7 +242,7 @@ def test_function(a: int, b: int):
 
     #[test]
     fn test_parametrize_three_decorators() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_file.py",
             r#"
 import karva
@@ -268,7 +268,7 @@ def test_function(a: int, b: int, c: int):
 
     #[test]
     fn test_fixture_generator() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_file.py",
             r"
 import karva
@@ -293,7 +293,7 @@ def test_fixture_generator(fixture_generator):
 
     #[rstest]
     fn test_fixture_generator_with_second_fixture(#[values("karva", "pytest")] framework: &str) {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_file.py",
             &format!(
                 r"
@@ -324,7 +324,7 @@ def test_fixture_generator(fixture_generator):
 
     #[test]
     fn test_fixture_generator_two_yields() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_file.py",
             r"import karva
 
@@ -364,7 +364,7 @@ def test_fixture_generator(fixture_generator):
 
     #[test]
     fn test_fixture_generator_fail_in_teardown() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_file.py",
             r#"import karva
 
@@ -403,7 +403,7 @@ def test_fixture_generator(fixture_generator):
 
     #[test]
     fn test_fixture_with_name_parameter() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_file.py",
             r#"import karva
 
@@ -427,7 +427,7 @@ def test_fixture_with_name_parameter(fixture_name):
 
     #[test]
     fn test_fixture_is_different_in_different_functions() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_file.py",
             r"import karva
 
@@ -462,7 +462,7 @@ def test_fixture_2(fixture):
 
     #[test]
     fn test_single_function() {
-        let env = TestEnv::with_files([(
+        let env = TestContext::with_files([(
             "<test>/test_file.py",
             r"
             def test_1(): pass
@@ -494,7 +494,7 @@ def test_fixture_2(fixture):
 
     #[test]
     fn test_single_function_shadowed_by_file() {
-        let env = TestEnv::with_files([(
+        let env = TestContext::with_files([(
             "<test>/test_file.py",
             r"
             def test_1(): pass
@@ -528,7 +528,7 @@ def test_fixture_2(fixture):
 
     #[test]
     fn test_single_function_shadowed_by_directory() {
-        let env = TestEnv::with_files([(
+        let env = TestContext::with_files([(
             "<test>/test_file.py",
             r"
             def test_1(): pass
@@ -562,7 +562,7 @@ def test_fixture_2(fixture):
 
     #[test]
     fn test_fixture_from_current_package_session_scope() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -586,7 +586,7 @@ def x():
 
     #[test]
     fn test_fixture_from_current_package_function_scope() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -610,7 +610,7 @@ def x():
 
     #[test]
     fn test_finalizer_from_current_package_session_scope() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -650,7 +650,7 @@ def test_2(x):
 
     #[test]
     fn test_finalizer_from_current_package_function_scope() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -690,7 +690,7 @@ def test_2(x):
 
     #[test]
     fn test_discover_pytest_fixture() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -715,7 +715,7 @@ def x():
 
     #[rstest]
     fn test_dynamic_fixture_scope_session_scope(#[values("pytest", "karva")] framework: &str) {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_dynamic_scope.py",
             &format!(
                 r#"
@@ -754,7 +754,7 @@ def test_2(x_session):
 
     #[rstest]
     fn test_dynamic_fixture_scope_function_scope(#[values("pytest", "karva")] framework: &str) {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_dynamic_scope.py",
             &format!(
                 r#"
@@ -793,7 +793,7 @@ def test_2(x_function):
 
     #[test]
     fn test_use_fixtures_single_fixture() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_use_fixtures.py",
             r#"
 import karva
@@ -821,7 +821,7 @@ def test_with_use_fixture():
 
     #[test]
     fn test_use_fixtures_multiple_fixtures() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_use_fixtures.py",
             r#"
 import karva
@@ -852,7 +852,7 @@ def test_with_multiple_use_fixtures():
 
     #[test]
     fn test_use_fixtures_combined_with_parameter_fixtures() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_use_fixtures.py",
             r#"
 import karva
@@ -882,7 +882,7 @@ def test_combined_fixtures(param_fixture):
 
     #[test]
     fn test_use_fixtures_with_parametrize() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_use_fixtures.py",
             r#"
 import karva
@@ -914,7 +914,7 @@ def test_use_fixtures_with_parametrize(value):
 
     #[test]
     fn test_use_fixtures_multiple_decorators() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_use_fixtures.py",
             r#"
 import karva
@@ -946,7 +946,7 @@ def test_multiple_use_fixtures_decorators():
 
     #[test]
     fn test_use_fixtures_fixture_not_found_but_not_used() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_use_fixtures.py",
             r#"
 import karva
@@ -968,7 +968,7 @@ def test_missing_fixture():
 
     #[test]
     fn test_use_fixtures_generator_fixture() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_use_fixtures.py",
             r#"
 import karva
@@ -996,7 +996,7 @@ def test_use_fixtures_with_generator():
 
     #[test]
     fn test_use_fixtures_session_scope() {
-        let env = TestEnv::with_files([(
+        let env = TestContext::with_files([(
             "<test>/test_use_fixtures.py",
             r#"
 import karva
@@ -1029,7 +1029,7 @@ def test_session_2():
 
     #[test]
     fn test_use_fixtures_mixed_with_normal_fixtures() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/conftest.py",
                 r#"
@@ -1067,7 +1067,7 @@ def test_mixed_fixtures(shared_fixture):
 
     #[test]
     fn test_pytest_mark_usefixtures_single_fixture() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_pytest_use_fixtures.py",
             r#"
 import pytest
@@ -1095,7 +1095,7 @@ def test_with_pytest_use_fixture():
 
     #[test]
     fn test_pytest_mark_usefixtures_multiple_fixtures() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_pytest_use_fixtures.py",
             r#"
 import pytest
@@ -1126,7 +1126,7 @@ def test_with_multiple_pytest_use_fixtures():
 
     #[test]
     fn test_pytest_mark_usefixtures_with_parametrize() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_pytest_use_fixtures.py",
             r#"
 import pytest
@@ -1158,7 +1158,7 @@ def test_pytest_use_fixtures_with_parametrize(value):
 
     #[test]
     fn test_pytest_mark_usefixtures_session_scope() {
-        let env = TestEnv::with_files([(
+        let env = TestContext::with_files([(
             "<test>/test_pytest_use_fixtures.py",
             r#"
 import pytest
@@ -1191,7 +1191,7 @@ def test_pytest_session_2():
 
     #[test]
     fn test_fixture_override_in_test_modules() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -1243,7 +1243,7 @@ def test_username(username):
 
     #[test]
     fn test_fixtures_given_by_decorator() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_fixtures_given_by_decorator.py",
             r"
 import functools
@@ -1273,7 +1273,7 @@ def test_fixtures_given_by_decorator(a):
 
     #[test]
     fn test_fixtures_given_by_decorator_and_fixture() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_fixtures_given_by_decorator.py",
             r"
 import karva
@@ -1309,7 +1309,7 @@ def test_fixtures_given_by_decorator(a, b):
 
     #[test]
     fn test_fixtures_given_by_decorator_and_parametrize() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_fixtures_given_by_decorator.py",
             r#"
 import karva
@@ -1344,7 +1344,7 @@ def test_fixtures_given_by_decorator(a, b):
 
     #[test]
     fn test_fixtures_given_by_decorator_and_parametrize_and_fixture() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_fixtures_given_by_decorator.py",
             r#"
 import karva
@@ -1384,7 +1384,7 @@ def test_fixtures_given_by_decorator(a, b, c):
 
     #[test]
     fn test_fixtures_given_by_decorator_one_missing() {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_fixtures_given_by_decorator.py",
             r"
 import functools
@@ -1414,7 +1414,7 @@ def test_fixtures_given_by_decorator(a, b):
 
     #[rstest]
     fn test_function_scope_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_function_scope_auto_use_fixture.py",
             format!(
                 r#"
@@ -1455,7 +1455,7 @@ def test_something_else():
         #[values("pytest", "karva")] framework: &str,
         #[values("module", "package", "session")] scope: &str,
     ) {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_function_scope_auto_use_fixture.py",
             &format!(
                 r#"
@@ -1492,7 +1492,7 @@ def test_something_else():
 
     #[rstest]
     fn test_skip(#[values("pytest", "karva")] framework: &str) {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_skip.py",
             &format!(
                 r"
@@ -1518,7 +1518,7 @@ def test_something_else():
 
     #[rstest]
     fn test_skip_keyword(#[values("pytest", "karva")] framework: &str) {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_skip.py",
             &format!(
                 r"
@@ -1543,7 +1543,7 @@ def test_something_else():
 
     #[rstest]
     fn test_skip_functionality_no_reason(#[values("pytest", "karva")] framework: &str) {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_skip.py",
             &format!(
                 r"
@@ -1569,7 +1569,7 @@ def test_something_else():
 
     #[rstest]
     fn test_skip_reason_function_call(#[values("pytest", "karva")] framework: &str) {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_skip.py",
             &format!(
                 r"
@@ -1595,7 +1595,7 @@ def test_something_else():
 
     #[rstest]
     fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_nested_generator_fixture.py",
             &format!(
                 r"
@@ -1629,7 +1629,7 @@ def test_something_else():
 
     #[rstest]
     fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &str) {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_nested_generator_fixture.py",
             &format!(
                 r"
@@ -1663,7 +1663,7 @@ def test_something_else():
 
     #[rstest]
     fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
-        let env = TestEnv::with_file(
+        let env = TestContext::with_file(
             "<test>/test_nested_generator_fixture.py",
             &format!(
                 r#"

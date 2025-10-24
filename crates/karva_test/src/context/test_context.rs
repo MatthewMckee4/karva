@@ -9,48 +9,16 @@ use anyhow::Context;
 use insta::{Settings, internals::SettingsBindDropGuard};
 use tempfile::TempDir;
 
-use crate::project::Project;
+use crate::{find_karva_wheel, utils::tempdir_filter};
 
-/// Find the karva wheel in the target/wheels directory.
-/// Returns the path to the wheel file.
-pub fn find_karva_wheel() -> anyhow::Result<PathBuf> {
-    let karva_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|p| p.parent())
-        .ok_or_else(|| anyhow::anyhow!("Could not determine KARVA_ROOT"))?
-        .to_path_buf();
-
-    let wheels_dir = karva_root.join("target").join("wheels");
-
-    let entries = std::fs::read_dir(&wheels_dir)
-        .with_context(|| format!("Could not read wheels directory: {}", wheels_dir.display()))?;
-
-    for entry in entries {
-        let entry = entry?;
-        let file_name = entry.file_name();
-        if let Some(name) = file_name.to_str() {
-            if name.starts_with("karva-")
-                && std::path::Path::new(name)
-                    .extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("whl"))
-            {
-                return Ok(entry.path());
-            }
-        }
-    }
-
-    anyhow::bail!("Could not find karva wheel in target/wheels directory");
-}
-
-pub struct TestEnv {
+pub struct TestContext {
     _temp_dir: TempDir,
     project_dir_path: PathBuf,
     mapped_paths: HashMap<String, PathBuf>,
-
     _settings_scope: SettingsBindDropGuard,
 }
 
-impl TestEnv {
+impl TestContext {
     #[must_use]
     pub fn new() -> Self {
         let temp_dir = TempDir::with_prefix("karva-test-env").unwrap();
@@ -159,13 +127,13 @@ impl TestEnv {
     }
 
     pub fn with_files<'a>(files: impl IntoIterator<Item = (&'a str, &'a str)>) -> Self {
-        let mut case = Self::new();
+        let mut case = Self::default();
         case.write_files(files).unwrap();
         case
     }
 
     pub fn with_file(path: impl AsRef<Path>, content: &str) -> Self {
-        let mut case = Self::new();
+        let mut case = Self::default();
         case.write_file(path, content).unwrap();
         case
     }
@@ -224,24 +192,10 @@ impl TestEnv {
     pub fn mapped_path(&self, path: &str) -> Option<&PathBuf> {
         self.mapped_paths.get(path)
     }
-
-    #[must_use]
-    pub fn relative_path(&self, path: &Path) -> PathBuf {
-        PathBuf::from(path.strip_prefix(self.cwd()).unwrap())
-    }
-
-    #[must_use]
-    pub fn project(&self) -> Project {
-        Project::new(self.cwd(), vec![self.cwd()])
-    }
 }
 
-impl Default for TestEnv {
+impl Default for TestContext {
     fn default() -> Self {
         Self::new()
     }
-}
-
-fn tempdir_filter(path: &Path) -> String {
-    format!(r"{}\\?/?", regex::escape(path.to_str().unwrap()))
 }

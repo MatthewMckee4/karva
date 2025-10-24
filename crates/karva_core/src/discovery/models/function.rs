@@ -262,14 +262,15 @@ impl std::fmt::Debug for TestFunction {
 #[cfg(test)]
 mod tests {
 
-    use karva_project::{project::Project, testing::TestEnv};
+    use karva_project::project::Project;
+    use karva_test::TestContext;
     use pyo3::prelude::*;
 
     use crate::{discovery::StandardDiscoverer, extensions::fixtures::UsesFixtures};
 
     #[test]
     fn test_case_construction_and_getters() {
-        let env = TestEnv::with_files([("<test>/test.py", "def test_function(): pass")]);
+        let env = TestContext::with_files([("<test>/test.py", "def test_function(): pass")]);
         let path = env.create_file("test.py", "def test_function(): pass");
 
         let project = Project::new(env.cwd(), vec![path]);
@@ -289,7 +290,7 @@ mod tests {
     #[test]
     fn test_case_with_fixtures() {
         Python::attach(|py| {
-            let env = TestEnv::with_files([(
+            let env = TestContext::with_files([(
                 "<test>/test.py",
                 "def test_with_fixtures(fixture1, fixture2): pass",
             )]);
@@ -313,7 +314,7 @@ mod tests {
 
     #[test]
     fn test_case_display() {
-        let env = TestEnv::with_files([("<test>/test.py", "def test_display(): pass")]);
+        let env = TestContext::with_files([("<test>/test.py", "def test_display(): pass")]);
 
         let mapped_dir = env.mapped_path("<test>").unwrap();
 

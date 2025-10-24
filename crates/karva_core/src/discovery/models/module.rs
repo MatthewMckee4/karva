@@ -265,14 +265,15 @@ impl PartialEq<&str> for DisplayDiscoveredModule<'_> {
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
-    use karva_project::{project::Project, testing::TestEnv};
+    use karva_project::project::Project;
+    use karva_test::TestContext;
     use pyo3::prelude::*;
 
     use crate::discovery::StandardDiscoverer;
 
     #[test]
     fn test_display_discovered_module() {
-        let env = TestEnv::with_files([("<test>/test.py", "def test_display(): pass")]);
+        let env = TestContext::with_files([("<test>/test.py", "def test_display(): pass")]);
 
         let mapped_dir = env.mapped_path("<test>").unwrap();
 
