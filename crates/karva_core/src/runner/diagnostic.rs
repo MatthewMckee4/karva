@@ -174,3 +174,103 @@ impl std::fmt::Display for DisplayRunDiagnostics<'_> {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    macro_rules! assert_snapshot_filtered {
+        ($value:expr, @$snapshot:literal) => {
+            insta::with_settings!({
+                filters => vec![
+                    (r"\x1b\[\d+m", ""),
+                    (r"(\s|\()(\d+m )?(\d+\.)?\d+(ms|s)", "$1[TIME]"),
+                ]
+            }, {
+                insta::assert_snapshot!($value, @$snapshot);
+            });
+        };
+    }
+
+    #[test]
+    fn test_display_all_passed() {
+        let mut diagnostics = RunDiagnostics::default();
+        diagnostics.stats_mut().add_passed();
+        diagnostics.stats_mut().add_passed();
+        diagnostics.stats_mut().add_passed();
+
+        let output = diagnostics.display().to_string();
+        assert_snapshot_filtered!(output, @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+    }
+
+    #[test]
+    fn test_display_with_failures() {
+        let mut diagnostics = RunDiagnostics::default();
+        diagnostics.stats_mut().add_passed();
+        diagnostics.stats_mut().add_failed();
+        diagnostics.stats_mut().add_failed();
+
+        let output = diagnostics.display().to_string();
+        assert_snapshot_filtered!(output, @"test result: FAILED. 1 passed; 2 failed; 0 skipped; finished in [TIME]");
+    }
+
+    #[test]
+    fn test_display_with_skipped() {
+        let mut diagnostics = RunDiagnostics::default();
+        diagnostics.stats_mut().add_passed();
+        diagnostics.stats_mut().add_skipped();
+        diagnostics.stats_mut().add_skipped();
+
+        let output = diagnostics.display().to_string();
+        assert_snapshot_filtered!(output, @"test result: ok. 1 passed; 0 failed; 2 skipped; finished in [TIME]");
+    }
+
+    #[test]
+    fn test_display_mixed_results() {
+        let mut diagnostics = RunDiagnostics::default();
+        diagnostics.stats_mut().add_passed();
+        diagnostics.stats_mut().add_passed();
+        diagnostics.stats_mut().add_failed();
+        diagnostics.stats_mut().add_skipped();
+
+        let output = diagnostics.display().to_string();
+        assert_snapshot_filtered!(output, @"test result: FAILED. 2 passed; 1 failed; 1 skipped; finished in [TIME]");
+    }
+
+    #[test]
+    fn test_display_no_tests() {
+        let diagnostics = RunDiagnostics::default();
+
+        let output = diagnostics.display().to_string();
+        assert_snapshot_filtered!(output, @"test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]");
+    }
+
+    #[test]
+    fn test_diagnostic_stats_totals() {
+        let mut stats = DiagnosticStats::default();
+        stats.add_passed();
+        stats.add_passed();
+        stats.add_failed();
+        stats.add_skipped();
+
+        assert_eq!(stats.total(), 4);
+        assert_eq!(stats.passed(), 2);
+        assert_eq!(stats.failed(), 1);
+        assert_eq!(stats.skipped(), 1);
+        assert!(!stats.is_success());
+    }
+
+    #[test]
+    fn test_run_diagnostics_update() {
+        let mut diagnostics1 = RunDiagnostics::default();
+        diagnostics1.stats_mut().add_passed();
+
+        let mut diagnostics2 = RunDiagnostics::default();
+        diagnostics2.stats_mut().add_failed();
+
+        diagnostics1.update(&diagnostics2);
+
+        assert_eq!(diagnostics1.stats().passed(), 1);
+        assert_eq!(diagnostics1.stats().failed(), 1);
+    }
+}
