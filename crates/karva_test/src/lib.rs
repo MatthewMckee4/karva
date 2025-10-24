@@ -1,3 +1,5 @@
 mod context;
+mod utils;
 
-pub use context::{IntegrationTestContext, TestContext, find_karva_wheel};
+pub use context::{IntegrationTestContext, TestContext};
+pub use utils::find_karva_wheel;
