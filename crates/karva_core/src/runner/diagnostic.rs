@@ -1,13 +1,24 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
 use colored::Colorize;
 
 use crate::diagnostic::Diagnostic;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct RunDiagnostics {
     diagnostics: Vec<Diagnostic>,
     stats: DiagnosticStats,
+    start_time: Instant,
+}
+
+impl Default for RunDiagnostics {
+    fn default() -> Self {
+        Self {
+            diagnostics: Vec::new(),
+            stats: DiagnosticStats::default(),
+            start_time: Instant::now(),
+        }
+    }
 }
 
 impl RunDiagnostics {
@@ -155,10 +166,11 @@ impl std::fmt::Display for DisplayRunDiagnostics<'_> {
 
         writeln!(
             f,
-            ". {} passed; {} failed; {} skipped",
+            ". {} passed; {} failed; {} skipped; finished in {}s",
             stats.passed(),
             stats.failed(),
-            stats.skipped()
+            stats.skipped(),
+            self.diagnostics.start_time.elapsed().as_millis() / 1000
         )
     }
 }
