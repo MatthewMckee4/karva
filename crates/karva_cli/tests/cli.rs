@@ -1,77 +1,12 @@
-use std::{
-    path::{Path, PathBuf},
-    process::Command,
-};
-
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
 use karva_core::testing::setup_module;
-use karva_project::testing::TestEnv;
+use karva_test::IntegrationTestEnv;
 use rstest::rstest;
 
 #[ctor::ctor]
 pub(crate) fn setup() {
     setup_module();
-}
-
-struct IntegrationTestEnv {
-    test_env: TestEnv,
-}
-
-impl IntegrationTestEnv {
-    fn new() -> Self {
-        let test_env = TestEnv::new();
-
-        Self { test_env }
-    }
-
-    fn karva_bin(&self) -> PathBuf {
-        let venv_bin =
-            self.test_env
-                .cwd()
-                .join(".venv")
-                .join(if cfg!(windows) { "Scripts" } else { "bin" });
-        venv_bin.join(if cfg!(windows) { "karva.exe" } else { "karva" })
-    }
-
-    fn with_files<'a>(files: impl IntoIterator<Item = (&'a str, &'a str)>) -> anyhow::Result<Self> {
-        let mut case = Self::new();
-        case.write_files(files)?;
-        Ok(case)
-    }
-
-    fn with_file(path: impl AsRef<Path>, content: &str) -> anyhow::Result<Self> {
-        let mut case = Self::new();
-        case.write_file(path, content)?;
-        Ok(case)
-    }
-
-    fn write_files<'a>(
-        &mut self,
-        files: impl IntoIterator<Item = (&'a str, &'a str)>,
-    ) -> anyhow::Result<()> {
-        for (path, content) in files {
-            self.write_file(path, content)?;
-        }
-
-        Ok(())
-    }
-
-    fn write_file(&mut self, path: impl AsRef<Path>, content: &str) -> anyhow::Result<()> {
-        self.test_env.write_file(path, content)
-    }
-
-    fn command(&self) -> Command {
-        let mut command = Command::new(self.karva_bin());
-        command.current_dir(self.test_env.cwd()).arg("test");
-        command
-    }
-
-    fn command_with_args(&self, args: &[&str]) -> Command {
-        let mut command = self.command();
-        command.args(args);
-        command
-    }
 }
 
 macro_rules! run_with_path_and_snapshot {

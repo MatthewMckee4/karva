@@ -35,6 +35,7 @@ karva_cli = { path = "crates/karva_cli" }
 karva_core = { path = "crates/karva_core" }
 karva_dev = { path = "crates/karva_dev" }
 karva_project = { path = "crates/karva_project" }
+karva_test = { path = "crates/karva_test" }
 markdown = { version = "1.0.0" }
 notify = { version = "8.0.0" }
 pretty_assertions = { version = "1.4.1" }

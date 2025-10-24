@@ -1,6 +1,6 @@
 use karva_project::Project;
 #[cfg(test)]
-use karva_project::testing::TestEnv;
+use karva_test::TestEnv;
 
 use crate::{
     collection::TestCaseCollector,
@@ -88,7 +88,7 @@ impl TestRunner for TestEnv {
 mod tests {
     use std::path::PathBuf;
 
-    use karva_project::{testing::TestEnv, utils::module_name};
+    use karva_project::utils::module_name;
     use rstest::rstest;
 
     use super::*;

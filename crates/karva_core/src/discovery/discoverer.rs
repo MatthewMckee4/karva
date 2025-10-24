@@ -263,7 +263,8 @@ impl DiscoveryMode {
 mod tests {
 
     use insta::{allow_duplicates, assert_snapshot};
-    use karva_project::{project::ProjectOptions, testing::TestEnv, verbosity::VerbosityLevel};
+    use karva_project::{project::ProjectOptions, verbosity::VerbosityLevel};
+    use karva_test::TestEnv;
 
     use super::*;
 

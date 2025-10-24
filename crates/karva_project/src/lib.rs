@@ -3,7 +3,4 @@ pub mod project;
 pub mod utils;
 pub mod verbosity;
 
-#[cfg(feature = "testing")]
-pub mod testing;
-
 pub use project::Project;

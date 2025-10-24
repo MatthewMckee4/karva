@@ -141,8 +141,9 @@ impl std::fmt::Display for TestPathError {
 
 #[cfg(test)]
 mod tests {
+    use karva_test::TestEnv;
+
     use super::*;
-    use crate::testing::TestEnv;
 
     #[test]
     fn test_python_file_exact_path() {

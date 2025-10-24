@@ -262,7 +262,8 @@ impl std::fmt::Debug for TestFunction {
 #[cfg(test)]
 mod tests {
 
-    use karva_project::{project::Project, testing::TestEnv};
+    use karva_project::project::Project;
+    use karva_test::TestEnv;
     use pyo3::prelude::*;
 
     use crate::{discovery::StandardDiscoverer, extensions::fixtures::UsesFixtures};
