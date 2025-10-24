@@ -274,7 +274,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+        let (session, _) = Python::attach(|py| discoverer.discover(py));
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -297,7 +297,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+        let (session, _) = Python::attach(|py| discoverer.discover(py));
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -319,7 +319,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+        let (session, _) = Python::attach(|py| discoverer.discover(py));
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -343,7 +343,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+        let (session, _) = Python::attach(|py| discoverer.discover(py));
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -376,7 +376,7 @@ def not_a_test(): pass
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+        let (session, _) = Python::attach(|py| discoverer.discover(py));
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -393,7 +393,7 @@ def not_a_test(): pass
 
         let project = Project::new(env.cwd(), vec![SystemPathBuf::from("non_existent_path")]);
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+        let (session, _) = Python::attach(|py| discoverer.discover(py));
 
         assert_snapshot!(session.display(), @"");
         assert_eq!(session.total_test_functions(), 0);
@@ -405,7 +405,7 @@ def not_a_test(): pass
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+        let (session, _) = Python::attach(|py| discoverer.discover(py));
 
         assert_snapshot!(session.display(), @"");
         assert_eq!(session.total_test_functions(), 0);
@@ -430,7 +430,7 @@ def test_function(): pass
         ));
 
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+        let (session, _) = Python::attach(|py| discoverer.discover(py));
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -456,7 +456,7 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![path_1, path_2, path_3]);
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+        let (session, _) = Python::attach(|py| discoverer.discover(py));
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -486,7 +486,7 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![mapped_dir.clone(), path_1]);
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+        let (session, _) = Python::attach(|py| discoverer.discover(py));
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             └── <test>.test_file
@@ -509,7 +509,7 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![path_1, path_2]);
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+        let (session, _) = Python::attach(|py| discoverer.discover(py));
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             ├── <test>.test_file
@@ -534,7 +534,7 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![conftest_path]);
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+        let (session, _) = Python::attach(|py| discoverer.discover(py));
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -557,7 +557,7 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![conftest_path]);
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+        let (session, _) = Python::attach(|py| discoverer.discover(py));
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -577,7 +577,7 @@ def test_function(): pass
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+        let (session, _) = Python::attach(|py| discoverer.discover(py));
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -601,7 +601,7 @@ def test_function(): pass
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = StandardDiscoverer::new(&project);
 
-        let (session, _) = Python::with_gil(|py| discoverer.discover(py));
+        let (session, _) = Python::attach(|py| discoverer.discover(py));
 
         assert_snapshot!(session.display(), @"");
     }
@@ -624,8 +624,7 @@ def test_1(x): pass",
 
         for path in [env.cwd(), test_path] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let (session, _) =
-                Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+            let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
             allow_duplicates!(assert_snapshot!(session.display(), @r"
             └── <temp_dir>/<test>/
@@ -653,8 +652,7 @@ def test_1(x): pass",
 
         for path in [env.cwd(), test_dir, test_path] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let (session, _) =
-                Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+            let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
             allow_duplicates!(assert_snapshot!(session.display(), @r"
             └── <temp_dir>/<test>/
                 └── <temp_dir>/<test>/tests/
@@ -686,8 +684,7 @@ def x():
 
         for path in [env.cwd(), test_dir, test_path] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let (session, _) =
-                Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+            let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
             allow_duplicates!(assert_snapshot!(session.display(), @r"
             └── <temp_dir>/<test>/
@@ -761,8 +758,7 @@ def w(x, y, z):
             test_path,
         ] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let (session, _) =
-                Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+            let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
             allow_duplicates!(assert_snapshot!(session.display(), @r"
             └── <temp_dir>/<test>/
                 ├── <test>.conftest
@@ -802,7 +798,7 @@ def w(x, y, z):
 
         let project = Project::new(env.cwd(), vec![test_dir_1, test_dir_2, test_file_3]);
 
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -843,7 +839,7 @@ def root_fixture():
         let middle_dir = test_dir.join("middle_dir");
 
         let project = Project::new(env.cwd(), vec![middle_dir]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -880,7 +876,7 @@ def x():
         let test_dir = mapped_dir.join("tests");
 
         let project = Project::new(env.cwd(), vec![test_dir]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -914,7 +910,7 @@ def x():
         let conftest_path = mapped_dir.join("conftest.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let mapped_package = session.get_package(mapped_dir).unwrap();
 
@@ -950,7 +946,7 @@ def x():
 
         let project = Project::new(env.cwd(), vec![path.clone(), path]);
 
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         assert_eq!(session.total_test_functions(), 1);
     }

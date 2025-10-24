@@ -62,20 +62,20 @@ pub(crate) struct ParametrizeTag {
     arg_names: Vec<String>,
 
     /// The values associated with each argument name.
-    arg_values: Vec<Vec<PyObject>>,
+    arg_values: Vec<Vec<Py<PyAny>>>,
 }
 
 impl ParametrizeTag {
     #[must_use]
     pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let args = py_mark.getattr("args").ok()?;
-        if let Ok((arg_name, arg_values)) = args.extract::<(String, Vec<PyObject>)>() {
+        if let Ok((arg_name, arg_values)) = args.extract::<(String, Vec<Py<PyAny>>)>() {
             Some(Self {
                 arg_names: vec![arg_name],
                 arg_values: arg_values.into_iter().map(|v| vec![v]).collect(),
             })
         } else if let Ok((arg_names, arg_values)) =
-            args.extract::<(Vec<String>, Vec<Vec<PyObject>>)>()
+            args.extract::<(Vec<String>, Vec<Vec<Py<PyAny>>>)>()
         {
             Some(Self {
                 arg_names,
@@ -90,7 +90,7 @@ impl ParametrizeTag {
     ///
     /// Each [`HashMap`] is used as keyword arguments for the test function.
     #[must_use]
-    pub(crate) fn each_arg_value(&self) -> Vec<HashMap<String, PyObject>> {
+    pub(crate) fn each_arg_value(&self) -> Vec<HashMap<String, Py<PyAny>>> {
         let total_combinations = self.arg_values.len();
         let mut param_args = Vec::with_capacity(total_combinations);
 
@@ -233,8 +233,8 @@ impl Tags {
     ///
     /// This function ensures that if we have multiple parametrize tags, we combine them together.
     #[must_use]
-    pub(crate) fn parametrize_args(&self) -> Vec<HashMap<String, PyObject>> {
-        let mut param_args: Vec<HashMap<String, PyObject>> = vec![HashMap::new()];
+    pub(crate) fn parametrize_args(&self) -> Vec<HashMap<String, Py<PyAny>>> {
+        let mut param_args: Vec<HashMap<String, Py<PyAny>>> = vec![HashMap::new()];
 
         for tag in &self.inner {
             if let Tag::Parametrize(parametrize_tag) = tag {
@@ -313,7 +313,7 @@ mod tests {
 
     #[rstest]
     fn test_parametrize_args_single_arg(#[values("karva", "pytest")] framework: &str) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -352,7 +352,7 @@ def test_parametrize(arg1):
 
     #[rstest]
     fn test_parametrize_args_two_args(#[values("karva", "pytest")] framework: &str) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -391,7 +391,7 @@ def test_parametrize(arg1, arg2):
 
     #[rstest]
     fn test_parametrize_args_multiple_tags(#[values("karva", "pytest")] framework: &str) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -438,7 +438,7 @@ def test_parametrize(arg1):
 
     #[rstest]
     fn test_use_fixtures_names_single(#[values("karva", "pytest")] framework: &str) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -465,7 +465,7 @@ def test_function():
 
     #[rstest]
     fn test_use_fixtures_names_multiple(#[values("karva", "pytest")] framework: &str) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -492,7 +492,7 @@ def test_function():
 
     #[rstest]
     fn test_use_fixtures_names_multiple_tags(#[values("karva", "pytest")] framework: &str) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -526,7 +526,7 @@ def test_function():
 
     #[rstest]
     fn test_empty_parametrize_values(#[values("karva", "pytest")] framework: &str) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -553,7 +553,7 @@ def test_parametrize(arg1):
 
     #[rstest]
     fn test_mixed_parametrize_and_fixtures(#[values("karva", "pytest")] framework: &str) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -585,7 +585,7 @@ def test_function(arg1):
 
     #[rstest]
     fn test_complex_parametrize_data_types(#[values("karva", "pytest")] framework: &str) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -620,7 +620,7 @@ def test_parametrize(arg1):
 
     #[rstest]
     fn test_no_decorators(#[values("karva", "pytest")] framework: &str) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r"
@@ -643,7 +643,7 @@ def test_function():
 
     #[rstest]
     fn test_single_arg_tuple_parametrize(#[values("karva", "pytest")] framework: &str) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -677,7 +677,7 @@ def test_parametrize(arg1):
 
     #[rstest]
     fn test_skip_mark_with_reason_kwarg(#[values("pytest")] framework: &str) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -708,7 +708,7 @@ def test_skipped():
 
     #[rstest]
     fn test_skip_mark_with_positional_reason(#[values("pytest")] framework: &str) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -739,7 +739,7 @@ def test_skipped():
 
     #[rstest]
     fn test_skip_mark_without_reason(#[values("pytest")] framework: &str) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r"

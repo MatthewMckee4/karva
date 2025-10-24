@@ -12,7 +12,7 @@ use ruff_python_ast::PythonVersion;
 /// compatibility and feature detection.
 #[must_use]
 pub fn current_python_version() -> PythonVersion {
-    PythonVersion::from(Python::with_gil(|py| {
+    PythonVersion::from(Python::attach(|py| {
         let version_info = py.version_info();
         (version_info.major, version_info.minor)
     }))
@@ -110,11 +110,11 @@ fn restore_python_output<'py>(py: Python<'py>, null_file: &Bound<'py, PyAny>) ->
 /// # Arguments
 /// * `project` - Project configuration containing output preferences
 /// * `f` - Function to execute with Python access
-pub(crate) fn with_gil<F, R>(project: &Project, f: F) -> R
+pub(crate) fn attach<F, R>(project: &Project, f: F) -> R
 where
     F: for<'py> FnOnce(Python<'py>) -> R,
 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let null_file = redirect_python_output(py, project.options());
         let result = f(py);
         if let Ok(Some(null_file)) = null_file {

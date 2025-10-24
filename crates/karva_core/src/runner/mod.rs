@@ -6,7 +6,7 @@ use crate::{
     collection::TestCaseCollector,
     diagnostic::reporter::{DummyReporter, Reporter},
     discovery::StandardDiscoverer,
-    utils::with_gil,
+    utils::attach,
 };
 
 mod diagnostic;
@@ -31,7 +31,7 @@ impl<'proj> StandardTestRunner<'proj> {
     }
 
     fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
-        with_gil(self.project, |py| {
+        attach(self.project, |py| {
             let (session, discovery_diagnostics) =
                 StandardDiscoverer::new(self.project).discover(py);
 

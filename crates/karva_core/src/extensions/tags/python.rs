@@ -11,7 +11,7 @@ pub enum PyTag {
     #[pyo3(name = "parametrize")]
     Parametrize {
         arg_names: Vec<String>,
-        arg_values: Vec<Vec<PyObject>>,
+        arg_values: Vec<Vec<Py<PyAny>>>,
     },
 
     #[pyo3(name = "use_fixtures")]
@@ -49,7 +49,7 @@ impl PyTags {
     ) -> PyResult<Self> {
         if let (Ok(name), Ok(values)) = (
             arg_names.extract::<String>(),
-            arg_values.extract::<Vec<PyObject>>(),
+            arg_values.extract::<Vec<Py<PyAny>>>(),
         ) {
             Ok(Self {
                 inner: vec![PyTag::Parametrize {
@@ -59,7 +59,7 @@ impl PyTags {
             })
         } else if let (Ok(names), Ok(values)) = (
             arg_names.extract::<Vec<String>>(),
-            arg_values.extract::<Vec<Vec<PyObject>>>(),
+            arg_values.extract::<Vec<Vec<Py<PyAny>>>>(),
         ) {
             Ok(Self {
                 inner: vec![PyTag::Parametrize {
@@ -102,8 +102,8 @@ impl PyTags {
     pub fn skip(
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
-        reason: Option<PyObject>,
-    ) -> PyResult<PyObject> {
+        reason: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
         if let Some(reason) = reason {
             if reason.extract::<Py<PyFunction>>(py).is_ok() {
                 return PyTestFunction {
@@ -129,11 +129,11 @@ impl PyTags {
     }
 
     #[pyo3(signature = (f, /))]
-    pub fn __call__(&self, py: Python<'_>, f: PyObject) -> PyResult<PyObject> {
-        if let Ok(tag_obj) = f.downcast_bound::<Self>(py) {
+    pub fn __call__(&self, py: Python<'_>, f: Py<PyAny>) -> PyResult<Py<PyAny>> {
+        if let Ok(tag_obj) = f.cast_bound::<Self>(py) {
             tag_obj.borrow_mut().inner.extend(self.inner.clone());
             return tag_obj.into_py_any(py);
-        } else if let Ok(test_case) = f.downcast_bound::<PyTestFunction>(py) {
+        } else if let Ok(test_case) = f.cast_bound::<PyTestFunction>(py) {
             test_case.borrow_mut().tags.inner.extend(self.inner.clone());
             return test_case.into_py_any(py);
         } else if f.extract::<Py<PyFunction>>(py).is_ok() {
@@ -158,7 +158,7 @@ impl PyTags {
 pub struct PyTestFunction {
     #[pyo3(get)]
     pub tags: PyTags,
-    pub function: PyObject,
+    pub function: Py<PyAny>,
 }
 
 #[pymethods]
@@ -169,7 +169,7 @@ impl PyTestFunction {
         py: Python<'_>,
         args: &Bound<'_, PyTuple>,
         kwargs: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         self.function.call(py, args, kwargs)
     }
 }
@@ -186,7 +186,7 @@ mod tests {
 
     #[test]
     fn test_parametrize_single_arg() {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             Python::run(
                 py,
@@ -197,7 +197,7 @@ mod tests {
             .unwrap();
 
             let binding = locals.get_item("tags").unwrap().unwrap();
-            let cls = binding.downcast::<PyType>().unwrap();
+            let cls = binding.cast::<PyType>().unwrap();
 
             let arg_names = py.eval(c_str!("'a'"), None, None).unwrap();
             let arg_values = py.eval(c_str!("[1, 2, 3]"), None, None).unwrap();
@@ -229,7 +229,7 @@ mod tests {
 
     #[test]
     fn test_parametrize_multiple_args() {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             Python::run(
                 py,
@@ -240,7 +240,7 @@ mod tests {
             .unwrap();
 
             let binding = locals.get_item("tags").unwrap().unwrap();
-            let cls = binding.downcast::<PyType>().unwrap();
+            let cls = binding.cast::<PyType>().unwrap();
 
             let arg_names = py.eval(c_str!("('a', 'b')"), None, None).unwrap();
             let arg_values = py.eval(c_str!("[[1, 2], [3, 4]]"), None, None).unwrap();
@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn test_invalid_parametrize_args() {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             Python::run(
                 py,
@@ -277,7 +277,7 @@ mod tests {
             .unwrap();
 
             let binding = locals.get_item("tags").unwrap().unwrap();
-            let cls = binding.downcast::<PyType>().unwrap();
+            let cls = binding.cast::<PyType>().unwrap();
 
             let arg_names = py.eval(c_str!("1"), None, None).unwrap();
             let arg_values = py.eval(c_str!("[1, 2, 3]"), None, None).unwrap();
@@ -291,7 +291,7 @@ mod tests {
 
     #[test]
     fn test_parametrize_multiple_args_with_fixture() {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
 
             py.run(
@@ -310,7 +310,7 @@ def test_function(a):
             .unwrap();
 
             let test_function = locals.get_item("test_function").unwrap().unwrap();
-            let test_function = test_function.downcast::<PyTestFunction>().unwrap();
+            let test_function = test_function.cast::<PyTestFunction>().unwrap();
 
             let args = PyTuple::new(py, [1]).unwrap();
 
@@ -320,7 +320,7 @@ def test_function(a):
 
     #[test]
     fn test_use_fixtures_single_fixture() {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             Python::run(
                 py,
@@ -331,10 +331,10 @@ def test_function(a):
             .unwrap();
 
             let binding = locals.get_item("tags").unwrap().unwrap();
-            let cls = binding.downcast::<PyType>().unwrap();
+            let cls = binding.cast::<PyType>().unwrap();
 
             let binding = py.eval(c_str!("('my_fixture',)"), None, None).unwrap();
-            let fixture_names = binding.downcast::<PyTuple>().unwrap();
+            let fixture_names = binding.cast::<PyTuple>().unwrap();
             let tags = PyTags::use_fixtures(cls, fixture_names).unwrap();
             assert_eq!(tags.inner.len(), 1);
             assert_eq!(tags.inner[0].name(), "use_fixtures");
@@ -346,7 +346,7 @@ def test_function(a):
 
     #[test]
     fn test_use_fixtures_multiple_fixtures() {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             Python::run(
                 py,
@@ -357,12 +357,12 @@ def test_function(a):
             .unwrap();
 
             let binding = locals.get_item("tags").unwrap().unwrap();
-            let cls = binding.downcast::<PyType>().unwrap();
+            let cls = binding.cast::<PyType>().unwrap();
 
             let binding = py
                 .eval(c_str!("('fixture1', 'fixture2', 'fixture3')"), None, None)
                 .unwrap();
-            let fixture_names = binding.downcast::<PyTuple>().unwrap();
+            let fixture_names = binding.cast::<PyTuple>().unwrap();
             let tags = PyTags::use_fixtures(cls, fixture_names).unwrap();
             assert_eq!(tags.inner.len(), 1);
             assert_eq!(tags.inner[0].name(), "use_fixtures");
@@ -374,7 +374,7 @@ def test_function(a):
 
     #[test]
     fn test_use_fixtures_invalid_args() {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             Python::run(
                 py,
@@ -385,7 +385,7 @@ def test_function(a):
             .unwrap();
 
             let binding = locals.get_item("tags").unwrap().unwrap();
-            let cls = binding.downcast::<PyType>().unwrap();
+            let cls = binding.cast::<PyType>().unwrap();
 
             // Create a Python class whose __str__ raises an exception, and use an instance as fixture name
             Python::run(
@@ -403,7 +403,7 @@ bad_tuple = (BadStr(),)
             )
             .unwrap();
             let binding = locals.get_item("bad_tuple").unwrap().unwrap();
-            let fixture_names = binding.downcast::<PyTuple>().unwrap();
+            let fixture_names = binding.cast::<PyTuple>().unwrap();
             let result = PyTags::use_fixtures(cls, fixture_names);
             assert!(result.is_err());
             assert_eq!(
@@ -415,7 +415,7 @@ bad_tuple = (BadStr(),)
 
     #[test]
     fn test_use_fixtures_decorator() {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
 
             py.run(
@@ -434,7 +434,7 @@ def test_function():
             .unwrap();
 
             let test_function = locals.get_item("test_function").unwrap().unwrap();
-            let test_function = test_function.downcast::<PyTestFunction>().unwrap();
+            let test_function = test_function.cast::<PyTestFunction>().unwrap();
 
             assert_eq!(test_function.borrow().tags.inner.len(), 1);
             if let PyTag::UseFixtures { fixture_names } = &test_function.borrow().tags.inner[0] {

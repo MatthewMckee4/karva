@@ -279,7 +279,7 @@ def x():
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
 
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(tests_dir).unwrap();
 
@@ -287,7 +287,7 @@ def x():
 
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let mut manager = FixtureManager::new(None, FixtureScope::Function);
 
             manager.add_fixtures(
@@ -332,7 +332,7 @@ def y(x):
         let test_path = inner_dir.join("test_1.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -342,7 +342,7 @@ def y(x):
 
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let mut manager = FixtureManager::new(None, FixtureScope::Function);
 
             manager.add_fixtures(
@@ -382,7 +382,7 @@ def y(x):
         let test_path = inner_dir.join("test_1.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -392,7 +392,7 @@ def y(x):
 
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let mut manager = FixtureManager::new(None, FixtureScope::Function);
 
             manager.add_fixtures(
@@ -448,7 +448,7 @@ def z(y):
         let test_path = inner_inner_dir.join("test_1.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -460,7 +460,7 @@ def z(y):
 
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let mut manager = FixtureManager::new(None, FixtureScope::Function);
 
             manager.add_fixtures(
@@ -511,7 +511,7 @@ def z(x):
         let test_path = inner_dir.join("test_1.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -521,7 +521,7 @@ def z(x):
 
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let y_fixture = inner_package.get_fixture(py, "y").unwrap();
             let z_fixture = inner_package.get_fixture(py, "z").unwrap();
 
@@ -592,7 +592,7 @@ def z(y):
         let test_path = inner_inner_dir.join("test_1.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -604,7 +604,7 @@ def z(y):
 
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let y_fixture = inner_package.get_fixture(py, "y").unwrap();
             let z_fixture = inner_inner_package.get_fixture(py, "z").unwrap();
 
@@ -676,7 +676,7 @@ def z(x, y):
         let test_path = inner_dir.join("test_1.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -686,7 +686,7 @@ def z(x, y):
 
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let y_fixture = tests_package.get_fixture(py, "y").unwrap();
             let z_fixture = tests_package.get_fixture(py, "z").unwrap();
 
@@ -766,7 +766,7 @@ def test_user_login(auth_token): pass",
         let test_path = users_dir.join("test_user_auth.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let api_package = tests_package.get_package(&api_dir).unwrap();
@@ -775,7 +775,7 @@ def test_user_login(auth_token): pass",
 
         let test_function = test_module.get_test_function("test_user_login").unwrap();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let api_client_fixture = api_package.get_fixture(py, "api_client").unwrap();
             let user_fixture = users_package.get_fixture(py, "user").unwrap();
             let auth_token_fixture = test_module.get_fixture(py, "auth_token").unwrap();
@@ -878,7 +878,7 @@ def service_b(config):
         let test_b_path = package_b_dir.join("test_b.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let package_a = tests_package.get_package(&package_a_dir).unwrap();
@@ -890,7 +890,7 @@ def service_b(config):
         let test_a = module_a.get_test_function("test_a").unwrap();
         let test_b = module_b.get_test_function("test_b").unwrap();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let service_a_fixture = package_a.get_fixture(py, "service_a").unwrap();
             let service_b_fixture = package_b.get_fixture(py, "service_b").unwrap();
 
@@ -964,7 +964,7 @@ def data():
         let child_test_path = child_dir.join("test_child.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let child_package = tests_package.get_package(&child_dir).unwrap();
@@ -975,7 +975,7 @@ def data():
         let root_test = root_module.get_test_function("test_root").unwrap();
         let child_test = child_module.get_test_function("test_child").unwrap();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let mut manager = FixtureManager::new(None, FixtureScope::Function);
 
             manager.add_fixtures(
@@ -1031,13 +1031,13 @@ def combined(derived_a, derived_b):
         let test_path = tests_dir.join("test_combined.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
         let test_function = test_module.get_test_function("test_combined").unwrap();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let mut manager = FixtureManager::new(None, FixtureScope::Function);
 
             manager.add_fixtures(
@@ -1124,7 +1124,7 @@ def level5(level4):
         let test_path = l5_dir.join("test_deep.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let l1_package = session.get_package(&l1_dir).unwrap();
         let l2_package = l1_package.get_package(&l2_dir).unwrap();
@@ -1135,7 +1135,7 @@ def level5(level4):
         let test_module = l5_package.get_module(&test_path).unwrap();
         let test_function = test_module.get_test_function("test_deep").unwrap();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let l2_fixture = l2_package.get_fixture(py, "level2").unwrap();
             let l3_fixture = l3_package.get_fixture(py, "level3").unwrap();
             let l4_fixture = l4_package.get_fixture(py, "level4").unwrap();
@@ -1221,7 +1221,7 @@ def test_three(module_fixture): pass",
         let test_path = tests_dir.join("test_multiple.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
@@ -1230,7 +1230,7 @@ def test_three(module_fixture): pass",
         let test_two = test_module.get_test_function("test_two").unwrap();
         let test_three = test_module.get_test_function("test_three").unwrap();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let mut module_fixture_manager = FixtureManager::new(None, FixtureScope::Module);
 
             module_fixture_manager.add_fixtures(
@@ -1301,13 +1301,13 @@ def converged(branch_a2, branch_b2):
         let test_path = tests_dir.join("test_converged.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
         let test_module = tests_package.get_module(&test_path).unwrap();
         let test_function = test_module.get_test_function("test_converged").unwrap();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let branch_a1_fixture = tests_package.get_fixture(py, "branch_a1").unwrap();
             let branch_b1_fixture = tests_package.get_fixture(py, "branch_b1").unwrap();
             let branch_a2_fixture = tests_package.get_fixture(py, "branch_a2").unwrap();
@@ -1401,7 +1401,7 @@ def function_fixture():
         let test_path = tests_dir.join("test_reset.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::with_gil(|py| StandardDiscoverer::new(&project).discover(py));
+        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
 
         let tests_package = session.get_package(&tests_dir).unwrap();
 
@@ -1409,7 +1409,7 @@ def function_fixture():
 
         let test_function = test_module.get_test_function("test_reset").unwrap();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
 
             session_fixture_manager.add_fixtures(

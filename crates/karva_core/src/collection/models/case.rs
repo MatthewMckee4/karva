@@ -25,7 +25,7 @@ pub(crate) struct TestCase<'proj> {
     function: &'proj TestFunction,
 
     /// The arguments to pass to the test function.
-    kwargs: HashMap<String, PyObject>,
+    kwargs: HashMap<String, Py<PyAny>>,
 
     /// The Python function to call.
     py_function: Py<PyAny>,
@@ -42,7 +42,7 @@ pub(crate) struct TestCase<'proj> {
 impl<'proj> TestCase<'proj> {
     pub(crate) fn new(
         function: &'proj TestFunction,
-        kwargs: HashMap<String, PyObject>,
+        kwargs: HashMap<String, Py<PyAny>>,
         py_function: Py<PyAny>,
         module: &'proj DiscoveredModule,
         skip: Option<SkipTag>,
@@ -222,7 +222,7 @@ impl TestCaseLogger {
     fn new(
         py: Python<'_>,
         function: &TestFunctionDisplay<'_>,
-        kwargs: Option<&HashMap<String, PyObject>>,
+        kwargs: Option<&HashMap<String, Py<PyAny>>>,
     ) -> Self {
         let test_name = kwargs.map_or_else(
             || function.to_string(),
@@ -232,7 +232,7 @@ impl TestCaseLogger {
                     if i > 0 {
                         args_str.push_str(", ");
                     }
-                    if let Ok(value) = value.downcast_bound::<PyAny>(py) {
+                    if let Ok(value) = value.cast_bound::<PyAny>(py) {
                         args_str.push_str(&format!("{key}={value:?}"));
                     }
                 }
