@@ -112,6 +112,7 @@ impl TestEnv {
 
         settings.add_filter(&tempdir_filter(&project_path), "<temp_dir>/");
         settings.add_filter(r#"\\(\w\w|\s|\.|")"#, "/$1");
+        settings.add_filter(r"(\s|\()(\d+m )?(\d+\.)?\d+(ms|s)", "$1[TIME]");
 
         let settings_scope = settings.bind_to_scope();
 
