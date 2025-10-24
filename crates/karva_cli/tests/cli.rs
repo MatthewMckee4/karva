@@ -1,7 +1,7 @@
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
 use karva_core::testing::setup_module;
-use karva_test::IntegrationTestEnv;
+use karva_test::IntegrationTestContext;
 use rstest::rstest;
 
 #[ctor::ctor]
@@ -37,7 +37,7 @@ macro_rules! run_with_path_and_snapshot {
 
 #[test]
 fn test_no_tests_found() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file("test_no_tests.py", r"")?;
+    let case = IntegrationTestContext::with_file("test_no_tests.py", r"")?;
     run_with_path_and_snapshot!(case, @r"
     success: true
     exit_code: 0
@@ -52,7 +52,7 @@ fn test_no_tests_found() -> anyhow::Result<()> {
 
 #[test]
 fn test_one_test_passes() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_pass.py",
         r"
         def test_pass():
@@ -74,7 +74,7 @@ fn test_one_test_passes() -> anyhow::Result<()> {
 
 #[test]
 fn test_two_tests_pass() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_files([
+    let case = IntegrationTestContext::with_files([
         (
             "test_pass.py",
             r"
@@ -106,7 +106,7 @@ fn test_two_tests_pass() -> anyhow::Result<()> {
 
 #[test]
 fn test_one_test_fails() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_fail.py",
         r"
         def test_fail():
@@ -133,7 +133,7 @@ fn test_one_test_fails() -> anyhow::Result<()> {
 
 #[test]
 fn test_multiple_tests_fail() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_fail2.py",
         r"
         def test_fail2():
@@ -160,7 +160,7 @@ fn test_multiple_tests_fail() -> anyhow::Result<()> {
 
 #[test]
 fn test_mixed_pass_and_fail() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_files([
+    let case = IntegrationTestContext::with_files([
         (
             "test_pass.py",
             r"
@@ -196,7 +196,7 @@ fn test_mixed_pass_and_fail() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_with_message() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_fail_with_msg.py",
         r"
         def test_fail_with_message():
@@ -223,7 +223,7 @@ fn test_assertion_with_message() -> anyhow::Result<()> {
 
 #[test]
 fn test_equality_assertion_fail() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_equality.py",
         r"
         def test_equality():
@@ -252,7 +252,7 @@ fn test_equality_assertion_fail() -> anyhow::Result<()> {
 
 #[test]
 fn test_complex_assertion_fail() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_complex.py",
         r"
         def test_complex():
@@ -280,7 +280,7 @@ fn test_complex_assertion_fail() -> anyhow::Result<()> {
 
 #[test]
 fn test_long_file() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_long.py",
         r"
         def helper_function_1():
@@ -318,7 +318,7 @@ fn test_long_file() -> anyhow::Result<()> {
 
 #[test]
 fn test_multiple_assertions_in_function() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_multiple_assertions.py",
         r"
         def test_multiple_assertions():
@@ -348,7 +348,7 @@ fn test_multiple_assertions_in_function() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_in_nested_function() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_nested.py",
         r"
         def helper():
@@ -379,7 +379,7 @@ fn test_assertion_in_nested_function() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_with_complex_expression() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_complex_expr.py",
         r"
         def test_complex_expression():
@@ -402,7 +402,7 @@ fn test_assertion_with_complex_expression() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_with_multiline_setup() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_multiline.py",
         r"
         def test_multiline_setup():
@@ -436,7 +436,7 @@ fn test_assertion_with_multiline_setup() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_with_very_long_line() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_very_long_line.py",
         r"
         def test_very_long_line():
@@ -463,7 +463,7 @@ fn test_assertion_with_very_long_line() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_on_line_1() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_line_1.py",
         r"def test_line_1():
     assert False",
@@ -488,7 +488,7 @@ fn test_assertion_on_line_1() -> anyhow::Result<()> {
 
 #[test]
 fn test_multiple_files_with_cross_function_calls() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_files([
+    let case = IntegrationTestContext::with_files([
         (
             "helper.py",
             r"
@@ -530,7 +530,7 @@ fn test_multiple_files_with_cross_function_calls() -> anyhow::Result<()> {
 
 #[test]
 fn test_nested_function_calls_deep_stack() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_deep_stack.py",
         r"
         def level_1():
@@ -572,7 +572,7 @@ fn test_nested_function_calls_deep_stack() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_in_class_method() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_class.py",
         r"
         class Calculator:
@@ -610,7 +610,7 @@ fn test_assertion_in_class_method() -> anyhow::Result<()> {
 
 #[test]
 fn test_assertion_in_imported_function() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_files([
+    let case = IntegrationTestContext::with_files([
         (
             "validators.py",
             r"
@@ -704,7 +704,8 @@ fn test_fixture_initialization_order(
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(
         case,
@@ -745,7 +746,8 @@ fn test_empty_conftest() -> anyhow::Result<()> {
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     assert_cmd_snapshot!(case.command_with_args(&["-s"]), @r"
     success: true
@@ -769,7 +771,7 @@ fn get_parametrize_function(package: &str) -> String {
 
 #[rstest]
 fn test_parametrize(#[values("pytest", "karva")] package: &str) -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_parametrize.py",
         &format!(
             r"
@@ -866,7 +868,8 @@ fn test_function_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow:
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -914,7 +917,8 @@ fn test_module_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow::R
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -968,7 +972,8 @@ fn test_package_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow::
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -1032,7 +1037,8 @@ fn test_session_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow::
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -1089,7 +1095,8 @@ fn test_mixed_scopes(#[values("pytest", "karva")] framework: &str) -> anyhow::Re
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -1146,7 +1153,8 @@ fn test_fixture_across_files(#[values("pytest", "karva")] framework: &str) -> an
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -1190,7 +1198,8 @@ fn test_named_fixtures(#[values("pytest", "karva")] framework: &str) -> anyhow::
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -1252,7 +1261,8 @@ fn test_nested_package_scopes(#[values("pytest", "karva")] framework: &str) -> a
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -1304,7 +1314,8 @@ fn test_independent_fixtures(#[values("pytest", "karva")] framework: &str) -> an
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, @r"
     success: true
@@ -1366,7 +1377,8 @@ fn test_multiple_files_independent_fixtures(
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -1419,7 +1431,8 @@ fn test_basic_error_handling(#[values("pytest", "karva")] framework: &str) -> an
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: false
@@ -1504,7 +1517,8 @@ fn test_different_scopes_independent(
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -1550,7 +1564,8 @@ fn test_invalid_scope_value(#[values("pytest", "karva")] framework: &str) -> any
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: false
@@ -1600,7 +1615,8 @@ fn test_invalid_fixture_name(#[values("pytest", "karva")] framework: &str) -> an
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: false
@@ -1665,7 +1681,8 @@ fn test_multiple_conftest_same_dir(
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: false
@@ -1731,7 +1748,8 @@ fn test_very_deep_directory_structure(
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -1777,7 +1795,8 @@ fn test_fixture_in_init_file(#[values("pytest", "karva")] framework: &str) -> an
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: false
@@ -1848,7 +1867,8 @@ fn test_same_fixture_name_different_types(
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, @r"
     success: true
@@ -1901,7 +1921,8 @@ fn test_fixture_dependencies(#[values("pytest", "karva")] framework: &str) -> an
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -1986,7 +2007,8 @@ fn test_dependent_fixtures_different_scopes(
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -2052,7 +2074,8 @@ fn test_complex_dependency_chain(
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -2124,7 +2147,8 @@ fn test_mixed_scope_dependencies(
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -2189,7 +2213,8 @@ fn test_diamond_dependency(#[values("pytest", "karva")] framework: &str) -> anyh
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -2237,7 +2262,8 @@ fn test_generator_fixture(#[values("pytest", "karva")] framework: &str) -> anyho
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -2297,7 +2323,8 @@ fn test_fixture_called_for_each_parametrization(
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -2348,7 +2375,8 @@ fn test_fixture_finalizer_called_after_test(
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -2403,7 +2431,8 @@ fn test_fixture_finalizer_called_at_correct_time(
         ),
     ]);
 
-    let case = IntegrationTestEnv::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
+    let case =
+        IntegrationTestContext::with_files(files.iter().map(|(k, v)| (k.as_str(), v.as_str())))?;
 
     run_with_path_and_snapshot!(case, &["-s"], @r"
     success: true
@@ -2425,7 +2454,7 @@ fn test_fixture_finalizer_called_at_correct_time(
 
 #[test]
 fn test_stdout_is_captured_and_displayed() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_std_out_redirected.py",
         r"
         def test_std_out_redirected():
@@ -2448,7 +2477,7 @@ fn test_stdout_is_captured_and_displayed() -> anyhow::Result<()> {
 
 #[test]
 fn test_stdout_is_captured_and_displayed_with_args() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_std_out_redirected.py",
         r"
         def test_std_out_redirected():
@@ -2470,7 +2499,7 @@ fn test_stdout_is_captured_and_displayed_with_args() -> anyhow::Result<()> {
 
 #[test]
 fn test_multiple_fixtures_not_found() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file(
+    let case = IntegrationTestContext::with_file(
         "test_multiple_fixtures_not_found.py",
         "def test_multiple_fixtures_not_found(a, b, c): ...",
     )?;
@@ -2512,7 +2541,7 @@ def test_1():
 ",
     );
 
-    let case = IntegrationTestEnv::with_file("test_skip.py", &test_code)?;
+    let case = IntegrationTestContext::with_file("test_skip.py", &test_code)?;
 
     run_with_path_and_snapshot!(case, @r"
     success: true
@@ -2528,7 +2557,7 @@ def test_1():
 
 #[test]
 fn test_text_file_in_directory() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_files([
+    let case = IntegrationTestContext::with_files([
         ("test_sample.py", "def test_sample(): assert True"),
         ("random.txt", "pass"),
     ])?;
@@ -2547,7 +2576,7 @@ fn test_text_file_in_directory() -> anyhow::Result<()> {
 
 #[test]
 fn test_just_text_file_() -> anyhow::Result<()> {
-    let case = IntegrationTestEnv::with_file("random.txt", "pass")?;
+    let case = IntegrationTestContext::with_file("random.txt", "pass")?;
 
     assert_cmd_snapshot!(
         case.command_with_args(&["random.txt"]),

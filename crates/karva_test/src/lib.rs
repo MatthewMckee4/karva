@@ -1,3 +1,3 @@
 mod context;
 
-pub use context::{IntegrationTestEnv, TestEnv, find_karva_wheel};
+pub use context::{IntegrationTestContext, TestContext, find_karva_wheel};

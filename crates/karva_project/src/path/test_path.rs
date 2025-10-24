@@ -141,13 +141,13 @@ impl std::fmt::Display for TestPathError {
 
 #[cfg(test)]
 mod tests {
-    use karva_test::TestEnv;
+    use karva_test::TestContext;
 
     use super::*;
 
     #[test]
     fn test_python_file_exact_path() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         let path = env.create_file("test.py", "def test(): pass");
 
         let result = TestPath::new(&path.display().to_string());
@@ -156,7 +156,7 @@ mod tests {
 
     #[test]
     fn test_python_file_auto_extension() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         env.create_file("test.py", "def test(): pass");
         let path_without_ext = env.temp_path("test");
 
@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn test_directory_path() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         let path = env.create_dir("test_dir");
 
         let result = TestPath::new(&path.display().to_string());
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn test_file_not_found_exact_path() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         let non_existent_path = env.temp_path("non_existent.py");
 
         let result = TestPath::new(&non_existent_path.display().to_string());
@@ -184,7 +184,7 @@ mod tests {
 
     #[test]
     fn test_file_not_found_auto_extension() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         let non_existent_path = env.temp_path("non_existent");
 
         let result = TestPath::new(&non_existent_path.display().to_string());
@@ -199,7 +199,7 @@ mod tests {
 
     #[test]
     fn test_invalid_path_with_extension() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         let path = env.create_file("path.txt", "def test(): pass");
         let result = TestPath::new(&path.display().to_string());
         assert!(matches!(result, Err(TestPathError::WrongFileExtension(_))));
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn test_wrong_file_extension() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         let path = env.create_file("test.rs", "fn test() {}");
 
         let result = TestPath::new(&path.display().to_string());
@@ -216,7 +216,7 @@ mod tests {
 
     #[test]
     fn test_path_that_exists_but_is_neither_file_nor_directory() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         let non_existent_path = env.temp_path("neither_file_nor_dir");
 
         let result = TestPath::new(&non_existent_path.display().to_string());
@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn test_file_and_auto_extension_both_exist() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         env.create_file("test", "not python");
         env.create_file("test.py", "def test(): pass");
         let base_path = env.temp_path("test");
@@ -236,7 +236,7 @@ mod tests {
 
     #[test]
     fn test_function_specification() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         let path = env.create_file("test.py", "def test_function(): pass");
 
         let function_spec = format!("{}::test_function", path.display());
@@ -256,7 +256,7 @@ mod tests {
 
     #[test]
     fn test_function_specification_with_auto_extension() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         env.create_file("test.py", "def test_function(): pass");
         let base_path = env.temp_path("test");
 
@@ -271,7 +271,7 @@ mod tests {
 
     #[test]
     fn test_function_specification_empty_function_name() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         let path = env.create_file("test.py", "def test_function(): pass");
 
         let function_spec = format!("{}::", path.display());
@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn test_function_specification_nonexistent_file() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         let non_existent_path = env.temp_path("nonexistent.py");
 
         let function_spec = format!("{}::test_function", non_existent_path.display());
@@ -293,7 +293,7 @@ mod tests {
 
     #[test]
     fn test_function_specification_wrong_extension() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         let path = env.create_file("test.txt", "def test_function(): pass");
 
         let function_spec = format!("{}::test_function", path.display());
@@ -304,7 +304,7 @@ mod tests {
 
     #[test]
     fn test_try_convert_to_py_path_file() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         let env_path = env.create_file("test.py", "def test(): pass");
 
         let result = try_convert_to_py_path(&env.cwd().join("test"));
@@ -317,7 +317,7 @@ mod tests {
 
     #[test]
     fn test_try_convert_to_py_path_file_slashes() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         let env_path = env.create_file("test/dir.py", "def test(): pass");
 
         let result = try_convert_to_py_path(&env.cwd().join("test/dir"));
@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     fn test_try_convert_to_py_path_directory() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         let env_path = env.create_dir("test.dir");
 
         let result = try_convert_to_py_path(&env.cwd().join("test.dir"));
@@ -343,7 +343,7 @@ mod tests {
 
     #[test]
     fn test_try_convert_to_py_path_not_found() {
-        let env = TestEnv::new();
+        let env = TestContext::new();
         let result = try_convert_to_py_path(&env.cwd().join("test/dir"));
         assert!(matches!(result, Err(TestPathError::NotFound(_))));
     }

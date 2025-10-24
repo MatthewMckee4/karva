@@ -254,14 +254,14 @@ impl<'a> FixtureManager<'a> {
 #[cfg(test)]
 mod tests {
     use karva_project::project::Project;
-    use karva_test::TestEnv;
+    use karva_test::TestContext;
 
     use super::*;
     use crate::discovery::StandardDiscoverer;
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_one_dependency() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/conftest.py",
                 r"
@@ -305,7 +305,7 @@ def x():
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_two_dependencies() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -361,7 +361,7 @@ def y(x):
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_two_dependencies_in_parent() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -411,7 +411,7 @@ def y(x):
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -480,7 +480,7 @@ def z(y):
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_two_dependencies_different_scopes() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -555,7 +555,7 @@ def z(x):
 
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -650,7 +650,7 @@ def z(y):
     #[test]
     fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
      {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -720,7 +720,7 @@ def z(x, y):
 
     #[test]
     fn test_fixture_manager_complex_nested_structure_with_session_fixtures() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -833,7 +833,7 @@ def test_user_login(auth_token): pass",
 
     #[test]
     fn test_fixture_manager_multiple_packages_same_level() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -932,7 +932,7 @@ def service_b(config):
 
     #[test]
     fn test_fixture_manager_fixture_override_in_nested_packages() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -1002,7 +1002,7 @@ def data():
 
     #[test]
     fn test_fixture_manager_multiple_dependent_fixtures_same_scope() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -1064,7 +1064,7 @@ def combined(derived_a, derived_b):
 
     #[test]
     fn test_fixture_manager_deep_nesting_five_levels() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/level1/conftest.py",
                 r"
@@ -1194,7 +1194,7 @@ def level5(level4):
 
     #[test]
     fn test_fixture_manager_multiple_tests_same_module() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -1260,7 +1260,7 @@ def test_three(module_fixture): pass",
 
     #[test]
     fn test_fixture_manager_complex_dependency_chain_with_multiple_branches() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -1369,7 +1369,7 @@ def converged(branch_a2, branch_b2):
 
     #[test]
     fn test_fixture_manager_reset_functions() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"

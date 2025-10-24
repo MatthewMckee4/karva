@@ -264,13 +264,13 @@ mod tests {
 
     use insta::{allow_duplicates, assert_snapshot};
     use karva_project::{project::ProjectOptions, verbosity::VerbosityLevel};
-    use karva_test::TestEnv;
+    use karva_test::TestContext;
 
     use super::*;
 
     #[test]
     fn test_discover_files() {
-        let env = TestEnv::with_files([("<test>/test.py", "def test_function(): pass")]);
+        let env = TestContext::with_files([("<test>/test.py", "def test_function(): pass")]);
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let discoverer = StandardDiscoverer::new(&project);
@@ -287,7 +287,7 @@ mod tests {
 
     #[test]
     fn test_discover_files_with_directory() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/test_dir/test_file1.py",
                 "def test_function1(): pass",
@@ -311,7 +311,7 @@ mod tests {
 
     #[test]
     fn test_discover_files_with_gitignore() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             ("<test>/test_file1.py", "def test_function1(): pass"),
             ("<test>/test_file2.py", "def test_function2(): pass"),
             ("<test>/.gitignore", "test_file2.py"),
@@ -332,7 +332,7 @@ mod tests {
 
     #[test]
     fn test_discover_files_with_nested_directories() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             ("<test>/test_file1.py", "def test_function1(): pass"),
             ("<test>/nested/test_file2.py", "def test_function2(): pass"),
             (
@@ -364,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_discover_files_with_multiple_test_functions() {
-        let env = TestEnv::with_files([(
+        let env = TestContext::with_files([(
             "<test>/test_file.py",
             r"
 def test_function1(): pass
@@ -389,7 +389,7 @@ def not_a_test(): pass
 
     #[test]
     fn test_discover_files_with_non_existent_function() {
-        let env = TestEnv::with_files([("<test>/test_file.py", "def test_function1(): pass")]);
+        let env = TestContext::with_files([("<test>/test_file.py", "def test_function1(): pass")]);
 
         let project = Project::new(env.cwd(), vec![PathBuf::from("non_existent_path")]);
         let discoverer = StandardDiscoverer::new(&project);
@@ -401,7 +401,7 @@ def not_a_test(): pass
 
     #[test]
     fn test_discover_files_with_invalid_python() {
-        let env = TestEnv::with_files([("<test>/test_file.py", "test_function1 = None")]);
+        let env = TestContext::with_files([("<test>/test_file.py", "test_function1 = None")]);
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let discoverer = StandardDiscoverer::new(&project);
@@ -413,7 +413,7 @@ def not_a_test(): pass
 
     #[test]
     fn test_discover_files_with_custom_test_prefix() {
-        let env = TestEnv::with_files([(
+        let env = TestContext::with_files([(
             "<test>/test_file.py",
             r"
 def check_function1(): pass
@@ -443,7 +443,7 @@ def test_function(): pass
 
     #[test]
     fn test_discover_files_with_multiple_paths() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             ("<test>/test1.py", "def test_function1(): pass"),
             ("<test>/test2.py", "def test_function2(): pass"),
             ("<test>/tests/test3.py", "def test_function3(): pass"),
@@ -476,7 +476,7 @@ def test_function(): pass
 
     #[test]
     fn test_paths_shadowed_by_other_paths_are_not_discovered_twice() {
-        let env = TestEnv::with_files([(
+        let env = TestContext::with_files([(
             "<test>/test_file.py",
             "def test_function(): pass\ndef test_function2(): pass",
         )]);
@@ -498,7 +498,7 @@ def test_function(): pass
 
     #[test]
     fn test_tests_same_name_different_module_are_discovered() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             ("<test>/test_file.py", "def test_function(): pass"),
             ("<test>/test_file2.py", "def test_function(): pass"),
         ]);
@@ -524,7 +524,7 @@ def test_function(): pass
 
     #[test]
     fn test_discover_files_with_conftest_explicit_path() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             ("<test>/conftest.py", "def test_function(): pass"),
             ("<test>/test_file.py", "def test_function2(): pass"),
         ]);
@@ -547,7 +547,7 @@ def test_function(): pass
 
     #[test]
     fn test_discover_files_with_conftest_parent_path_conftest_not_discovered() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             ("<test>/conftest.py", "def test_function(): pass"),
             ("<test>/test_file.py", "def test_function2(): pass"),
         ]);
@@ -570,7 +570,7 @@ def test_function(): pass
 
     #[test]
     fn test_discover_files_with_cwd_path() {
-        let env = TestEnv::with_files([("<test>/test_file.py", "def test_function(): pass")]);
+        let env = TestContext::with_files([("<test>/test_file.py", "def test_function(): pass")]);
 
         let mapped_dir = env.mapped_path("<test>").unwrap();
         let path = mapped_dir.join("test_file.py");
@@ -590,7 +590,7 @@ def test_function(): pass
 
     #[test]
     fn test_discover_function_inside_function() {
-        let env = TestEnv::with_files([(
+        let env = TestContext::with_files([(
             "<test>/test_file.py",
             "def test_function(): def test_function2(): pass",
         )]);
@@ -608,7 +608,7 @@ def test_function(): pass
 
     #[test]
     fn test_discover_fixture_in_same_file_in_root() {
-        let env = TestEnv::with_files([(
+        let env = TestContext::with_files([(
             "<test>/test_1.py",
             r"
 import karva
@@ -637,7 +637,7 @@ def test_1(x): pass",
 
     #[test]
     fn test_discover_fixture_in_same_file_in_test_dir() {
-        let env = TestEnv::with_files([(
+        let env = TestContext::with_files([(
             "<test>/tests/test_1.py",
             r"
 import karva
@@ -665,7 +665,7 @@ def test_1(x): pass",
 
     #[test]
     fn test_discover_fixture_in_root_tests_in_test_dir() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/conftest.py",
                 r"
@@ -701,7 +701,7 @@ def x():
 
     #[test]
     fn test_discover_fixture_in_root_tests_in_nested_dir() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/conftest.py",
                 r"
@@ -785,7 +785,7 @@ def w(x, y, z):
 
     #[test]
     fn test_discover_multiple_test_paths() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             ("<test>/tests/test_1.py", "def test_1(): pass"),
             ("<test>/tests2/test_2.py", "def test_2(): pass"),
             ("<test>/test_3.py", "def test_3(): pass"),
@@ -818,7 +818,7 @@ def w(x, y, z):
 
     #[test]
     fn test_discover_doubly_nested_with_conftest_middle_path() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -858,7 +858,7 @@ def root_fixture():
 
     #[test]
     fn test_discover_pytest_fixture() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/tests/conftest.py",
                 r"
@@ -892,7 +892,7 @@ def x():
 
     #[test]
     fn test_discover_generator_fixture() {
-        let env = TestEnv::with_files([
+        let env = TestContext::with_files([
             (
                 "<test>/conftest.py",
                 r"
@@ -938,7 +938,7 @@ def x():
 
     #[test]
     fn test_discovery_same_module_given_twice() {
-        let env = TestEnv::with_files([("<test>/tests/test_1.py", "def test_1(x): pass")]);
+        let env = TestContext::with_files([("<test>/tests/test_1.py", "def test_1(x): pass")]);
 
         let mapped_dir = env.mapped_path("<test>").unwrap();
         let test_dir = mapped_dir.join("tests");

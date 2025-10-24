@@ -40,15 +40,14 @@ pub fn find_karva_wheel() -> anyhow::Result<PathBuf> {
     anyhow::bail!("Could not find karva wheel in target/wheels directory");
 }
 
-pub struct TestEnv {
+pub struct TestContext {
     _temp_dir: TempDir,
     project_dir_path: PathBuf,
     mapped_paths: HashMap<String, PathBuf>,
-
     _settings_scope: SettingsBindDropGuard,
 }
 
-impl TestEnv {
+impl TestContext {
     #[must_use]
     pub fn new() -> Self {
         let temp_dir = TempDir::with_prefix("karva-test-env").unwrap();
@@ -229,7 +228,7 @@ impl TestEnv {
     }
 }
 
-impl Default for TestEnv {
+impl Default for TestContext {
     fn default() -> Self {
         Self::new()
     }
@@ -239,20 +238,20 @@ fn tempdir_filter(path: &Path) -> String {
     format!(r"{}\\?/?", regex::escape(path.to_str().unwrap()))
 }
 
-pub struct IntegrationTestEnv {
-    test_env: TestEnv,
+pub struct IntegrationTestContext {
+    test_env: TestContext,
 }
 
-impl Default for IntegrationTestEnv {
+impl Default for IntegrationTestContext {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl IntegrationTestEnv {
+impl IntegrationTestContext {
     #[must_use]
     pub fn new() -> Self {
-        let test_env = TestEnv::new();
+        let test_env = TestContext::new();
 
         Self { test_env }
     }
