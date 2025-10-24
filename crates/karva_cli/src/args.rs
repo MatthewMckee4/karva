@@ -1,5 +1,7 @@
+use std::path::PathBuf;
+
 use clap::Parser;
-use karva_project::{path::SystemPathBuf, project::ProjectOptions};
+use karva_project::project::ProjectOptions;
 
 use crate::logging::Verbosity;
 
@@ -27,7 +29,7 @@ pub struct TestCommand {
         help = "List of files, directories, or test functions to test [default: the project root]",
         value_name = "PATH"
     )]
-    pub(crate) paths: Vec<SystemPathBuf>,
+    pub(crate) paths: Vec<PathBuf>,
 
     #[clap(flatten)]
     pub(crate) verbosity: Verbosity,

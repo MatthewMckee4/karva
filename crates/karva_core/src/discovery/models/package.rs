@@ -1,6 +1,8 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
-use karva_project::path::SystemPathBuf;
 use pyo3::prelude::*;
 
 #[cfg(test)]
@@ -13,15 +15,15 @@ use crate::{
 /// A package represents a single python directory.
 #[derive(Debug)]
 pub(crate) struct DiscoveredPackage {
-    path: SystemPathBuf,
-    modules: HashMap<SystemPathBuf, DiscoveredModule>,
-    packages: HashMap<SystemPathBuf, DiscoveredPackage>,
-    configuration_modules: HashSet<SystemPathBuf>,
+    path: PathBuf,
+    modules: HashMap<PathBuf, DiscoveredModule>,
+    packages: HashMap<PathBuf, DiscoveredPackage>,
+    configuration_modules: HashSet<PathBuf>,
 }
 
 impl DiscoveredPackage {
     #[must_use]
-    pub(crate) fn new(path: SystemPathBuf) -> Self {
+    pub(crate) fn new(path: PathBuf) -> Self {
         Self {
             path,
             modules: HashMap::new(),
@@ -31,23 +33,23 @@ impl DiscoveredPackage {
     }
 
     #[must_use]
-    pub(crate) const fn path(&self) -> &SystemPathBuf {
+    pub(crate) const fn path(&self) -> &PathBuf {
         &self.path
     }
 
     #[must_use]
-    pub(crate) const fn modules(&self) -> &HashMap<SystemPathBuf, DiscoveredModule> {
+    pub(crate) const fn modules(&self) -> &HashMap<PathBuf, DiscoveredModule> {
         &self.modules
     }
 
     #[must_use]
-    pub(crate) const fn packages(&self) -> &HashMap<SystemPathBuf, Self> {
+    pub(crate) const fn packages(&self) -> &HashMap<PathBuf, Self> {
         &self.packages
     }
 
     #[must_use]
     #[cfg(test)]
-    pub(crate) fn get_module(&self, path: &SystemPathBuf) -> Option<&DiscoveredModule> {
+    pub(crate) fn get_module(&self, path: &PathBuf) -> Option<&DiscoveredModule> {
         if let Some(module) = self.modules.get(path) {
             Some(module)
         } else {
@@ -62,7 +64,7 @@ impl DiscoveredPackage {
 
     #[must_use]
     #[cfg(test)]
-    pub(crate) fn get_package(&self, path: &SystemPathBuf) -> Option<&Self> {
+    pub(crate) fn get_package(&self, path: &PathBuf) -> Option<&Self> {
         if let Some(package) = self.packages.get(path) {
             Some(package)
         } else {
@@ -348,7 +350,7 @@ impl std::fmt::Display for DisplayDiscoveredPackage<'_> {
                     }
                     "package" => {
                         writeln!(f, "{prefix}{branch}{name}/")?;
-                        let subpackage = &package.packages()[&SystemPathBuf::from(name)];
+                        let subpackage = &package.packages()[&PathBuf::from(name)];
                         write_tree(f, subpackage, &format!("{prefix}{child_prefix}"))?;
                     }
                     _ => {}

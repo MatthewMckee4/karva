@@ -17,7 +17,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use karva_project::{path::SystemPathBuf, testing::find_karva_wheel};
+use karva_project::testing::find_karva_wheel;
 use ruff_python_ast::PythonVersion;
 
 fn global_venv_path() -> PathBuf {
@@ -39,7 +39,7 @@ pub struct RealWorldProject<'a> {
     /// Specific commit hash to checkout
     pub commit: &'a str,
     /// List of paths within the project to check (`ty check <paths>`)
-    pub paths: Vec<SystemPathBuf>,
+    pub paths: Vec<PathBuf>,
     /// Dependencies to install via uv
     pub dependencies: Vec<&'a str>,
     /// Python version to use
@@ -116,7 +116,7 @@ impl<'a> InstalledProject<'a> {
     }
 
     #[must_use]
-    pub fn test_paths(&self) -> Vec<SystemPathBuf> {
+    pub fn test_paths(&self) -> Vec<PathBuf> {
         self.config.paths.clone()
     }
 

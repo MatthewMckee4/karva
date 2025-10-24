@@ -1,7 +1,6 @@
-use karva_project::{
-    path::SystemPathBuf,
-    project::{Project, ProjectOptions},
-};
+use std::path::Path;
+
+use karva_project::project::{Project, ProjectOptions};
 use pyo3::{PyResult, Python, prelude::*, types::PyAnyMethods};
 use ruff_python_ast::PythonVersion;
 
@@ -28,7 +27,7 @@ pub fn current_python_version() -> PythonVersion {
 /// * `py` - Python interpreter instance
 /// * `path` - Directory path to add to sys.path
 /// * `index` - Position to insert the path (0 for highest priority)
-pub(crate) fn add_to_sys_path(py: Python<'_>, path: &SystemPathBuf, index: isize) -> PyResult<()> {
+pub(crate) fn add_to_sys_path(py: Python<'_>, path: &Path, index: isize) -> PyResult<()> {
     let sys_module = py.import("sys")?;
     let sys_path = sys_module.getattr("path")?;
     sys_path.call_method1("insert", (index, path.display().to_string()))?;

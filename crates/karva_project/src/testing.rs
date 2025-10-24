@@ -9,7 +9,7 @@ use anyhow::Context;
 use insta::{Settings, internals::SettingsBindDropGuard};
 use tempfile::TempDir;
 
-use crate::{path::SystemPathBuf, project::Project};
+use crate::project::Project;
 
 /// Find the karva wheel in the target/wheels directory.
 /// Returns the path to the wheel file.
@@ -45,7 +45,7 @@ pub fn find_karva_wheel() -> anyhow::Result<PathBuf> {
 pub struct TestEnv {
     _temp_dir: TempDir,
     project_dir_path: PathBuf,
-    mapped_paths: HashMap<String, SystemPathBuf>,
+    mapped_paths: HashMap<String, PathBuf>,
 
     _settings_scope: SettingsBindDropGuard,
 }
@@ -124,11 +124,11 @@ impl TestEnv {
     }
 
     #[must_use]
-    fn create_random_dir(&self) -> SystemPathBuf {
+    fn create_random_dir(&self) -> PathBuf {
         self.create_dir(format!("main_{}", rand::random::<u32>()))
     }
 
-    pub fn create_file(&self, path: impl AsRef<std::path::Path>, content: &str) -> SystemPathBuf {
+    pub fn create_file(&self, path: impl AsRef<std::path::Path>, content: &str) -> PathBuf {
         let path = path.as_ref();
         let path = self.project_dir_path.join(path);
 
@@ -137,23 +137,23 @@ impl TestEnv {
         }
         std::fs::write(&path, &*ruff_python_trivia::textwrap::dedent(content)).unwrap();
 
-        SystemPathBuf::from(path)
+        path
     }
 
     #[allow(clippy::must_use_candidate)]
-    pub fn create_dir(&self, path: impl AsRef<std::path::Path>) -> SystemPathBuf {
+    pub fn create_dir(&self, path: impl AsRef<std::path::Path>) -> PathBuf {
         let path = self.project_dir_path.join(path);
         fs::create_dir_all(&path).unwrap();
-        SystemPathBuf::from(path)
+        path
     }
 
     #[must_use]
-    pub fn temp_path(&self, path: impl AsRef<std::path::Path>) -> SystemPathBuf {
-        SystemPathBuf::from(self.project_dir_path.join(path))
+    pub fn temp_path(&self, path: impl AsRef<std::path::Path>) -> PathBuf {
+        self.project_dir_path.join(path)
     }
 
     #[must_use]
-    pub fn cwd(&self) -> SystemPathBuf {
+    pub fn cwd(&self) -> PathBuf {
         self.project_dir_path.clone()
     }
 
@@ -220,13 +220,13 @@ impl TestEnv {
     }
 
     #[must_use]
-    pub fn mapped_path(&self, path: &str) -> Option<&SystemPathBuf> {
+    pub fn mapped_path(&self, path: &str) -> Option<&PathBuf> {
         self.mapped_paths.get(path)
     }
 
     #[must_use]
-    pub fn relative_path(&self, path: &SystemPathBuf) -> SystemPathBuf {
-        SystemPathBuf::from(path.strip_prefix(self.cwd()).unwrap())
+    pub fn relative_path(&self, path: &Path) -> PathBuf {
+        PathBuf::from(path.strip_prefix(self.cwd()).unwrap())
     }
 
     #[must_use]

@@ -1,12 +1,12 @@
-use crate::path::SystemPathBuf;
+use std::path::{Path, PathBuf};
 
 #[must_use]
-pub fn is_python_file(path: &SystemPathBuf) -> bool {
+pub fn is_python_file(path: &Path) -> bool {
     path.extension().is_some_and(|extension| extension == "py")
 }
 
 /// Gets the module name from a path.
-pub fn module_name(cwd: &SystemPathBuf, path: &SystemPathBuf) -> Result<String, String> {
+pub fn module_name(cwd: &PathBuf, path: &Path) -> Result<String, String> {
     let relative_path = path
         .strip_prefix(cwd)
         .map_err(|_| "Failed to get module name")?;
@@ -21,14 +21,15 @@ pub fn module_name(cwd: &SystemPathBuf, path: &SystemPathBuf) -> Result<String, 
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
-    use crate::path::SystemPathBuf;
 
     #[cfg(unix)]
     #[test]
     fn test_module_name() {
         assert_eq!(
-            module_name(&SystemPathBuf::from("/"), &SystemPathBuf::from("/test.py")),
+            module_name(&PathBuf::from("/"), &PathBuf::from("/test.py")),
             Ok("test".to_string())
         );
     }
@@ -37,10 +38,7 @@ mod tests {
     #[test]
     fn test_module_name_with_directory() {
         assert_eq!(
-            module_name(
-                &SystemPathBuf::from("/"),
-                &SystemPathBuf::from("/test_dir/test.py")
-            ),
+            module_name(&PathBuf::from("/"), &PathBuf::from("/test_dir/test.py")),
             Ok("test_dir.test".to_string())
         );
     }
@@ -49,10 +47,7 @@ mod tests {
     #[test]
     fn test_module_name_with_gitignore() {
         assert_eq!(
-            module_name(
-                &SystemPathBuf::from("/"),
-                &SystemPathBuf::from("/tests/test.py")
-            ),
+            module_name(&PathBuf::from("/"), &PathBuf::from("/tests/test.py")),
             Ok("tests.test".to_string())
         );
     }
@@ -65,8 +60,8 @@ mod tests {
         fn test_unix_paths() {
             assert_eq!(
                 module_name(
-                    &SystemPathBuf::from("/home/user/project"),
-                    &SystemPathBuf::from("/home/user/project/src/module/test.py")
+                    &PathBuf::from("/home/user/project"),
+                    &PathBuf::from("/home/user/project/src/module/test.py")
                 ),
                 Ok("src.module.test".to_string())
             );
@@ -81,8 +76,8 @@ mod tests {
         fn test_windows_paths() {
             assert_eq!(
                 module_name(
-                    &SystemPathBuf::from("C:\\Users\\user\\project"),
-                    &SystemPathBuf::from("C:\\Users\\user\\project\\src\\module\\test.py")
+                    &PathBuf::from("C:\\Users\\user\\project"),
+                    &PathBuf::from("C:\\Users\\user\\project\\src\\module\\test.py")
                 ),
                 Ok("src.module.test".to_string())
             );

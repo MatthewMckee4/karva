@@ -1,8 +1,7 @@
+use std::path::{Path, PathBuf};
+
 use ignore::WalkBuilder;
-use karva_project::{
-    Project,
-    path::{SystemPathBuf, TestPath},
-};
+use karva_project::{Project, path::TestPath};
 use pyo3::prelude::*;
 
 use crate::{
@@ -93,7 +92,7 @@ impl<'proj> StandardDiscoverer<'proj> {
     fn discover_test_file(
         &self,
         py: Python,
-        path: &SystemPathBuf,
+        path: &PathBuf,
         discovery_mode: DiscoveryMode,
     ) -> (DiscoveredModule, Vec<Diagnostic>) {
         let (discovered, diagnostics) = discover(py, path, self.project);
@@ -113,14 +112,14 @@ impl<'proj> StandardDiscoverer<'proj> {
     fn add_parent_configuration_packages(
         &self,
         py: Python,
-        path: &SystemPathBuf,
+        path: &Path,
         session_package: &mut DiscoveredPackage,
     ) -> Vec<Diagnostic> {
         let mut current_path = if path.is_dir() {
-            path.clone()
+            path
         } else {
             match path.parent() {
-                Some(parent) => parent.to_path_buf(),
+                Some(parent) => parent,
                 None => return Vec::new(),
             }
         };
@@ -130,7 +129,7 @@ impl<'proj> StandardDiscoverer<'proj> {
         loop {
             let conftest_path = current_path.join("conftest.py");
             if conftest_path.exists() {
-                let mut package = DiscoveredPackage::new(current_path.clone());
+                let mut package = DiscoveredPackage::new(current_path.to_path_buf());
 
                 let (module, sub_diagnostics) =
                     self.discover_test_file(py, &conftest_path, DiscoveryMode::ConfigurationOnly);
@@ -147,7 +146,7 @@ impl<'proj> StandardDiscoverer<'proj> {
             }
 
             current_path = match current_path.parent() {
-                Some(parent) => parent.to_path_buf(),
+                Some(parent) => parent,
                 None => break,
             };
         }
@@ -163,7 +162,7 @@ impl<'proj> StandardDiscoverer<'proj> {
     fn discover_directory(
         &self,
         py: Python,
-        path: &SystemPathBuf,
+        path: &PathBuf,
         discovery_mode: DiscoveryMode,
     ) -> (DiscoveredPackage, Vec<Diagnostic>) {
         let walker = self.create_directory_walker(path);
@@ -176,7 +175,7 @@ impl<'proj> StandardDiscoverer<'proj> {
             let Ok(entry) = entry else {
                 continue;
             };
-            let current_path = SystemPathBuf::from(entry.path());
+            let current_path = PathBuf::from(entry.path());
 
             // Skip the package directory itself
             if package.path() == &current_path {
@@ -226,7 +225,7 @@ impl<'proj> StandardDiscoverer<'proj> {
     }
 
     /// Creates a configured directory walker for Python file discovery.
-    fn create_directory_walker(&self, path: &SystemPathBuf) -> ignore::Walk {
+    fn create_directory_walker(&self, path: &PathBuf) -> ignore::Walk {
         WalkBuilder::new(path)
             .max_depth(Some(1))
             .standard_filters(true)
@@ -391,7 +390,7 @@ def not_a_test(): pass
     fn test_discover_files_with_non_existent_function() {
         let env = TestEnv::with_files([("<test>/test_file.py", "def test_function1(): pass")]);
 
-        let project = Project::new(env.cwd(), vec![SystemPathBuf::from("non_existent_path")]);
+        let project = Project::new(env.cwd(), vec![PathBuf::from("non_existent_path")]);
         let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::attach(|py| discoverer.discover(py));
 

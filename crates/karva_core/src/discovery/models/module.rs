@@ -1,6 +1,9 @@
-use std::fmt::{self, Display};
+use std::{
+    fmt::{self, Display},
+    path::PathBuf,
+};
 
-use karva_project::{path::SystemPathBuf, project::Project, utils::module_name};
+use karva_project::{project::Project, utils::module_name};
 use pyo3::Python;
 use ruff_source_file::LineIndex;
 
@@ -12,7 +15,7 @@ use crate::{
 /// A module represents a single python file.
 #[derive(Debug)]
 pub(crate) struct DiscoveredModule {
-    path: SystemPathBuf,
+    path: PathBuf,
     test_functions: Vec<TestFunction>,
     fixtures: Vec<Fixture>,
     type_: ModuleType,
@@ -22,7 +25,7 @@ pub(crate) struct DiscoveredModule {
 
 impl DiscoveredModule {
     #[must_use]
-    pub(crate) fn new(project: &Project, path: &SystemPathBuf, module_type: ModuleType) -> Self {
+    pub(crate) fn new(project: &Project, path: &PathBuf, module_type: ModuleType) -> Self {
         Self {
             path: path.clone(),
             test_functions: Vec::new(),
@@ -34,7 +37,7 @@ impl DiscoveredModule {
     }
 
     #[must_use]
-    pub(crate) const fn path(&self) -> &SystemPathBuf {
+    pub(crate) const fn path(&self) -> &PathBuf {
         &self.path
     }
 
@@ -188,8 +191,8 @@ pub(crate) enum ModuleType {
     Configuration,
 }
 
-impl From<&SystemPathBuf> for ModuleType {
-    fn from(path: &SystemPathBuf) -> Self {
+impl From<&PathBuf> for ModuleType {
+    fn from(path: &PathBuf) -> Self {
         if path
             .file_name()
             .is_some_and(|file_name| file_name == "conftest.py")

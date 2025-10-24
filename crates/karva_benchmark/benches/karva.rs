@@ -1,4 +1,4 @@
-use std::sync::Once;
+use std::{path::PathBuf, sync::Once};
 
 use anyhow::Context;
 use karva_benchmark::{
@@ -9,7 +9,7 @@ use karva_benchmark::{
 };
 use karva_core::{DummyReporter, TestRunner, testing::setup_module};
 use karva_project::{
-    path::{SystemPathBuf, absolute},
+    path::absolute,
     project::{Project, ProjectOptions},
     verbosity::VerbosityLevel,
 };
@@ -126,7 +126,7 @@ fn affect(criterion: &mut Criterion) {
         name: "affect",
         repository: "https://github.com/MatthewMckee4/affect",
         commit: "803cc916b492378a8ad8966e747cac3325e11b5f",
-        paths: vec![SystemPathBuf::from("tests")],
+        paths: vec![PathBuf::from("tests")],
         dependencies: vec!["pydantic", "pydantic-settings", "pytest"],
         python_version: PythonVersion::PY313,
     });

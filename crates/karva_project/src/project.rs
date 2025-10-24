@@ -1,7 +1,9 @@
+use std::path::PathBuf;
+
 use ruff_python_ast::PythonVersion;
 
 use crate::{
-    path::{SystemPathBuf, TestPath, TestPathError},
+    path::{TestPath, TestPathError},
     verbosity::VerbosityLevel,
 };
 
@@ -80,7 +82,7 @@ impl Default for ProjectOptions {
 
 #[derive(Debug, Clone)]
 pub struct Project {
-    cwd: SystemPathBuf,
+    cwd: PathBuf,
     paths: Vec<String>,
     metadata: ProjectMetadata,
     options: ProjectOptions,
@@ -88,7 +90,7 @@ pub struct Project {
 
 impl Project {
     #[must_use]
-    pub fn new(cwd: SystemPathBuf, paths: Vec<SystemPathBuf>) -> Self {
+    pub fn new(cwd: PathBuf, paths: Vec<PathBuf>) -> Self {
         Self {
             cwd,
             paths: paths.into_iter().map(|p| p.display().to_string()).collect(),
@@ -120,7 +122,7 @@ impl Project {
     }
 
     #[must_use]
-    pub const fn cwd(&self) -> &SystemPathBuf {
+    pub const fn cwd(&self) -> &PathBuf {
         &self.cwd
     }
 
