@@ -1,18 +1,21 @@
-use std::fmt::Formatter;
+use std::{
+    fmt::Formatter,
+    path::{Path, PathBuf},
+};
 
-use crate::{path::SystemPathBuf, utils::is_python_file};
+use crate::utils::is_python_file;
 
-fn try_convert_to_py_path(path: &SystemPathBuf) -> Result<SystemPathBuf, TestPathError> {
+fn try_convert_to_py_path(path: &Path) -> Result<PathBuf, TestPathError> {
     if path.exists() {
-        return Ok(path.clone());
+        return Ok(path.to_path_buf());
     }
 
-    let path_with_py = SystemPathBuf::from(format!("{}.py", path.display()));
+    let path_with_py = PathBuf::from(format!("{}.py", path.display()));
     if path_with_py.exists() {
         return Ok(path_with_py);
     }
 
-    let path_with_slash = SystemPathBuf::from(format!(
+    let path_with_slash = PathBuf::from(format!(
         "{}.py",
         path.display().to_string().replace('.', "/")
     ));
@@ -20,7 +23,7 @@ fn try_convert_to_py_path(path: &SystemPathBuf) -> Result<SystemPathBuf, TestPat
         return Ok(path_with_slash);
     }
 
-    Err(TestPathError::NotFound(path.clone()))
+    Err(TestPathError::NotFound(path.to_path_buf()))
 }
 
 #[derive(Eq, PartialEq, Clone, Hash, PartialOrd, Ord, Debug)]
@@ -30,13 +33,13 @@ pub enum TestPath {
     /// Some examples are:
     /// - `test_file.py`
     /// - `test_file`
-    File(SystemPathBuf),
+    File(PathBuf),
 
     /// A directory containing test files.
     ///
     /// Some examples are:
     /// - `tests/`
-    Directory(SystemPathBuf),
+    Directory(PathBuf),
 
     /// A function in a file containing test functions.
     ///
@@ -44,7 +47,7 @@ pub enum TestPath {
     /// - `test_file.py::test_function`
     /// - `test_file::test_function`
     Function {
-        path: SystemPathBuf,
+        path: PathBuf,
         function_name: String,
     },
 }
@@ -56,12 +59,10 @@ impl TestPath {
             let function_name = &value[separator_pos + 2..];
 
             if function_name.is_empty() {
-                return Err(TestPathError::MissingFunctionName(SystemPathBuf::from(
-                    file_part,
-                )));
+                return Err(TestPathError::MissingFunctionName(PathBuf::from(file_part)));
             }
 
-            let file_path = SystemPathBuf::from(file_part);
+            let file_path = PathBuf::from(file_part);
             let path = try_convert_to_py_path(&file_path)?;
 
             if path.is_file() {
@@ -78,7 +79,7 @@ impl TestPath {
             }
         } else {
             // Original file/directory logic
-            let value = SystemPathBuf::from(value);
+            let value = PathBuf::from(value);
             let path = try_convert_to_py_path(&value)?;
 
             if path.is_file() {
@@ -96,7 +97,7 @@ impl TestPath {
     }
 
     #[must_use]
-    pub const fn path(&self) -> &SystemPathBuf {
+    pub const fn path(&self) -> &PathBuf {
         match self {
             Self::File(path) | Self::Directory(path) | Self::Function { path, .. } => path,
         }
@@ -105,15 +106,15 @@ impl TestPath {
 
 #[derive(Debug)]
 pub enum TestPathError {
-    NotFound(SystemPathBuf),
-    WrongFileExtension(SystemPathBuf),
-    InvalidPath(SystemPathBuf),
-    MissingFunctionName(SystemPathBuf),
+    NotFound(PathBuf),
+    WrongFileExtension(PathBuf),
+    InvalidPath(PathBuf),
+    MissingFunctionName(PathBuf),
 }
 
 impl TestPathError {
     #[must_use]
-    pub const fn path(&self) -> &SystemPathBuf {
+    pub const fn path(&self) -> &PathBuf {
         match self {
             Self::NotFound(path)
             | Self::WrongFileExtension(path)

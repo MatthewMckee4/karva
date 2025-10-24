@@ -86,7 +86,9 @@ impl TestRunner for TestEnv {
 
 #[cfg(test)]
 mod tests {
-    use karva_project::{path::SystemPathBuf, testing::TestEnv, utils::module_name};
+    use std::path::PathBuf;
+
+    use karva_project::{testing::TestEnv, utils::module_name};
     use rstest::rstest;
 
     use super::*;
@@ -473,7 +475,7 @@ def test_fixture_2(fixture):
 
         let project = Project::new(
             env.cwd(),
-            vec![SystemPathBuf::from(format!(
+            vec![PathBuf::from(format!(
                 "{}::test_1",
                 test_file1_path.display()
             ))],
@@ -506,7 +508,7 @@ def test_fixture_2(fixture):
         let project = Project::new(
             env.cwd(),
             vec![
-                SystemPathBuf::from(format!("{}::test_1", test_file1_path.display())),
+                PathBuf::from(format!("{}::test_1", test_file1_path.display())),
                 test_file1_path,
             ],
         );
@@ -540,7 +542,7 @@ def test_fixture_2(fixture):
         let project = Project::new(
             env.cwd(),
             vec![
-                SystemPathBuf::from(format!("{}::test_1", test_file1_path.display())),
+                PathBuf::from(format!("{}::test_1", test_file1_path.display())),
                 mapped_path,
             ],
         );
