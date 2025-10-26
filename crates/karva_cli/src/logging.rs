@@ -10,7 +10,7 @@ use tracing_subscriber::{
     registry::LookupSpan,
 };
 
-#[derive(clap::Args, Debug, Clone, Default, PartialEq, Eq)]
+#[derive(clap::Args, Debug, Clone, Default)]
 #[command(about = None, long_about = None)]
 pub struct Verbosity {
     #[arg(
@@ -19,12 +19,32 @@ pub struct Verbosity {
         help = "Use verbose output (or `-vv` and `-vvv` for more verbose output)",
         action = clap::ArgAction::Count,
         global = true,
+        overrides_with = "quiet",
     )]
     verbose: u8,
+
+    #[arg(
+        long,
+        short,
+        help = "Use quiet output (or `-qq` for silent output)",
+        action = clap::ArgAction::Count,
+        global = true,
+        overrides_with = "verbose",
+    )]
+    quiet: u8,
 }
 
 impl Verbosity {
+    /// Returns the verbosity level based on the number of `-v` and `-q` flags.
+    ///
+    /// Returns `None` if the user did not specify any verbosity flags.
     pub(crate) const fn level(&self) -> VerbosityLevel {
+        // `--quiet` and `--verbose` are mutually exclusive in Clap, so we can just check one first.
+        match self.quiet {
+            0 => {}
+            _ => return VerbosityLevel::Quiet,
+        }
+
         match self.verbose {
             0 => VerbosityLevel::Default,
             1 => VerbosityLevel::Verbose,

@@ -7,7 +7,7 @@ use std::{
 use anyhow::{Context, Result};
 use clap::Parser;
 use colored::Colorize;
-use karva_core::{Reporter, TestCaseReporter, TestRunner, current_python_version};
+use karva_core::{DummyReporter, Reporter, TestCaseReporter, TestRunner, current_python_version};
 use karva_project::{
     path::absolute,
     project::{Project, ProjectMetadata},
@@ -98,7 +98,11 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         std::process::exit(0);
     })?;
 
-    let mut reporter: Box<dyn Reporter> = Box::new(TestCaseReporter);
+    let mut reporter: Box<dyn Reporter> = if verbosity.is_quiet() {
+        Box::new(DummyReporter)
+    } else {
+        Box::new(TestCaseReporter)
+    };
 
     let result = project.test_with_reporter(&mut *reporter);
 
