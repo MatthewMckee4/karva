@@ -85,11 +85,12 @@ impl<'proj> TestCase<'proj> {
 
         let (case_call_result, test_name) = if self.kwargs.is_empty() {
             let test_name = full_test_name(py, &display.to_string(), None);
-            if let Some(skip_reason) = &self.skip {
+
+            if let Some(skip_tag) = &self.skip {
                 run_result.register_test_case_result(
                     &test_name,
                     IndividualTestResultKind::Skipped {
-                        reason: skip_reason.reason(),
+                        reason: skip_tag.reason(),
                     },
                     Some(reporter),
                 );
@@ -109,11 +110,11 @@ impl<'proj> TestCase<'proj> {
                 }
             }
 
-            if let Some(skip_reason) = &self.skip {
+            if let Some(skip_tag) = &self.skip {
                 run_result.register_test_case_result(
                     &test_name,
                     IndividualTestResultKind::Skipped {
-                        reason: skip_reason.reason(),
+                        reason: skip_tag.reason(),
                     },
                     Some(reporter),
                 );

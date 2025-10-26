@@ -39,14 +39,10 @@ impl<'proj> StandardTestRunner<'proj> {
 
             let total_test_cases = collected_session.total_test_cases();
 
-            let total_modules = collected_session.total_modules();
-
             tracing::info!(
-                "Collected {} test{} in {} module{}",
+                "Collected {} test{}",
                 total_test_cases,
                 if total_test_cases == 1 { "" } else { "s" },
-                total_modules,
-                if total_modules == 1 { "" } else { "s" },
             );
 
             let mut diagnostics = TestRunResult::default();
@@ -109,6 +105,69 @@ mod tests {
             "karva" => "karva.tags.skip",
             _ => panic!("Invalid framework"),
         }
+    }
+
+    #[test]
+    fn test_single_file() {
+        let test_context = TestContext::with_files([
+            (
+                "<test>/test_file1.py",
+                r"
+                def test_1(): pass
+                def test_2(): pass",
+            ),
+            (
+                "<test>/test_file2.py",
+                r"
+                def test_3(): pass
+                def test_4(): pass",
+            ),
+        ]);
+
+        let mapped_path = test_context.mapped_path("<test>").unwrap().clone();
+        let test_file1_path = mapped_path.join("test_file1.py");
+
+        let project = Project::new(test_context.cwd(), vec![test_file1_path]);
+
+        let test_runner = StandardTestRunner::new(&project);
+
+        let result = test_runner.test();
+
+        let mut expected_stats = TestResultStats::default();
+
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_empty_file() {
+        let test_context = TestContext::with_file("<test>/test_empty.py", "");
+
+        let result = test_context.test();
+
+        let expected_stats = TestResultStats::default();
+
+        assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_empty_directory() {
+        let test_context = TestContext::with_file("<test>/tests/test_empty.py", "");
+
+        let mapped_tests_dir = test_context.mapped_path("<test>").unwrap();
+
+        let project = Project::new(test_context.cwd(), vec![mapped_tests_dir.clone()]);
+
+        let test_runner = StandardTestRunner::new(&project);
+
+        let result = test_runner.test();
+
+        let expected_stats = TestResultStats::default();
+
+        assert_eq!(*result.stats(), expected_stats);
     }
 
     #[test]

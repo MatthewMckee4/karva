@@ -44,21 +44,6 @@ impl<'proj> CollectedPackage<'proj> {
         total
     }
 
-    /// Count the number of modules in the package that have test cases.
-    #[must_use]
-    pub(crate) fn total_modules(&self) -> usize {
-        let mut total = 0;
-        for module in &self.modules {
-            if !module.test_cases().is_empty() {
-                total += 1;
-            }
-        }
-        for package in &self.packages {
-            total += package.total_modules();
-        }
-        total
-    }
-
     pub(crate) fn run_with_reporter(
         &self,
         py: Python<'_>,
