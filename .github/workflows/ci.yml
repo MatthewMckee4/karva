@@ -99,39 +99,63 @@ jobs:
 
       - name: Setup Python
         uses: actions/setup-python@v4
-        id: setup-python
-        with:
-          python-version: 3.13
-
-      - name: Delete .gitignore
-        run: rm -f .gitignore
-
-      - uses: astral-sh/setup-uv@v5
-        id: setup-uv
         with:
           python-version: 3.13
 
       - name: Build wheels
         run: |
-          uv venv
-          uv pip install maturin pytest
-          uv run --no-project maturin build
+          pip install maturin pytest
+          maturin build
 
       - name: Generate resources
-        run: uv run --no-project crates/karva_benchmark/resources/generate.py
+        run: python crates/karva_benchmark/resources/generate.py
 
       - name: Build benchmarks
-        env:
-          PYO3_PYTHON: ${{ env.VIRTUAL_ENV }}/bin/python
-        run: uv run --no-project cargo codspeed build --features codspeed -p karva_benchmark
+        run: cargo codspeed build --features codspeed -p karva_benchmark
 
       - name: Run benchmarks
-        env:
-          PYO3_PYTHON: ${{ env.VIRTUAL_ENV }}/bin/python
         uses: CodSpeedHQ/action@v3
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
-          run: uv run --no-project cargo codspeed run
+          run: cargo codspeed run --bench karva
+
+  benchmarks-walltime:
+    name: Run walltime benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: moonrepo/setup-rust@v1
+        with:
+          channel: stable
+          cache-target: release
+          bins: cargo-codspeed
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.13
+
+      - name: Build wheels
+        run: |
+          pip install maturin pytest
+          maturin build
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: 3.13
+
+      - name: Build benchmarks
+        run: cargo codspeed build -m walltime
+
+      - name: Run benchmarks
+        env:
+          CODSPEED_PERF_ENABLED: false
+        uses: CodSpeedHQ/action@v3
+        with:
+          token: ${{ secrets.CODSPEED_TOKEN }}
+          run: cargo codspeed run --bench karva_walltime
+          mode: walltime
 
   coverage:
     runs-on: ubuntu-latest
