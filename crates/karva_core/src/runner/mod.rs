@@ -9,15 +9,15 @@ use crate::{
     utils::attach,
 };
 
-mod diagnostic;
+pub(crate) mod diagnostic;
 
-pub(crate) use diagnostic::RunDiagnostics;
+pub(crate) use diagnostic::TestRunResult;
 
 pub trait TestRunner {
-    fn test(&self) -> RunDiagnostics {
+    fn test(&self) -> TestRunResult {
         self.test_with_reporter(&mut DummyReporter)
     }
-    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics;
+    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> TestRunResult;
 }
 
 pub(crate) struct StandardTestRunner<'proj> {
@@ -30,7 +30,7 @@ impl<'proj> StandardTestRunner<'proj> {
         Self { project }
     }
 
-    fn test_impl(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
+    fn test_impl(&self, reporter: &dyn Reporter) -> TestRunResult {
         attach(self.project, |py| {
             let (session, discovery_diagnostics) =
                 StandardDiscoverer::new(self.project).discover(py);
@@ -49,11 +49,9 @@ impl<'proj> StandardTestRunner<'proj> {
                 if total_modules == 1 { "" } else { "s" },
             );
 
-            let mut diagnostics = RunDiagnostics::default();
+            let mut diagnostics = TestRunResult::default();
 
             diagnostics.add_diagnostics(discovery_diagnostics);
-
-            reporter.set(total_test_cases);
 
             diagnostics.update(&collected_session.run_with_reporter(py, reporter));
 
@@ -63,13 +61,13 @@ impl<'proj> StandardTestRunner<'proj> {
 }
 
 impl TestRunner for StandardTestRunner<'_> {
-    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
+    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> TestRunResult {
         self.test_impl(reporter)
     }
 }
 
 impl TestRunner for Project {
-    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
+    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> TestRunResult {
         let test_runner = StandardTestRunner::new(self);
         test_runner.test_with_reporter(reporter)
     }
@@ -77,7 +75,7 @@ impl TestRunner for Project {
 
 #[cfg(test)]
 impl TestRunner for TestContext {
-    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> RunDiagnostics {
+    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> TestRunResult {
         let project = Project::new(self.cwd(), vec![self.cwd()]);
         let test_runner = StandardTestRunner::new(&project);
         test_runner.test_with_reporter(reporter)
@@ -94,7 +92,7 @@ mod tests {
     use super::*;
     use crate::{
         diagnostic::{Diagnostic, DiagnosticSeverity},
-        runner::diagnostic::DiagnosticStats,
+        runner::diagnostic::TestResultStats,
     };
 
     fn get_auto_use_kw(framework: &str) -> &str {
@@ -181,7 +179,7 @@ def test_parametrize_with_fixture(a, fixture_value):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         for _ in 0..3 {
             expected_stats.add_passed();
@@ -207,7 +205,7 @@ def test_parametrize_with_fixture(a):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         for _ in 0..3 {
             expected_stats.add_passed();
@@ -231,7 +229,7 @@ def test_function(a: int, b: int):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         for _ in 0..4 {
             expected_stats.add_passed();
@@ -257,7 +255,7 @@ def test_function(a: int, b: int, c: int):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         for _ in 0..8 {
             expected_stats.add_passed();
@@ -284,7 +282,7 @@ def test_fixture_generator(fixture_generator):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -315,7 +313,7 @@ def test_fixture_generator(fixture_generator):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -340,7 +338,7 @@ def test_fixture_generator(fixture_generator):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -380,7 +378,7 @@ def test_fixture_generator(fixture_generator):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -418,7 +416,7 @@ def test_fixture_with_name_parameter(fixture_name):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -451,7 +449,7 @@ def test_fixture_2(fixture):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         for _ in 0..2 {
             expected_stats.add_passed();
@@ -485,7 +483,7 @@ def test_fixture_2(fixture):
 
         let result = test_runner.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -517,7 +515,7 @@ def test_fixture_2(fixture):
 
         let result = test_runner.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         for _ in 0..2 {
             expected_stats.add_passed();
@@ -551,7 +549,7 @@ def test_fixture_2(fixture):
 
         let result = test_runner.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         for _ in 0..2 {
             expected_stats.add_passed();
@@ -577,7 +575,7 @@ def x():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -601,7 +599,7 @@ def x():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -640,7 +638,7 @@ def test_2(x):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
         for _ in 0..2 {
             expected_stats.add_passed();
         }
@@ -680,7 +678,7 @@ def test_2(x):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
         for _ in 0..2 {
             expected_stats.add_passed();
         }
@@ -706,7 +704,7 @@ def x():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -743,7 +741,7 @@ def test_2(x_session):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         for _ in 0..2 {
             expected_stats.add_passed();
@@ -782,7 +780,7 @@ def test_2(x_function):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         for _ in 0..2 {
             expected_stats.add_passed();
@@ -812,7 +810,7 @@ def test_with_use_fixture():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -844,7 +842,7 @@ def test_with_multiple_use_fixtures():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
         expected_stats.add_passed();
 
         assert_eq!(*result.stats(), expected_stats);
@@ -874,7 +872,7 @@ def test_combined_fixtures(param_fixture):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
         expected_stats.add_passed();
 
         assert_eq!(*result.stats(), expected_stats);
@@ -904,7 +902,7 @@ def test_use_fixtures_with_parametrize(value):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
         for _ in 0..3 {
             expected_stats.add_passed();
         }
@@ -938,7 +936,7 @@ def test_multiple_use_fixtures_decorators():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
         expected_stats.add_passed();
 
         assert_eq!(*result.stats(), expected_stats);
@@ -959,7 +957,7 @@ def test_missing_fixture():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -988,7 +986,7 @@ def test_use_fixtures_with_generator():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
         expected_stats.add_passed();
 
         assert_eq!(*result.stats(), expected_stats);
@@ -1019,7 +1017,7 @@ def test_session_2():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
         for _ in 0..2 {
             expected_stats.add_passed();
         }
@@ -1058,7 +1056,7 @@ def test_mixed_fixtures(shared_fixture):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -1086,7 +1084,7 @@ def test_with_pytest_use_fixture():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -1118,7 +1116,7 @@ def test_with_multiple_pytest_use_fixtures():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
         expected_stats.add_passed();
 
         assert_eq!(*result.stats(), expected_stats);
@@ -1148,7 +1146,7 @@ def test_pytest_use_fixtures_with_parametrize(value):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
         for _ in 0..3 {
             expected_stats.add_passed();
         }
@@ -1181,7 +1179,7 @@ def test_pytest_session_2():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
         for _ in 0..2 {
             expected_stats.add_passed();
         }
@@ -1232,7 +1230,7 @@ def test_username(username):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         for _ in 0..2 {
             expected_stats.add_passed();
@@ -1264,7 +1262,7 @@ def test_fixtures_given_by_decorator(a):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -1300,7 +1298,7 @@ def test_fixtures_given_by_decorator(a, b):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -1333,7 +1331,7 @@ def test_fixtures_given_by_decorator(a, b):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         for _ in 0..2 {
             expected_stats.add_passed();
@@ -1373,7 +1371,7 @@ def test_fixtures_given_by_decorator(a, b, c):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         for _ in 0..2 {
             expected_stats.add_passed();
@@ -1406,7 +1404,7 @@ def test_fixtures_given_by_decorator(a, b):
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
         expected_stats.add_failed();
 
         assert_eq!(*result.stats(), expected_stats);
@@ -1441,7 +1439,7 @@ def test_something_else():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         for _ in 0..2 {
             expected_stats.add_passed();
@@ -1481,7 +1479,7 @@ def test_something_else():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         for _ in 0..2 {
             expected_stats.add_passed();
@@ -1509,7 +1507,7 @@ def test_something_else():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_skipped();
 
@@ -1534,7 +1532,7 @@ def test_something_else():
         );
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_skipped();
 
@@ -1560,7 +1558,7 @@ def test_something_else():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_skipped();
 
@@ -1586,7 +1584,7 @@ def test_something_else():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_skipped();
 
@@ -1620,7 +1618,7 @@ def test_something_else():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -1654,7 +1652,7 @@ def test_something_else():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         expected_stats.add_passed();
 
@@ -1694,7 +1692,7 @@ def test_something_else():
 
         let result = env.test();
 
-        let mut expected_stats = DiagnosticStats::default();
+        let mut expected_stats = TestResultStats::default();
 
         for _ in 0..2 {
             expected_stats.add_passed();

@@ -1,27 +1,27 @@
-use std::{collections::HashMap, time::Instant};
+use std::{collections::HashMap, fmt::Debug, time::Instant};
 
 use colored::Colorize;
 
-use crate::diagnostic::Diagnostic;
+use crate::{Reporter, diagnostic::Diagnostic};
 
-#[derive(Clone, Debug)]
-pub struct RunDiagnostics {
+#[derive(Debug, Clone)]
+pub struct TestRunResult {
     diagnostics: Vec<Diagnostic>,
-    stats: DiagnosticStats,
+    stats: TestResultStats,
     start_time: Instant,
 }
 
-impl Default for RunDiagnostics {
+impl Default for TestRunResult {
     fn default() -> Self {
         Self {
             diagnostics: Vec::new(),
-            stats: DiagnosticStats::default(),
+            stats: TestResultStats::default(),
             start_time: Instant::now(),
         }
     }
 }
 
-impl RunDiagnostics {
+impl TestRunResult {
     #[must_use]
     pub const fn diagnostics(&self) -> &Vec<Diagnostic> {
         &self.diagnostics
@@ -55,16 +55,29 @@ impl RunDiagnostics {
     }
 
     #[must_use]
-    pub const fn stats(&self) -> &DiagnosticStats {
+    pub const fn stats(&self) -> &TestResultStats {
         &self.stats
     }
 
-    pub(crate) const fn stats_mut(&mut self) -> &mut DiagnosticStats {
+    #[cfg(test)]
+    pub(crate) const fn stats_mut(&mut self) -> &mut TestResultStats {
         &mut self.stats
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Diagnostic> {
         self.diagnostics.iter()
+    }
+
+    pub fn register_test_case_result(
+        &mut self,
+        test_case_name: &str,
+        result: IndividualTestResultKind,
+        reporter: Option<&dyn Reporter>,
+    ) {
+        self.stats.add(result.clone().into());
+        if let Some(reporter) = reporter {
+            reporter.report_test_case_result(test_case_name, result);
+        }
     }
 
     #[must_use]
@@ -73,19 +86,36 @@ impl RunDiagnostics {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum IndividualTestResultKind {
+    Passed,
+    Failed,
+    Skipped { reason: Option<String> },
+}
+
+impl From<IndividualTestResultKind> for TestResultKind {
+    fn from(val: IndividualTestResultKind) -> Self {
+        match val {
+            IndividualTestResultKind::Passed => Self::Passed,
+            IndividualTestResultKind::Failed => Self::Failed,
+            IndividualTestResultKind::Skipped { .. } => Self::Skipped,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
-pub enum DiagnosticKind {
+pub enum TestResultKind {
     Passed,
     Failed,
     Skipped,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct DiagnosticStats {
-    inner: HashMap<DiagnosticKind, usize>,
+pub struct TestResultStats {
+    inner: HashMap<TestResultKind, usize>,
 }
 
-impl DiagnosticStats {
+impl TestResultStats {
     pub(crate) fn update(&mut self, other: &Self) {
         for (kind, count) in &other.inner {
             self.inner
@@ -104,48 +134,51 @@ impl DiagnosticStats {
         self.failed() == 0
     }
 
-    fn get(&self, kind: DiagnosticKind) -> usize {
+    fn get(&self, kind: TestResultKind) -> usize {
         self.inner.get(&kind).copied().unwrap_or(0)
     }
 
     #[must_use]
     pub(crate) fn passed(&self) -> usize {
-        self.get(DiagnosticKind::Passed)
+        self.get(TestResultKind::Passed)
     }
 
     #[must_use]
     pub(crate) fn failed(&self) -> usize {
-        self.get(DiagnosticKind::Failed)
+        self.get(TestResultKind::Failed)
     }
 
     #[must_use]
     pub(crate) fn skipped(&self) -> usize {
-        self.get(DiagnosticKind::Skipped)
+        self.get(TestResultKind::Skipped)
     }
 
-    fn add(&mut self, kind: DiagnosticKind) {
+    fn add(&mut self, kind: TestResultKind) {
         self.inner.entry(kind).and_modify(|v| *v += 1).or_insert(1);
     }
 
+    #[cfg(test)]
     pub(crate) fn add_failed(&mut self) {
-        self.add(DiagnosticKind::Failed);
+        self.add(TestResultKind::Failed);
     }
 
+    #[cfg(test)]
     pub(crate) fn add_passed(&mut self) {
-        self.add(DiagnosticKind::Passed);
+        self.add(TestResultKind::Passed);
     }
 
+    #[cfg(test)]
     pub(crate) fn add_skipped(&mut self) {
-        self.add(DiagnosticKind::Skipped);
+        self.add(TestResultKind::Skipped);
     }
 }
 
 pub struct DisplayRunDiagnostics<'a> {
-    diagnostics: &'a RunDiagnostics,
+    diagnostics: &'a TestRunResult,
 }
 
 impl<'a> DisplayRunDiagnostics<'a> {
-    pub(crate) const fn new(diagnostics: &'a RunDiagnostics) -> Self {
+    pub(crate) const fn new(diagnostics: &'a TestRunResult) -> Self {
         Self { diagnostics }
     }
 }
@@ -194,7 +227,7 @@ mod tests {
 
     #[test]
     fn test_display_all_passed() {
-        let mut diagnostics = RunDiagnostics::default();
+        let mut diagnostics = TestRunResult::default();
         diagnostics.stats_mut().add_passed();
         diagnostics.stats_mut().add_passed();
         diagnostics.stats_mut().add_passed();
@@ -205,7 +238,7 @@ mod tests {
 
     #[test]
     fn test_display_with_failures() {
-        let mut diagnostics = RunDiagnostics::default();
+        let mut diagnostics = TestRunResult::default();
         diagnostics.stats_mut().add_passed();
         diagnostics.stats_mut().add_failed();
         diagnostics.stats_mut().add_failed();
@@ -216,7 +249,7 @@ mod tests {
 
     #[test]
     fn test_display_with_skipped() {
-        let mut diagnostics = RunDiagnostics::default();
+        let mut diagnostics = TestRunResult::default();
         diagnostics.stats_mut().add_passed();
         diagnostics.stats_mut().add_skipped();
         diagnostics.stats_mut().add_skipped();
@@ -227,7 +260,7 @@ mod tests {
 
     #[test]
     fn test_display_mixed_results() {
-        let mut diagnostics = RunDiagnostics::default();
+        let mut diagnostics = TestRunResult::default();
         diagnostics.stats_mut().add_passed();
         diagnostics.stats_mut().add_passed();
         diagnostics.stats_mut().add_failed();
@@ -239,7 +272,7 @@ mod tests {
 
     #[test]
     fn test_display_no_tests() {
-        let diagnostics = RunDiagnostics::default();
+        let diagnostics = TestRunResult::default();
 
         let output = diagnostics.display().to_string();
         assert_snapshot_filtered!(output, @"test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]");
@@ -247,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_diagnostic_stats_totals() {
-        let mut stats = DiagnosticStats::default();
+        let mut stats = TestResultStats::default();
         stats.add_passed();
         stats.add_passed();
         stats.add_failed();
@@ -262,10 +295,10 @@ mod tests {
 
     #[test]
     fn test_run_diagnostics_update() {
-        let mut diagnostics1 = RunDiagnostics::default();
+        let mut diagnostics1 = TestRunResult::default();
         diagnostics1.stats_mut().add_passed();
 
-        let mut diagnostics2 = RunDiagnostics::default();
+        let mut diagnostics2 = TestRunResult::default();
         diagnostics2.stats_mut().add_failed();
 
         diagnostics1.update(&diagnostics2);

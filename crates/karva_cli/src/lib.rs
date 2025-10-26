@@ -7,7 +7,7 @@ use std::{
 use anyhow::{Context, Result};
 use clap::Parser;
 use colored::Colorize;
-use karva_core::{DummyReporter, Reporter, TestRunner, current_python_version};
+use karva_core::{Reporter, TestCaseReporter, TestRunner, current_python_version};
 use karva_project::{
     path::absolute,
     project::{Project, ProjectMetadata},
@@ -98,16 +98,13 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         std::process::exit(0);
     })?;
 
-    let mut reporter: Box<dyn Reporter> =
-        if project.options().verbosity().is_default() && !project.options().show_output() {
-            Box::new(ProgressReporter::default())
-        } else {
-            Box::new(DummyReporter)
-        };
+    let mut reporter: Box<dyn Reporter> = Box::new(TestCaseReporter);
 
     let result = project.test_with_reporter(&mut *reporter);
 
     let mut stdout = io::stdout().lock();
+
+    writeln!(stdout)?;
 
     for diagnostic in result.iter() {
         write!(stdout, "{}", diagnostic.display())?;
@@ -145,30 +142,5 @@ impl ExitStatus {
     #[must_use]
     pub const fn to_i32(self) -> i32 {
         self as i32
-    }
-}
-
-#[derive(Default)]
-struct ProgressReporter(Option<indicatif::ProgressBar>);
-
-impl Reporter for ProgressReporter {
-    fn set(&mut self, n: usize) {
-        let progress = indicatif::ProgressBar::new(n as u64);
-        progress.set_style(
-            indicatif::ProgressStyle::with_template(
-                r"{msg:10.dim} {bar:60.green/dim} {pos}/{len} tests",
-            )
-            .expect("Failed to create progress style")
-            .progress_chars("--"),
-        );
-        progress.set_message("Testing");
-
-        self.0 = Some(progress);
-    }
-
-    fn report(&self) {
-        if let Some(ref progress_bar) = self.0 {
-            progress_bar.inc(1);
-        }
     }
 }

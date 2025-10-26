@@ -7,15 +7,16 @@ use pyo3::{prelude::*, types::PyDict};
 use regex::Regex;
 
 use crate::{
+    Reporter,
     diagnostic::{
         Diagnostic, FixtureSubDiagnosticType, SubDiagnosticErrorType, SubDiagnosticSeverity,
     },
-    discovery::{DiscoveredModule, TestFunction, TestFunctionDisplay},
+    discovery::{DiscoveredModule, TestFunction},
     extensions::{
         fixtures::{Finalizers, UsesFixtures},
         tags::SkipTag,
     },
-    runner::RunDiagnostics,
+    runner::{TestRunResult, diagnostic::IndividualTestResultKind},
 };
 
 /// A test case represents a single test function invocation with a set of arguments.
@@ -72,26 +73,35 @@ impl<'proj> TestCase<'proj> {
     }
 
     #[must_use]
-    pub(crate) fn run(&self, py: Python<'_>, diagnostic: Option<Diagnostic>) -> RunDiagnostics {
-        let mut run_result = RunDiagnostics::default();
+    pub(crate) fn run(
+        &self,
+        py: Python<'_>,
+        diagnostic: Option<Diagnostic>,
+        reporter: &dyn Reporter,
+    ) -> TestRunResult {
+        let mut run_result = TestRunResult::default();
 
         let display = self.function.display();
 
-        let (case_call_result, logger) = if self.kwargs.is_empty() {
-            let logger = TestCaseLogger::new(py, &display, None);
-
+        let (case_call_result, test_name) = if self.kwargs.is_empty() {
+            let test_name = full_test_name(py, &display.to_string(), None);
             if let Some(skip_reason) = &self.skip {
-                logger.log_skipped(skip_reason.reason());
-
-                run_result.stats_mut().add_skipped();
+                run_result.register_test_case_result(
+                    &test_name,
+                    IndividualTestResultKind::Skipped {
+                        reason: skip_reason.reason(),
+                    },
+                    Some(reporter),
+                );
 
                 return run_result;
             }
 
-            logger.log_running();
-            (self.py_function.call0(py), logger)
+            (self.py_function.call0(py), test_name)
         } else {
             let kwargs = PyDict::new(py);
+
+            let test_name = full_test_name(py, &display.to_string(), Some(&self.kwargs));
 
             for key in self.function.definition().dependant_fixtures(py) {
                 if let Some(value) = self.kwargs.get(&key) {
@@ -99,24 +109,28 @@ impl<'proj> TestCase<'proj> {
                 }
             }
 
-            let logger = TestCaseLogger::new(py, &display, Some(&self.kwargs));
-
             if let Some(skip_reason) = &self.skip {
-                logger.log_skipped(skip_reason.reason());
-
-                run_result.stats_mut().add_skipped();
+                run_result.register_test_case_result(
+                    &test_name,
+                    IndividualTestResultKind::Skipped {
+                        reason: skip_reason.reason(),
+                    },
+                    Some(reporter),
+                );
 
                 return run_result;
             }
 
-            logger.log_running();
-            (self.py_function.call(py, (), Some(&kwargs)), logger)
+            (self.py_function.call(py, (), Some(&kwargs)), test_name)
         };
 
         match case_call_result {
             Ok(_) => {
-                logger.log_passed();
-                run_result.stats_mut().add_passed();
+                run_result.register_test_case_result(
+                    &test_name,
+                    IndividualTestResultKind::Passed,
+                    Some(reporter),
+                );
             }
             Err(err) => {
                 let diagnostic = diagnostic.map_or_else(
@@ -132,8 +146,11 @@ impl<'proj> TestCase<'proj> {
                 let error_type = diagnostic.severity();
 
                 if error_type.is_test_fail() {
-                    logger.log_failed();
-                    run_result.stats_mut().add_failed();
+                    run_result.register_test_case_result(
+                        &test_name,
+                        IndividualTestResultKind::Failed,
+                        Some(reporter),
+                    );
                 }
 
                 run_result.add_diagnostic(diagnostic);
@@ -212,61 +229,29 @@ fn missing_arguments_from_error(err: &str) -> HashSet<String> {
     )
 }
 
-/// Log the status of a test case.
-struct TestCaseLogger {
-    test_name: String,
-}
+fn full_test_name(
+    py: Python,
+    function: &str,
+    kwargs: Option<&HashMap<String, Py<PyAny>>>,
+) -> String {
+    kwargs.map_or_else(
+        || function.to_string(),
+        |kwargs| {
+            let mut args_str = String::new();
+            let mut sorted_kwargs: Vec<_> = kwargs.iter().collect();
+            sorted_kwargs.sort_by_key(|(key, _)| *key);
 
-impl TestCaseLogger {
-    #[must_use]
-    fn new(
-        py: Python<'_>,
-        function: &TestFunctionDisplay<'_>,
-        kwargs: Option<&HashMap<String, Py<PyAny>>>,
-    ) -> Self {
-        let test_name = kwargs.map_or_else(
-            || function.to_string(),
-            |kwargs| {
-                let mut args_str = String::new();
-                for (i, (key, value)) in kwargs.iter().enumerate() {
-                    if i > 0 {
-                        args_str.push_str(", ");
-                    }
-                    if let Ok(value) = value.cast_bound::<PyAny>(py) {
-                        args_str.push_str(&format!("{key}={value:?}"));
-                    }
+            for (i, (key, value)) in sorted_kwargs.iter().enumerate() {
+                if i > 0 {
+                    args_str.push_str(", ");
                 }
-                format!("{function} [{args_str}]")
-            },
-        );
-
-        Self { test_name }
-    }
-
-    fn log(&self, status: &str, message: Option<&str>) {
-        tracing::info!(
-            "{:<8} | {}{}",
-            status,
-            self.test_name,
-            message.map_or_else(String::new, |message| format!(" - {message}"))
-        );
-    }
-
-    fn log_running(&self) {
-        self.log("running", None);
-    }
-
-    fn log_passed(&self) {
-        self.log("passed", None);
-    }
-
-    fn log_failed(&self) {
-        self.log("failed", None);
-    }
-
-    fn log_skipped(&self, reason: Option<&str>) {
-        self.log("skipped", reason);
-    }
+                if let Ok(value) = value.cast_bound::<PyAny>(py) {
+                    args_str.push_str(&format!("{key}={value:?}"));
+                }
+            }
+            format!("{function} [{args_str}]")
+        },
+    )
 }
 
 #[cfg(test)]

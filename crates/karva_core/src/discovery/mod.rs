@@ -4,7 +4,7 @@ pub mod visitor;
 
 pub(crate) use discoverer::StandardDiscoverer;
 pub(crate) use models::{
-    function::{TestFunction, TestFunctionDisplay},
+    function::TestFunction,
     module::{DiscoveredModule, ModuleType},
     package::DiscoveredPackage,
 };
