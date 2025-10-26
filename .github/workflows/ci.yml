@@ -197,5 +197,6 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
+          slug: MatthewMckee4/karva
           files: lcov.info
           fail_ci_if_error: true
