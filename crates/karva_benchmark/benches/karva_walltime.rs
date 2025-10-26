@@ -4,7 +4,7 @@ use karva_benchmark::{
     criterion::{BatchSize, Criterion, criterion_group, criterion_main},
     real_world_projects::{InstalledProject, RealWorldProject},
 };
-use karva_core::{DummyReporter, TestRunner, testing::setup_module};
+use karva_core::{TestRunner, testing::setup_module};
 use karva_project::{
     path::absolute,
     project::{Project, ProjectOptions},
@@ -53,7 +53,7 @@ impl<'a> ProjectBenchmark<'a> {
 
 fn bench_project(benchmark: &ProjectBenchmark, criterion: &mut Criterion) {
     fn test_project(project: &Project) {
-        let result = project.test_with_reporter(&mut DummyReporter);
+        let result = project.test();
 
         assert!(result.stats().total() > 0, "{:#?}", result.diagnostics());
     }
