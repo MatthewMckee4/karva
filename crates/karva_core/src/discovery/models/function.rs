@@ -26,6 +26,7 @@ use crate::{
 /// This structure bridges the gap between Rust's AST representation and Python's
 /// runtime objects, maintaining both the parsed function definition and the actual
 /// Python function object for execution.
+#[derive(Debug)]
 pub(crate) struct TestFunction {
     /// The parsed AST representation of the function from ruff
     function_definition: StmtFunctionDef,
@@ -250,12 +251,6 @@ impl<'proj> Upcast<Vec<&'proj dyn UsesFixtures>> for Vec<&'proj TestFunction> {
             result.push(tc as &dyn UsesFixtures);
         }
         result
-    }
-}
-
-impl std::fmt::Debug for TestFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
     }
 }
 
