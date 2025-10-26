@@ -1,19 +1,13 @@
-use std::{path::PathBuf, sync::Once};
+use std::sync::Once;
 
 use anyhow::Context;
 use karva_benchmark::{
     FIXTURES, LARGE_LIST_COMPREHENSION, LARGE_SUMMATION, MATH, PARAMETRIZE, STRING_CONCATENATION,
     TRUE_ASSERTIONS, TestCase,
-    criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main},
-    real_world_projects::{InstalledProject, RealWorldProject},
+    criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main},
 };
 use karva_core::{DummyReporter, TestRunner, testing::setup_module};
-use karva_project::{
-    path::absolute,
-    project::{Project, ProjectOptions},
-    verbosity::VerbosityLevel,
-};
-use ruff_python_ast::PythonVersion;
+use karva_project::{path::absolute, project::Project};
 
 fn create_test_cases() -> Vec<TestCase> {
     vec![
@@ -69,72 +63,6 @@ fn benchmark_karva(criterion: &mut Criterion) {
     group.finish();
 }
 
-struct ProjectBenchmark<'a> {
-    installed_project: InstalledProject<'a>,
-}
-
-impl<'a> ProjectBenchmark<'a> {
-    fn new(project: RealWorldProject<'a>) -> Self {
-        let installed_project = project.setup().expect("Failed to setup project");
-        Self { installed_project }
-    }
-
-    fn project(&self) -> Project {
-        let test_paths = self.installed_project.config().paths.clone();
-
-        let absolute_test_paths = test_paths
-            .iter()
-            .map(|path| absolute(path, self.installed_project.path()))
-            .collect();
-
-        Project::new(
-            self.installed_project.path().to_path_buf(),
-            absolute_test_paths,
-        )
-        .with_options(ProjectOptions::new(
-            "test".to_string(),
-            VerbosityLevel::Default,
-            false,
-            true,
-        ))
-    }
-}
-
-fn bench_project(benchmark: &ProjectBenchmark, criterion: &mut Criterion) {
-    fn test_project(project: &Project) {
-        let result = project.test_with_reporter(&mut DummyReporter);
-
-        assert!(result.stats().total() > 0, "{:#?}", result.diagnostics());
-    }
-
-    setup_module_once();
-
-    let mut group = criterion.benchmark_group("project");
-
-    group.sampling_mode(karva_benchmark::criterion::SamplingMode::Flat);
-    group.bench_function(benchmark.installed_project.config().name, |b| {
-        b.iter_batched_ref(
-            || benchmark.project(),
-            |db| test_project(db),
-            BatchSize::SmallInput,
-        );
-    });
-}
-
-fn affect(criterion: &mut Criterion) {
-    let benchmark = ProjectBenchmark::new(RealWorldProject {
-        name: "affect",
-        repository: "https://github.com/MatthewMckee4/affect",
-        commit: "803cc916b492378a8ad8966e747cac3325e11b5f",
-        paths: vec![PathBuf::from("tests")],
-        dependencies: vec!["pydantic", "pydantic-settings", "pytest"],
-        python_version: PythonVersion::PY313,
-    });
-
-    bench_project(&benchmark, criterion);
-}
-
-criterion_group!(project, affect);
 criterion_group!(karva, benchmark_karva);
 
-criterion_main!(project, karva);
+criterion_main!(karva);

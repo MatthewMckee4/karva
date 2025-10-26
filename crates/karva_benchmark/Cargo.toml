@@ -15,6 +15,10 @@ license = { workspace = true }
 name = "karva"
 harness = false
 
+[[bench]]
+name = "karva_walltime"
+harness = false
+
 [dependencies]
 karva_core = { workspace = true }
 karva_project = { workspace = true }
