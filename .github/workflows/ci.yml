@@ -121,7 +121,7 @@ jobs:
 
   benchmarks-walltime:
     name: Run walltime benchmarks
-    runs-on: codspeed-macro
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
