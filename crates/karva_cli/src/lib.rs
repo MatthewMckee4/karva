@@ -110,7 +110,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     writeln!(stdout)?;
 
-    for diagnostic in result.iter() {
+    for diagnostic in result.diagnostics() {
         write!(stdout, "{}", diagnostic.display())?;
         writeln!(stdout)?;
     }

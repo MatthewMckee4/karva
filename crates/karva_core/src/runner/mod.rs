@@ -1470,7 +1470,10 @@ def test_fixtures_given_by_decorator(a, b):
         let result = test_context.test();
 
         let mut expected_stats = TestResultStats::default();
+
         expected_stats.add_failed();
+
+        assert!(!result.passed());
 
         assert_eq!(*result.stats(), expected_stats);
     }

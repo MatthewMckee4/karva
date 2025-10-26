@@ -64,10 +64,6 @@ impl TestRunResult {
         &mut self.stats
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Diagnostic> {
-        self.diagnostics.iter()
-    }
-
     pub fn register_test_case_result(
         &mut self,
         test_case_name: &str,
