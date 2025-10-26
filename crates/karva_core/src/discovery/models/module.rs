@@ -1,7 +1,4 @@
-use std::{
-    fmt::{self, Display},
-    path::PathBuf,
-};
+use std::path::PathBuf;
 
 use karva_project::{project::Project, utils::module_name};
 use pyo3::Python;
@@ -177,12 +174,6 @@ impl<'proj> HasFixtures<'proj> for DiscoveredModule {
     }
 }
 
-impl Display for DiscoveredModule {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name())
-    }
-}
-
 /// The type of module.
 /// This is used to differentiation between files that contain only test functions and files that contain only configuration functions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -239,26 +230,6 @@ impl std::fmt::Display for DisplayDiscoveredModule<'_> {
         }
         write!(f, "]")?;
         Ok(())
-    }
-}
-
-#[cfg(test)]
-impl std::fmt::Debug for DisplayDiscoveredModule<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.module.display())
-    }
-}
-
-#[cfg(test)]
-impl PartialEq<String> for DisplayDiscoveredModule<'_> {
-    fn eq(&self, other: &String) -> bool {
-        self.to_string() == *other
-    }
-}
-#[cfg(test)]
-impl PartialEq<&str> for DisplayDiscoveredModule<'_> {
-    fn eq(&self, other: &&str) -> bool {
-        self.to_string() == *other
     }
 }
 

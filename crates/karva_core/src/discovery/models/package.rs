@@ -362,24 +362,3 @@ impl std::fmt::Display for DisplayDiscoveredPackage<'_> {
         write_tree(f, self.package, "")
     }
 }
-
-#[cfg(test)]
-impl std::fmt::Debug for DisplayDiscoveredPackage<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.package.display())
-    }
-}
-
-#[cfg(test)]
-impl PartialEq<String> for DisplayDiscoveredPackage<'_> {
-    fn eq(&self, other: &String) -> bool {
-        self.to_string() == *other
-    }
-}
-
-#[cfg(test)]
-impl PartialEq<&str> for DisplayDiscoveredPackage<'_> {
-    fn eq(&self, other: &&str) -> bool {
-        self.to_string() == *other
-    }
-}

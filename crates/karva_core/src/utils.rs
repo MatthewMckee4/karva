@@ -43,13 +43,6 @@ pub(crate) trait Upcast<T> {
     fn upcast(self) -> T;
 }
 
-/// Identity implementation - any type can upcast to itself
-impl<T> Upcast<T> for T {
-    fn upcast(self) -> T {
-        self
-    }
-}
-
 /// Redirects Python's stdout and stderr to /dev/null if output is disabled.
 ///
 /// This function is used to suppress Python output during test execution

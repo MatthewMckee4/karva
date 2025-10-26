@@ -1470,7 +1470,10 @@ def test_fixtures_given_by_decorator(a, b):
         let result = test_context.test();
 
         let mut expected_stats = TestResultStats::default();
+
         expected_stats.add_failed();
+
+        assert!(!result.passed());
 
         assert_eq!(*result.stats(), expected_stats);
     }
@@ -1817,10 +1820,37 @@ def test_something_else():
 
         let mut expected_stats = TestResultStats::default();
 
-        for _ in 0..1 {
-            expected_stats.add_passed();
-        }
+        expected_stats.add_passed();
 
         assert_eq!(*result.stats(), expected_stats);
+    }
+
+    #[test]
+    fn test_invalid_pytest_fixture_scope() {
+        let test_context = TestContext::with_file(
+            "<test>/test.py",
+            r#"
+                import pytest
+
+                @pytest.fixture(scope="sessionss")
+                def some_fixture() -> int:
+                    return 1
+
+                def test_all_scopes(
+                    some_fixture: int,
+                ) -> None:
+                    assert some_fixture == 1
+                "#,
+        );
+
+        let result = test_context.test();
+
+        let mut expected_stats = TestResultStats::default();
+
+        expected_stats.add_failed();
+
+        assert_eq!(*result.stats(), expected_stats);
+
+        assert!(result.diagnostics().len() == 2);
     }
 }

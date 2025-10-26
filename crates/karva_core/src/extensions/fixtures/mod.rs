@@ -13,18 +13,13 @@ pub(crate) use manager::FixtureManager;
 
 use crate::name::QualifiedFunctionName;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) enum FixtureScope {
+    #[default]
     Function,
     Module,
     Package,
     Session,
-}
-
-impl Default for FixtureScope {
-    fn default() -> Self {
-        Self::Function
-    }
 }
 
 impl PartialOrd for FixtureScope {
