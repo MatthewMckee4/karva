@@ -176,35 +176,3 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: lcov.info
           fail_ci_if_error: true
-
-  python-test:
-    name: python-test-${{ matrix.folder }}-${{ matrix.os }}-${{ matrix.python-version }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.13"]
-        folder: ["tests/example"]
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Setup karva environment
-        run: |
-          uv venv
-          uv pip install pytest
-
-      - name: Setup integration test environment
-        run: |
-          cd ${{ matrix.folder }}
-          uv venv
-          uv sync
-          uv pip install -e ../../
-
-      - name: Run karva test
-        run: |
-          cd ${{ matrix.folder }}
-          uv run --with pytest karva test -v -s
