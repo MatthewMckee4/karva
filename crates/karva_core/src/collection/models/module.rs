@@ -15,20 +15,12 @@ pub(crate) struct CollectedModule<'proj> {
 
     /// Finalizers to run after the module is executed.
     finalizers: Finalizers,
-
-    /// Diagnostics received from the module collection.
-    diagnostics: Vec<Diagnostic>,
 }
 
 impl<'proj> CollectedModule<'proj> {
     #[must_use]
     pub(crate) fn total_test_cases(&self) -> usize {
         self.test_cases.len()
-    }
-
-    #[must_use]
-    pub(crate) const fn test_cases(&self) -> &Vec<(TestCase<'proj>, Option<Diagnostic>)> {
-        &self.test_cases
     }
 
     pub(crate) fn add_test_cases(
@@ -47,18 +39,12 @@ impl<'proj> CollectedModule<'proj> {
         self.finalizers.update(finalizers);
     }
 
-    pub(crate) fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
-        self.diagnostics.push(diagnostic);
-    }
-
     pub(crate) fn run_with_reporter(
         &self,
         py: Python<'_>,
         reporter: &dyn Reporter,
     ) -> TestRunResult {
         let mut diagnostics = TestRunResult::default();
-
-        diagnostics.add_diagnostics(self.diagnostics.clone());
 
         self.test_cases.iter().for_each(|(test_case, diagnostic)| {
             let mut result = test_case.run(py, diagnostic.clone(), reporter);

@@ -1,4 +1,7 @@
-use std::io::Write;
+use std::{
+    io::Write,
+    sync::{Arc, Mutex},
+};
 
 use pyo3::marker::Ungil;
 
@@ -19,13 +22,26 @@ impl Reporter for DummyReporter {
 }
 
 /// A reporter that outputs test results to stdout as they complete.
-#[derive(Default)]
-pub struct TestCaseReporter;
+pub struct TestCaseReporter {
+    output: Arc<Mutex<Box<dyn Write + Send>>>,
+}
+
+impl Default for TestCaseReporter {
+    fn default() -> Self {
+        Self::new(Arc::new(Mutex::new(Box::new(std::io::stdout()))))
+    }
+}
+
+impl TestCaseReporter {
+    #[must_use]
+    pub fn new(output: Arc<Mutex<Box<dyn Write + Send>>>) -> Self {
+        Self { output }
+    }
+}
 
 impl Reporter for TestCaseReporter {
     fn report_test_case_result(&self, test_name: &str, result_kind: IndividualTestResultKind) {
-        let mut stdout = std::io::stdout().lock();
-
+        let mut stdout = self.output.lock().unwrap();
         match result_kind {
             IndividualTestResultKind::Passed => {
                 writeln!(stdout, "test {test_name} ... ok").ok();
