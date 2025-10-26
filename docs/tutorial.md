@@ -49,9 +49,3 @@ We can then run our tests with `uv run karva test`.
 ```bash
 uv run karva test
 ```
-
-This will give us a report of our tests.
-
-```
-All checks passed!
-```

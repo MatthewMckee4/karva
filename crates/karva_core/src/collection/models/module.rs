@@ -4,7 +4,7 @@ use crate::{
     collection::TestCase,
     diagnostic::{Diagnostic, reporter::Reporter},
     extensions::fixtures::Finalizers,
-    runner::RunDiagnostics,
+    runner::TestRunResult,
 };
 
 /// A collected module represents a single Python module with its test cases and finalizers.
@@ -55,16 +55,15 @@ impl<'proj> CollectedModule<'proj> {
         &self,
         py: Python<'_>,
         reporter: &dyn Reporter,
-    ) -> RunDiagnostics {
-        let mut diagnostics = RunDiagnostics::default();
+    ) -> TestRunResult {
+        let mut diagnostics = TestRunResult::default();
 
         diagnostics.add_diagnostics(self.diagnostics.clone());
 
         self.test_cases.iter().for_each(|(test_case, diagnostic)| {
-            let mut result = test_case.run(py, diagnostic.clone());
+            let mut result = test_case.run(py, diagnostic.clone(), reporter);
             result.add_diagnostics(test_case.finalizers().run(py));
             diagnostics.update(&result);
-            reporter.report();
         });
 
         diagnostics.add_diagnostics(self.finalizers().run(py));

@@ -1,13 +1,7 @@
 from collections.abc import Callable, Sequence
-from typing import (
-    Any,
-    Generic,
-    Literal,
-    ParamSpec,
-    TypeAlias,
-    TypeVar,
-    overload,
-)
+from typing import Any, Generic, Literal, TypeAlias, TypeVar, overload
+
+from typing_extensions import ParamSpec
 
 _ScopeName: TypeAlias = Literal["session", "package", "module", "function"]
 

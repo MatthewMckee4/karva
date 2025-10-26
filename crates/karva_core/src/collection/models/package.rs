@@ -2,7 +2,7 @@ use pyo3::prelude::*;
 
 use crate::{
     collection::CollectedModule, diagnostic::reporter::Reporter, extensions::fixtures::Finalizers,
-    runner::RunDiagnostics,
+    runner::TestRunResult,
 };
 
 /// A collected package represents a single Python package with its test cases and finalizers.
@@ -63,8 +63,8 @@ impl<'proj> CollectedPackage<'proj> {
         &self,
         py: Python<'_>,
         reporter: &dyn Reporter,
-    ) -> RunDiagnostics {
-        let mut diagnostics = RunDiagnostics::default();
+    ) -> TestRunResult {
+        let mut diagnostics = TestRunResult::default();
 
         self.modules
             .iter()

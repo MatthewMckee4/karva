@@ -13,18 +13,15 @@ def test_function(a: int):
     assert a > 0
 ```
 
-Then running `uv run karva test -v` will provide the following output:
+Then running `uv run karva test` will provide the following output:
 
 ```bash
-INFO Discovering tests...
-INFO Discovered 1 test in 1 file
-INFO running  | test_parametrize::test_function [1]
-INFO passed   | test_parametrize::test_function [1]
-INFO running  | test_parametrize::test_function [2]
-INFO passed   | test_parametrize::test_function [2]
-INFO running  | test_parametrize::test_function [3]
-INFO passed   | test_parametrize::test_function [3]
-test result: PASSED. 3 passed
+test test::test_function [a=1] ... ok
+test test::test_function [a=2] ... ok
+test test::test_function [a=3] ... ok
+
+test result: ok. 3 passed; 0 failed; 0 skipped; finished in 0s
+
 ```
 
 We can also parametrize multiple arguments:
@@ -37,18 +34,15 @@ def test_function(a: int, b: int):
     assert a > 0 and b > 0
 ```
 
-Then running `uv run karva test -v` will provide the following output:
+Then running `uv run karva test` will provide the following output:
 
 ```bash
-INFO Discovering tests...
-INFO Discovered 1 test in 1 file
-INFO running  | test_parametrize::test_function [1, 4]
-INFO passed   | test_parametrize::test_function [1, 4]
-INFO running  | test_parametrize::test_function [2, 5]
-INFO passed   | test_parametrize::test_function [2, 5]
-INFO running  | test_parametrize::test_function [3, 6]
-INFO passed   | test_parametrize::test_function [3, 6]
-test result: PASSED. 3 passed
+test test::test_function [a=1, b=4] ... ok
+test test::test_function [a=2, b=5] ... ok
+test test::test_function [a=3, b=6] ... ok
+
+test result: ok. 3 passed; 0 failed; 0 skipped; finished in 0s
+
 ```
 
 We can also mix fixtures and parametrize:
@@ -68,13 +62,11 @@ def test_function(a: int, b: int):
 Then running `uv run karva test -v` will provide the following output:
 
 ```bash
-INFO Discovering tests...
-INFO Discovered 1 test in 1 file
-INFO running  | test_parametrize::test_function [1, 1]
-INFO passed   | test_parametrize::test_function [1, 1]
-INFO running  | test_parametrize::test_function [2, 1]
-INFO passed   | test_parametrize::test_function [2, 1]
-test result: PASSED. 2 passed
+test test::test_function [a=1, b=1] ... ok
+test test::test_function [a=2, b=1] ... ok
+
+test result: ok. 2 passed; 0 failed; 0 skipped; finished in 0s
+
 ```
 
 We can also use multiple decorators:
@@ -93,17 +85,13 @@ def test_function(a: int, b: int):
 Then running `uv run karva test -v` will provide the following output:
 
 ```bash
-INFO Discovering tests...
-INFO Discovered 1 test in 1 file
-INFO running  | test_parametrize::test_function [1, 1]
-INFO passed   | test_parametrize::test_function [1, 1]
-INFO running  | test_parametrize::test_function [2, 1]
-INFO passed   | test_parametrize::test_function [2, 1]
-INFO running  | test_parametrize::test_function [1, 2]
-INFO passed   | test_parametrize::test_function [1, 2]
-INFO running  | test_parametrize::test_function [2, 2]
-INFO passed   | test_parametrize::test_function [2, 2]
-test result: PASSED. 4 passed
+test test::test_function [a=1, b=1] ... ok
+test test::test_function [a=2, b=1] ... ok
+test test::test_function [a=1, b=2] ... ok
+test test::test_function [a=2, b=2] ... ok
+
+test result: ok. 4 passed; 0 failed; 0 skipped; finished in 0s
+
 ```
 
 We can also still use pytest's `parametrize` decorator:
@@ -119,11 +107,9 @@ def test_function(a: int):
 Then running `uv run karva test -v` will provide the following output:
 
 ```bash
-INFO Discovering tests...
-INFO Discovered 1 test in 1 file
-INFO running  | test_parametrize::test_function [1]
-INFO passed   | test_parametrize::test_function [1]
-INFO running  | test_parametrize::test_function [2]
-INFO passed   | test_parametrize::test_function [2]
-test result: PASSED. 2 passed
+test test::test_function [a=1] ... ok
+test test::test_function [a=2] ... ok
+
+test result: ok. 2 passed; 0 failed; 0 skipped; finished in 0s
+
 ```

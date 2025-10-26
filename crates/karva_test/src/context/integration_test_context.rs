@@ -75,4 +75,76 @@ impl IntegrationTestContext {
         command.args(args);
         command
     }
+
+    /// Execute command and return normalized output string for snapshot testing.
+    /// This normalizes test output ordering to handle non-deterministic test execution.
+    #[must_use]
+    pub fn command_snapshot(&self) -> String {
+        let output = self.command().output().expect("Failed to execute command");
+        format_output(&output)
+    }
+
+    /// Execute command with args and return normalized output string for snapshot testing.
+    /// This normalizes test output ordering to handle non-deterministic test execution.
+    #[must_use]
+    pub fn command_with_args_snapshot(&self, args: &[&str]) -> String {
+        let output = self
+            .command_with_args(args)
+            .output()
+            .expect("Failed to execute command");
+        format_output(&output)
+    }
+}
+
+fn format_output(output: &std::process::Output) -> String {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let normalized_stdout = normalize_test_output(&stdout);
+
+    format!(
+        "success: {}\nexit_code: {}\n----- stdout -----\n{}\n----- stderr -----\n{}",
+        output.status.success(),
+        output.status.code().unwrap_or(-1),
+        normalized_stdout,
+        stderr
+    )
+}
+
+/// Sorts test result lines in snapshot output to handle non-deterministic test execution order.
+/// This ensures snapshots remain stable even when tests run in different orders.
+#[must_use]
+pub fn normalize_test_output(output: &str) -> String {
+    let mut lines: Vec<&str> = output.lines().collect();
+
+    // Find where test results start
+    let test_start = lines.iter().position(|line| {
+        let trimmed = line.trim();
+        trimmed.starts_with("test ")
+            && (trimmed.contains("... ok")
+                || trimmed.contains("... FAILED")
+                || trimmed.contains("... skipped"))
+    });
+
+    if let Some(start) = test_start {
+        // Find where test results end - look for first non-empty, non-test line
+        let test_end = lines[start..]
+            .iter()
+            .position(|line| {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    return false; // Skip empty lines, they're part of the test output
+                }
+                // Stop when we hit something that's not a test result line
+                !(trimmed.starts_with("test ")
+                    && (trimmed.contains("... ok")
+                        || trimmed.contains("... FAILED")
+                        || trimmed.contains("... skipped")))
+            })
+            .map_or(lines.len(), |idx| start + idx);
+
+        // Sort only the test result lines
+        lines[start..(test_end - 1)].sort_unstable();
+    }
+
+    lines.join("\n")
 }

@@ -162,8 +162,8 @@ impl SkipTag {
     }
 
     #[must_use]
-    pub(crate) fn reason(&self) -> Option<&str> {
-        self.reason.as_deref()
+    pub(crate) fn reason(&self) -> Option<String> {
+        self.reason.clone()
     }
 }
 
@@ -699,7 +699,7 @@ def test_skipped():
 
             assert_eq!(tags.inner.len(), 1);
             if let Tag::Skip(skip_tag) = &tags.inner[0] {
-                assert_eq!(skip_tag.reason(), Some("Not implemented yet"));
+                assert_eq!(skip_tag.reason(), Some("Not implemented yet".to_string()));
             } else {
                 panic!("Expected Skip tag");
             }
@@ -730,7 +730,7 @@ def test_skipped():
 
             assert_eq!(tags.inner.len(), 1);
             if let Tag::Skip(skip_tag) = &tags.inner[0] {
-                assert_eq!(skip_tag.reason(), Some("some reason"));
+                assert_eq!(skip_tag.reason(), Some("some reason".to_string()));
             } else {
                 panic!("Expected Skip tag");
             }
