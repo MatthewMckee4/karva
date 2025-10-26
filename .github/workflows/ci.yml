@@ -195,8 +195,9 @@ jobs:
         run: cargo llvm-cov --all-features --package karva_core --package karva_project --lcov --output-path lcov.info
 
       - name: Upload coverage to Codecov
+        if: github.actor != 'dependabot[bot]'
         uses: codecov/codecov-action@v5
         with:
-          slug: MatthewMckee4/karva
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: lcov.info
           fail_ci_if_error: true

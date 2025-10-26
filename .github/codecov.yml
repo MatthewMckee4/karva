@@ -7,7 +7,3 @@ coverage:
     patch:
       default:
         enabled: false
-
-codecov:
-  require_ci_to_pass: false
-  token: not_required
