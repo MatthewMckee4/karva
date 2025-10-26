@@ -1,4 +1,4 @@
-# Karva (0.1.6)
+# Karva (0.1.7)
 
 A Python test framework, written in Rust.
 
