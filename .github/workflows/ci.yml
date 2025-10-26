@@ -111,7 +111,7 @@ jobs:
         run: crates/karva_benchmark/resources/generate.py
 
       - name: Build benchmarks
-        run: cargo codspeed build --features codspeed -p karva_benchmark --bench karva
+        run: cargo codspeed build --features codspeed -p karva_benchmark
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v3
@@ -142,11 +142,11 @@ jobs:
           maturin build
 
       - name: Build benchmarks
-        run: cargo codspeed build --features codspeed -p karva_benchmark --bench karva_walltime
+        run: cargo codspeed build --features codspeed -p karva_benchmark
 
       - name: Run benchmarks
         env:
-          PYO3_PYTHON: ${{ env.VIRTUAL_ENV }}/bin/python
+          CODSPEED_PERF_ENABLED: false
         uses: CodSpeedHQ/action@v3
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
