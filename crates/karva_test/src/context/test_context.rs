@@ -128,28 +128,23 @@ impl TestContext {
 
     pub fn with_files<'a>(files: impl IntoIterator<Item = (&'a str, &'a str)>) -> Self {
         let mut case = Self::default();
-        case.write_files(files).unwrap();
+        case.write_files(files);
         case
     }
 
     pub fn with_file(path: impl AsRef<Path>, content: &str) -> Self {
         let mut case = Self::default();
-        case.write_file(path, content).unwrap();
+        case.write_file(path, content);
         case
     }
 
-    pub fn write_files<'a>(
-        &mut self,
-        files: impl IntoIterator<Item = (&'a str, &'a str)>,
-    ) -> anyhow::Result<()> {
+    pub fn write_files<'a>(&mut self, files: impl IntoIterator<Item = (&'a str, &'a str)>) {
         for (path, content) in files {
-            self.write_file(path, content)?;
+            self.write_file(path, content);
         }
-
-        Ok(())
     }
 
-    pub fn write_file(&mut self, path: impl AsRef<Path>, content: &str) -> anyhow::Result<()> {
+    pub fn write_file(&mut self, path: impl AsRef<Path>, content: &str) {
         // If the path starts with "<test>/", we want to map "<test>" to a temp dir.
         let path = path.as_ref();
         let mut components = path.components();
@@ -180,12 +175,12 @@ impl TestContext {
 
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create directory `{}`", parent.display()))?;
+                .with_context(|| format!("Failed to create directory `{}`", parent.display()))
+                .unwrap();
         }
         std::fs::write(&path, &*ruff_python_trivia::textwrap::dedent(content))
-            .with_context(|| format!("Failed to write file `{path}`", path = path.display()))?;
-
-        Ok(())
+            .with_context(|| format!("Failed to write file `{path}`", path = path.display()))
+            .unwrap();
     }
 
     #[must_use]
