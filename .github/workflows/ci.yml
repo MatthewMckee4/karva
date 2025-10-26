@@ -108,7 +108,7 @@ jobs:
           maturin build
 
       - name: Generate resources
-        run: crates/karva_benchmark/resources/generate.py
+        run: python crates/karva_benchmark/resources/generate.py
 
       - name: Build benchmarks
         run: cargo codspeed build --features codspeed -p karva_benchmark
@@ -142,7 +142,7 @@ jobs:
           maturin build
 
       - name: Build benchmarks
-        run: cargo codspeed build --features codspeed -p karva_benchmark
+        run: cargo codspeed build -m walltime
 
       - name: Run benchmarks
         env:
