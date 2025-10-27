@@ -30,7 +30,6 @@ insta = { version = "1.35.1" }
 insta-cmd = { version = "0.6.0" }
 itertools = { version = "0.14.0" }
 karva = { path = "crates/karva" }
-karva_benchmark = { path = "crates/karva_benchmark" }
 karva_cli = { path = "crates/karva_cli" }
 karva_core = { path = "crates/karva_core" }
 karva_dev = { path = "crates/karva_dev" }
