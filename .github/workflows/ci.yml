@@ -111,7 +111,7 @@ jobs:
         run: python crates/karva_benchmark/resources/generate.py
 
       - name: Build benchmarks
-        run: cargo codspeed build --features codspeed -p karva_benchmark
+        run: cargo codspeed build -p karva_benchmark
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v3
