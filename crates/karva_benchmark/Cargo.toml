@@ -35,6 +35,3 @@ serde_json = { workspace = true }
 
 [lints]
 workspace = true
-
-[features]
-codspeed = ["codspeed-criterion-compat"]
