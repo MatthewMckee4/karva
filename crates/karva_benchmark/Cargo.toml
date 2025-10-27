@@ -25,7 +25,7 @@ karva_project = { workspace = true }
 karva_test = { workspace = true }
 
 anyhow = { workspace = true }
-codspeed-criterion-compat = { workspace = true, default-features = false, optional = true }
+codspeed-criterion-compat = { workspace = true }
 criterion = { workspace = true, default-features = false }
 ruff_python_ast = { workspace = true }
 tracing = { workspace = true }
