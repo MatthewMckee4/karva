@@ -11,20 +11,9 @@ jobs:
   pre-commit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v3
-
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-
-      - name: Install Rustfmt nightly
-        run: |
-          rustup component add rustfmt --toolchain nightly
-
-      - uses: pre-commit/action@v3.0.1
+      - uses: j178/prek-action@v1
 
   cargo-test:
     runs-on: ${{ matrix.os }}
