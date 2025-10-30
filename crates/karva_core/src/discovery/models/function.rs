@@ -75,6 +75,10 @@ impl TestFunction {
         &self.function_definition
     }
 
+    pub(crate) const fn py_function(&self) -> &Py<PyAny> {
+        &self.py_function
+    }
+
     /// Creates a display string showing the function's file location and line number.
     ///
     /// This is particularly useful for error reporting and debugging, providing
@@ -141,7 +145,6 @@ impl TestFunction {
             let test_case_creator = |fixture_manager: &FixtureManager| {
                 self.resolve_fixtures_for_test_case(
                     module,
-                    &py_function,
                     &required_fixture_names,
                     &params,
                     fixture_manager,
@@ -154,11 +157,9 @@ impl TestFunction {
         test_cases
     }
 
-    /// Resolves fixtures for a single test case and creates appropriate diagnostics.
     fn resolve_fixtures_for_test_case<'a>(
         &'a self,
         module: &'a DiscoveredModule,
-        py_function: &Py<PyAny>,
         required_fixture_names: &[String],
         params: &HashMap<String, Py<PyAny>>,
         fixture_manager: &FixtureManager,
@@ -168,18 +169,14 @@ impl TestFunction {
         let mut fixture_diagnostics = Vec::with_capacity(num_required_fixtures);
         let mut resolved_fixtures = HashMap::with_capacity(num_required_fixtures);
 
-        // Resolve each required fixture
         for fixture_name in required_fixture_names {
             if let Some(fixture_value) = params.get(fixture_name) {
-                // Use parametrized value if available
                 resolved_fixtures.insert(fixture_name.clone(), fixture_value.clone());
             } else if let Some(fixture_value) =
                 fixture_manager.get_fixture_with_name(fixture_name, None)
             {
-                // Use fixture from manager
                 resolved_fixtures.insert(fixture_name.clone(), fixture_value);
             } else {
-                // Fixture not found - record diagnostic
                 fixture_diagnostics.push(SubDiagnostic::fixture_not_found(fixture_name));
             }
         }
@@ -187,18 +184,11 @@ impl TestFunction {
         let diagnostic = self.create_fixture_diagnostic(module, fixture_diagnostics);
 
         (
-            TestCase::new(
-                self,
-                resolved_fixtures,
-                py_function.clone(),
-                module,
-                tags.skip_tag(),
-            ),
+            TestCase::new(self, resolved_fixtures, module, tags.skip_tag()),
             diagnostic,
         )
     }
 
-    /// Creates a diagnostic for missing fixtures, if any.
     fn create_fixture_diagnostic(
         &self,
         module: &DiscoveredModule,

@@ -7,7 +7,7 @@ use crate::{
         Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, UsesFixtures,
     },
     name::QualifiedFunctionName,
-    utils::create_hierarchy_iterator,
+    utils::iter_with_ancestors,
 };
 
 /// Collection of fixtures and their finalizers for a specific scope.
@@ -197,7 +197,7 @@ impl<'a> FixtureManager<'a> {
             // We did not find the dependency in the current scope.
             // So we must try the parent scopes.
             if !found {
-                for (parent, parents_above_current_parent) in create_hierarchy_iterator(parents) {
+                for (parent, parents_above_current_parent) in iter_with_ancestors(parents) {
                     let parent_fixture = (*parent).get_fixture(py, dependency);
 
                     if let Some(parent_fixture) = parent_fixture {

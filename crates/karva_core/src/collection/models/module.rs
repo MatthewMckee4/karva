@@ -7,7 +7,7 @@ use crate::{
     runner::TestRunResult,
 };
 
-/// A collected module represents a single Python module with its test cases and finalizers.
+/// A collected module represents a single Python file with its test cases and finalizers.
 #[derive(Default, Debug)]
 pub(crate) struct CollectedModule<'proj> {
     /// The test cases in the module.

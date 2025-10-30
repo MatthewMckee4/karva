@@ -14,16 +14,16 @@ pub(crate) struct CollectedPackage<'proj> {
     /// The sub-packages in the package.
     packages: Vec<CollectedPackage<'proj>>,
 
-    /// Finalizers to run after the package is executed.
+    /// Finalizers to run after the tests are executed.
     finalizers: Finalizers,
 }
 
 impl<'proj> CollectedPackage<'proj> {
-    pub(crate) fn add_collected_module(&mut self, collected_module: CollectedModule<'proj>) {
+    pub(crate) fn add_module(&mut self, collected_module: CollectedModule<'proj>) {
         self.modules.push(collected_module);
     }
 
-    pub(crate) fn add_collected_package(&mut self, collected_package: Self) {
+    pub(crate) fn add_package(&mut self, collected_package: Self) {
         self.packages.push(collected_package);
     }
 

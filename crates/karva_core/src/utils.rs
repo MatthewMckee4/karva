@@ -16,16 +16,7 @@ pub fn current_python_version() -> PythonVersion {
     }))
 }
 
-/// Adds a directory path to Python's sys.path for module resolution.
-///
-/// This is essential for allowing Python to import modules from the test
-/// directories. The path is inserted at the specified index to control
-/// import precedence.
-///
-/// # Arguments
-/// * `py` - Python interpreter instance
-/// * `path` - Directory path to add to sys.path
-/// * `index` - Position to insert the path (0 for highest priority)
+/// Adds a directory path to Python's sys.path at the specified index.
 pub(crate) fn add_to_sys_path(py: Python<'_>, path: &Path, index: isize) -> PyResult<()> {
     let sys_module = py.import("sys")?;
     let sys_path = sys_module.getattr("path")?;
@@ -34,10 +25,6 @@ pub(crate) fn add_to_sys_path(py: Python<'_>, path: &Path, index: isize) -> PyRe
 }
 
 /// Trait for converting types to more general trait objects.
-///
-/// This trait is primarily used for converting collections of concrete types
-/// to collections of trait objects, enabling polymorphic behavior while
-/// maintaining type safety.
 pub(crate) trait Upcast<T> {
     fn upcast(self) -> T;
 }
@@ -92,15 +79,7 @@ fn restore_python_output<'py>(py: Python<'py>, null_file: &Bound<'py, PyAny>) ->
     Ok(())
 }
 
-/// Executes a function with Python GIL, managing output redirection.
-///
-/// This wrapper function handles the complexity of Python output management
-/// during test execution. It automatically redirects output if configured
-/// and ensures proper cleanup regardless of whether the function succeeds or fails.
-///
-/// # Arguments
-/// * `project` - Project configuration containing output preferences
-/// * `f` - Function to execute with Python access
+/// A wrapper around `Python::attach` so we can manage the stdout and stderr redirection.
 pub(crate) fn attach<F, R>(project: &Project, f: F) -> R
 where
     F: for<'py> FnOnce(Python<'py>) -> R,
@@ -115,18 +94,11 @@ where
     })
 }
 
-/// Creates an iterator that yields each item with all items above it in the hierarchy.
+/// Creates an iterator that yields each item with all items after it.
 ///
-/// This function is used for fixture dependency resolution where each scope needs
-/// access to all parent scopes. For example, given [session, package, module],
+/// For example, given [session, package, module],
 /// it yields: (module, [session, package]), (package, [session]), (session, []).
-///
-/// # Arguments
-/// * `items` - Slice of references representing the scope hierarchy
-///
-/// # Returns
-/// Iterator yielding tuples of (`current_item`, ancestors)
-pub(crate) fn create_hierarchy_iterator<'a, T>(
+pub(crate) fn iter_with_ancestors<'a, T: ?Sized>(
     items: &[&'a T],
 ) -> impl Iterator<Item = (&'a T, Vec<&'a T>)> {
     let mut ancestors = items.to_vec();
@@ -155,6 +127,22 @@ mod tests {
         fn test_current_python_version() {
             let version = current_python_version();
             assert!(version >= PythonVersion::from((3, 7)));
+        }
+    }
+
+    mod utils_tests {
+        use super::*;
+
+        #[test]
+        fn test_iter_with_ancestors() {
+            let items = vec!["session", "package", "module"];
+            let expected = vec![
+                ("module", vec!["session", "package"]),
+                ("package", vec!["session"]),
+                ("session", vec![]),
+            ];
+            let result: Vec<(&str, Vec<&str>)> = iter_with_ancestors(&items).collect();
+            assert_eq!(result, expected);
         }
     }
 }

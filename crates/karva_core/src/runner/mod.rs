@@ -1852,4 +1852,27 @@ def test_something_else():
 
         assert!(result.diagnostics().len() == 2);
     }
+
+    #[test]
+    fn test_missing_fixture() {
+        let test_context = TestContext::with_file(
+            "<test>/test.py",
+            r"
+                def test_all_scopes(
+                    missing_fixture: int,
+                ) -> None:
+                    assert missing_fixture == 1
+                ",
+        );
+
+        let result = test_context.test();
+
+        let mut expected_stats = TestResultStats::default();
+
+        expected_stats.add_failed();
+
+        assert_eq!(*result.stats(), expected_stats);
+
+        assert!(result.diagnostics().len() == 1);
+    }
 }
