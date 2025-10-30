@@ -32,9 +32,6 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install UV
-        run: pip install uv
-
       - name: Build karva wheel (PR branch)
         run: |
           cargo build --release -p karva
@@ -45,18 +42,15 @@ jobs:
           cargo run --release -p karva_diffs --bin karva-diagnostics -- run --output pr-diagnostics.json
         continue-on-error: true
 
-      - name: Save PR diagnostics
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr-diagnostics
-          path: pr-diagnostics.json
-          retention-days: 1
+      - name: Stash PR diagnostics
+        run: |
+          mkdir -p /tmp/karva-diagnostics
+          cp pr-diagnostics.json /tmp/karva-diagnostics/
 
       - name: Checkout main branch
         uses: actions/checkout@v4
         with:
           ref: main
-          clean: false
 
       - name: Build karva wheel (main branch)
         run: |
@@ -68,38 +62,13 @@ jobs:
           cargo run --release -p karva_diffs --bin karva-diagnostics -- run --output main-diagnostics.json
         continue-on-error: true
 
-      - name: Save main diagnostics
-        uses: actions/upload-artifact@v4
-        with:
-          name: main-diagnostics
-          path: main-diagnostics.json
-          retention-days: 1
-
-      - name: Checkout PR branch again
-        uses: actions/checkout@v4
-
-      - name: Download diagnostics artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: pr-diagnostics
-          path: .
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: main-diagnostics
-          path: .
+      - name: Retrieve PR diagnostics
+        run: |
+          cp /tmp/karva-diagnostics/pr-diagnostics.json .
 
       - name: Generate diff
         run: |
           cargo run --release -p karva_diffs --bin karva-diagnostics -- diff --base main-diagnostics.json --head pr-diagnostics.json --output diff.md
-
-      - name: Read diff file
-        id: diff
-        run: |
-          DIFF_CONTENT=$(cat diff.md)
-          echo "diff<<EOF" >> $GITHUB_OUTPUT
-          echo "$DIFF_CONTENT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Comment PR
         uses: actions/github-script@v7
