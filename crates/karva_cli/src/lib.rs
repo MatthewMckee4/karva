@@ -24,7 +24,6 @@ mod version;
 
 pub use args::Args;
 
-#[must_use]
 pub fn karva_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> ExitStatus {
     run(f).unwrap_or_else(|error| {
         use std::io::Write;
@@ -143,7 +142,6 @@ impl Termination for ExitStatus {
 }
 
 impl ExitStatus {
-    #[must_use]
     pub const fn to_i32(self) -> i32 {
         self as i32
     }

@@ -9,7 +9,6 @@ pub(crate) struct Finalizers {
 }
 
 impl Finalizers {
-    #[must_use]
     pub(crate) const fn new(finalizers: Vec<Finalizer>) -> Self {
         Self { finalizers }
     }
@@ -18,7 +17,6 @@ impl Finalizers {
         self.finalizers.extend(other.finalizers);
     }
 
-    #[must_use]
     pub(crate) fn run(&self, py: Python<'_>) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
         for finalizer in &self.finalizers {
@@ -44,7 +42,6 @@ pub(crate) struct Finalizer {
 }
 
 impl Finalizer {
-    #[must_use]
     pub(crate) const fn new(fixture_name: String, fixture_return: Py<PyIterator>) -> Self {
         Self {
             fixture_name,
@@ -52,7 +49,6 @@ impl Finalizer {
         }
     }
 
-    #[must_use]
     pub(crate) fn run(&self, py: Python<'_>) -> Option<Diagnostic> {
         let mut generator = self.fixture_return.bind(py).clone();
         match generator.next()? {

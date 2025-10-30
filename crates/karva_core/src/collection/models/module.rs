@@ -18,7 +18,6 @@ pub(crate) struct CollectedModule<'proj> {
 }
 
 impl<'proj> CollectedModule<'proj> {
-    #[must_use]
     pub(crate) fn total_test_cases(&self) -> usize {
         self.test_cases.len()
     }
@@ -30,7 +29,6 @@ impl<'proj> CollectedModule<'proj> {
         self.test_cases.extend(test_cases);
     }
 
-    #[must_use]
     pub(crate) const fn finalizers(&self) -> &Finalizers {
         &self.finalizers
     }

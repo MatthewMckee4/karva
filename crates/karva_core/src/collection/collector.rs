@@ -21,7 +21,6 @@ impl TestCaseCollector {
     ///
     /// This is the main entry point for test collection. It creates a session-level
     /// fixture manager and recursively processes all packages, modules, and test functions.
-    #[must_use]
     pub(crate) fn collect<'a>(
         py: Python<'_>,
         session: &'a DiscoveredPackage,

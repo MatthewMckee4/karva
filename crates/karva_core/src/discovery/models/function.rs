@@ -49,7 +49,6 @@ impl UsesFixtures for TestFunction {
 }
 
 impl TestFunction {
-    #[must_use]
     pub(crate) fn new(
         module_path: ModulePath,
         function_definition: StmtFunctionDef,
@@ -64,17 +63,14 @@ impl TestFunction {
         }
     }
 
-    #[must_use]
     pub(crate) const fn name(&self) -> &QualifiedFunctionName {
         &self.name
     }
 
-    #[must_use]
     pub(crate) fn function_name(&self) -> &str {
         &self.function_definition.name
     }
 
-    #[must_use]
     pub(crate) const fn definition(&self) -> &StmtFunctionDef {
         &self.function_definition
     }

@@ -18,7 +18,6 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    #[must_use]
     pub(crate) const fn new(
         message: Option<String>,
         location: Option<String>,
@@ -44,22 +43,18 @@ impl Diagnostic {
         self.sub_diagnostics.extend(sub_diagnostics);
     }
 
-    #[must_use]
     pub(crate) fn sub_diagnostics(&self) -> &[SubDiagnostic] {
         &self.sub_diagnostics
     }
 
-    #[must_use]
     pub(crate) const fn severity(&self) -> &DiagnosticSeverity {
         &self.inner.severity
     }
 
-    #[must_use]
     pub const fn display(&self) -> DisplayDiagnostic<'_> {
         DisplayDiagnostic::new(self)
     }
 
-    #[must_use]
     pub(crate) const fn inner(&self) -> &DiagnosticInner {
         &self.inner
     }
@@ -87,7 +82,6 @@ impl Diagnostic {
         )
     }
 
-    #[must_use]
     pub(crate) fn invalid_path_error(error: &TestPathError) -> Self {
         Self::new(
             Some(format!("{error}")),
@@ -97,7 +91,6 @@ impl Diagnostic {
         )
     }
 
-    #[must_use]
     pub(crate) fn warning(
         warning_type: &str,
         message: Option<String>,
@@ -111,7 +104,6 @@ impl Diagnostic {
         )
     }
 
-    #[must_use]
     pub(crate) const fn invalid_fixture(message: Option<String>, location: Option<String>) -> Self {
         Self::new(
             message,
@@ -132,7 +124,6 @@ pub(crate) struct DiagnosticInner {
 
 impl DiagnosticInner {
     #[cfg(test)]
-    #[must_use]
     pub(crate) const fn new(
         message: Option<String>,
         location: Option<String>,
@@ -147,27 +138,22 @@ impl DiagnosticInner {
         }
     }
 
-    #[must_use]
     pub(crate) const fn display(&self) -> DiagnosticInnerDisplay<'_> {
         DiagnosticInnerDisplay::new(self)
     }
 
-    #[must_use]
     pub(crate) fn message(&self) -> Option<&str> {
         self.message.as_deref()
     }
 
-    #[must_use]
     pub(crate) fn location(&self) -> Option<&str> {
         self.location.as_deref()
     }
 
-    #[must_use]
     pub(crate) fn traceback(&self) -> Option<&str> {
         self.traceback.as_deref()
     }
 
-    #[must_use]
     pub(crate) const fn severity(&self) -> &DiagnosticSeverity {
         &self.severity
     }
@@ -181,12 +167,10 @@ pub(crate) enum DiagnosticSeverity {
 }
 
 impl DiagnosticSeverity {
-    #[must_use]
     pub(crate) const fn is_error(&self) -> bool {
         matches!(self, Self::Error(_))
     }
 
-    #[must_use]
     pub(crate) const fn is_test_fail(&self) -> bool {
         matches!(self, Self::Error(DiagnosticErrorType::TestCase { .. }))
     }

@@ -7,12 +7,10 @@ pub(crate) struct SubDiagnostic {
 }
 
 impl SubDiagnostic {
-    #[must_use]
     pub(crate) const fn new(message: String, severity: SubDiagnosticSeverity) -> Self {
         Self { message, severity }
     }
 
-    #[must_use]
     pub(crate) fn fixture_not_found(fixture_name: &String) -> Self {
         Self::new(
             format!("fixture '{fixture_name}' not found"),
@@ -22,17 +20,14 @@ impl SubDiagnostic {
         )
     }
 
-    #[must_use]
     pub(crate) const fn display(&self) -> SubDiagnosticDisplay<'_> {
         SubDiagnosticDisplay::new(self)
     }
 
-    #[must_use]
     pub(crate) fn message(&self) -> &str {
         &self.message
     }
 
-    #[must_use]
     pub(crate) const fn severity(&self) -> &SubDiagnosticSeverity {
         &self.severity
     }

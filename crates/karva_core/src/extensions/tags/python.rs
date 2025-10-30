@@ -23,7 +23,6 @@ pub enum PyTag {
 
 #[pymethods]
 impl PyTag {
-    #[must_use]
     pub fn name(&self) -> String {
         match self {
             Self::Parametrize { .. } => "parametrize".to_string(),

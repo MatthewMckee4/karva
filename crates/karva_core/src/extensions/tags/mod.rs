@@ -17,7 +17,6 @@ pub(crate) enum Tag {
 
 impl Tag {
     /// Converts a Python Tag into an internal Tag.
-    #[must_use]
     pub(crate) fn from_py_tag(py_tag: &PyTag) -> Self {
         match py_tag {
             PyTag::Parametrize {
@@ -39,7 +38,6 @@ impl Tag {
     /// Converts a Pytest mark into an internal Tag.
     ///
     /// This is used to allow Pytest marks to be used as Karva tags.
-    #[must_use]
     pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let name = py_mark.getattr("name").ok()?.extract::<String>().ok()?;
         match name.as_str() {
@@ -66,7 +64,6 @@ pub(crate) struct ParametrizeTag {
 }
 
 impl ParametrizeTag {
-    #[must_use]
     pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let args = py_mark.getattr("args").ok()?;
         if let Ok((arg_name, arg_values)) = args.extract::<(String, Vec<Py<PyAny>>)>() {
@@ -89,7 +86,6 @@ impl ParametrizeTag {
     /// Returns each parameterize case.
     ///
     /// Each [`HashMap`] is used as keyword arguments for the test function.
-    #[must_use]
     pub(crate) fn each_arg_value(&self) -> Vec<HashMap<String, Py<PyAny>>> {
         let total_combinations = self.arg_values.len();
         let mut param_args = Vec::with_capacity(total_combinations);
@@ -116,14 +112,12 @@ pub(crate) struct UseFixturesTag {
 }
 
 impl UseFixturesTag {
-    #[must_use]
     pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let args = py_mark.getattr("args").ok()?;
         args.extract::<Vec<String>>()
             .map_or(None, |fixture_names| Some(Self { fixture_names }))
     }
 
-    #[must_use]
     pub(crate) fn fixture_names(&self) -> &[String] {
         &self.fixture_names
     }
@@ -138,7 +132,6 @@ pub(crate) struct SkipTag {
 }
 
 impl SkipTag {
-    #[must_use]
     pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let kwargs = py_mark.getattr("kwargs").ok()?;
 
@@ -161,7 +154,6 @@ impl SkipTag {
         Some(Self { reason: None })
     }
 
-    #[must_use]
     pub(crate) fn reason(&self) -> Option<String> {
         self.reason.clone()
     }
@@ -176,7 +168,6 @@ pub(crate) struct Tags {
 }
 
 impl Tags {
-    #[must_use]
     pub(crate) fn from_py_any(
         py: Python<'_>,
         py_function: &Py<PyAny>,
@@ -209,7 +200,6 @@ impl Tags {
         Self::default()
     }
 
-    #[must_use]
     pub(crate) fn from_pytest_function(
         py: Python<'_>,
         py_test_function: &Py<PyAny>,
@@ -232,7 +222,6 @@ impl Tags {
     /// Return all parametrizations
     ///
     /// This function ensures that if we have multiple parametrize tags, we combine them together.
-    #[must_use]
     pub(crate) fn parametrize_args(&self) -> Vec<HashMap<String, Py<PyAny>>> {
         let mut param_args: Vec<HashMap<String, Py<PyAny>>> = vec![HashMap::new()];
 
@@ -255,7 +244,6 @@ impl Tags {
     }
 
     /// Get all required fixture names for the given test.
-    #[must_use]
     pub(crate) fn required_fixtures_names(&self) -> Vec<String> {
         let mut fixture_names = Vec::new();
         for tag in &self.inner {
@@ -267,7 +255,6 @@ impl Tags {
     }
 
     /// Return the skip tag if it exists.
-    #[must_use]
     pub(crate) fn skip_tag(&self) -> Option<SkipTag> {
         for tag in &self.inner {
             if let Tag::Skip(skip_tag) = tag {

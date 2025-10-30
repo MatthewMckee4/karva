@@ -11,7 +11,6 @@ pub struct DisplayDiagnostic<'a> {
 }
 
 impl<'a> DisplayDiagnostic<'a> {
-    #[must_use]
     pub(crate) const fn new(diagnostic: &'a Diagnostic) -> Self {
         Self { diagnostic }
     }
@@ -34,7 +33,6 @@ pub struct DiagnosticInnerDisplay<'a> {
 }
 
 impl<'a> DiagnosticInnerDisplay<'a> {
-    #[must_use]
     pub(crate) const fn new(diagnostic: &'a DiagnosticInner) -> Self {
         Self { diagnostic }
     }
@@ -104,7 +102,6 @@ pub(crate) struct SubDiagnosticDisplay<'a> {
 }
 
 impl<'a> SubDiagnosticDisplay<'a> {
-    #[must_use]
     pub(crate) const fn new(diagnostic: &'a SubDiagnostic) -> Self {
         Self { diagnostic }
     }

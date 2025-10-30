@@ -110,28 +110,23 @@ pub struct InstalledProject<'a> {
 }
 
 impl<'a> InstalledProject<'a> {
-    #[must_use]
     pub const fn config(&self) -> &RealWorldProject<'a> {
         &self.config
     }
 
-    #[must_use]
     pub fn test_paths(&self) -> Vec<PathBuf> {
         self.config.paths.clone()
     }
 
-    #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
     }
 
-    #[must_use]
     pub fn venv_path(&self) -> PathBuf {
         self.path().join(".venv")
     }
 
     /// Get the path to the Python executable
-    #[must_use]
     pub fn python_path(&self) -> PathBuf {
         if cfg!(windows) {
             self.venv_path().join("Scripts/python.exe")

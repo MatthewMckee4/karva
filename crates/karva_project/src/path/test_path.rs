@@ -96,7 +96,6 @@ impl TestPath {
         }
     }
 
-    #[must_use]
     pub const fn path(&self) -> &PathBuf {
         match self {
             Self::File(path) | Self::Directory(path) | Self::Function { path, .. } => path,
@@ -113,7 +112,6 @@ pub enum TestPathError {
 }
 
 impl TestPathError {
-    #[must_use]
     pub const fn path(&self) -> &PathBuf {
         match self {
             Self::NotFound(path)

@@ -20,7 +20,6 @@ pub(crate) struct DiscoveredModule {
 }
 
 impl DiscoveredModule {
-    #[must_use]
     pub(crate) fn new(path: ModulePath, module_type: ModuleType) -> Self {
         let source_text =
             std::fs::read_to_string(path.module_path()).expect("Failed to read source file");
@@ -34,22 +33,18 @@ impl DiscoveredModule {
         }
     }
 
-    #[must_use]
     pub(crate) const fn path(&self) -> &PathBuf {
         self.path.module_path()
     }
 
-    #[must_use]
     pub(crate) fn name(&self) -> &str {
         self.path.module_name()
     }
 
-    #[must_use]
     pub(crate) const fn module_type(&self) -> ModuleType {
         self.type_
     }
 
-    #[must_use]
     pub(crate) fn test_functions(&self) -> Vec<&TestFunction> {
         self.test_functions.iter().collect()
     }
@@ -65,7 +60,6 @@ impl DiscoveredModule {
         self.test_functions.retain(|tc| tc.function_name() == name);
     }
 
-    #[must_use]
     #[cfg(test)]
     pub(crate) fn get_test_function(&self, name: &str) -> Option<&TestFunction> {
         self.test_functions
@@ -73,7 +67,6 @@ impl DiscoveredModule {
             .find(|tc| tc.function_name() == name)
     }
 
-    #[must_use]
     #[cfg(test)]
     pub(crate) fn fixtures(&self) -> Vec<&Fixture> {
         self.fixtures.iter().collect()
@@ -83,17 +76,14 @@ impl DiscoveredModule {
         Self { fixtures, ..self }
     }
 
-    #[must_use]
     pub(crate) fn total_test_functions(&self) -> usize {
         self.test_functions.len()
     }
 
-    #[must_use]
     pub(crate) const fn source_text(&self) -> &String {
         &self.source_text
     }
 
-    #[must_use]
     pub(crate) fn line_index(&self) -> LineIndex {
         let source_text = self.source_text();
         LineIndex::from_source_text(source_text)
@@ -123,7 +113,6 @@ impl DiscoveredModule {
         }
     }
 
-    #[must_use]
     pub(crate) fn all_uses_fixtures(&self) -> Vec<&dyn UsesFixtures> {
         let mut deps = Vec::new();
         for tc in &self.test_functions {
@@ -135,12 +124,10 @@ impl DiscoveredModule {
         deps
     }
 
-    #[must_use]
     pub(crate) fn is_empty(&self) -> bool {
         self.test_functions.is_empty() && self.fixtures.is_empty()
     }
 
-    #[must_use]
     #[cfg(test)]
     pub(crate) const fn display(&self) -> DisplayDiscoveredModule<'_> {
         DisplayDiscoveredModule::new(self)
@@ -203,7 +190,6 @@ pub(crate) struct DisplayDiscoveredModule<'proj> {
 
 #[cfg(test)]
 impl<'proj> DisplayDiscoveredModule<'proj> {
-    #[must_use]
     pub(crate) const fn new(module: &'proj DiscoveredModule) -> Self {
         Self { module }
     }
