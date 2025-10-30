@@ -47,11 +47,6 @@ jobs:
         with:
           ref: main
 
-      - name: Build karva wheel (main branch)
-        run: |
-          cargo build --release -p karva
-          uv build --wheel
-
       - name: Run diagnostics on main branch
         run: |
           cargo run --release -p karva_diffs --bin karva-diagnostics -- run --output main-diagnostics.json
