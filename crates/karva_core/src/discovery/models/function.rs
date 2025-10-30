@@ -17,7 +17,7 @@ use crate::{
         fixtures::{FixtureManager, UsesFixtures},
         tags::Tags,
     },
-    name::QualifiedFunctionName,
+    name::{ModulePath, QualifiedFunctionName},
     utils::Upcast,
 };
 
@@ -51,11 +51,11 @@ impl UsesFixtures for TestFunction {
 impl TestFunction {
     #[must_use]
     pub(crate) fn new(
-        module_name: String,
+        module_path: ModulePath,
         function_definition: StmtFunctionDef,
         py_function: Py<PyAny>,
     ) -> Self {
-        let name = QualifiedFunctionName::new(function_definition.name.to_string(), module_name);
+        let name = QualifiedFunctionName::new(function_definition.name.to_string(), module_path);
 
         Self {
             function_definition,

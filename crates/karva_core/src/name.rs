@@ -1,31 +1,27 @@
+use std::path::PathBuf;
+
+use karva_project::utils::module_name;
+
 /// Represents a fully qualified function name including its module path.
 ///
 /// This structure ensures unique identification of test functions across
 /// the entire test suite by combining the function name with its module path.
 /// This is essential for avoiding name conflicts and providing clear test
 /// identification in reports and diagnostics.
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct QualifiedFunctionName {
-    /// The actual function name (e.g., `test_addition`)
     function_name: String,
-    /// The module path (e.g., `tests.math.test_calculator`)
-    module_path: String,
+    module_path: ModulePath,
 }
 
 impl QualifiedFunctionName {
-    /// Creates a new qualified function name.
-    ///
-    /// # Arguments
-    /// * `function_name` - The actual function name
-    /// * `module_path` - The fully qualified module path
-    pub(crate) const fn new(function_name: String, module_path: String) -> Self {
+    pub(crate) const fn new(function_name: String, module_path: ModulePath) -> Self {
         Self {
             function_name,
             module_path,
         }
     }
 
-    /// Returns the function name portion (without module path).
     pub(crate) fn function_name(&self) -> &str {
         &self.function_name
     }
@@ -33,6 +29,33 @@ impl QualifiedFunctionName {
 
 impl std::fmt::Display for QualifiedFunctionName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}::{}", self.module_path, self.function_name)
+        write!(
+            f,
+            "{}::{}",
+            self.module_path.module_name(),
+            self.function_name
+        )
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct ModulePath {
+    path: PathBuf,
+    module_name: String,
+}
+
+impl ModulePath {
+    pub(crate) fn new<P: Into<PathBuf>>(path: P, cwd: &PathBuf) -> Option<Self> {
+        let path = path.into();
+        let module_name = module_name(cwd, path.as_ref())?;
+        Some(Self { path, module_name })
+    }
+
+    pub(crate) fn module_name(&self) -> &str {
+        self.module_name.as_str()
+    }
+
+    pub(crate) const fn module_path(&self) -> &PathBuf {
+        &self.path
     }
 }
