@@ -58,7 +58,6 @@ impl<'proj> TestCase<'proj> {
         }
     }
 
-    #[must_use]
     pub(crate) const fn function(&self) -> &TestFunction {
         self.function
     }
@@ -67,12 +66,10 @@ impl<'proj> TestCase<'proj> {
         self.finalizers.update(finalizers);
     }
 
-    #[must_use]
     pub(crate) const fn finalizers(&self) -> &Finalizers {
         &self.finalizers
     }
 
-    #[must_use]
     pub(crate) fn run(
         &self,
         py: Python<'_>,

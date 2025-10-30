@@ -9,7 +9,6 @@ use ruff_python_ast::PythonVersion;
 /// This function queries the embedded Python interpreter to determine
 /// the major and minor version numbers, which are used for AST parsing
 /// compatibility and feature detection.
-#[must_use]
 pub fn current_python_version() -> PythonVersion {
     PythonVersion::from(Python::attach(|py| {
         let version_info = py.version_info();

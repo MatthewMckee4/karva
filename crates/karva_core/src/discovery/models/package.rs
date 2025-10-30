@@ -22,7 +22,6 @@ pub(crate) struct DiscoveredPackage {
 }
 
 impl DiscoveredPackage {
-    #[must_use]
     pub(crate) fn new(path: PathBuf) -> Self {
         Self {
             path,
@@ -32,22 +31,18 @@ impl DiscoveredPackage {
         }
     }
 
-    #[must_use]
     pub(crate) const fn path(&self) -> &PathBuf {
         &self.path
     }
 
-    #[must_use]
     pub(crate) const fn modules(&self) -> &HashMap<PathBuf, DiscoveredModule> {
         &self.modules
     }
 
-    #[must_use]
     pub(crate) const fn packages(&self) -> &HashMap<PathBuf, Self> {
         &self.packages
     }
 
-    #[must_use]
     #[cfg(test)]
     pub(crate) fn get_module(&self, path: &PathBuf) -> Option<&DiscoveredModule> {
         if let Some(module) = self.modules.get(path) {
@@ -62,7 +57,6 @@ impl DiscoveredPackage {
         }
     }
 
-    #[must_use]
     #[cfg(test)]
     pub(crate) fn get_package(&self, path: &PathBuf) -> Option<&Self> {
         if let Some(package) = self.packages.get(path) {
@@ -171,7 +165,6 @@ impl DiscoveredPackage {
         }
     }
 
-    #[must_use]
     pub(crate) fn total_test_functions(&self) -> usize {
         let mut total = 0;
         for module in self.modules.values() {
@@ -196,7 +189,6 @@ impl DiscoveredPackage {
         }
     }
 
-    #[must_use]
     #[cfg(test)]
     pub(crate) fn test_functions(&self) -> Vec<&TestFunction> {
         let mut functions = Vec::new();
@@ -210,7 +202,6 @@ impl DiscoveredPackage {
     }
 
     /// Get all the test functions and fixtures that are used in this package.
-    #[must_use]
     pub(crate) fn all_uses_fixtures(&self) -> Vec<&dyn UsesFixtures> {
         let mut dependencies: Vec<&dyn UsesFixtures> = Vec::new();
 
@@ -225,7 +216,6 @@ impl DiscoveredPackage {
         dependencies
     }
 
-    #[must_use]
     pub(crate) fn configuration_modules(&self) -> Vec<&DiscoveredModule> {
         self.configuration_modules
             .iter()
@@ -251,12 +241,10 @@ impl DiscoveredPackage {
         }
     }
 
-    #[must_use]
     pub(crate) fn is_empty(&self) -> bool {
         self.modules.is_empty() && self.packages.is_empty()
     }
 
-    #[must_use]
     #[cfg(test)]
     pub(crate) const fn display(&self) -> DisplayDiscoveredPackage<'_> {
         DisplayDiscoveredPackage::new(self)
@@ -298,7 +286,6 @@ pub(crate) struct DisplayDiscoveredPackage<'proj> {
 
 #[cfg(test)]
 impl<'proj> DisplayDiscoveredPackage<'proj> {
-    #[must_use]
     pub(crate) const fn new(package: &'proj DiscoveredPackage) -> Self {
         Self { package }
     }

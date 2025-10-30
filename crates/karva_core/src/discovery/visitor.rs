@@ -107,7 +107,6 @@ pub(crate) struct DiscoveredFunctions {
     pub(crate) fixtures: Vec<Fixture>,
 }
 
-#[must_use]
 pub(crate) fn discover(
     py: Python,
     module_path: &ModulePath,
@@ -139,7 +138,6 @@ pub(crate) fn discover(
     )
 }
 
-#[must_use]
 pub(crate) fn parsed_module(
     module_path: &ModulePath,
     python_version: PythonVersion,

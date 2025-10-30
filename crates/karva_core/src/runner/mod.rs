@@ -25,7 +25,6 @@ pub(crate) struct StandardTestRunner<'proj> {
 }
 
 impl<'proj> StandardTestRunner<'proj> {
-    #[must_use]
     pub(crate) const fn new(project: &'proj Project) -> Self {
         Self { project }
     }

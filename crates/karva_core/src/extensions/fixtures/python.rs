@@ -17,7 +17,7 @@ pub struct FixtureFunctionMarker {
 impl FixtureFunctionMarker {
     #[new]
     #[pyo3(signature = (scope=None, name=None, auto_use=false))]
-    #[must_use]
+
     pub fn new(
         py: Python<'_>,
         scope: Option<Py<PyAny>>,
@@ -71,7 +71,7 @@ pub struct FixtureFunctionDefinition {
 #[pymethods]
 impl FixtureFunctionDefinition {
     #[new]
-    #[must_use]
+
     pub const fn new(function: Py<PyAny>, name: String, scope: Py<PyAny>, auto_use: bool) -> Self {
         Self {
             name,

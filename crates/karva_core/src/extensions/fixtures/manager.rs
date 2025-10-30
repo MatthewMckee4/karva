@@ -70,7 +70,6 @@ pub(crate) struct FixtureManager<'a> {
 }
 
 impl<'a> FixtureManager<'a> {
-    #[must_use]
     pub(crate) fn new(parent: Option<&'a Self>, scope: FixtureScope) -> Self {
         Self {
             parent,
@@ -79,7 +78,6 @@ impl<'a> FixtureManager<'a> {
         }
     }
 
-    #[must_use]
     #[cfg(test)]
     pub(crate) fn contains_fixture_with_name_at_scope(
         &self,
@@ -105,7 +103,6 @@ impl<'a> FixtureManager<'a> {
             .is_some_and(|parent| parent.contains_fixture_with_name(fixture_name))
     }
 
-    #[must_use]
     pub(crate) fn get_fixture(&self, fixture_name: &QualifiedFunctionName) -> Option<Py<PyAny>> {
         if let Some(fixture) = self.collection.fixtures.get(fixture_name) {
             return Some(fixture.clone());
@@ -118,7 +115,7 @@ impl<'a> FixtureManager<'a> {
     // Get a single fixture with a given name.
     //
     // We can optionally exclude specific function names from the search.
-    #[must_use]
+
     pub(crate) fn get_fixture_with_name(
         &self,
         fixture_name: &str,

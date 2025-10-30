@@ -19,7 +19,6 @@ pub struct TestContext {
 }
 
 impl TestContext {
-    #[must_use]
     pub fn new() -> Self {
         let temp_dir = TempDir::with_prefix("karva-test-env").unwrap();
 
@@ -92,7 +91,6 @@ impl TestContext {
         }
     }
 
-    #[must_use]
     fn create_random_dir(&self) -> PathBuf {
         self.create_dir(format!("main_{}", rand::random::<u32>()))
     }
@@ -116,12 +114,10 @@ impl TestContext {
         path
     }
 
-    #[must_use]
     pub fn temp_path(&self, path: impl AsRef<std::path::Path>) -> PathBuf {
         self.project_dir_path.join(path)
     }
 
-    #[must_use]
     pub fn cwd(&self) -> PathBuf {
         self.project_dir_path.clone()
     }
@@ -183,7 +179,6 @@ impl TestContext {
             .unwrap();
     }
 
-    #[must_use]
     pub fn mapped_path(&self, path: &str) -> Option<&PathBuf> {
         self.mapped_paths.get(path)
     }

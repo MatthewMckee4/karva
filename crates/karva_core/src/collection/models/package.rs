@@ -32,7 +32,6 @@ impl<'proj> CollectedPackage<'proj> {
     }
 
     /// Count the number of test cases in the package.
-    #[must_use]
     pub(crate) fn total_test_cases(&self) -> usize {
         let mut total = 0;
         for module in &self.modules {

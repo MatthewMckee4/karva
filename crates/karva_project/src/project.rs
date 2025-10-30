@@ -13,12 +13,10 @@ pub struct ProjectMetadata {
 }
 
 impl ProjectMetadata {
-    #[must_use]
     pub const fn new(python_version: PythonVersion) -> Self {
         Self { python_version }
     }
 
-    #[must_use]
     pub const fn python_version(&self) -> PythonVersion {
         self.python_version
     }
@@ -33,7 +31,6 @@ pub struct ProjectOptions {
 }
 
 impl ProjectOptions {
-    #[must_use]
     pub const fn new(
         test_prefix: String,
         verbosity: VerbosityLevel,
@@ -48,22 +45,18 @@ impl ProjectOptions {
         }
     }
 
-    #[must_use]
     pub fn test_prefix(&self) -> &str {
         &self.test_prefix
     }
 
-    #[must_use]
     pub const fn verbosity(&self) -> VerbosityLevel {
         self.verbosity
     }
 
-    #[must_use]
     pub const fn show_output(&self) -> bool {
         self.show_output
     }
 
-    #[must_use]
     pub const fn no_ignore(&self) -> bool {
         self.no_ignore
     }
@@ -89,7 +82,6 @@ pub struct Project {
 }
 
 impl Project {
-    #[must_use]
     pub fn new(cwd: PathBuf, paths: Vec<PathBuf>) -> Self {
         Self {
             cwd,
@@ -105,7 +97,6 @@ impl Project {
         self
     }
 
-    #[must_use]
     pub const fn metadata(&self) -> &ProjectMetadata {
         &self.metadata
     }
@@ -116,17 +107,14 @@ impl Project {
         self
     }
 
-    #[must_use]
     pub const fn options(&self) -> &ProjectOptions {
         &self.options
     }
 
-    #[must_use]
     pub const fn cwd(&self) -> &PathBuf {
         &self.cwd
     }
 
-    #[must_use]
     pub fn test_paths(&self) -> Vec<Result<TestPath, TestPathError>> {
         self.paths.iter().map(|p| TestPath::new(p)).collect()
     }

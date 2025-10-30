@@ -16,14 +16,12 @@ impl Default for IntegrationTestContext {
 }
 
 impl IntegrationTestContext {
-    #[must_use]
     pub fn new() -> Self {
         let test_env = TestContext::new();
 
         Self { test_env }
     }
 
-    #[must_use]
     pub fn karva_bin(&self) -> PathBuf {
         let venv_bin =
             self.test_env
@@ -55,7 +53,6 @@ impl IntegrationTestContext {
         self.test_env.write_file(path, content);
     }
 
-    #[must_use]
     pub fn command(&self) -> Command {
         let mut command = Command::new(self.karva_bin());
         command.current_dir(self.test_env.cwd()).arg("test");

@@ -22,7 +22,6 @@ impl Default for TestRunResult {
 }
 
 impl TestRunResult {
-    #[must_use]
     pub const fn diagnostics(&self) -> &Vec<Diagnostic> {
         &self.diagnostics
     }
@@ -44,7 +43,6 @@ impl TestRunResult {
         self.stats.update(&other.stats);
     }
 
-    #[must_use]
     pub fn passed(&self) -> bool {
         for diagnostic in &self.diagnostics {
             if diagnostic.severity().is_error() {
@@ -54,7 +52,6 @@ impl TestRunResult {
         true
     }
 
-    #[must_use]
     pub const fn stats(&self) -> &TestResultStats {
         &self.stats
     }
@@ -76,7 +73,6 @@ impl TestRunResult {
         }
     }
 
-    #[must_use]
     pub const fn display(&self) -> DisplayRunDiagnostics<'_> {
         DisplayRunDiagnostics::new(self)
     }
@@ -121,7 +117,6 @@ impl TestResultStats {
         }
     }
 
-    #[must_use]
     pub fn total(&self) -> usize {
         self.inner.values().sum()
     }
@@ -134,17 +129,14 @@ impl TestResultStats {
         self.inner.get(&kind).copied().unwrap_or(0)
     }
 
-    #[must_use]
     pub(crate) fn passed(&self) -> usize {
         self.get(TestResultKind::Passed)
     }
 
-    #[must_use]
     pub(crate) fn failed(&self) -> usize {
         self.get(TestResultKind::Failed)
     }
 
-    #[must_use]
     pub(crate) fn skipped(&self) -> usize {
         self.get(TestResultKind::Skipped)
     }

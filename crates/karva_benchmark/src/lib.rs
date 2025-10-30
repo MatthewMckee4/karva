@@ -55,22 +55,18 @@ pub struct TestCase {
 }
 
 impl TestCase {
-    #[must_use]
     pub const fn new(file: TestFile) -> Self {
         Self { file }
     }
 
-    #[must_use]
     pub const fn code(&self) -> &str {
         self.file.code
     }
 
-    #[must_use]
     pub const fn name(&self) -> &str {
         self.file.name
     }
 
-    #[must_use]
     pub fn path(&self) -> PathBuf {
         PathBuf::from(file!())
             .parent()
@@ -89,17 +85,14 @@ pub struct TestFile {
 }
 
 impl TestFile {
-    #[must_use]
     pub const fn new(name: &'static str, code: &'static str) -> Self {
         Self { name, code }
     }
 
-    #[must_use]
     pub const fn code(&self) -> &str {
         self.code
     }
 
-    #[must_use]
     pub const fn name(&self) -> &str {
         self.name
     }

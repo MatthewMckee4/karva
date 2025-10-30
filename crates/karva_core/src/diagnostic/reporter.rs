@@ -33,7 +33,6 @@ impl Default for TestCaseReporter {
 }
 
 impl TestCaseReporter {
-    #[must_use]
     pub fn new(output: Arc<Mutex<Box<dyn Write + Send>>>) -> Self {
         Self { output }
     }

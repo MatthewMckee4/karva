@@ -16,12 +16,10 @@ pub(crate) struct StandardDiscoverer<'proj> {
 }
 
 impl<'proj> StandardDiscoverer<'proj> {
-    #[must_use]
     pub(crate) const fn new(project: &'proj Project) -> Self {
         Self { project }
     }
 
-    #[must_use]
     pub(crate) fn discover(self, py: Python<'_>) -> (DiscoveredPackage, Vec<Diagnostic>) {
         let mut session_package = DiscoveredPackage::new(self.project.cwd().clone());
 

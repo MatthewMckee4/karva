@@ -100,7 +100,6 @@ pub(crate) struct Fixture {
 }
 
 impl Fixture {
-    #[must_use]
     pub(crate) const fn new(
         name: QualifiedFunctionName,
         function_def: StmtFunctionDef,
@@ -119,22 +118,18 @@ impl Fixture {
         }
     }
 
-    #[must_use]
     pub(crate) const fn name(&self) -> &QualifiedFunctionName {
         &self.name
     }
 
-    #[must_use]
     pub(crate) const fn scope(&self) -> &FixtureScope {
         &self.scope
     }
 
-    #[must_use]
     pub(crate) const fn is_generator(&self) -> bool {
         self.is_generator
     }
 
-    #[must_use]
     pub(crate) const fn auto_use(&self) -> bool {
         self.auto_use
     }
@@ -332,13 +327,11 @@ impl std::fmt::Debug for Fixture {
 
 /// This trait is used to represent an object that may require fixtures to be called before it is run.
 pub(crate) trait UsesFixtures: std::fmt::Debug {
-    #[must_use]
     fn uses_fixture(&self, py: Python<'_>, fixture_name: &str) -> bool {
         self.dependant_fixtures(py)
             .contains(&fixture_name.to_string())
     }
 
-    #[must_use]
     fn dependant_fixtures(&self, py: Python<'_>) -> Vec<String>;
 }
 
