@@ -9,9 +9,9 @@ use crate::{
     utils::attach,
 };
 
-pub(crate) mod diagnostic;
+pub mod diagnostic;
 
-pub(crate) use diagnostic::TestRunResult;
+pub use diagnostic::TestRunResult;
 
 pub trait TestRunner {
     fn test(&self) -> TestRunResult {

@@ -1,24 +1,14 @@
 #![allow(clippy::print_stderr)]
 
-//! Infrastructure for benchmarking real-world Python projects.
-//!
-//! The module uses a setup similar to mypy primer's, which should make it easy
-//! to add new benchmarks for projects in [mypy primer's project's list](https://github.com/hauntsaninja/mypy_primer/blob/ebaa9fd27b51a278873b63676fd25490cec6823b/mypy_primer/projects.py#L74).
-//!
-//! The basic steps for a project are:
-//! 1. Clone or update the project into a directory inside `./target`. The commits are pinnted to prevent flaky benchmark results due to new commits.
-//! 2. For projects with dependencies, run uv to create a virtual environment and install the dependencies.
-//! 3. (optionally) Copy the entire project structure into a memory file system to reduce the IO noise in benchmarks.
-//! 4. (not in this module) Create a `ProjectDatabase` and run the benchmark.
-
 use std::{
     path::{Path, PathBuf},
     process::Command,
 };
 
 use anyhow::{Context, Result};
-use karva_test::find_karva_wheel;
 use ruff_python_ast::PythonVersion;
+
+use crate::find_karva_wheel;
 
 fn global_venv_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -29,16 +19,16 @@ fn global_venv_path() -> PathBuf {
         .join(".venv")
 }
 
-/// Configuration for a real-world project to benchmark
+/// Configuration for a real-world project to benchmark or test
 #[derive(Debug, Clone)]
 pub struct RealWorldProject<'a> {
-    // The name of the project.
+    /// The name of the project.
     pub name: &'a str,
     /// The project's GIT repository. Must be publicly accessible.
     pub repository: &'a str,
     /// Specific commit hash to checkout
     pub commit: &'a str,
-    /// List of paths within the project to check (`ty check <paths>`)
+    /// List of paths within the project to test
     pub paths: Vec<PathBuf>,
     /// Dependencies to install via uv
     pub dependencies: Vec<&'a str>,
@@ -47,7 +37,7 @@ pub struct RealWorldProject<'a> {
 }
 
 impl<'a> RealWorldProject<'a> {
-    /// Setup a real-world project for benchmarking
+    /// Setup a real-world project for testing/benchmarking
     pub fn setup(self) -> Result<InstalledProject<'a>> {
         tracing::debug!("Setting up project {}", self.name);
 
@@ -351,4 +341,23 @@ fn cargo_target_directory() -> Option<&'static PathBuf> {
                 })
         })
         .as_ref()
+}
+
+/// The affect project - a real-world Python project for testing
+#[must_use]
+pub fn affect_project() -> RealWorldProject<'static> {
+    RealWorldProject {
+        name: "affect",
+        repository: "https://github.com/MatthewMckee4/affect",
+        commit: "803cc916b492378a8ad8966e747cac3325e11b5f",
+        paths: vec![PathBuf::from("tests")],
+        dependencies: vec!["pydantic", "pydantic-settings", "pytest"],
+        python_version: PythonVersion::PY313,
+    }
+}
+
+/// Registry of real-world projects used for benchmarking and diagnostic testing
+#[must_use]
+pub fn get_real_world_projects() -> Vec<RealWorldProject<'static>> {
+    vec![affect_project()]
 }

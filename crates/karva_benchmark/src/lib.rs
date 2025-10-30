@@ -1,7 +1,12 @@
 use std::path::PathBuf;
 
 pub mod criterion;
-pub mod real_world_projects;
+
+// Re-export real world projects from karva_test
+pub use karva_test::{
+    InstalledProject, RealWorldProject, affect_project, get_real_world_projects,
+    real_world_projects,
+};
 
 pub static TRUE_ASSERTIONS: TestFile = TestFile::new(
     "test_true_assertions.py",
@@ -35,19 +40,6 @@ pub static PARAMETRIZE: TestFile = TestFile::new(
     "test_parametrize.py",
     include_str!("../resources/test_parametrize.py"),
 );
-
-/// Relative size of a test case. Benchmarks can use it to configure the time for how long a benchmark should run to get stable results.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum TestCaseSpeed {
-    /// A test case that is fast to run
-    Fast,
-
-    /// A normal test case
-    Normal,
-
-    /// A slow test case
-    Slow,
-}
 
 #[derive(Debug, Clone)]
 pub struct TestCase {

@@ -50,7 +50,7 @@ impl Diagnostic {
     }
 
     #[must_use]
-    pub(crate) const fn severity(&self) -> &DiagnosticSeverity {
+    pub const fn severity(&self) -> &DiagnosticSeverity {
         &self.inner.severity
     }
 
@@ -175,14 +175,14 @@ impl DiagnosticInner {
 
 // Diagnostic severity
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum DiagnosticSeverity {
+pub enum DiagnosticSeverity {
     Error(DiagnosticErrorType),
     Warning(String),
 }
 
 impl DiagnosticSeverity {
     #[must_use]
-    pub(crate) const fn is_error(&self) -> bool {
+    pub const fn is_error(&self) -> bool {
         matches!(self, Self::Error(_))
     }
 
@@ -193,7 +193,7 @@ impl DiagnosticSeverity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum DiagnosticErrorType {
+pub enum DiagnosticErrorType {
     TestCase {
         test_name: String,
         diagnostic_type: TestCaseDiagnosticType,
@@ -203,17 +203,17 @@ pub(crate) enum DiagnosticErrorType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum TestCaseDiagnosticType {
+pub enum TestCaseDiagnosticType {
     Fail(String),
     Collection(TestCaseCollectionDiagnosticType),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum TestCaseCollectionDiagnosticType {
+pub enum TestCaseCollectionDiagnosticType {
     FixtureNotFound,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum FixtureDiagnosticType {
+pub enum FixtureDiagnosticType {
     Invalid,
 }

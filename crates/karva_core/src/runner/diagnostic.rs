@@ -126,6 +126,7 @@ impl TestResultStats {
         self.inner.values().sum()
     }
 
+    #[must_use]
     pub fn is_success(&self) -> bool {
         self.failed() == 0
     }
@@ -135,17 +136,17 @@ impl TestResultStats {
     }
 
     #[must_use]
-    pub(crate) fn passed(&self) -> usize {
+    pub fn passed(&self) -> usize {
         self.get(TestResultKind::Passed)
     }
 
     #[must_use]
-    pub(crate) fn failed(&self) -> usize {
+    pub fn failed(&self) -> usize {
         self.get(TestResultKind::Failed)
     }
 
     #[must_use]
-    pub(crate) fn skipped(&self) -> usize {
+    pub fn skipped(&self) -> usize {
         self.get(TestResultKind::Skipped)
     }
 
