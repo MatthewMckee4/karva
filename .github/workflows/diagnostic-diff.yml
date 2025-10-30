@@ -32,11 +32,6 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Build karva wheel (PR branch)
-        run: |
-          cargo build --release -p karva
-          uv build --wheel
-
       - name: Run diagnostics on PR branch
         run: |
           cargo run --release -p karva_diffs --bin karva-diagnostics -- run --output pr-diagnostics.json
