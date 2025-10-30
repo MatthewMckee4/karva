@@ -32,6 +32,11 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+
       - name: Run diagnostics on PR branch
         run: |
           cargo run --release -p karva_diffs --bin karva-diagnostics -- run --output pr-diagnostics.json
@@ -46,6 +51,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
 
       - name: Run diagnostics on main branch
         run: |
