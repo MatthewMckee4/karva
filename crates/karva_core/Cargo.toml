@@ -18,7 +18,6 @@ pyo3 = { workspace = true, features = ["py-clone", "auto-initialize"] }
 ruff_python_ast = { workspace = true }
 ruff_python_parser = { workspace = true }
 ruff_source_file = { workspace = true }
-ruff_text_size = { workspace = true }
 tracing = { workspace = true }
 ignore = { workspace = true }
 regex = { workspace = true }
