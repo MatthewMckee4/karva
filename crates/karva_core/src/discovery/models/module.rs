@@ -1,46 +1,47 @@
 use std::path::PathBuf;
 
-use karva_project::{project::Project, utils::module_name};
 use pyo3::Python;
 use ruff_source_file::LineIndex;
 
 use crate::{
     discovery::TestFunction,
     extensions::fixtures::{Fixture, HasFixtures, UsesFixtures},
+    name::ModulePath,
 };
 
 /// A module represents a single python file.
 #[derive(Debug)]
 pub(crate) struct DiscoveredModule {
-    path: PathBuf,
+    path: ModulePath,
     test_functions: Vec<TestFunction>,
     fixtures: Vec<Fixture>,
     type_: ModuleType,
-    name: String,
     source_text: String,
 }
 
 impl DiscoveredModule {
     #[must_use]
-    pub(crate) fn new(project: &Project, path: &PathBuf, module_type: ModuleType) -> Self {
+    pub(crate) fn new(path: ModulePath, module_type: ModuleType) -> Self {
+        let source_text =
+            std::fs::read_to_string(path.module_path()).expect("Failed to read source file");
+
         Self {
-            path: path.clone(),
+            path,
             test_functions: Vec::new(),
             fixtures: Vec::new(),
             type_: module_type,
-            name: module_name(project.cwd(), path).expect("Module has no name"),
-            source_text: std::fs::read_to_string(path).expect("Failed to read source file"),
+            source_text,
         }
     }
 
     #[must_use]
     pub(crate) const fn path(&self) -> &PathBuf {
-        &self.path
+        self.path.module_path()
     }
 
     #[must_use]
     pub(crate) fn name(&self) -> &str {
-        &self.name
+        self.path.module_name()
     }
 
     #[must_use]

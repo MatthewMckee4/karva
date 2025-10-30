@@ -7,6 +7,7 @@ use pyo3::prelude::*;
 use crate::{
     diagnostic::Diagnostic,
     discovery::{DiscoveredModule, DiscoveredPackage, ModuleType, discover},
+    name::ModulePath,
     utils::add_to_sys_path,
 };
 
@@ -39,8 +40,11 @@ impl<'proj> StandardDiscoverer<'proj> {
                 Ok(path) => {
                     match &path {
                         TestPath::File(path) => {
-                            let (module, diagnostics) =
-                                self.discover_test_file(py, path, DiscoveryMode::All);
+                            let Some((module, diagnostics)) =
+                                self.discover_test_file(py, path, DiscoveryMode::All)
+                            else {
+                                continue;
+                            };
 
                             session_package.add_module(module);
 
@@ -58,8 +62,11 @@ impl<'proj> StandardDiscoverer<'proj> {
                             path,
                             function_name,
                         } => {
-                            let (mut module, diagnostics) =
-                                self.discover_test_file(py, path, DiscoveryMode::All);
+                            let Some((mut module, diagnostics)) =
+                                self.discover_test_file(py, path, DiscoveryMode::All)
+                            else {
+                                continue;
+                            };
 
                             module.filter_test_functions(function_name);
 
@@ -94,10 +101,12 @@ impl<'proj> StandardDiscoverer<'proj> {
         py: Python,
         path: &PathBuf,
         discovery_mode: DiscoveryMode,
-    ) -> (DiscoveredModule, Vec<Diagnostic>) {
-        let (discovered, diagnostics) = discover(py, path, self.project);
+    ) -> Option<(DiscoveredModule, Vec<Diagnostic>)> {
+        let module_path = ModulePath::new(path, self.project.cwd())?;
 
-        let mut module = DiscoveredModule::new(self.project, path, path.into());
+        let (discovered, diagnostics) = discover(py, &module_path, self.project);
+
+        let mut module = DiscoveredModule::new(module_path, path.into());
 
         if !discovery_mode.is_configuration_only() {
             module = module.with_test_functions(discovered.functions);
@@ -105,7 +114,7 @@ impl<'proj> StandardDiscoverer<'proj> {
 
         module = module.with_fixtures(discovered.fixtures);
 
-        (module, diagnostics)
+        Some((module, diagnostics))
     }
 
     // This should look from the parent of path to the cwd for configuration files
@@ -131,8 +140,11 @@ impl<'proj> StandardDiscoverer<'proj> {
             if conftest_path.exists() {
                 let mut package = DiscoveredPackage::new(current_path.to_path_buf());
 
-                let (module, sub_diagnostics) =
-                    self.discover_test_file(py, &conftest_path, DiscoveryMode::ConfigurationOnly);
+                let Some((module, sub_diagnostics)) =
+                    self.discover_test_file(py, &conftest_path, DiscoveryMode::ConfigurationOnly)
+                else {
+                    break;
+                };
 
                 package.add_configuration_module(module);
 
@@ -200,18 +212,23 @@ impl<'proj> StandardDiscoverer<'proj> {
                             continue;
                         }
 
-                        let (module, module_diagnostics) =
-                            self.discover_test_file(py, &current_path, DiscoveryMode::All);
+                        let Some((module, module_diagnostics)) =
+                            self.discover_test_file(py, &current_path, DiscoveryMode::All)
+                        else {
+                            continue;
+                        };
 
                         package.add_module(module);
                         diagnostics.extend(module_diagnostics);
                     }
                     ModuleType::Configuration => {
-                        let (module, module_diagnostics) = self.discover_test_file(
+                        let Some((module, module_diagnostics)) = self.discover_test_file(
                             py,
                             &current_path,
                             DiscoveryMode::ConfigurationOnly,
-                        );
+                        ) else {
+                            continue;
+                        };
 
                         package.add_configuration_module(module);
                         diagnostics.extend(module_diagnostics);

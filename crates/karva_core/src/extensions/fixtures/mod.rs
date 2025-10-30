@@ -11,7 +11,7 @@ pub mod python;
 pub(crate) use finalizer::{Finalizer, Finalizers};
 pub(crate) use manager::FixtureManager;
 
-use crate::name::QualifiedFunctionName;
+use crate::name::{ModulePath, QualifiedFunctionName};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) enum FixtureScope {
@@ -178,7 +178,7 @@ impl Fixture {
         py: Python<'_>,
         function_definition: &StmtFunctionDef,
         py_module: &Bound<'_, PyModule>,
-        module_name: &str,
+        module_path: &ModulePath,
         is_generator_function: bool,
     ) -> Result<Option<Self>, String> {
         let function = py_module
@@ -189,7 +189,7 @@ impl Fixture {
             py,
             function_definition,
             &function,
-            module_name,
+            module_path.clone(),
             is_generator_function,
         );
 
@@ -203,7 +203,7 @@ impl Fixture {
             py,
             function_definition,
             &function,
-            module_name,
+            module_path.clone(),
             is_generator_function,
         );
 
@@ -218,7 +218,7 @@ impl Fixture {
         py: Python<'_>,
         function_definition: &StmtFunctionDef,
         function: &Bound<'_, PyAny>,
-        module_name: &str,
+        module_name: ModulePath,
         is_generator_function: bool,
     ) -> Result<Option<Self>, String> {
         let Some(found_name) =
@@ -251,7 +251,7 @@ impl Fixture {
         let fixture_scope = fixture_scope(py, &scope, &name)?;
 
         Ok(Some(Self::new(
-            QualifiedFunctionName::new(name, module_name.to_string()),
+            QualifiedFunctionName::new(name, module_name),
             function_definition.clone(),
             fixture_scope,
             auto_use.extract::<bool>().unwrap_or(false),
@@ -264,7 +264,7 @@ impl Fixture {
         py: Python<'_>,
         function_def: &StmtFunctionDef,
         function: &Bound<'_, PyAny>,
-        module_name: &str,
+        module_path: ModulePath,
         is_generator_function: bool,
     ) -> Result<Option<Self>, String> {
         let Ok(py_function) = function
@@ -285,7 +285,7 @@ impl Fixture {
         let fixture_scope = fixture_scope(py, scope_obj.bind(py), &name)?;
 
         Ok(Some(Self::new(
-            QualifiedFunctionName::new(name, module_name.to_string()),
+            QualifiedFunctionName::new(name, module_path),
             function_def.clone(),
             fixture_scope,
             auto_use,
