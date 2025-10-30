@@ -343,7 +343,7 @@ def test_parametrize(arg1):
                 for (key, value) in parametrize_arg {
                     assert_eq!(
                         value.extract::<i32>(py).unwrap(),
-                        expected_parametrize_args[i][&key.to_string()]
+                        expected_parametrize_args[i][key]
                     );
                 }
             }
@@ -382,7 +382,7 @@ def test_parametrize(arg1, arg2):
                 for (key, value) in parametrize_arg {
                     assert_eq!(
                         value.extract::<i32>(py).unwrap(),
-                        expected_parametrize_args[i][&key.to_string()]
+                        expected_parametrize_args[i][key]
                     );
                 }
             }
@@ -429,7 +429,7 @@ def test_parametrize(arg1):
                 for (key, value) in parametrize_arg {
                     assert_eq!(
                         value.extract::<i32>(py).unwrap(),
-                        expected_parametrize_args[i][&key.to_string()]
+                        expected_parametrize_args[i][key]
                     );
                 }
             }
