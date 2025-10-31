@@ -46,31 +46,19 @@ impl PyTags {
         arg_names: &Bound<'_, PyAny>,
         arg_values: &Bound<'_, PyAny>,
     ) -> PyResult<Self> {
-        if let (Ok(name), Ok(values)) = (
-            arg_names.extract::<String>(),
-            arg_values.extract::<Vec<Py<PyAny>>>(),
-        ) {
-            Ok(Self {
-                inner: vec![PyTag::Parametrize {
-                    arg_names: vec![name],
-                    arg_values: values.into_iter().map(|v| vec![v]).collect(),
-                }],
-            })
-        } else if let (Ok(names), Ok(values)) = (
-            arg_names.extract::<Vec<String>>(),
-            arg_values.extract::<Vec<Vec<Py<PyAny>>>>(),
-        ) {
-            Ok(Self {
-                inner: vec![PyTag::Parametrize {
-                    arg_names: names,
-                    arg_values: values,
-                }],
-            })
-        } else {
-            Err(PyErr::new::<PyTypeError, _>(
-                "Expected a string or a list of strings for the arg_names, and a list of lists of objects for the arg_values",
-            ))
-        }
+        let (arg_names, arg_values) = super::parametrize::parse_parametrize_args(arg_names, arg_values)
+            .map_err(|()| {
+                PyErr::new::<PyTypeError, _>(
+                    "Expected a string or a list of strings for the arg_names, and a list of lists of objects for the arg_values",
+                )
+            })?;
+
+        Ok(Self {
+            inner: vec![PyTag::Parametrize {
+                arg_names,
+                arg_values,
+            }],
+        })
     }
 
     #[classmethod]

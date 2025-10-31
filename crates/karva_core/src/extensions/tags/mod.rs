@@ -5,7 +5,14 @@ use ruff_python_ast::StmtFunctionDef;
 
 use crate::extensions::tags::python::{PyTag, PyTestFunction};
 
+mod parametrize;
 pub mod python;
+mod skip;
+mod use_fixtures;
+
+pub(crate) use parametrize::ParametrizeTag;
+pub(crate) use skip::SkipTag;
+pub(crate) use use_fixtures::UseFixturesTag;
 
 /// Represents a decorator function in Python that can be used to extend the functionality of a test.
 #[derive(Debug, Clone)]
@@ -16,146 +23,33 @@ pub(crate) enum Tag {
 }
 
 impl Tag {
-    /// Converts a Python Tag into an internal Tag.
-    pub(crate) fn from_py_tag(py_tag: &PyTag) -> Self {
-        match py_tag {
-            PyTag::Parametrize {
-                arg_names,
-                arg_values,
-            } => Self::Parametrize(ParametrizeTag {
-                arg_names: arg_names.clone(),
-                arg_values: arg_values.clone(),
-            }),
-            PyTag::UseFixtures { fixture_names } => Self::UseFixtures(UseFixturesTag {
-                fixture_names: fixture_names.clone(),
-            }),
-            PyTag::Skip { reason } => Self::Skip(SkipTag {
-                reason: reason.clone(),
-            }),
-        }
-    }
-
-    /// Converts a Pytest mark into an internal Tag.
+    /// Converts a Pytest mark into an Karva Tag.
     ///
     /// This is used to allow Pytest marks to be used as Karva tags.
     pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let name = py_mark.getattr("name").ok()?.extract::<String>().ok()?;
         match name.as_str() {
-            "parametrize" => ParametrizeTag::try_from_pytest_mark(py_mark).map(Self::Parametrize),
-            "usefixtures" => UseFixturesTag::try_from_pytest_mark(py_mark).map(Self::UseFixtures),
-            "skip" => SkipTag::try_from_pytest_mark(py_mark).map(Self::Skip),
-            _ => None,
+            "parametrize" => ParametrizeTag::try_from(py_mark).map(Self::Parametrize),
+            "usefixtures" => UseFixturesTag::try_from(py_mark).map(Self::UseFixtures),
+            "skip" => SkipTag::try_from(py_mark).map(Self::Skip),
+            _ => Err(()),
         }
+        .ok()
     }
 }
 
-/// Represents different argument names and values that can be given to a test.
-///
-/// This is most useful to repeat a test multiple times with different arguments instead of duplicating the test.
-#[derive(Debug, Clone)]
-pub(crate) struct ParametrizeTag {
-    /// The names of the arguments
-    ///
-    /// These are used as keyword argument names for the test function.
-    arg_names: Vec<String>,
-
-    /// The values associated with each argument name.
-    arg_values: Vec<Vec<Py<PyAny>>>,
-}
-
-impl ParametrizeTag {
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
-        let args = py_mark.getattr("args").ok()?;
-        if let Ok((arg_name, arg_values)) = args.extract::<(String, Vec<Py<PyAny>>)>() {
-            Some(Self {
-                arg_names: vec![arg_name],
-                arg_values: arg_values.into_iter().map(|v| vec![v]).collect(),
-            })
-        } else if let Ok((arg_names, arg_values)) =
-            args.extract::<(Vec<String>, Vec<Vec<Py<PyAny>>>)>()
-        {
-            Some(Self {
+impl From<&PyTag> for Tag {
+    fn from(py_tag: &PyTag) -> Self {
+        match py_tag {
+            PyTag::Parametrize {
                 arg_names,
                 arg_values,
-            })
-        } else {
-            None
-        }
-    }
-
-    /// Returns each parameterize case.
-    ///
-    /// Each [`HashMap`] is used as keyword arguments for the test function.
-    pub(crate) fn each_arg_value(&self) -> Vec<HashMap<String, Py<PyAny>>> {
-        let total_combinations = self.arg_values.len();
-        let mut param_args = Vec::with_capacity(total_combinations);
-
-        for values in &self.arg_values {
-            let mut current_parameratisation = HashMap::with_capacity(self.arg_names.len());
-            for (arg_name, arg_value) in self.arg_names.iter().zip(values.iter()) {
-                current_parameratisation.insert(arg_name.clone(), arg_value.clone());
+            } => Self::Parametrize(ParametrizeTag::new(arg_names.clone(), arg_values.clone())),
+            PyTag::UseFixtures { fixture_names } => {
+                Self::UseFixtures(UseFixturesTag::new(fixture_names.clone()))
             }
-            param_args.push(current_parameratisation);
+            PyTag::Skip { reason } => Self::Skip(SkipTag::new(reason.clone())),
         }
-        param_args
-    }
-}
-
-/// Represents required fixtures that should be called before a test function is run.
-///
-/// These fixtures are not specified as arguments as the function does not directly need them.
-/// But they are still called.
-#[derive(Debug, Clone)]
-pub(crate) struct UseFixturesTag {
-    /// The names of the fixtures to be called.
-    fixture_names: Vec<String>,
-}
-
-impl UseFixturesTag {
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
-        let args = py_mark.getattr("args").ok()?;
-        args.extract::<Vec<String>>()
-            .map_or(None, |fixture_names| Some(Self { fixture_names }))
-    }
-
-    pub(crate) fn fixture_names(&self) -> &[String] {
-        &self.fixture_names
-    }
-}
-
-/// Represents a test that should be skipped.
-///
-/// A given reason will be logged if given.
-#[derive(Debug, Clone)]
-pub(crate) struct SkipTag {
-    reason: Option<String>,
-}
-
-impl SkipTag {
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
-        let kwargs = py_mark.getattr("kwargs").ok()?;
-
-        if let Ok(reason) = kwargs.get_item("reason") {
-            if let Ok(reason_str) = reason.extract::<String>() {
-                return Some(Self {
-                    reason: Some(reason_str),
-                });
-            }
-        }
-
-        let args = py_mark.getattr("args").ok()?;
-
-        if let Ok(args_tuple) = args.extract::<(String,)>() {
-            return Some(Self {
-                reason: Some(args_tuple.0),
-            });
-        }
-
-        Some(Self { reason: None })
-    }
-
-    pub(crate) fn reason(&self) -> Option<String> {
-        self.reason.clone()
     }
 }
 
@@ -168,6 +62,10 @@ pub(crate) struct Tags {
 }
 
 impl Tags {
+    pub(crate) const fn new(tags: Vec<Tag>) -> Self {
+        Self { inner: tags }
+    }
+
     pub(crate) fn from_py_any(
         py: Python<'_>,
         py_function: &Py<PyAny>,
@@ -180,16 +78,16 @@ impl Tags {
         if let Ok(py_test_function) = py_function.extract::<Py<PyTestFunction>>(py) {
             let mut tags = Vec::new();
             for tag in &py_test_function.borrow(py).tags.inner {
-                tags.push(Tag::from_py_tag(tag));
+                tags.push(Tag::from(tag));
             }
-            return Self { inner: tags };
+            return Self::new(tags);
         } else if let Ok(wrapped) = py_function.getattr(py, "__wrapped__") {
             if let Ok(py_wrapped_function) = wrapped.extract::<Py<PyTestFunction>>(py) {
                 let mut tags = Vec::new();
                 for tag in &py_wrapped_function.borrow(py).tags.inner {
-                    tags.push(Tag::from_py_tag(tag));
+                    tags.push(Tag::from(tag));
                 }
-                return Self { inner: tags };
+                return Self::new(tags);
             }
         }
 

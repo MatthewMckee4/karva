@@ -106,6 +106,14 @@ mod tests {
         }
     }
 
+    fn get_parametrize_function(framework: &str) -> &str {
+        match framework {
+            "pytest" => "pytest.mark.parametrize",
+            "karva" => "karva.tags.parametrize",
+            _ => panic!("Invalid framework"),
+        }
+    }
+
     #[test]
     fn test_single_file() {
         let test_context = TestContext::with_files([
@@ -1874,5 +1882,38 @@ def test_something_else():
         assert_eq!(*result.stats(), expected_stats);
 
         assert!(result.diagnostics().len() == 1);
+    }
+
+    #[rstest]
+    fn test_parametrize_multiple_args_single_string(#[values("pytest", "karva")] framework: &str) {
+        let test_context = TestContext::with_file(
+            "<test>/test.py",
+            &format!(
+                r#"
+                import {}
+
+                @{}("input,expected", [
+                    (2, 4),
+                    (3, 9),
+                ])
+                def test_square(input, expected):
+                    assert input ** 2 == expected
+                "#,
+                framework,
+                get_parametrize_function(framework)
+            ),
+        );
+
+        let result = test_context.test();
+
+        let mut expected_stats = TestResultStats::default();
+
+        for _ in 0..2 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats);
+
+        assert!(result.diagnostics().is_empty());
     }
 }
