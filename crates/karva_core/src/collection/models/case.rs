@@ -19,7 +19,7 @@ use crate::{
     runner::{TestRunResult, diagnostic::IndividualTestResultKind},
 };
 
-/// A test case represents a single test function invocation with a set of arguments.
+/// A test case represents a test function with a set of arguments.
 #[derive(Debug)]
 pub(crate) struct TestCase<'proj> {
     /// The test function to run.
@@ -27,9 +27,6 @@ pub(crate) struct TestCase<'proj> {
 
     /// The arguments to pass to the test function.
     kwargs: HashMap<String, Py<PyAny>>,
-
-    /// The Python function to call.
-    py_function: Py<PyAny>,
 
     /// The module containing the test function.
     module: &'proj DiscoveredModule,
@@ -44,14 +41,12 @@ impl<'proj> TestCase<'proj> {
     pub(crate) fn new(
         function: &'proj TestFunction,
         kwargs: HashMap<String, Py<PyAny>>,
-        py_function: Py<PyAny>,
         module: &'proj DiscoveredModule,
         skip: Option<SkipTag>,
     ) -> Self {
         Self {
             function,
             kwargs,
-            py_function,
             module,
             finalizers: Finalizers::default(),
             skip,
@@ -80,26 +75,24 @@ impl<'proj> TestCase<'proj> {
 
         let display = self.function.display();
 
-        let (case_call_result, test_name) = if self.kwargs.is_empty() {
-            let test_name = full_test_name(py, &display.to_string(), None);
+        let test_name = full_test_name(py, &display.to_string(), &self.kwargs);
 
-            if let Some(skip_tag) = &self.skip {
-                run_result.register_test_case_result(
-                    &test_name,
-                    IndividualTestResultKind::Skipped {
-                        reason: skip_tag.reason(),
-                    },
-                    Some(reporter),
-                );
+        if let Some(skip_tag) = &self.skip {
+            run_result.register_test_case_result(
+                &test_name,
+                IndividualTestResultKind::Skipped {
+                    reason: skip_tag.reason(),
+                },
+                Some(reporter),
+            );
 
-                return run_result;
-            }
+            return run_result;
+        }
 
-            (self.py_function.call0(py), test_name)
+        let case_call_result = if self.kwargs.is_empty() {
+            self.function.py_function().call0(py)
         } else {
             let kwargs = PyDict::new(py);
-
-            let test_name = full_test_name(py, &display.to_string(), Some(&self.kwargs));
 
             for key in self.function.definition().dependant_fixtures(py) {
                 if let Some(value) = self.kwargs.get(&key) {
@@ -107,53 +100,34 @@ impl<'proj> TestCase<'proj> {
                 }
             }
 
-            if let Some(skip_tag) = &self.skip {
-                run_result.register_test_case_result(
-                    &test_name,
-                    IndividualTestResultKind::Skipped {
-                        reason: skip_tag.reason(),
-                    },
-                    Some(reporter),
-                );
-
-                return run_result;
-            }
-
-            (self.py_function.call(py, (), Some(&kwargs)), test_name)
+            self.function.py_function().call(py, (), Some(&kwargs))
         };
 
-        match case_call_result {
-            Ok(_) => {
-                run_result.register_test_case_result(
-                    &test_name,
-                    IndividualTestResultKind::Passed,
-                    Some(reporter),
-                );
-            }
-            Err(err) => {
-                let diagnostic = diagnostic.map_or_else(
-                    || Diagnostic::from_test_fail(py, &err, self, self.module),
-                    |input_diagnostic| {
-                        let missing_args = missing_arguments_from_error(&err.to_string());
-                        handle_missing_fixtures(&missing_args, input_diagnostic).unwrap_or_else(
-                            || Diagnostic::from_test_fail(py, &err, self, self.module),
-                        )
-                    },
-                );
+        let Err(err) = case_call_result else {
+            run_result.register_test_case_result(
+                &test_name,
+                IndividualTestResultKind::Passed,
+                Some(reporter),
+            );
 
-                let error_type = diagnostic.severity();
+            return run_result;
+        };
 
-                if error_type.is_test_fail() {
-                    run_result.register_test_case_result(
-                        &test_name,
-                        IndividualTestResultKind::Failed,
-                        Some(reporter),
-                    );
-                }
+        let default_diagnostic = || Diagnostic::from_test_fail(py, &err, self, self.module);
 
-                run_result.add_diagnostic(diagnostic);
-            }
-        }
+        let diagnostic = diagnostic.map_or_else(default_diagnostic, |input_diagnostic| {
+            let missing_args = missing_arguments_from_error(&err.to_string());
+            handle_missing_fixtures(&missing_args, input_diagnostic)
+                .unwrap_or_else(default_diagnostic)
+        });
+
+        run_result.register_test_case_result(
+            &test_name,
+            IndividualTestResultKind::Failed,
+            Some(reporter),
+        );
+
+        run_result.add_diagnostic(diagnostic);
 
         run_result
     }
@@ -227,29 +201,24 @@ fn missing_arguments_from_error(err: &str) -> HashSet<String> {
     )
 }
 
-fn full_test_name(
-    py: Python,
-    function: &str,
-    kwargs: Option<&HashMap<String, Py<PyAny>>>,
-) -> String {
-    kwargs.map_or_else(
-        || function.to_string(),
-        |kwargs| {
-            let mut args_str = String::new();
-            let mut sorted_kwargs: Vec<_> = kwargs.iter().collect();
-            sorted_kwargs.sort_by_key(|(key, _)| *key);
+fn full_test_name(py: Python, function: &str, kwargs: &HashMap<String, Py<PyAny>>) -> String {
+    if kwargs.is_empty() {
+        function.to_string()
+    } else {
+        let mut args_str = String::new();
+        let mut sorted_kwargs: Vec<_> = kwargs.iter().collect();
+        sorted_kwargs.sort_by_key(|(key, _)| *key);
 
-            for (i, (key, value)) in sorted_kwargs.iter().enumerate() {
-                if i > 0 {
-                    args_str.push_str(", ");
-                }
-                if let Ok(value) = value.cast_bound::<PyAny>(py) {
-                    args_str.push_str(&format!("{key}={value:?}"));
-                }
+        for (i, (key, value)) in sorted_kwargs.iter().enumerate() {
+            if i > 0 {
+                args_str.push_str(", ");
             }
-            format!("{function} [{args_str}]")
-        },
-    )
+            if let Ok(value) = value.cast_bound::<PyAny>(py) {
+                args_str.push_str(&format!("{key}={value:?}"));
+            }
+        }
+        format!("{function} [{args_str}]")
+    }
 }
 
 #[cfg(test)]

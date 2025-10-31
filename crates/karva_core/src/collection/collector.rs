@@ -5,22 +5,13 @@ use crate::{
     diagnostic::Diagnostic,
     discovery::{DiscoveredModule, DiscoveredPackage, TestFunction},
     extensions::fixtures::{FixtureManager, FixtureScope, UsesFixtures},
-    utils::{Upcast, create_hierarchy_iterator},
+    utils::{Upcast, iter_with_ancestors},
 };
 
-/// Collects and processes test cases from discovered test functions.
-///
-/// The `TestCaseCollector` is responsible for the complex process of converting
-/// discovered test functions into executable test cases. This involves resolving
-/// fixture dependencies, setting up the proper scope hierarchy, and handling
-/// test parametrization.
+/// Collects and processes test cases from given packages, modules, and test functions.
 pub(crate) struct TestCaseCollector;
 
 impl TestCaseCollector {
-    /// Collects all test cases from a discovered test session.
-    ///
-    /// This is the main entry point for test collection. It creates a session-level
-    /// fixture manager and recursively processes all packages, modules, and test functions.
     pub(crate) fn collect<'a>(
         py: Python<'_>,
         session: &'a DiscoveredPackage,
@@ -45,17 +36,11 @@ impl TestCaseCollector {
 
         session_collected.add_finalizers(fixture_manager.reset_fixtures());
 
-        session_collected.add_collected_package(package_collected);
+        session_collected.add_package(package_collected);
 
         session_collected
     }
 
-    /// Collects test cases from a single test function with fixture resolution.
-    ///
-    /// This method creates a function-scoped fixture manager and delegates to the
-    /// test function's collect method. It handles the complex fixture hierarchy
-    /// setup required for proper dependency injection.
-    #[allow(clippy::unused_self)]
     fn collect_test_function<'a>(
         py: Python<'_>,
         test_function: &'a TestFunction,
@@ -64,7 +49,6 @@ impl TestCaseCollector {
         parents: &[&DiscoveredPackage],
         fixture_manager: &FixtureManager,
     ) -> Vec<(TestCase<'a>, Option<Diagnostic>)> {
-        // Create a closure that sets up function-scoped fixtures for test execution
         let create_function_fixture_manager = |inner_py: Python<'_>,
                                                test_case_creator: &dyn Fn(
             &FixtureManager,
@@ -77,7 +61,7 @@ impl TestCaseCollector {
             let test_cases = [test_function].to_vec();
             let upcast_test_cases: Vec<&dyn UsesFixtures> = test_cases.upcast();
 
-            for (parent, parents_above_current_parent) in create_hierarchy_iterator(parents) {
+            for (parent, parents_above_current_parent) in iter_with_ancestors(parents) {
                 function_fixture_manager.add_fixtures(
                     inner_py,
                     &parents_above_current_parent,
@@ -106,7 +90,6 @@ impl TestCaseCollector {
         test_function.collect(py, module, py_module, create_function_fixture_manager)
     }
 
-    #[allow(clippy::unused_self)]
     fn collect_module<'a>(
         py: Python<'_>,
         module: &'a DiscoveredModule,
@@ -127,7 +110,7 @@ impl TestCaseCollector {
         let mut module_fixture_manager =
             FixtureManager::new(Some(fixture_manager), FixtureScope::Module);
 
-        for (parent, parents_above_current_parent) in create_hierarchy_iterator(parents) {
+        for (parent, parents_above_current_parent) in iter_with_ancestors(parents) {
             module_fixture_manager.add_fixtures(
                 py,
                 &parents_above_current_parent,
@@ -198,7 +181,7 @@ impl TestCaseCollector {
         let mut package_fixture_manager =
             FixtureManager::new(Some(fixture_manager), FixtureScope::Package);
 
-        for (parent, parents_above_current_parent) in create_hierarchy_iterator(parents) {
+        for (parent, parents_above_current_parent) in iter_with_ancestors(parents) {
             package_fixture_manager.add_fixtures(
                 py,
                 &parents_above_current_parent,
@@ -222,13 +205,13 @@ impl TestCaseCollector {
         for module in package.modules().values() {
             let module_collected =
                 Self::collect_module(py, module, &new_parents, &package_fixture_manager);
-            package_collected.add_collected_module(module_collected);
+            package_collected.add_module(module_collected);
         }
 
         for sub_package in package.packages().values() {
             let sub_package_collected =
                 Self::collect_package(py, sub_package, &new_parents, &package_fixture_manager);
-            package_collected.add_collected_package(sub_package_collected);
+            package_collected.add_package(sub_package_collected);
         }
 
         package_collected.add_finalizers(package_fixture_manager.reset_fixtures());

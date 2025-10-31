@@ -3,11 +3,6 @@ use std::path::PathBuf;
 use karva_project::utils::module_name;
 
 /// Represents a fully qualified function name including its module path.
-///
-/// This structure ensures unique identification of test functions across
-/// the entire test suite by combining the function name with its module path.
-/// This is essential for avoiding name conflicts and providing clear test
-/// identification in reports and diagnostics.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct QualifiedFunctionName {
     function_name: String,

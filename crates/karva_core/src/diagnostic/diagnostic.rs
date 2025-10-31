@@ -170,10 +170,6 @@ impl DiagnosticSeverity {
     pub(crate) const fn is_error(&self) -> bool {
         matches!(self, Self::Error(_))
     }
-
-    pub(crate) const fn is_test_fail(&self) -> bool {
-        matches!(self, Self::Error(DiagnosticErrorType::TestCase { .. }))
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
