@@ -35,6 +35,7 @@ version-resolver:
 
 exclude-contributors:
   - dependabot
+  - dependabot[bot]
 
 exclude-labels:
   - dependencies
