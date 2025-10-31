@@ -12,17 +12,34 @@ template: |
 change-template: "- $TITLE @$AUTHOR ([#$NUMBER](https://github.com/MatthewMckee4/karva/pull/$NUMBER))"
 
 categories:
-  - title: Breaking
-    label: breaking
-  - title: New
-    labels:
-      - feature
-      - enhancement
   - title: Bug Fixes
     label: bug
+  - title: Reporting
+    label: reporting
+  - title: Extensions
+    labels:
+      - "extensions: fixtures"
+      - "extensions: tags"
+  - title: Discovery
+    label: "discovery"
+  - title: CLI
+    label: cli
   - title: Documentation
     label: documentation
-  - title: Other changes
+  - title: Internal
+    label: internal
+  - title: Other Changes
 
 version-resolver:
   default: patch
+
+exclude-contributors:
+  - dependabot
+
+exclude-labels:
+  - dependencies
+  - testing
+  - rust
+  - question
+  - performance
+  - contributor-friendly
