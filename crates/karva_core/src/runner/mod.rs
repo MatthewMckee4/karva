@@ -1913,7 +1913,7 @@ def test_something_else():
 
     #[rstest]
     fn test_temp_directory_fixture(
-        #[values("tmp_path", "tmpdir", "temp_path", "temp_dir")] fixture_name: &str,
+        #[values("tmp_path", "temp_path", "temp_dir")] fixture_name: &str,
     ) {
         let test_context = TestContext::with_file(
             "<test>/test.py",

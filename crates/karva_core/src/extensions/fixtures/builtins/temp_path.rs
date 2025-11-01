@@ -4,7 +4,7 @@ use tempfile::TempDir;
 pub fn is_temp_path_fixture_name(fixture_name: &str) -> bool {
     match fixture_name {
         // pytest names
-        "tmp_path" | "tmpdir" |
+        "tmp_path" |
         // karva names
         "temp_path" | "temp_dir" => true,
         _ => false,
