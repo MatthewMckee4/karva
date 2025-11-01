@@ -120,6 +120,7 @@ impl TestFunction {
         for params in parametrize_args {
             let test_case_creator = |fixture_manager: &FixtureManager| {
                 self.resolve_fixtures_for_test_case(
+                    py,
                     module,
                     &required_fixture_names,
                     &params,
@@ -135,6 +136,7 @@ impl TestFunction {
 
     fn resolve_fixtures_for_test_case<'a>(
         &'a self,
+        py: Python<'_>,
         module: &'a DiscoveredModule,
         required_fixture_names: &[String],
         params: &HashMap<String, Py<PyAny>>,
@@ -149,7 +151,7 @@ impl TestFunction {
             if let Some(fixture_value) = params.get(fixture_name) {
                 resolved_fixtures.insert(fixture_name.clone(), fixture_value.clone());
             } else if let Some(fixture_value) =
-                fixture_manager.get_fixture_with_name(fixture_name, None)
+                fixture_manager.get_fixture_with_name(py, fixture_name, None)
             {
                 resolved_fixtures.insert(fixture_name.clone(), fixture_value);
             } else {

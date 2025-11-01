@@ -3,6 +3,7 @@ use std::fmt::Display;
 use pyo3::{prelude::*, types::PyTuple};
 use ruff_python_ast::{Expr, StmtFunctionDef};
 
+pub mod builtins;
 pub mod finalizer;
 pub mod manager;
 
@@ -143,7 +144,7 @@ impl Fixture {
 
         for name in self.dependant_fixtures(py) {
             if let Some(fixture) =
-                fixture_manager.get_fixture_with_name(&name, Some(&[self.name()]))
+                fixture_manager.get_fixture_with_name(py, &name, Some(&[self.name()]))
             {
                 required_fixtures.push(fixture.clone().into_bound(py));
             }

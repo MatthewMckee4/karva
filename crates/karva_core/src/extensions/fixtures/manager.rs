@@ -4,7 +4,7 @@ use pyo3::{prelude::*, types::PyAny};
 use crate::{
     discovery::DiscoveredPackage,
     extensions::fixtures::{
-        Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, UsesFixtures,
+        Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, UsesFixtures, builtins,
     },
     name::QualifiedFunctionName,
     utils::iter_with_ancestors,
@@ -26,6 +26,35 @@ impl FixtureCollection {
 
     fn insert_finalizer(&mut self, finalizer: Finalizer) {
         self.finalizers.push(finalizer);
+    }
+
+    /// Get a fixture by name
+    ///
+    /// If the fixture name matches a built-in fixture,
+    /// it creates the fixture on-demand and stores it.
+    fn get_fixture(
+        &self,
+        py: Python<'_>,
+        fixture_name: &str,
+        exclude: Option<&[&QualifiedFunctionName]>,
+    ) -> Option<Py<PyAny>> {
+        if let Some((_, fixture)) = self.fixtures.iter().rev().find(|(name, _)| {
+            name.function_name() == fixture_name
+                && exclude.is_none_or(|exclude| !exclude.contains(name))
+        }) {
+            return Some(fixture.clone());
+        }
+
+        match fixture_name {
+            _ if builtins::temp_path::is_temp_path_fixture_name(fixture_name) => {
+                if let Some(path_obj) = builtins::temp_path::create_temp_dir(py) {
+                    return Some(path_obj);
+                }
+            }
+            _ => {}
+        }
+
+        None
     }
 
     fn reset(&mut self) -> Finalizers {
@@ -100,26 +129,23 @@ impl<'a> FixtureManager<'a> {
             .map_or_else(|| None, |parent| parent.get_fixture(fixture_name))
     }
 
-    // Get a single fixture with a given name.
+    // Check if a fixture with the given name exists (including built-ins).
     //
     // We can optionally exclude specific function names from the search.
 
     pub(crate) fn get_fixture_with_name(
         &self,
+        py: Python<'_>,
         fixture_name: &str,
         exclude: Option<&[&QualifiedFunctionName]>,
     ) -> Option<Py<PyAny>> {
-        if let Some((_, fixture)) = self.collection.fixtures.iter().rev().find(|(name, _)| {
-            name.function_name() == fixture_name
-                && exclude.is_none_or(|exclude| !exclude.contains(name))
-        }) {
-            return Some(fixture.clone());
+        // Check existing fixtures first in current scope
+        if let Some(fixture) = self.collection.get_fixture(py, fixture_name, exclude) {
+            return Some(fixture);
         }
 
-        self.parent.as_ref().map_or_else(
-            || None,
-            |parent| parent.get_fixture_with_name(fixture_name, exclude),
-        )
+        self.parent?
+            .get_fixture_with_name(py, fixture_name, exclude)
     }
 
     pub(crate) fn insert_fixture(&mut self, fixture_return: Py<PyAny>, fixture: &Fixture) {

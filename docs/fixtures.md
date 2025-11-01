@@ -180,59 +180,16 @@ def test_username(username):
     assert username == 'overridden-username'
 ```
 
-## Example
+## Built-in fixtures
 
-```bash
-uv init --lib calculator
-```
+Karva provides a few built-in fixtures that can be used in your tests.
 
-This will give us a project that looks like this:
+### Temporary Directory
 
-```
-calculator
-├── pyproject.toml
-├── README.md
-└── src
-    └── calculator
-        ├── __init__.py
-        └── py.typed
-```
+This fixture provides the user with a `pathlib.Path` object that points to a temporary directory.
 
-We can then create our core logic in `src/calculator/__init__.py`.
+You can use any of the following fixture names to use this fixture:
 
-```py
-class Calculator:
-    def add(self, a: int, b: int) -> int:
-        return a + b
-```
-
-We can then create our fixtures in `tests/conftest.py`.
-
-```py
-from karva import fixture
-
-@fixture
-def calculator() -> Calculator:
-    return Calculator()
-```
-
-We can then create our tests in `tests/test_add.py`.
-
-```py
-from calculator import Calculator
-
-def test_add(calculator: Calculator):
-    assert calculator.add(1, 2) == 3
-```
-
-Then, we'll add karva to our project.
-
-```bash
-uv add --dev karva
-```
-
-We can then run our tests with `uv run karva test`.
-
-```bash
-uv run karva test
-```
+- `tmp_path` # from pytest
+- `temp_path` # from karva
+- `temp_dir` # from karva
