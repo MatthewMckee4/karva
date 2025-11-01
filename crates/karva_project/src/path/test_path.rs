@@ -123,11 +123,11 @@ impl TestPathError {
 impl std::fmt::Display for TestPathError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NotFound(path) => write!(f, "Utf8Path `{path}` could not be found"),
+            Self::NotFound(path) => write!(f, "Path `{path}` could not be found"),
             Self::WrongFileExtension(path) => {
-                write!(f, "Utf8Path `{path}` has a wrong file extension")
+                write!(f, "Path `{path}` has a wrong file extension")
             }
-            Self::InvalidUtf8Path(path) => write!(f, "Utf8Path `{path}` is invalid"),
+            Self::InvalidUtf8Path(path) => write!(f, "Path `{path}` is invalid"),
             Self::MissingFunctionName(path) => {
                 write!(f, "Invalid function specification: `{path}::`")
             }

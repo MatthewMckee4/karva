@@ -291,7 +291,7 @@ fn test_just_text_file() {
     exit_code: 0
     ----- stdout -----
 
-    error[invalid-path]: Utf8Path `<temp_dir>/random.txt` has a wrong file extension
+    error[invalid-path]: Path `<temp_dir>/random.txt` has a wrong file extension
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
 
