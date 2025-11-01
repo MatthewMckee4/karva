@@ -6,7 +6,6 @@ use karva_core::extensions::{
 use pyo3::prelude::*;
 
 #[pyfunction]
-
 pub(crate) fn karva_run() -> i32 {
     karva_main(|args| {
         let mut args: Vec<_> = args.into_iter().skip(1).collect();

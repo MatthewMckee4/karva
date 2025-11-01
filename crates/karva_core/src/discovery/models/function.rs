@@ -159,7 +159,7 @@ impl TestFunction {
 
         let diagnostic = self.create_fixture_diagnostic(module, fixture_diagnostics);
 
-        TestCase::new(self, resolved_fixtures, module, tags.clone(), diagnostic)
+        TestCase::new(self, resolved_fixtures, module, tags.skip_tag(), diagnostic)
     }
 
     fn create_fixture_diagnostic(
