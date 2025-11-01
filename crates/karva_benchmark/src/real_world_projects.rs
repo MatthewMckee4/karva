@@ -11,12 +11,10 @@
 //! 3. (optionally) Copy the entire project structure into a memory file system to reduce the IO noise in benchmarks.
 //! 4. (not in this module) Create a `ProjectDatabase` and run the benchmark.
 
-use std::{
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{path::PathBuf, process::Command};
 
 use anyhow::{Context, Result};
+use camino::Utf8PathBuf;
 use karva_test::find_karva_wheel;
 use ruff_python_ast::PythonVersion;
 
@@ -39,7 +37,7 @@ pub struct RealWorldProject<'a> {
     /// Specific commit hash to checkout
     pub commit: &'a str,
     /// List of paths within the project to check (`ty check <paths>`)
-    pub paths: Vec<PathBuf>,
+    pub paths: Vec<Utf8PathBuf>,
     /// Dependencies to install via uv
     pub dependencies: Vec<&'a str>,
     /// Python version to use
@@ -89,7 +87,7 @@ impl<'a> RealWorldProject<'a> {
 
 struct Checkout<'a> {
     project: RealWorldProject<'a>,
-    path: PathBuf,
+    path: Utf8PathBuf,
 }
 
 impl<'a> Checkout<'a> {
@@ -97,14 +95,14 @@ impl<'a> Checkout<'a> {
         &self.project
     }
 
-    fn project_root(&self) -> &Path {
+    const fn project_root(&self) -> &Utf8PathBuf {
         &self.path
     }
 }
 
 pub struct InstalledProject<'a> {
     /// Path to the cloned project
-    pub path: PathBuf,
+    pub path: Utf8PathBuf,
     /// Project configuration
     pub config: RealWorldProject<'a>,
 }
@@ -114,20 +112,20 @@ impl<'a> InstalledProject<'a> {
         &self.config
     }
 
-    pub fn test_paths(&self) -> Vec<PathBuf> {
+    pub fn test_paths(&self) -> Vec<Utf8PathBuf> {
         self.config.paths.clone()
     }
 
-    pub fn path(&self) -> &Path {
+    pub const fn path(&self) -> &Utf8PathBuf {
         &self.path
     }
 
-    pub fn venv_path(&self) -> PathBuf {
+    pub fn venv_path(&self) -> Utf8PathBuf {
         self.path().join(".venv")
     }
 
     /// Get the path to the Python executable
-    pub fn python_path(&self) -> PathBuf {
+    pub fn python_path(&self) -> Utf8PathBuf {
         if cfg!(windows) {
             self.venv_path().join("Scripts/python.exe")
         } else {
@@ -137,7 +135,7 @@ impl<'a> InstalledProject<'a> {
 }
 
 /// Get the cache directory for a project in the cargo target directory
-fn get_project_cache_dir(project_name: &str) -> Result<std::path::PathBuf> {
+fn get_project_cache_dir(project_name: &str) -> Result<Utf8PathBuf> {
     let target_dir = cargo_target_directory()
         .cloned()
         .unwrap_or_else(|| PathBuf::from("target"));
@@ -149,11 +147,11 @@ fn get_project_cache_dir(project_name: &str) -> Result<std::path::PathBuf> {
         std::fs::create_dir_all(parent).context("Failed to create cache directory")?;
     }
 
-    Ok(cache_dir)
+    Ok(Utf8PathBuf::from_path_buf(cache_dir).unwrap())
 }
 
 /// Update an existing repository
-fn update_repository(project_root: &Path, commit: &str) -> Result<()> {
+fn update_repository(project_root: &Utf8PathBuf, commit: &str) -> Result<()> {
     let output = Command::new("git")
         .args(["fetch", "origin", commit])
         .current_dir(project_root)
@@ -186,7 +184,7 @@ fn update_repository(project_root: &Path, commit: &str) -> Result<()> {
 }
 
 /// Clone a git repository to the specified directory
-fn clone_repository(repo_url: &str, target_dir: &Path, commit: &str) -> Result<()> {
+fn clone_repository(repo_url: &str, target_dir: &Utf8PathBuf, commit: &str) -> Result<()> {
     // Create parent directory if it doesn't exist
     if let Some(parent) = target_dir.parent() {
         std::fs::create_dir_all(parent).context("Failed to create parent directory for clone")?;
@@ -199,7 +197,7 @@ fn clone_repository(repo_url: &str, target_dir: &Path, commit: &str) -> Result<(
             "--filter=blob:none", // Don't download large files initially
             "--no-checkout",      // Don't checkout files yet
             repo_url,
-            target_dir.to_str().unwrap(),
+            target_dir.as_ref(),
         ])
         .output()
         .context("Failed to execute git clone command")?;
@@ -243,6 +241,7 @@ fn clone_repository(repo_url: &str, target_dir: &Path, commit: &str) -> Result<(
 
 /// Install dependencies using uv with date constraints
 fn install_dependencies(checkout: &Checkout) -> Result<()> {
+    // Check if uv is available
     let uv_check = Command::new("uv")
         .arg("--version")
         .output()

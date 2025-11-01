@@ -1,7 +1,8 @@
 //! Generate a Markdown-compatible reference for the karva command-line interface.
-use std::{cmp::max, path::PathBuf};
+use std::cmp::max;
 
 use anyhow::{Result, bail};
+use camino::Utf8PathBuf;
 use clap::{Command, CommandFactory};
 use itertools::Itertools;
 use karva_cli::Args as Cli;
@@ -35,7 +36,7 @@ pub(crate) struct Args {
 pub(crate) fn main(args: &Args) -> Result<()> {
     let reference_string = generate();
     let filename = "docs/cli.md";
-    let reference_path = PathBuf::from(ROOT_DIR).join(filename);
+    let reference_path = Utf8PathBuf::from(ROOT_DIR).join(filename);
 
     match args.mode {
         Mode::DryRun => {

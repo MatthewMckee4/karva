@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
 use karva_core::{DummyReporter, Reporter, TestCaseReporter, TestRunner, current_python_version};
@@ -76,7 +77,16 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let verbosity = args.verbosity.level();
     let _guard = setup_tracing(verbosity);
 
-    let cwd = std::env::current_dir().context("Failed to get the current working directory")?;
+    let cwd = {
+        let cwd = std::env::current_dir().context("Failed to get the current working directory")?;
+        Utf8PathBuf::from_path_buf(cwd)
+                .map_err(|path| {
+                    anyhow::anyhow!(
+                        "The current working directory `{}` contains non-Unicode characters. ty only supports Unicode paths.",
+                        path.display()
+                    )
+                })?
+    };
 
     let mut paths: Vec<_> = args.paths.iter().map(|path| absolute(path, &cwd)).collect();
 

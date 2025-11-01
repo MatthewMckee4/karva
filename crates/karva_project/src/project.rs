@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-
+use camino::Utf8PathBuf;
 use ruff_python_ast::PythonVersion;
 
 use crate::{
@@ -75,17 +74,17 @@ impl Default for ProjectOptions {
 
 #[derive(Debug, Clone)]
 pub struct Project {
-    cwd: PathBuf,
+    cwd: Utf8PathBuf,
     paths: Vec<String>,
     metadata: ProjectMetadata,
     options: ProjectOptions,
 }
 
 impl Project {
-    pub fn new(cwd: PathBuf, paths: Vec<PathBuf>) -> Self {
+    pub fn new(cwd: Utf8PathBuf, paths: Vec<Utf8PathBuf>) -> Self {
         Self {
             cwd,
-            paths: paths.into_iter().map(|p| p.display().to_string()).collect(),
+            paths: paths.into_iter().map(|p| p.to_string()).collect(),
             metadata: ProjectMetadata::default(),
             options: ProjectOptions::default(),
         }
@@ -111,7 +110,7 @@ impl Project {
         &self.options
     }
 
-    pub const fn cwd(&self) -> &PathBuf {
+    pub const fn cwd(&self) -> &Utf8PathBuf {
         &self.cwd
     }
 

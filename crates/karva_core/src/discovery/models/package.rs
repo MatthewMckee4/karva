@@ -1,8 +1,6 @@
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-};
+use std::collections::{HashMap, HashSet};
 
+use camino::Utf8PathBuf;
 use pyo3::prelude::*;
 
 #[cfg(test)]
@@ -15,14 +13,14 @@ use crate::{
 /// A package represents a single python directory.
 #[derive(Debug)]
 pub(crate) struct DiscoveredPackage {
-    path: PathBuf,
-    modules: HashMap<PathBuf, DiscoveredModule>,
-    packages: HashMap<PathBuf, DiscoveredPackage>,
-    configuration_modules: HashSet<PathBuf>,
+    path: Utf8PathBuf,
+    modules: HashMap<Utf8PathBuf, DiscoveredModule>,
+    packages: HashMap<Utf8PathBuf, DiscoveredPackage>,
+    configuration_modules: HashSet<Utf8PathBuf>,
 }
 
 impl DiscoveredPackage {
-    pub(crate) fn new(path: PathBuf) -> Self {
+    pub(crate) fn new(path: Utf8PathBuf) -> Self {
         Self {
             path,
             modules: HashMap::new(),
@@ -31,20 +29,20 @@ impl DiscoveredPackage {
         }
     }
 
-    pub(crate) const fn path(&self) -> &PathBuf {
+    pub(crate) const fn path(&self) -> &Utf8PathBuf {
         &self.path
     }
 
-    pub(crate) const fn modules(&self) -> &HashMap<PathBuf, DiscoveredModule> {
+    pub(crate) const fn modules(&self) -> &HashMap<Utf8PathBuf, DiscoveredModule> {
         &self.modules
     }
 
-    pub(crate) const fn packages(&self) -> &HashMap<PathBuf, Self> {
+    pub(crate) const fn packages(&self) -> &HashMap<Utf8PathBuf, Self> {
         &self.packages
     }
 
     #[cfg(test)]
-    pub(crate) fn get_module(&self, path: &PathBuf) -> Option<&DiscoveredModule> {
+    pub(crate) fn get_module(&self, path: &Utf8PathBuf) -> Option<&DiscoveredModule> {
         if let Some(module) = self.modules.get(path) {
             Some(module)
         } else {
@@ -58,7 +56,7 @@ impl DiscoveredPackage {
     }
 
     #[cfg(test)]
-    pub(crate) fn get_package(&self, path: &PathBuf) -> Option<&Self> {
+    pub(crate) fn get_package(&self, path: &Utf8PathBuf) -> Option<&Self> {
         if let Some(package) = self.packages.get(path) {
             Some(package)
         } else {
@@ -309,10 +307,10 @@ impl std::fmt::Display for DisplayDiscoveredPackage<'_> {
             }
 
             let mut packages: Vec<_> = package.packages().iter().collect();
-            packages.sort_by_key(|(name, _)| name.display().to_string());
+            packages.sort_by_key(|(name, _)| name.to_string());
 
             for (name, _) in &packages {
-                entries.push(("package", name.display().to_string()));
+                entries.push(("package", name.to_string()));
             }
 
             let total = entries.len();
@@ -337,7 +335,7 @@ impl std::fmt::Display for DisplayDiscoveredPackage<'_> {
                     }
                     "package" => {
                         writeln!(f, "{prefix}{branch}{name}/")?;
-                        let subpackage = &package.packages()[&PathBuf::from(name)];
+                        let subpackage = &package.packages()[&Utf8PathBuf::from(name)];
                         write_tree(f, subpackage, &format!("{prefix}{child_prefix}"))?;
                     }
                     _ => {}

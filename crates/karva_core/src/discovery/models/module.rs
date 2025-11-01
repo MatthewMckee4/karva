@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-
+use camino::Utf8PathBuf;
 use pyo3::Python;
 use ruff_source_file::LineIndex;
 
@@ -33,7 +32,7 @@ impl DiscoveredModule {
         }
     }
 
-    pub(crate) const fn path(&self) -> &PathBuf {
+    pub(crate) const fn path(&self) -> &Utf8PathBuf {
         self.path.module_path()
     }
 
@@ -170,8 +169,8 @@ pub(crate) enum ModuleType {
     Configuration,
 }
 
-impl From<&PathBuf> for ModuleType {
-    fn from(path: &PathBuf) -> Self {
+impl From<&Utf8PathBuf> for ModuleType {
+    fn from(path: &Utf8PathBuf) -> Self {
         if path
             .file_name()
             .is_some_and(|file_name| file_name == "conftest.py")

@@ -88,7 +88,7 @@ impl TestFunction {
         let source_text = module.source_text();
         let start = self.function_definition.range.start();
         let line_number = line_index.line_column(start, source_text);
-        format!("{}:{}", module.path().display(), line_number.line)
+        format!("{}:{}", module.path(), line_number.line)
     }
 
     /// Collects test cases from this function, resolving fixtures and handling parametrization.

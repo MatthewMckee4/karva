@@ -1,7 +1,6 @@
-use std::{
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::process::Command;
+
+use camino::{Utf8Path, Utf8PathBuf};
 
 use crate::TestContext;
 
@@ -22,7 +21,7 @@ impl IntegrationTestContext {
         Self { test_env }
     }
 
-    pub fn karva_bin(&self) -> PathBuf {
+    pub fn karva_bin(&self) -> Utf8PathBuf {
         let venv_bin =
             self.test_env
                 .cwd()
@@ -37,7 +36,7 @@ impl IntegrationTestContext {
         case
     }
 
-    pub fn with_file(path: impl AsRef<Path>, content: &str) -> Self {
+    pub fn with_file(path: impl AsRef<Utf8Path>, content: &str) -> Self {
         let mut case = Self::new();
         case.write_file(path, content);
         case
@@ -49,7 +48,7 @@ impl IntegrationTestContext {
         }
     }
 
-    pub fn write_file(&mut self, path: impl AsRef<Path>, content: &str) {
+    pub fn write_file(&mut self, path: impl AsRef<Utf8Path>, content: &str) {
         self.test_env.write_file(path, content);
     }
 

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use camino::Utf8PathBuf;
 
 pub mod criterion;
 pub mod real_world_projects;
@@ -67,8 +67,8 @@ impl TestCase {
         self.file.name
     }
 
-    pub fn path(&self) -> PathBuf {
-        PathBuf::from(file!())
+    pub fn path(&self) -> Utf8PathBuf {
+        Utf8PathBuf::from(file!())
             .parent()
             .expect("Failed to get parent of file")
             .parent()

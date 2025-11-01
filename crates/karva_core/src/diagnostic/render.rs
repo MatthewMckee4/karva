@@ -192,7 +192,9 @@ mod test {
                 Some("Known error occurred".to_string()),
                 Some("file.py:5".to_string()),
                 None,
-                DiagnosticSeverity::Error(DiagnosticErrorType::Known("InvalidPath".to_string())),
+                DiagnosticSeverity::Error(DiagnosticErrorType::Known(
+                    "InvalidUtf8Path".to_string(),
+                )),
             );
 
             let display = diagnostic.display();
