@@ -144,10 +144,8 @@ impl<'a> FixtureManager<'a> {
             return Some(fixture);
         }
 
-        self.parent.as_ref().map_or_else(
-            || None,
-            |parent| parent.get_fixture_with_name(py, fixture_name, exclude),
-        )
+        self.parent?
+            .get_fixture_with_name(py, fixture_name, exclude)
     }
 
     pub(crate) fn insert_fixture(&mut self, fixture_return: Py<PyAny>, fixture: &Fixture) {
