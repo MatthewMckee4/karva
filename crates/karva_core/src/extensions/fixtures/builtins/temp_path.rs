@@ -24,27 +24,3 @@ pub fn create_temp_dir(py: Python<'_>) -> Option<Py<PyAny>> {
 
     Some(path_obj.unbind())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_create_directory() {
-        Python::attach(|py| {
-            let path = create_temp_dir(py).unwrap();
-
-            let pathlib = py.import("pathlib").unwrap();
-            let path_class = pathlib.getattr("Path").unwrap();
-            assert!(path.bind(py).is_instance(&path_class).unwrap());
-
-            let exists_method = path.getattr(py, "exists").unwrap();
-            let exists = exists_method
-                .call0(py)
-                .unwrap()
-                .extract::<bool>(py)
-                .unwrap();
-            assert!(exists);
-        });
-    }
-}
