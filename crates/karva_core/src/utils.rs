@@ -1,5 +1,4 @@
-use std::path::Path;
-
+use camino::Utf8Path;
 use karva_project::project::{Project, ProjectOptions};
 use pyo3::{PyResult, Python, prelude::*, types::PyAnyMethods};
 use ruff_python_ast::PythonVersion;
@@ -17,10 +16,10 @@ pub fn current_python_version() -> PythonVersion {
 }
 
 /// Adds a directory path to Python's sys.path at the specified index.
-pub(crate) fn add_to_sys_path(py: Python<'_>, path: &Path, index: isize) -> PyResult<()> {
+pub(crate) fn add_to_sys_path(py: Python<'_>, path: &Utf8Path, index: isize) -> PyResult<()> {
     let sys_module = py.import("sys")?;
     let sys_path = sys_module.getattr("path")?;
-    sys_path.call_method1("insert", (index, path.display().to_string()))?;
+    sys_path.call_method1("insert", (index, path.to_string()))?;
     Ok(())
 }
 

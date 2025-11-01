@@ -1,5 +1,6 @@
-use std::{path::PathBuf, sync::Once};
+use std::sync::Once;
 
+use camino::Utf8PathBuf;
 use karva_benchmark::{
     criterion::{BatchSize, Criterion, criterion_group, criterion_main},
     real_world_projects::{InstalledProject, RealWorldProject},
@@ -77,7 +78,7 @@ fn affect(criterion: &mut Criterion) {
         name: "affect",
         repository: "https://github.com/MatthewMckee4/affect",
         commit: "803cc916b492378a8ad8966e747cac3325e11b5f",
-        paths: vec![PathBuf::from("tests")],
+        paths: vec![Utf8PathBuf::from("tests")],
         dependencies: vec!["pydantic", "pydantic-settings", "pytest"],
         python_version: PythonVersion::PY313,
     });

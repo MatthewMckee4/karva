@@ -1,5 +1,4 @@
-use std::path::{Path, PathBuf};
-
+use camino::{Utf8Path, Utf8PathBuf};
 use ignore::WalkBuilder;
 use karva_project::{Project, path::TestPath};
 use pyo3::prelude::*;
@@ -97,7 +96,7 @@ impl<'proj> StandardDiscoverer<'proj> {
     fn discover_test_file(
         &self,
         py: Python,
-        path: &PathBuf,
+        path: &Utf8PathBuf,
         discovery_mode: DiscoveryMode,
     ) -> Option<(DiscoveredModule, Vec<Diagnostic>)> {
         let module_path = ModulePath::new(path, self.project.cwd())?;
@@ -119,7 +118,7 @@ impl<'proj> StandardDiscoverer<'proj> {
     fn add_parent_configuration_packages(
         &self,
         py: Python,
-        path: &Path,
+        path: &Utf8Path,
         session_package: &mut DiscoveredPackage,
     ) -> Vec<Diagnostic> {
         let mut current_path = if path.is_dir() {
@@ -172,7 +171,7 @@ impl<'proj> StandardDiscoverer<'proj> {
     fn discover_directory(
         &self,
         py: Python,
-        path: &PathBuf,
+        path: &Utf8PathBuf,
         discovery_mode: DiscoveryMode,
     ) -> (DiscoveredPackage, Vec<Diagnostic>) {
         let walker = self.create_directory_walker(path);
@@ -185,7 +184,8 @@ impl<'proj> StandardDiscoverer<'proj> {
             let Ok(entry) = entry else {
                 continue;
             };
-            let current_path = PathBuf::from(entry.path());
+            let current_path = Utf8PathBuf::from_path_buf(entry.path().to_path_buf())
+                .expect("Path is not valid UTF-8");
 
             // Skip the package directory itself
             if package.path() == &current_path {
@@ -240,7 +240,7 @@ impl<'proj> StandardDiscoverer<'proj> {
     }
 
     /// Creates a configured directory walker for Python file discovery.
-    fn create_directory_walker(&self, path: &PathBuf) -> ignore::Walk {
+    fn create_directory_walker(&self, path: &Utf8PathBuf) -> ignore::Walk {
         WalkBuilder::new(path)
             .max_depth(Some(1))
             .standard_filters(true)
@@ -406,7 +406,7 @@ def not_a_test(): pass
     fn test_discover_files_with_non_existent_function() {
         let env = TestContext::with_files([("<test>/test_file.py", "def test_function1(): pass")]);
 
-        let project = Project::new(env.cwd(), vec![PathBuf::from("non_existent_path")]);
+        let project = Project::new(env.cwd(), vec![Utf8PathBuf::from("non_existent_path")]);
         let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::attach(|py| discoverer.discover(py));
 

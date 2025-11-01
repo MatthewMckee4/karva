@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-
+use camino::Utf8PathBuf;
 use clap::Parser;
 use karva_project::project::ProjectOptions;
 
@@ -29,7 +28,7 @@ pub struct TestCommand {
         help = "List of files, directories, or test functions to test [default: the project root]",
         value_name = "PATH"
     )]
-    pub(crate) paths: Vec<PathBuf>,
+    pub(crate) paths: Vec<Utf8PathBuf>,
 
     #[clap(flatten)]
     pub(crate) verbosity: Verbosity,

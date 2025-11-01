@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-
+use camino::Utf8PathBuf;
 use karva_project::utils::module_name;
 
 /// Represents a fully qualified function name including its module path.
@@ -35,12 +34,12 @@ impl std::fmt::Display for QualifiedFunctionName {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct ModulePath {
-    path: PathBuf,
+    path: Utf8PathBuf,
     module_name: String,
 }
 
 impl ModulePath {
-    pub(crate) fn new<P: Into<PathBuf>>(path: P, cwd: &PathBuf) -> Option<Self> {
+    pub(crate) fn new<P: Into<Utf8PathBuf>>(path: P, cwd: &Utf8PathBuf) -> Option<Self> {
         let path = path.into();
         let module_name = module_name(cwd, path.as_ref())?;
         Some(Self { path, module_name })
@@ -50,7 +49,7 @@ impl ModulePath {
         self.module_name.as_str()
     }
 
-    pub(crate) const fn module_path(&self) -> &PathBuf {
+    pub(crate) const fn module_path(&self) -> &Utf8PathBuf {
         &self.path
     }
 }

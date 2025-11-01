@@ -11,6 +11,7 @@ authors = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
+camino = { workspace = true }
 karva_project = { workspace = true }
 
 colored = { workspace = true }

@@ -1,24 +1,20 @@
-use std::{
-    fmt::Formatter,
-    path::{Path, PathBuf},
-};
+use std::fmt::Formatter;
+
+use camino::{Utf8Path, Utf8PathBuf};
 
 use crate::utils::is_python_file;
 
-fn try_convert_to_py_path(path: &Path) -> Result<PathBuf, TestPathError> {
+fn try_convert_to_py_path(path: &Utf8Path) -> Result<Utf8PathBuf, TestPathError> {
     if path.exists() {
         return Ok(path.to_path_buf());
     }
 
-    let path_with_py = PathBuf::from(format!("{}.py", path.display()));
+    let path_with_py = Utf8PathBuf::from(format!("{path}.py"));
     if path_with_py.exists() {
         return Ok(path_with_py);
     }
 
-    let path_with_slash = PathBuf::from(format!(
-        "{}.py",
-        path.display().to_string().replace('.', "/")
-    ));
+    let path_with_slash = Utf8PathBuf::from(format!("{}.py", path.to_string().replace('.', "/")));
     if path_with_slash.exists() {
         return Ok(path_with_slash);
     }
@@ -33,13 +29,13 @@ pub enum TestPath {
     /// Some examples are:
     /// - `test_file.py`
     /// - `test_file`
-    File(PathBuf),
+    File(Utf8PathBuf),
 
     /// A directory containing test files.
     ///
     /// Some examples are:
     /// - `tests/`
-    Directory(PathBuf),
+    Directory(Utf8PathBuf),
 
     /// A function in a file containing test functions.
     ///
@@ -47,7 +43,7 @@ pub enum TestPath {
     /// - `test_file.py::test_function`
     /// - `test_file::test_function`
     Function {
-        path: PathBuf,
+        path: Utf8PathBuf,
         function_name: String,
     },
 }
@@ -59,10 +55,12 @@ impl TestPath {
             let function_name = &value[separator_pos + 2..];
 
             if function_name.is_empty() {
-                return Err(TestPathError::MissingFunctionName(PathBuf::from(file_part)));
+                return Err(TestPathError::MissingFunctionName(Utf8PathBuf::from(
+                    file_part,
+                )));
             }
 
-            let file_path = PathBuf::from(file_part);
+            let file_path = Utf8PathBuf::from(file_part);
             let path = try_convert_to_py_path(&file_path)?;
 
             if path.is_file() {
@@ -75,11 +73,11 @@ impl TestPath {
                     Err(TestPathError::WrongFileExtension(path))
                 }
             } else {
-                Err(TestPathError::InvalidPath(path))
+                Err(TestPathError::InvalidUtf8Path(path))
             }
         } else {
             // Original file/directory logic
-            let value = PathBuf::from(value);
+            let value = Utf8PathBuf::from(value);
             let path = try_convert_to_py_path(&value)?;
 
             if path.is_file() {
@@ -91,12 +89,12 @@ impl TestPath {
             } else if path.is_dir() {
                 Ok(Self::Directory(path))
             } else {
-                Err(TestPathError::InvalidPath(path))
+                Err(TestPathError::InvalidUtf8Path(path))
             }
         }
     }
 
-    pub const fn path(&self) -> &PathBuf {
+    pub const fn path(&self) -> &Utf8PathBuf {
         match self {
             Self::File(path) | Self::Directory(path) | Self::Function { path, .. } => path,
         }
@@ -105,18 +103,18 @@ impl TestPath {
 
 #[derive(Debug)]
 pub enum TestPathError {
-    NotFound(PathBuf),
-    WrongFileExtension(PathBuf),
-    InvalidPath(PathBuf),
-    MissingFunctionName(PathBuf),
+    NotFound(Utf8PathBuf),
+    WrongFileExtension(Utf8PathBuf),
+    InvalidUtf8Path(Utf8PathBuf),
+    MissingFunctionName(Utf8PathBuf),
 }
 
 impl TestPathError {
-    pub const fn path(&self) -> &PathBuf {
+    pub const fn path(&self) -> &Utf8PathBuf {
         match self {
             Self::NotFound(path)
             | Self::WrongFileExtension(path)
-            | Self::InvalidPath(path)
+            | Self::InvalidUtf8Path(path)
             | Self::MissingFunctionName(path) => path,
         }
     }
@@ -125,13 +123,13 @@ impl TestPathError {
 impl std::fmt::Display for TestPathError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NotFound(path) => write!(f, "Path `{}` could not be found", path.display()),
+            Self::NotFound(path) => write!(f, "Path `{path}` could not be found"),
             Self::WrongFileExtension(path) => {
-                write!(f, "Path `{}` has a wrong file extension", path.display())
+                write!(f, "Path `{path}` has a wrong file extension")
             }
-            Self::InvalidPath(path) => write!(f, "Path `{}` is invalid", path.display()),
+            Self::InvalidUtf8Path(path) => write!(f, "Path `{path}` is invalid"),
             Self::MissingFunctionName(path) => {
-                write!(f, "Invalid function specification: `{}::`", path.display())
+                write!(f, "Invalid function specification: `{path}::`")
             }
         }
     }
@@ -148,7 +146,7 @@ mod tests {
         let env = TestContext::new();
         let path = env.create_file("test.py", "def test(): pass");
 
-        let result = TestPath::new(&path.display().to_string());
+        let result = TestPath::new(path.as_ref());
         assert!(matches!(result, Ok(TestPath::File(_))));
     }
 
@@ -158,7 +156,7 @@ mod tests {
         env.create_file("test.py", "def test(): pass");
         let path_without_ext = env.temp_path("test");
 
-        let result = TestPath::new(&path_without_ext.display().to_string());
+        let result = TestPath::new(path_without_ext.as_ref());
         assert!(matches!(result, Ok(TestPath::File(_))));
     }
 
@@ -167,7 +165,7 @@ mod tests {
         let env = TestContext::new();
         let path = env.create_dir("test_dir");
 
-        let result = TestPath::new(&path.display().to_string());
+        let result = TestPath::new(path.as_ref());
         assert!(matches!(result, Ok(TestPath::Directory(_))));
     }
 
@@ -176,7 +174,7 @@ mod tests {
         let env = TestContext::new();
         let non_existent_path = env.temp_path("non_existent.py");
 
-        let result = TestPath::new(&non_existent_path.display().to_string());
+        let result = TestPath::new(non_existent_path.as_ref());
         assert!(matches!(result, Err(TestPathError::NotFound(_))));
     }
 
@@ -185,7 +183,7 @@ mod tests {
         let env = TestContext::new();
         let non_existent_path = env.temp_path("non_existent");
 
-        let result = TestPath::new(&non_existent_path.display().to_string());
+        let result = TestPath::new(non_existent_path.as_ref());
         assert!(matches!(result, Err(TestPathError::NotFound(_))));
     }
 
@@ -199,7 +197,7 @@ mod tests {
     fn test_invalid_path_with_extension() {
         let env = TestContext::new();
         let path = env.create_file("path.txt", "def test(): pass");
-        let result = TestPath::new(&path.display().to_string());
+        let result = TestPath::new(path.as_ref());
         assert!(matches!(result, Err(TestPathError::WrongFileExtension(_))));
     }
 
@@ -208,7 +206,7 @@ mod tests {
         let env = TestContext::new();
         let path = env.create_file("test.rs", "fn test() {}");
 
-        let result = TestPath::new(&path.display().to_string());
+        let result = TestPath::new(path.as_ref());
         assert!(matches!(result, Err(TestPathError::WrongFileExtension(_))));
     }
 
@@ -217,7 +215,7 @@ mod tests {
         let env = TestContext::new();
         let non_existent_path = env.temp_path("neither_file_nor_dir");
 
-        let result = TestPath::new(&non_existent_path.display().to_string());
+        let result = TestPath::new(non_existent_path.as_ref());
         assert!(matches!(result, Err(TestPathError::NotFound(_))));
     }
 
@@ -228,7 +226,7 @@ mod tests {
         env.create_file("test.py", "def test(): pass");
         let base_path = env.temp_path("test");
 
-        let result = TestPath::new(&base_path.display().to_string());
+        let result = TestPath::new(base_path.as_ref());
         assert!(matches!(result, Err(TestPathError::WrongFileExtension(_))));
     }
 
@@ -237,7 +235,7 @@ mod tests {
         let env = TestContext::new();
         let path = env.create_file("test.py", "def test_function(): pass");
 
-        let function_spec = format!("{}::test_function", path.display());
+        let function_spec = format!("{path}::test_function");
         let result = TestPath::new(&function_spec);
 
         if let Ok(TestPath::Function {
@@ -248,7 +246,7 @@ mod tests {
             assert_eq!(result_path, path);
             assert_eq!(function_name, "test_function");
         } else {
-            panic!("Expected Ok(TestPath::Function), got {result:?}");
+            panic!("Expected Ok(TestUtf8Path::Function), got {result:?}");
         }
     }
 
@@ -258,7 +256,7 @@ mod tests {
         env.create_file("test.py", "def test_function(): pass");
         let base_path = env.temp_path("test");
 
-        let function_spec = format!("{}::test_function", base_path.display());
+        let function_spec = format!("{base_path}::test_function");
         let result = TestPath::new(&function_spec);
 
         assert!(matches!(result, Ok(TestPath::Function { .. })));
@@ -272,7 +270,7 @@ mod tests {
         let env = TestContext::new();
         let path = env.create_file("test.py", "def test_function(): pass");
 
-        let function_spec = format!("{}::", path.display());
+        let function_spec = format!("{path}::");
         let result = TestPath::new(&function_spec);
 
         assert!(matches!(result, Err(TestPathError::MissingFunctionName(_))));
@@ -283,7 +281,7 @@ mod tests {
         let env = TestContext::new();
         let non_existent_path = env.temp_path("nonexistent.py");
 
-        let function_spec = format!("{}::test_function", non_existent_path.display());
+        let function_spec = format!("{non_existent_path}::test_function");
         let result = TestPath::new(&function_spec);
 
         assert!(matches!(result, Err(TestPathError::NotFound(_))));
@@ -294,7 +292,7 @@ mod tests {
         let env = TestContext::new();
         let path = env.create_file("test.txt", "def test_function(): pass");
 
-        let function_spec = format!("{}::test_function", path.display());
+        let function_spec = format!("{path}::test_function");
         let result = TestPath::new(&function_spec);
 
         assert!(matches!(result, Err(TestPathError::WrongFileExtension(_))));

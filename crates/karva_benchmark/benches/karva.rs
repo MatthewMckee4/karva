@@ -1,6 +1,7 @@
 use std::sync::Once;
 
 use anyhow::Context;
+use camino::Utf8Path;
 use karva_benchmark::{
     FIXTURES, LARGE_LIST_COMPREHENSION, LARGE_SUMMATION, MATH, PARAMETRIZE, STRING_CONCATENATION,
     TRUE_ASSERTIONS, TestCase,
@@ -36,12 +37,13 @@ fn benchmark_karva(criterion: &mut Criterion) {
 
     setup_module_once();
 
-    let root = {
-        let env_cwd = std::env::current_dir()
-            .context("Failed to get the current working directory")
-            .unwrap();
-        env_cwd.parent().unwrap().parent().unwrap().to_path_buf()
-    };
+    let env_cwd = std::env::current_dir()
+        .context("Failed to get the current working directory")
+        .unwrap();
+
+    let env_cwd = env_cwd.parent().unwrap().parent().unwrap();
+
+    let root = Utf8Path::from_path(env_cwd).unwrap();
 
     for case in create_test_cases() {
         group.throughput(Throughput::Bytes(case.code().len() as u64));
@@ -51,7 +53,7 @@ fn benchmark_karva(criterion: &mut Criterion) {
             &case,
             |b, case| {
                 b.iter(|| {
-                    let cwd = absolute(case.path().parent().unwrap(), &root);
+                    let cwd = absolute(case.path().parent().unwrap(), root);
                     let project = Project::new(cwd.clone(), [absolute(case.name(), &cwd)].to_vec());
                     let runner_result = project.test_with_reporter(&mut DummyReporter);
                     assert!(runner_result.passed());

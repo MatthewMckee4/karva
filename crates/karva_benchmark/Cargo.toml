@@ -20,6 +20,7 @@ name = "karva_walltime"
 harness = false
 
 [dependencies]
+camino = { workspace = true }
 karva_core = { workspace = true }
 karva_project = { workspace = true }
 karva_test = { workspace = true }

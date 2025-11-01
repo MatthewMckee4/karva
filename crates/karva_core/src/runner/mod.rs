@@ -79,8 +79,7 @@ impl TestRunner for TestContext {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
+    use camino::Utf8PathBuf;
     use karva_project::utils::module_name;
     use rstest::rstest;
 
@@ -545,10 +544,7 @@ def test_fixture_2(fixture):
 
         let project = Project::new(
             test_context.cwd(),
-            vec![PathBuf::from(format!(
-                "{}::test_1",
-                test_file1_path.display()
-            ))],
+            vec![Utf8PathBuf::from(format!("{test_file1_path}::test_1"))],
         );
 
         let test_runner = StandardTestRunner::new(&project);
@@ -578,7 +574,7 @@ def test_fixture_2(fixture):
         let project = Project::new(
             test_context.cwd(),
             vec![
-                PathBuf::from(format!("{}::test_1", test_file1_path.display())),
+                Utf8PathBuf::from(format!("{test_file1_path}::test_1")),
                 test_file1_path,
             ],
         );
@@ -612,7 +608,7 @@ def test_fixture_2(fixture):
         let project = Project::new(
             test_context.cwd(),
             vec![
-                PathBuf::from(format!("{}::test_1", test_file1_path.display())),
+                Utf8PathBuf::from(format!("{test_file1_path}::test_1")),
                 mapped_path,
             ],
         );

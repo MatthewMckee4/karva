@@ -18,3 +18,4 @@ clap = { workspace = true, features = ["wrap_help", "env"] }
 itertools = { workspace = true }
 pretty_assertions = { workspace = true }
 markdown = { workspace = true }
+camino = { workspace = true }

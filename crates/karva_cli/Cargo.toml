@@ -16,6 +16,7 @@ name = "karva"
 path = "src/main.rs"
 
 [dependencies]
+camino = { workspace = true }
 karva_core = { workspace = true }
 karva_project = { workspace = true }
 

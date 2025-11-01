@@ -1,30 +1,30 @@
-use std::path::{Component, Path, PathBuf};
+use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 
-pub fn absolute(path: impl AsRef<Path>, cwd: impl AsRef<Path>) -> PathBuf {
+pub fn absolute(path: impl AsRef<Utf8Path>, cwd: impl AsRef<Utf8Path>) -> Utf8PathBuf {
     let path = path.as_ref();
     let cwd = cwd.as_ref();
 
     let mut components = path.components().peekable();
-    let mut ret = if let Some(c @ (Component::Prefix(..) | Component::RootDir)) =
+    let mut ret = if let Some(c @ (Utf8Component::Prefix(..) | Utf8Component::RootDir)) =
         components.peek().copied()
     {
         components.next();
-        PathBuf::from(c.as_os_str())
+        Utf8PathBuf::from(c.as_str())
     } else {
         cwd.to_path_buf()
     };
 
     for component in components {
         match component {
-            Component::Prefix(..) => unreachable!(),
-            Component::RootDir => {
-                ret.push(component);
+            Utf8Component::Prefix(..) => unreachable!(),
+            Utf8Component::RootDir => {
+                ret.push(component.as_str());
             }
-            Component::CurDir => {}
-            Component::ParentDir => {
+            Utf8Component::CurDir => {}
+            Utf8Component::ParentDir => {
                 ret.pop();
             }
-            Component::Normal(c) => {
+            Utf8Component::Normal(c) => {
                 ret.push(c);
             }
         }
