@@ -15,7 +15,6 @@ use std::{path::PathBuf, process::Command};
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
-use karva_test::find_karva_wheel;
 use ruff_python_ast::PythonVersion;
 
 fn global_venv_path() -> PathBuf {
@@ -276,12 +275,9 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
         return Ok(());
     }
 
-    let karva_wheel = find_karva_wheel().unwrap();
-
     let mut cmd = Command::new("uv");
     cmd.args(["pip", "install", "--python", venv_path.to_str().unwrap()])
-        .args(&checkout.project().dependencies)
-        .arg(karva_wheel);
+        .args(&checkout.project().dependencies);
 
     let output = cmd
         .output()

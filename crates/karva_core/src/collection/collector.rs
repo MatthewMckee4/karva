@@ -2,7 +2,6 @@ use pyo3::prelude::*;
 
 use crate::{
     collection::{CollectedModule, CollectedPackage, TestCase},
-    diagnostic::Diagnostic,
     discovery::{DiscoveredModule, DiscoveredPackage, TestFunction},
     extensions::fixtures::{FixtureManager, FixtureScope, UsesFixtures},
     utils::{Upcast, iter_with_ancestors},
@@ -48,44 +47,38 @@ impl TestCaseCollector {
         module: &'a DiscoveredModule,
         parents: &[&DiscoveredPackage],
         fixture_manager: &FixtureManager,
-    ) -> Vec<(TestCase<'a>, Option<Diagnostic>)> {
-        let create_function_fixture_manager = |inner_py: Python<'_>,
-                                               test_case_creator: &dyn Fn(
-            &FixtureManager,
-        ) -> (
-            TestCase<'a>,
-            Option<Diagnostic>,
-        )| {
-            let mut function_fixture_manager =
-                FixtureManager::new(Some(fixture_manager), FixtureScope::Function);
-            let test_cases = [test_function].to_vec();
-            let upcast_test_cases: Vec<&dyn UsesFixtures> = test_cases.upcast();
+    ) -> Vec<TestCase<'a>> {
+        let create_function_fixture_manager =
+            |inner_py: Python<'_>, test_case_creator: &dyn Fn(&FixtureManager) -> TestCase<'a>| {
+                let mut function_fixture_manager =
+                    FixtureManager::new(Some(fixture_manager), FixtureScope::Function);
+                let test_cases = [test_function].to_vec();
+                let upcast_test_cases: Vec<&dyn UsesFixtures> = test_cases.upcast();
 
-            for (parent, parents_above_current_parent) in iter_with_ancestors(parents) {
+                for (parent, parents_above_current_parent) in iter_with_ancestors(parents) {
+                    function_fixture_manager.add_fixtures(
+                        inner_py,
+                        &parents_above_current_parent,
+                        parent,
+                        &[FixtureScope::Function],
+                        upcast_test_cases.as_slice(),
+                    );
+                }
+
                 function_fixture_manager.add_fixtures(
                     inner_py,
-                    &parents_above_current_parent,
-                    parent,
+                    parents,
+                    module,
                     &[FixtureScope::Function],
                     upcast_test_cases.as_slice(),
                 );
-            }
 
-            function_fixture_manager.add_fixtures(
-                inner_py,
-                parents,
-                module,
-                &[FixtureScope::Function],
-                upcast_test_cases.as_slice(),
-            );
+                let mut collected_test_case = test_case_creator(&function_fixture_manager);
 
-            let (mut collected_test_case, diagnostic) =
-                test_case_creator(&function_fixture_manager);
+                collected_test_case.add_finalizers(function_fixture_manager.reset_fixtures());
 
-            collected_test_case.add_finalizers(function_fixture_manager.reset_fixtures());
-
-            (collected_test_case, diagnostic)
-        };
+                collected_test_case
+            };
 
         test_function.collect(py, module, py_module, create_function_fixture_manager)
     }

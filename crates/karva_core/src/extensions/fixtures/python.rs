@@ -17,7 +17,6 @@ pub struct FixtureFunctionMarker {
 impl FixtureFunctionMarker {
     #[new]
     #[pyo3(signature = (scope=None, name=None, auto_use=false))]
-
     pub fn new(
         py: Python<'_>,
         scope: Option<Py<PyAny>>,

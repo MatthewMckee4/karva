@@ -15,9 +15,9 @@ pub(crate) use diagnostic::TestRunResult;
 
 pub trait TestRunner {
     fn test(&self) -> TestRunResult {
-        self.test_with_reporter(&mut DummyReporter)
+        self.test_with_reporter(&DummyReporter)
     }
-    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> TestRunResult;
+    fn test_with_reporter(&self, reporter: &dyn Reporter) -> TestRunResult;
 }
 
 pub(crate) struct StandardTestRunner<'proj> {
@@ -56,23 +56,14 @@ impl<'proj> StandardTestRunner<'proj> {
 }
 
 impl TestRunner for StandardTestRunner<'_> {
-    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> TestRunResult {
+    fn test_with_reporter(&self, reporter: &dyn Reporter) -> TestRunResult {
         self.test_impl(reporter)
     }
 }
 
 impl TestRunner for Project {
-    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> TestRunResult {
+    fn test_with_reporter(&self, reporter: &dyn Reporter) -> TestRunResult {
         let test_runner = StandardTestRunner::new(self);
-        test_runner.test_with_reporter(reporter)
-    }
-}
-
-#[cfg(test)]
-impl TestRunner for TestContext {
-    fn test_with_reporter(&self, reporter: &mut dyn Reporter) -> TestRunResult {
-        let project = Project::new(self.cwd(), vec![self.cwd()]);
-        let test_runner = StandardTestRunner::new(&project);
         test_runner.test_with_reporter(reporter)
     }
 }
@@ -89,6 +80,13 @@ mod tests {
         runner::diagnostic::TestResultStats,
     };
 
+    impl TestRunner for TestContext {
+        fn test_with_reporter(&self, reporter: &dyn Reporter) -> TestRunResult {
+            let project = Project::new(self.cwd(), vec![self.cwd()]);
+            let test_runner = StandardTestRunner::new(&project);
+            test_runner.test_with_reporter(reporter)
+        }
+    }
     fn get_auto_use_kw(framework: &str) -> &str {
         match framework {
             "pytest" => "autouse",

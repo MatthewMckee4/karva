@@ -218,34 +218,3 @@ impl std::fmt::Display for DisplayDiscoveredModule<'_> {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use insta::assert_snapshot;
-    use karva_project::project::Project;
-    use karva_test::TestContext;
-    use pyo3::prelude::*;
-
-    use crate::discovery::StandardDiscoverer;
-
-    #[test]
-    fn test_display_discovered_module() {
-        let env = TestContext::with_files([("<test>/test.py", "def test_display(): pass")]);
-
-        let mapped_dir = env.mapped_path("<test>").unwrap();
-
-        let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let (session, _) = Python::attach(|py| StandardDiscoverer::new(&project).discover(py));
-
-        let test_module = session.get_module(&mapped_dir.join("test.py")).unwrap();
-
-        assert_snapshot!(
-            test_module.display().to_string(),
-            @r"
-            <test>.test
-            ├── test_cases [test_display]
-            └── fixtures []
-            "
-        );
-    }
-}

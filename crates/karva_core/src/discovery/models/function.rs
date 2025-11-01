@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    fmt::{self, Display},
-};
+use std::collections::HashMap;
 
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
@@ -22,17 +19,12 @@ use crate::{
 };
 
 /// Represents a single test function discovered from Python source code.
-///
-/// This structure bridges the gap between Rust's AST representation and Python's
-/// runtime objects, maintaining both the parsed function definition and the actual
-/// Python function object for execution.
 #[derive(Debug)]
 pub(crate) struct TestFunction {
-    /// The parsed AST representation of the function from ruff
     function_definition: StmtFunctionDef,
-    /// The actual Python function object that can be called
+
     py_function: Py<PyAny>,
-    /// Qualified name including module path for unique identification
+
     name: QualifiedFunctionName,
 }
 
@@ -80,9 +72,6 @@ impl TestFunction {
     }
 
     /// Creates a display string showing the function's file location and line number.
-    ///
-    /// This is particularly useful for error reporting and debugging, providing
-    /// precise location information for test functions.
     pub(crate) fn display_with_line(&self, module: &DiscoveredModule) -> String {
         let line_index = module.line_index();
         let source_text = module.source_text();
@@ -92,19 +81,6 @@ impl TestFunction {
     }
 
     /// Collects test cases from this function, resolving fixtures and handling parametrization.
-    ///
-    /// This method is responsible for the complex process of converting a discovered test function
-    /// into executable test cases. It handles fixture resolution, parametrization via tags,
-    /// and creates the appropriate number of test cases based on parameter combinations.
-    ///
-    /// # Arguments
-    /// * `py` - Python interpreter instance
-    /// * `module` - The module containing this function
-    /// * `py_module` - The Python module object
-    /// * `fixture_manager_func` - Callback to create fixture managers for test execution
-    ///
-    /// # Returns
-    /// A vector of test cases paired with optional diagnostics for any issues encountered
     pub(crate) fn collect<'a>(
         &'a self,
         py: Python<'_>,
@@ -112,10 +88,10 @@ impl TestFunction {
         py_module: &Py<PyModule>,
         fixture_manager_func: impl Fn(
             Python<'_>,
-            &dyn Fn(&FixtureManager<'_>) -> (TestCase<'a>, Option<Diagnostic>),
-        ) -> (TestCase<'a>, Option<Diagnostic>)
+            &dyn Fn(&FixtureManager<'_>) -> TestCase<'a>,
+        ) -> TestCase<'a>
         + Sync,
-    ) -> Vec<(TestCase<'a>, Option<Diagnostic>)> {
+    ) -> Vec<TestCase<'a>> {
         tracing::info!(
             "Collecting test cases for function: {}",
             self.function_definition.name
@@ -164,7 +140,7 @@ impl TestFunction {
         params: &HashMap<String, Py<PyAny>>,
         fixture_manager: &FixtureManager,
         tags: &Tags,
-    ) -> (TestCase<'a>, Option<Diagnostic>) {
+    ) -> TestCase<'a> {
         let num_required_fixtures = required_fixture_names.len();
         let mut fixture_diagnostics = Vec::with_capacity(num_required_fixtures);
         let mut resolved_fixtures = HashMap::with_capacity(num_required_fixtures);
@@ -183,10 +159,7 @@ impl TestFunction {
 
         let diagnostic = self.create_fixture_diagnostic(module, fixture_diagnostics);
 
-        (
-            TestCase::new(self, resolved_fixtures, module, tags.skip_tag()),
-            diagnostic,
-        )
+        TestCase::new(self, resolved_fixtures, module, tags.clone(), diagnostic)
     }
 
     fn create_fixture_diagnostic(
@@ -212,31 +185,13 @@ impl TestFunction {
             Some(diagnostic)
         }
     }
-
-    pub(crate) const fn display(&self) -> TestFunctionDisplay<'_> {
-        TestFunctionDisplay {
-            test_function: self,
-        }
-    }
-}
-
-pub(crate) struct TestFunctionDisplay<'proj> {
-    test_function: &'proj TestFunction,
-}
-
-impl Display for TestFunctionDisplay<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.test_function.name())
-    }
 }
 
 impl<'proj> Upcast<Vec<&'proj dyn UsesFixtures>> for Vec<&'proj TestFunction> {
     fn upcast(self) -> Vec<&'proj dyn UsesFixtures> {
-        let mut result = Vec::with_capacity(self.len());
-        for tc in self {
-            result.push(tc as &dyn UsesFixtures);
-        }
-        result
+        self.into_iter()
+            .map(|test_function| test_function as &dyn UsesFixtures)
+            .collect()
     }
 }
 
@@ -312,7 +267,7 @@ mod tests {
         let test_case = session.test_functions()[0];
 
         assert_eq!(
-            test_case.display().to_string(),
+            test_case.name().to_string(),
             format!("{}::test_display", test_module.name())
         );
     }
