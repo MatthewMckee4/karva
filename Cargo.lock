@@ -928,6 +928,7 @@ dependencies = [
  "ruff_python_ast",
  "ruff_python_parser",
  "ruff_source_file",
+ "tempfile",
  "tracing",
 ]
 
