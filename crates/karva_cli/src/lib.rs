@@ -107,13 +107,13 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         std::process::exit(0);
     })?;
 
-    let mut reporter: Box<dyn Reporter> = if verbosity.is_quiet() {
+    let reporter: Box<dyn Reporter> = if verbosity.is_quiet() {
         Box::new(DummyReporter)
     } else {
         Box::new(TestCaseReporter::default())
     };
 
-    let result = project.test_with_reporter(&mut *reporter);
+    let result = project.test_with_reporter(&*reporter);
 
     let mut stdout = io::stdout().lock();
 

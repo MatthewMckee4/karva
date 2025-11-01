@@ -34,7 +34,11 @@ pub(crate) struct TestCase<'proj> {
     /// Finalizers to run after the test case is executed.
     finalizers: Finalizers,
 
-    skip: Option<SkipTag>,
+    /// The tags associated with the test case.
+    skip_tag: Option<SkipTag>,
+
+    /// The diagnostic from collecting the test case.
+    diagnostic: Option<Diagnostic>,
 }
 
 impl<'proj> TestCase<'proj> {
@@ -42,14 +46,16 @@ impl<'proj> TestCase<'proj> {
         function: &'proj TestFunction,
         kwargs: HashMap<String, Py<PyAny>>,
         module: &'proj DiscoveredModule,
-        skip: Option<SkipTag>,
+        skip_tag: Option<SkipTag>,
+        diagnostic: Option<Diagnostic>,
     ) -> Self {
         Self {
             function,
             kwargs,
             module,
             finalizers: Finalizers::default(),
-            skip,
+            skip_tag,
+            diagnostic,
         }
     }
 
@@ -65,19 +71,12 @@ impl<'proj> TestCase<'proj> {
         &self.finalizers
     }
 
-    pub(crate) fn run(
-        &self,
-        py: Python<'_>,
-        diagnostic: Option<Diagnostic>,
-        reporter: &dyn Reporter,
-    ) -> TestRunResult {
+    pub(crate) fn run(&self, py: Python<'_>, reporter: &dyn Reporter) -> TestRunResult {
         let mut run_result = TestRunResult::default();
 
-        let display = self.function.display();
+        let test_name = full_test_name(py, &self.function.name().to_string(), &self.kwargs);
 
-        let test_name = full_test_name(py, &display.to_string(), &self.kwargs);
-
-        if let Some(skip_tag) = &self.skip {
+        if let Some(skip_tag) = &self.skip_tag {
             run_result.register_test_case_result(
                 &test_name,
                 IndividualTestResultKind::Skipped {
@@ -115,11 +114,14 @@ impl<'proj> TestCase<'proj> {
 
         let default_diagnostic = || Diagnostic::from_test_fail(py, &err, self, self.module);
 
-        let diagnostic = diagnostic.map_or_else(default_diagnostic, |input_diagnostic| {
-            let missing_args = missing_arguments_from_error(&err.to_string());
-            handle_missing_fixtures(&missing_args, input_diagnostic)
-                .unwrap_or_else(default_diagnostic)
-        });
+        let diagnostic =
+            self.diagnostic
+                .clone()
+                .map_or_else(default_diagnostic, |input_diagnostic| {
+                    let missing_args = missing_arguments_from_error(&err.to_string());
+                    handle_missing_fixtures(&missing_args, input_diagnostic)
+                        .unwrap_or_else(default_diagnostic)
+                });
 
         run_result.register_test_case_result(
             &test_name,

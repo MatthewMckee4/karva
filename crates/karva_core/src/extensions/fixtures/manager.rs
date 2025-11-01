@@ -11,10 +11,6 @@ use crate::{
 };
 
 /// Collection of fixtures and their finalizers for a specific scope.
-///
-/// This structure manages the lifecycle of fixtures within a particular scope,
-/// storing both the fixture values and any cleanup functions (finalizers) that
-/// need to be executed when the scope ends.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct FixtureCollection {
     /// Map of fixture names to their resolved Python values
@@ -24,29 +20,21 @@ pub(crate) struct FixtureCollection {
 }
 
 impl FixtureCollection {
-    pub(crate) fn insert_fixture(
-        &mut self,
-        fixture_name: QualifiedFunctionName,
-        fixture_return: Py<PyAny>,
-    ) {
+    fn insert_fixture(&mut self, fixture_name: QualifiedFunctionName, fixture_return: Py<PyAny>) {
         self.fixtures.insert(fixture_name, fixture_return);
     }
 
-    pub(crate) fn insert_finalizer(&mut self, finalizer: Finalizer) {
+    fn insert_finalizer(&mut self, finalizer: Finalizer) {
         self.finalizers.push(finalizer);
     }
 
-    /// Clears all fixtures and returns finalizers for cleanup.
-    ///
-    /// This method is called when a scope ends to ensure proper cleanup
-    /// of resources allocated by fixtures.
-    pub(crate) fn reset(&mut self) -> Finalizers {
+    fn reset(&mut self) -> Finalizers {
         self.fixtures.clear();
         Finalizers::new(self.finalizers.drain(..).collect())
     }
 
     #[cfg(test)]
-    pub(crate) fn contains_fixture_with_name(&self, fixture_name: &str) -> bool {
+    fn contains_fixture_with_name(&self, fixture_name: &str) -> bool {
         self.fixtures
             .iter()
             .any(|(name, _)| name.function_name() == fixture_name)
@@ -156,12 +144,6 @@ impl<'a> FixtureManager<'a> {
     /// This method ensures that all dependencies of a fixture are resolved and executed
     /// before the fixture itself is called. It performs a depth-first traversal of the
     /// dependency graph, checking both the current scope and parent scopes for required fixtures.
-    ///
-    /// # Arguments
-    /// * `py` - Python interpreter instance
-    /// * `parents` - Array of parent packages in the scope hierarchy
-    /// * `current` - The current scope that contains fixtures
-    /// * `fixture` - The fixture whose dependencies need to be resolved
     fn ensure_fixture_dependencies<'proj>(
         &mut self,
         py: Python<'_>,
@@ -195,7 +177,7 @@ impl<'a> FixtureManager<'a> {
             }
 
             // We did not find the dependency in the current scope.
-            // So we must try the parent scopes.
+            // So we try the parent scopes.
             if !found {
                 for (parent, parents_above_current_parent) in iter_with_ancestors(parents) {
                     let parent_fixture = (*parent).get_fixture(py, dependency);
@@ -243,6 +225,10 @@ impl<'a> FixtureManager<'a> {
         }
     }
 
+    /// Clears all fixtures and returns finalizers for cleanup.
+    ///
+    /// This method is called when a scope ends to ensure proper cleanup
+    /// of resources allocated by fixtures.
     pub(crate) fn reset_fixtures(&mut self) -> Finalizers {
         self.collection.reset()
     }

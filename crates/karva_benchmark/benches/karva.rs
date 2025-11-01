@@ -55,7 +55,7 @@ fn benchmark_karva(criterion: &mut Criterion) {
                 b.iter(|| {
                     let cwd = absolute(case.path().parent().unwrap(), root);
                     let project = Project::new(cwd.clone(), [absolute(case.name(), &cwd)].to_vec());
-                    let runner_result = project.test_with_reporter(&mut DummyReporter);
+                    let runner_result = project.test_with_reporter(&DummyReporter);
                     assert!(runner_result.passed());
                 });
             },

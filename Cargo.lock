@@ -962,6 +962,7 @@ dependencies = [
  "camino",
  "dunce",
  "insta",
+ "insta-cmd",
  "rand 0.9.2",
  "regex",
  "ruff_python_trivia",

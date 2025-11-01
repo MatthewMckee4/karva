@@ -4,22 +4,20 @@ use crate::diagnostic::Diagnostic;
 
 /// Represents a collection of finalizers.
 #[derive(Debug, Default)]
-pub(crate) struct Finalizers {
-    finalizers: Vec<Finalizer>,
-}
+pub(crate) struct Finalizers(Vec<Finalizer>);
 
 impl Finalizers {
     pub(crate) const fn new(finalizers: Vec<Finalizer>) -> Self {
-        Self { finalizers }
+        Self(finalizers)
     }
 
     pub(crate) fn update(&mut self, other: Self) {
-        self.finalizers.extend(other.finalizers);
+        self.0.extend(other.0);
     }
 
     pub(crate) fn run(&self, py: Python<'_>) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
-        for finalizer in &self.finalizers {
+        for finalizer in &self.0 {
             if let Some(diagnostic) = finalizer.run(py) {
                 diagnostics.push(diagnostic);
             }
