@@ -144,6 +144,8 @@ jobs:
 
       - name: Setup Python
         uses: actions/setup-python@v4
+        with:
+          python-version: 3.13
 
       - name: Build wheels
         run: |
@@ -151,6 +153,8 @@ jobs:
           maturin build
 
       - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: 3.13
 
       - name: Build benchmarks
         run: cargo codspeed build -m walltime
