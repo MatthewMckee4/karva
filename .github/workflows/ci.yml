@@ -133,9 +133,6 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    env:
-      PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -147,8 +144,6 @@ jobs:
 
       - name: Setup Python
         uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Build wheels
         run: |
@@ -156,8 +151,6 @@ jobs:
           maturin build
 
       - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Build benchmarks
         run: cargo codspeed build -m walltime
