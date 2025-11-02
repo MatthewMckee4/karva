@@ -180,6 +180,32 @@ def test_username(username):
     assert username == 'overridden-username'
 ```
 
+## Parametrizing fixtures
+
+You can parametrize fixtures by using the `@karva.fixture(params=...)` decorator.
+
+```py
+import karva
+
+@karva.fixture(params=['username', 'email'])
+def some_fixture(request):
+    return request.param
+
+def test_username_email(some_fixture):
+    assert some_fixture in ['username', 'email']
+```
+
+This will run `test_username_email` twice, once with `username` and once with `email`.
+
+Here we also see that we can "introspect" the fixture by using the `request` object.
+
+Currently the only parameter you can use here is `request.param`.
+
+In future you will be able to access other parameters.
+
+It is important to note that this request object is not the same as the pytest `FixtureRequest` object. It is a custom object provided by Karva.
+And so it may not have all of the information that the pytest `FixtureRequest` object has.
+
 ## Built-in fixtures
 
 Karva provides a few built-in fixtures that can be used in your tests.
