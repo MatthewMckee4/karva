@@ -11,6 +11,7 @@ on:
 
 env:
   PYTHON_VERSION: "3.14"
+  BENCHMARK_PYTHON_VERSION: "3.13"
 
 jobs:
   pre-commit:
@@ -109,7 +110,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
 
       - name: Build wheels
         run: |
@@ -145,7 +146,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.13
+          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
 
       - name: Build wheels
         run: |
@@ -154,7 +155,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
         with:
-          python-version: 3.13
+          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
 
       - name: Build benchmarks
         run: cargo codspeed build -m walltime
