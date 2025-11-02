@@ -1,0 +1,19 @@
+ci:
+  - changed-files:
+      - any-glob-to-any-file: .github/**/*
+
+extensions/fixtures:
+  - changed-files:
+      - any-glob-to-any-file: crates/karva_core/src/extensions/fixtures/**/*
+
+extensions/tags:
+  - changed-files:
+      - any-glob-to-any-file: crates/karva_core/src/extensions/tags/**/*
+
+discovery:
+  - changed-files:
+      - any-glob-to-any-file: crates/karva_core/src/discovery/**/*
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: ["docs/**/*"]

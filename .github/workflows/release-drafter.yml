@@ -36,12 +36,6 @@ jobs:
         with:
           mode: minimum
           count: 1
-          labels: |
-            bug
-            reporting
-            extensions:.*
-            discovery
-            cli
-            documentation
-            internal
+          labels: ".+"
           add_comment: true
+          use_regex: true

@@ -18,8 +18,8 @@ categories:
     label: reporting
   - title: Extensions
     labels:
-      - "extensions: fixtures"
-      - "extensions: tags"
+      - "extensions/fixtures"
+      - "extensions/tags"
   - title: Discovery
     label: discovery
   - title: CLI
