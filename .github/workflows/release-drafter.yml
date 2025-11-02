@@ -4,26 +4,44 @@ on:
   push:
     branches:
       - main
+
   pull_request:
     types: [edited, opened, reopened, synchronize, unlabeled, labeled]
 
 permissions:
   contents: read
+
 jobs:
   update_release_draft:
     permissions:
       contents: write
       pull-requests: write
+
     runs-on: ubuntu-latest
+
     steps:
       - uses: release-drafter/release-drafter@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  labeller:
+    if: github.event.pull_request
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          sync-labels: true
+
   require_label:
     if: github.event.pull_request
 
-    needs: update_release_draft
+    needs: [update_release_draft, labeller]
 
     runs-on: ubuntu-latest
 
