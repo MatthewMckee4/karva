@@ -9,6 +9,9 @@ on:
 
   workflow_dispatch:
 
+env:
+  PYTHON_VERSION: "3.14"
+
 jobs:
   pre-commit:
     runs-on: ubuntu-latest
@@ -33,11 +36,10 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
-      max-parallel: 12
-      fail-fast: false
+      max-parallel: 18
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.13"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
@@ -71,20 +73,14 @@ jobs:
           cargo test
 
   build-docs:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      max-parallel: 12
-      matrix:
-        python-version: ["3.11"]
-        os: [ubuntu-latest]
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Dependencies
         run: uv sync --group docs --no-install-project
@@ -109,7 +105,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.13
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Build wheels
         run: |
@@ -145,7 +141,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.13
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Build wheels
         run: |
@@ -154,7 +150,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
         with:
-          python-version: 3.13
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Build benchmarks
         run: cargo codspeed build -m walltime
@@ -179,13 +175,13 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
         with:
-          python-version: 3.13
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
         id: setup-python
         with:
-          python-version: 3.13
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Python dependencies
         run: |

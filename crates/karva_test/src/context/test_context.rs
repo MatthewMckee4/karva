@@ -34,9 +34,17 @@ impl TestContext {
 
         let venv_path = project_path.join(".venv");
 
+        let python_version = std::env::var("PYTHON_VERSION").unwrap_or_else(|_| "3.14".to_string());
+
         let commands = [
             vec!["uv", "init", "--bare", "--directory", project_path.as_str()],
-            vec!["uv", "venv", venv_path.as_str(), "-p", "3.13"],
+            vec![
+                "uv",
+                "venv",
+                venv_path.as_str(),
+                "-p",
+                python_version.as_str(),
+            ],
             vec![
                 "uv",
                 "pip",

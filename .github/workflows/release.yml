@@ -6,7 +6,7 @@ on:
       - v[0-9]*.[0-9]*.[0-9]*
 
 env:
-  PYTHON_VERSION: "3.13"
+  PYTHON_VERSION: "3.14"
 
 jobs:
   release_github:
@@ -45,7 +45,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
         with:
-          python-version: 3.11
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Dependencies
         run: uv sync --group docs --no-install-project

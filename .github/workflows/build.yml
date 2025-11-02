@@ -10,9 +10,6 @@ on:
     tags:
       - v[0-9]*.[0-9]*.[0-9]*
 
-env:
-  PYTHON_VERSION: "3.13"
-
 jobs:
   build:
     name: build-${{ matrix.platform.os }}-${{ matrix.python-version }}-${{ matrix.platform.python-architecture }}
@@ -22,7 +19,7 @@ jobs:
     strategy:
       fail-fast: ${{ !contains(github.event.pull_request.labels.*.name, 'CI-no-fail-fast') }}
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
         platform:
           [
             {
