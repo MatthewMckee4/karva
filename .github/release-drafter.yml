@@ -21,14 +21,11 @@ categories:
       - "extensions: fixtures"
       - "extensions: tags"
   - title: Discovery
-    label: "discovery"
+    label: discovery
   - title: CLI
     label: cli
   - title: Documentation
     label: documentation
-  - title: Internal
-    label: internal
-  - title: Other Changes
 
 version-resolver:
   default: patch
