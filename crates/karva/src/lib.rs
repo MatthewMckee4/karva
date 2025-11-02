@@ -1,6 +1,8 @@
 use karva_cli::karva_main;
 use karva_core::extensions::{
-    fixtures::python::{FixtureFunctionDefinition, FixtureFunctionMarker, fixture_decorator},
+    fixtures::python::{
+        FixtureFunctionDefinition, FixtureFunctionMarker, FixtureRequest, fixture_decorator,
+    },
     tags::python::{PyTag, PyTags, PyTestFunction},
 };
 use pyo3::prelude::*;
@@ -27,6 +29,7 @@ pub(crate) fn _karva(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fixture_decorator, m)?)?;
     m.add_class::<FixtureFunctionMarker>()?;
     m.add_class::<FixtureFunctionDefinition>()?;
+    m.add_class::<FixtureRequest>()?;
     m.add_class::<PyTag>()?;
     m.add_class::<PyTags>()?;
     m.add_class::<PyTestFunction>()?;

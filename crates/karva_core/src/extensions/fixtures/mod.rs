@@ -1,6 +1,6 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
-use pyo3::{prelude::*, types::PyTuple};
+use pyo3::{prelude::*, types::PyDict};
 use ruff_python_ast::{Expr, StmtFunctionDef};
 
 pub mod builtins;
@@ -12,7 +12,11 @@ pub mod python;
 pub(crate) use finalizer::{Finalizer, Finalizers};
 pub(crate) use manager::FixtureManager;
 
-use crate::name::{ModulePath, QualifiedFunctionName};
+use crate::{
+    extensions::fixtures::python::FixtureRequest,
+    name::{ModulePath, QualifiedFunctionName},
+    utils::cartesian_insert,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) enum FixtureScope {
@@ -98,6 +102,7 @@ pub(crate) struct Fixture {
     auto_use: bool,
     function: Py<PyAny>,
     is_generator: bool,
+    params: Option<Vec<Py<PyAny>>>,
 }
 
 impl Fixture {
@@ -108,6 +113,7 @@ impl Fixture {
         auto_use: bool,
         function: Py<PyAny>,
         is_generator: bool,
+        params: Option<Vec<Py<PyAny>>>,
     ) -> Self {
         Self {
             name,
@@ -116,6 +122,7 @@ impl Fixture {
             auto_use,
             function,
             is_generator,
+            params,
         }
     }
 
@@ -139,35 +146,66 @@ impl Fixture {
         &self,
         py: Python<'a>,
         fixture_manager: &mut FixtureManager,
-    ) -> PyResult<Bound<'a, PyAny>> {
-        let mut required_fixtures = Vec::new();
+    ) -> PyResult<Vec<Bound<'a, PyAny>>> {
+        // A hashmap of fixtures for each param
+        let mut each_call_fixtures: Vec<HashMap<String, Py<PyAny>>> = vec![HashMap::new()];
 
-        for name in self.dependant_fixtures(py) {
-            if let Some(fixture) =
-                fixture_manager.get_fixture_with_name(py, &name, Some(&[self.name()]))
+        let param_names = self.dependant_fixtures(py);
+
+        for name in &param_names {
+            if name == "request" {
+                let params = match &self.params {
+                    Some(p) if !p.is_empty() => p,
+                    _ => &vec![py.None()],
+                };
+
+                each_call_fixtures = cartesian_insert(each_call_fixtures, params, name, |param| {
+                    let param_value = param.clone();
+                    let request = FixtureRequest::new(param_value);
+                    let request_obj = Py::new(py, request)?;
+                    Ok(request_obj.into_any())
+                })?;
+            } else if let Some(fixture_returns) =
+                fixture_manager.get_fixture_with_name(py, name, Some(&[self.name()]))
             {
-                required_fixtures.push(fixture.clone().into_bound(py));
+                each_call_fixtures = cartesian_insert(
+                    each_call_fixtures,
+                    &fixture_returns,
+                    name,
+                    |fixture_return| Ok(fixture_return.clone()),
+                )?;
             }
         }
-        let args = PyTuple::new(py, required_fixtures)?;
 
-        if self.is_generator() {
-            let mut generator = self
-                .function
-                .bind(py)
-                .call(args.clone(), None)?
-                .cast_into()?;
+        let mut res = Vec::new();
 
-            let finalizer = Finalizer::new(self.name().to_string(), generator.clone().unbind());
-            fixture_manager.insert_finalizer(finalizer, self.scope());
+        for fixtures in each_call_fixtures {
+            let kwargs = PyDict::new(py);
 
-            generator
-                .next()
-                .expect("generator should yield at least once")
-        } else {
-            let function_return = self.function.call(py, args, None);
-            function_return.map(|r| r.into_bound(py))
+            for (key, value) in fixtures {
+                let _ = kwargs.set_item(key, value);
+            }
+
+            res.push(if self.is_generator() {
+                let mut generator = self
+                    .function
+                    .bind(py)
+                    .call((), Some(&kwargs))?
+                    .cast_into()?;
+
+                let finalizer = Finalizer::new(self.name().to_string(), generator.clone().unbind());
+                fixture_manager.insert_finalizer(finalizer, self.scope());
+
+                generator
+                    .next()
+                    .expect("generator should yield at least once")?
+            } else {
+                let function_return = self.function.call(py, (), Some(&kwargs));
+                function_return.map(|r| r.into_bound(py))?
+            });
         }
+
+        Ok(res)
     }
 
     pub(crate) fn try_from_function(
@@ -234,6 +272,15 @@ impl Fixture {
             return Ok(None);
         };
 
+        let params = get_attribute(function.clone(), &["_fixture_function_marker", "params"])
+            .and_then(|p| {
+                if p.is_none() {
+                    None
+                } else {
+                    p.extract::<Vec<Py<PyAny>>>().ok()
+                }
+            });
+
         let Some(function) = get_attribute(function.clone(), &["_fixture_function"]) else {
             return Ok(None);
         };
@@ -253,6 +300,7 @@ impl Fixture {
             auto_use.extract::<bool>().unwrap_or(false),
             function.into(),
             is_generator_function,
+            params,
         )))
     }
 
@@ -277,6 +325,7 @@ impl Fixture {
         let scope_obj = py_function_borrow.scope.clone();
         let name = py_function_borrow.name.clone();
         let auto_use = py_function_borrow.auto_use;
+        let params = py_function_borrow.params.clone();
 
         let fixture_scope = fixture_scope(py, scope_obj.bind(py), &name)?;
 
@@ -287,6 +336,7 @@ impl Fixture {
             auto_use,
             py_function.into(),
             is_generator_function,
+            params,
         )))
     }
 }

@@ -14,13 +14,17 @@ use crate::{
 #[derive(Debug, Default, Clone)]
 pub(crate) struct FixtureCollection {
     /// Map of fixture names to their resolved Python values
-    fixtures: IndexMap<QualifiedFunctionName, Py<PyAny>>,
+    fixtures: IndexMap<QualifiedFunctionName, Vec<Py<PyAny>>>,
     /// List of cleanup functions to execute when this collection is reset
     finalizers: Vec<Finalizer>,
 }
 
 impl FixtureCollection {
-    fn insert_fixture(&mut self, fixture_name: QualifiedFunctionName, fixture_return: Py<PyAny>) {
+    fn insert_fixture(
+        &mut self,
+        fixture_name: QualifiedFunctionName,
+        fixture_return: Vec<Py<PyAny>>,
+    ) {
         self.fixtures.insert(fixture_name, fixture_return);
     }
 
@@ -37,7 +41,7 @@ impl FixtureCollection {
         py: Python<'_>,
         fixture_name: &str,
         exclude: Option<&[&QualifiedFunctionName]>,
-    ) -> Option<Py<PyAny>> {
+    ) -> Option<Vec<Py<PyAny>>> {
         if let Some((_, fixture)) = self.fixtures.iter().rev().find(|(name, _)| {
             name.function_name() == fixture_name
                 && exclude.is_none_or(|exclude| !exclude.contains(name))
@@ -48,7 +52,7 @@ impl FixtureCollection {
         match fixture_name {
             _ if builtins::temp_path::is_temp_path_fixture_name(fixture_name) => {
                 if let Some(path_obj) = builtins::temp_path::create_temp_dir(py) {
-                    return Some(path_obj);
+                    return Some(vec![path_obj]);
                 }
             }
             _ => {}
@@ -120,13 +124,13 @@ impl<'a> FixtureManager<'a> {
             .is_some_and(|parent| parent.contains_fixture_with_name(fixture_name))
     }
 
-    pub(crate) fn get_fixture(&self, fixture_name: &QualifiedFunctionName) -> Option<Py<PyAny>> {
-        if let Some(fixture) = self.collection.fixtures.get(fixture_name) {
-            return Some(fixture.clone());
+    pub(crate) fn has_fixture(&self, fixture_name: &QualifiedFunctionName) -> bool {
+        if self.collection.fixtures.get(fixture_name).is_some() {
+            return true;
         }
         self.parent
             .as_ref()
-            .map_or_else(|| None, |parent| parent.get_fixture(fixture_name))
+            .map_or_else(|| false, |parent| parent.has_fixture(fixture_name))
     }
 
     // Check if a fixture with the given name exists (including built-ins).
@@ -138,7 +142,7 @@ impl<'a> FixtureManager<'a> {
         py: Python<'_>,
         fixture_name: &str,
         exclude: Option<&[&QualifiedFunctionName]>,
-    ) -> Option<Py<PyAny>> {
+    ) -> Option<Vec<Py<PyAny>>> {
         // Check existing fixtures first in current scope
         if let Some(fixture) = self.collection.get_fixture(py, fixture_name, exclude) {
             return Some(fixture);
@@ -148,7 +152,7 @@ impl<'a> FixtureManager<'a> {
             .get_fixture_with_name(py, fixture_name, exclude)
     }
 
-    pub(crate) fn insert_fixture(&mut self, fixture_return: Py<PyAny>, fixture: &Fixture) {
+    pub(crate) fn insert_fixture(&mut self, fixture_return: Vec<Py<PyAny>>, fixture: &Fixture) {
         if self.scope <= *fixture.scope() {
             self.collection
                 .insert_fixture(fixture.name().clone(), fixture_return);
@@ -177,7 +181,7 @@ impl<'a> FixtureManager<'a> {
         current: &'proj dyn HasFixtures<'proj>,
         fixture: &Fixture,
     ) {
-        if self.get_fixture(fixture.name()).is_some() {
+        if self.has_fixture(fixture.name()) {
             // We have already called this fixture. So we can return.
             return;
         }
@@ -225,7 +229,13 @@ impl<'a> FixtureManager<'a> {
 
         match fixture.call(py, self) {
             Ok(fixture_return) => {
-                self.insert_fixture(fixture_return.unbind(), fixture);
+                self.insert_fixture(
+                    fixture_return
+                        .into_iter()
+                        .map(pyo3::Bound::unbind)
+                        .collect(),
+                    fixture,
+                );
             }
             Err(e) => {
                 tracing::debug!("Failed to call fixture {}: {}", fixture.name(), e);

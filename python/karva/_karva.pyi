@@ -21,6 +21,10 @@ class FixtureFunctionDefinition(Generic[_P, _T]):
     def __init__(self, function: Callable[_P, _T], name: str, scope: str) -> None: ...
     def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T: ...
 
+class FixtureRequest:
+    @property
+    def param(self) -> Any: ...
+
 @overload
 def fixture(func: Callable[_P, _T]) -> FixtureFunctionDefinition[_P, _T]: ...
 @overload
@@ -30,6 +34,7 @@ def fixture(
     scope: _ScopeName = "function",
     name: str | None = ...,
     auto_use: bool = ...,
+    params: Sequence[Any] | None = ...,
 ) -> Callable[[Callable[_P, _T]], FixtureFunctionDefinition[_P, _T]]: ...
 
 class TestFunction(Generic[_P, _T]):

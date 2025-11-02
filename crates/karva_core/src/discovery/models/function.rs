@@ -15,7 +15,7 @@ use crate::{
         tags::Tags,
     },
     name::{ModulePath, QualifiedFunctionName},
-    utils::Upcast,
+    utils::{Upcast, cartesian_insert},
 };
 
 /// Represents a single test function discovered from Python source code.
@@ -86,11 +86,8 @@ impl TestFunction {
         py: Python<'_>,
         module: &'a DiscoveredModule,
         py_module: &Py<PyModule>,
-        fixture_manager_func: impl Fn(
-            Python<'_>,
-            &dyn Fn(&FixtureManager<'_>) -> TestCase<'a>,
-        ) -> TestCase<'a>
-        + Sync,
+        fixture_manager: &mut FixtureManager<'_>,
+        setup_fixture_manager: impl Fn(&mut FixtureManager<'_>),
     ) -> Vec<TestCase<'a>> {
         tracing::info!(
             "Collecting test cases for function: {}",
@@ -102,11 +99,9 @@ impl TestFunction {
             return Vec::new();
         };
 
-        let mut required_fixture_names = self.dependant_fixtures(py);
+        let required_fixture_names = self.dependant_fixtures(py);
 
         let tags = Tags::from_py_any(py, &py_function, Some(&self.function_definition));
-
-        required_fixture_names.extend(tags.required_fixtures_names());
 
         let mut parametrize_args = tags.parametrize_args();
 
@@ -118,50 +113,51 @@ impl TestFunction {
         let mut test_cases = Vec::with_capacity(parametrize_args.len());
 
         for params in parametrize_args {
-            let test_case_creator = |fixture_manager: &FixtureManager| {
-                self.resolve_fixtures_for_test_case(
-                    py,
+            setup_fixture_manager(fixture_manager);
+
+            let mut fixture_diagnostics = Vec::new();
+            let mut all_resolved_fixtures = Vec::new();
+
+            all_resolved_fixtures.push(HashMap::new());
+
+            for fixture_name in &required_fixture_names {
+                if let Some(fixture_value) = params.get(fixture_name) {
+                    for resolved_fixtures in &mut all_resolved_fixtures {
+                        resolved_fixtures.insert(fixture_name.clone(), fixture_value.clone());
+                    }
+                } else if let Some(fixture_values) =
+                    fixture_manager.get_fixture_with_name(py, fixture_name, None)
+                {
+                    all_resolved_fixtures = cartesian_insert(
+                        all_resolved_fixtures,
+                        &fixture_values,
+                        fixture_name,
+                        |fixture_value| Ok(fixture_value.clone()),
+                    )
+                    .unwrap();
+                } else {
+                    fixture_diagnostics.push(SubDiagnostic::fixture_not_found(fixture_name));
+                }
+            }
+
+            let diagnostic = self.create_fixture_diagnostic(module, fixture_diagnostics);
+
+            for resolved_fixtures in all_resolved_fixtures {
+                let test_case = TestCase::new(
+                    self,
+                    resolved_fixtures,
                     module,
-                    &required_fixture_names,
-                    &params,
-                    fixture_manager,
-                    &tags,
-                )
-            };
-            test_cases.push(fixture_manager_func(py, &test_case_creator));
+                    tags.skip_tag(),
+                    diagnostic.clone(),
+                );
+
+                test_cases.push(test_case);
+            }
+
+            test_cases[0].add_finalizers(fixture_manager.reset_fixtures());
         }
 
         test_cases
-    }
-
-    fn resolve_fixtures_for_test_case<'a>(
-        &'a self,
-        py: Python<'_>,
-        module: &'a DiscoveredModule,
-        required_fixture_names: &[String],
-        params: &HashMap<String, Py<PyAny>>,
-        fixture_manager: &FixtureManager,
-        tags: &Tags,
-    ) -> TestCase<'a> {
-        let num_required_fixtures = required_fixture_names.len();
-        let mut fixture_diagnostics = Vec::with_capacity(num_required_fixtures);
-        let mut resolved_fixtures = HashMap::with_capacity(num_required_fixtures);
-
-        for fixture_name in required_fixture_names {
-            if let Some(fixture_value) = params.get(fixture_name) {
-                resolved_fixtures.insert(fixture_name.clone(), fixture_value.clone());
-            } else if let Some(fixture_value) =
-                fixture_manager.get_fixture_with_name(py, fixture_name, None)
-            {
-                resolved_fixtures.insert(fixture_name.clone(), fixture_value);
-            } else {
-                fixture_diagnostics.push(SubDiagnostic::fixture_not_found(fixture_name));
-            }
-        }
-
-        let diagnostic = self.create_fixture_diagnostic(module, fixture_diagnostics);
-
-        TestCase::new(self, resolved_fixtures, module, tags.skip_tag(), diagnostic)
     }
 
     fn create_fixture_diagnostic(

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use camino::Utf8Path;
 use karva_project::project::{Project, ProjectOptions};
 use pyo3::{PyResult, Python, prelude::*, types::PyAnyMethods};
@@ -113,6 +115,30 @@ pub(crate) fn iter_with_ancestors<'a, T: ?Sized>(
             None
         }
     })
+}
+
+pub(crate) fn cartesian_insert<T, F>(
+    existing: Vec<HashMap<String, T>>,
+    new_items: &[T],
+    key: &str,
+    mut create_value: F,
+) -> PyResult<Vec<HashMap<String, T>>>
+where
+    T: Clone,
+    F: FnMut(&T) -> PyResult<T>,
+{
+    let mut result = Vec::new();
+
+    for fixtures in existing {
+        for item in new_items {
+            let mut new_fixtures = fixtures.clone();
+            let value = create_value(item)?;
+            new_fixtures.insert(key.to_string(), value);
+            result.push(new_fixtures);
+        }
+    }
+
+    Ok(result)
 }
 
 #[cfg(test)]

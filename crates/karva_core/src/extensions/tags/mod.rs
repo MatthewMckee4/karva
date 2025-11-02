@@ -126,8 +126,10 @@ impl Tags {
         for tag in &self.inner {
             if let Tag::Parametrize(parametrize_tag) = tag {
                 let current_values = parametrize_tag.each_arg_value();
+
                 let mut new_param_args =
                     Vec::with_capacity(param_args.len() * current_values.len());
+
                 for existing_params in &param_args {
                     for new_params in &current_values {
                         let mut combined_params = existing_params.clone();
