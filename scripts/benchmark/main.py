@@ -215,11 +215,11 @@ def main() -> None:
     benchmarks: list[Benchmark] = [
         Benchmark(
             name="pytest",
-            command=f"uv run pytest {pytest_test_file}",
+            command=f"uv run pytest {pytest_test_file} -q",
         ),
         Benchmark(
             name="karva",
-            command=f"uv run karva test {karva_test_file}",
+            command=f"uv run karva test {karva_test_file} -q",
         ),
     ]
     if args.run_test:
