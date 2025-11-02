@@ -25,7 +25,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   labeller:
-    if: github.event.pull_request
+    if: github.event.pull_request && github.event.action != 'unlabeled' && github.event.action != 'labeled'
 
     permissions:
       contents: read
@@ -41,7 +41,7 @@ jobs:
   require_label:
     if: github.event.pull_request
 
-    needs: [update_release_draft, labeller]
+    needs: [update_release_draft]
 
     runs-on: ubuntu-latest
 
@@ -57,3 +57,4 @@ jobs:
           labels: ".+"
           add_comment: true
           use_regex: true
+          message: "Please add a label to this pull request."

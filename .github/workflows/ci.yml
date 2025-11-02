@@ -41,7 +41,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.9", "3.13", "3.14"]
 
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
@@ -76,6 +76,30 @@ jobs:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         run: |
           cargo test
+
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      max-parallel: 18
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.14"]
+
+    env:
+      PYTHON_VERSION: ${{ matrix.python-version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update Rust toolchain
+        run: rustup update
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
 
   build-docs:
     runs-on: ubuntu-latest
