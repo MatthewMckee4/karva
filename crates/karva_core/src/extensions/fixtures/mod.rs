@@ -272,6 +272,15 @@ impl Fixture {
             return Ok(None);
         };
 
+        let params = get_attribute(function.clone(), &["_fixture_function_marker", "params"])
+            .and_then(|p| {
+                if p.is_none() {
+                    None
+                } else {
+                    p.extract::<Vec<Py<PyAny>>>().ok()
+                }
+            });
+
         let Some(function) = get_attribute(function.clone(), &["_fixture_function"]) else {
             return Ok(None);
         };
@@ -283,16 +292,6 @@ impl Fixture {
         };
 
         let fixture_scope = fixture_scope(py, &scope, &name)?;
-
-        // Try to get params attribute (pytest fixtures may not have it)
-        let params = get_attribute(function.clone(), &["_fixture_function_marker", "params"])
-            .and_then(|p| {
-                if p.is_none() {
-                    None
-                } else {
-                    p.extract::<Vec<Py<PyAny>>>().ok()
-                }
-            });
 
         Ok(Some(Self::new(
             QualifiedFunctionName::new(name, module_name),
