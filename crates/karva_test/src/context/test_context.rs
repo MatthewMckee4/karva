@@ -43,7 +43,7 @@ impl TestContext {
             venv_args.push(version);
         }
 
-        let commands = [
+        let command_arguments = [
             vec!["init", "--bare", "--directory", project_path.as_str()],
             venv_args,
             vec![
@@ -56,15 +56,15 @@ impl TestContext {
             ],
         ];
 
-        for command in &commands {
+        for arguments in &command_arguments {
             let output = Command::new("uv")
-                .args(&command[1..])
+                .args(arguments)
                 .current_dir(&project_path)
                 .output()
-                .with_context(|| format!("Failed to run command: {command:?}"))
+                .with_context(|| format!("Failed to run command: {arguments:?}"))
                 .unwrap();
 
-            eprintln!("Command: {command:?}");
+            eprintln!("Command: {arguments:?}");
             eprintln!("{}", String::from_utf8_lossy(&output.stdout));
             eprintln!("{}", String::from_utf8_lossy(&output.stderr));
         }
