@@ -12,7 +12,11 @@ pub mod python;
 pub(crate) use finalizer::{Finalizer, Finalizers};
 pub(crate) use manager::FixtureManager;
 
-use crate::name::{ModulePath, QualifiedFunctionName};
+use crate::{
+    extensions::fixtures::python::FixtureRequest,
+    name::{ModulePath, QualifiedFunctionName},
+    utils::cartesian_insert,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) enum FixtureScope {
@@ -138,65 +142,38 @@ impl Fixture {
         self.auto_use
     }
 
-    pub(crate) const fn params(&self) -> Option<&Vec<Py<PyAny>>> {
-        self.params.as_ref()
-    }
-
-    pub(crate) fn is_parametrized(&self) -> bool {
-        self.params.is_some() && !self.params.as_ref().unwrap().is_empty()
-    }
-
     pub(crate) fn call<'a>(
         &self,
         py: Python<'a>,
         fixture_manager: &mut FixtureManager,
     ) -> PyResult<Vec<Bound<'a, PyAny>>> {
-        let num_calls = self.params.as_ref().map_or(1, |params| params.len());
-
         // A hashmap of fixtures for each param
-        let mut each_call_fixtures: Vec<HashMap<String, Bound<'a, PyAny>>> =
-            Vec::with_capacity(num_calls);
+        let mut each_call_fixtures: Vec<HashMap<String, Py<PyAny>>> = vec![HashMap::new()];
 
         let param_names = self.dependant_fixtures(py);
 
-        for _ in 0..num_calls {
-            for name in &param_names {
-                if name == "request" {
-                    let Some(params) = &self.params else {
-                        continue;
-                    };
-                    let mut new_each_call_fixtures: Vec<HashMap<String, Bound<'a, PyAny>>> =
-                        Vec::new();
+        for name in &param_names {
+            if name == "request" {
+                let params = match &self.params {
+                    Some(p) if !p.is_empty() => p,
+                    _ => &vec![py.None()],
+                };
 
-                    for fixtures in &each_call_fixtures {
-                        for param in params {
-                            let mut new_fixtures = fixtures.clone();
-                            let param_value = param.clone();
-                            let request = python::FixtureRequest::new(param_value);
-                            let request_obj = Py::new(py, request)?;
-                            new_fixtures
-                                .insert(name.to_string(), request_obj.into_any().into_bound(py));
-                            new_each_call_fixtures.push(new_fixtures);
-                        }
-                    }
-
-                    each_call_fixtures = new_each_call_fixtures;
-                } else if let Some(fixture_returns) =
-                    fixture_manager.get_fixture_with_name(py, name, Some(&[self.name()]))
-                {
-                    let mut new_each_call_fixtures: Vec<HashMap<String, Bound<'a, PyAny>>> =
-                        Vec::new();
-                    for fixtures in &each_call_fixtures {
-                        for fixture_return in &fixture_returns {
-                            let mut new_fixtures = fixtures.clone();
-                            new_fixtures
-                                .insert(name.to_string(), fixture_return.clone().into_bound(py));
-                            new_each_call_fixtures.push(new_fixtures);
-                        }
-                    }
-
-                    each_call_fixtures = new_each_call_fixtures;
-                }
+                each_call_fixtures = cartesian_insert(each_call_fixtures, params, name, |param| {
+                    let param_value = param.clone();
+                    let request = FixtureRequest::new(param_value);
+                    let request_obj = Py::new(py, request)?;
+                    Ok(request_obj.into_any())
+                })?;
+            } else if let Some(fixture_returns) =
+                fixture_manager.get_fixture_with_name(py, name, Some(&[self.name()]))
+            {
+                each_call_fixtures = cartesian_insert(
+                    each_call_fixtures,
+                    &fixture_returns,
+                    name,
+                    |fixture_return| Ok(fixture_return.clone()),
+                )?;
             }
         }
 
@@ -225,7 +202,7 @@ impl Fixture {
             } else {
                 let function_return = self.function.call(py, (), Some(&kwargs));
                 function_return.map(|r| r.into_bound(py))?
-            })
+            });
         }
 
         Ok(res)

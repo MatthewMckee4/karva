@@ -232,7 +232,7 @@ impl<'a> FixtureManager<'a> {
                 self.insert_fixture(
                     fixture_return
                         .into_iter()
-                        .map(|fixture| fixture.unbind())
+                        .map(pyo3::Bound::unbind)
                         .collect(),
                     fixture,
                 );

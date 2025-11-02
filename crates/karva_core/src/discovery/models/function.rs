@@ -9,13 +9,13 @@ use crate::{
         Diagnostic, DiagnosticErrorType, DiagnosticSeverity, SubDiagnostic,
         TestCaseCollectionDiagnosticType, TestCaseDiagnosticType,
     },
-    discovery::{DiscoveredModule, DiscoveredPackage},
+    discovery::DiscoveredModule,
     extensions::{
         fixtures::{FixtureManager, UsesFixtures},
         tags::Tags,
     },
     name::{ModulePath, QualifiedFunctionName},
-    utils::Upcast,
+    utils::{Upcast, cartesian_insert},
 };
 
 /// Represents a single test function discovered from Python source code.
@@ -86,11 +86,8 @@ impl TestFunction {
         py: Python<'_>,
         module: &'a DiscoveredModule,
         py_module: &Py<PyModule>,
-        fixture_manager_func: impl Fn(
-            Python<'_>,
-            &dyn Fn(&mut FixtureManager<'_>) -> TestCase<'a>,
-        ) -> TestCase<'a>
-        + Sync,
+        fixture_manager: &mut FixtureManager<'_>,
+        setup_fixture_manager: impl Fn(&mut FixtureManager<'_>),
     ) -> Vec<TestCase<'a>> {
         tracing::info!(
             "Collecting test cases for function: {}",
@@ -102,11 +99,9 @@ impl TestFunction {
             return Vec::new();
         };
 
-        let mut required_fixture_names = self.dependant_fixtures(py);
+        let required_fixture_names = self.dependant_fixtures(py);
 
         let tags = Tags::from_py_any(py, &py_function, Some(&self.function_definition));
-
-        required_fixture_names.extend(tags.required_fixtures_names());
 
         let mut parametrize_args = tags.parametrize_args();
 
@@ -118,46 +113,48 @@ impl TestFunction {
         let mut test_cases = Vec::with_capacity(parametrize_args.len());
 
         for params in parametrize_args {
-            let test_case_creator = |fixture_manager: &mut FixtureManager| {
-                let num_required_fixtures = required_fixture_names.len();
-                let mut fixture_diagnostics = Vec::new();
-                let mut all_resolved_fixtures: Vec<HashMap<String, Py<PyAny>>> = Vec::new();
+            setup_fixture_manager(fixture_manager);
 
-                for fixture_name in &required_fixture_names {
-                    if let Some(fixture_value) = params.get(fixture_name) {
-                        for resolved_fixtures in &mut all_resolved_fixtures {
-                            resolved_fixtures.insert(fixture_name.clone(), fixture_value.clone());
-                        }
-                    } else if let Some(fixture_values) =
-                        fixture_manager.get_fixture_with_name(py, fixture_name, None)
-                    {
-                        for resolved_fixtures in &mut all_resolved_fixtures {
-                            for fixture_value in &fixture_values {
-                                resolved_fixtures
-                                    .insert(fixture_name.clone(), fixture_value.clone());
-                            }
-                        }
-                    } else {
-                        fixture_diagnostics.push(SubDiagnostic::fixture_not_found(fixture_name));
+            let mut fixture_diagnostics = Vec::new();
+            let mut all_resolved_fixtures = Vec::new();
+
+            all_resolved_fixtures.push(HashMap::new());
+
+            for fixture_name in &required_fixture_names {
+                if let Some(fixture_value) = params.get(fixture_name) {
+                    for resolved_fixtures in &mut all_resolved_fixtures {
+                        resolved_fixtures.insert(fixture_name.clone(), fixture_value.clone());
                     }
+                } else if let Some(fixture_values) =
+                    fixture_manager.get_fixture_with_name(py, fixture_name, None)
+                {
+                    all_resolved_fixtures = cartesian_insert(
+                        all_resolved_fixtures,
+                        &fixture_values,
+                        fixture_name,
+                        |fixture_value| Ok(fixture_value.clone()),
+                    )
+                    .unwrap();
+                } else {
+                    fixture_diagnostics.push(SubDiagnostic::fixture_not_found(fixture_name));
                 }
+            }
 
-                let diagnostic = self.create_fixture_diagnostic(module, fixture_diagnostics);
+            let diagnostic = self.create_fixture_diagnostic(module, fixture_diagnostics);
 
-                all_resolved_fixtures
-                    .into_iter()
-                    .map(|resolved_fixtures| {
-                        TestCase::new(
-                            self,
-                            resolved_fixtures.clone(),
-                            module,
-                            tags.skip_tag(),
-                            diagnostic.clone(),
-                        )
-                    })
-                    .collect()
-            };
-            test_cases.extend(fixture_manager_func(py, &test_case_creator));
+            for resolved_fixtures in all_resolved_fixtures {
+                let test_case = TestCase::new(
+                    self,
+                    resolved_fixtures,
+                    module,
+                    tags.skip_tag(),
+                    diagnostic.clone(),
+                );
+
+                test_cases.push(test_case);
+            }
+
+            test_cases[0].add_finalizers(fixture_manager.reset_fixtures());
         }
 
         test_cases

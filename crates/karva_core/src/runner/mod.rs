@@ -2103,7 +2103,6 @@ def test_something_else():
 
         let mut expected_stats = TestResultStats::default();
 
-        // 2 parametrized test runs + 1 verification test
         for _ in 0..3 {
             expected_stats.add_passed();
         }
@@ -2150,7 +2149,6 @@ def test_something_else():
 
         let mut expected_stats = TestResultStats::default();
 
-        // 3 tests * 2 params = 6 test runs
         for _ in 0..6 {
             expected_stats.add_passed();
         }
@@ -2183,7 +2181,6 @@ def test_something_else():
 
         let mut expected_stats = TestResultStats::default();
 
-        // 2 number params * 2 letter params = 4 test runs
         for _ in 0..4 {
             expected_stats.add_passed();
         }
@@ -2213,7 +2210,6 @@ def test_something_else():
 
         let mut expected_stats = TestResultStats::default();
 
-        // 2 fixture params * 2 test params = 4 test runs
         for _ in 0..4 {
             expected_stats.add_passed();
         }
@@ -2241,7 +2237,6 @@ def test_something_else():
                     assert ordered_fixture in ['first', 'second']
 
                 def test_check_order():
-                    # Verify the execution order
                     assert 'first_setup' in execution_log
                     assert 'test_one_first' in execution_log
                     assert 'first_teardown' in execution_log
@@ -2249,7 +2244,6 @@ def test_something_else():
                     assert 'test_one_second' in execution_log
                     assert 'second_teardown' in execution_log
 
-                    # Verify teardown happened after test
                     first_test_idx = execution_log.index('test_one_first')
                     first_teardown_idx = execution_log.index('first_teardown')
                     assert first_teardown_idx > first_test_idx
@@ -2260,7 +2254,6 @@ def test_something_else():
 
         let mut expected_stats = TestResultStats::default();
 
-        // 2 parametrized test runs + 1 verification test
         for _ in 0..3 {
             expected_stats.add_passed();
         }
@@ -2301,7 +2294,6 @@ def test_something_else():
 
         let mut expected_stats = TestResultStats::default();
 
-        // 2 tests * 2 params = 4 test runs
         for _ in 0..4 {
             expected_stats.add_passed();
         }
@@ -2333,7 +2325,6 @@ def test_something_else():
 
         let mut expected_stats = TestResultStats::default();
 
-        // 2 param values = 2 test runs
         for _ in 0..2 {
             expected_stats.add_passed();
         }
@@ -2348,23 +2339,19 @@ def test_something_else():
             r"
                 import karva
 
-                cleanup_state = {'cleaned': []}
+                arr = []
 
                 @karva.fixture(params=['resource_1', 'resource_2', 'resource_3'])
                 def resource(request):
                     resource_name = request.param
                     yield resource_name
-                    cleanup_state['cleaned'].append(resource_name)
+                    arr.append(resource_name)
 
                 def test_uses_resource(resource):
                     assert resource in ['resource_1', 'resource_2', 'resource_3']
 
                 def test_all_cleaned_up():
-                    # All three resources should have been cleaned up
-                    assert len(cleanup_state['cleaned']) == 3
-                    assert 'resource_1' in cleanup_state['cleaned']
-                    assert 'resource_2' in cleanup_state['cleaned']
-                    assert 'resource_3' in cleanup_state['cleaned']
+                    assert arr == ['resource_1', 'resource_2', 'resource_3']
 ",
         );
 
@@ -2372,7 +2359,6 @@ def test_something_else():
 
         let mut expected_stats = TestResultStats::default();
 
-        // 3 parametrized tests + 1 verification test
         for _ in 0..4 {
             expected_stats.add_passed();
         }

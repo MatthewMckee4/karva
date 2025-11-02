@@ -117,25 +117,28 @@ pub(crate) fn iter_with_ancestors<'a, T: ?Sized>(
     })
 }
 
-pub(crate) fn combine_parameters<K, V, I>(parameter_sets: I) -> Vec<HashMap<K, V>>
+pub(crate) fn cartesian_insert<T, F>(
+    existing: Vec<HashMap<String, T>>,
+    new_items: &[T],
+    key: &str,
+    mut create_value: F,
+) -> PyResult<Vec<HashMap<String, T>>>
 where
-    K: Eq + std::hash::Hash + Clone,
-    V: Clone,
-    I: IntoIterator<Item = Vec<HashMap<K, V>>>,
+    T: Clone,
+    F: FnMut(&T) -> PyResult<T>,
 {
-    parameter_sets
-        .into_iter()
-        .fold(vec![HashMap::new()], |acc, param_set| {
-            acc.into_iter()
-                .flat_map(|existing| {
-                    param_set.iter().map(move |new| {
-                        let mut combined = existing.clone();
-                        combined.extend(new.clone());
-                        combined
-                    })
-                })
-                .collect()
-        })
+    let mut result = Vec::new();
+
+    for fixtures in existing {
+        for item in new_items {
+            let mut new_fixtures = fixtures.clone();
+            let value = create_value(item)?;
+            new_fixtures.insert(key.to_string(), value);
+            result.push(new_fixtures);
+        }
+    }
+
+    Ok(result)
 }
 
 #[cfg(test)]

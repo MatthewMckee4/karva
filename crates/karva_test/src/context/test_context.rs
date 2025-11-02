@@ -57,26 +57,13 @@ impl TestContext {
         ];
 
         for arguments in &command_arguments {
-            let output = Command::new("uv")
+            Command::new("uv")
                 .args(arguments)
                 .current_dir(&project_path)
                 .output()
                 .with_context(|| format!("Failed to run command: {arguments:?}"))
                 .unwrap();
-
-            eprintln!("Command: {arguments:?}");
-            eprintln!("{}", String::from_utf8_lossy(&output.stdout));
-            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
         }
-
-        let pip_list_output = Command::new("uv")
-            .args(["run", "pip", "list"])
-            .current_dir(&project_path)
-            .output()
-            .with_context(|| "Failed to run uv run pip list")
-            .unwrap();
-
-        eprintln!("{}", String::from_utf8_lossy(&pip_list_output.stdout));
 
         let mut settings = Settings::clone_current();
 
