@@ -178,7 +178,7 @@ impl<'a> FixtureManager<'a> {
         fixture: &Fixture,
     ) {
         if self.get_fixture(fixture.name()).is_some() {
-            // We have already called this fixture. So we can just return.
+            // We have already called this fixture. So we can return.
             return;
         }
 

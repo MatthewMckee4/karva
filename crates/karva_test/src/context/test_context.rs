@@ -34,11 +34,19 @@ impl TestContext {
 
         let venv_path = project_path.join(".venv");
 
-        let commands = [
-            vec!["uv", "init", "--bare", "--directory", project_path.as_str()],
-            vec!["uv", "venv", venv_path.as_str(), "-p", "3.13"],
+        let mut venv_args = vec!["venv", venv_path.as_str()];
+
+        let env_python_version = std::env::var("PYTHON_VERSION");
+
+        if let Ok(version) = &env_python_version {
+            venv_args.push("-p");
+            venv_args.push(version);
+        }
+
+        let command_arguments = [
+            vec!["init", "--bare", "--directory", project_path.as_str()],
+            venv_args,
             vec![
-                "uv",
                 "pip",
                 "install",
                 "--python",
@@ -48,14 +56,27 @@ impl TestContext {
             ],
         ];
 
-        for command in &commands {
-            Command::new(command[0])
-                .args(&command[1..])
+        for arguments in &command_arguments {
+            let output = Command::new("uv")
+                .args(arguments)
                 .current_dir(&project_path)
                 .output()
-                .with_context(|| format!("Failed to run command: {command:?}"))
+                .with_context(|| format!("Failed to run command: {arguments:?}"))
                 .unwrap();
+
+            eprintln!("Command: {arguments:?}");
+            eprintln!("{}", String::from_utf8_lossy(&output.stdout));
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
         }
+
+        let pip_list_output = Command::new("uv")
+            .args(["run", "pip", "list"])
+            .current_dir(&project_path)
+            .output()
+            .with_context(|| "Failed to run uv run pip list")
+            .unwrap();
+
+        eprintln!("{}", String::from_utf8_lossy(&pip_list_output.stdout));
 
         let mut settings = Settings::clone_current();
 

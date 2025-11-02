@@ -281,7 +281,7 @@ fn test_text_file_in_directory() {
 }
 
 #[test]
-fn test_just_text_file() {
+fn test_text_file() {
     let case = IntegrationTestContext::with_file("random.txt", "pass");
 
     assert_cmd_snapshot!(
