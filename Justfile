@@ -21,8 +21,3 @@ docs-serve:
     uv venv --clear
     uv sync --group docs --no-install-project
     uv run --no-project mkdocs serve
-
-
-
-pytest-benchmark iterations: build
-    cd scripts/benchmark && uv sync --all-extras --no-install-project && uv pip install -e ../../ && uv run main.py --iterations {{iterations}} --num-tests 10000 --run-test

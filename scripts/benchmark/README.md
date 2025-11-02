@@ -12,9 +12,10 @@ uv sync
 
 ## Running the Benchmark
 
-To run the benchmark:
+To run the benchmark cd into this directory and run:
 
 ```bash
-cd scripts/benchmark
-uv run main.py
+uv sync --all-extras --no-install-project
+uv pip install -e ../../
+uv run main.py --iterations 5 --num-tests 10000 --run-test
 ```
