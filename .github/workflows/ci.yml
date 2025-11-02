@@ -2,14 +2,17 @@ name: Continuous Integration
 
 on:
   pull_request:
+
   push:
     branches:
       - main
+
   workflow_dispatch:
 
 jobs:
   pre-commit:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v3
 
@@ -28,12 +31,14 @@ jobs:
 
   cargo-test:
     runs-on: ${{ matrix.os }}
+
     strategy:
       max-parallel: 12
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.13"]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -67,11 +72,13 @@ jobs:
 
   build-docs:
     runs-on: ${{ matrix.os }}
+
     strategy:
       max-parallel: 12
       matrix:
         python-version: ["3.11"]
         os: [ubuntu-latest]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -87,7 +94,9 @@ jobs:
 
   benchmarks:
     name: Run benchmarks
+
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -121,7 +130,9 @@ jobs:
 
   benchmarks-walltime:
     name: Run walltime benchmarks
+
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 

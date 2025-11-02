@@ -2,15 +2,11 @@ name: Build / Release PyPI
 
 on:
   pull_request:
-    paths:
-      - "crates/**/*"
-      - "scripts/**/*"
-      - "python/**/*"
-      - ".github/workflows/build.yml"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "pyproject.toml"
+
   push:
+    branches:
+      - main
+
     tags:
       - v[0-9]*.[0-9]*.[0-9]*
 
@@ -20,7 +16,9 @@ env:
 jobs:
   build:
     name: build-${{ matrix.platform.os }}-${{ matrix.python-version }}-${{ matrix.platform.python-architecture }}
+
     runs-on: ${{ matrix.platform.os }}
+
     strategy:
       fail-fast: ${{ !contains(github.event.pull_request.labels.*.name, 'CI-no-fail-fast') }}
       matrix:
@@ -59,20 +57,24 @@ jobs:
               }
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.platform.python-architecture }}
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform.rust-target }}
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           command: build
           args: --release --target ${{ matrix.platform.rust-target }} --out dist
+
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -81,13 +83,16 @@ jobs:
 
   sdist:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Build sdist
         uses: PyO3/maturin-action@v1
         with:
           command: sdist
           args: --out dist
+
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
@@ -96,11 +101,16 @@ jobs:
 
   release:
     name: Release
+
     runs-on: ubuntu-latest
+
     if: startsWith(github.ref, 'refs/tags/')
+
     needs: [build, sdist]
+
     steps:
       - uses: actions/download-artifact@v4
+
       - name: Publish to PyPI
         uses: PyO3/maturin-action@v1
         env:

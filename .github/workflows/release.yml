@@ -11,10 +11,13 @@ env:
 jobs:
   release_github:
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Publish Latest Draft
         run: |
           if gh release list | grep Draft; then
@@ -31,6 +34,7 @@ jobs:
 
   publish-docs:
     runs-on: ubuntu-latest
+
     name: Docs builder and publisher
 
     permissions:
@@ -38,11 +42,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: 3.11
+
       - name: Install Dependencies
         run: uv sync --group docs --no-install-project
+
       - name: Build docs
         run: uv run --no-project mkdocs build
 
