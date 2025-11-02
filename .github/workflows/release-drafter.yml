@@ -57,3 +57,4 @@ jobs:
           labels: ".+"
           add_comment: true
           use_regex: true
+          message: "Please add a label to this pull request."
