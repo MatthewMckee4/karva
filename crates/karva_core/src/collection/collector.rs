@@ -80,7 +80,13 @@ impl TestCaseCollector {
                 collected_test_case
             };
 
-        test_function.collect(py, module, py_module, create_function_fixture_manager)
+        test_function.collect(
+            py,
+            module,
+            py_module,
+            parents,
+            create_function_fixture_manager,
+        )
     }
 
     fn collect_module<'a>(

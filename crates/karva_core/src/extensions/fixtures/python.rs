@@ -3,6 +3,26 @@ use pyo3::{
     types::{PyDict, PyTuple},
 };
 
+/// Request context object that fixtures can access via the 'request' parameter.
+///
+/// This provides access to metadata about the current test/fixture context,
+/// most notably the current parameter value for parametrized fixtures.
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct FixtureRequest {
+    /// The current parameter value for parametrized fixtures
+    #[pyo3(get)]
+    pub param: Py<PyAny>,
+}
+
+#[pymethods]
+impl FixtureRequest {
+    #[new]
+    pub const fn new(param: Py<PyAny>) -> Self {
+        Self { param }
+    }
+}
+
 #[pyclass]
 pub struct FixtureFunctionMarker {
     #[pyo3(get, set)]
@@ -11,17 +31,20 @@ pub struct FixtureFunctionMarker {
     pub name: Option<String>,
     #[pyo3(get, set)]
     pub auto_use: bool,
+    #[pyo3(get, set)]
+    pub params: Option<Vec<Py<PyAny>>>,
 }
 
 #[pymethods]
 impl FixtureFunctionMarker {
     #[new]
-    #[pyo3(signature = (scope=None, name=None, auto_use=false))]
+    #[pyo3(signature = (scope=None, name=None, auto_use=false, params=None))]
     pub fn new(
         py: Python<'_>,
         scope: Option<Py<PyAny>>,
         name: Option<String>,
         auto_use: bool,
+        params: Option<Vec<Py<PyAny>>>,
     ) -> Self {
         let scope =
             scope.unwrap_or_else(|| "function".to_string().into_pyobject(py).unwrap().into());
@@ -30,6 +53,7 @@ impl FixtureFunctionMarker {
             scope,
             name,
             auto_use,
+            params,
         }
     }
 
@@ -49,6 +73,7 @@ impl FixtureFunctionMarker {
             name: func_name,
             scope: self.scope.clone(),
             auto_use: self.auto_use,
+            params: self.params.clone(),
         };
 
         Ok(fixture_def)
@@ -64,18 +89,27 @@ pub struct FixtureFunctionDefinition {
     pub scope: Py<PyAny>,
     #[pyo3(get, set)]
     pub auto_use: bool,
+    #[pyo3(get, set)]
+    pub params: Option<Vec<Py<PyAny>>>,
     pub function: Py<PyAny>,
 }
 
 #[pymethods]
 impl FixtureFunctionDefinition {
     #[new]
-
-    pub const fn new(function: Py<PyAny>, name: String, scope: Py<PyAny>, auto_use: bool) -> Self {
+    #[pyo3(signature = (function, name, scope, auto_use, params=None))]
+    pub const fn new(
+        function: Py<PyAny>,
+        name: String,
+        scope: Py<PyAny>,
+        auto_use: bool,
+        params: Option<Vec<Py<PyAny>>>,
+    ) -> Self {
         Self {
             name,
             scope,
             auto_use,
+            params,
             function,
         }
     }
@@ -92,15 +126,16 @@ impl FixtureFunctionDefinition {
 }
 
 #[pyfunction(name = "fixture")]
-#[pyo3(signature = (func=None, *, scope=None, name=None, auto_use=false))]
+#[pyo3(signature = (func=None, *, scope=None, name=None, auto_use=false, params=None))]
 pub fn fixture_decorator(
     py: Python<'_>,
     func: Option<Py<PyAny>>,
     scope: Option<Py<PyAny>>,
     name: Option<&str>,
     auto_use: bool,
+    params: Option<Vec<Py<PyAny>>>,
 ) -> PyResult<Py<PyAny>> {
-    let marker = FixtureFunctionMarker::new(py, scope, name.map(String::from), auto_use);
+    let marker = FixtureFunctionMarker::new(py, scope, name.map(String::from), auto_use, params);
     if let Some(f) = func {
         let fixture_def = marker.__call__(py, f)?;
         Ok(Py::new(py, fixture_def)?.into_any())

@@ -98,6 +98,7 @@ pub(crate) struct Fixture {
     auto_use: bool,
     function: Py<PyAny>,
     is_generator: bool,
+    params: Option<Vec<Py<PyAny>>>,
 }
 
 impl Fixture {
@@ -108,6 +109,7 @@ impl Fixture {
         auto_use: bool,
         function: Py<PyAny>,
         is_generator: bool,
+        params: Option<Vec<Py<PyAny>>>,
     ) -> Self {
         Self {
             name,
@@ -116,6 +118,7 @@ impl Fixture {
             auto_use,
             function,
             is_generator,
+            params,
         }
     }
 
@@ -135,12 +138,21 @@ impl Fixture {
         self.auto_use
     }
 
+    pub(crate) const fn params(&self) -> Option<&Vec<Py<PyAny>>> {
+        self.params.as_ref()
+    }
+
+    pub(crate) fn is_parametrized(&self) -> bool {
+        self.params().is_some_and(|params| !params.is_empty())
+    }
+
     pub(crate) fn call<'a>(
         &self,
         py: Python<'a>,
         fixture_manager: &mut FixtureManager,
     ) -> PyResult<Bound<'a, PyAny>> {
-        let mut required_fixtures = Vec::new();
+        self.call_with_param(py, fixture_manager, None)
+    }
 
         for name in self.dependant_fixtures(py) {
             if let Some(fixture) =
@@ -246,6 +258,16 @@ impl Fixture {
 
         let fixture_scope = fixture_scope(py, &scope, &name)?;
 
+        // Try to get params attribute (pytest fixtures may not have it)
+        let params = get_attribute(function.clone(), &["_fixture_function_marker", "params"])
+            .and_then(|p| {
+                if p.is_none() {
+                    None
+                } else {
+                    p.extract::<Vec<Py<PyAny>>>().ok()
+                }
+            });
+
         Ok(Some(Self::new(
             QualifiedFunctionName::new(name, module_name),
             function_definition.clone(),
@@ -253,6 +275,7 @@ impl Fixture {
             auto_use.extract::<bool>().unwrap_or(false),
             function.into(),
             is_generator_function,
+            params,
         )))
     }
 
@@ -277,6 +300,7 @@ impl Fixture {
         let scope_obj = py_function_borrow.scope.clone();
         let name = py_function_borrow.name.clone();
         let auto_use = py_function_borrow.auto_use;
+        let params = py_function_borrow.params.clone();
 
         let fixture_scope = fixture_scope(py, scope_obj.bind(py), &name)?;
 
@@ -287,6 +311,7 @@ impl Fixture {
             auto_use,
             py_function.into(),
             is_generator_function,
+            params,
         )))
     }
 }

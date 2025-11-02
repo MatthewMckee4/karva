@@ -31,6 +31,8 @@ impl<'proj> StandardTestRunner<'proj> {
 
     fn test_impl(&self, reporter: &dyn Reporter) -> TestRunResult {
         attach(self.project, |py| {
+            let mut diagnostics = TestRunResult::default();
+
             let (session, discovery_diagnostics) =
                 StandardDiscoverer::new(self.project).discover(py);
 
@@ -43,8 +45,6 @@ impl<'proj> StandardTestRunner<'proj> {
                 total_test_cases,
                 if total_test_cases == 1 { "" } else { "s" },
             );
-
-            let mut diagnostics = TestRunResult::default();
 
             diagnostics.add_diagnostics(discovery_diagnostics);
 
@@ -1939,5 +1939,63 @@ def test_something_else():
         assert_eq!(*result.stats(), expected_stats);
 
         assert!(result.diagnostics().is_empty());
+    }
+
+    #[test]
+    fn test_fixture_request() {
+        let test_context = TestContext::with_file(
+            "<test>/test_file.py",
+            r"
+import karva
+
+@karva.fixture
+def my_fixture(request):
+    # request should be a FixtureRequest instance with a param property
+    assert hasattr(request, 'param')
+    # For non-parametrized fixtures, param should be None
+    assert request.param is None
+    return 'fixture_value'
+
+def test_with_request_fixture(my_fixture):
+    assert my_fixture == 'fixture_value'
+",
+        );
+
+        let result = test_context.test();
+
+        let mut expected_stats = TestResultStats::default();
+
+        expected_stats.add_passed();
+
+        assert_eq!(*result.stats(), expected_stats, "{result:?}");
+    }
+
+    #[test]
+    fn test_parametrized_fixture() {
+        let test_context = TestContext::with_file(
+            "<test>/test_file.py",
+            r"
+import karva
+
+@karva.fixture(params=['a', 'b', 'c'])
+def my_fixture(request):
+    assert hasattr(request, 'param')
+    assert request.param in ['a', 'b', 'c']
+    return request.param
+
+def test_with_parametrized_fixture(my_fixture):
+    assert my_fixture in ['a', 'b', 'c']
+",
+        );
+
+        let result = test_context.test();
+
+        let mut expected_stats = TestResultStats::default();
+
+        for _ in 0..3 {
+            expected_stats.add_passed();
+        }
+
+        assert_eq!(*result.stats(), expected_stats, "{result:?}");
     }
 }

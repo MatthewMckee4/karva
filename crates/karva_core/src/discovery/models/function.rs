@@ -11,7 +11,7 @@ use crate::{
     },
     discovery::DiscoveredModule,
     extensions::{
-        fixtures::{FixtureManager, UsesFixtures},
+        fixtures::{FixtureManager, HasFixtures, UsesFixtures},
         tags::Tags,
     },
     name::{ModulePath, QualifiedFunctionName},
@@ -86,6 +86,7 @@ impl TestFunction {
         py: Python<'_>,
         module: &'a DiscoveredModule,
         py_module: &Py<PyModule>,
+        parents: &[&crate::discovery::DiscoveredPackage],
         fixture_manager_func: impl Fn(
             Python<'_>,
             &dyn Fn(&FixtureManager<'_>) -> TestCase<'a>,
@@ -110,6 +111,43 @@ impl TestFunction {
 
         let mut parametrize_args = tags.parametrize_args();
 
+        // Check for parametrized fixtures by looking at module and parent fixtures
+        let mut fixture_params: Vec<(String, Vec<Py<PyAny>>)> = Vec::new();
+
+        for fixture_name in &required_fixture_names {
+            // Skip request as it's not a real fixture
+            if fixture_name == "request" {
+                continue;
+            }
+
+            // Check in current module
+            if let Some(fixture) = module.get_fixture(py, fixture_name) {
+                if fixture.is_parametrized() {
+                    if let Some(params) = fixture.params() {
+                        fixture_params.push((fixture_name.clone(), params.clone()));
+                        continue;
+                    }
+                }
+            }
+
+            // Check in parent packages
+            for parent in parents {
+                if let Some(fixture) = parent.get_fixture(py, fixture_name) {
+                    if fixture.is_parametrized() {
+                        if let Some(params) = fixture.params() {
+                            fixture_params.push((fixture_name.clone(), params.clone()));
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Expand parametrize_args with fixture params
+        if !fixture_params.is_empty() {
+            parametrize_args = Self::expand_with_fixture_params(parametrize_args, &fixture_params);
+        }
+
         // Ensure at least one test case exists (no parametrization)
         if parametrize_args.is_empty() {
             parametrize_args.push(HashMap::new());
@@ -132,6 +170,42 @@ impl TestFunction {
         }
 
         test_cases
+    }
+
+    /// Expand `parametrize_args` with fixture params
+    fn expand_with_fixture_params(
+        mut parametrize_args: Vec<HashMap<String, Py<PyAny>>>,
+        fixture_params: &[(String, Vec<Py<PyAny>>)],
+    ) -> Vec<HashMap<String, Py<PyAny>>> {
+        // If we have no base params, start with an empty map
+        if parametrize_args.is_empty() {
+            parametrize_args.push(HashMap::new());
+        }
+
+        let mut result = parametrize_args;
+
+        // For each fixture that has params
+        for (fixture_name, param_values) in fixture_params {
+            let mut new_result = Vec::new();
+
+            // For each existing param combination
+            for existing_params in &result {
+                // For each param value of this fixture
+                for param_value in param_values {
+                    let mut new_params = existing_params.clone();
+                    // Store the param value with a special key
+                    new_params.insert(
+                        format!("__fixture_param_{}", fixture_name),
+                        param_value.clone(),
+                    );
+                    new_result.push(new_params);
+                }
+            }
+
+            result = new_result;
+        }
+
+        result
     }
 
     fn resolve_fixtures_for_test_case<'a>(
