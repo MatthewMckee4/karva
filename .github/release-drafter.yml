@@ -34,10 +34,11 @@ exclude-contributors:
   - dependabot
   - dependabot[bot]
 
-exclude-labels:
-  - dependencies
-  - testing
-  - rust
-  - question
-  - performance
-  - contributor-friendly
+include-labels:
+  - bug
+  - reporting
+  - extensions/fixtures
+  - extensions/tags
+  - discovery
+  - cli
+  - documentation
