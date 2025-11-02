@@ -133,6 +133,9 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    env:
+      PYTHON_VERSION: ${{ env.PYTHON_VERSION }}
+
     steps:
       - uses: actions/checkout@v4
 
