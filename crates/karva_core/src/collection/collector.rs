@@ -49,7 +49,8 @@ impl TestCaseCollector {
         fixture_manager: &FixtureManager,
     ) -> Vec<TestCase<'a>> {
         let create_function_fixture_manager =
-            |inner_py: Python<'_>, test_case_creator: &dyn Fn(&FixtureManager) -> TestCase<'a>| {
+            |inner_py: Python<'_>,
+             test_case_creator: &dyn FnOnce(&mut FixtureManager) -> TestCase<'a>| {
                 let mut function_fixture_manager =
                     FixtureManager::new(Some(fixture_manager), FixtureScope::Function);
                 let test_cases = [test_function].to_vec();
@@ -73,20 +74,14 @@ impl TestCaseCollector {
                     upcast_test_cases.as_slice(),
                 );
 
-                let mut collected_test_case = test_case_creator(&function_fixture_manager);
+                let mut collected_test_case = test_case_creator(&mut function_fixture_manager);
 
                 collected_test_case.add_finalizers(function_fixture_manager.reset_fixtures());
 
                 collected_test_case
             };
 
-        test_function.collect(
-            py,
-            module,
-            py_module,
-            parents,
-            create_function_fixture_manager,
-        )
+        test_function.collect(py, module, py_module, create_function_fixture_manager)
     }
 
     fn collect_module<'a>(

@@ -1,6 +1,6 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
-use pyo3::{prelude::*, types::PyTuple};
+use pyo3::{prelude::*, types::PyDict};
 use ruff_python_ast::{Expr, StmtFunctionDef};
 
 pub mod builtins;
@@ -143,43 +143,92 @@ impl Fixture {
     }
 
     pub(crate) fn is_parametrized(&self) -> bool {
-        self.params().is_some_and(|params| !params.is_empty())
+        self.params.is_some() && !self.params.as_ref().unwrap().is_empty()
     }
 
     pub(crate) fn call<'a>(
         &self,
         py: Python<'a>,
         fixture_manager: &mut FixtureManager,
-    ) -> PyResult<Bound<'a, PyAny>> {
-        self.call_with_param(py, fixture_manager, None)
-    }
+    ) -> PyResult<Vec<Bound<'a, PyAny>>> {
+        let num_calls = self.params.as_ref().map_or(1, |params| params.len());
 
-        for name in self.dependant_fixtures(py) {
-            if let Some(fixture) =
-                fixture_manager.get_fixture_with_name(py, &name, Some(&[self.name()]))
-            {
-                required_fixtures.push(fixture.clone().into_bound(py));
+        // A hashmap of fixtures for each param
+        let mut each_call_fixtures: Vec<HashMap<String, Bound<'a, PyAny>>> =
+            Vec::with_capacity(num_calls);
+
+        let param_names = self.dependant_fixtures(py);
+
+        for _ in 0..num_calls {
+            for name in &param_names {
+                if name == "request" {
+                    let Some(params) = &self.params else {
+                        continue;
+                    };
+                    let mut new_each_call_fixtures: Vec<HashMap<String, Bound<'a, PyAny>>> =
+                        Vec::new();
+
+                    for fixtures in &each_call_fixtures {
+                        for param in params {
+                            let mut new_fixtures = fixtures.clone();
+                            let param_value = param.clone();
+                            let request = python::FixtureRequest::new(param_value);
+                            let request_obj = Py::new(py, request)?;
+                            new_fixtures
+                                .insert(name.to_string(), request_obj.into_any().into_bound(py));
+                            new_each_call_fixtures.push(new_fixtures);
+                        }
+                    }
+
+                    each_call_fixtures = new_each_call_fixtures;
+                } else if let Some(fixture_returns) =
+                    fixture_manager.get_fixture_with_name(py, name, Some(&[self.name()]))
+                {
+                    let mut new_each_call_fixtures: Vec<HashMap<String, Bound<'a, PyAny>>> =
+                        Vec::new();
+                    for fixtures in &each_call_fixtures {
+                        for fixture_return in &fixture_returns {
+                            let mut new_fixtures = fixtures.clone();
+                            new_fixtures
+                                .insert(name.to_string(), fixture_return.clone().into_bound(py));
+                            new_each_call_fixtures.push(new_fixtures);
+                        }
+                    }
+
+                    each_call_fixtures = new_each_call_fixtures;
+                }
             }
         }
-        let args = PyTuple::new(py, required_fixtures)?;
 
-        if self.is_generator() {
-            let mut generator = self
-                .function
-                .bind(py)
-                .call(args.clone(), None)?
-                .cast_into()?;
+        let mut res = Vec::new();
 
-            let finalizer = Finalizer::new(self.name().to_string(), generator.clone().unbind());
-            fixture_manager.insert_finalizer(finalizer, self.scope());
+        for fixtures in each_call_fixtures {
+            let kwargs = PyDict::new(py);
 
-            generator
-                .next()
-                .expect("generator should yield at least once")
-        } else {
-            let function_return = self.function.call(py, args, None);
-            function_return.map(|r| r.into_bound(py))
+            for (key, value) in fixtures {
+                let _ = kwargs.set_item(key, value);
+            }
+
+            res.push(if self.is_generator() {
+                let mut generator = self
+                    .function
+                    .bind(py)
+                    .call((), Some(&kwargs))?
+                    .cast_into()?;
+
+                let finalizer = Finalizer::new(self.name().to_string(), generator.clone().unbind());
+                fixture_manager.insert_finalizer(finalizer, self.scope());
+
+                generator
+                    .next()
+                    .expect("generator should yield at least once")?
+            } else {
+                let function_return = self.function.call(py, (), Some(&kwargs));
+                function_return.map(|r| r.into_bound(py))?
+            })
         }
+
+        Ok(res)
     }
 
     pub(crate) fn try_from_function(

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use camino::Utf8Path;
 use karva_project::project::{Project, ProjectOptions};
 use pyo3::{PyResult, Python, prelude::*, types::PyAnyMethods};
@@ -113,6 +115,27 @@ pub(crate) fn iter_with_ancestors<'a, T: ?Sized>(
             None
         }
     })
+}
+
+pub(crate) fn combine_parameters<K, V, I>(parameter_sets: I) -> Vec<HashMap<K, V>>
+where
+    K: Eq + std::hash::Hash + Clone,
+    V: Clone,
+    I: IntoIterator<Item = Vec<HashMap<K, V>>>,
+{
+    parameter_sets
+        .into_iter()
+        .fold(vec![HashMap::new()], |acc, param_set| {
+            acc.into_iter()
+                .flat_map(|existing| {
+                    param_set.iter().map(move |new| {
+                        let mut combined = existing.clone();
+                        combined.extend(new.clone());
+                        combined
+                    })
+                })
+                .collect()
+        })
 }
 
 #[cfg(test)]
