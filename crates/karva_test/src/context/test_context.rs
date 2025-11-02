@@ -57,12 +57,16 @@ impl TestContext {
         ];
 
         for command in &commands {
-            Command::new("uv")
+            let output = Command::new("uv")
                 .args(&command[1..])
                 .current_dir(&project_path)
                 .output()
                 .with_context(|| format!("Failed to run command: {command:?}"))
                 .unwrap();
+
+            eprintln!("Command: {command:?}");
+            eprintln!("{}", String::from_utf8_lossy(&output.stdout));
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
         }
 
         let pip_list_output = Command::new("uv")
