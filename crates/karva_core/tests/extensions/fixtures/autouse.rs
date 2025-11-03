@@ -1,0 +1,127 @@
+use karva_core::TestResultStats;
+use karva_test::TestContext;
+use rstest::rstest;
+
+use crate::{TestRunnerExt, get_auto_use_kw};
+
+#[rstest]
+fn test_function_scope_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
+    use crate::TestRunnerExt;
+
+    let test_context = TestContext::with_file(
+        "<test>/test_function_scope_auto_use_fixture.py",
+        format!(
+            r#"
+import {framework}
+
+arr = []
+
+@{framework}.fixture(scope="function", {auto_use_kw}=True)
+def auto_function_fixture():
+    arr.append(1)
+    yield
+    arr.append(2)
+
+def test_something():
+    assert arr == [1, 1]
+
+def test_something_else():
+    assert arr == [1, 1, 2]
+"#,
+            auto_use_kw = get_auto_use_kw(framework),
+        )
+        .as_str(),
+    );
+
+    let result = test_context.test();
+
+    let mut expected_stats = TestResultStats::default();
+
+    for _ in 0..2 {
+        expected_stats.add_passed();
+    }
+
+    assert_eq!(*result.stats(), expected_stats);
+}
+
+#[rstest]
+fn test_scope_auto_use_fixture(
+    #[values("pytest", "karva")] framework: &str,
+    #[values("module", "package", "session")] scope: &str,
+) {
+    let test_context = TestContext::with_file(
+        "<test>/test_function_scope_auto_use_fixture.py",
+        &format!(
+            r#"
+import {framework}
+
+arr = []
+
+@{framework}.fixture(scope="{scope}", {auto_use_kw}=True)
+def auto_function_fixture():
+    arr.append(1)
+    yield
+    arr.append(2)
+
+def test_something():
+    assert arr == [1]
+
+def test_something_else():
+    assert arr == [1]
+"#,
+            auto_use_kw = get_auto_use_kw(framework),
+        ),
+    );
+
+    let result = test_context.test();
+
+    let mut expected_stats = TestResultStats::default();
+
+    for _ in 0..2 {
+        expected_stats.add_passed();
+    }
+
+    assert_eq!(*result.stats(), expected_stats);
+}
+
+#[rstest]
+fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
+    let test_context = TestContext::with_file(
+        "<test>/test_nested_generator_fixture.py",
+        &format!(
+            r#"
+                from {framework} import fixture
+
+                @fixture
+                def first_entry():
+                    return "a"
+
+                @fixture
+                def order(first_entry):
+                    return []
+
+                @fixture({auto_use_kw}=True)
+                def append_first(order, first_entry):
+                    return order.append(first_entry)
+
+                def test_string_only(order, first_entry):
+                    assert order == [first_entry]
+
+                def test_string_and_int(order, first_entry):
+                    order.append(2)
+                    assert order == [first_entry, 2]
+                "#,
+            auto_use_kw = get_auto_use_kw(framework)
+        ),
+    );
+
+    let result = test_context.test();
+
+    let mut expected_stats = TestResultStats::default();
+
+    for _ in 0..2 {
+        expected_stats.add_passed();
+    }
+
+    assert_eq!(*result.stats(), expected_stats);
+}

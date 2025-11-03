@@ -1,0 +1,45 @@
+use karva_core::{
+    TestCaseReporter, TestRunner,
+    runner::{StandardTestRunner, diagnostic::TestRunResult},
+};
+use karva_project::Project;
+use karva_test::TestContext;
+
+pub trait TestRunnerExt {
+    fn test(&self) -> TestRunResult;
+}
+
+impl TestRunnerExt for TestContext {
+    fn test(&self) -> TestRunResult {
+        let project = Project::new(self.cwd(), vec![self.cwd()]);
+        let test_runner = StandardTestRunner::new(&project);
+        test_runner.test_with_reporter(&TestCaseReporter::default())
+    }
+}
+
+#[allow(dead_code)]
+pub fn get_auto_use_kw(framework: &str) -> &str {
+    match framework {
+        "pytest" => "autouse",
+        "karva" => "auto_use",
+        _ => panic!("Invalid framework"),
+    }
+}
+
+#[allow(dead_code)]
+pub fn get_skip_function(framework: &str) -> &str {
+    match framework {
+        "pytest" => "pytest.mark.skip",
+        "karva" => "karva.tags.skip",
+        _ => panic!("Invalid framework"),
+    }
+}
+
+#[allow(dead_code)]
+pub fn get_parametrize_function(framework: &str) -> &str {
+    match framework {
+        "pytest" => "pytest.mark.parametrize",
+        "karva" => "karva.tags.parametrize",
+        _ => panic!("Invalid framework"),
+    }
+}

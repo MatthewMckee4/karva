@@ -1,0 +1,105 @@
+use karva_core::TestResultStats;
+use karva_test::TestContext;
+use rstest::rstest;
+
+use crate::{TestRunnerExt, get_skip_function};
+
+#[rstest]
+fn test_skip(#[values("pytest", "karva")] framework: &str) {
+    let test_context = TestContext::with_file(
+        "<test>/test_skip.py",
+        &format!(
+            r"
+import {framework}
+
+@{decorator}('This test is skipped with decorator')
+def test_1():
+    assert False
+
+        ",
+            decorator = get_skip_function(framework)
+        ),
+    );
+
+    let result = test_context.test();
+
+    let mut expected_stats = TestResultStats::default();
+
+    expected_stats.add_skipped();
+
+    assert_eq!(*result.stats(), expected_stats);
+}
+
+#[rstest]
+fn test_skip_keyword(#[values("pytest", "karva")] framework: &str) {
+    let test_context = TestContext::with_file(
+        "<test>/test_skip.py",
+        &format!(
+            r"
+import {framework}
+
+@{decorator}(reason='This test is skipped with decorator')
+def test_1():
+    assert False
+        ",
+            decorator = get_skip_function(framework)
+        ),
+    );
+    let result = test_context.test();
+
+    let mut expected_stats = TestResultStats::default();
+
+    expected_stats.add_skipped();
+
+    assert_eq!(*result.stats(), expected_stats);
+}
+
+#[rstest]
+fn test_skip_functionality_no_reason(#[values("pytest", "karva")] framework: &str) {
+    let test_context = TestContext::with_file(
+        "<test>/test_skip.py",
+        &format!(
+            r"
+import {framework}
+
+@{decorator}
+def test_1():
+    assert False
+        ",
+            decorator = get_skip_function(framework)
+        ),
+    );
+
+    let result = test_context.test();
+
+    let mut expected_stats = TestResultStats::default();
+
+    expected_stats.add_skipped();
+
+    assert_eq!(*result.stats(), expected_stats);
+}
+
+#[rstest]
+fn test_skip_reason_function_call(#[values("pytest", "karva")] framework: &str) {
+    let test_context = TestContext::with_file(
+        "<test>/test_skip.py",
+        &format!(
+            r"
+import {framework}
+
+@{decorator}()
+def test_1():
+    assert False
+        ",
+            decorator = get_skip_function(framework)
+        ),
+    );
+
+    let result = test_context.test();
+
+    let mut expected_stats = TestResultStats::default();
+
+    expected_stats.add_skipped();
+
+    assert_eq!(*result.stats(), expected_stats);
+}
