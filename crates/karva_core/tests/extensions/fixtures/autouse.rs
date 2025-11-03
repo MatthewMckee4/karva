@@ -6,8 +6,6 @@ use crate::{TestRunnerExt, get_auto_use_kw};
 
 #[rstest]
 fn test_function_scope_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
-    use crate::TestRunnerExt;
-
     let test_context = TestContext::with_file(
         "<test>/test_function_scope_auto_use_fixture.py",
         format!(

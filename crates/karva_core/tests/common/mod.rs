@@ -17,7 +17,6 @@ impl TestRunnerExt for TestContext {
     }
 }
 
-#[allow(dead_code)]
 pub fn get_auto_use_kw(framework: &str) -> &str {
     match framework {
         "pytest" => "autouse",
@@ -26,7 +25,6 @@ pub fn get_auto_use_kw(framework: &str) -> &str {
     }
 }
 
-#[allow(dead_code)]
 pub fn get_skip_function(framework: &str) -> &str {
     match framework {
         "pytest" => "pytest.mark.skip",
@@ -35,7 +33,6 @@ pub fn get_skip_function(framework: &str) -> &str {
     }
 }
 
-#[allow(dead_code)]
 pub fn get_parametrize_function(framework: &str) -> &str {
     match framework {
         "pytest" => "pytest.mark.parametrize",
