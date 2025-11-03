@@ -1,6 +1,6 @@
 //! This crate implements an internal CLI for developers of Karva.
 //!
-//! Within the Karva repository you can run it with `cargo dev`.
+//! Within the Karva repository you can run it with `cargo run -p karva_dev`.
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 

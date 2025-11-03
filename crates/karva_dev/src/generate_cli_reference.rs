@@ -10,7 +10,7 @@ use pretty_assertions::StrComparison;
 
 use crate::ROOT_DIR;
 
-pub(crate) const REGENERATE_ALL_COMMAND: &str = "cargo dev generate-all";
+pub(crate) const REGENERATE_ALL_COMMAND: &str = "cargo run -p karva_dev generate-all";
 
 #[derive(Copy, Clone, PartialEq, Eq, clap::ValueEnum, Default)]
 pub(crate) enum Mode {
@@ -74,7 +74,9 @@ pub(crate) fn main(args: &Args) -> Result<()> {
                 std::fs::write(reference_path, reference_string.as_bytes())?;
             }
             Err(err) => {
-                bail!("{filename} changed, please run `cargo dev generate-cli-reference`:\n{err}");
+                bail!(
+                    "{filename} changed, please run `cargo run -p karva_dev generate-cli-reference`:\n{err}"
+                );
             }
         },
     }
@@ -93,7 +95,7 @@ fn generate() -> String {
 
     let mut parents = Vec::new();
 
-    output.push_str("<!-- WARNING: This file is auto-generated (cargo dev generate-all). Edit the doc comments in 'crates/karva_cli/src/args.rs' if you want to change anything here. -->\n\n");
+    output.push_str("<!-- WARNING: This file is auto-generated (cargo run -p karva_dev generate-all). Edit the doc comments in 'crates/karva_cli/src/args.rs' if you want to change anything here. -->\n\n");
     output.push_str("# CLI Reference\n\n");
     generate_command(&mut output, &karva, &mut parents);
 
