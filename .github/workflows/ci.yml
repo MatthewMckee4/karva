@@ -75,7 +75,7 @@ jobs:
         env:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         run: |
-          cargo test
+          cargo test -- --include-ignored
 
   build:
     runs-on: ${{ matrix.os }}

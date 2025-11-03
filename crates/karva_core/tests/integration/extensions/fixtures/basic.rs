@@ -2,7 +2,7 @@ use karva_core::TestResultStats;
 use karva_test::TestContext;
 use rstest::rstest;
 
-use crate::{TestRunnerExt, get_auto_use_kw};
+use crate::common::{TestRunnerExt, get_auto_use_kw};
 
 #[test]
 fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()

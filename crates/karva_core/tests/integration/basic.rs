@@ -1,36 +1,14 @@
-mod common;
-
-#[path = "extensions/fixtures"]
-mod fixtures {
-    pub mod autouse;
-    pub mod basic;
-    pub mod builtins;
-    pub mod decorators;
-    pub mod generators;
-    pub mod parametrized;
-    pub mod request;
-}
-
-#[path = "extensions/tags"]
-mod tags {
-    pub mod parametrize;
-    pub mod skip;
-    pub mod use_fixtures;
-}
-
-#[ctor::ctor]
-pub fn setup() {
-    setup_module();
-}
-
 use camino::Utf8PathBuf;
 use karva_core::{StandardTestRunner, TestResultStats, TestRunner, testing::setup_module};
 use karva_project::Project;
 use karva_test::TestContext;
 
-pub use crate::common::{
-    TestRunnerExt, get_auto_use_kw, get_parametrize_function, get_skip_function,
-};
+use crate::common::TestRunnerExt;
+
+#[ctor::ctor]
+pub fn setup() {
+    setup_module();
+}
 
 #[test]
 fn test_single_file() {

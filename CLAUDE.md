@@ -34,7 +34,7 @@ All paths relative to `crates/karva_core/src/`:
 - `collection/models/case.rs` - Test case model
 
 #### Runner (Executing tests)
-- `runner/mod.rs` - **Main test runner and tests (1944 lines of tests here)**
+- `karva_core/tests`
 - `runner/diagnostic.rs` - Test results tracking
 
 #### Fixtures
@@ -73,8 +73,6 @@ cargo test test_name
 # With logging
 RUST_LOG=debug cargo test
 ```
-
-**Main test file**: `crates/karva_core/src/runner/mod.rs` contains extensive integration tests.
 
 ## Building
 

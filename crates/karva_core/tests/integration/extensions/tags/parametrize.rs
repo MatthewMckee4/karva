@@ -2,7 +2,7 @@ use karva_core::TestResultStats;
 use karva_test::TestContext;
 use rstest::rstest;
 
-use crate::{TestRunnerExt, get_parametrize_function};
+use crate::common::{TestRunnerExt, get_parametrize_function};
 
 #[test]
 fn test_parametrize_with_fixture() {
