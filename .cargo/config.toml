@@ -1,2 +1,0 @@
-[alias]
-dev = "run --package karva_dev --bin karva_dev"
