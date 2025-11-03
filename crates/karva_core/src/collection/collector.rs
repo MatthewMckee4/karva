@@ -43,7 +43,6 @@ impl TestCaseCollector {
     fn collect_test_function<'a>(
         py: Python<'_>,
         test_function: &'a TestFunction,
-        py_module: &Py<PyModule>,
         module: &'a DiscoveredModule,
         parents: &[&DiscoveredPackage],
         fixture_manager: &FixtureManager,
@@ -78,7 +77,6 @@ impl TestCaseCollector {
         test_function.collect(
             py,
             module,
-            py_module,
             &mut function_fixture_manager,
             setup_fixture_manager,
         )
@@ -132,19 +130,12 @@ impl TestCaseCollector {
             return module_collected;
         }
 
-        let Ok(py_module) = PyModule::import(py, module_name) else {
-            return module_collected;
-        };
-
-        let py_module = py_module.unbind();
-
         let mut module_test_cases = Vec::new();
 
         module.test_functions().iter().for_each(|function| {
             module_test_cases.extend(Self::collect_test_function(
                 py,
                 function,
-                &py_module,
                 module,
                 parents,
                 &module_fixture_manager,

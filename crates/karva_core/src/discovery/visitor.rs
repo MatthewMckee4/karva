@@ -85,6 +85,7 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_> {
             {
                 if let Ok(py_function) = self.py_module.getattr(function_def.name.to_string()) {
                     self.discovered_functions.push(TestFunction::new(
+                        self.py,
                         self.module_path.clone(),
                         function_def.clone(),
                         py_function.unbind(),

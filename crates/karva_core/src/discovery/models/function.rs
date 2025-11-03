@@ -26,32 +26,26 @@ pub(crate) struct TestFunction {
     py_function: Py<PyAny>,
 
     name: QualifiedFunctionName,
-}
 
-impl UsesFixtures for TestFunction {
-    fn dependant_fixtures(&self, py: Python<'_>) -> Vec<String> {
-        let mut required_fixtures = self.function_definition.dependant_fixtures(py);
-
-        let tags = Tags::from_py_any(py, &self.py_function, Some(&self.function_definition));
-
-        required_fixtures.extend(tags.required_fixtures_names());
-
-        required_fixtures
-    }
+    tags: Tags,
 }
 
 impl TestFunction {
     pub(crate) fn new(
+        py: Python<'_>,
         module_path: ModulePath,
         function_definition: StmtFunctionDef,
         py_function: Py<PyAny>,
     ) -> Self {
         let name = QualifiedFunctionName::new(function_definition.name.to_string(), module_path);
 
+        let tags = Tags::from_py_any(py, &py_function, Some(&function_definition));
+
         Self {
             function_definition,
             py_function,
             name,
+            tags,
         }
     }
 
@@ -71,6 +65,10 @@ impl TestFunction {
         &self.py_function
     }
 
+    pub(crate) const fn tags(&self) -> &Tags {
+        &self.tags
+    }
+
     /// Creates a display string showing the function's file location and line number.
     pub(crate) fn display_with_line(&self, module: &DiscoveredModule) -> String {
         let line_index = module.line_index();
@@ -85,7 +83,6 @@ impl TestFunction {
         &'a self,
         py: Python<'_>,
         module: &'a DiscoveredModule,
-        py_module: &Py<PyModule>,
         fixture_manager: &mut FixtureManager<'_>,
         setup_fixture_manager: impl Fn(&mut FixtureManager<'_>),
     ) -> Vec<TestCase<'a>> {
@@ -94,16 +91,11 @@ impl TestFunction {
             self.function_definition.name
         );
 
-        let Ok(py_function) = py_module.getattr(py, self.function_definition.name.to_string())
-        else {
-            return Vec::new();
-        };
+        let mut required_fixture_names = self.function_definition.dependant_fixtures(py);
 
-        let required_fixture_names = self.dependant_fixtures(py);
+        required_fixture_names.extend(self.tags.required_fixtures_names());
 
-        let tags = Tags::from_py_any(py, &py_function, Some(&self.function_definition));
-
-        let mut parametrize_args = tags.parametrize_args();
+        let mut parametrize_args = self.tags.parametrize_args();
 
         // Ensure at least one test case exists (no parametrization)
         if parametrize_args.is_empty() {
@@ -153,13 +145,7 @@ impl TestFunction {
                 self.create_missing_fixture_diagnostic(module, missing_fixture_diagnostics);
 
             for resolved_fixtures in all_resolved_fixtures {
-                let test_case = TestCase::new(
-                    self,
-                    resolved_fixtures,
-                    module,
-                    tags.skip_tag(),
-                    diagnostic.clone(),
-                );
+                let test_case = TestCase::new(self, resolved_fixtures, module, diagnostic.clone());
 
                 test_cases.push(test_case);
             }
@@ -202,6 +188,16 @@ impl<'proj> Upcast<Vec<&'proj dyn UsesFixtures>> for Vec<&'proj TestFunction> {
         self.into_iter()
             .map(|test_function| test_function as &dyn UsesFixtures)
             .collect()
+    }
+}
+
+impl UsesFixtures for TestFunction {
+    fn dependant_fixtures(&self, py: Python<'_>) -> Vec<String> {
+        let mut required_fixtures = self.function_definition.dependant_fixtures(py);
+
+        required_fixtures.extend(self.tags.required_fixtures_names());
+
+        required_fixtures
     }
 }
 
