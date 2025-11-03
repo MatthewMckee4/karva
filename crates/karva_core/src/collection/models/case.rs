@@ -12,10 +12,7 @@ use crate::{
         Diagnostic, FixtureSubDiagnosticType, SubDiagnosticErrorType, SubDiagnosticSeverity,
     },
     discovery::{DiscoveredModule, TestFunction},
-    extensions::{
-        fixtures::{Finalizers, UsesFixtures},
-        tags::SkipTag,
-    },
+    extensions::fixtures::{Finalizers, UsesFixtures},
     runner::{TestRunResult, diagnostic::IndividualTestResultKind},
 };
 
@@ -34,9 +31,6 @@ pub(crate) struct TestCase<'proj> {
     /// Finalizers to run after the test case is executed.
     finalizers: Finalizers,
 
-    /// The tags associated with the test case.
-    skip_tag: Option<SkipTag>,
-
     /// The diagnostic from collecting the test case.
     diagnostic: Option<Diagnostic>,
 }
@@ -46,7 +40,6 @@ impl<'proj> TestCase<'proj> {
         function: &'proj TestFunction,
         kwargs: HashMap<String, Py<PyAny>>,
         module: &'proj DiscoveredModule,
-        skip_tag: Option<SkipTag>,
         diagnostic: Option<Diagnostic>,
     ) -> Self {
         Self {
@@ -54,7 +47,6 @@ impl<'proj> TestCase<'proj> {
             kwargs,
             module,
             finalizers: Finalizers::default(),
-            skip_tag,
             diagnostic,
         }
     }
@@ -76,7 +68,7 @@ impl<'proj> TestCase<'proj> {
 
         let test_name = full_test_name(py, &self.function.name().to_string(), &self.kwargs);
 
-        if let Some(skip_tag) = &self.skip_tag {
+        if let Some(skip_tag) = &self.function.tags().skip_tag() {
             run_result.register_test_case_result(
                 &test_name,
                 IndividualTestResultKind::Skipped {
