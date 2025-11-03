@@ -18,13 +18,19 @@ mod tags {
     pub mod use_fixtures;
 }
 
+#[ctor::ctor]
+pub fn setup() {
+    setup_module();
+}
+
 use camino::Utf8PathBuf;
-use karva_core::{StandardTestRunner, TestResultStats, TestRunner};
+use karva_core::{StandardTestRunner, TestResultStats, TestRunner, testing::setup_module};
 use karva_project::Project;
 use karva_test::TestContext;
 
-// Re-export common utilities so submodules can access them via crate::
-pub use crate::common::{TestRunnerExt, get_auto_use_kw, get_skip_function, get_parametrize_function};
+pub use crate::common::{
+    TestRunnerExt, get_auto_use_kw, get_parametrize_function, get_skip_function,
+};
 
 #[test]
 fn test_single_file() {

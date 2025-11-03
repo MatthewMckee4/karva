@@ -1,5 +1,5 @@
 use karva_core::{
-    TestCaseReporter, TestRunner,
+    TestRunner,
     runner::{StandardTestRunner, diagnostic::TestRunResult},
 };
 use karva_project::Project;
@@ -13,7 +13,7 @@ impl TestRunnerExt for TestContext {
     fn test(&self) -> TestRunResult {
         let project = Project::new(self.cwd(), vec![self.cwd()]);
         let test_runner = StandardTestRunner::new(&project);
-        test_runner.test_with_reporter(&TestCaseReporter::default())
+        test_runner.test()
     }
 }
 
