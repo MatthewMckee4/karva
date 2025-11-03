@@ -44,10 +44,6 @@ ignore = ["D", "S", "ANN401"]
 
 [tool.tbump]
 
-[[tool.tbump.before_commit]]
-cmd = "cargo update"
-name = "Update Cargo.lock"
-
 [[tool.tbump.file]]
 src = "pyproject.toml"
 
