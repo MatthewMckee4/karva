@@ -19,7 +19,7 @@ chrono = { version = "0.4.35", default-features = false, features = ["clock"] }
 clap = { version = "4.5.51", features = ["derive", "wrap_help"] }
 codspeed-criterion-compat = { version = "4.0.4", default-features = false }
 colored = { version = "3.0.0" }
-ctor = "0.6.0"
+ctor = "0.6.1"
 dunce = { version = "1.0.5" }
 ignore = { version = "0.4.23" }
 indexmap = { version = "2.10.0" }
