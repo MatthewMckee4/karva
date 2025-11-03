@@ -115,19 +115,27 @@ impl TestFunction {
         for params in parametrize_args {
             setup_fixture_manager(fixture_manager);
 
-            let mut fixture_diagnostics = Vec::new();
+            let mut missing_fixture_diagnostics = Vec::new();
+
+            // This is used to collect all fixture for each test case.
+            // Currently, the only way we will generate more than one test case here is if
+            // we have a parameterized fixture.
             let mut all_resolved_fixtures = Vec::new();
 
             all_resolved_fixtures.push(HashMap::new());
 
             for fixture_name in &required_fixture_names {
                 if let Some(fixture_value) = params.get(fixture_name) {
+                    // Add this parameterization to each test case.
                     for resolved_fixtures in &mut all_resolved_fixtures {
                         resolved_fixtures.insert(fixture_name.clone(), fixture_value.clone());
                     }
                 } else if let Some(fixture_values) =
                     fixture_manager.get_fixture_with_name(py, fixture_name, None)
                 {
+                    // Add this fixture to each test case.
+                    // This may be a parameterized fixture, so we need to cartesian product
+                    // the resolved fixtures with the fixture values.
                     all_resolved_fixtures = cartesian_insert(
                         all_resolved_fixtures,
                         &fixture_values,
@@ -136,11 +144,13 @@ impl TestFunction {
                     )
                     .unwrap();
                 } else {
-                    fixture_diagnostics.push(SubDiagnostic::fixture_not_found(fixture_name));
+                    missing_fixture_diagnostics
+                        .push(SubDiagnostic::fixture_not_found(fixture_name));
                 }
             }
 
-            let diagnostic = self.create_fixture_diagnostic(module, fixture_diagnostics);
+            let diagnostic =
+                self.create_missing_fixture_diagnostic(module, missing_fixture_diagnostics);
 
             for resolved_fixtures in all_resolved_fixtures {
                 let test_case = TestCase::new(
@@ -154,18 +164,20 @@ impl TestFunction {
                 test_cases.push(test_case);
             }
 
-            test_cases[0].add_finalizers(fixture_manager.reset_fixtures());
+            if let Some(first_test) = test_cases.first_mut() {
+                first_test.add_finalizers(fixture_manager.reset_fixtures());
+            }
         }
 
         test_cases
     }
 
-    fn create_fixture_diagnostic(
+    fn create_missing_fixture_diagnostic(
         &self,
         module: &DiscoveredModule,
-        fixture_diagnostics: Vec<SubDiagnostic>,
+        missing_fixture_diagnostics: Vec<SubDiagnostic>,
     ) -> Option<Diagnostic> {
-        if fixture_diagnostics.is_empty() {
+        if missing_fixture_diagnostics.is_empty() {
             None
         } else {
             let mut diagnostic = Diagnostic::new(
@@ -179,7 +191,7 @@ impl TestFunction {
                     ),
                 }),
             );
-            diagnostic.add_sub_diagnostics(fixture_diagnostics);
+            diagnostic.add_sub_diagnostics(missing_fixture_diagnostics);
             Some(diagnostic)
         }
     }
