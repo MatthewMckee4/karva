@@ -2,7 +2,7 @@ use karva_core::TestResultStats;
 use karva_test::TestContext;
 use rstest::rstest;
 
-use crate::{TestRunnerExt, get_auto_use_kw};
+use crate::common::{TestRunnerExt, get_auto_use_kw};
 
 #[rstest]
 fn test_function_scope_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {

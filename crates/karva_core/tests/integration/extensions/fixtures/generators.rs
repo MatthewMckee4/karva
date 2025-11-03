@@ -2,7 +2,7 @@ use karva_core::TestResultStats;
 use karva_test::TestContext;
 use rstest::rstest;
 
-use crate::TestRunnerExt;
+use crate::common::TestRunnerExt;
 
 #[test]
 fn test_fixture_generator() {

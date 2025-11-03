@@ -1,7 +1,7 @@
 use karva_core::TestResultStats;
 use karva_test::TestContext;
 
-use crate::TestRunnerExt;
+use crate::common::TestRunnerExt;
 
 #[test]
 fn test_use_fixtures_single_fixture() {

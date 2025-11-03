@@ -2,7 +2,7 @@ use karva_core::TestResultStats;
 use karva_test::TestContext;
 use rstest::rstest;
 
-use crate::{TestRunnerExt, get_skip_function};
+use crate::common::{TestRunnerExt, get_skip_function};
 
 #[rstest]
 fn test_skip(#[values("pytest", "karva")] framework: &str) {

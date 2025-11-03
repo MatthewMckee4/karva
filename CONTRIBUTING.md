@@ -48,7 +48,7 @@ python -c "import pytest;print('pytest installed')"
 Then you can run the tests with:
 
 ```bash
-just test
+cargo test
 ```
 
 ### Documentation

@@ -124,12 +124,10 @@ pub(crate) fn iter_with_ancestors<'a, T: ?Sized>(
 /// each item before insertion.
 ///
 /// # Example
-/// ```ignore
 /// // existing = [{"a": 1}, {"b": 2}]
-/// // new_items = [10, 20]
+/// // `new_items` = [10, 20]
 /// // key = "c"
 /// // Result: [{"a": 1, "c": 10}, {"a": 1, "c": 20}, {"b": 2, "c": 10}, {"b": 2, "c": 20}]
-/// ```
 ///
 /// This is primarily used for parametrized fixtures where all combinations of
 /// fixture values need to be generated.
