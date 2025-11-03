@@ -9,5 +9,5 @@ pub mod utils;
 pub mod testing;
 
 pub use diagnostic::reporter::{DummyReporter, Reporter, TestCaseReporter};
-pub use runner::TestRunner;
+pub use runner::{StandardTestRunner, TestRunner, diagnostic::TestResultStats};
 pub use utils::current_python_version;

@@ -66,3 +66,101 @@ impl Finalizer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use karva_project::utils::module_name;
+    use karva_test::TestContext;
+
+    use crate::{
+        TestResultStats, TestRunner,
+        diagnostic::{Diagnostic, DiagnosticSeverity},
+    };
+
+    #[test]
+    fn test_fixture_generator_two_yields() {
+        let test_context = TestContext::with_file(
+            "<test>/test_file.py",
+            r"
+import karva
+
+@karva.fixture
+def fixture_generator():
+    yield 1
+    yield 2
+
+def test_fixture_generator(fixture_generator):
+    assert fixture_generator == 1
+    ",
+        );
+
+        let result = test_context.test();
+
+        let mut expected_stats = TestResultStats::default();
+
+        expected_stats.add_passed();
+
+        let module_name_path = test_context
+            .mapped_path("<test>")
+            .unwrap()
+            .join("test_file.py");
+        let module_name = module_name(&test_context.cwd(), &module_name_path).unwrap();
+
+        assert_eq!(*result.stats(), expected_stats, "{result:?}");
+
+        assert_eq!(result.diagnostics().len(), 1);
+        let first_diagnostic = &result.diagnostics()[0];
+        let expected_diagnostic = Diagnostic::warning(
+            "fixture-error",
+            Some(format!(
+                "Fixture {module_name}::fixture_generator had more than one yield statement"
+            )),
+            None,
+        );
+
+        assert_eq!(*first_diagnostic, expected_diagnostic);
+    }
+
+    #[test]
+    fn test_fixture_generator_fail_in_teardown() {
+        let test_context = TestContext::with_file(
+            "<test>/test_file.py",
+            r#"
+import karva
+
+@karva.fixture
+def fixture_generator():
+    yield 1
+    raise ValueError("fixture-error")
+
+def test_fixture_generator(fixture_generator):
+    assert fixture_generator == 1
+    "#,
+        );
+
+        let result = test_context.test();
+
+        let mut expected_stats = TestResultStats::default();
+
+        expected_stats.add_passed();
+
+        let module_name_path = test_context
+            .mapped_path("<test>")
+            .unwrap()
+            .join("test_file.py");
+        let module_name = module_name(&test_context.cwd(), &module_name_path).unwrap();
+
+        assert_eq!(*result.stats(), expected_stats, "{result:?}");
+
+        assert_eq!(result.diagnostics().len(), 1);
+        let first_diagnostic = &result.diagnostics()[0];
+        assert_eq!(
+            first_diagnostic.inner().message(),
+            Some(format!("Failed to reset fixture {module_name}::fixture_generator").as_str()),
+        );
+        assert_eq!(
+            first_diagnostic.severity(),
+            &DiagnosticSeverity::Warning("fixture-error".to_string())
+        );
+    }
+}

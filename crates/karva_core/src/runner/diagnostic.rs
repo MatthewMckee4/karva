@@ -141,22 +141,19 @@ impl TestResultStats {
         self.get(TestResultKind::Skipped)
     }
 
-    fn add(&mut self, kind: TestResultKind) {
+    pub(crate) fn add(&mut self, kind: TestResultKind) {
         self.inner.entry(kind).and_modify(|v| *v += 1).or_insert(1);
     }
 
-    #[cfg(test)]
-    pub(crate) fn add_failed(&mut self) {
+    pub fn add_failed(&mut self) {
         self.add(TestResultKind::Failed);
     }
 
-    #[cfg(test)]
-    pub(crate) fn add_passed(&mut self) {
+    pub fn add_passed(&mut self) {
         self.add(TestResultKind::Passed);
     }
 
-    #[cfg(test)]
-    pub(crate) fn add_skipped(&mut self) {
+    pub fn add_skipped(&mut self) {
         self.add(TestResultKind::Skipped);
     }
 }
