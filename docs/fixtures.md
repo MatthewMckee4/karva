@@ -206,6 +206,29 @@ In future you will be able to access other parameters.
 It is important to note that this request object is not the same as the pytest `FixtureRequest` object. It is a custom object provided by Karva.
 And so it may not have all of the information that the pytest `FixtureRequest` object has.
 
+### Fixture scopes with parametrized fixtures
+
+See this example:
+
+```py
+import karva
+
+@karva.fixture(params=['username', 'email'])
+def some_fixture(request):
+    return request.param
+
+@karva.fixture(scope="function")
+def another_fixture():
+    return "another_fixture"
+
+def test_username_email(some_fixture, another_fixture):
+    assert some_fixture in ['username', 'email']
+```
+
+Our current implementation means that we will only run `another_fixture` once.
+
+While this may not be ideal for all scenarios, it is a trade-off that we have made to ensure that our fixtures are efficient and performant.
+
 ## Built-in fixtures
 
 Karva provides a few built-in fixtures that can be used in your tests.
