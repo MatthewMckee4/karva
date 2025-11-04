@@ -56,5 +56,5 @@ cargo test
 We use mkdocs to build the documentation.
 
 ```bash
-just docs
+uv run --isolated --only-group docs mkdocs build
 ```
