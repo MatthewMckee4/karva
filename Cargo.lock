@@ -877,7 +877,7 @@ dependencies = [
 
 [[package]]
 name = "karva"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "karva_cli",
  "karva_core",
@@ -902,7 +902,7 @@ dependencies = [
 
 [[package]]
 name = "karva_cli"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "argfile",
@@ -961,6 +961,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "karva_diff"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "camino",
+ "clap",
+ "karva_test",
+]
+
+[[package]]
 name = "karva_project"
 version = "0.0.0"
 dependencies = [
@@ -981,8 +991,12 @@ dependencies = [
  "insta-cmd",
  "rand 0.9.2",
  "regex",
+ "ruff_python_ast",
  "ruff_python_trivia",
+ "serde",
+ "serde_json",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]

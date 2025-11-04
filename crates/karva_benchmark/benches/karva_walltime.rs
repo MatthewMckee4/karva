@@ -1,17 +1,13 @@
 use std::sync::Once;
 
-use camino::Utf8PathBuf;
-use karva_benchmark::{
-    criterion::{BatchSize, Criterion, criterion_group, criterion_main},
-    real_world_projects::{InstalledProject, RealWorldProject},
-};
+use karva_benchmark::criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use karva_core::{TestRunner, testing::setup_module};
 use karva_project::{
     path::absolute,
     project::{Project, ProjectOptions},
     verbosity::VerbosityLevel,
 };
-use ruff_python_ast::PythonVersion;
+use karva_test::{InstalledProject, RealWorldProject, affect_project};
 
 static SETUP_MODULE_ONCE: Once = Once::new();
 
@@ -74,14 +70,7 @@ fn bench_project(benchmark: &ProjectBenchmark, criterion: &mut Criterion) {
 }
 
 fn affect(criterion: &mut Criterion) {
-    let benchmark = ProjectBenchmark::new(RealWorldProject {
-        name: "affect",
-        repository: "https://github.com/MatthewMckee4/affect",
-        commit: "803cc916b492378a8ad8966e747cac3325e11b5f",
-        paths: vec![Utf8PathBuf::from("tests")],
-        dependencies: vec!["pydantic", "pydantic-settings", "pytest"],
-        python_version: PythonVersion::PY313,
-    });
+    let benchmark = ProjectBenchmark::new(affect_project());
 
     bench_project(&benchmark, criterion);
 }

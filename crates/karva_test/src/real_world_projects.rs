@@ -342,3 +342,21 @@ fn cargo_target_directory() -> Option<&'static PathBuf> {
         })
         .as_ref()
 }
+
+pub fn affect_project() -> RealWorldProject<'static> {
+    RealWorldProject {
+        name: "affect",
+        repository: "https://github.com/MatthewMckee4/affect",
+        commit: "803cc916b492378a8ad8966e747cac3325e11b5f",
+        paths: vec![Utf8PathBuf::from("tests")],
+        dependencies: vec!["pydantic", "pydantic-settings", "pytest"],
+        python_version: PythonVersion::PY313,
+    }
+}
+
+pub fn all_projects() -> Vec<RealWorldProject<'static>> {
+    vec![
+        affect_project(),
+        // Add more projects here
+    ]
+}
