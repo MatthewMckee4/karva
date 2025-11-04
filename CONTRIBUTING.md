@@ -20,8 +20,11 @@ Karva is written in Rust. You can install the [Rust Toolchain](https://www.rust-
 
 You can optionally install pre-commit hooks to automatically run the validation checks when making a commit:
 
+You can install [prek](https://github.com/j178/prek?tab=readme-ov-file#installation) or pre-commit.
+
 ```bash
-uv tool install pre-commit
+prek install
+# or
 pre-commit install
 ```
 
