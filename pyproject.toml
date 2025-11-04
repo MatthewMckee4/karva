@@ -15,7 +15,7 @@ version = "0.1.8"
 karva = "karva._karva:karva_run"
 
 [dependency-groups]
-dev = [ "pre-commit", "ruff", "tbump"]
+dev = ["pre-commit", "ruff", "tbump"]
 docs = ["mkdocs", "mkdocs-material", "pymdown-extensions"]
 
 [project.urls]
@@ -43,6 +43,10 @@ select = ["ALL"]
 ignore = ["D", "S", "ANN401"]
 
 [tool.tbump]
+
+[[tool.tbump.before_commit]]
+cmd = "cargo update -p karva"
+name = "Update Cargo.lock"
 
 [[tool.tbump.file]]
 src = "pyproject.toml"
