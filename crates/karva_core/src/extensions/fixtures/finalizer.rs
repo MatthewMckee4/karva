@@ -142,10 +142,10 @@ def test_fixture_generator(fixture_generator):
 
         assert_eq!(result.diagnostics().len(), 1);
         let first_diagnostic = &result.diagnostics()[0];
-        let expected_diagnotic = Diagnostic::warning(&format!(
+        let expected_diagnostic = Diagnostic::warning(&format!(
             "Failed to reset fixture {module_name}::fixture_generator"
         ));
 
-        assert_eq!(*first_diagnostic, expected_diagnotic);
+        assert_eq!(*first_diagnostic, expected_diagnostic);
     }
 }
