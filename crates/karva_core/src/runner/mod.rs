@@ -38,11 +38,7 @@ impl<'proj> StandardTestRunner<'proj> {
 
             let total_test_cases = collected_session.total_test_cases();
 
-            tracing::info!(
-                "Collected {} test{}",
-                total_test_cases,
-                if total_test_cases == 1 { "" } else { "s" },
-            );
+            reporter.log_test_count(total_test_cases);
 
             diagnostics.add_diagnostics(discovery_diagnostics);
 

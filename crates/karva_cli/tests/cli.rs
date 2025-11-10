@@ -12,6 +12,7 @@ fn test_no_tests_found() {
     success: true
     exit_code: 0
     ----- stdout -----
+    running 0 tests
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
 
@@ -34,6 +35,7 @@ fn test_one_test_passes() {
     success: true
     exit_code: 0
     ----- stdout -----
+    running 1 test
     test test_pass::test_pass ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
@@ -57,6 +59,7 @@ fn test_one_test_fails() {
     success: false
     exit_code: 1
     ----- stdout -----
+    running 1 test
     test test_fail::test_fail ... FAILED
 
     fail[assertion-error]
@@ -98,6 +101,7 @@ fn test_file_importing_another_file() {
     success: false
     exit_code: 1
     ----- stdout -----
+    running 1 test
     test test_cross_file::test_with_helper ... FAILED
 
     fail[assertion-error]: Data validation failed
@@ -147,6 +151,7 @@ fn test_parametrize(#[values("pytest", "karva")] package: &str) {
     success: true
     exit_code: 0
     ----- stdout -----
+    running 3 tests
     test test_parametrize::test_parametrize [a=1, b=2, expected=3] ... ok
     test test_parametrize::test_parametrize [a=2, b=3, expected=5] ... ok
     test test_parametrize::test_parametrize [a=3, b=4, expected=7] ... ok
@@ -172,6 +177,7 @@ fn test_stdout_is_captured_and_displayed() {
     success: true
     exit_code: 0
     ----- stdout -----
+    running 1 test
     test test_std_out_redirected::test_std_out_redirected ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
@@ -196,6 +202,7 @@ fn test_stdout_is_captured_and_displayed_with_args() {
     success: true
     exit_code: 0
     ----- stdout -----
+    running 1 test
     test test_std_out_redirected::test_std_out_redirected ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
@@ -216,6 +223,7 @@ fn test_multiple_fixtures_not_found() {
     success: false
     exit_code: 1
     ----- stdout -----
+    running 1 test
     test test_multiple_fixtures_not_found::test_multiple_fixtures_not_found ... FAILED
 
     error[fixtures-not-found]: Fixture(s) not found for test_multiple_fixtures_not_found::test_multiple_fixtures_not_found
@@ -256,6 +264,7 @@ def test_1():
     success: true
     exit_code: 0
     ----- stdout -----
+    running 1 test
     test test_skip::test_1 ... skipped: This test is skipped with decorator
 
     test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]
@@ -276,6 +285,7 @@ fn test_text_file_in_directory() {
     success: true
     exit_code: 0
     ----- stdout -----
+    running 1 test
     test test_sample::test_sample ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
@@ -295,6 +305,7 @@ fn test_text_file() {
     success: true
     exit_code: 0
     ----- stdout -----
+    running 0 tests
 
     error[invalid-path]: Path `<temp_dir>/random.txt` has a wrong file extension
 
