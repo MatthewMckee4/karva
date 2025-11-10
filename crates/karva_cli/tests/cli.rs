@@ -148,18 +148,18 @@ fn test_parametrize(#[values("pytest", "karva")] package: &str) {
     );
 
     allow_duplicates!(assert_cmd_snapshot!(case.command(), @r"
-    allow_duplicates!(success: true
-    allow_duplicates!(exit_code: 0
-    allow_duplicates!(----- stdout -----
-    allow_duplicates!(running 3 tests
-    allow_duplicates!(test test_parametrize::test_parametrize [a=1, b=2, expected=3] ... ok
-    allow_duplicates!(test test_parametrize::test_parametrize [a=2, b=3, expected=5] ... ok
-    allow_duplicates!(test test_parametrize::test_parametrize [a=3, b=4, expected=7] ... ok
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    running 3 tests
+    test test_parametrize::test_parametrize [a=1, b=2, expected=3] ... ok
+    test test_parametrize::test_parametrize [a=2, b=3, expected=5] ... ok
+    test test_parametrize::test_parametrize [a=3, b=4, expected=7] ... ok
 
-    allow_duplicates!(test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
+    test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
 
-    allow_duplicates!(----- stderr -----
-    allow_duplicates!("));
+    ----- stderr -----
+    "));
 }
 
 #[test]
@@ -261,16 +261,16 @@ def test_1():
     let case = IntegrationTestContext::with_file("test_skip.py", &test_code);
 
     allow_duplicates!(assert_cmd_snapshot!(case.command(), @r"
-    allow_duplicates!(success: true
-    allow_duplicates!(exit_code: 0
-    allow_duplicates!(----- stdout -----
-    allow_duplicates!(running 1 test
-    allow_duplicates!(test test_skip::test_1 ... skipped: This test is skipped with decorator
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    running 1 test
+    test test_skip::test_1 ... skipped: This test is skipped with decorator
 
-    allow_duplicates!(test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]
+    test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]
 
-    allow_duplicates!(----- stderr -----
-    allow_duplicates!("));
+    ----- stderr -----
+    "));
 }
 
 #[test]
