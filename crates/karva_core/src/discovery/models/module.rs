@@ -32,6 +32,10 @@ impl DiscoveredModule {
         }
     }
 
+    pub(crate) const fn module_path(&self) -> &ModulePath {
+        &self.path
+    }
+
     pub(crate) const fn path(&self) -> &Utf8PathBuf {
         self.path.module_path()
     }

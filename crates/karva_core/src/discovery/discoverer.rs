@@ -4,7 +4,7 @@ use karva_project::{Project, path::TestPath};
 use pyo3::prelude::*;
 
 use crate::{
-    diagnostic::Diagnostic,
+    diagnostic::DiscoveryDiagnostic,
     discovery::{DiscoveredModule, DiscoveredPackage, ModuleType, discover},
     name::ModulePath,
     utils::add_to_sys_path,
@@ -19,7 +19,7 @@ impl<'proj> StandardDiscoverer<'proj> {
         Self { project }
     }
 
-    pub(crate) fn discover(self, py: Python<'_>) -> (DiscoveredPackage, Vec<Diagnostic>) {
+    pub(crate) fn discover(self, py: Python<'_>) -> (DiscoveredPackage, Vec<DiscoveryDiagnostic>) {
         let mut session_package = DiscoveredPackage::new(self.project.cwd().clone());
 
         let mut discovery_diagnostics = Vec::new();
@@ -82,7 +82,7 @@ impl<'proj> StandardDiscoverer<'proj> {
                     ));
                 }
                 Err(e) => {
-                    discovery_diagnostics.push(Diagnostic::invalid_path_error(&e));
+                    discovery_diagnostics.push(DiscoveryDiagnostic::invalid_path_error(&e));
                 }
             }
         }
@@ -98,12 +98,12 @@ impl<'proj> StandardDiscoverer<'proj> {
         py: Python,
         path: &Utf8PathBuf,
         discovery_mode: DiscoveryMode,
-    ) -> Option<(DiscoveredModule, Vec<Diagnostic>)> {
+    ) -> Option<(DiscoveredModule, Vec<DiscoveryDiagnostic>)> {
         let module_path = ModulePath::new(path, self.project.cwd())?;
 
-        let (discovered, diagnostics) = discover(py, &module_path, self.project);
-
         let mut module = DiscoveredModule::new(module_path, path.into());
+
+        let (discovered, diagnostics) = discover(py, &module, self.project);
 
         if !discovery_mode.is_configuration_only() {
             module = module.with_test_functions(discovered.functions);
@@ -120,7 +120,7 @@ impl<'proj> StandardDiscoverer<'proj> {
         py: Python,
         path: &Utf8Path,
         session_package: &mut DiscoveredPackage,
-    ) -> Vec<Diagnostic> {
+    ) -> Vec<DiscoveryDiagnostic> {
         let mut current_path = if path.is_dir() {
             path
         } else {
@@ -173,7 +173,7 @@ impl<'proj> StandardDiscoverer<'proj> {
         py: Python,
         path: &Utf8PathBuf,
         discovery_mode: DiscoveryMode,
-    ) -> (DiscoveredPackage, Vec<Diagnostic>) {
+    ) -> (DiscoveredPackage, Vec<DiscoveryDiagnostic>) {
         let walker = self.create_directory_walker(path);
 
         let mut package = DiscoveredPackage::new(path.clone());

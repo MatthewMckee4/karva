@@ -55,22 +55,21 @@ fn test_one_test_fails() {
     ",
     );
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    assert_cmd_snapshot!(case.command(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
     running 1 test
     test test_fail::test_fail ... FAILED
 
-    fail[assertion-error]
-     --> test_fail::test_fail at <temp_dir>/test_fail.py:2
-     | File "<temp_dir>/test_fail.py", line 3, in test_fail
-     |   assert False
+    failures:
+
+    test `test_fail` failed at <temp_dir>/test_fail.py:2
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
-    "#);
+    ");
 }
 
 #[test]
@@ -97,24 +96,22 @@ fn test_file_importing_another_file() {
         ),
     ]);
 
-    assert_cmd_snapshot!(case.command(), @r#"
+    assert_cmd_snapshot!(case.command(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
     running 1 test
     test test_cross_file::test_with_helper ... FAILED
 
-    fail[assertion-error]: Data validation failed
-     --> test_cross_file::test_with_helper at <temp_dir>/test_cross_file.py:4
-     | File "<temp_dir>/test_cross_file.py", line 5, in test_with_helper
-     |   validate_data([])
-     | File "<temp_dir>/helper.py", line 4, in validate_data
-     |   assert False, 'Data validation failed'
+    failures:
+
+    test `test_with_helper` failed at <temp_dir>/test_cross_file.py:4
+    Data validation failed
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
-    "#);
+    ");
 }
 
 fn get_parametrize_function(package: &str) -> String {
@@ -219,23 +216,22 @@ fn test_multiple_fixtures_not_found() {
         "def test_multiple_fixtures_not_found(a, b, c): ...",
     );
 
-    assert_cmd_snapshot!(case.command(), @r"
+    assert_cmd_snapshot!(case.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
     running 1 test
     test test_multiple_fixtures_not_found::test_multiple_fixtures_not_found ... FAILED
 
-    error[fixtures-not-found]: Fixture(s) not found for test_multiple_fixtures_not_found::test_multiple_fixtures_not_found
-     --> test_multiple_fixtures_not_found::test_multiple_fixtures_not_found at <temp_dir>/test_multiple_fixtures_not_found.py:1
-    error[fixture-not-found]: fixture 'a' not found
-    error[fixture-not-found]: fixture 'b' not found
-    error[fixture-not-found]: fixture 'c' not found
+    failures:
+
+    test `test_multiple_fixtures_not_found` has missing fixtures: ["a", "b", "c"]
+     --> <temp_dir>/test_multiple_fixtures_not_found.py:1
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
-    ");
+    "#);
 }
 
 #[rstest]
@@ -305,9 +301,11 @@ fn test_text_file() {
     success: true
     exit_code: 0
     ----- stdout -----
-    running 0 tests
+    discovery diagnostics:
 
-    error[invalid-path]: Path `<temp_dir>/random.txt` has a wrong file extension
+    error: Path `<temp_dir>/random.txt` has a wrong file extension
+
+    running 0 tests
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
 

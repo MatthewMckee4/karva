@@ -50,19 +50,14 @@ impl Finalizer {
     pub(crate) fn run(&self, py: Python<'_>) -> Option<Diagnostic> {
         let mut generator = self.fixture_return.bind(py).clone();
         match generator.next()? {
-            Ok(_) => Some(Diagnostic::warning(
-                "fixture-error",
-                Some(format!(
-                    "Fixture {} had more than one yield statement",
-                    self.fixture_name
-                )),
-                None,
-            )),
-            Err(_) => Some(Diagnostic::warning(
-                "fixture-error",
-                Some(format!("Failed to reset fixture {}", self.fixture_name)),
-                None,
-            )),
+            Ok(_) => Some(Diagnostic::warning(&format!(
+                "Fixture {} had more than one yield statement",
+                self.fixture_name
+            ))),
+            Err(_) => Some(Diagnostic::warning(&format!(
+                "Failed to reset fixture {}",
+                self.fixture_name
+            ))),
         }
     }
 }
@@ -72,10 +67,7 @@ mod tests {
     use karva_project::utils::module_name;
     use karva_test::TestContext;
 
-    use crate::{
-        TestResultStats, TestRunner,
-        diagnostic::{Diagnostic, DiagnosticSeverity},
-    };
+    use crate::{TestResultStats, TestRunner, diagnostic::Diagnostic};
 
     #[test]
     fn test_fixture_generator_two_yields() {
@@ -110,13 +102,9 @@ def test_fixture_generator(fixture_generator):
 
         assert_eq!(result.diagnostics().len(), 1);
         let first_diagnostic = &result.diagnostics()[0];
-        let expected_diagnostic = Diagnostic::warning(
-            "fixture-error",
-            Some(format!(
-                "Fixture {module_name}::fixture_generator had more than one yield statement"
-            )),
-            None,
-        );
+        let expected_diagnostic = Diagnostic::warning(&format!(
+            "Fixture {module_name}::fixture_generator had more than one yield statement"
+        ));
 
         assert_eq!(*first_diagnostic, expected_diagnostic);
     }
@@ -154,13 +142,10 @@ def test_fixture_generator(fixture_generator):
 
         assert_eq!(result.diagnostics().len(), 1);
         let first_diagnostic = &result.diagnostics()[0];
-        assert_eq!(
-            first_diagnostic.inner().message(),
-            Some(format!("Failed to reset fixture {module_name}::fixture_generator").as_str()),
-        );
-        assert_eq!(
-            first_diagnostic.severity(),
-            &DiagnosticSeverity::Warning("fixture-error".to_string())
-        );
+        let expected_diagnotic = Diagnostic::warning(&format!(
+            "Failed to reset fixture {module_name}::fixture_generator"
+        ));
+
+        assert_eq!(*first_diagnostic, expected_diagnotic);
     }
 }

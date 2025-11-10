@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use camino::Utf8Path;
 use karva_project::project::{Project, ProjectOptions};
 use pyo3::{PyResult, Python, prelude::*, types::PyAnyMethods};
-use ruff_python_ast::PythonVersion;
+use ruff_python_ast::{PythonVersion, StmtFunctionDef};
+
+use crate::discovery::DiscoveredModule;
 
 /// Retrieves the current Python interpreter version.
 ///
@@ -153,6 +155,17 @@ where
     }
 
     Ok(result)
+}
+
+pub(crate) fn function_definition_location(
+    module: &DiscoveredModule,
+    stmt_function_def: &StmtFunctionDef,
+) -> String {
+    let line_index = module.line_index();
+    let source_text = module.source_text();
+    let start = stmt_function_def.range.start();
+    let line_number = line_index.line_column(start, source_text);
+    format!("{}:{}", module.path(), line_number.line)
 }
 
 #[cfg(test)]

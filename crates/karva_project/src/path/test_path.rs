@@ -101,7 +101,7 @@ impl TestPath {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TestPathError {
     NotFound(Utf8PathBuf),
     WrongFileExtension(Utf8PathBuf),
@@ -147,6 +147,7 @@ mod tests {
         let path = env.create_file("test.py", "def test(): pass");
 
         let result = TestPath::new(path.as_ref());
+        assert!(result.is_err());
         assert!(matches!(result, Ok(TestPath::File(_))));
     }
 
@@ -157,6 +158,7 @@ mod tests {
         let path_without_ext = env.temp_path("test");
 
         let result = TestPath::new(path_without_ext.as_ref());
+        assert!(result.is_err());
         assert!(matches!(result, Ok(TestPath::File(_))));
     }
 

@@ -45,7 +45,7 @@ impl TestRunResult {
 
     pub fn passed(&self) -> bool {
         for diagnostic in &self.diagnostics {
-            if diagnostic.severity().is_error() {
+            if diagnostic.is_test_failure() {
                 return false;
             }
         }
@@ -73,8 +73,8 @@ impl TestRunResult {
         }
     }
 
-    pub const fn display(&self) -> DisplayRunDiagnostics<'_> {
-        DisplayRunDiagnostics::new(self)
+    pub const fn display(&self) -> DisplayTestRunResult<'_> {
+        DisplayTestRunResult::new(self)
     }
 }
 
@@ -156,23 +156,58 @@ impl TestResultStats {
     pub fn add_skipped(&mut self) {
         self.add(TestResultKind::Skipped);
     }
-}
 
-pub struct DisplayRunDiagnostics<'a> {
-    diagnostics: &'a TestRunResult,
-}
-
-impl<'a> DisplayRunDiagnostics<'a> {
-    pub(crate) const fn new(diagnostics: &'a TestRunResult) -> Self {
-        Self { diagnostics }
+    pub const fn display(&self, start_time: Instant) -> DisplayTestResultStats<'_> {
+        DisplayTestResultStats::new(self, start_time)
     }
 }
 
-impl std::fmt::Display for DisplayRunDiagnostics<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let stats = self.diagnostics.stats();
+pub struct DisplayTestRunResult<'a> {
+    test_run_result: &'a TestRunResult,
+}
 
-        let success = stats.is_success();
+impl<'a> DisplayTestRunResult<'a> {
+    pub(crate) const fn new(test_run_result: &'a TestRunResult) -> Self {
+        Self { test_run_result }
+    }
+}
+
+impl std::fmt::Display for DisplayTestRunResult<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.test_run_result.diagnostics().is_empty() {
+            writeln!(f, "failures:")?;
+            writeln!(f)?;
+
+            for diagnostic in self.test_run_result.diagnostics() {
+                write!(f, "{}", diagnostic.display())?;
+                writeln!(f)?;
+            }
+        }
+
+        write!(
+            f,
+            "{}",
+            self.test_run_result
+                .stats()
+                .display(self.test_run_result.start_time)
+        )
+    }
+}
+
+pub struct DisplayTestResultStats<'a> {
+    stats: &'a TestResultStats,
+    start_time: Instant,
+}
+
+impl<'a> DisplayTestResultStats<'a> {
+    const fn new(stats: &'a TestResultStats, start_time: Instant) -> Self {
+        Self { stats, start_time }
+    }
+}
+
+impl std::fmt::Display for DisplayTestResultStats<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let success = self.stats.is_success();
 
         write!(f, "test result: ")?;
 
@@ -185,10 +220,10 @@ impl std::fmt::Display for DisplayRunDiagnostics<'_> {
         writeln!(
             f,
             ". {} passed; {} failed; {} skipped; finished in {}s",
-            stats.passed(),
-            stats.failed(),
-            stats.skipped(),
-            self.diagnostics.start_time.elapsed().as_millis() / 1000
+            self.stats.passed(),
+            self.stats.failed(),
+            self.stats.skipped(),
+            self.start_time.elapsed().as_millis() / 1000
         )
     }
 }

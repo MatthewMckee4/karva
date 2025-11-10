@@ -5,7 +5,7 @@ use std::{
 
 use pyo3::marker::Ungil;
 
-use crate::runner::diagnostic::IndividualTestResultKind;
+use crate::{diagnostic::DiscoveryDiagnostic, runner::diagnostic::IndividualTestResultKind};
 
 /// A progress reporter.
 pub trait Reporter: Send + Sync + Ungil {
@@ -14,6 +14,8 @@ pub trait Reporter: Send + Sync + Ungil {
 
     /// Log the number of test cases that will be run.
     fn log_test_count(&self, test_count: usize);
+
+    fn report_discovery_diagnostics(&self, diagnostics: Vec<DiscoveryDiagnostic>);
 }
 
 /// A no-op implementation of [`Reporter`].
@@ -24,6 +26,8 @@ impl Reporter for DummyReporter {
     fn report_test_case_result(&self, _test_name: &str, _result_kind: IndividualTestResultKind) {}
 
     fn log_test_count(&self, _test_count: usize) {}
+
+    fn report_discovery_diagnostics(&self, _diagnostics: Vec<DiscoveryDiagnostic>) {}
 }
 
 /// A reporter that outputs test results to stdout as they complete.
@@ -71,5 +75,21 @@ impl Reporter for TestCaseReporter {
             if test_count == 1 { "" } else { "s" }
         )
         .ok();
+    }
+
+    fn report_discovery_diagnostics(&self, diagnostics: Vec<DiscoveryDiagnostic>) {
+        if diagnostics.is_empty() {
+            return;
+        }
+
+        let mut stdout = self.output.lock().unwrap();
+
+        writeln!(stdout, "discovery diagnostics:").ok();
+
+        writeln!(stdout).ok();
+
+        for diagnostic in diagnostics {
+            writeln!(stdout, "{}", diagnostic.display()).ok();
+        }
     }
 }
