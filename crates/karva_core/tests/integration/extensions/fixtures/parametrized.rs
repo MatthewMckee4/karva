@@ -1,4 +1,4 @@
-use karva_core::TestResultStats;
+use insta::{allow_duplicates, assert_snapshot};
 use karva_test::TestContext;
 use rstest::rstest;
 
@@ -26,13 +26,9 @@ fn test_parametrized_fixture(#[values("pytest", "karva")] framework: &str) {
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..3 {
-        expected_stats.add_passed();
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
-
-    assert_eq!(*result.stats(), expected_stats, "{result:?}");
 }
 
 #[rstest]
@@ -62,13 +58,9 @@ fn test_parametrized_fixture_in_conftest(#[values("pytest", "karva")] framework:
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..3 {
-        expected_stats.add_passed();
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
-
-    assert_eq!(*result.stats(), expected_stats, "{result:?}");
 }
 
 #[rstest]
@@ -101,14 +93,9 @@ fn test_parametrized_fixture_module_scope(#[values("pytest", "karva")] framework
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    // 2 tests * 2 params = 4 test runs
-    for _ in 0..4 {
-        expected_stats.add_passed();
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
-
-    assert_eq!(*result.stats(), expected_stats, "{result:?}");
 }
 
 #[rstest]
@@ -145,13 +132,9 @@ fn test_parametrized_fixture_with_generator(#[values("pytest", "karva")] framewo
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..3 {
-        expected_stats.add_passed();
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
-
-    assert_eq!(*result.stats(), expected_stats, "{result:?}");
 }
 
 #[rstest]
@@ -194,13 +177,9 @@ fn test_parametrized_fixture_session_scope(#[values("pytest", "karva")] framewor
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..6 {
-        expected_stats.add_passed();
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 6 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
-
-    assert_eq!(*result.stats(), expected_stats, "{result:?}");
 }
 
 #[rstest]
@@ -228,13 +207,9 @@ fn test_parametrized_fixture_with_multiple_params(#[values("pytest", "karva")] f
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..4 {
-        expected_stats.add_passed();
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
-
-    assert_eq!(*result.stats(), expected_stats, "{result:?}");
 }
 
 #[rstest]
@@ -262,13 +237,9 @@ fn test_parametrized_fixture_with_regular_parametrize(
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..4 {
-        expected_stats.add_passed();
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
-
-    assert_eq!(*result.stats(), expected_stats, "{result:?}");
 }
 
 #[rstest]
@@ -310,13 +281,9 @@ fn test_parametrized_generator_fixture_finalizer_order(
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..3 {
-        expected_stats.add_passed();
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
-
-    assert_eq!(*result.stats(), expected_stats, "{result:?}");
 }
 
 #[rstest]
@@ -353,13 +320,9 @@ fn test_parametrized_fixture_package_scope(#[values("pytest", "karva")] framewor
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..4 {
-        expected_stats.add_passed();
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
-
-    assert_eq!(*result.stats(), expected_stats, "{result:?}");
 }
 
 #[rstest]
@@ -386,13 +349,9 @@ fn test_parametrized_fixture_with_dependency(#[values("pytest", "karva")] framew
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..2 {
-        expected_stats.add_passed();
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
-
-    assert_eq!(*result.stats(), expected_stats, "{result:?}");
 }
 
 #[rstest]
@@ -422,11 +381,7 @@ fn test_parametrized_fixture_finalizer_with_state(#[values("pytest", "karva")] f
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..4 {
-        expected_stats.add_passed();
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
-
-    assert_eq!(*result.stats(), expected_stats, "{result:?}");
 }

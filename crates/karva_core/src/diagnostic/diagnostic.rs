@@ -26,6 +26,10 @@ impl Diagnostic {
         matches!(self, Self::TestFailure(_))
     }
 
+    pub(crate) const fn is_warning(&self) -> bool {
+        matches!(self, Self::Warning(_))
+    }
+
     pub(crate) fn from_test_fail(
         py: Python<'_>,
         error: &PyErr,

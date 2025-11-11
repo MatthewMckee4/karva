@@ -190,11 +190,35 @@ impl<'a> DisplayTestRunResult<'a> {
 
 impl std::fmt::Display for DisplayTestRunResult<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if !self.test_run_result.diagnostics().is_empty() {
+        let failures = self
+            .test_run_result
+            .diagnostics()
+            .iter()
+            .filter(|d| d.is_test_failure())
+            .collect::<Vec<_>>();
+
+        let warnings = self
+            .test_run_result
+            .diagnostics()
+            .iter()
+            .filter(|d| d.is_warning())
+            .collect::<Vec<_>>();
+
+        if !failures.is_empty() {
             writeln!(f, "failures:")?;
             writeln!(f)?;
 
-            for diagnostic in self.test_run_result.diagnostics() {
+            for diagnostic in failures {
+                write!(f, "{}", diagnostic.display())?;
+                writeln!(f)?;
+            }
+        }
+
+        if !warnings.is_empty() {
+            writeln!(f, "warnings:")?;
+            writeln!(f)?;
+
+            for diagnostic in warnings {
                 write!(f, "{}", diagnostic.display())?;
                 writeln!(f)?;
             }

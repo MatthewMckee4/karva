@@ -64,6 +64,7 @@ impl Finalizer {
 
 #[cfg(test)]
 mod tests {
+    use insta::assert_snapshot;
     use karva_project::utils::module_name;
     use karva_test::TestContext;
 
@@ -98,8 +99,14 @@ def test_fixture_generator(fixture_generator):
             .join("test_file.py");
         let module_name = module_name(&test_context.cwd(), &module_name_path).unwrap();
 
-        assert_eq!(*result.stats(), expected_stats, "{result:?}");
+        assert_eq!(*result.stats(), expected_stats);
+        assert_snapshot!(result.display(), @r"
+        warnings:
 
+        warning: Fixture <test>.test_file::fixture_generator had more than one yield statement
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+        ");
         assert_eq!(result.diagnostics().len(), 1);
         let first_diagnostic = &result.diagnostics()[0];
         let expected_diagnostic = Diagnostic::warning(&format!(
@@ -138,8 +145,14 @@ def test_fixture_generator(fixture_generator):
             .join("test_file.py");
         let module_name = module_name(&test_context.cwd(), &module_name_path).unwrap();
 
-        assert_eq!(*result.stats(), expected_stats, "{result:?}");
+        assert_eq!(*result.stats(), expected_stats);
+        assert_snapshot!(result.display(), @r"
+        warnings:
 
+        warning: Failed to reset fixture <test>.test_file::fixture_generator
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+        ");
         assert_eq!(result.diagnostics().len(), 1);
         let first_diagnostic = &result.diagnostics()[0];
         let expected_diagnostic = Diagnostic::warning(&format!(

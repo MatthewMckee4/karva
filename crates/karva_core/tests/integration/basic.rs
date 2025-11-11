@@ -1,5 +1,6 @@
 use camino::Utf8PathBuf;
-use karva_core::{StandardTestRunner, TestResultStats, TestRunner, testing::setup_module};
+use insta::assert_snapshot;
+use karva_core::{StandardTestRunner, TestRunner, testing::setup_module};
 use karva_project::Project;
 use karva_test::TestContext;
 
@@ -36,13 +37,7 @@ def test_4(): pass",
 
     let result = test_runner.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..2 {
-        expected_stats.add_passed();
-    }
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -51,9 +46,7 @@ fn test_empty_file() {
 
     let result = test_context.test();
 
-    let expected_stats = TestResultStats::default();
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -68,9 +61,7 @@ fn test_empty_directory() {
 
     let result = test_runner.test();
 
-    let expected_stats = TestResultStats::default();
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -95,11 +86,7 @@ fn test_single_function() {
 
     let result = test_runner.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    expected_stats.add_passed();
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -127,13 +114,7 @@ def test_2(): pass",
 
     let result = test_runner.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..2 {
-        expected_stats.add_passed();
-    }
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -161,11 +142,5 @@ def test_2(): pass",
 
     let result = test_runner.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..2 {
-        expected_stats.add_passed();
-    }
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
