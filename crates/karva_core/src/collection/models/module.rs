@@ -41,11 +41,11 @@ impl<'proj> CollectedModule<'proj> {
 
         self.test_cases.iter().for_each(|test_case| {
             let mut result = test_case.run(py, reporter);
-            result.add_diagnostics(test_case.finalizers().run(py));
+            result.add_test_diagnostics(test_case.finalizers().run(py));
             diagnostics.update(&result);
         });
 
-        diagnostics.add_diagnostics(self.finalizers().run(py));
+        diagnostics.add_test_diagnostics(self.finalizers().run(py));
 
         diagnostics
     }

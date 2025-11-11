@@ -119,7 +119,7 @@ impl<'proj> TestCase<'proj> {
             Some(reporter),
         );
 
-        run_result.add_diagnostic(diagnostic);
+        run_result.add_test_diagnostic(diagnostic);
 
         run_result
     }

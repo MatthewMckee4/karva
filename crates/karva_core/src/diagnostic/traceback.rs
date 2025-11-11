@@ -160,9 +160,9 @@ ValueError: Invalid value"#;
 
         #[test]
         fn test_get_location_no_file_prefix() {
-            let traceback = r#"Traceback (most recent call last):
+            let traceback = r"Traceback (most recent call last):
 Some random line
-Exception: Test error"#;
+Exception: Test error";
             let location = get_location(traceback);
             assert_eq!(location, None);
         }

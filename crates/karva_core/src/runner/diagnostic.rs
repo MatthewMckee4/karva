@@ -36,14 +36,20 @@ impl TestRunResult {
         &self.test_diagnostics
     }
 
-    pub(crate) fn add_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
+    pub(crate) fn add_test_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
         for diagnostic in diagnostics {
-            self.add_diagnostic(diagnostic);
+            self.test_diagnostics.push(diagnostic);
         }
     }
 
-    pub(crate) fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
+    pub(crate) fn add_test_diagnostic(&mut self, diagnostic: Diagnostic) {
         self.test_diagnostics.push(diagnostic);
+    }
+
+    pub(crate) fn add_discovery_diagnostics(&mut self, diagnostics: Vec<DiscoveryDiagnostic>) {
+        for diagnostic in diagnostics {
+            self.discovery_diagnostics.push(diagnostic);
+        }
     }
 
     pub(crate) fn update(&mut self, other: &Self) {

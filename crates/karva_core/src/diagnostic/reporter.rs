@@ -15,7 +15,7 @@ pub trait Reporter: Send + Sync + Ungil {
     /// Log the number of test cases that will be run.
     fn log_test_count(&self, test_count: usize);
 
-    fn report_discovery_diagnostics(&self, diagnostics: Vec<DiscoveryDiagnostic>);
+    fn report_discovery_diagnostics(&self, diagnostics: &[DiscoveryDiagnostic]);
 }
 
 /// A no-op implementation of [`Reporter`].
@@ -27,7 +27,7 @@ impl Reporter for DummyReporter {
 
     fn log_test_count(&self, _test_count: usize) {}
 
-    fn report_discovery_diagnostics(&self, _diagnostics: Vec<DiscoveryDiagnostic>) {}
+    fn report_discovery_diagnostics(&self, _diagnostics: &[DiscoveryDiagnostic]) {}
 }
 
 /// A reporter that outputs test results to stdout as they complete.
@@ -77,7 +77,7 @@ impl Reporter for TestCaseReporter {
         .ok();
     }
 
-    fn report_discovery_diagnostics(&self, diagnostics: Vec<DiscoveryDiagnostic>) {
+    fn report_discovery_diagnostics(&self, diagnostics: &[DiscoveryDiagnostic]) {
         if diagnostics.is_empty() {
             return;
         }
