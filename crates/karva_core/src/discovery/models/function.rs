@@ -97,8 +97,6 @@ impl TestFunction {
 
         let mut test_cases = Vec::with_capacity(parametrize_args.len());
 
-        let test_case_location = self.display_with_line(module);
-
         for params in parametrize_args {
             setup_fixture_manager(fixture_manager);
 
@@ -138,9 +136,11 @@ impl TestFunction {
             let diagnostic = if missing_fixtures.is_empty() {
                 None
             } else {
+                let test_case_location = self.display_with_line(module);
+
                 Some(Diagnostic::missing_fixtures(
                     missing_fixtures,
-                    test_case_location.clone(),
+                    test_case_location,
                     self.function_name().to_string(),
                 ))
             };
