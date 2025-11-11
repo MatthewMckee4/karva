@@ -334,3 +334,24 @@ fn test_quiet_output() {
     ----- stderr -----
     ");
 }
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_invalid_path() {
+    let case = IntegrationTestContext::new();
+
+    assert_cmd_snapshot!(case.command().arg("non_existing_path.py"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    discovery diagnostics:
+
+    error: Path `<temp_dir>/non_existing_path.py` could not be found
+
+    running 0 tests
+
+    test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
