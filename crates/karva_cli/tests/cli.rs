@@ -64,7 +64,7 @@ fn test_one_test_fails() {
 
     failures:
 
-    test `test_fail` failed at <temp_dir>/test_fail.py:2
+    test `test_fail` failed at <temp_dir>/test_fail.py:3
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -105,7 +105,7 @@ fn test_file_importing_another_file() {
 
     failures:
 
-    test `test_with_helper` failed at <temp_dir>/test_cross_file.py:4
+    test `test_with_helper` failed at <temp_dir>/helper.py:4
     Data validation failed
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]

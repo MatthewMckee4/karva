@@ -36,16 +36,20 @@ impl Traceback {
 
 fn get_location(traceback: &str) -> Option<String> {
     let lines: Vec<&str> = traceback.lines().collect();
-    let second_last_line = lines.get(lines.len() - 2).unwrap_or(&"");
-    if let Some(after_file) = second_last_line.strip_prefix("File \"") {
-        if let Some(quote_end) = after_file.find('"') {
-            let filename = &after_file[..quote_end];
-            let rest = &after_file[quote_end + 1..];
-            if let Some(line_start) = rest.find("line ") {
-                let line_part = &rest[line_start + 5..];
-                if let Some(comma_pos) = line_part.find(',') {
-                    let line_number = &line_part[..comma_pos];
-                    return Some(format!("{filename}:{line_number}"));
+
+    // Find the last line that starts with "File \"" (ignoring leading whitespace)
+    for line in lines.iter().rev() {
+        let trimmed = line.trim_start();
+        if let Some(after_file) = trimmed.strip_prefix("File \"") {
+            if let Some(quote_end) = after_file.find('"') {
+                let filename = &after_file[..quote_end];
+                let rest = &after_file[quote_end + 1..];
+                if let Some(line_start) = rest.find("line ") {
+                    let line_part = &rest[line_start + 5..];
+                    if let Some(comma_pos) = line_part.find(',') {
+                        let line_number = &line_part[..comma_pos];
+                        return Some(format!("{filename}:{line_number}"));
+                    }
                 }
             }
         }
@@ -101,6 +105,94 @@ Exception: Test error"#
             let traceback = "";
             let filtered = filter_traceback(traceback);
             assert_eq!(filtered, "");
+        }
+    }
+
+    mod get_location_tests {
+        use super::*;
+
+        #[test]
+        fn test_get_location_valid_traceback() {
+            let traceback = r#"Traceback (most recent call last):
+  File "test.py", line 10, in <module>
+    raise Exception('Test error')
+Exception: Test error"#;
+            let location = get_location(traceback);
+            assert_eq!(location, Some("test.py:10".to_string()));
+        }
+
+        #[test]
+        fn test_get_location_with_path() {
+            let traceback = r#"Traceback (most recent call last):
+  File "/path/to/script.py", line 42, in function_name
+    some_code()
+RuntimeError: Something went wrong"#;
+            let location = get_location(traceback);
+            assert_eq!(location, Some("/path/to/script.py:42".to_string()));
+        }
+
+        #[test]
+        fn test_get_location_multi_frame() {
+            let traceback = r#"Traceback (most recent call last):
+  File "main.py", line 5, in <module>
+    foo()
+  File "helper.py", line 15, in foo
+    bar()
+ValueError: Invalid value"#;
+            // Should get the second-to-last line, which is the last File entry
+            let location = get_location(traceback);
+            assert_eq!(location, Some("helper.py:15".to_string()));
+        }
+
+        #[test]
+        fn test_get_location_empty_traceback() {
+            let traceback = "";
+            let location = get_location(traceback);
+            assert_eq!(location, None);
+        }
+
+        #[test]
+        fn test_get_location_single_line() {
+            let traceback = "Exception: Test error";
+            let location = get_location(traceback);
+            assert_eq!(location, None);
+        }
+
+        #[test]
+        fn test_get_location_no_file_prefix() {
+            let traceback = r#"Traceback (most recent call last):
+Some random line
+Exception: Test error"#;
+            let location = get_location(traceback);
+            assert_eq!(location, None);
+        }
+
+        #[test]
+        fn test_get_location_missing_line_number() {
+            let traceback = r#"Traceback (most recent call last):
+  File "test.py", in <module>
+Exception: Test error"#;
+            let location = get_location(traceback);
+            assert_eq!(location, None);
+        }
+
+        #[test]
+        fn test_get_location_malformed_quote() {
+            let traceback = r#"Traceback (most recent call last):
+  File "test.py, line 10, in <module>
+Exception: Test error"#;
+            let location = get_location(traceback);
+            assert_eq!(location, None);
+        }
+
+        #[test]
+        fn test_get_location_large_line_number() {
+            let traceback = r#"Traceback (most recent call last):
+  File "test.py", line 99999, in <module>
+    code()
+Exception: Test error"#;
+            let location = get_location(traceback);
+            assert_eq!(location, Some("test.py:99999".to_string()));
         }
     }
 }

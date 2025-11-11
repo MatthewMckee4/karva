@@ -2,11 +2,16 @@ use std::{collections::HashMap, fmt::Debug, time::Instant};
 
 use colored::Colorize;
 
-use crate::{Reporter, diagnostic::Diagnostic};
+use crate::{
+    Reporter,
+    diagnostic::{Diagnostic, DiscoveryDiagnostic},
+};
 
 #[derive(Debug, Clone)]
 pub struct TestRunResult {
-    diagnostics: Vec<Diagnostic>,
+    discovery_diagnostics: Vec<DiscoveryDiagnostic>,
+    test_diagnostics: Vec<Diagnostic>,
+
     stats: TestResultStats,
     start_time: Instant,
 }
@@ -14,7 +19,8 @@ pub struct TestRunResult {
 impl Default for TestRunResult {
     fn default() -> Self {
         Self {
-            diagnostics: Vec::new(),
+            discovery_diagnostics: Vec::new(),
+            test_diagnostics: Vec::new(),
             stats: TestResultStats::default(),
             start_time: Instant::now(),
         }
@@ -22,8 +28,12 @@ impl Default for TestRunResult {
 }
 
 impl TestRunResult {
+    pub fn total_diagnostics(&self) -> usize {
+        self.discovery_diagnostics.len() + self.test_diagnostics.len()
+    }
+
     pub const fn diagnostics(&self) -> &Vec<Diagnostic> {
-        &self.diagnostics
+        &self.test_diagnostics
     }
 
     pub(crate) fn add_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
@@ -33,18 +43,18 @@ impl TestRunResult {
     }
 
     pub(crate) fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
-        self.diagnostics.push(diagnostic);
+        self.test_diagnostics.push(diagnostic);
     }
 
     pub(crate) fn update(&mut self, other: &Self) {
-        for diagnostic in other.diagnostics.clone() {
-            self.diagnostics.push(diagnostic);
+        for diagnostic in other.test_diagnostics.clone() {
+            self.test_diagnostics.push(diagnostic);
         }
         self.stats.update(&other.stats);
     }
 
     pub fn passed(&self) -> bool {
-        for diagnostic in &self.diagnostics {
+        for diagnostic in &self.test_diagnostics {
             if diagnostic.is_test_failure() {
                 return false;
             }

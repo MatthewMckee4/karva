@@ -478,7 +478,7 @@ fn test_invalid_pytest_fixture_scope() {
 
     assert_eq!(*result.stats(), expected_stats);
 
-    assert!(result.diagnostics().len() == 2);
+    assert!(result.total_diagnostics() == 2);
 }
 
 #[test]
