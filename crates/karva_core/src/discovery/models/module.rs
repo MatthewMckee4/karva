@@ -16,6 +16,7 @@ pub(crate) struct DiscoveredModule {
     fixtures: Vec<Fixture>,
     type_: ModuleType,
     source_text: String,
+    line_index: LineIndex,
 }
 
 impl DiscoveredModule {
@@ -23,12 +24,15 @@ impl DiscoveredModule {
         let source_text =
             std::fs::read_to_string(path.module_path()).expect("Failed to read source file");
 
+        let line_index = LineIndex::from_source_text(&source_text);
+
         Self {
             path,
             test_functions: Vec::new(),
             fixtures: Vec::new(),
             type_: module_type,
             source_text,
+            line_index,
         }
     }
 
@@ -87,9 +91,8 @@ impl DiscoveredModule {
         &self.source_text
     }
 
-    pub(crate) fn line_index(&self) -> LineIndex {
-        let source_text = self.source_text();
-        LineIndex::from_source_text(source_text)
+    pub(crate) const fn line_index(&self) -> &LineIndex {
+        &self.line_index
     }
 
     pub(crate) fn update(&mut self, module: Self) {
