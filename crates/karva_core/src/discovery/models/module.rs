@@ -21,8 +21,7 @@ pub(crate) struct DiscoveredModule {
 
 impl DiscoveredModule {
     pub(crate) fn new(path: ModulePath, module_type: ModuleType) -> Self {
-        let source_text =
-            std::fs::read_to_string(path.module_path()).expect("Failed to read source file");
+        let source_text = std::fs::read_to_string(path.path()).expect("Failed to read source file");
 
         let line_index = LineIndex::from_source_text(&source_text);
 
@@ -41,7 +40,7 @@ impl DiscoveredModule {
     }
 
     pub(crate) const fn path(&self) -> &Utf8PathBuf {
-        self.path.module_path()
+        self.path.path()
     }
 
     pub(crate) fn name(&self) -> &str {
@@ -165,6 +164,10 @@ impl<'proj> HasFixtures<'proj> for DiscoveredModule {
             .collect();
 
         all_fixtures
+    }
+
+    fn fixture_module<'a: 'proj>(&'a self) -> Option<&'a DiscoveredModule> {
+        Some(self)
     }
 }
 

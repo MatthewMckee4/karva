@@ -2,12 +2,13 @@ use indexmap::IndexMap;
 use pyo3::{prelude::*, types::PyAny};
 
 use crate::{
+    diagnostic::{Diagnostic, diagnostic::FunctionDefinitionLocation},
     discovery::DiscoveredPackage,
     extensions::fixtures::{
         Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, UsesFixtures, builtins,
     },
     name::QualifiedFunctionName,
-    utils::iter_with_ancestors,
+    utils::{function_definition_location, iter_with_ancestors},
 };
 
 /// Collection of fixtures and their finalizers for a specific scope.
@@ -84,10 +85,15 @@ impl FixtureCollection {
 pub(crate) struct FixtureManager<'a> {
     /// Reference to the parent manager in the scope hierarchy
     parent: Option<&'a FixtureManager<'a>>,
+
     /// The actual fixtures and finalizers for this scope
     collection: FixtureCollection,
+
     /// The scope level this manager is responsible for
     scope: FixtureScope,
+
+    /// The diagnostics from creating fixtures
+    diagnostics: Vec<Diagnostic>,
 }
 
 impl<'a> FixtureManager<'a> {
@@ -96,7 +102,12 @@ impl<'a> FixtureManager<'a> {
             parent,
             collection: FixtureCollection::default(),
             scope,
+            diagnostics: Vec::new(),
         }
+    }
+
+    pub(crate) fn clear_diagnostics(&mut self) -> Vec<Diagnostic> {
+        self.diagnostics.drain(..).collect()
     }
 
     #[cfg(test)]
@@ -136,7 +147,6 @@ impl<'a> FixtureManager<'a> {
     // Check if a fixture with the given name exists (including built-ins).
     //
     // We can optionally exclude specific function names from the search.
-
     pub(crate) fn get_fixture_with_name(
         &self,
         py: Python<'_>,
@@ -237,8 +247,19 @@ impl<'a> FixtureManager<'a> {
                     fixture,
                 );
             }
-            Err(e) => {
-                tracing::debug!("Failed to call fixture {}: {}", fixture.name(), e);
+            Err(error) => {
+                if let Some(module) = current.fixture_module() {
+                    let fixture_location =
+                        function_definition_location(module, fixture.function_statement());
+                    let location = FunctionDefinitionLocation::new(
+                        fixture.name().function_name().to_string(),
+                        fixture_location,
+                    );
+                    let diagnostic = Diagnostic::from_fixture_fail(py, &error, location);
+                    self.diagnostics.push(diagnostic);
+                } else {
+                    tracing::debug!("Failed to call fixture {}: {}", fixture.name(), error);
+                }
             }
         }
     }

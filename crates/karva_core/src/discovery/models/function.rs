@@ -153,6 +153,8 @@ impl TestFunction {
 
             if let Some(first_test) = test_cases.first_mut() {
                 first_test.add_finalizers(fixture_manager.reset_fixtures());
+
+                first_test.add_fixture_diagnostics(fixture_manager.clear_diagnostics());
             }
         }
 

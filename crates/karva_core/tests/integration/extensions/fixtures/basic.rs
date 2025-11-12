@@ -7,7 +7,7 @@ use crate::common::{TestRunnerExt, get_auto_use_kw};
 #[test]
 fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
  {
-    let test_context = TestContext::with_files([
+    let context = TestContext::with_files([
         (
             "<test>/conftest.py",
             r"
@@ -28,14 +28,14 @@ def z(x, y):
         ("<test>/inner/test_file.py", "def test_1(z): pass"),
     ]);
 
-    let result = test_context.test();
+    let result = context.test();
 
     assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
 fn test_runner_given_nested_path() {
-    let test_context = TestContext::with_files([
+    let context = TestContext::with_files([
         (
             "<test>/conftest.py",
             r"
@@ -48,14 +48,14 @@ def x():
         ("<test>/test_file.py", "def test_1(x): pass"),
     ]);
 
-    let result = test_context.test();
+    let result = context.test();
 
     assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
 fn test_fixture_with_name_parameter() {
-    let test_context = TestContext::with_file(
+    let context = TestContext::with_file(
         "<test>/test_file.py",
         r#"import karva
 
@@ -68,24 +68,24 @@ def test_fixture_with_name_parameter(fixture_name):
 "#,
     );
 
-    let result = test_context.test();
+    let result = context.test();
 
     assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
 fn test_fixture_is_different_in_different_functions() {
-    let test_context = TestContext::with_file(
+    let context = TestContext::with_file(
         "<test>/test_file.py",
         r"import karva
 
-class Testtest_context:
+class Testcontext:
     def __init__(self):
         self.x = 1
 
 @karva.fixture
 def fixture():
-    return Testtest_context()
+    return Testcontext()
 
 def test_fixture(fixture):
     assert fixture.x == 1
@@ -97,14 +97,14 @@ def test_fixture_2(fixture):
 ",
     );
 
-    let result = test_context.test();
+    let result = context.test();
 
     assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
 fn test_fixture_from_current_package_session_scope() {
-    let test_context = TestContext::with_files([
+    let context = TestContext::with_files([
         (
             "<test>/tests/conftest.py",
             r"
@@ -118,14 +118,14 @@ def x():
         ("<test>/tests/test_file.py", "def test_1(x): pass"),
     ]);
 
-    let result = test_context.test();
+    let result = context.test();
 
     assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
 fn test_fixture_from_current_package_function_scope() {
-    let test_context = TestContext::with_files([
+    let context = TestContext::with_files([
         (
             "<test>/tests/conftest.py",
             r"
@@ -138,14 +138,14 @@ def x():
         ("<test>/tests/test_file.py", "def test_1(x): pass"),
     ]);
 
-    let result = test_context.test();
+    let result = context.test();
 
     assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
 fn test_finalizer_from_current_package_session_scope() {
-    let test_context = TestContext::with_files([
+    let context = TestContext::with_files([
         (
             "<test>/tests/conftest.py",
             r"
@@ -173,14 +173,14 @@ def test_2(x):
         ),
     ]);
 
-    let result = test_context.test();
+    let result = context.test();
 
     assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
 fn test_finalizer_from_current_package_function_scope() {
-    let test_context = TestContext::with_files([
+    let context = TestContext::with_files([
         (
             "<test>/tests/conftest.py",
             r"
@@ -208,14 +208,14 @@ def test_2(x):
         ),
     ]);
 
-    let result = test_context.test();
+    let result = context.test();
 
     assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
 fn test_discover_pytest_fixture() {
-    let test_context = TestContext::with_files([
+    let context = TestContext::with_files([
         (
             "<test>/tests/conftest.py",
             r"
@@ -229,14 +229,14 @@ def x():
         ("<test>/tests/test_1.py", "def test_1(x): pass"),
     ]);
 
-    let result = test_context.test();
+    let result = context.test();
 
     assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[rstest]
 fn test_dynamic_fixture_scope_session_scope(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_file(
+    let context = TestContext::with_file(
         "<test>/test_dynamic_scope.py",
         &format!(
             r#"
@@ -262,7 +262,7 @@ def test_2(x_session):
         ),
     );
 
-    let result = test_context.test();
+    let result = context.test();
 
     allow_duplicates!(
         assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]")
@@ -271,7 +271,7 @@ def test_2(x_session):
 
 #[rstest]
 fn test_dynamic_fixture_scope_function_scope(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_file(
+    let context = TestContext::with_file(
         "<test>/test_dynamic_scope.py",
         &format!(
             r#"
@@ -297,7 +297,7 @@ def test_2(x_function):
         ),
     );
 
-    let result = test_context.test();
+    let result = context.test();
 
     allow_duplicates! {
         assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
@@ -306,7 +306,7 @@ def test_2(x_function):
 
 #[test]
 fn test_fixture_override_in_test_modules() {
-    let test_context = TestContext::with_files([
+    let context = TestContext::with_files([
         (
             "<test>/tests/conftest.py",
             r"
@@ -345,14 +345,14 @@ def test_username(username):
         ),
     ]);
 
-    let result = test_context.test();
+    let result = context.test();
 
     assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[rstest]
 fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_file(
+    let context = TestContext::with_file(
         "<test>/test.py",
         &format!(
             r#"
@@ -397,7 +397,7 @@ fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &st
                     "#,
         ),
     );
-    let result = test_context.test();
+    let result = context.test();
 
     allow_duplicates! {
         assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
@@ -406,7 +406,7 @@ fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &st
 
 #[test]
 fn test_invalid_pytest_fixture_scope() {
-    let test_context = TestContext::with_file(
+    let context = TestContext::with_file(
         "<test>/test.py",
         r#"
                 import pytest
@@ -422,18 +422,18 @@ fn test_invalid_pytest_fixture_scope() {
                 "#,
     );
 
-    let result = test_context.test();
+    let result = context.test();
 
     assert_snapshot!(result.display(), @r#"
     discovery failures:
 
     invalid fixture `some_fixture`: Invalid fixture scope: sessionss at <temp_dir>/<test>/test.py:4
 
-    failures:
+    test failures:
 
     test `<test>.test::test_all_scopes` has missing fixtures: ["some_fixture"] at <temp_dir>/<test>/test.py:8
 
-    failures:
+    test failures:
         <test>.test::test_all_scopes at <temp_dir>/<test>/test.py:8
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
@@ -444,7 +444,7 @@ fn test_invalid_pytest_fixture_scope() {
 
 #[test]
 fn test_missing_fixture() {
-    let test_context = TestContext::with_file(
+    let context = TestContext::with_file(
         "<test>/test.py",
         r"
                 def test_all_scopes(
@@ -454,14 +454,14 @@ fn test_missing_fixture() {
                 ",
     );
 
-    let result = test_context.test();
+    let result = context.test();
 
     assert_snapshot!(result.display(), @r#"
-    failures:
+    test failures:
 
     test `<test>.test::test_all_scopes` has missing fixtures: ["missing_fixture"] at <temp_dir>/<test>/test.py:2
 
-    failures:
+    test failures:
         <test>.test::test_all_scopes at <temp_dir>/<test>/test.py:2
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
@@ -472,7 +472,7 @@ fn test_missing_fixture() {
 
 #[rstest]
 fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_file(
+    let context = TestContext::with_file(
         "<test>/test_nested_generator_fixture.py",
         &format!(
             r"
@@ -495,7 +495,7 @@ fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
         ),
     );
 
-    let result = test_context.test();
+    let result = context.test();
 
     allow_duplicates! {
         assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
@@ -504,7 +504,7 @@ fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
 
 #[rstest]
 fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_file(
+    let context = TestContext::with_file(
         "<test>/test_nested_generator_fixture.py",
         &format!(
             r"
@@ -527,9 +527,44 @@ fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &st
         ),
     );
 
-    let result = test_context.test();
+    let result = context.test();
 
     allow_duplicates! {
         assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
+}
+
+#[test]
+fn test_fixture_fails_to_run() {
+    let context = TestContext::with_file(
+        "<test>/test_fixture_fails_to_run.py",
+        r"
+                from karva import fixture
+
+                @fixture
+                def failing_fixture():
+                    raise Exception('Fixture failed')
+
+                def test_failing_fixture(failing_fixture):
+                    pass
+                ",
+    );
+
+    let result = context.test();
+
+    assert_snapshot!(result.display(), @r#"
+    fixture failures:
+
+    fixture function `failing_fixture` at <temp_dir>/<test>/test_fixture_fails_to_run.py:4 failed at <temp_dir>/<test>/test_fixture_fails_to_run.py:6
+    Fixture failed
+
+    test failures:
+
+    test `<test>.test_fixture_fails_to_run::test_failing_fixture` has missing fixtures: ["failing_fixture"] at <temp_dir>/<test>/test_fixture_fails_to_run.py:8
+
+    test failures:
+        <test>.test_fixture_fails_to_run::test_failing_fixture at <temp_dir>/<test>/test_fixture_fails_to_run.py:8
+
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+    "#);
 }

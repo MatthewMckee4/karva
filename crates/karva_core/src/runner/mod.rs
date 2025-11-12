@@ -42,7 +42,7 @@ impl<'proj> StandardTestRunner<'proj> {
 
             reporter.log_test_count(total_test_cases);
 
-            diagnostics.update(&collected_session.run_with_reporter(py, reporter));
+            diagnostics.update(collected_session.run_with_reporter(py, reporter));
 
             diagnostics
         })

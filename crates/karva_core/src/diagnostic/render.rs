@@ -1,7 +1,7 @@
 use crate::diagnostic::{
     Diagnostic, DiscoveryDiagnostic, InvalidFixtureDiagnostic, MissingFixturesDiagnostic,
     TestFailureDiagnostic, WarningDiagnostic,
-    diagnostic::{FunctionDefinitionLocation, TestRunFailureDiagnostic},
+    diagnostic::{FixtureFailureDiagnostic, FunctionDefinitionLocation, TestRunFailureDiagnostic},
 };
 
 pub struct DisplayDiagnostic<'a> {
@@ -55,9 +55,31 @@ impl std::fmt::Display for DisplayDiagnostic<'_> {
                     )?;
                 }
             },
-
             Diagnostic::Warning(WarningDiagnostic { message }) => {
                 writeln!(f, "warning: {message}")?;
+            }
+            Diagnostic::FixtureFailure(FixtureFailureDiagnostic {
+                location:
+                    FunctionDefinitionLocation {
+                        function_name,
+                        location: function_location,
+                    },
+                traceback,
+                message,
+            }) => {
+                let location_fail_string = traceback
+                    .location
+                    .as_ref()
+                    .map(|location| format!("at {location}"))
+                    .unwrap_or_default();
+
+                writeln!(
+                    f,
+                    "fixture function `{function_name}` at {function_location} failed {location_fail_string}"
+                )?;
+                if let Some(message) = message {
+                    writeln!(f, "{message}")?;
+                }
             }
         }
 

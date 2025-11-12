@@ -56,8 +56,8 @@ impl TestRunResult {
         }
     }
 
-    pub(crate) fn update(&mut self, other: &Self) {
-        for diagnostic in other.test_diagnostics.clone() {
+    pub(crate) fn update(&mut self, other: Self) {
+        for diagnostic in other.test_diagnostics {
             self.test_diagnostics.push(diagnostic);
         }
         self.stats.update(&other.stats);
@@ -204,11 +204,18 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
             }
         }
 
-        let failures = self
+        let test_failures = self
             .test_run_result
             .diagnostics()
             .iter()
             .filter(|d| d.is_test_failure())
+            .collect::<Vec<_>>();
+
+        let fixture_failures = self
+            .test_run_result
+            .diagnostics()
+            .iter()
+            .filter(|d| d.is_fixture_failure())
             .collect::<Vec<_>>();
 
         let warnings = self
@@ -218,11 +225,20 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
             .filter(|d| d.is_warning())
             .collect::<Vec<_>>();
 
-        if !failures.is_empty() {
-            writeln!(f, "failures:")?;
+        if !fixture_failures.is_empty() {
+            writeln!(f, "fixture failures:")?;
             writeln!(f)?;
 
-            for diagnostic in &failures {
+            for diagnostic in &fixture_failures {
+                writeln!(f, "{}", diagnostic.display())?;
+            }
+        }
+
+        if !test_failures.is_empty() {
+            writeln!(f, "test failures:")?;
+            writeln!(f)?;
+
+            for diagnostic in &test_failures {
                 writeln!(f, "{}", diagnostic.display())?;
             }
         }
@@ -236,10 +252,10 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
             }
         }
 
-        if !failures.is_empty() {
-            writeln!(f, "failures:")?;
+        if !test_failures.is_empty() {
+            writeln!(f, "test failures:")?;
 
-            for diagnostic in &failures {
+            for diagnostic in &test_failures {
                 let FunctionDefinitionLocation {
                     location,
                     function_name,
@@ -388,7 +404,7 @@ mod tests {
         let mut diagnostics2 = TestRunResult::default();
         diagnostics2.stats_mut().add_failed();
 
-        diagnostics1.update(&diagnostics2);
+        diagnostics1.update(diagnostics2);
 
         assert_eq!(diagnostics1.stats().passed(), 1);
         assert_eq!(diagnostics1.stats().failed(), 1);

@@ -1,7 +1,9 @@
 use pyo3::prelude::*;
 
 use crate::{
-    collection::CollectedModule, diagnostic::reporter::Reporter, extensions::fixtures::Finalizers,
+    collection::CollectedModule,
+    diagnostic::{Diagnostic, reporter::Reporter},
+    extensions::fixtures::Finalizers,
     runner::TestRunResult,
 };
 
@@ -16,6 +18,9 @@ pub(crate) struct CollectedPackage<'proj> {
 
     /// Finalizers to run after the tests are executed.
     finalizers: Finalizers,
+
+    /// Fixture diagnostics collected during the test run.
+    fixture_diagnostics: Vec<Diagnostic>,
 }
 
 impl<'proj> CollectedPackage<'proj> {
@@ -31,6 +36,10 @@ impl<'proj> CollectedPackage<'proj> {
         self.finalizers.update(finalizers);
     }
 
+    pub(crate) fn add_fixture_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
+        self.fixture_diagnostics.extend(diagnostics);
+    }
+
     /// Count the number of test cases in the package.
     pub(crate) fn total_test_cases(&self) -> usize {
         let mut total = 0;
@@ -44,22 +53,31 @@ impl<'proj> CollectedPackage<'proj> {
     }
 
     pub(crate) fn run_with_reporter(
-        &self,
+        self,
         py: Python<'_>,
         reporter: &dyn Reporter,
     ) -> TestRunResult {
-        let mut diagnostics = TestRunResult::default();
+        let Self {
+            modules,
+            packages,
+            finalizers,
+            fixture_diagnostics,
+        } = self;
 
-        self.modules
-            .iter()
-            .for_each(|module| diagnostics.update(&module.run_with_reporter(py, reporter)));
+        let mut run_result = TestRunResult::default();
 
-        self.packages
-            .iter()
-            .for_each(|package| diagnostics.update(&package.run_with_reporter(py, reporter)));
+        for module in modules {
+            run_result.update(module.run_with_reporter(py, reporter));
+        }
 
-        diagnostics.add_test_diagnostics(self.finalizers.run(py));
+        for package in packages {
+            run_result.update(package.run_with_reporter(py, reporter));
+        }
 
-        diagnostics
+        run_result.add_test_diagnostics(finalizers.run(py));
+
+        run_result.add_test_diagnostics(fixture_diagnostics);
+
+        run_result
     }
 }
