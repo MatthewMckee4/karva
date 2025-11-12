@@ -58,3 +58,13 @@ We use mkdocs to build the documentation.
 ```bash
 uv run --isolated --only-group docs mkdocs build
 ```
+
+## Release Process
+
+Currently, everything is automated for releasing a new version of Karva.
+
+Simply run the following command with your new version (eg `0.1.0`):
+
+```bash
+uv run --isolated --only-group release tbump <new-version>
+```
