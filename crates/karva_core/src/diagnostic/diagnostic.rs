@@ -43,7 +43,7 @@ impl Diagnostic {
         Self::TestFailure(TestFailureDiagnostic::RunFailure(
             TestRunFailureDiagnostic {
                 location: FunctionDefinitionLocation::new(
-                    test_case.function().function_name().to_string(),
+                    test_case.function().name().to_string(),
                     test_case.function().display_with_line(module),
                 ),
                 traceback: Traceback::new(py, error),

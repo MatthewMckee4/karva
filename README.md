@@ -92,15 +92,15 @@ test tests.test::test_error ... FAILED
 
 failures:
 
-test `test_fail` failed at tests/test.py:6
+test `tests.test::test_fail` at tests/test.py:5 failed at tests/test.py:6
 This test should fail
 
-test `test_error` failed at tests/test.py:10
+test `tests.test::test_error` at tests/test.py:9 failed at tests/test.py:10
 This is an error
 
 failures:
-    test_fail
-    test_error
+    tests.test::test_fail at tests/test.py:5
+    tests.test::test_error at tests/test.py:9
 
 test result: FAILED. 1 passed; 2 failed; 0 skipped; finished in 0s
 ```

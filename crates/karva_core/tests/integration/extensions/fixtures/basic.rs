@@ -431,10 +431,10 @@ fn test_invalid_pytest_fixture_scope() {
 
     failures:
 
-    test `test_all_scopes` has missing fixtures: ["some_fixture"] at <temp_dir>/<test>/test.py:8
+    test `<test>.test::test_all_scopes` has missing fixtures: ["some_fixture"] at <temp_dir>/<test>/test.py:8
 
     failures:
-        test_all_scopes
+        <test>.test::test_all_scopes at <temp_dir>/<test>/test.py:8
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     "#);
@@ -459,10 +459,10 @@ fn test_missing_fixture() {
     assert_snapshot!(result.display(), @r#"
     failures:
 
-    test `test_all_scopes` has missing fixtures: ["missing_fixture"] at <temp_dir>/<test>/test.py:2
+    test `<test>.test::test_all_scopes` has missing fixtures: ["missing_fixture"] at <temp_dir>/<test>/test.py:2
 
     failures:
-        test_all_scopes
+        <test>.test::test_all_scopes at <temp_dir>/<test>/test.py:2
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     "#);

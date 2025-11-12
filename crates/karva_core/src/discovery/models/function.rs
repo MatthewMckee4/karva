@@ -141,7 +141,7 @@ impl TestFunction {
                 Some(Diagnostic::missing_fixtures(
                     missing_fixtures,
                     test_case_location,
-                    self.function_name().to_string(),
+                    self.name().to_string(),
                 ))
             };
 
