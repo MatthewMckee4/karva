@@ -171,6 +171,22 @@ fn get_parametrize_function(package: &str) -> String {
     }
 }
 
+fn get_skip_decorator(framework: &str) -> &str {
+    if framework == "pytest" {
+        "pytest.mark.skip"
+    } else {
+        "karva.tags.skip"
+    }
+}
+
+fn get_skipif_decorator(framework: &str) -> &str {
+    if framework == "pytest" {
+        "pytest.mark.skipif"
+    } else {
+        "karva.tags.skip_if"
+    }
+}
+
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize(#[values("pytest", "karva")] package: &str) {
@@ -281,11 +297,7 @@ fn test_multiple_fixtures_not_found() {
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_skip_functionality(#[values("pytest", "karva")] framework: &str) {
-    let decorator = if framework == "pytest" {
-        "pytest.mark.skip"
-    } else {
-        "karva.tags.skip"
-    };
+    let decorator = get_skip_decorator(framework);
 
     let context = IntegrationTestContext::with_file(
         "test_skip.py",
@@ -350,11 +362,11 @@ fn test_text_file() {
     success: true
     exit_code: 0
     ----- stdout -----
+    running 0 tests
+
     discovery failures:
 
     path `<temp_dir>/random.txt` has a wrong file extension
-
-    running 0 tests
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
 
@@ -393,11 +405,11 @@ fn test_invalid_path() {
     success: true
     exit_code: 0
     ----- stdout -----
+    running 0 tests
+
     discovery failures:
 
     path `<temp_dir>/non_existing_path.py` could not be found
-
-    running 0 tests
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
 
@@ -541,13 +553,13 @@ fn test_invalid_fixture() {
     success: false
     exit_code: 1
     ----- stdout -----
-    discovery failures:
-
-    invalid fixture `fixture_generator`: Invalid fixture scope: ssession at <temp_dir>/test.py:4
-
     running 1 test
 
     test test::test_fixture_generator ... FAILED
+
+    discovery failures:
+
+    invalid fixture `fixture_generator`: Invalid fixture scope: ssession at <temp_dir>/test.py:4
 
     failures:
 
@@ -563,6 +575,7 @@ fn test_invalid_fixture() {
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_runtime_skip_pytest(#[values("pytest", "karva")] framework: &str) {
     let context = IntegrationTestContext::with_file(
         "<test>/test_pytest_skip.py",
@@ -599,6 +612,151 @@ def test_conditional_skip():
         test <test>.test_pytest_skip::test_conditional_skip ... skipped: Condition was true
 
         test result: ok. 0 passed; 0 failed; 3 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_skipif_true_condition(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_skipif_decorator(framework);
+
+    let context = IntegrationTestContext::with_file(
+        "test_skipif.py",
+        &format!(
+            r"
+import {framework}
+
+@{decorator}(True, reason='Condition is true')
+def test_1():
+    assert False
+        ",
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        running 1 test
+
+        test test_skipif::test_1 ... skipped: Condition is true
+
+        test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_skipif_false_condition(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_skipif_decorator(framework);
+
+    let context = IntegrationTestContext::with_file(
+        "test_skipif.py",
+        &format!(
+            r"
+import {framework}
+
+@{decorator}(False, reason='Should not skip')
+def test_1():
+    assert True
+        ",
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        running 1 test
+
+        test test_skipif::test_1 ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_skipif_multiple_conditions(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_skipif_decorator(framework);
+
+    let context = IntegrationTestContext::with_file(
+        "test_skipif.py",
+        &format!(
+            r"
+import {framework}
+
+@{decorator}(False, True, False, reason='One condition is true')
+def test_1():
+    assert False
+        ",
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        running 1 test
+
+        test test_skipif::test_1 ... skipped: One condition is true
+
+        test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_skipif_mixed_tests(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_skipif_decorator(framework);
+
+    let context = IntegrationTestContext::with_file(
+        "test_skipif.py",
+        &format!(
+            r"
+import {framework}
+
+@{decorator}(True, reason='Skipped')
+def test_skip_this():
+    assert False
+
+@{decorator}(False, reason='Not skipped')
+def test_run_this():
+    assert True
+
+def test_normal():
+    assert True
+        ",
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        running 3 tests
+
+        test test_skipif::test_skip_this ... skipped: Skipped
+        test test_skipif::test_run_this ... ok
+        test test_skipif::test_normal ... ok
+
+        test result: ok. 2 passed; 0 failed; 1 skipped; finished in [TIME]
 
         ----- stderr -----
         ");

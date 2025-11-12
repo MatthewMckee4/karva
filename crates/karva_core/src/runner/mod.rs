@@ -34,8 +34,6 @@ impl<'proj> StandardTestRunner<'proj> {
             let (session, discovery_diagnostics) =
                 StandardDiscoverer::new(self.project).discover(py);
 
-            reporter.report_discovery_diagnostics(&discovery_diagnostics);
-
             diagnostics.add_discovery_diagnostics(discovery_diagnostics);
 
             let collected_session = TestCaseCollector::collect(py, &session);

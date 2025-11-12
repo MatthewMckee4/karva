@@ -81,6 +81,19 @@ impl<'proj> TestCase<'proj> {
             return run_result;
         }
 
+        if let Some(skip_if_tag) = &self.function.tags().skip_if_tag() {
+            if skip_if_tag.should_skip() {
+                run_result.register_test_case_result(
+                    &test_name,
+                    IndividualTestResultKind::Skipped {
+                        reason: skip_if_tag.reason(),
+                    },
+                    Some(reporter),
+                );
+                return run_result;
+            }
+        }
+
         let case_call_result = if self.kwargs.is_empty() {
             self.function.py_function().call0(py)
         } else {
