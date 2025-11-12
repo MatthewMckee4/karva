@@ -34,7 +34,6 @@ impl SkipIfTag {
         if let Ok(args_tuple) = args.extract::<Bound<'_, pyo3::types::PyTuple>>() {
             for i in 0..args_tuple.len() {
                 if let Ok(item) = args_tuple.get_item(i) {
-                    // Try to extract as bool
                     if let Ok(bool_val) = item.extract::<bool>() {
                         conditions.push(bool_val);
                     }
@@ -47,7 +46,6 @@ impl SkipIfTag {
             return None;
         }
 
-        // Check for reason in kwargs
         let reason = kwargs.get_item("reason").ok().map_or_else(
             || None,
             |reason_value| reason_value.extract::<String>().ok(),

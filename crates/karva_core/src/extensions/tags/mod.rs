@@ -172,10 +172,10 @@ impl Tags {
     }
 
     /// Return the skipif tag if it exists.
-    pub(crate) fn skipif_tag(&self) -> Option<SkipIfTag> {
+    pub(crate) fn skip_if_tag(&self) -> Option<SkipIfTag> {
         for tag in &self.inner {
-            if let Tag::SkipIf(skipif_tag) = tag {
-                return Some(skipif_tag.clone());
+            if let Tag::SkipIf(skip_if_tag) = tag {
+                return Some(skip_if_tag.clone());
             }
         }
         None

@@ -81,13 +81,12 @@ impl<'proj> TestCase<'proj> {
             return run_result;
         }
 
-        // Check for skip_if tag (both karva and pytest)
-        if let Some(skipif_tag) = &self.function.tags().skipif_tag() {
-            if skipif_tag.should_skip() {
+        if let Some(skip_if_tag) = &self.function.tags().skip_if_tag() {
+            if skip_if_tag.should_skip() {
                 run_result.register_test_case_result(
                     &test_name,
                     IndividualTestResultKind::Skipped {
-                        reason: skipif_tag.reason(),
+                        reason: skip_if_tag.reason(),
                     },
                     Some(reporter),
                 );
