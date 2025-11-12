@@ -64,11 +64,11 @@ fn test_one_test_fails() {
 
     test test_fail::test_fail ... FAILED
 
-    failures:
+    test failures:
 
     test `test_fail::test_fail` at <temp_dir>/test_fail.py:2 failed at <temp_dir>/test_fail.py:3
 
-    failures:
+    test failures:
         test_fail::test_fail at <temp_dir>/test_fail.py:2
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
@@ -100,14 +100,14 @@ fn test_two_test_fails() {
     test tests.test_fail::test_fail ... FAILED
     test tests.test_fail::test_fail2 ... FAILED
 
-    failures:
+    test failures:
 
     test `tests.test_fail::test_fail` at <temp_dir>/tests/test_fail.py:2 failed at <temp_dir>/tests/test_fail.py:3
 
     test `tests.test_fail::test_fail2` at <temp_dir>/tests/test_fail.py:5 failed at <temp_dir>/tests/test_fail.py:6
     Test failed
 
-    failures:
+    test failures:
         tests.test_fail::test_fail at <temp_dir>/tests/test_fail.py:2
         tests.test_fail::test_fail2 at <temp_dir>/tests/test_fail.py:5
 
@@ -149,12 +149,12 @@ fn test_file_importing_another_file() {
 
     test test_cross_file::test_with_helper ... FAILED
 
-    failures:
+    test failures:
 
     test `test_cross_file::test_with_helper` at <temp_dir>/test_cross_file.py:4 failed at <temp_dir>/helper.py:4
     Data validation failed
 
-    failures:
+    test failures:
         test_cross_file::test_with_helper at <temp_dir>/test_cross_file.py:4
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
@@ -281,11 +281,11 @@ fn test_multiple_fixtures_not_found() {
 
     test test_multiple_fixtures_not_found::test_multiple_fixtures_not_found ... FAILED
 
-    failures:
+    test failures:
 
     test `test_multiple_fixtures_not_found::test_multiple_fixtures_not_found` has missing fixtures: ["a", "b", "c"] at <temp_dir>/test_multiple_fixtures_not_found.py:1
 
-    failures:
+    test failures:
         test_multiple_fixtures_not_found::test_multiple_fixtures_not_found at <temp_dir>/test_multiple_fixtures_not_found.py:1
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
@@ -479,7 +479,7 @@ fn test_fixture_generator_two_yields_failing_test() {
 
     test test::test_fixture_generator [fixture_generator=1] ... FAILED
 
-    failures:
+    test failures:
 
     test `test::test_fixture_generator` at <temp_dir>/test.py:9 failed at <temp_dir>/test.py:10
 
@@ -487,7 +487,7 @@ fn test_fixture_generator_two_yields_failing_test() {
 
     warning: Fixture test::fixture_generator had more than one yield statement
 
-    failures:
+    test failures:
         test::test_fixture_generator at <temp_dir>/test.py:9
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
@@ -561,11 +561,11 @@ fn test_invalid_fixture() {
 
     invalid fixture `fixture_generator`: Invalid fixture scope: ssession at <temp_dir>/test.py:4
 
-    failures:
+    test failures:
 
     test `test::test_fixture_generator` has missing fixtures: ["fixture_generator"] at <temp_dir>/test.py:8
 
-    failures:
+    test failures:
         test::test_fixture_generator at <temp_dir>/test.py:8
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]

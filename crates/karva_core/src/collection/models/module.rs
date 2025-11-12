@@ -1,7 +1,9 @@
 use pyo3::prelude::*;
 
 use crate::{
-    collection::TestCase, diagnostic::reporter::Reporter, extensions::fixtures::Finalizers,
+    collection::TestCase,
+    diagnostic::{Diagnostic, reporter::Reporter},
+    extensions::fixtures::Finalizers,
     runner::TestRunResult,
 };
 
@@ -13,6 +15,9 @@ pub(crate) struct CollectedModule<'proj> {
 
     /// Finalizers to run after the tests are executed.
     finalizers: Finalizers,
+
+    /// Fixture diagnostics generated during the collection process.
+    fixture_diagnostics: Vec<Diagnostic>,
 }
 
 impl<'proj> CollectedModule<'proj> {
@@ -24,29 +29,35 @@ impl<'proj> CollectedModule<'proj> {
         self.test_cases.extend(test_cases);
     }
 
-    pub(crate) const fn finalizers(&self) -> &Finalizers {
-        &self.finalizers
-    }
-
     pub(crate) fn add_finalizers(&mut self, finalizers: Finalizers) {
         self.finalizers.update(finalizers);
     }
 
+    pub(crate) fn add_fixture_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
+        self.fixture_diagnostics.extend(diagnostics);
+    }
+
     pub(crate) fn run_with_reporter(
-        &self,
+        self,
         py: Python<'_>,
         reporter: &dyn Reporter,
     ) -> TestRunResult {
-        let mut diagnostics = TestRunResult::default();
+        let Self {
+            test_cases,
+            finalizers,
+            fixture_diagnostics,
+        } = self;
 
-        self.test_cases.iter().for_each(|test_case| {
-            let mut result = test_case.run(py, reporter);
-            result.add_test_diagnostics(test_case.finalizers().run(py));
-            diagnostics.update(&result);
-        });
+        let mut run_result = TestRunResult::default();
 
-        diagnostics.add_test_diagnostics(self.finalizers().run(py));
+        for test_case in test_cases {
+            run_result.update(test_case.run(py, reporter));
+        }
 
-        diagnostics
+        run_result.add_test_diagnostics(finalizers.run(py));
+
+        run_result.add_test_diagnostics(fixture_diagnostics);
+
+        run_result
     }
 }

@@ -49,7 +49,7 @@ impl ModulePath {
         self.module_name.as_str()
     }
 
-    pub(crate) const fn module_path(&self) -> &Utf8PathBuf {
+    pub(crate) const fn path(&self) -> &Utf8PathBuf {
         &self.path
     }
 }

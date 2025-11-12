@@ -13,6 +13,7 @@ pub(crate) use finalizer::{Finalizer, Finalizers};
 pub(crate) use manager::FixtureManager;
 
 use crate::{
+    discovery::DiscoveredModule,
     extensions::fixtures::python::FixtureRequest,
     name::{ModulePath, QualifiedFunctionName},
     utils::cartesian_insert,
@@ -128,6 +129,10 @@ impl Fixture {
 
     pub(crate) const fn name(&self) -> &QualifiedFunctionName {
         &self.name
+    }
+
+    pub(crate) const fn function_statement(&self) -> &StmtFunctionDef {
+        &self.function_def
     }
 
     pub(crate) const fn scope(&self) -> &FixtureScope {
@@ -452,6 +457,8 @@ pub(crate) trait HasFixtures<'proj>: std::fmt::Debug {
         py: Python<'_>,
         test_cases: &[&dyn UsesFixtures],
     ) -> Vec<&'proj Fixture>;
+
+    fn fixture_module<'a: 'proj>(&'a self) -> Option<&'a DiscoveredModule>;
 }
 
 #[cfg(test)]

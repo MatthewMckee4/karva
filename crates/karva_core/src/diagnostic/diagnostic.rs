@@ -1,18 +1,16 @@
 use karva_project::path::TestPathError;
 use pyo3::prelude::*;
 
-use crate::{
-    collection::TestCase,
-    diagnostic::{
-        render::{DisplayDiagnostic, DisplayDiscoveryDiagnostic},
-        traceback::Traceback,
-    },
-    discovery::DiscoveredModule,
+use crate::diagnostic::{
+    render::{DisplayDiagnostic, DisplayDiscoveryDiagnostic},
+    traceback::Traceback,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Diagnostic {
     TestFailure(TestFailureDiagnostic),
+
+    FixtureFailure(FixtureFailureDiagnostic),
 
     Warning(WarningDiagnostic),
 }
@@ -26,6 +24,10 @@ impl Diagnostic {
         matches!(self, Self::TestFailure(_))
     }
 
+    pub(crate) const fn is_fixture_failure(&self) -> bool {
+        matches!(self, Self::FixtureFailure(_))
+    }
+
     pub(crate) const fn is_warning(&self) -> bool {
         matches!(self, Self::Warning(_))
     }
@@ -33,8 +35,7 @@ impl Diagnostic {
     pub(crate) fn from_test_fail(
         py: Python<'_>,
         error: &PyErr,
-        test_case: &TestCase,
-        module: &DiscoveredModule,
+        location: FunctionDefinitionLocation,
     ) -> Self {
         let message = {
             let msg = error.value(py).to_string();
@@ -42,14 +43,27 @@ impl Diagnostic {
         };
         Self::TestFailure(TestFailureDiagnostic::RunFailure(
             TestRunFailureDiagnostic {
-                location: FunctionDefinitionLocation::new(
-                    test_case.function().name().to_string(),
-                    test_case.function().display_with_line(module),
-                ),
+                location,
                 traceback: Traceback::new(py, error),
                 message,
             },
         ))
+    }
+
+    pub(crate) fn from_fixture_fail(
+        py: Python<'_>,
+        error: &PyErr,
+        location: FunctionDefinitionLocation,
+    ) -> Self {
+        let message = {
+            let msg = error.value(py).to_string();
+            if msg.is_empty() { None } else { Some(msg) }
+        };
+        Self::FixtureFailure(FixtureFailureDiagnostic {
+            location,
+            traceback: Traceback::new(py, error),
+            message,
+        })
     }
 
     pub(crate) fn warning(message: &str) -> Self {
@@ -83,7 +97,7 @@ impl Diagnostic {
     pub(crate) const fn expect_test_failure(&self) -> &TestFailureDiagnostic {
         match self {
             Self::TestFailure(diagnostic) => diagnostic,
-            Self::Warning(_) => panic!("Expected test failure"),
+            _ => panic!("Expected test failure"),
         }
     }
 }
@@ -163,6 +177,24 @@ pub struct MissingFixturesDiagnostic {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FixtureFailureDiagnostic {
+    /// The location of the fixture function.
+    ///
+    /// This is a string of the format `file.py:line`.
+    pub(crate) location: FunctionDefinitionLocation,
+
+    /// The traceback of the fixture failure.
+    ///
+    /// This is used as the "info" message in the diagnostic.
+    pub(crate) traceback: Traceback,
+
+    /// The message of the fixture failure.
+    ///
+    /// This is used as the "info" message in the diagnostic.
+    pub(crate) message: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InvalidFixtureDiagnostic {
     /// The location of the fixture function.
     ///
@@ -191,7 +223,7 @@ pub(crate) struct FunctionDefinitionLocation {
 }
 
 impl FunctionDefinitionLocation {
-    const fn new(function_name: String, location: String) -> Self {
+    pub(crate) const fn new(function_name: String, location: String) -> Self {
         Self {
             function_name,
             location,
