@@ -65,10 +65,9 @@ impl Finalizer {
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
-    use karva_project::utils::module_name;
     use karva_test::TestContext;
 
-    use crate::{TestResultStats, TestRunner, diagnostic::Diagnostic};
+    use crate::TestRunner;
 
     #[test]
     fn test_fixture_generator_two_yields() {
@@ -89,17 +88,6 @@ def test_fixture_generator(fixture_generator):
 
         let result = test_context.test();
 
-        let mut expected_stats = TestResultStats::default();
-
-        expected_stats.add_passed();
-
-        let module_name_path = test_context
-            .mapped_path("<test>")
-            .unwrap()
-            .join("test_file.py");
-        let module_name = module_name(&test_context.cwd(), &module_name_path).unwrap();
-
-        assert_eq!(*result.stats(), expected_stats);
         assert_snapshot!(result.display(), @r"
         warnings:
 
@@ -107,13 +95,6 @@ def test_fixture_generator(fixture_generator):
 
         test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
         ");
-        assert_eq!(result.diagnostics().len(), 1);
-        let first_diagnostic = &result.diagnostics()[0];
-        let expected_diagnostic = Diagnostic::warning(&format!(
-            "Fixture {module_name}::fixture_generator had more than one yield statement"
-        ));
-
-        assert_eq!(*first_diagnostic, expected_diagnostic);
     }
 
     #[test]
@@ -135,17 +116,6 @@ def test_fixture_generator(fixture_generator):
 
         let result = test_context.test();
 
-        let mut expected_stats = TestResultStats::default();
-
-        expected_stats.add_passed();
-
-        let module_name_path = test_context
-            .mapped_path("<test>")
-            .unwrap()
-            .join("test_file.py");
-        let module_name = module_name(&test_context.cwd(), &module_name_path).unwrap();
-
-        assert_eq!(*result.stats(), expected_stats);
         assert_snapshot!(result.display(), @r"
         warnings:
 
@@ -153,12 +123,5 @@ def test_fixture_generator(fixture_generator):
 
         test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
         ");
-        assert_eq!(result.diagnostics().len(), 1);
-        let first_diagnostic = &result.diagnostics()[0];
-        let expected_diagnostic = Diagnostic::warning(&format!(
-            "Failed to reset fixture {module_name}::fixture_generator"
-        ));
-
-        assert_eq!(*first_diagnostic, expected_diagnostic);
     }
 }

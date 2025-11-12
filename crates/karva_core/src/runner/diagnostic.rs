@@ -208,9 +208,8 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
             writeln!(f, "failures:")?;
             writeln!(f)?;
 
-            for diagnostic in failures {
-                write!(f, "{}", diagnostic.display())?;
-                writeln!(f)?;
+            for diagnostic in &failures {
+                writeln!(f, "{}", diagnostic.display())?;
             }
         }
 
@@ -218,10 +217,23 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
             writeln!(f, "warnings:")?;
             writeln!(f)?;
 
-            for diagnostic in warnings {
-                write!(f, "{}", diagnostic.display())?;
-                writeln!(f)?;
+            for diagnostic in &warnings {
+                writeln!(f, "{}", diagnostic.display())?;
             }
+        }
+
+        if !failures.is_empty() {
+            writeln!(f, "failures:")?;
+
+            for diagnostic in &failures {
+                writeln!(
+                    f,
+                    "    {}",
+                    diagnostic.expect_test_failure().location().function_name
+                )?;
+            }
+
+            writeln!(f)?;
         }
 
         write!(

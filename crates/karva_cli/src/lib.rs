@@ -117,7 +117,9 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     let mut stdout = io::stdout().lock();
 
-    writeln!(stdout)?;
+    if result.stats().total() > 0 {
+        writeln!(stdout)?;
+    }
 
     write!(stdout, "{}", result.display())?;
 

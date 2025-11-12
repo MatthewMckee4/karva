@@ -43,9 +43,8 @@ impl std::fmt::Display for DisplayDiagnostic<'_> {
                 }) => {
                     writeln!(
                         f,
-                        "test `{function_name}` has missing fixtures: {missing_fixtures:?}",
+                        "test `{function_name}` has missing fixtures: {missing_fixtures:?} at {location}",
                     )?;
-                    writeln!(f, " --> {location}")?;
                 }
             },
 
@@ -71,12 +70,21 @@ impl<'a> DisplayDiscoveryDiagnostic<'a> {
 impl std::fmt::Display for DisplayDiscoveryDiagnostic<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.diagnostic {
-            DiscoveryDiagnostic::InvalidFixture(InvalidFixtureDiagnostic { location, message }) => {
-                writeln!(f, "error[invalid-fixture]: {message}")?;
-                writeln!(f, " --> {}", location.location)?;
+            DiscoveryDiagnostic::InvalidFixture(InvalidFixtureDiagnostic {
+                location:
+                    FunctionDefinitionLocation {
+                        function_name,
+                        location,
+                    },
+                message,
+            }) => {
+                writeln!(
+                    f,
+                    "invalid fixture `{function_name}`: {message} at {location}"
+                )?;
             }
             DiscoveryDiagnostic::InvalidPath(test_path_error) => {
-                writeln!(f, "error: {test_path_error}")?;
+                writeln!(f, "{test_path_error}")?;
             }
         }
 

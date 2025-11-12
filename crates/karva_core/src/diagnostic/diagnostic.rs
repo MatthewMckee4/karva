@@ -79,6 +79,13 @@ impl Diagnostic {
             _ => None,
         }
     }
+
+    pub(crate) const fn expect_test_failure(&self) -> &TestFailureDiagnostic {
+        match self {
+            Self::TestFailure(diagnostic) => diagnostic,
+            Self::Warning(_) => panic!("Expected test failure"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -113,6 +120,15 @@ impl DiscoveryDiagnostic {
 pub enum TestFailureDiagnostic {
     RunFailure(TestRunFailureDiagnostic),
     MissingFixtures(MissingFixturesDiagnostic),
+}
+
+impl TestFailureDiagnostic {
+    pub(crate) const fn location(&self) -> &FunctionDefinitionLocation {
+        match self {
+            Self::RunFailure(diagnostic) => &diagnostic.location,
+            Self::MissingFixtures(diagnostic) => &diagnostic.location,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

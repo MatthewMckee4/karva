@@ -75,6 +75,8 @@ impl Reporter for TestCaseReporter {
             if test_count == 1 { "" } else { "s" }
         )
         .ok();
+
+        writeln!(stdout).ok();
     }
 
     fn report_discovery_diagnostics(&self, diagnostics: &[DiscoveryDiagnostic]) {
@@ -84,7 +86,7 @@ impl Reporter for TestCaseReporter {
 
         let mut stdout = self.output.lock().unwrap();
 
-        writeln!(stdout, "discovery diagnostics:").ok();
+        writeln!(stdout, "discovery failures:").ok();
 
         writeln!(stdout).ok();
 
