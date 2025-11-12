@@ -46,6 +46,10 @@ impl TestRunResult {
         self.test_diagnostics.push(diagnostic);
     }
 
+    pub(crate) const fn discovery_diagnostics(&self) -> &Vec<DiscoveryDiagnostic> {
+        &self.discovery_diagnostics
+    }
+
     pub(crate) fn add_discovery_diagnostics(&mut self, diagnostics: Vec<DiscoveryDiagnostic>) {
         for diagnostic in diagnostics {
             self.discovery_diagnostics.push(diagnostic);
@@ -190,6 +194,16 @@ impl<'a> DisplayTestRunResult<'a> {
 
 impl std::fmt::Display for DisplayTestRunResult<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.test_run_result.discovery_diagnostics().is_empty() {
+            writeln!(f, "discovery failures:").ok();
+
+            writeln!(f).ok();
+
+            for diagnostic in self.test_run_result.discovery_diagnostics() {
+                writeln!(f, "{}", diagnostic.display()).ok();
+            }
+        }
+
         let failures = self
             .test_run_result
             .diagnostics()

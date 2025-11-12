@@ -362,11 +362,11 @@ fn test_text_file() {
     success: true
     exit_code: 0
     ----- stdout -----
+    running 0 tests
+
     discovery failures:
 
     path `<temp_dir>/random.txt` has a wrong file extension
-
-    running 0 tests
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
 
@@ -405,11 +405,11 @@ fn test_invalid_path() {
     success: true
     exit_code: 0
     ----- stdout -----
+    running 0 tests
+
     discovery failures:
 
     path `<temp_dir>/non_existing_path.py` could not be found
-
-    running 0 tests
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
 
@@ -553,13 +553,13 @@ fn test_invalid_fixture() {
     success: false
     exit_code: 1
     ----- stdout -----
-    discovery failures:
-
-    invalid fixture `fixture_generator`: Invalid fixture scope: ssession at <temp_dir>/test.py:4
-
     running 1 test
 
     test test::test_fixture_generator ... FAILED
+
+    discovery failures:
+
+    invalid fixture `fixture_generator`: Invalid fixture scope: ssession at <temp_dir>/test.py:4
 
     failures:
 

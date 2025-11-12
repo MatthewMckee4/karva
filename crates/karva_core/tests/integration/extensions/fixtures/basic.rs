@@ -425,6 +425,10 @@ fn test_invalid_pytest_fixture_scope() {
     let result = test_context.test();
 
     assert_snapshot!(result.display(), @r#"
+    discovery failures:
+
+    invalid fixture `some_fixture`: Invalid fixture scope: sessionss at <temp_dir>/<test>/test.py:4
+
     failures:
 
     test `test_all_scopes` has missing fixtures: ["some_fixture"] at <temp_dir>/<test>/test.py:8

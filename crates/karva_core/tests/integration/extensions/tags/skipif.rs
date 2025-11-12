@@ -173,3 +173,79 @@ def test_1():
         assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
 }
+
+#[test]
+fn test_skipif_empty_conditions_karva() {
+    let context = TestContext::with_file(
+        "<test>/test_skipif.py",
+        r"
+import karva
+
+@karva.tags.skip_if()
+def test_1():
+    assert True
+        ",
+    );
+
+    let result = context.test();
+
+    // Empty conditions cause the decorator to fail, resulting in no tests collected
+    assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_skipif_invalid_condition_string_karva() {
+    let context = TestContext::with_file(
+        "<test>/test_skipif.py",
+        r"
+import karva
+
+@karva.tags.skip_if('true', reason='Invalid string condition')
+def test_1():
+    assert True
+        ",
+    );
+
+    let result = context.test();
+
+    // Invalid conditions cause the decorator to fail at decoration time, resulting in no tests collected
+    assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_skipif_invalid_condition_integer_karva() {
+    let context = TestContext::with_file(
+        "<test>/test_skipif.py",
+        r"
+import karva
+
+@karva.tags.skip_if(1, 0, reason='Invalid integer conditions')
+def test_1():
+    assert True
+        ",
+    );
+
+    let result = context.test();
+
+    // Invalid conditions cause the decorator to fail at decoration time, resulting in no tests collected
+    assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_skipif_mixed_valid_invalid_conditions_karva() {
+    let context = TestContext::with_file(
+        "<test>/test_skipif.py",
+        r"
+import karva
+
+@karva.tags.skip_if(True, 'false', reason='Mixed valid and invalid')
+def test_1():
+    assert True
+        ",
+    );
+
+    let result = context.test();
+
+    // Invalid conditions cause the decorator to fail at decoration time, resulting in no tests collected
+    assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
