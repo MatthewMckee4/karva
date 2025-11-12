@@ -561,3 +561,46 @@ fn test_invalid_fixture() {
     ----- stderr -----
     "#);
 }
+
+#[rstest]
+fn test_runtime_skip_pytest(#[values("pytest", "karva")] framework: &str) {
+    let context = IntegrationTestContext::with_file(
+        "<test>/test_pytest_skip.py",
+        &format!(
+            r"
+import {framework}
+
+def test_skip_with_reason():
+    {framework}.skip('This test is skipped at runtime')
+    assert False, 'This should not be reached'
+
+def test_skip_without_reason():
+    {framework}.skip()
+    assert False, 'This should not be reached'
+
+def test_conditional_skip():
+    condition = True
+    if condition:
+        {framework}.skip('Condition was true')
+    assert False, 'This should not be reached'
+        "
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        running 3 tests
+
+        test <test>.test_pytest_skip::test_skip_with_reason ... skipped: This test is skipped at runtime
+        test <test>.test_pytest_skip::test_skip_without_reason ... skipped: 
+        test <test>.test_pytest_skip::test_conditional_skip ... skipped: Condition was true
+
+        test result: ok. 0 passed; 0 failed; 3 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
+    }
+}
