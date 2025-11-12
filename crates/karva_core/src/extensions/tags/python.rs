@@ -19,6 +19,12 @@ pub enum PyTag {
 
     #[pyo3(name = "skip")]
     Skip { reason: Option<String> },
+
+    #[pyo3(name = "skip_if")]
+    SkipIf {
+        conditions: Vec<bool>,
+        reason: Option<String>,
+    },
 }
 
 #[pymethods]
@@ -28,6 +34,7 @@ impl PyTag {
             Self::Parametrize { .. } => "parametrize".to_string(),
             Self::UseFixtures { .. } => "use_fixtures".to_string(),
             Self::Skip { .. } => "skip".to_string(),
+            Self::SkipIf { .. } => "skip_if".to_string(),
         }
     }
 }
@@ -111,6 +118,40 @@ impl PyTags {
         }
         Self {
             inner: vec![PyTag::Skip { reason: None }],
+        }
+        .into_py_any(py)
+    }
+
+    #[classmethod]
+    #[pyo3(signature = (*conditions, reason = None))]
+    pub fn skip_if(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        conditions: &Bound<'_, PyTuple>,
+        reason: Option<String>,
+    ) -> PyResult<Py<PyAny>> {
+        let mut bool_conditions = Vec::new();
+        for item in conditions.iter() {
+            if let Ok(bool_val) = item.extract::<bool>() {
+                bool_conditions.push(bool_val);
+            } else {
+                return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "Expected boolean values for conditions",
+                ));
+            }
+        }
+
+        if bool_conditions.is_empty() {
+            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "At least one condition is required",
+            ));
+        }
+
+        Self {
+            inner: vec![PyTag::SkipIf {
+                conditions: bool_conditions,
+                reason,
+            }],
         }
         .into_py_any(py)
     }
