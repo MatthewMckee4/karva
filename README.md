@@ -108,3 +108,5 @@ test result: FAILED. 1 passed; 2 failed; 0 skipped; finished in 0s
 ## Contributing
 
 Contributions are welcome! See [CONTRIBUTING.md](https://github.com/MatthewMckee4/karva/blob/main/CONTRIBUTING.md) for more information.
+
+You can also join us on [Discord](https://discord.gg/XG95vNz4Zu)
