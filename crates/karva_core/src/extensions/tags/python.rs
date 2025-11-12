@@ -161,6 +161,20 @@ impl PyTestFunction {
     }
 }
 
+// SkipError exception that can be raised to skip tests at runtime
+pyo3::create_exception!(karva, SkipError, pyo3::exceptions::PyException);
+
+/// Skip the current test at runtime with an optional reason.
+///
+/// This function raises a `SkipError` exception which will be caught by the test runner
+/// and mark the test as skipped.
+#[pyfunction]
+#[pyo3(signature = (reason = None))]
+pub fn skip(_py: Python<'_>, reason: Option<String>) -> PyResult<()> {
+    let message = reason.unwrap_or_default();
+    Err(SkipError::new_err(message))
+}
+
 #[cfg(test)]
 mod tests {
     use pyo3::{

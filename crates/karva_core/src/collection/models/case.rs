@@ -10,7 +10,10 @@ use crate::{
     Reporter,
     diagnostic::{Diagnostic, MissingFixturesDiagnostic, diagnostic::FunctionDefinitionLocation},
     discovery::{DiscoveredModule, TestFunction},
-    extensions::fixtures::{Finalizers, UsesFixtures},
+    extensions::{
+        fixtures::{Finalizers, UsesFixtures},
+        tags::python::SkipError,
+    },
     runner::{TestRunResult, diagnostic::IndividualTestResultKind},
 };
 
@@ -102,6 +105,18 @@ impl<'proj> TestCase<'proj> {
             return run_result;
         };
 
+        // Check if the exception is a skip exception (karva.SkipError or pytest.Skipped)
+        if is_skip_exception(py, &err) {
+            let reason = extract_skip_reason(py, &err);
+            run_result.register_test_case_result(
+                &test_name,
+                IndividualTestResultKind::Skipped { reason },
+                Some(reporter),
+            );
+
+            return run_result;
+        }
+
         let default_diagnostic = || Diagnostic::from_test_fail(py, &err, self, self.module);
 
         let diagnostic =
@@ -123,6 +138,43 @@ impl<'proj> TestCase<'proj> {
 
         run_result
     }
+}
+
+/// Check if the given `PyErr` is a skip exception (karva.SkipError or pytest.skip.Exception/Skipped).
+fn is_skip_exception(py: Python<'_>, err: &PyErr) -> bool {
+    // Check for karva.SkipError
+    if err.is_instance_of::<SkipError>(py) {
+        return true;
+    }
+
+    // Check for pytest.skip.Exception (the actual exception raised by pytest.skip())
+    if let Ok(pytest_module) = py.import("_pytest.outcomes")
+        && let Ok(skipped) = pytest_module.getattr("Skipped")
+        && err.matches(py, skipped).unwrap_or(false)
+    {
+        return true;
+    }
+
+    false
+}
+
+/// Extract the skip reason from a skip exception.
+fn extract_skip_reason(py: Python<'_>, err: &PyErr) -> Option<String> {
+    let value = err.value(py);
+
+    // Try to get the first argument (the message)
+    if let Ok(args) = value.getattr("args")
+        && let Ok(tuple) = args.cast::<pyo3::types::PyTuple>()
+        && let Ok(first_arg) = tuple.get_item(0)
+        && let Ok(message) = first_arg.extract::<String>()
+    {
+        if message.is_empty() {
+            return None;
+        }
+        return Some(message);
+    }
+
+    None
 }
 
 /// Handle missing fixtures.
