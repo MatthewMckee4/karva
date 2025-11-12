@@ -175,14 +175,21 @@ fn extract_skip_reason(py: Python<'_>, err: &PyErr) -> Option<String> {
     if let Ok(args) = value.getattr("args")
         && let Ok(tuple) = args.cast::<pyo3::types::PyTuple>()
         && let Ok(first_arg) = tuple.get_item(0)
-        && let Ok(msg) = first_arg.extract::<String>()
+        && let Ok(message) = first_arg.extract::<String>()
     {
-        return Some(msg);
+        if message.is_empty() {
+            return None;
+        }
+        return Some(message);
     }
 
     // Fallback to string representation of the exception
-    if let Ok(msg) = value.str() {
-        return Some(msg.to_string());
+    if let Ok(message) = value.str() {
+        let message = message.to_string();
+        if message.is_empty() {
+            return None;
+        }
+        return Some(message);
     }
 
     None

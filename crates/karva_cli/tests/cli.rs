@@ -595,7 +595,7 @@ def test_conditional_skip():
         running 3 tests
 
         test <test>.test_pytest_skip::test_skip_with_reason ... skipped: This test is skipped at runtime
-        test <test>.test_pytest_skip::test_skip_without_reason ... skipped: 
+        test <test>.test_pytest_skip::test_skip_without_reason ... skipped
         test <test>.test_pytest_skip::test_conditional_skip ... skipped: Condition was true
 
         test result: ok. 0 passed; 0 failed; 3 skipped; finished in [TIME]
