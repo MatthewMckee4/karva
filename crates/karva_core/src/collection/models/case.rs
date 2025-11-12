@@ -155,15 +155,6 @@ fn is_skip_exception(py: Python<'_>, err: &PyErr) -> bool {
         return true;
     }
 
-    // Also check the public pytest.skip namespace as a fallback
-    if let Ok(pytest_module) = py.import("pytest")
-        && let Ok(skip_module) = pytest_module.getattr("skip")
-        && let Ok(exception) = skip_module.getattr("Exception")
-        && err.matches(py, exception).unwrap_or(false)
-    {
-        return true;
-    }
-
     false
 }
 
@@ -177,15 +168,6 @@ fn extract_skip_reason(py: Python<'_>, err: &PyErr) -> Option<String> {
         && let Ok(first_arg) = tuple.get_item(0)
         && let Ok(message) = first_arg.extract::<String>()
     {
-        if message.is_empty() {
-            return None;
-        }
-        return Some(message);
-    }
-
-    // Fallback to string representation of the exception
-    if let Ok(message) = value.str() {
-        let message = message.to_string();
         if message.is_empty() {
             return None;
         }
