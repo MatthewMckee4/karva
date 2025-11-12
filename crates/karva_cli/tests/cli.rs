@@ -69,7 +69,7 @@ fn test_one_test_fails() {
     test `test_fail::test_fail` at <temp_dir>/test_fail.py:2 failed at <temp_dir>/test_fail.py:3
 
     failures:
-        test_fail::test_fail
+        test_fail::test_fail at <temp_dir>/test_fail.py:2
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -108,8 +108,8 @@ fn test_two_test_fails() {
     Test failed
 
     failures:
-        tests.test_fail::test_fail
-        tests.test_fail::test_fail2
+        tests.test_fail::test_fail at <temp_dir>/tests/test_fail.py:2
+        tests.test_fail::test_fail2 at <temp_dir>/tests/test_fail.py:5
 
     test result: FAILED. 0 passed; 2 failed; 0 skipped; finished in [TIME]
 
@@ -155,7 +155,7 @@ fn test_file_importing_another_file() {
     Data validation failed
 
     failures:
-        test_cross_file::test_with_helper
+        test_cross_file::test_with_helper at <temp_dir>/test_cross_file.py:4
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -286,7 +286,7 @@ fn test_multiple_fixtures_not_found() {
     test `test_multiple_fixtures_not_found::test_multiple_fixtures_not_found` has missing fixtures: ["a", "b", "c"] at <temp_dir>/test_multiple_fixtures_not_found.py:1
 
     failures:
-        test_multiple_fixtures_not_found::test_multiple_fixtures_not_found
+        test_multiple_fixtures_not_found::test_multiple_fixtures_not_found at <temp_dir>/test_multiple_fixtures_not_found.py:1
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -488,7 +488,7 @@ fn test_fixture_generator_two_yields_failing_test() {
     warning: Fixture test::fixture_generator had more than one yield statement
 
     failures:
-        test::test_fixture_generator
+        test::test_fixture_generator at <temp_dir>/test.py:9
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -566,7 +566,7 @@ fn test_invalid_fixture() {
     test `test::test_fixture_generator` has missing fixtures: ["fixture_generator"] at <temp_dir>/test.py:8
 
     failures:
-        test::test_fixture_generator
+        test::test_fixture_generator at <temp_dir>/test.py:8
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 

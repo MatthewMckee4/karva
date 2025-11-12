@@ -4,7 +4,7 @@ use colored::Colorize;
 
 use crate::{
     Reporter,
-    diagnostic::{Diagnostic, DiscoveryDiagnostic},
+    diagnostic::{Diagnostic, DiscoveryDiagnostic, diagnostic::FunctionDefinitionLocation},
 };
 
 #[derive(Debug, Clone)]
@@ -240,11 +240,12 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
             writeln!(f, "failures:")?;
 
             for diagnostic in &failures {
-                writeln!(
-                    f,
-                    "    {}",
-                    diagnostic.expect_test_failure().location().function_name
-                )?;
+                let FunctionDefinitionLocation {
+                    location,
+                    function_name,
+                } = diagnostic.expect_test_failure().location();
+
+                writeln!(f, "    {function_name} at {location}")?;
             }
 
             writeln!(f)?;

@@ -154,7 +154,7 @@ def test_fixtures_given_by_decorator(a, b):
     test `<test>.test_fixtures_given_by_decorator_one_missing::test_fixtures_given_by_decorator` has missing fixtures: ["b"] at <temp_dir>/<test>/test_fixtures_given_by_decorator_one_missing.py:12
 
     failures:
-        <test>.test_fixtures_given_by_decorator_one_missing::test_fixtures_given_by_decorator
+        <test>.test_fixtures_given_by_decorator_one_missing::test_fixtures_given_by_decorator at <temp_dir>/<test>/test_fixtures_given_by_decorator_one_missing.py:12
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     "#);
