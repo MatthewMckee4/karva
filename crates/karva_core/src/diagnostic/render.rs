@@ -22,13 +22,21 @@ impl std::fmt::Display for DisplayDiagnostic<'_> {
                     location:
                         FunctionDefinitionLocation {
                             function_name,
-                            location,
+                            location: function_location,
                         },
                     traceback,
                     message,
                 }) => {
-                    let location = traceback.location.as_ref().unwrap_or(location);
-                    writeln!(f, "test `{function_name}` failed at {location}")?;
+                    let location_fail_string = traceback
+                        .location
+                        .as_ref()
+                        .map(|location| format!("at {location}"))
+                        .unwrap_or_default();
+
+                    writeln!(
+                        f,
+                        "test `{function_name}` at {function_location} failed {location_fail_string}"
+                    )?;
                     if let Some(message) = message {
                         writeln!(f, "{message}")?;
                     }
