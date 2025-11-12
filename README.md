@@ -84,19 +84,23 @@ uv run karva test tests/test.py
 Provides the following output:
 
 ```bash
+running 3 tests
+
 test tests.test::test_pass ... ok
 test tests.test::test_fail ... FAILED
 test tests.test::test_error ... FAILED
 
-fail[assertion-error]: This test should fail
- --> tests.test::test_fail at tests/test.py:5
- | File "tests/test.py", line 6, in test_fail
- |   assert False, "This test should fail"
+failures:
 
-fail[value-error]: This is an error
- --> tests.test::test_error at tests/test.py:9
- | File "tests/test.py", line 10, in test_error
- |   raise ValueError("This is an error")
+test `test_fail` failed at tests/test.py:6
+This test should fail
+
+test `test_error` failed at tests/test.py:10
+This is an error
+
+failures:
+    test_fail
+    test_error
 
 test result: FAILED. 1 passed; 2 failed; 0 skipped; finished in 0s
 ```

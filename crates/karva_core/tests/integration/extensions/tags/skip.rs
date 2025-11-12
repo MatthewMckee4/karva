@@ -1,4 +1,4 @@
-use karva_core::TestResultStats;
+use insta::{allow_duplicates, assert_snapshot};
 use karva_test::TestContext;
 use rstest::rstest;
 
@@ -23,11 +23,9 @@ def test_1():
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    expected_stats.add_skipped();
-
-    assert_eq!(*result.stats(), expected_stats);
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]");
+    }
 }
 
 #[rstest]
@@ -47,11 +45,9 @@ def test_1():
     );
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    expected_stats.add_skipped();
-
-    assert_eq!(*result.stats(), expected_stats);
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]");
+    }
 }
 
 #[rstest]
@@ -72,11 +68,9 @@ def test_1():
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    expected_stats.add_skipped();
-
-    assert_eq!(*result.stats(), expected_stats);
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]");
+    }
 }
 
 #[rstest]
@@ -97,9 +91,7 @@ def test_1():
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    expected_stats.add_skipped();
-
-    assert_eq!(*result.stats(), expected_stats);
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]");
+    }
 }

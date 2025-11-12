@@ -50,32 +50,24 @@ impl Finalizer {
     pub(crate) fn run(&self, py: Python<'_>) -> Option<Diagnostic> {
         let mut generator = self.fixture_return.bind(py).clone();
         match generator.next()? {
-            Ok(_) => Some(Diagnostic::warning(
-                "fixture-error",
-                Some(format!(
-                    "Fixture {} had more than one yield statement",
-                    self.fixture_name
-                )),
-                None,
-            )),
-            Err(_) => Some(Diagnostic::warning(
-                "fixture-error",
-                Some(format!("Failed to reset fixture {}", self.fixture_name)),
-                None,
-            )),
+            Ok(_) => Some(Diagnostic::warning(&format!(
+                "Fixture {} had more than one yield statement",
+                self.fixture_name
+            ))),
+            Err(_) => Some(Diagnostic::warning(&format!(
+                "Failed to reset fixture {}",
+                self.fixture_name
+            ))),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use karva_project::utils::module_name;
+    use insta::assert_snapshot;
     use karva_test::TestContext;
 
-    use crate::{
-        TestResultStats, TestRunner,
-        diagnostic::{Diagnostic, DiagnosticSeverity},
-    };
+    use crate::TestRunner;
 
     #[test]
     fn test_fixture_generator_two_yields() {
@@ -96,29 +88,13 @@ def test_fixture_generator(fixture_generator):
 
         let result = test_context.test();
 
-        let mut expected_stats = TestResultStats::default();
+        assert_snapshot!(result.display(), @r"
+        warnings:
 
-        expected_stats.add_passed();
+        warning: Fixture <test>.test_file::fixture_generator had more than one yield statement
 
-        let module_name_path = test_context
-            .mapped_path("<test>")
-            .unwrap()
-            .join("test_file.py");
-        let module_name = module_name(&test_context.cwd(), &module_name_path).unwrap();
-
-        assert_eq!(*result.stats(), expected_stats, "{result:?}");
-
-        assert_eq!(result.diagnostics().len(), 1);
-        let first_diagnostic = &result.diagnostics()[0];
-        let expected_diagnostic = Diagnostic::warning(
-            "fixture-error",
-            Some(format!(
-                "Fixture {module_name}::fixture_generator had more than one yield statement"
-            )),
-            None,
-        );
-
-        assert_eq!(*first_diagnostic, expected_diagnostic);
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+        ");
     }
 
     #[test]
@@ -140,27 +116,12 @@ def test_fixture_generator(fixture_generator):
 
         let result = test_context.test();
 
-        let mut expected_stats = TestResultStats::default();
+        assert_snapshot!(result.display(), @r"
+        warnings:
 
-        expected_stats.add_passed();
+        warning: Failed to reset fixture <test>.test_file::fixture_generator
 
-        let module_name_path = test_context
-            .mapped_path("<test>")
-            .unwrap()
-            .join("test_file.py");
-        let module_name = module_name(&test_context.cwd(), &module_name_path).unwrap();
-
-        assert_eq!(*result.stats(), expected_stats, "{result:?}");
-
-        assert_eq!(result.diagnostics().len(), 1);
-        let first_diagnostic = &result.diagnostics()[0];
-        assert_eq!(
-            first_diagnostic.inner().message(),
-            Some(format!("Failed to reset fixture {module_name}::fixture_generator").as_str()),
-        );
-        assert_eq!(
-            first_diagnostic.severity(),
-            &DiagnosticSeverity::Warning("fixture-error".to_string())
-        );
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+        ");
     }
 }

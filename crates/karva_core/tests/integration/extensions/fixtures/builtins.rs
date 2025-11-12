@@ -1,9 +1,8 @@
-use karva_core::TestResultStats;
+use insta::{allow_duplicates, assert_snapshot};
 use karva_test::TestContext;
 use rstest::rstest;
 
 use crate::common::TestRunnerExt;
-
 #[rstest]
 fn test_temp_directory_fixture(#[values("tmp_path", "temp_path", "temp_dir")] fixture_name: &str) {
     let test_context = TestContext::with_file(
@@ -23,11 +22,7 @@ fn test_temp_directory_fixture(#[values("tmp_path", "temp_path", "temp_dir")] fi
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    expected_stats.add_passed();
-
-    assert_eq!(*result.stats(), expected_stats);
-
-    assert!(result.diagnostics().is_empty());
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    }
 }

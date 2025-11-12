@@ -34,13 +34,15 @@ impl<'proj> StandardTestRunner<'proj> {
             let (session, discovery_diagnostics) =
                 StandardDiscoverer::new(self.project).discover(py);
 
+            reporter.report_discovery_diagnostics(&discovery_diagnostics);
+
+            diagnostics.add_discovery_diagnostics(discovery_diagnostics);
+
             let collected_session = TestCaseCollector::collect(py, &session);
 
             let total_test_cases = collected_session.total_test_cases();
 
             reporter.log_test_count(total_test_cases);
-
-            diagnostics.add_diagnostics(discovery_diagnostics);
 
             diagnostics.update(&collected_session.run_with_reporter(py, reporter));
 

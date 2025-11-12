@@ -1,4 +1,4 @@
-use karva_core::TestResultStats;
+use insta::assert_snapshot;
 use karva_test::TestContext;
 
 use crate::common::TestRunnerExt;
@@ -24,11 +24,7 @@ def test_with_use_fixture():
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    expected_stats.add_passed();
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -56,10 +52,7 @@ def test_with_multiple_use_fixtures():
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-    expected_stats.add_passed();
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -86,10 +79,7 @@ def test_combined_fixtures(param_fixture):
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-    expected_stats.add_passed();
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -116,12 +106,7 @@ def test_use_fixtures_with_parametrize(value):
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-    for _ in 0..3 {
-        expected_stats.add_passed();
-    }
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -150,10 +135,7 @@ def test_multiple_use_fixtures_decorators():
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-    expected_stats.add_passed();
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -171,11 +153,7 @@ def test_missing_fixture():
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    expected_stats.add_passed();
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -200,10 +178,7 @@ def test_use_fixtures_with_generator():
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-    expected_stats.add_passed();
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -231,12 +206,7 @@ def test_session_2():
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-    for _ in 0..2 {
-        expected_stats.add_passed();
-    }
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -270,11 +240,7 @@ def test_mixed_fixtures(shared_fixture):
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    expected_stats.add_passed();
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -298,11 +264,7 @@ def test_with_pytest_use_fixture():
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    expected_stats.add_passed();
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -330,10 +292,7 @@ def test_with_multiple_pytest_use_fixtures():
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-    expected_stats.add_passed();
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -360,12 +319,7 @@ def test_pytest_use_fixtures_with_parametrize(value):
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-    for _ in 0..3 {
-        expected_stats.add_passed();
-    }
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -393,10 +347,5 @@ def test_pytest_session_2():
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-    for _ in 0..2 {
-        expected_stats.add_passed();
-    }
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
 }

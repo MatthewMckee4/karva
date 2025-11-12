@@ -5,17 +5,14 @@ use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
     collection::TestCase,
-    diagnostic::{
-        Diagnostic, DiagnosticErrorType, DiagnosticSeverity, SubDiagnostic,
-        TestCaseCollectionDiagnosticType, TestCaseDiagnosticType,
-    },
+    diagnostic::Diagnostic,
     discovery::DiscoveredModule,
     extensions::{
         fixtures::{FixtureManager, UsesFixtures},
         tags::Tags,
     },
     name::{ModulePath, QualifiedFunctionName},
-    utils::{Upcast, cartesian_insert},
+    utils::{Upcast, cartesian_insert, function_definition_location},
 };
 
 /// Represents a single test function discovered from Python source code.
@@ -71,11 +68,7 @@ impl TestFunction {
 
     /// Creates a display string showing the function's file location and line number.
     pub(crate) fn display_with_line(&self, module: &DiscoveredModule) -> String {
-        let line_index = module.line_index();
-        let source_text = module.source_text();
-        let start = self.function_definition.range.start();
-        let line_number = line_index.line_column(start, source_text);
-        format!("{}:{}", module.path(), line_number.line)
+        function_definition_location(module, &self.function_definition)
     }
 
     /// Collects test cases from this function, resolving fixtures and handling parametrization.
@@ -107,7 +100,7 @@ impl TestFunction {
         for params in parametrize_args {
             setup_fixture_manager(fixture_manager);
 
-            let mut missing_fixture_diagnostics = Vec::new();
+            let mut missing_fixtures = Vec::new();
 
             // This is used to collect all fixture for each test case.
             // Currently, the only way we will generate more than one test case here is if
@@ -136,13 +129,21 @@ impl TestFunction {
                     )
                     .unwrap();
                 } else {
-                    missing_fixture_diagnostics
-                        .push(SubDiagnostic::fixture_not_found(fixture_name));
+                    missing_fixtures.push(fixture_name.clone());
                 }
             }
 
-            let diagnostic =
-                self.create_missing_fixture_diagnostic(module, missing_fixture_diagnostics);
+            let diagnostic = if missing_fixtures.is_empty() {
+                None
+            } else {
+                let test_case_location = self.display_with_line(module);
+
+                Some(Diagnostic::missing_fixtures(
+                    missing_fixtures,
+                    test_case_location,
+                    self.function_name().to_string(),
+                ))
+            };
 
             for resolved_fixtures in all_resolved_fixtures {
                 let test_case = TestCase::new(self, resolved_fixtures, module, diagnostic.clone());
@@ -156,30 +157,6 @@ impl TestFunction {
         }
 
         test_cases
-    }
-
-    fn create_missing_fixture_diagnostic(
-        &self,
-        module: &DiscoveredModule,
-        missing_fixture_diagnostics: Vec<SubDiagnostic>,
-    ) -> Option<Diagnostic> {
-        if missing_fixture_diagnostics.is_empty() {
-            None
-        } else {
-            let mut diagnostic = Diagnostic::new(
-                Some(format!("Fixture(s) not found for {}", self.name())),
-                Some(self.display_with_line(module)),
-                None,
-                DiagnosticSeverity::Error(DiagnosticErrorType::TestCase {
-                    test_name: self.name().to_string(),
-                    diagnostic_type: TestCaseDiagnosticType::Collection(
-                        TestCaseCollectionDiagnosticType::FixtureNotFound,
-                    ),
-                }),
-            );
-            diagnostic.add_sub_diagnostics(missing_fixture_diagnostics);
-            Some(diagnostic)
-        }
     }
 }
 

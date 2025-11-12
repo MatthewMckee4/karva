@@ -8,9 +8,7 @@ use regex::Regex;
 
 use crate::{
     Reporter,
-    diagnostic::{
-        Diagnostic, FixtureSubDiagnosticType, SubDiagnosticErrorType, SubDiagnosticSeverity,
-    },
+    diagnostic::{Diagnostic, MissingFixturesDiagnostic, diagnostic::FunctionDefinitionLocation},
     discovery::{DiscoveredModule, TestFunction},
     extensions::fixtures::{Finalizers, UsesFixtures},
     runner::{TestRunResult, diagnostic::IndividualTestResultKind},
@@ -121,7 +119,7 @@ impl<'proj> TestCase<'proj> {
             Some(reporter),
         );
 
-        run_result.add_diagnostic(diagnostic);
+        run_result.add_test_diagnostic(diagnostic);
 
         run_result
     }
@@ -135,30 +133,33 @@ impl<'proj> TestCase<'proj> {
 /// Otherwise, return None.
 fn handle_missing_fixtures(
     missing_args: &HashSet<String>,
-    mut diagnostic: Diagnostic,
+    diagnostic: Diagnostic,
 ) -> Option<Diagnostic> {
-    let sub_diagnostics: Vec<_> = diagnostic
-        .sub_diagnostics()
+    let missing_fixtures_diagnostic = diagnostic.into_missing_fixtures()?;
+
+    let MissingFixturesDiagnostic {
+        location:
+            FunctionDefinitionLocation {
+                function_name,
+                location,
+            },
+        missing_fixtures,
+    } = missing_fixtures_diagnostic;
+
+    let actually_missing_fixtures = missing_fixtures
         .iter()
-        .filter_map(|sd| {
-            let SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
-                FixtureSubDiagnosticType::NotFound(fixture_name),
-            )) = sd.severity();
+        .filter(|fixture| missing_args.contains(*fixture))
+        .cloned()
+        .collect::<Vec<_>>();
 
-            if missing_args.contains(fixture_name) {
-                Some(sd.clone())
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    diagnostic.clear_sub_diagnostics();
-    if sub_diagnostics.is_empty() {
+    if actually_missing_fixtures.is_empty() {
         None
     } else {
-        diagnostic.add_sub_diagnostics(sub_diagnostics);
-        Some(diagnostic)
+        Some(Diagnostic::missing_fixtures(
+            actually_missing_fixtures,
+            location,
+            function_name,
+        ))
     }
 }
 

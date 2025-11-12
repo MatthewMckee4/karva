@@ -101,7 +101,7 @@ impl TestPath {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TestPathError {
     NotFound(Utf8PathBuf),
     WrongFileExtension(Utf8PathBuf),
@@ -123,13 +123,13 @@ impl TestPathError {
 impl std::fmt::Display for TestPathError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NotFound(path) => write!(f, "Path `{path}` could not be found"),
+            Self::NotFound(path) => write!(f, "path `{path}` could not be found"),
             Self::WrongFileExtension(path) => {
-                write!(f, "Path `{path}` has a wrong file extension")
+                write!(f, "path `{path}` has a wrong file extension")
             }
-            Self::InvalidUtf8Path(path) => write!(f, "Path `{path}` is invalid"),
+            Self::InvalidUtf8Path(path) => write!(f, "path `{path}` is invalid"),
             Self::MissingFunctionName(path) => {
-                write!(f, "Invalid function specification: `{path}::`")
+                write!(f, "invalid function specification: `{path}::`")
             }
         }
     }
@@ -147,6 +147,7 @@ mod tests {
         let path = env.create_file("test.py", "def test(): pass");
 
         let result = TestPath::new(path.as_ref());
+
         assert!(matches!(result, Ok(TestPath::File(_))));
     }
 
@@ -157,6 +158,7 @@ mod tests {
         let path_without_ext = env.temp_path("test");
 
         let result = TestPath::new(path_without_ext.as_ref());
+
         assert!(matches!(result, Ok(TestPath::File(_))));
     }
 

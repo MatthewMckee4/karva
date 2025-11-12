@@ -58,7 +58,7 @@ impl<'proj> CollectedPackage<'proj> {
             .iter()
             .for_each(|package| diagnostics.update(&package.run_with_reporter(py, reporter)));
 
-        diagnostics.add_diagnostics(self.finalizers.run(py));
+        diagnostics.add_test_diagnostics(self.finalizers.run(py));
 
         diagnostics
     }
