@@ -543,7 +543,7 @@ fn test_invalid_fixture() {
     ----- stdout -----
     discovery failures:
 
-    invalid fixture `<temp_dir>/test.py:4`: Invalid fixture scope: ssession at fixture_generator
+    invalid fixture `fixture_generator`: Invalid fixture scope: ssession at <temp_dir>/test.py:4
 
     running 1 test
 

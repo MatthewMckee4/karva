@@ -65,7 +65,7 @@ impl Diagnostic {
     ) -> Self {
         Self::TestFailure(TestFailureDiagnostic::MissingFixtures(
             MissingFixturesDiagnostic {
-                location: FunctionDefinitionLocation::new(location, function_name),
+                location: FunctionDefinitionLocation::new(function_name, location),
                 missing_fixtures,
             },
         ))
@@ -111,7 +111,7 @@ impl DiscoveryDiagnostic {
     ) -> Self {
         Self::InvalidFixture(InvalidFixtureDiagnostic {
             message,
-            location: FunctionDefinitionLocation::new(location, function_name),
+            location: FunctionDefinitionLocation::new(function_name, location),
         })
     }
 }
