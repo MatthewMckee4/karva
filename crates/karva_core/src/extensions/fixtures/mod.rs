@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+};
 
 use pyo3::{prelude::*, types::PyDict};
 use ruff_python_ast::{Expr, StmtFunctionDef};
@@ -6,17 +9,19 @@ use ruff_python_ast::{Expr, StmtFunctionDef};
 pub mod builtins;
 pub mod finalizer;
 pub mod manager;
-
 pub mod python;
+pub mod utils;
 
 pub(crate) use finalizer::{Finalizer, Finalizers};
 pub(crate) use manager::FixtureManager;
+pub(crate) use utils::{handle_missing_fixtures, missing_arguments_from_error};
 
 use crate::{
+    diagnostic::{Diagnostic, FunctionDefinitionLocation, FunctionKind},
     discovery::DiscoveredModule,
     extensions::fixtures::python::FixtureRequest,
     name::{ModulePath, QualifiedFunctionName},
-    utils::cartesian_insert,
+    utils::{cartesian_insert, function_definition_location},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -98,7 +103,7 @@ pub(crate) fn resolve_dynamic_scope(
 
 pub(crate) struct Fixture {
     name: QualifiedFunctionName,
-    function_def: StmtFunctionDef,
+    function_definition: StmtFunctionDef,
     scope: FixtureScope,
     auto_use: bool,
     function: Py<PyAny>,
@@ -109,7 +114,7 @@ pub(crate) struct Fixture {
 impl Fixture {
     pub(crate) const fn new(
         name: QualifiedFunctionName,
-        function_def: StmtFunctionDef,
+        function_definition: StmtFunctionDef,
         scope: FixtureScope,
         auto_use: bool,
         function: Py<PyAny>,
@@ -118,7 +123,7 @@ impl Fixture {
     ) -> Self {
         Self {
             name,
-            function_def,
+            function_definition,
             scope,
             auto_use,
             function,
@@ -129,10 +134,6 @@ impl Fixture {
 
     pub(crate) const fn name(&self) -> &QualifiedFunctionName {
         &self.name
-    }
-
-    pub(crate) const fn function_statement(&self) -> &StmtFunctionDef {
-        &self.function_def
     }
 
     pub(crate) const fn scope(&self) -> &FixtureScope {
@@ -151,11 +152,14 @@ impl Fixture {
         &self,
         py: Python<'a>,
         fixture_manager: &mut FixtureManager,
-    ) -> PyResult<Vec<Bound<'a, PyAny>>> {
+        module: &DiscoveredModule,
+    ) -> Result<Vec<Bound<'a, PyAny>>, Diagnostic> {
         // A hashmap of fixtures for each param
         let mut each_call_fixtures: Vec<HashMap<String, Py<PyAny>>> = vec![HashMap::new()];
 
         let param_names = self.dependant_fixtures(py);
+
+        let mut missing_fixtures = HashSet::new();
 
         for name in &param_names {
             if name == "request" {
@@ -169,7 +173,8 @@ impl Fixture {
                     let request = FixtureRequest::new(param_value);
                     let request_obj = Py::new(py, request)?;
                     Ok(request_obj.into_any())
-                })?;
+                })
+                .unwrap();
             } else if let Some(fixture_returns) =
                 fixture_manager.get_fixture_with_name(py, name, Some(&[self.name()]))
             {
@@ -178,8 +183,22 @@ impl Fixture {
                     &fixture_returns,
                     name,
                     |fixture_return| Ok(fixture_return.clone()),
-                )?;
+                )
+                .unwrap();
+            } else {
+                missing_fixtures.insert(name.clone());
             }
+        }
+
+        let test_case_location = function_definition_location(module, &self.function_definition);
+
+        if !missing_fixtures.is_empty() {
+            return Err(Diagnostic::missing_fixtures(
+                missing_fixtures.into_iter().collect(),
+                test_case_location,
+                self.name().to_string(),
+                FunctionKind::Fixture,
+            ));
         }
 
         let mut res = Vec::new();
@@ -191,22 +210,39 @@ impl Fixture {
                 let _ = kwargs.set_item(key, value);
             }
 
+            let default_diagnostic = |err: PyErr| {
+                Diagnostic::from_fixture_fail(
+                    py,
+                    &err,
+                    FunctionDefinitionLocation::new(
+                        self.name().to_string(),
+                        test_case_location.clone(),
+                    ),
+                )
+            };
+
             res.push(if self.is_generator() {
-                let mut generator = self
-                    .function
-                    .bind(py)
-                    .call((), Some(&kwargs))?
-                    .cast_into()?;
+                match self.function.bind(py).call((), Some(&kwargs)) {
+                    Ok(generator) => {
+                        let mut generator = generator.cast_into().unwrap();
 
-                let finalizer = Finalizer::new(self.name().to_string(), generator.clone().unbind());
-                fixture_manager.insert_finalizer(finalizer, self.scope());
+                        let finalizer =
+                            Finalizer::new(self.name().to_string(), generator.clone().unbind());
+                        fixture_manager.insert_finalizer(finalizer, self.scope());
 
-                generator
-                    .next()
-                    .expect("generator should yield at least once")?
+                        generator
+                            .next()
+                            .expect("generator should yield at least once")
+                            .unwrap()
+                    }
+                    Err(err) => return Err(default_diagnostic(err)),
+                }
             } else {
                 let function_return = self.function.call(py, (), Some(&kwargs));
-                function_return.map(|r| r.into_bound(py))?
+                match function_return.map(|r| r.into_bound(py)) {
+                    Ok(return_value) => return_value,
+                    Err(err) => return Err(default_diagnostic(err)),
+                }
             });
         }
 
@@ -403,7 +439,7 @@ impl UsesFixtures for StmtFunctionDef {
 
 impl UsesFixtures for Fixture {
     fn dependant_fixtures(&self, py: Python<'_>) -> Vec<String> {
-        self.function_def.dependant_fixtures(py)
+        self.function_definition.dependant_fixtures(py)
     }
 }
 

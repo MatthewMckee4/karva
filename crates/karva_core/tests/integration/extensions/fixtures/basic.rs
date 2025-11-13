@@ -537,7 +537,7 @@ fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &st
 #[test]
 fn test_fixture_fails_to_run() {
     let context = TestContext::with_file(
-        "<test>/test_fixture_fails_to_run.py",
+        "<test>/test.py",
         r"
                 from karva import fixture
 
@@ -555,15 +555,49 @@ fn test_fixture_fails_to_run() {
     assert_snapshot!(result.display(), @r#"
     fixture failures:
 
-    fixture function `failing_fixture` at <temp_dir>/<test>/test_fixture_fails_to_run.py:4 failed at <temp_dir>/<test>/test_fixture_fails_to_run.py:6
+    fixture function `<test>.test::failing_fixture` at <temp_dir>/<test>/test.py:4 failed at <temp_dir>/<test>/test.py:6
     Fixture failed
 
     test failures:
 
-    test `<test>.test_fixture_fails_to_run::test_failing_fixture` has missing fixtures: ["failing_fixture"] at <temp_dir>/<test>/test_fixture_fails_to_run.py:8
+    test `<test>.test::test_failing_fixture` has missing fixtures: ["failing_fixture"] at <temp_dir>/<test>/test.py:8
 
     test failures:
-        <test>.test_fixture_fails_to_run::test_failing_fixture at <temp_dir>/<test>/test_fixture_fails_to_run.py:8
+        <test>.test::test_failing_fixture at <temp_dir>/<test>/test.py:8
+
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+    "#);
+}
+
+#[test]
+fn test_fixture_missing_fixtures() {
+    let context = TestContext::with_file(
+        "<test>/test.py",
+        r"
+                from karva import fixture
+
+                @fixture
+                def failing_fixture(missing_fixture):
+                    return 1
+
+                def test_failing_fixture(failing_fixture):
+                    pass
+                ",
+    );
+
+    let result = context.test();
+
+    assert_snapshot!(result.display(), @r#"
+    fixture failures:
+
+    fixture `<test>.test::failing_fixture` has missing fixtures: ["missing_fixture"] at <temp_dir>/<test>/test.py:4
+
+    test failures:
+
+    test `<test>.test::test_failing_fixture` has missing fixtures: ["failing_fixture"] at <temp_dir>/<test>/test.py:8
+
+    test failures:
+        <test>.test::test_failing_fixture at <temp_dir>/<test>/test.py:8
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     "#);

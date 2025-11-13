@@ -256,10 +256,13 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
             writeln!(f, "test failures:")?;
 
             for diagnostic in &test_failures {
-                let FunctionDefinitionLocation {
+                let Some(FunctionDefinitionLocation {
                     location,
                     function_name,
-                } = diagnostic.expect_test_failure().location();
+                }) = diagnostic.location()
+                else {
+                    continue;
+                };
 
                 writeln!(f, "    {function_name} at {location}")?;
             }

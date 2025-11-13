@@ -12,6 +12,8 @@ pub enum Diagnostic {
 
     FixtureFailure(FixtureFailureDiagnostic),
 
+    MissingFixtures(MissingFixturesDiagnostic),
+
     Warning(WarningDiagnostic),
 }
 
@@ -21,11 +23,25 @@ impl Diagnostic {
     }
 
     pub(crate) const fn is_test_failure(&self) -> bool {
-        matches!(self, Self::TestFailure(_))
+        matches!(
+            self,
+            Self::TestFailure(_)
+                | Self::MissingFixtures(MissingFixturesDiagnostic {
+                    function_kind: FunctionKind::Test,
+                    ..
+                })
+        )
     }
 
     pub(crate) const fn is_fixture_failure(&self) -> bool {
-        matches!(self, Self::FixtureFailure(_))
+        matches!(
+            self,
+            Self::FixtureFailure(_)
+                | Self::MissingFixtures(MissingFixturesDiagnostic {
+                    function_kind: FunctionKind::Fixture,
+                    ..
+                })
+        )
     }
 
     pub(crate) const fn is_warning(&self) -> bool {
@@ -41,13 +57,11 @@ impl Diagnostic {
             let msg = error.value(py).to_string();
             if msg.is_empty() { None } else { Some(msg) }
         };
-        Self::TestFailure(TestFailureDiagnostic::RunFailure(
-            TestRunFailureDiagnostic {
-                location,
-                traceback: Traceback::new(py, error),
-                message,
-            },
-        ))
+        Self::TestFailure(TestFailureDiagnostic {
+            location,
+            traceback: Traceback::new(py, error),
+            message,
+        })
     }
 
     pub(crate) fn from_fixture_fail(
@@ -76,28 +90,28 @@ impl Diagnostic {
         missing_fixtures: Vec<String>,
         location: String,
         function_name: String,
+        function_kind: FunctionKind,
     ) -> Self {
-        Self::TestFailure(TestFailureDiagnostic::MissingFixtures(
-            MissingFixturesDiagnostic {
-                location: FunctionDefinitionLocation::new(function_name, location),
-                missing_fixtures,
-            },
-        ))
+        Self::MissingFixtures(MissingFixturesDiagnostic {
+            location: FunctionDefinitionLocation::new(function_name, location),
+            missing_fixtures,
+            function_kind,
+        })
     }
 
     pub(crate) fn into_missing_fixtures(self) -> Option<MissingFixturesDiagnostic> {
         match self {
-            Self::TestFailure(TestFailureDiagnostic::MissingFixtures(diagnostic)) => {
-                Some(diagnostic)
-            }
+            Self::MissingFixtures(diagnostic) => Some(diagnostic),
             _ => None,
         }
     }
 
-    pub(crate) const fn expect_test_failure(&self) -> &TestFailureDiagnostic {
+    pub(crate) const fn location(&self) -> Option<&FunctionDefinitionLocation> {
         match self {
-            Self::TestFailure(diagnostic) => diagnostic,
-            _ => panic!("Expected test failure"),
+            Self::MissingFixtures(diagnostic) => Some(&diagnostic.location),
+            Self::TestFailure(diagnostic) => Some(&diagnostic.location),
+            Self::FixtureFailure(diagnostic) => Some(&diagnostic.location),
+            Self::Warning(_) => None,
         }
     }
 }
@@ -131,22 +145,7 @@ impl DiscoveryDiagnostic {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TestFailureDiagnostic {
-    RunFailure(TestRunFailureDiagnostic),
-    MissingFixtures(MissingFixturesDiagnostic),
-}
-
-impl TestFailureDiagnostic {
-    pub(crate) const fn location(&self) -> &FunctionDefinitionLocation {
-        match self {
-            Self::RunFailure(diagnostic) => &diagnostic.location,
-            Self::MissingFixtures(diagnostic) => &diagnostic.location,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TestRunFailureDiagnostic {
+pub struct TestFailureDiagnostic {
     /// The location of the test function.
     ///
     /// This is a string of the format `file.py:line`.
@@ -174,6 +173,9 @@ pub struct MissingFixturesDiagnostic {
 
     /// The missing fixture names from the functions definition.
     pub(crate) missing_fixtures: Vec<String>,
+
+    /// The kind of function that is missing fixtures.
+    pub(crate) function_kind: FunctionKind,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -229,4 +231,10 @@ impl FunctionDefinitionLocation {
             location,
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum FunctionKind {
+    Fixture,
+    Test,
 }

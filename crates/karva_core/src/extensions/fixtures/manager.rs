@@ -2,13 +2,13 @@ use indexmap::IndexMap;
 use pyo3::{prelude::*, types::PyAny};
 
 use crate::{
-    diagnostic::{Diagnostic, diagnostic::FunctionDefinitionLocation},
+    diagnostic::Diagnostic,
     discovery::DiscoveredPackage,
     extensions::fixtures::{
         Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, UsesFixtures, builtins,
     },
     name::QualifiedFunctionName,
-    utils::{function_definition_location, iter_with_ancestors},
+    utils::iter_with_ancestors,
 };
 
 /// Collection of fixtures and their finalizers for a specific scope.
@@ -237,7 +237,11 @@ impl<'a> FixtureManager<'a> {
             }
         }
 
-        match fixture.call(py, self) {
+        let Some(module) = current.fixture_module() else {
+            return;
+        };
+
+        match fixture.call(py, self, module) {
             Ok(fixture_return) => {
                 self.insert_fixture(
                     fixture_return
@@ -247,19 +251,8 @@ impl<'a> FixtureManager<'a> {
                     fixture,
                 );
             }
-            Err(error) => {
-                if let Some(module) = current.fixture_module() {
-                    let fixture_location =
-                        function_definition_location(module, fixture.function_statement());
-                    let location = FunctionDefinitionLocation::new(
-                        fixture.name().function_name().to_string(),
-                        fixture_location,
-                    );
-                    let diagnostic = Diagnostic::from_fixture_fail(py, &error, location);
-                    self.diagnostics.push(diagnostic);
-                } else {
-                    tracing::debug!("Failed to call fixture {}: {}", fixture.name(), error);
-                }
+            Err(diagnostic) => {
+                self.diagnostics.push(diagnostic);
             }
         }
     }
