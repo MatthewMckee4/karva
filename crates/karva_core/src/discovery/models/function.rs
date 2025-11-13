@@ -5,7 +5,7 @@ use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
     collection::TestCase,
-    diagnostic::Diagnostic,
+    diagnostic::{Diagnostic, FunctionKind},
     discovery::DiscoveredModule,
     extensions::{
         fixtures::{FixtureManager, UsesFixtures},
@@ -142,6 +142,7 @@ impl TestFunction {
                     missing_fixtures,
                     test_case_location,
                     self.name().to_string(),
+                    FunctionKind::Test,
                 ))
             };
 

@@ -5,6 +5,6 @@ pub mod reporter;
 pub mod traceback;
 
 pub(crate) use diagnostic::{
-    Diagnostic, DiscoveryDiagnostic, InvalidFixtureDiagnostic, MissingFixturesDiagnostic,
-    TestFailureDiagnostic, WarningDiagnostic,
+    Diagnostic, DiscoveryDiagnostic, FunctionDefinitionLocation, FunctionKind,
+    InvalidFixtureDiagnostic, MissingFixturesDiagnostic, TestFailureDiagnostic, WarningDiagnostic,
 };

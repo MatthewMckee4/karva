@@ -1,7 +1,9 @@
+use std::fmt::{self, Display, Formatter};
+
 use crate::diagnostic::{
-    Diagnostic, DiscoveryDiagnostic, InvalidFixtureDiagnostic, MissingFixturesDiagnostic,
-    TestFailureDiagnostic, WarningDiagnostic,
-    diagnostic::{FixtureFailureDiagnostic, FunctionDefinitionLocation, TestRunFailureDiagnostic},
+    Diagnostic, DiscoveryDiagnostic, FunctionKind, InvalidFixtureDiagnostic,
+    MissingFixturesDiagnostic, TestFailureDiagnostic, WarningDiagnostic,
+    diagnostic::{FixtureFailureDiagnostic, FunctionDefinitionLocation},
 };
 
 pub struct DisplayDiagnostic<'a> {
@@ -14,47 +16,46 @@ impl<'a> DisplayDiagnostic<'a> {
     }
 }
 
-impl std::fmt::Display for DisplayDiagnostic<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for DisplayDiagnostic<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.diagnostic {
-            Diagnostic::TestFailure(test_failure_diagnostic) => match test_failure_diagnostic {
-                TestFailureDiagnostic::RunFailure(TestRunFailureDiagnostic {
-                    location:
-                        FunctionDefinitionLocation {
-                            function_name,
-                            location: function_location,
-                        },
-                    traceback,
-                    message,
-                }) => {
-                    let location_fail_string = traceback
-                        .location
-                        .as_ref()
-                        .map(|location| format!("at {location}"))
-                        .unwrap_or_default();
+            Diagnostic::TestFailure(TestFailureDiagnostic {
+                location:
+                    FunctionDefinitionLocation {
+                        function_name,
+                        location: function_location,
+                    },
+                traceback,
+                message,
+            }) => {
+                let location_fail_string = traceback
+                    .location
+                    .as_ref()
+                    .map(|location| format!("at {location}"))
+                    .unwrap_or_default();
 
-                    writeln!(
-                        f,
-                        "test `{function_name}` at {function_location} failed {location_fail_string}"
-                    )?;
-                    if let Some(message) = message {
-                        writeln!(f, "{message}")?;
-                    }
+                writeln!(
+                    f,
+                    "test `{function_name}` at {function_location} failed {location_fail_string}"
+                )?;
+                if let Some(message) = message {
+                    writeln!(f, "{message}")?;
                 }
-                TestFailureDiagnostic::MissingFixtures(MissingFixturesDiagnostic {
-                    location:
-                        FunctionDefinitionLocation {
-                            function_name,
-                            location,
-                        },
-                    missing_fixtures,
-                }) => {
-                    writeln!(
-                        f,
-                        "test `{function_name}` has missing fixtures: {missing_fixtures:?} at {location}",
-                    )?;
-                }
-            },
+            }
+            Diagnostic::MissingFixtures(MissingFixturesDiagnostic {
+                location:
+                    FunctionDefinitionLocation {
+                        function_name,
+                        location,
+                    },
+                missing_fixtures,
+                function_kind,
+            }) => {
+                writeln!(
+                    f,
+                    "{function_kind} `{function_name}` has missing fixtures: {missing_fixtures:?} at {location}",
+                )?;
+            }
             Diagnostic::Warning(WarningDiagnostic { message }) => {
                 writeln!(f, "warning: {message}")?;
             }
@@ -97,8 +98,8 @@ impl<'a> DisplayDiscoveryDiagnostic<'a> {
     }
 }
 
-impl std::fmt::Display for DisplayDiscoveryDiagnostic<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for DisplayDiscoveryDiagnostic<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.diagnostic {
             DiscoveryDiagnostic::InvalidFixture(InvalidFixtureDiagnostic {
                 location:
@@ -119,5 +120,14 @@ impl std::fmt::Display for DisplayDiscoveryDiagnostic<'_> {
         }
 
         Ok(())
+    }
+}
+
+impl Display for FunctionKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Test => write!(f, "test"),
+            Self::Fixture => write!(f, "fixture"),
+        }
     }
 }

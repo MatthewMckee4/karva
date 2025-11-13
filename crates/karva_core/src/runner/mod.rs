@@ -1,9 +1,7 @@
 use karva_project::Project;
 
 use crate::{
-    collection::TestCaseCollector,
-    diagnostic::reporter::{DummyReporter, Reporter},
-    discovery::StandardDiscoverer,
+    DummyReporter, Reporter, collection::TestCaseCollector, discovery::StandardDiscoverer,
     utils::attach,
 };
 
