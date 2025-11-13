@@ -254,7 +254,7 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
     }
 
     let mut cmd = Command::new("uv");
-    cmd.args(["pip", "install", "--python", &venv_path.to_string()])
+    cmd.args(["pip", "install", "--python", venv_path.as_ref()])
         .args(&checkout.project().dependencies);
 
     let output = cmd
@@ -268,7 +268,7 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
     );
 
     let mut cmd = Command::new("uv");
-    cmd.args(["pip", "install", "--python", &venv_path.to_string()])
+    cmd.args(["pip", "install", "--python", venv_path.as_ref()])
         .arg("-e")
         .arg(checkout.project_root());
 
@@ -283,7 +283,7 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
     );
 
     let mut cmd = Command::new("uv");
-    cmd.args(["pip", "list", "--python", &venv_path.to_string()]);
+    cmd.args(["pip", "list", "--python", venv_path.as_ref()]);
 
     let output = cmd
         .output()

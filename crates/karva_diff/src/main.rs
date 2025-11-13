@@ -65,7 +65,7 @@ fn run(
         .map(ToString::to_string)
         .collect();
 
-    println!("Paths: {:?}", installed_project.path);
+    println!("Path: {:?}", installed_project.path);
 
     let old_output = Command::new(&args.old_karva_binary)
         .current_dir(&installed_project.path)
