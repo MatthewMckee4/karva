@@ -1,4 +1,4 @@
-use karva_core::TestResultStats;
+use insta::{allow_duplicates, assert_snapshot};
 use karva_test::TestContext;
 use rstest::rstest;
 
@@ -22,11 +22,7 @@ def test_fixture_generator(fixture_generator):
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    expected_stats.add_passed();
-
-    assert_eq!(*result.stats(), expected_stats, "{result:?}");
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[rstest]
@@ -53,9 +49,7 @@ def test_fixture_generator(fixture_generator):
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    expected_stats.add_passed();
-
-    assert_eq!(*result.stats(), expected_stats, "{result:?}");
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    }
 }

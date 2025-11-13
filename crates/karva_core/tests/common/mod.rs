@@ -33,6 +33,14 @@ pub fn get_skip_function(framework: &str) -> &str {
     }
 }
 
+pub fn get_skipif_function(framework: &str) -> &str {
+    match framework {
+        "pytest" => "pytest.mark.skipif",
+        "karva" => "karva.tags.skip_if",
+        _ => panic!("Invalid framework"),
+    }
+}
+
 pub fn get_parametrize_function(framework: &str) -> &str {
     match framework {
         "pytest" => "pytest.mark.parametrize",

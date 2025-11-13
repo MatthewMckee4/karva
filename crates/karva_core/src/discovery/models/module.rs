@@ -16,12 +16,14 @@ pub(crate) struct DiscoveredModule {
     fixtures: Vec<Fixture>,
     type_: ModuleType,
     source_text: String,
+    line_index: LineIndex,
 }
 
 impl DiscoveredModule {
     pub(crate) fn new(path: ModulePath, module_type: ModuleType) -> Self {
-        let source_text =
-            std::fs::read_to_string(path.module_path()).expect("Failed to read source file");
+        let source_text = std::fs::read_to_string(path.path()).expect("Failed to read source file");
+
+        let line_index = LineIndex::from_source_text(&source_text);
 
         Self {
             path,
@@ -29,11 +31,16 @@ impl DiscoveredModule {
             fixtures: Vec::new(),
             type_: module_type,
             source_text,
+            line_index,
         }
     }
 
+    pub(crate) const fn module_path(&self) -> &ModulePath {
+        &self.path
+    }
+
     pub(crate) const fn path(&self) -> &Utf8PathBuf {
-        self.path.module_path()
+        self.path.path()
     }
 
     pub(crate) fn name(&self) -> &str {
@@ -83,9 +90,8 @@ impl DiscoveredModule {
         &self.source_text
     }
 
-    pub(crate) fn line_index(&self) -> LineIndex {
-        let source_text = self.source_text();
-        LineIndex::from_source_text(source_text)
+    pub(crate) const fn line_index(&self) -> &LineIndex {
+        &self.line_index
     }
 
     pub(crate) fn update(&mut self, module: Self) {
@@ -158,6 +164,10 @@ impl<'proj> HasFixtures<'proj> for DiscoveredModule {
             .collect();
 
         all_fixtures
+    }
+
+    fn fixture_module<'a: 'proj>(&'a self) -> Option<&'a DiscoveredModule> {
+        Some(self)
     }
 }
 

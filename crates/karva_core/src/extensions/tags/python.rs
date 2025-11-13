@@ -19,6 +19,12 @@ pub enum PyTag {
 
     #[pyo3(name = "skip")]
     Skip { reason: Option<String> },
+
+    #[pyo3(name = "skip_if")]
+    SkipIf {
+        conditions: Vec<bool>,
+        reason: Option<String>,
+    },
 }
 
 #[pymethods]
@@ -28,6 +34,7 @@ impl PyTag {
             Self::Parametrize { .. } => "parametrize".to_string(),
             Self::UseFixtures { .. } => "use_fixtures".to_string(),
             Self::Skip { .. } => "skip".to_string(),
+            Self::SkipIf { .. } => "skip_if".to_string(),
         }
     }
 }
@@ -115,6 +122,40 @@ impl PyTags {
         .into_py_any(py)
     }
 
+    #[classmethod]
+    #[pyo3(signature = (*conditions, reason = None))]
+    pub fn skip_if(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        conditions: &Bound<'_, PyTuple>,
+        reason: Option<String>,
+    ) -> PyResult<Py<PyAny>> {
+        let mut bool_conditions = Vec::new();
+        for item in conditions.iter() {
+            if let Ok(bool_val) = item.extract::<bool>() {
+                bool_conditions.push(bool_val);
+            } else {
+                return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "Expected boolean values for conditions",
+                ));
+            }
+        }
+
+        if bool_conditions.is_empty() {
+            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "At least one condition is required",
+            ));
+        }
+
+        Self {
+            inner: vec![PyTag::SkipIf {
+                conditions: bool_conditions,
+                reason,
+            }],
+        }
+        .into_py_any(py)
+    }
+
     #[pyo3(signature = (f, /))]
     pub fn __call__(&self, py: Python<'_>, f: Py<PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(tag_obj) = f.cast_bound::<Self>(py) {
@@ -159,6 +200,20 @@ impl PyTestFunction {
     ) -> PyResult<Py<PyAny>> {
         self.function.call(py, args, kwargs)
     }
+}
+
+// SkipError exception that can be raised to skip tests at runtime
+pyo3::create_exception!(karva, SkipError, pyo3::exceptions::PyException);
+
+/// Skip the current test at runtime with an optional reason.
+///
+/// This function raises a `SkipError` exception which will be caught by the test runner
+/// and mark the test as skipped.
+#[pyfunction]
+#[pyo3(signature = (reason = None))]
+pub fn skip(_py: Python<'_>, reason: Option<String>) -> PyResult<()> {
+    let message = reason.unwrap_or_default();
+    Err(SkipError::new_err(message))
 }
 
 #[cfg(test)]

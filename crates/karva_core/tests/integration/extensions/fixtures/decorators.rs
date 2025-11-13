@@ -1,4 +1,4 @@
-use karva_core::TestResultStats;
+use insta::assert_snapshot;
 use karva_test::TestContext;
 
 use crate::common::TestRunnerExt;
@@ -26,11 +26,7 @@ def test_fixtures_given_by_decorator(a):
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    expected_stats.add_passed();
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -62,11 +58,7 @@ def test_func(a, b):
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    expected_stats.add_passed();
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -95,13 +87,7 @@ def test_func(a, b):
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..2 {
-        expected_stats.add_passed();
-    }
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -135,13 +121,7 @@ def test_func(a, b, c):
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..2 {
-        expected_stats.add_passed();
-    }
-
-    assert_eq!(*result.stats(), expected_stats);
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -168,11 +148,14 @@ def test_fixtures_given_by_decorator(a, b):
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
+    assert_snapshot!(result.display(), @r#"
+    test failures:
 
-    expected_stats.add_failed();
+    test `<test>.test_fixtures_given_by_decorator_one_missing::test_fixtures_given_by_decorator` has missing fixtures: ["b"] at <temp_dir>/<test>/test_fixtures_given_by_decorator_one_missing.py:12
 
-    assert!(!result.passed());
+    test failures:
+        <test>.test_fixtures_given_by_decorator_one_missing::test_fixtures_given_by_decorator at <temp_dir>/<test>/test_fixtures_given_by_decorator_one_missing.py:12
 
-    assert_eq!(*result.stats(), expected_stats);
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+    "#);
 }

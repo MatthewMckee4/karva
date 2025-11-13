@@ -2,11 +2,16 @@ use std::{collections::HashMap, fmt::Debug, time::Instant};
 
 use colored::Colorize;
 
-use crate::{Reporter, diagnostic::Diagnostic};
+use crate::{
+    Reporter,
+    diagnostic::{Diagnostic, DiscoveryDiagnostic, diagnostic::FunctionDefinitionLocation},
+};
 
 #[derive(Debug, Clone)]
 pub struct TestRunResult {
-    diagnostics: Vec<Diagnostic>,
+    discovery_diagnostics: Vec<DiscoveryDiagnostic>,
+    test_diagnostics: Vec<Diagnostic>,
+
     stats: TestResultStats,
     start_time: Instant,
 }
@@ -14,7 +19,8 @@ pub struct TestRunResult {
 impl Default for TestRunResult {
     fn default() -> Self {
         Self {
-            diagnostics: Vec::new(),
+            discovery_diagnostics: Vec::new(),
+            test_diagnostics: Vec::new(),
             stats: TestResultStats::default(),
             start_time: Instant::now(),
         }
@@ -22,30 +28,44 @@ impl Default for TestRunResult {
 }
 
 impl TestRunResult {
-    pub const fn diagnostics(&self) -> &Vec<Diagnostic> {
-        &self.diagnostics
+    pub fn total_diagnostics(&self) -> usize {
+        self.discovery_diagnostics.len() + self.test_diagnostics.len()
     }
 
-    pub(crate) fn add_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
+    pub const fn diagnostics(&self) -> &Vec<Diagnostic> {
+        &self.test_diagnostics
+    }
+
+    pub(crate) fn add_test_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
         for diagnostic in diagnostics {
-            self.add_diagnostic(diagnostic);
+            self.test_diagnostics.push(diagnostic);
         }
     }
 
-    pub(crate) fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
-        self.diagnostics.push(diagnostic);
+    pub(crate) fn add_test_diagnostic(&mut self, diagnostic: Diagnostic) {
+        self.test_diagnostics.push(diagnostic);
     }
 
-    pub(crate) fn update(&mut self, other: &Self) {
-        for diagnostic in other.diagnostics.clone() {
-            self.diagnostics.push(diagnostic);
+    pub(crate) const fn discovery_diagnostics(&self) -> &Vec<DiscoveryDiagnostic> {
+        &self.discovery_diagnostics
+    }
+
+    pub(crate) fn add_discovery_diagnostics(&mut self, diagnostics: Vec<DiscoveryDiagnostic>) {
+        for diagnostic in diagnostics {
+            self.discovery_diagnostics.push(diagnostic);
+        }
+    }
+
+    pub(crate) fn update(&mut self, other: Self) {
+        for diagnostic in other.test_diagnostics {
+            self.test_diagnostics.push(diagnostic);
         }
         self.stats.update(&other.stats);
     }
 
     pub fn passed(&self) -> bool {
-        for diagnostic in &self.diagnostics {
-            if diagnostic.severity().is_error() {
+        for diagnostic in &self.test_diagnostics {
+            if diagnostic.is_test_failure() {
                 return false;
             }
         }
@@ -73,8 +93,8 @@ impl TestRunResult {
         }
     }
 
-    pub const fn display(&self) -> DisplayRunDiagnostics<'_> {
-        DisplayRunDiagnostics::new(self)
+    pub const fn display(&self) -> DisplayTestRunResult<'_> {
+        DisplayTestRunResult::new(self)
     }
 }
 
@@ -156,23 +176,124 @@ impl TestResultStats {
     pub fn add_skipped(&mut self) {
         self.add(TestResultKind::Skipped);
     }
-}
 
-pub struct DisplayRunDiagnostics<'a> {
-    diagnostics: &'a TestRunResult,
-}
-
-impl<'a> DisplayRunDiagnostics<'a> {
-    pub(crate) const fn new(diagnostics: &'a TestRunResult) -> Self {
-        Self { diagnostics }
+    pub const fn display(&self, start_time: Instant) -> DisplayTestResultStats<'_> {
+        DisplayTestResultStats::new(self, start_time)
     }
 }
 
-impl std::fmt::Display for DisplayRunDiagnostics<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let stats = self.diagnostics.stats();
+pub struct DisplayTestRunResult<'a> {
+    test_run_result: &'a TestRunResult,
+}
 
-        let success = stats.is_success();
+impl<'a> DisplayTestRunResult<'a> {
+    pub(crate) const fn new(test_run_result: &'a TestRunResult) -> Self {
+        Self { test_run_result }
+    }
+}
+
+impl std::fmt::Display for DisplayTestRunResult<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.test_run_result.discovery_diagnostics().is_empty() {
+            writeln!(f, "discovery failures:").ok();
+
+            writeln!(f).ok();
+
+            for diagnostic in self.test_run_result.discovery_diagnostics() {
+                writeln!(f, "{}", diagnostic.display()).ok();
+            }
+        }
+
+        let test_failures = self
+            .test_run_result
+            .diagnostics()
+            .iter()
+            .filter(|d| d.is_test_failure())
+            .collect::<Vec<_>>();
+
+        let fixture_failures = self
+            .test_run_result
+            .diagnostics()
+            .iter()
+            .filter(|d| d.is_fixture_failure())
+            .collect::<Vec<_>>();
+
+        let warnings = self
+            .test_run_result
+            .diagnostics()
+            .iter()
+            .filter(|d| d.is_warning())
+            .collect::<Vec<_>>();
+
+        if !fixture_failures.is_empty() {
+            writeln!(f, "fixture failures:")?;
+            writeln!(f)?;
+
+            for diagnostic in &fixture_failures {
+                writeln!(f, "{}", diagnostic.display())?;
+            }
+        }
+
+        if !test_failures.is_empty() {
+            writeln!(f, "test failures:")?;
+            writeln!(f)?;
+
+            for diagnostic in &test_failures {
+                writeln!(f, "{}", diagnostic.display())?;
+            }
+        }
+
+        if !warnings.is_empty() {
+            writeln!(f, "warnings:")?;
+            writeln!(f)?;
+
+            for diagnostic in &warnings {
+                writeln!(f, "{}", diagnostic.display())?;
+            }
+        }
+
+        if !test_failures.is_empty() {
+            writeln!(f, "test failures:")?;
+
+            for diagnostic in &test_failures {
+                let Some(FunctionDefinitionLocation {
+                    location,
+                    function_name,
+                }) = diagnostic.location()
+                else {
+                    continue;
+                };
+
+                writeln!(f, "    {function_name} at {location}")?;
+            }
+
+            writeln!(f)?;
+        }
+
+        write!(
+            f,
+            "{}",
+            self.test_run_result
+                .stats()
+                .display(self.test_run_result.start_time)
+        )
+    }
+}
+
+pub struct DisplayTestResultStats<'a> {
+    stats: &'a TestResultStats,
+    start_time: Instant,
+}
+
+impl<'a> DisplayTestResultStats<'a> {
+    const fn new(stats: &'a TestResultStats, start_time: Instant) -> Self {
+        Self { stats, start_time }
+    }
+}
+
+impl std::fmt::Display for DisplayTestResultStats<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let success = self.stats.is_success();
 
         write!(f, "test result: ")?;
 
@@ -185,10 +306,10 @@ impl std::fmt::Display for DisplayRunDiagnostics<'_> {
         writeln!(
             f,
             ". {} passed; {} failed; {} skipped; finished in {}s",
-            stats.passed(),
-            stats.failed(),
-            stats.skipped(),
-            self.diagnostics.start_time.elapsed().as_millis() / 1000
+            self.stats.passed(),
+            self.stats.failed(),
+            self.stats.skipped(),
+            self.start_time.elapsed().as_millis() / 1000
         )
     }
 }
@@ -286,7 +407,7 @@ mod tests {
         let mut diagnostics2 = TestRunResult::default();
         diagnostics2.stats_mut().add_failed();
 
-        diagnostics1.update(&diagnostics2);
+        diagnostics1.update(diagnostics2);
 
         assert_eq!(diagnostics1.stats().passed(), 1);
         assert_eq!(diagnostics1.stats().failed(), 1);

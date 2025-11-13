@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use camino::Utf8PathBuf;
 use pyo3::prelude::*;
@@ -8,6 +8,7 @@ use crate::discovery::TestFunction;
 use crate::{
     discovery::{DiscoveredModule, ModuleType},
     extensions::fixtures::{Fixture, HasFixtures, UsesFixtures},
+    name::ModulePath,
 };
 
 /// A package represents a single python directory.
@@ -16,7 +17,7 @@ pub(crate) struct DiscoveredPackage {
     path: Utf8PathBuf,
     modules: HashMap<Utf8PathBuf, DiscoveredModule>,
     packages: HashMap<Utf8PathBuf, DiscoveredPackage>,
-    configuration_modules: HashSet<Utf8PathBuf>,
+    configuration_module_path: Option<ModulePath>,
 }
 
 impl DiscoveredPackage {
@@ -25,7 +26,7 @@ impl DiscoveredPackage {
             path,
             modules: HashMap::new(),
             packages: HashMap::new(),
-            configuration_modules: HashSet::new(),
+            configuration_module_path: None,
         }
     }
 
@@ -90,7 +91,7 @@ impl DiscoveredPackage {
                 existing_module.update(module);
             } else {
                 if module.module_type() == ModuleType::Configuration {
-                    self.configuration_modules.insert(module.path().clone());
+                    self.configuration_module_path = Some(module.module_path().clone());
                 }
                 self.modules.insert(module.path().clone(), module);
             }
@@ -121,7 +122,7 @@ impl DiscoveredPackage {
     }
 
     pub(crate) fn add_configuration_module(&mut self, module: DiscoveredModule) {
-        self.configuration_modules.insert(module.path().clone());
+        self.configuration_module_path = Some(module.module_path().clone());
         self.add_module(module);
     }
 
@@ -182,8 +183,8 @@ impl DiscoveredPackage {
             self.add_package(package);
         }
 
-        for module in package.configuration_modules {
-            self.configuration_modules.insert(module);
+        if let Some(module) = package.configuration_module_path {
+            self.configuration_module_path = Some(module);
         }
     }
 
@@ -214,18 +215,17 @@ impl DiscoveredPackage {
         dependencies
     }
 
-    pub(crate) fn configuration_modules(&self) -> Vec<&DiscoveredModule> {
-        self.configuration_modules
-            .iter()
-            .filter_map(|path| self.modules.get(path))
-            .collect()
+    pub(crate) fn configuration_module(&self) -> Option<&DiscoveredModule> {
+        self.configuration_module_path
+            .as_ref()
+            .map(|module_path| self.modules.get(module_path.path()).unwrap())
     }
 
     /// Remove empty modules and packages.
     pub(crate) fn shrink(&mut self) {
-        self.modules.retain(|path, module| {
+        self.modules.retain(|_, module| {
             if module.is_empty() {
-                self.configuration_modules.remove(path);
+                self.configuration_module_path = None;
                 false
             } else {
                 true
@@ -257,13 +257,17 @@ impl<'proj> HasFixtures<'proj> for DiscoveredPackage {
     ) -> Vec<&'proj Fixture> {
         let mut fixtures = Vec::new();
 
-        for module in self.configuration_modules() {
+        if let Some(module) = self.configuration_module() {
             let module_fixtures = module.all_fixtures(py, test_cases);
 
             fixtures.extend(module_fixtures);
         }
 
         fixtures
+    }
+
+    fn fixture_module<'a: 'proj>(&'a self) -> Option<&'a DiscoveredModule> {
+        self.configuration_module()
     }
 }
 
@@ -274,6 +278,10 @@ impl<'proj> HasFixtures<'proj> for &'proj DiscoveredPackage {
         test_cases: &[&dyn UsesFixtures],
     ) -> Vec<&'proj Fixture> {
         (*self).all_fixtures(py, test_cases)
+    }
+
+    fn fixture_module<'a: 'proj>(&'a self) -> Option<&'a DiscoveredModule> {
+        (*self).fixture_module()
     }
 }
 

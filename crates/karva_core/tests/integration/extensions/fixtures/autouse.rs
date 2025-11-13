@@ -1,4 +1,4 @@
-use karva_core::TestResultStats;
+use insta::{allow_duplicates, assert_snapshot};
 use karva_test::TestContext;
 use rstest::rstest;
 
@@ -33,13 +33,9 @@ def test_something_else():
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..2 {
-        expected_stats.add_passed();
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
-
-    assert_eq!(*result.stats(), expected_stats);
 }
 
 #[rstest]
@@ -73,13 +69,9 @@ def test_something_else():
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..2 {
-        expected_stats.add_passed();
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
-
-    assert_eq!(*result.stats(), expected_stats);
 }
 
 #[rstest]
@@ -115,11 +107,7 @@ fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
 
     let result = test_context.test();
 
-    let mut expected_stats = TestResultStats::default();
-
-    for _ in 0..2 {
-        expected_stats.add_passed();
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
-
-    assert_eq!(*result.stats(), expected_stats);
 }

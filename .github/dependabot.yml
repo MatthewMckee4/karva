@@ -4,8 +4,17 @@
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
+
 updates:
   - package-ecosystem: "cargo" # See documentation for possible values
+
     directory: "/" # Location of package manifests
+
     schedule:
       interval: "weekly"
+
+    ignore:
+      - dependency-name: ruff_python_trivia
+      - dependency-name: ruff_python_ast
+      - dependency-name: ruff_python_parser
+      - dependency-name: ruff_python_file

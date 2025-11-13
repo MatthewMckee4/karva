@@ -1,9 +1,6 @@
 use pyo3::prelude::*;
 
-use crate::extensions::{
-    fixtures::python::{FixtureFunctionDefinition, FixtureFunctionMarker, fixture_decorator},
-    tags::python::{PyTag, PyTags, PyTestFunction},
-};
+use crate::init_module;
 
 #[cfg(test)]
 #[ctor::ctor]
@@ -13,13 +10,8 @@ pub(crate) fn setup() {
 
 pub fn setup_module() {
     #[pymodule]
-    pub(crate) fn karva(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-        m.add_function(wrap_pyfunction!(fixture_decorator, m)?)?;
-        m.add_class::<FixtureFunctionMarker>()?;
-        m.add_class::<FixtureFunctionDefinition>()?;
-        m.add_class::<PyTag>()?;
-        m.add_class::<PyTags>()?;
-        m.add_class::<PyTestFunction>()?;
+    pub(crate) fn karva(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+        init_module(py, m)?;
         Ok(())
     }
     pyo3::append_to_inittab!(karva);

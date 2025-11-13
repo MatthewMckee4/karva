@@ -2,6 +2,7 @@ use indexmap::IndexMap;
 use pyo3::{prelude::*, types::PyAny};
 
 use crate::{
+    diagnostic::Diagnostic,
     discovery::DiscoveredPackage,
     extensions::fixtures::{
         Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, UsesFixtures, builtins,
@@ -84,10 +85,15 @@ impl FixtureCollection {
 pub(crate) struct FixtureManager<'a> {
     /// Reference to the parent manager in the scope hierarchy
     parent: Option<&'a FixtureManager<'a>>,
+
     /// The actual fixtures and finalizers for this scope
     collection: FixtureCollection,
+
     /// The scope level this manager is responsible for
     scope: FixtureScope,
+
+    /// The diagnostics from creating fixtures
+    diagnostics: Vec<Diagnostic>,
 }
 
 impl<'a> FixtureManager<'a> {
@@ -96,7 +102,12 @@ impl<'a> FixtureManager<'a> {
             parent,
             collection: FixtureCollection::default(),
             scope,
+            diagnostics: Vec::new(),
         }
+    }
+
+    pub(crate) fn clear_diagnostics(&mut self) -> Vec<Diagnostic> {
+        self.diagnostics.drain(..).collect()
     }
 
     #[cfg(test)]
@@ -136,7 +147,6 @@ impl<'a> FixtureManager<'a> {
     // Check if a fixture with the given name exists (including built-ins).
     //
     // We can optionally exclude specific function names from the search.
-
     pub(crate) fn get_fixture_with_name(
         &self,
         py: Python<'_>,
@@ -227,7 +237,11 @@ impl<'a> FixtureManager<'a> {
             }
         }
 
-        match fixture.call(py, self) {
+        let Some(module) = current.fixture_module() else {
+            return;
+        };
+
+        match fixture.call(py, self, module) {
             Ok(fixture_return) => {
                 self.insert_fixture(
                     fixture_return
@@ -237,8 +251,8 @@ impl<'a> FixtureManager<'a> {
                     fixture,
                 );
             }
-            Err(e) => {
-                tracing::debug!("Failed to call fixture {}: {}", fixture.name(), e);
+            Err(diagnostic) => {
+                self.diagnostics.push(diagnostic);
             }
         }
     }

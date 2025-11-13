@@ -1,9 +1,7 @@
 use karva_project::Project;
 
 use crate::{
-    collection::TestCaseCollector,
-    diagnostic::reporter::{DummyReporter, Reporter},
-    discovery::StandardDiscoverer,
+    DummyReporter, Reporter, collection::TestCaseCollector, discovery::StandardDiscoverer,
     utils::attach,
 };
 
@@ -34,19 +32,15 @@ impl<'proj> StandardTestRunner<'proj> {
             let (session, discovery_diagnostics) =
                 StandardDiscoverer::new(self.project).discover(py);
 
+            diagnostics.add_discovery_diagnostics(discovery_diagnostics);
+
             let collected_session = TestCaseCollector::collect(py, &session);
 
             let total_test_cases = collected_session.total_test_cases();
 
-            tracing::info!(
-                "Collected {} test{}",
-                total_test_cases,
-                if total_test_cases == 1 { "" } else { "s" },
-            );
+            reporter.log_test_count(total_test_cases);
 
-            diagnostics.add_diagnostics(discovery_diagnostics);
-
-            diagnostics.update(&collected_session.run_with_reporter(py, reporter));
+            diagnostics.update(collected_session.run_with_reporter(py, reporter));
 
             diagnostics
         })

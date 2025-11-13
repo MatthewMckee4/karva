@@ -1,19 +1,17 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::LazyLock,
-};
+use std::collections::HashMap;
 
 use pyo3::{prelude::*, types::PyDict};
-use regex::Regex;
 
 use crate::{
-    Reporter,
-    diagnostic::{
-        Diagnostic, FixtureSubDiagnosticType, SubDiagnosticErrorType, SubDiagnosticSeverity,
-    },
+    IndividualTestResultKind, Reporter, TestRunResult,
+    diagnostic::{Diagnostic, FunctionDefinitionLocation},
     discovery::{DiscoveredModule, TestFunction},
-    extensions::fixtures::{Finalizers, UsesFixtures},
-    runner::{TestRunResult, diagnostic::IndividualTestResultKind},
+    extensions::{
+        fixtures::{
+            Finalizers, UsesFixtures, handle_missing_fixtures, missing_arguments_from_error,
+        },
+        tags::python::SkipError,
+    },
 };
 
 /// A test case represents a test function with a set of arguments.
@@ -31,8 +29,14 @@ pub(crate) struct TestCase<'proj> {
     /// Finalizers to run after the test case is executed.
     finalizers: Finalizers,
 
-    /// The diagnostic from collecting the test case.
+    /// The missing fixtures diagnostic.
     diagnostic: Option<Diagnostic>,
+
+    /// The diagnostic from collecting the test case.
+    ///
+    /// These fixture diagnostics come from the collection process and are most likely
+    /// diagnostics of failed fixtures.
+    fixture_diagnostics: Vec<Diagnostic>,
 }
 
 impl<'proj> TestCase<'proj> {
@@ -48,151 +52,165 @@ impl<'proj> TestCase<'proj> {
             module,
             finalizers: Finalizers::default(),
             diagnostic,
+            fixture_diagnostics: Vec::new(),
         }
-    }
-
-    pub(crate) const fn function(&self) -> &TestFunction {
-        self.function
     }
 
     pub(crate) fn add_finalizers(&mut self, finalizers: Finalizers) {
         self.finalizers.update(finalizers);
     }
 
-    pub(crate) const fn finalizers(&self) -> &Finalizers {
-        &self.finalizers
+    pub(crate) fn add_fixture_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
+        self.fixture_diagnostics.extend(diagnostics);
     }
 
-    pub(crate) fn run(&self, py: Python<'_>, reporter: &dyn Reporter) -> TestRunResult {
-        let mut run_result = TestRunResult::default();
+    pub(crate) fn run(self, py: Python<'_>, reporter: &dyn Reporter) -> TestRunResult {
+        let Self {
+            function,
+            kwargs,
+            module,
+            finalizers,
+            diagnostic,
+            fixture_diagnostics,
+        } = self;
 
-        let test_name = full_test_name(py, &self.function.name().to_string(), &self.kwargs);
+        let mut run_result = (|| {
+            let mut run_result = TestRunResult::default();
 
-        if let Some(skip_tag) = &self.function.tags().skip_tag() {
-            run_result.register_test_case_result(
-                &test_name,
-                IndividualTestResultKind::Skipped {
-                    reason: skip_tag.reason(),
-                },
-                Some(reporter),
-            );
+            let test_name = full_test_name(py, &function.name().to_string(), &kwargs);
 
-            return run_result;
-        }
+            if let Some(skip_tag) = &function.tags().skip_tag() {
+                run_result.register_test_case_result(
+                    &test_name,
+                    IndividualTestResultKind::Skipped {
+                        reason: skip_tag.reason(),
+                    },
+                    Some(reporter),
+                );
 
-        let case_call_result = if self.kwargs.is_empty() {
-            self.function.py_function().call0(py)
-        } else {
-            let kwargs = PyDict::new(py);
+                return run_result;
+            }
 
-            for key in self.function.definition().dependant_fixtures(py) {
-                if let Some(value) = self.kwargs.get(&key) {
-                    let _ = kwargs.set_item(key, value);
+            if let Some(skip_if_tag) = &function.tags().skip_if_tag() {
+                if skip_if_tag.should_skip() {
+                    run_result.register_test_case_result(
+                        &test_name,
+                        IndividualTestResultKind::Skipped {
+                            reason: skip_if_tag.reason(),
+                        },
+                        Some(reporter),
+                    );
+                    return run_result;
                 }
             }
 
-            self.function.py_function().call(py, (), Some(&kwargs))
-        };
+            let case_call_result = if kwargs.is_empty() {
+                function.py_function().call0(py)
+            } else {
+                let py_dict = PyDict::new(py);
 
-        let Err(err) = case_call_result else {
+                for key in function.definition().dependant_fixtures(py) {
+                    if let Some(value) = kwargs.get(&key) {
+                        let _ = py_dict.set_item(key, value);
+                    }
+                }
+
+                function.py_function().call(py, (), Some(&py_dict))
+            };
+
+            let Err(err) = case_call_result else {
+                run_result.register_test_case_result(
+                    &test_name,
+                    IndividualTestResultKind::Passed,
+                    Some(reporter),
+                );
+
+                return run_result;
+            };
+
+            // Check if the exception is a skip exception (karva.SkipError or pytest.Skipped)
+            if is_skip_exception(py, &err) {
+                let reason = extract_skip_reason(py, &err);
+                run_result.register_test_case_result(
+                    &test_name,
+                    IndividualTestResultKind::Skipped { reason },
+                    Some(reporter),
+                );
+
+                return run_result;
+            }
+
+            let default_diagnostic = || {
+                Diagnostic::from_test_fail(
+                    py,
+                    &err,
+                    FunctionDefinitionLocation::new(
+                        function.name().to_string(),
+                        function.display_with_line(module),
+                    ),
+                )
+            };
+
+            let diagnostic = diagnostic.map_or_else(default_diagnostic, |input_diagnostic| {
+                let missing_args = missing_arguments_from_error(&err.to_string());
+                handle_missing_fixtures(&missing_args, input_diagnostic)
+                    .unwrap_or_else(default_diagnostic)
+            });
+
             run_result.register_test_case_result(
                 &test_name,
-                IndividualTestResultKind::Passed,
+                IndividualTestResultKind::Failed,
                 Some(reporter),
             );
 
-            return run_result;
-        };
+            run_result.add_test_diagnostic(diagnostic);
 
-        let default_diagnostic = || Diagnostic::from_test_fail(py, &err, self, self.module);
+            run_result
+        })();
 
-        let diagnostic =
-            self.diagnostic
-                .clone()
-                .map_or_else(default_diagnostic, |input_diagnostic| {
-                    let missing_args = missing_arguments_from_error(&err.to_string());
-                    handle_missing_fixtures(&missing_args, input_diagnostic)
-                        .unwrap_or_else(default_diagnostic)
-                });
+        run_result.add_test_diagnostics(fixture_diagnostics);
 
-        run_result.register_test_case_result(
-            &test_name,
-            IndividualTestResultKind::Failed,
-            Some(reporter),
-        );
-
-        run_result.add_diagnostic(diagnostic);
+        run_result.add_test_diagnostics(finalizers.run(py));
 
         run_result
     }
 }
 
-/// Handle missing fixtures.
-///
-/// If the diagnostic has a sub-diagnostic with a fixture not found error, and the missing fixture is in the set of missing arguments,
-/// return the diagnostic with the sub-diagnostic removed.
-///
-/// Otherwise, return None.
-fn handle_missing_fixtures(
-    missing_args: &HashSet<String>,
-    mut diagnostic: Diagnostic,
-) -> Option<Diagnostic> {
-    let sub_diagnostics: Vec<_> = diagnostic
-        .sub_diagnostics()
-        .iter()
-        .filter_map(|sd| {
-            let SubDiagnosticSeverity::Error(SubDiagnosticErrorType::Fixture(
-                FixtureSubDiagnosticType::NotFound(fixture_name),
-            )) = sd.severity();
-
-            if missing_args.contains(fixture_name) {
-                Some(sd.clone())
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    diagnostic.clear_sub_diagnostics();
-    if sub_diagnostics.is_empty() {
-        None
-    } else {
-        diagnostic.add_sub_diagnostics(sub_diagnostics);
-        Some(diagnostic)
+/// Check if the given `PyErr` is a skip exception (karva.SkipError or pytest.skip.Exception/Skipped).
+fn is_skip_exception(py: Python<'_>, err: &PyErr) -> bool {
+    // Check for karva.SkipError
+    if err.is_instance_of::<SkipError>(py) {
+        return true;
     }
+
+    // Check for pytest.skip.Exception (the actual exception raised by pytest.skip())
+    if let Ok(pytest_module) = py.import("_pytest.outcomes")
+        && let Ok(skipped) = pytest_module.getattr("Skipped")
+        && err.matches(py, skipped).unwrap_or(false)
+    {
+        return true;
+    }
+
+    false
 }
 
-static RE_MULTI: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"missing \d+ required positional arguments?: (.+)").unwrap());
+/// Extract the skip reason from a skip exception.
+fn extract_skip_reason(py: Python<'_>, err: &PyErr) -> Option<String> {
+    let value = err.value(py);
 
-static RE_SINGLE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"missing 1 required positional argument: '([^']+)'").unwrap());
+    // Try to get the first argument (the message)
+    if let Ok(args) = value.getattr("args")
+        && let Ok(tuple) = args.cast::<pyo3::types::PyTuple>()
+        && let Ok(first_arg) = tuple.get_item(0)
+        && let Ok(message) = first_arg.extract::<String>()
+    {
+        if message.is_empty() {
+            return None;
+        }
+        return Some(message);
+    }
 
-/// Extract missing arguments from a test function error.
-///
-/// If the error is of the form "missing 1 required positional argument: 'a'", return a set with "a".
-///
-/// If the error is of the form "missing 2 required positional arguments: 'a' and 'b'", return a set with "a" and "b".
-fn missing_arguments_from_error(err: &str) -> HashSet<String> {
-    RE_MULTI.captures(err).map_or_else(
-        || {
-            RE_SINGLE.captures(err).map_or_else(HashSet::new, |caps| {
-                HashSet::from([caps.get(1).unwrap().as_str().to_string()])
-            })
-        },
-        |caps| {
-            let args_str = caps.get(1).unwrap().as_str();
-            let args_str = args_str.replace(" and ", ", ");
-            let mut result = HashSet::new();
-            for part in args_str.split(',') {
-                let trimmed = part.trim();
-                if trimmed.len() > 2 && trimmed.starts_with('\'') && trimmed.ends_with('\'') {
-                    result.insert(trimmed[1..trimmed.len() - 1].to_string());
-                }
-            }
-            result
-        },
-    )
+    None
 }
 
 fn full_test_name(py: Python, function: &str, kwargs: &HashMap<String, Py<PyAny>>) -> String {
@@ -212,27 +230,5 @@ fn full_test_name(py: Python, function: &str, kwargs: &HashMap<String, Py<PyAny>
             }
         }
         format!("{function} [{args_str}]")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_missing_arguments_from_error() {
-        let err = "missing 2 required positional arguments: 'a' and 'b'";
-        let missing_args = missing_arguments_from_error(err);
-        assert_eq!(
-            missing_args,
-            HashSet::from([String::from("a"), String::from("b")])
-        );
-    }
-
-    #[test]
-    fn test_missing_arguments_from_error_single() {
-        let err = "missing 1 required positional argument: 'a'";
-        let missing_args = missing_arguments_from_error(err);
-        assert_eq!(missing_args, HashSet::from([String::from("a")]));
     }
 }

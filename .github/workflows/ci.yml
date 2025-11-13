@@ -111,11 +111,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install Dependencies
-        run: uv sync --group docs --no-install-project
-
       - name: Build docs
-        run: uv run --no-project mkdocs build
+        run: uv run --isolated --only-group docs mkdocs build
 
   benchmarks:
     name: Run benchmarks
@@ -156,7 +153,9 @@ jobs:
   benchmarks-walltime:
     name: Run walltime benchmarks
 
-    runs-on: ubuntu-latest
+    if: false # Very flakey as of (12/11/2025)
+
+    runs-on: ubuntu-latest # This should be `codspeed-macro`
 
     steps:
       - uses: actions/checkout@v4

@@ -35,6 +35,8 @@ impl TestCaseCollector {
 
         session_collected.add_finalizers(fixture_manager.reset_fixtures());
 
+        session_collected.add_fixture_diagnostics(fixture_manager.clear_diagnostics());
+
         session_collected.add_package(package_collected);
 
         session_collected
@@ -146,6 +148,8 @@ impl TestCaseCollector {
 
         module_collected.add_finalizers(module_fixture_manager.reset_fixtures());
 
+        module_collected.add_fixture_diagnostics(module_fixture_manager.clear_diagnostics());
+
         module_collected
     }
 
@@ -200,6 +204,8 @@ impl TestCaseCollector {
         }
 
         package_collected.add_finalizers(package_fixture_manager.reset_fixtures());
+
+        package_collected.add_fixture_diagnostics(package_fixture_manager.clear_diagnostics());
 
         package_collected
     }

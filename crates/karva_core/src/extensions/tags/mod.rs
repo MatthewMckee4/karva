@@ -8,10 +8,12 @@ use crate::extensions::tags::python::{PyTag, PyTestFunction};
 mod parametrize;
 pub mod python;
 mod skip;
+mod skip_if;
 mod use_fixtures;
 
 pub(crate) use parametrize::ParametrizeTag;
 pub(crate) use skip::SkipTag;
+pub(crate) use skip_if::SkipIfTag;
 pub(crate) use use_fixtures::UseFixturesTag;
 
 /// Represents a decorator function in Python that can be used to extend the functionality of a test.
@@ -20,6 +22,7 @@ pub(crate) enum Tag {
     Parametrize(ParametrizeTag),
     UseFixtures(UseFixturesTag),
     Skip(SkipTag),
+    SkipIf(SkipIfTag),
 }
 
 impl Tag {
@@ -32,6 +35,7 @@ impl Tag {
             "parametrize" => ParametrizeTag::try_from(py_mark).map(Self::Parametrize),
             "usefixtures" => UseFixturesTag::try_from(py_mark).map(Self::UseFixtures),
             "skip" => SkipTag::try_from(py_mark).map(Self::Skip),
+            "skipif" => SkipIfTag::try_from(py_mark).map(Self::SkipIf),
             _ => Err(()),
         }
         .ok()
@@ -49,6 +53,9 @@ impl From<&PyTag> for Tag {
                 Self::UseFixtures(UseFixturesTag::new(fixture_names.clone()))
             }
             PyTag::Skip { reason } => Self::Skip(SkipTag::new(reason.clone())),
+            PyTag::SkipIf { conditions, reason } => {
+                Self::SkipIf(SkipIfTag::new(conditions.clone(), reason.clone()))
+            }
         }
     }
 }
@@ -159,6 +166,16 @@ impl Tags {
         for tag in &self.inner {
             if let Tag::Skip(skip_tag) = tag {
                 return Some(skip_tag.clone());
+            }
+        }
+        None
+    }
+
+    /// Return the skipif tag if it exists.
+    pub(crate) fn skip_if_tag(&self) -> Option<SkipIfTag> {
+        for tag in &self.inner {
+            if let Tag::SkipIf(skip_if_tag) = tag {
+                return Some(skip_if_tag.clone());
             }
         }
         None
