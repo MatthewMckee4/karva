@@ -16,6 +16,7 @@ clap = { workspace = true }
 camino = { workspace = true }
 anyhow = { workspace = true }
 karva_test = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

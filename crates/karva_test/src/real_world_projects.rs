@@ -17,15 +17,6 @@ use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use ruff_python_ast::PythonVersion;
 
-fn global_venv_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join(".venv")
-}
-
 /// Configuration for a real-world project to benchmark
 #[derive(Debug, Clone)]
 pub struct RealWorldProject<'a> {
@@ -117,19 +108,6 @@ impl<'a> InstalledProject<'a> {
 
     pub const fn path(&self) -> &Utf8PathBuf {
         &self.path
-    }
-
-    pub fn venv_path(&self) -> Utf8PathBuf {
-        self.path().join(".venv")
-    }
-
-    /// Get the path to the Python executable
-    pub fn python_path(&self) -> Utf8PathBuf {
-        if cfg!(windows) {
-            self.venv_path().join("Scripts/python.exe")
-        } else {
-            self.venv_path().join("bin/python")
-        }
     }
 }
 
@@ -252,7 +230,7 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
         );
     }
 
-    let venv_path = global_venv_path();
+    let venv_path = checkout.project_root().join(".venv").to_path_buf();
     let python_version_str = checkout.project().python_version.to_string();
 
     let output = Command::new("uv")
@@ -276,7 +254,7 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
     }
 
     let mut cmd = Command::new("uv");
-    cmd.args(["pip", "install", "--python", venv_path.to_str().unwrap()])
+    cmd.args(["pip", "install", "--python", &venv_path.to_string()])
         .args(&checkout.project().dependencies);
 
     let output = cmd
@@ -290,7 +268,7 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
     );
 
     let mut cmd = Command::new("uv");
-    cmd.args(["pip", "install", "--python", venv_path.to_str().unwrap()])
+    cmd.args(["pip", "install", "--python", &venv_path.to_string()])
         .arg("-e")
         .arg(checkout.project_root());
 
@@ -305,7 +283,7 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
     );
 
     let mut cmd = Command::new("uv");
-    cmd.args(["pip", "list", "--python", venv_path.to_str().unwrap()]);
+    cmd.args(["pip", "list", "--python", &venv_path.to_string()]);
 
     let output = cmd
         .output()

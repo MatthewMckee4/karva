@@ -968,6 +968,7 @@ dependencies = [
  "camino",
  "clap",
  "karva_test",
+ "tempfile",
 ]
 
 [[package]]

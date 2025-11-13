@@ -153,8 +153,6 @@ jobs:
   benchmarks-walltime:
     name: Run walltime benchmarks
 
-    if: false # Very flakey as of (12/11/2025)
-
     runs-on: ubuntu-latest # This should be `codspeed-macro`
 
     steps:
