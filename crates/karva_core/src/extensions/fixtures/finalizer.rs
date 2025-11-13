@@ -54,9 +54,9 @@ impl Finalizer {
                 "Fixture {} had more than one yield statement",
                 self.fixture_name
             ))),
-            Err(_) => Some(Diagnostic::warning(&format!(
-                "Failed to reset fixture {}",
-                self.fixture_name
+            Err(err) => Some(Diagnostic::warning(&format!(
+                "Failed to reset fixture {}\n{}",
+                self.fixture_name, err
             ))),
         }
     }

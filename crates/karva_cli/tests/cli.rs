@@ -507,7 +507,7 @@ fn test_fixture_generator_fail_in_teardown() {
         @karva.fixture
         def fixture_generator():
             yield 1
-            raise ValueError("fixture-error")
+            raise ValueError("fixture error")
 
         def test_fixture_generator(fixture_generator):
             assert fixture_generator == 1
@@ -525,6 +525,7 @@ fn test_fixture_generator_fail_in_teardown() {
     warnings:
 
     warning: Failed to reset fixture test::fixture_generator
+    ValueError: fixture error
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
 
