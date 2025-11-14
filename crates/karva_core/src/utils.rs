@@ -27,11 +27,6 @@ pub(crate) fn add_to_sys_path(py: Python<'_>, path: &Utf8Path, index: isize) -> 
     Ok(())
 }
 
-/// Trait for converting types to more general trait objects.
-pub(crate) trait Upcast<T> {
-    fn upcast(self) -> T;
-}
-
 /// Redirects Python's stdout and stderr to /dev/null if output is disabled.
 ///
 /// This function is used to suppress Python output during test execution

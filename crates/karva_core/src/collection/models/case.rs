@@ -8,7 +8,7 @@ use crate::{
     discovery::{DiscoveredModule, TestFunction},
     extensions::{
         fixtures::{
-            Finalizers, UsesFixtures, handle_missing_fixtures, missing_arguments_from_error,
+            Finalizers, RequiresFixtures, handle_missing_fixtures, missing_arguments_from_error,
         },
         tags::python::SkipError,
     },
@@ -109,7 +109,7 @@ impl<'proj> TestCase<'proj> {
             } else {
                 let py_dict = PyDict::new(py);
 
-                for key in function.definition().dependant_fixtures(py) {
+                for key in function.definition().required_fixtures(py) {
                     if let Some(value) = kwargs.get(&key) {
                         let _ = py_dict.set_item(key, value);
                     }

@@ -3,8 +3,8 @@ use pyo3::prelude::*;
 use crate::{
     collection::{CollectedModule, CollectedPackage, TestCase},
     discovery::{DiscoveredModule, DiscoveredPackage, TestFunction},
-    extensions::fixtures::{FixtureManager, FixtureScope, UsesFixtures},
-    utils::{Upcast, iter_with_ancestors},
+    extensions::fixtures::{FixtureManager, FixtureScope, RequiresFixtures},
+    utils::iter_with_ancestors,
 };
 
 /// Collects and processes test cases from given packages, modules, and test functions.
@@ -19,7 +19,7 @@ impl TestCaseCollector {
 
         let mut fixture_manager = FixtureManager::new(None, FixtureScope::Session);
 
-        let upcast_test_cases = session.all_uses_fixtures();
+        let upcast_test_cases = session.required_fixtures(py);
 
         let mut session_collected = CollectedPackage::default();
 
@@ -28,7 +28,7 @@ impl TestCaseCollector {
             &[],
             session,
             &[FixtureScope::Session],
-            upcast_test_cases.as_slice(),
+            &upcast_test_cases,
         );
 
         let package_collected = Self::collect_package(py, session, &[], &fixture_manager);
@@ -53,9 +53,7 @@ impl TestCaseCollector {
             FixtureManager::new(Some(fixture_manager), FixtureScope::Function);
 
         let setup_fixture_manager = |fixture_manager: &mut FixtureManager<'_>| {
-            let test_cases = [test_function].to_vec();
-
-            let upcast_test_cases: Vec<&dyn UsesFixtures> = test_cases.upcast();
+            let required_fixtures = test_function.required_fixtures(py);
 
             for (parent, parents_above_current_parent) in iter_with_ancestors(parents) {
                 fixture_manager.add_fixtures(
@@ -63,7 +61,7 @@ impl TestCaseCollector {
                     &parents_above_current_parent,
                     parent,
                     &[FixtureScope::Function],
-                    upcast_test_cases.as_slice(),
+                    &required_fixtures,
                 );
             }
 
@@ -72,7 +70,7 @@ impl TestCaseCollector {
                 parents,
                 module,
                 &[FixtureScope::Function],
-                upcast_test_cases.as_slice(),
+                required_fixtures.as_slice(),
             );
         };
 
@@ -95,11 +93,7 @@ impl TestCaseCollector {
             return module_collected;
         }
 
-        let module_test_cases = module.all_uses_fixtures();
-
-        if module_test_cases.is_empty() {
-            return module_collected;
-        }
+        let module_test_cases = module.required_fixtures(py);
 
         let mut module_fixture_manager =
             FixtureManager::new(Some(fixture_manager), FixtureScope::Module);
@@ -125,12 +119,6 @@ impl TestCaseCollector {
             ],
             module_test_cases.as_slice(),
         );
-
-        let module_name = module.name();
-
-        if module_name.is_empty() {
-            return module_collected;
-        }
 
         let mut module_test_cases = Vec::new();
 
@@ -165,7 +153,7 @@ impl TestCaseCollector {
             return package_collected;
         }
 
-        let package_test_cases = package.all_uses_fixtures();
+        let package_test_cases = package.required_fixtures(py);
 
         let mut package_fixture_manager =
             FixtureManager::new(Some(fixture_manager), FixtureScope::Package);
@@ -189,6 +177,7 @@ impl TestCaseCollector {
         );
 
         let mut new_parents = parents.to_vec();
+
         new_parents.push(package);
 
         for module in package.modules().values() {
