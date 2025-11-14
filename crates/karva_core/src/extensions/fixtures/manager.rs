@@ -283,21 +283,15 @@ impl<'a> FixtureManager<'a> {
         scope: FixtureScope,
         fixture_names: &[String],
     ) -> Self {
-        let mut package_fixture_manager = FixtureManager::new(Some(parent_fixture_manager), scope);
+        let mut fixture_manager = FixtureManager::new(Some(parent_fixture_manager), scope);
 
-        for (parent, parents) in iter_with_ancestors(parents) {
-            package_fixture_manager.add_fixtures(py, &parents, &parent, &[scope], fixture_names);
+        for (current, parents) in iter_with_ancestors(parents) {
+            fixture_manager.add_fixtures(py, &parents, &current, &[scope], fixture_names);
         }
 
-        package_fixture_manager.add_fixtures(
-            py,
-            parents,
-            current,
-            &scope.scopes_above(),
-            fixture_names,
-        );
+        fixture_manager.add_fixtures(py, parents, current, &scope.scopes_above(), fixture_names);
 
-        package_fixture_manager
+        fixture_manager
     }
 
     /// Clears all fixtures and returns finalizers for cleanup.

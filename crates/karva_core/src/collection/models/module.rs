@@ -37,7 +37,7 @@ impl<'proj> CollectedModule<'proj> {
         self.fixture_diagnostics.extend(diagnostics);
     }
 
-    pub(crate) fn run_with_reporter(
+    pub(crate) fn run(
         self,
         py: Python<'_>,
         reporter: &dyn Reporter,

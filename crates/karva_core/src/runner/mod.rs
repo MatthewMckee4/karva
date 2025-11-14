@@ -40,7 +40,7 @@ impl<'proj> StandardTestRunner<'proj> {
 
             reporter.log_test_count(total_test_cases);
 
-            collected_session.run_with_reporter(py, reporter, &mut run_result);
+            collected_session.run(py, reporter, &mut run_result);
 
             run_result
         })

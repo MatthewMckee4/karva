@@ -52,7 +52,7 @@ impl<'proj> CollectedPackage<'proj> {
         total
     }
 
-    pub(crate) fn run_with_reporter(
+    pub(crate) fn run(
         self,
         py: Python<'_>,
         reporter: &dyn Reporter,
@@ -66,11 +66,11 @@ impl<'proj> CollectedPackage<'proj> {
         } = self;
 
         for module in modules {
-            module.run_with_reporter(py, reporter, run_result);
+            module.run(py, reporter, run_result);
         }
 
         for package in packages {
-            package.run_with_reporter(py, reporter, run_result);
+            package.run(py, reporter, run_result);
         }
 
         run_result.add_test_diagnostics(finalizers.run(py));
