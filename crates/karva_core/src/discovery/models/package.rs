@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 
 use camino::Utf8PathBuf;
-use pyo3::prelude::*;
 
 #[cfg(test)]
 use crate::discovery::TestFunction;
 use crate::{
     discovery::{DiscoveredModule, ModuleType},
-    extensions::fixtures::{Fixture, HasFixtures, RequiresFixtures},
     name::ModulePath,
 };
 
@@ -231,57 +229,6 @@ impl DiscoveredPackage {
     #[cfg(test)]
     pub(crate) const fn display(&self) -> DisplayDiscoveredPackage<'_> {
         DisplayDiscoveredPackage::new(self)
-    }
-}
-
-impl RequiresFixtures for DiscoveredPackage {
-    fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
-        let mut fixtures = Vec::new();
-
-        for module in self.modules.values() {
-            fixtures.extend(module.required_fixtures(py));
-        }
-
-        for sub_package in self.packages.values() {
-            fixtures.extend(sub_package.required_fixtures(py));
-        }
-
-        fixtures
-    }
-}
-
-impl<'proj> HasFixtures<'proj> for DiscoveredPackage {
-    fn all_fixtures<'a: 'proj>(&'a self, fixture_names: &[String]) -> Vec<&'proj Fixture> {
-        let mut fixtures = Vec::new();
-
-        if let Some(module) = self.configuration_module() {
-            fixtures.extend(module.all_fixtures(fixture_names));
-        }
-
-        fixtures
-    }
-
-    fn fixture_module<'a: 'proj>(&'a self) -> Option<&'a DiscoveredModule> {
-        self.configuration_module()
-    }
-
-    fn get_fixture<'a: 'proj>(&'a self, fixture_name: &str) -> Option<&'proj Fixture> {
-        self.configuration_module()
-            .and_then(|module| module.get_fixture(fixture_name))
-    }
-}
-
-impl<'proj> HasFixtures<'proj> for &'proj DiscoveredPackage {
-    fn all_fixtures<'a: 'proj>(&'a self, fixture_names: &[String]) -> Vec<&'proj Fixture> {
-        (*self).all_fixtures(fixture_names)
-    }
-
-    fn fixture_module<'a: 'proj>(&'a self) -> Option<&'a DiscoveredModule> {
-        (*self).fixture_module()
-    }
-
-    fn get_fixture<'a: 'proj>(&'a self, fixture_name: &str) -> Option<&'proj Fixture> {
-        (*self).get_fixture(fixture_name)
     }
 }
 

@@ -10,10 +10,12 @@ pub mod builtins;
 pub mod finalizer;
 pub mod manager;
 pub mod python;
+mod traits;
 pub mod utils;
 
 pub(crate) use finalizer::{Finalizer, Finalizers};
 pub(crate) use manager::FixtureManager;
+pub(crate) use traits::{HasFixtures, RequiresFixtures};
 pub(crate) use utils::{handle_missing_fixtures, missing_arguments_from_error};
 
 use crate::{
@@ -24,7 +26,7 @@ use crate::{
     utils::{cartesian_insert, function_definition_location},
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Copy, Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) enum FixtureScope {
     #[default]
     Function,
@@ -33,9 +35,22 @@ pub(crate) enum FixtureScope {
     Session,
 }
 
+impl FixtureScope {
+    pub(crate) fn scopes_above(self) -> Vec<Self> {
+        use FixtureScope::{Function, Module, Package, Session};
+
+        match self {
+            Function => vec![Function, Module, Package, Session],
+            Module => vec![Module, Package, Session],
+            Package => vec![Package, Session],
+            Session => vec![Session],
+        }
+    }
+}
+
 impl PartialOrd for FixtureScope {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        const fn rank(scope: &FixtureScope) -> usize {
+        const fn rank(scope: FixtureScope) -> usize {
             match scope {
                 FixtureScope::Function => 0,
                 FixtureScope::Module => 1,
@@ -43,8 +58,8 @@ impl PartialOrd for FixtureScope {
                 FixtureScope::Session => 3,
             }
         }
-        let self_rank = rank(self);
-        let other_rank = rank(other);
+        let self_rank = rank(*self);
+        let other_rank = rank(*other);
         Some(self_rank.cmp(&other_rank))
     }
 }
@@ -136,8 +151,8 @@ impl Fixture {
         &self.name
     }
 
-    pub(crate) const fn scope(&self) -> &FixtureScope {
-        &self.scope
+    pub(crate) const fn scope(&self) -> FixtureScope {
+        self.scope
     }
 
     pub(crate) const fn is_generator(&self) -> bool {
@@ -417,35 +432,6 @@ impl std::fmt::Debug for Fixture {
     }
 }
 
-/// This trait is used to represent an object that may require fixtures to be called before it is run.
-pub(crate) trait RequiresFixtures: std::fmt::Debug {
-    #[cfg(test)]
-    fn uses_fixture(&self, py: Python<'_>, fixture_name: &str) -> bool {
-        self.required_fixtures(py)
-            .contains(&fixture_name.to_string())
-    }
-
-    fn required_fixtures(&self, py: Python<'_>) -> Vec<String>;
-}
-
-impl RequiresFixtures for StmtFunctionDef {
-    fn required_fixtures(&self, _py: Python<'_>) -> Vec<String> {
-        let mut required_fixtures = Vec::new();
-
-        for parameter in self.parameters.iter_non_variadic_params() {
-            required_fixtures.push(parameter.parameter.name.as_str().to_string());
-        }
-
-        required_fixtures
-    }
-}
-
-impl RequiresFixtures for Fixture {
-    fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
-        self.function_definition.required_fixtures(py)
-    }
-}
-
 pub(crate) fn is_fixture_function(val: &StmtFunctionDef) -> bool {
     val.decorator_list
         .iter()
@@ -459,42 +445,6 @@ fn is_fixture(expr: &Expr) -> bool {
         Expr::Call(call) => is_fixture(call.func.as_ref()),
         _ => false,
     }
-}
-
-/// This trait is used to get all fixtures (from a module or package) that have a given scope.
-///
-/// For example, if we are in a test module, we want to get all fixtures used in the test module.
-/// If we are in a package, we want to get all fixtures used in the package from the configuration module.
-pub(crate) trait HasFixtures<'proj>: std::fmt::Debug {
-    /// Get all fixtures with the given names and scopes
-    ///
-    /// If fixture names is empty, return all fixtures.
-    fn fixtures<'a: 'proj>(
-        &'a self,
-        scopes: &[FixtureScope],
-        fixture_names: &[String],
-    ) -> Vec<&'proj Fixture> {
-        let mut fixtures = Vec::new();
-        for fixture in self.all_fixtures(fixture_names) {
-            if scopes.contains(fixture.scope()) {
-                fixtures.push(fixture);
-            }
-        }
-        fixtures
-    }
-
-    /// Get a fixture with the given name
-    ///
-    /// If fixture names is empty, return all fixtures.
-    fn get_fixture<'a: 'proj>(&'a self, fixture_name: &str) -> Option<&'proj Fixture>;
-
-    /// Get all fixtures with the given names
-    ///
-    /// If fixture names is empty, return all fixtures.
-    fn all_fixtures<'a: 'proj>(&'a self, fixture_names: &[String]) -> Vec<&'proj Fixture>;
-
-    /// The module where the fixtures are being found in.
-    fn fixture_module<'a: 'proj>(&'a self) -> Option<&'a DiscoveredModule>;
 }
 
 #[cfg(test)]

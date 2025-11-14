@@ -1,12 +1,7 @@
 use camino::Utf8PathBuf;
-use pyo3::Python;
 use ruff_source_file::LineIndex;
 
-use crate::{
-    discovery::TestFunction,
-    extensions::fixtures::{Fixture, HasFixtures, RequiresFixtures},
-    name::ModulePath,
-};
+use crate::{discovery::TestFunction, extensions::fixtures::Fixture, name::ModulePath};
 
 /// A module represents a single python file.
 #[derive(Debug)]
@@ -73,9 +68,8 @@ impl DiscoveredModule {
             .find(|tc| tc.function_name() == name)
     }
 
-    #[cfg(test)]
-    pub(crate) fn fixtures(&self) -> Vec<&Fixture> {
-        self.fixtures.iter().collect()
+    pub(crate) const fn fixtures(&self) -> &Vec<Fixture> {
+        &self.fixtures
     }
 
     pub(crate) fn with_fixtures(self, fixtures: Vec<Fixture>) -> Self {
@@ -125,51 +119,6 @@ impl DiscoveredModule {
     #[cfg(test)]
     pub(crate) const fn display(&self) -> DisplayDiscoveredModule<'_> {
         DisplayDiscoveredModule::new(self)
-    }
-}
-
-impl RequiresFixtures for DiscoveredModule {
-    fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
-        let mut fixtures = Vec::new();
-
-        for test_function in &self.test_functions {
-            fixtures.extend(test_function.required_fixtures(py));
-        }
-
-        for fixture in &self.fixtures {
-            fixtures.extend(fixture.required_fixtures(py));
-        }
-
-        fixtures
-    }
-}
-
-impl<'proj> HasFixtures<'proj> for DiscoveredModule {
-    fn all_fixtures<'a: 'proj>(&'a self, fixture_names: &[String]) -> Vec<&'proj Fixture> {
-        if fixture_names.is_empty() {
-            return self.fixtures.iter().collect();
-        }
-
-        self.fixtures
-            .iter()
-            .filter(|f| {
-                if f.auto_use() {
-                    true
-                } else {
-                    fixture_names.contains(&f.name().function_name().to_string())
-                }
-            })
-            .collect()
-    }
-
-    fn fixture_module<'a: 'proj>(&'a self) -> Option<&'a DiscoveredModule> {
-        Some(self)
-    }
-
-    fn get_fixture<'a: 'proj>(&'a self, fixture_name: &str) -> Option<&'proj Fixture> {
-        self.fixtures
-            .iter()
-            .find(|f| f.name().function_name() == fixture_name)
     }
 }
 

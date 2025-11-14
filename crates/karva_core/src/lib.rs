@@ -5,9 +5,8 @@ pub mod extensions;
 pub mod name;
 mod python;
 pub mod runner;
-pub mod utils;
-
 pub mod testing;
+pub mod utils;
 
 pub use diagnostic::reporter::{DummyReporter, Reporter, TestCaseReporter};
 pub use python::init_module;
