@@ -56,13 +56,6 @@ impl TestRunResult {
         }
     }
 
-    pub(crate) fn update(&mut self, other: Self) {
-        for diagnostic in other.test_diagnostics {
-            self.test_diagnostics.push(diagnostic);
-        }
-        self.stats.update(&other.stats);
-    }
-
     pub fn passed(&self) -> bool {
         for diagnostic in &self.test_diagnostics {
             if diagnostic.is_test_failure() {
@@ -128,15 +121,6 @@ pub struct TestResultStats {
 }
 
 impl TestResultStats {
-    pub(crate) fn update(&mut self, other: &Self) {
-        for (kind, count) in &other.inner {
-            self.inner
-                .entry(*kind)
-                .and_modify(|v| *v += count)
-                .or_insert(*count);
-        }
-    }
-
     pub fn total(&self) -> usize {
         self.inner.values().sum()
     }
@@ -397,19 +381,5 @@ mod tests {
         assert_eq!(stats.failed(), 1);
         assert_eq!(stats.skipped(), 1);
         assert!(!stats.is_success());
-    }
-
-    #[test]
-    fn test_run_diagnostics_update() {
-        let mut diagnostics1 = TestRunResult::default();
-        diagnostics1.stats_mut().add_passed();
-
-        let mut diagnostics2 = TestRunResult::default();
-        diagnostics2.stats_mut().add_failed();
-
-        diagnostics1.update(diagnostics2);
-
-        assert_eq!(diagnostics1.stats().passed(), 1);
-        assert_eq!(diagnostics1.stats().failed(), 1);
     }
 }

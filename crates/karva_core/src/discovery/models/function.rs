@@ -76,7 +76,7 @@ impl TestFunction {
         &'a self,
         py: Python<'_>,
         module: &'a DiscoveredModule,
-        setup_fixture_manager: impl Fn() -> FixtureManager<'b>,
+        get_fixture_manager: impl Fn() -> FixtureManager<'b>,
     ) -> Vec<TestCase<'a>> {
         tracing::info!(
             "Collecting test cases for function: {}",
@@ -97,7 +97,7 @@ impl TestFunction {
         let mut test_cases = Vec::with_capacity(parametrize_args.len());
 
         for params in parametrize_args {
-            let mut fixture_manager = setup_fixture_manager();
+            let mut fixture_manager = get_fixture_manager();
 
             let mut missing_fixtures = Vec::new();
 

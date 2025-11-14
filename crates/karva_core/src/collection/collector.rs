@@ -20,8 +20,6 @@ impl TestCaseCollector {
 
         let required_session_fixture_names = session.required_fixtures(py);
 
-        let mut session_collected = CollectedPackage::default();
-
         fixture_manager.add_fixtures(
             py,
             &[],
@@ -30,13 +28,11 @@ impl TestCaseCollector {
             &required_session_fixture_names,
         );
 
-        let package_collected = Self::collect_package(py, session, &[], &fixture_manager);
+        let mut session_collected = Self::collect_package(py, session, &[], &fixture_manager);
 
         session_collected.add_finalizers(fixture_manager.reset_fixtures());
 
         session_collected.add_fixture_diagnostics(fixture_manager.clear_diagnostics());
-
-        session_collected.add_package(package_collected);
 
         session_collected
     }
@@ -48,7 +44,7 @@ impl TestCaseCollector {
         parents: &[&DiscoveredPackage],
         fixture_manager: &FixtureManager,
     ) -> Vec<TestCase<'a>> {
-        let setup_fixture_manager = || {
+        let get_fixture_manager = || {
             let required_fixtures = test_function.required_fixtures(py);
 
             FixtureManager::from_parent(
@@ -61,7 +57,7 @@ impl TestCaseCollector {
             )
         };
 
-        test_function.collect(py, module, setup_fixture_manager)
+        test_function.collect(py, module, get_fixture_manager)
     }
 
     fn collect_module<'a>(
