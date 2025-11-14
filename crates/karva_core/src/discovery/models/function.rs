@@ -8,11 +8,11 @@ use crate::{
     diagnostic::{Diagnostic, FunctionKind},
     discovery::DiscoveredModule,
     extensions::{
-        fixtures::{FixtureManager, UsesFixtures},
+        fixtures::{FixtureManager, RequiresFixtures},
         tags::Tags,
     },
     name::{ModulePath, QualifiedFunctionName},
-    utils::{Upcast, cartesian_insert, function_definition_location},
+    utils::{cartesian_insert, function_definition_location},
 };
 
 /// Represents a single test function discovered from Python source code.
@@ -84,7 +84,7 @@ impl TestFunction {
             self.function_definition.name
         );
 
-        let mut required_fixture_names = self.function_definition.dependant_fixtures(py);
+        let mut required_fixture_names = self.function_definition.required_fixtures(py);
 
         required_fixture_names.extend(self.tags.required_fixtures_names());
 
@@ -163,17 +163,9 @@ impl TestFunction {
     }
 }
 
-impl<'proj> Upcast<Vec<&'proj dyn UsesFixtures>> for Vec<&'proj TestFunction> {
-    fn upcast(self) -> Vec<&'proj dyn UsesFixtures> {
-        self.into_iter()
-            .map(|test_function| test_function as &dyn UsesFixtures)
-            .collect()
-    }
-}
-
-impl UsesFixtures for TestFunction {
-    fn dependant_fixtures(&self, py: Python<'_>) -> Vec<String> {
-        let mut required_fixtures = self.function_definition.dependant_fixtures(py);
+impl RequiresFixtures for TestFunction {
+    fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
+        let mut required_fixtures = self.function_definition.required_fixtures(py);
 
         required_fixtures.extend(self.tags.required_fixtures_names());
 
@@ -188,7 +180,7 @@ mod tests {
     use karva_test::TestContext;
     use pyo3::prelude::*;
 
-    use crate::{discovery::StandardDiscoverer, extensions::fixtures::UsesFixtures};
+    use crate::{discovery::StandardDiscoverer, extensions::fixtures::RequiresFixtures};
 
     #[test]
     fn test_case_construction_and_getters() {
@@ -223,7 +215,7 @@ mod tests {
 
             let test_case = session.test_functions()[0];
 
-            let required_fixtures = test_case.dependant_fixtures(py);
+            let required_fixtures = test_case.required_fixtures(py);
             assert_eq!(required_fixtures.len(), 2);
             assert!(required_fixtures.contains(&"fixture1".to_string()));
             assert!(required_fixtures.contains(&"fixture2".to_string()));

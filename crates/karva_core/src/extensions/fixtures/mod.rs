@@ -157,7 +157,7 @@ impl Fixture {
         // A hashmap of fixtures for each param
         let mut each_call_fixtures: Vec<HashMap<String, Py<PyAny>>> = vec![HashMap::new()];
 
-        let param_names = self.dependant_fixtures(py);
+        let param_names = self.required_fixtures(py);
 
         let mut missing_fixtures = HashSet::new();
 
@@ -418,28 +418,31 @@ impl std::fmt::Debug for Fixture {
 }
 
 /// This trait is used to represent an object that may require fixtures to be called before it is run.
-pub(crate) trait UsesFixtures: std::fmt::Debug {
+pub(crate) trait RequiresFixtures: std::fmt::Debug {
+    #[cfg(test)]
     fn uses_fixture(&self, py: Python<'_>, fixture_name: &str) -> bool {
-        self.dependant_fixtures(py)
+        self.required_fixtures(py)
             .contains(&fixture_name.to_string())
     }
 
-    fn dependant_fixtures(&self, py: Python<'_>) -> Vec<String>;
+    fn required_fixtures(&self, py: Python<'_>) -> Vec<String>;
 }
 
-impl UsesFixtures for StmtFunctionDef {
-    fn dependant_fixtures(&self, _py: Python<'_>) -> Vec<String> {
+impl RequiresFixtures for StmtFunctionDef {
+    fn required_fixtures(&self, _py: Python<'_>) -> Vec<String> {
         let mut required_fixtures = Vec::new();
+
         for parameter in self.parameters.iter_non_variadic_params() {
             required_fixtures.push(parameter.parameter.name.as_str().to_string());
         }
+
         required_fixtures
     }
 }
 
-impl UsesFixtures for Fixture {
-    fn dependant_fixtures(&self, py: Python<'_>) -> Vec<String> {
-        self.function_definition.dependant_fixtures(py)
+impl RequiresFixtures for Fixture {
+    fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
+        self.function_definition.required_fixtures(py)
     }
 }
 
@@ -463,14 +466,16 @@ fn is_fixture(expr: &Expr) -> bool {
 /// For example, if we are in a test module, we want to get all fixtures used in the test module.
 /// If we are in a package, we want to get all fixtures used in the package from the configuration module.
 pub(crate) trait HasFixtures<'proj>: std::fmt::Debug {
+    /// Get all fixtures with the given names and scopes
+    ///
+    /// If fixture names is empty, return all fixtures.
     fn fixtures<'a: 'proj>(
         &'a self,
-        py: Python<'_>,
         scopes: &[FixtureScope],
-        test_cases: &[&dyn UsesFixtures],
+        fixture_names: &[String],
     ) -> Vec<&'proj Fixture> {
         let mut fixtures = Vec::new();
-        for fixture in self.all_fixtures(py, test_cases) {
+        for fixture in self.all_fixtures(fixture_names) {
             if scopes.contains(fixture.scope()) {
                 fixtures.push(fixture);
             }
@@ -478,22 +483,17 @@ pub(crate) trait HasFixtures<'proj>: std::fmt::Debug {
         fixtures
     }
 
-    fn get_fixture<'a: 'proj>(
-        &'a self,
-        py: Python<'_>,
-        fixture_name: &str,
-    ) -> Option<&'proj Fixture> {
-        self.all_fixtures(py, &[])
-            .into_iter()
-            .find(|fixture| fixture.name().function_name() == fixture_name)
-    }
+    /// Get a fixture with the given name
+    ///
+    /// If fixture names is empty, return all fixtures.
+    fn get_fixture<'a: 'proj>(&'a self, fixture_name: &str) -> Option<&'proj Fixture>;
 
-    fn all_fixtures<'a: 'proj>(
-        &'a self,
-        py: Python<'_>,
-        test_cases: &[&dyn UsesFixtures],
-    ) -> Vec<&'proj Fixture>;
+    /// Get all fixtures with the given names
+    ///
+    /// If fixture names is empty, return all fixtures.
+    fn all_fixtures<'a: 'proj>(&'a self, fixture_names: &[String]) -> Vec<&'proj Fixture>;
 
+    /// The module where the fixtures are being found in.
     fn fixture_module<'a: 'proj>(&'a self) -> Option<&'a DiscoveredModule>;
 }
 
