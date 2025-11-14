@@ -72,12 +72,11 @@ impl TestFunction {
     }
 
     /// Collects test cases from this function, resolving fixtures and handling parametrization.
-    pub(crate) fn collect<'a>(
+    pub(crate) fn collect<'a, 'b>(
         &'a self,
         py: Python<'_>,
         module: &'a DiscoveredModule,
-        fixture_manager: &mut FixtureManager<'_>,
-        setup_fixture_manager: impl Fn(&mut FixtureManager<'_>),
+        get_fixture_manager: impl Fn() -> FixtureManager<'b>,
     ) -> Vec<TestCase<'a>> {
         tracing::info!(
             "Collecting test cases for function: {}",
@@ -98,7 +97,7 @@ impl TestFunction {
         let mut test_cases = Vec::with_capacity(parametrize_args.len());
 
         for params in parametrize_args {
-            setup_fixture_manager(fixture_manager);
+            let mut fixture_manager = get_fixture_manager();
 
             let mut missing_fixtures = Vec::new();
 

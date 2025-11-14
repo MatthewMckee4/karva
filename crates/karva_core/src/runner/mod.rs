@@ -27,12 +27,12 @@ impl<'proj> StandardTestRunner<'proj> {
 
     fn test_impl(&self, reporter: &dyn Reporter) -> TestRunResult {
         attach(self.project, |py| {
-            let mut diagnostics = TestRunResult::default();
+            let mut run_result = TestRunResult::default();
 
             let (session, discovery_diagnostics) =
                 StandardDiscoverer::new(self.project).discover(py);
 
-            diagnostics.add_discovery_diagnostics(discovery_diagnostics);
+            run_result.add_discovery_diagnostics(discovery_diagnostics);
 
             let collected_session = TestCaseCollector::collect(py, &session);
 
@@ -40,9 +40,9 @@ impl<'proj> StandardTestRunner<'proj> {
 
             reporter.log_test_count(total_test_cases);
 
-            diagnostics.update(collected_session.run_with_reporter(py, reporter));
+            collected_session.run(py, reporter, &mut run_result);
 
-            diagnostics
+            run_result
         })
     }
 }

@@ -114,9 +114,9 @@ impl<'a> FixtureManager<'a> {
     pub(crate) fn contains_fixture_with_name_at_scope(
         &self,
         fixture_name: &str,
-        scope: &FixtureScope,
+        scope: FixtureScope,
     ) -> bool {
-        if self.scope == *scope {
+        if self.scope == scope {
             self.collection.contains_fixture_with_name(fixture_name)
         } else {
             self.parent
@@ -163,7 +163,7 @@ impl<'a> FixtureManager<'a> {
     }
 
     pub(crate) fn insert_fixture(&mut self, fixture_return: Vec<Py<PyAny>>, fixture: &Fixture) {
-        if self.scope <= *fixture.scope() {
+        if self.scope <= fixture.scope() {
             self.collection
                 .insert_fixture(fixture.name().clone(), fixture_return);
         } else {
@@ -171,8 +171,8 @@ impl<'a> FixtureManager<'a> {
         }
     }
 
-    pub(crate) fn insert_finalizer(&mut self, finalizer: Finalizer, scope: &FixtureScope) {
-        if self.scope <= *scope {
+    pub(crate) fn insert_finalizer(&mut self, finalizer: Finalizer, scope: FixtureScope) {
+        if self.scope <= scope {
             self.collection.insert_finalizer(finalizer);
         } else {
             // We should not reach this
@@ -201,7 +201,7 @@ impl<'a> FixtureManager<'a> {
         let current_dependencies = fixture.required_fixtures(py);
 
         // We need to get all of the fixtures in the current scope.
-        let current_all_fixtures = current.all_fixtures(&[]);
+        let current_all_fixtures = current.all_fixtures(None);
 
         for dependency in &current_dependencies {
             let mut found = false;
@@ -268,11 +268,30 @@ impl<'a> FixtureManager<'a> {
         scopes: &[FixtureScope],
         fixture_names: &[String],
     ) {
-        let fixtures = current.fixtures(scopes, fixture_names);
+        let fixtures = current.fixtures(scopes, Some(fixture_names));
 
         for fixture in fixtures {
             self.ensure_fixture_dependencies(py, parents, current, fixture);
         }
+    }
+
+    pub(crate) fn from_parent<'proj>(
+        py: Python<'_>,
+        parent_fixture_manager: &'a FixtureManager,
+        parents: &[&'proj DiscoveredPackage],
+        current: &'proj dyn HasFixtures<'proj>,
+        scope: FixtureScope,
+        fixture_names: &[String],
+    ) -> Self {
+        let mut fixture_manager = FixtureManager::new(Some(parent_fixture_manager), scope);
+
+        for (current, parents) in iter_with_ancestors(parents) {
+            fixture_manager.add_fixtures(py, &parents, &current, &[scope], fixture_names);
+        }
+
+        fixture_manager.add_fixtures(py, parents, current, &scope.scopes_above(), fixture_names);
+
+        fixture_manager
     }
 
     /// Clears all fixtures and returns finalizers for cleanup.
@@ -1042,7 +1061,7 @@ def data():
                 &child_test.required_fixtures(py),
             );
 
-            assert!(manager.contains_fixture_with_name_at_scope("data", &FixtureScope::Function));
+            assert!(manager.contains_fixture_with_name_at_scope("data", FixtureScope::Function));
         });
     }
 
@@ -1095,15 +1114,15 @@ def combined(derived_a, derived_b):
                 &test_function.required_fixtures(py),
             );
 
-            assert!(manager.contains_fixture_with_name_at_scope("base", &FixtureScope::Function));
+            assert!(manager.contains_fixture_with_name_at_scope("base", FixtureScope::Function));
             assert!(
-                manager.contains_fixture_with_name_at_scope("derived_a", &FixtureScope::Function)
+                manager.contains_fixture_with_name_at_scope("derived_a", FixtureScope::Function)
             );
             assert!(
-                manager.contains_fixture_with_name_at_scope("derived_b", &FixtureScope::Function)
+                manager.contains_fixture_with_name_at_scope("derived_b", FixtureScope::Function)
             );
             assert!(
-                manager.contains_fixture_with_name_at_scope("combined", &FixtureScope::Function)
+                manager.contains_fixture_with_name_at_scope("combined", FixtureScope::Function)
             );
         });
     }
@@ -1526,26 +1545,26 @@ def function_fixture():
             assert!(
                 !function_fixture_manager.contains_fixture_with_name_at_scope(
                     "function_fixture",
-                    &FixtureScope::Function
+                    FixtureScope::Function
                 )
             );
 
             module_fixture_manager.reset_fixtures();
             assert!(
                 !module_fixture_manager
-                    .contains_fixture_with_name_at_scope("module_fixture", &FixtureScope::Module)
+                    .contains_fixture_with_name_at_scope("module_fixture", FixtureScope::Module)
             );
 
             package_fixture_manager.reset_fixtures();
             assert!(
                 !package_fixture_manager
-                    .contains_fixture_with_name_at_scope("package_fixture", &FixtureScope::Package)
+                    .contains_fixture_with_name_at_scope("package_fixture", FixtureScope::Package)
             );
 
             session_fixture_manager.reset_fixtures();
             assert!(
                 !session_fixture_manager
-                    .contains_fixture_with_name_at_scope("session_fixture", &FixtureScope::Session)
+                    .contains_fixture_with_name_at_scope("session_fixture", FixtureScope::Session)
             );
         });
     }
