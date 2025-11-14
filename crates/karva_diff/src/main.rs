@@ -65,25 +65,25 @@ fn run(
         .map(ToString::to_string)
         .collect();
 
-    println!("Path: {:?}", installed_project.path);
-
-    let old_output = Command::new(&args.old_karva_binary)
+    let old_output = Command::new("uv")
+        .arg("run")
+        .arg(&args.old_karva_binary)
         .current_dir(&installed_project.path)
         .arg("test")
+        .arg("-vv")
         .args(&paths)
         .output()
         .context("Failed to run old karva binary")?;
 
-    println!("Old output: {:?}", old_output);
-
-    let new_output = Command::new(&args.new_karva_binary)
+    let new_output = Command::new("uv")
+        .arg("run")
+        .arg(&args.new_karva_binary)
         .current_dir(&installed_project.path)
         .arg("test")
+        .arg("-vv")
         .args(&paths)
         .output()
         .context("Failed to run new karva binary")?;
-
-    println!("New output: {:?}", new_output);
 
     let old_result = extract_test_result(&old_output.stdout)?;
 
