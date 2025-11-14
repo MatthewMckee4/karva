@@ -56,7 +56,8 @@ impl Finalizer {
             ))),
             Err(err) => Some(Diagnostic::warning(&format!(
                 "Failed to reset fixture {}\n{}",
-                self.fixture_name, err
+                self.fixture_name,
+                err.value(py)
             ))),
         }
     }
@@ -120,6 +121,7 @@ def test_fixture_generator(fixture_generator):
         warnings:
 
         warning: Failed to reset fixture <test>.test_file::fixture_generator
+        fixture-error
 
         test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
         ");
