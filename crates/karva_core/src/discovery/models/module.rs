@@ -1,12 +1,7 @@
 use camino::Utf8PathBuf;
-use pyo3::Python;
 use ruff_source_file::LineIndex;
 
-use crate::{
-    discovery::TestFunction,
-    extensions::fixtures::{Fixture, HasFixtures, UsesFixtures},
-    name::ModulePath,
-};
+use crate::{discovery::TestFunction, extensions::fixtures::Fixture, name::ModulePath};
 
 /// A module represents a single python file.
 #[derive(Debug)]
@@ -73,9 +68,8 @@ impl DiscoveredModule {
             .find(|tc| tc.function_name() == name)
     }
 
-    #[cfg(test)]
-    pub(crate) fn fixtures(&self) -> Vec<&Fixture> {
-        self.fixtures.iter().collect()
+    pub(crate) const fn fixtures(&self) -> &Vec<Fixture> {
+        &self.fixtures
     }
 
     pub(crate) fn with_fixtures(self, fixtures: Vec<Fixture>) -> Self {
@@ -118,17 +112,6 @@ impl DiscoveredModule {
         }
     }
 
-    pub(crate) fn all_uses_fixtures(&self) -> Vec<&dyn UsesFixtures> {
-        let mut deps = Vec::new();
-        for tc in &self.test_functions {
-            deps.push(tc as &dyn UsesFixtures);
-        }
-        for f in &self.fixtures {
-            deps.push(f as &dyn UsesFixtures);
-        }
-        deps
-    }
-
     pub(crate) fn is_empty(&self) -> bool {
         self.test_functions.is_empty() && self.fixtures.is_empty()
     }
@@ -136,38 +119,6 @@ impl DiscoveredModule {
     #[cfg(test)]
     pub(crate) const fn display(&self) -> DisplayDiscoveredModule<'_> {
         DisplayDiscoveredModule::new(self)
-    }
-}
-
-impl<'proj> HasFixtures<'proj> for DiscoveredModule {
-    fn all_fixtures<'a: 'proj>(
-        &'a self,
-        py: Python<'_>,
-        test_cases: &[&dyn UsesFixtures],
-    ) -> Vec<&'proj Fixture> {
-        if test_cases.is_empty() {
-            return self.fixtures.iter().collect();
-        }
-
-        let all_fixtures: Vec<&'proj Fixture> = self
-            .fixtures
-            .iter()
-            .filter(|f| {
-                if f.auto_use() {
-                    true
-                } else {
-                    test_cases
-                        .iter()
-                        .any(|tc| tc.uses_fixture(py, f.name().function_name()))
-                }
-            })
-            .collect();
-
-        all_fixtures
-    }
-
-    fn fixture_module<'a: 'proj>(&'a self) -> Option<&'a DiscoveredModule> {
-        Some(self)
     }
 }
 

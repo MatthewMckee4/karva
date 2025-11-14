@@ -8,7 +8,7 @@ use crate::{
     discovery::{DiscoveredModule, TestFunction},
     extensions::{
         fixtures::{
-            Finalizers, UsesFixtures, handle_missing_fixtures, missing_arguments_from_error,
+            Finalizers, RequiresFixtures, handle_missing_fixtures, missing_arguments_from_error,
         },
         tags::python::SkipError,
     },
@@ -64,7 +64,12 @@ impl<'proj> TestCase<'proj> {
         self.fixture_diagnostics.extend(diagnostics);
     }
 
-    pub(crate) fn run(self, py: Python<'_>, reporter: &dyn Reporter) -> TestRunResult {
+    pub(crate) fn run(
+        self,
+        py: Python<'_>,
+        reporter: &dyn Reporter,
+        run_result: &mut TestRunResult,
+    ) {
         let Self {
             function,
             kwargs,
@@ -74,9 +79,7 @@ impl<'proj> TestCase<'proj> {
             fixture_diagnostics,
         } = self;
 
-        let mut run_result = (|| {
-            let mut run_result = TestRunResult::default();
-
+        (|| {
             let test_name = full_test_name(py, &function.name().to_string(), &kwargs);
 
             if let Some(skip_tag) = &function.tags().skip_tag() {
@@ -88,7 +91,7 @@ impl<'proj> TestCase<'proj> {
                     Some(reporter),
                 );
 
-                return run_result;
+                return;
             }
 
             if let Some(skip_if_tag) = &function.tags().skip_if_tag() {
@@ -100,7 +103,7 @@ impl<'proj> TestCase<'proj> {
                         },
                         Some(reporter),
                     );
-                    return run_result;
+                    return;
                 }
             }
 
@@ -109,7 +112,7 @@ impl<'proj> TestCase<'proj> {
             } else {
                 let py_dict = PyDict::new(py);
 
-                for key in function.definition().dependant_fixtures(py) {
+                for key in function.definition().required_fixtures(py) {
                     if let Some(value) = kwargs.get(&key) {
                         let _ = py_dict.set_item(key, value);
                     }
@@ -125,7 +128,7 @@ impl<'proj> TestCase<'proj> {
                     Some(reporter),
                 );
 
-                return run_result;
+                return;
             };
 
             // Check if the exception is a skip exception (karva.SkipError or pytest.Skipped)
@@ -137,7 +140,7 @@ impl<'proj> TestCase<'proj> {
                     Some(reporter),
                 );
 
-                return run_result;
+                return;
             }
 
             let default_diagnostic = || {
@@ -164,15 +167,11 @@ impl<'proj> TestCase<'proj> {
             );
 
             run_result.add_test_diagnostic(diagnostic);
-
-            run_result
         })();
 
         run_result.add_test_diagnostics(fixture_diagnostics);
 
         run_result.add_test_diagnostics(finalizers.run(py));
-
-        run_result
     }
 }
 

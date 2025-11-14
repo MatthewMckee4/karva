@@ -946,7 +946,9 @@ def x():
             .get(&conftest_path)
             .unwrap();
 
-        let fixture = test_1_module.fixtures()[0];
+        let fixtures = test_1_module.fixtures();
+
+        let fixture = &fixtures[0];
 
         assert!(fixture.is_generator());
     }

@@ -525,7 +525,7 @@ fn test_fixture_generator_fail_in_teardown() {
     warnings:
 
     warning: Failed to reset fixture test::fixture_generator
-    ValueError: fixture error
+    fixture error
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
 

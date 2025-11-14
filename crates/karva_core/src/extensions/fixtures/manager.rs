@@ -5,7 +5,7 @@ use crate::{
     diagnostic::Diagnostic,
     discovery::DiscoveredPackage,
     extensions::fixtures::{
-        Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, UsesFixtures, builtins,
+        Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, RequiresFixtures, builtins,
     },
     name::QualifiedFunctionName,
     utils::iter_with_ancestors,
@@ -114,9 +114,9 @@ impl<'a> FixtureManager<'a> {
     pub(crate) fn contains_fixture_with_name_at_scope(
         &self,
         fixture_name: &str,
-        scope: &FixtureScope,
+        scope: FixtureScope,
     ) -> bool {
-        if self.scope == *scope {
+        if self.scope == scope {
             self.collection.contains_fixture_with_name(fixture_name)
         } else {
             self.parent
@@ -163,7 +163,7 @@ impl<'a> FixtureManager<'a> {
     }
 
     pub(crate) fn insert_fixture(&mut self, fixture_return: Vec<Py<PyAny>>, fixture: &Fixture) {
-        if self.scope <= *fixture.scope() {
+        if self.scope <= fixture.scope() {
             self.collection
                 .insert_fixture(fixture.name().clone(), fixture_return);
         } else {
@@ -171,8 +171,8 @@ impl<'a> FixtureManager<'a> {
         }
     }
 
-    pub(crate) fn insert_finalizer(&mut self, finalizer: Finalizer, scope: &FixtureScope) {
-        if self.scope <= *scope {
+    pub(crate) fn insert_finalizer(&mut self, finalizer: Finalizer, scope: FixtureScope) {
+        if self.scope <= scope {
             self.collection.insert_finalizer(finalizer);
         } else {
             // We should not reach this
@@ -198,10 +198,10 @@ impl<'a> FixtureManager<'a> {
 
         // To ensure we can call the current fixture, we must first look at all of its dependencies,
         // and resolve them first.
-        let current_dependencies = fixture.dependant_fixtures(py);
+        let current_dependencies = fixture.required_fixtures(py);
 
         // We need to get all of the fixtures in the current scope.
-        let current_all_fixtures = current.all_fixtures(py, &[]);
+        let current_all_fixtures = current.all_fixtures(None);
 
         for dependency in &current_dependencies {
             let mut found = false;
@@ -220,7 +220,7 @@ impl<'a> FixtureManager<'a> {
             // So we try the parent scopes.
             if !found {
                 for (parent, parents_above_current_parent) in iter_with_ancestors(parents) {
-                    let parent_fixture = (*parent).get_fixture(py, dependency);
+                    let parent_fixture = (*parent).get_fixture(dependency);
 
                     if let Some(parent_fixture) = parent_fixture {
                         if parent_fixture.name() != fixture.name() {
@@ -266,13 +266,32 @@ impl<'a> FixtureManager<'a> {
         parents: &[&'proj DiscoveredPackage],
         current: &'proj dyn HasFixtures<'proj>,
         scopes: &[FixtureScope],
-        dependencies: &[&dyn UsesFixtures],
+        fixture_names: &[String],
     ) {
-        let fixtures = current.fixtures(py, scopes, dependencies);
+        let fixtures = current.fixtures(scopes, Some(fixture_names));
 
         for fixture in fixtures {
             self.ensure_fixture_dependencies(py, parents, current, fixture);
         }
+    }
+
+    pub(crate) fn from_parent<'proj>(
+        py: Python<'_>,
+        parent_fixture_manager: &'a FixtureManager,
+        parents: &[&'proj DiscoveredPackage],
+        current: &'proj dyn HasFixtures<'proj>,
+        scope: FixtureScope,
+        fixture_names: &[String],
+    ) -> Self {
+        let mut fixture_manager = FixtureManager::new(Some(parent_fixture_manager), scope);
+
+        for (current, parents) in iter_with_ancestors(parents) {
+            fixture_manager.add_fixtures(py, &parents, &current, &[scope], fixture_names);
+        }
+
+        fixture_manager.add_fixtures(py, parents, current, &scope.scopes_above(), fixture_names);
+
+        fixture_manager
     }
 
     /// Clears all fixtures and returns finalizers for cleanup.
@@ -329,7 +348,7 @@ def x():
                 &[],
                 &tests_package,
                 &[FixtureScope::Function],
-                &[first_test_function],
+                &first_test_function.required_fixtures(py),
             );
 
             assert!(manager.contains_fixture_with_name("x"));
@@ -384,7 +403,7 @@ def y(x):
                 &[tests_package],
                 inner_package,
                 &[FixtureScope::Function],
-                &[first_test_function],
+                &first_test_function.required_fixtures(py),
             );
 
             assert!(manager.contains_fixture_with_name("x"));
@@ -434,7 +453,7 @@ def y(x):
                 &[],
                 tests_package,
                 &[FixtureScope::Function],
-                &[first_test_function],
+                &first_test_function.required_fixtures(py),
             );
 
             assert!(manager.contains_fixture_with_name("x"));
@@ -502,7 +521,7 @@ def z(y):
                 &[tests_package, inner_package],
                 inner_inner_package,
                 &[FixtureScope::Function],
-                &[first_test_function],
+                &first_test_function.required_fixtures(py),
             );
 
             assert!(manager.contains_fixture_with_name("x"));
@@ -556,17 +575,21 @@ def z(x):
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
         Python::attach(|py| {
-            let y_fixture = inner_package.get_fixture(py, "y").unwrap();
-            let z_fixture = inner_package.get_fixture(py, "z").unwrap();
+            let y_fixture = inner_package.get_fixture("y").unwrap();
+            let z_fixture = inner_package.get_fixture("z").unwrap();
 
             let mut test_module_fixture_manager = FixtureManager::new(None, FixtureScope::Module);
+
+            let mut fixture_names = Vec::new();
+            fixture_names.extend(y_fixture.required_fixtures(py));
+            fixture_names.extend(z_fixture.required_fixtures(py));
 
             test_module_fixture_manager.add_fixtures(
                 py,
                 &[],
                 tests_package,
                 &[FixtureScope::Module],
-                &[y_fixture, z_fixture],
+                &fixture_names,
             );
 
             let mut function_fixture_manager =
@@ -577,7 +600,7 @@ def z(x):
                 &[tests_package],
                 inner_package,
                 &[FixtureScope::Function],
-                &[first_test_function],
+                &first_test_function.required_fixtures(py),
             );
 
             assert!(test_module_fixture_manager.contains_fixture_with_name("x"));
@@ -639,8 +662,8 @@ def z(y):
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
         Python::attach(|py| {
-            let y_fixture = inner_package.get_fixture(py, "y").unwrap();
-            let z_fixture = inner_inner_package.get_fixture(py, "z").unwrap();
+            let y_fixture = inner_package.get_fixture("y").unwrap();
+            let z_fixture = inner_inner_package.get_fixture("z").unwrap();
 
             let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
 
@@ -649,7 +672,7 @@ def z(y):
                 &[],
                 tests_package,
                 &[FixtureScope::Session],
-                &[y_fixture],
+                &y_fixture.required_fixtures(py),
             );
 
             let mut module_fixture_manager =
@@ -660,7 +683,7 @@ def z(y):
                 &[tests_package],
                 inner_package,
                 &[FixtureScope::Module],
-                &[z_fixture],
+                &z_fixture.required_fixtures(py),
             );
 
             let mut function_fixture_manager =
@@ -671,7 +694,7 @@ def z(y):
                 &[tests_package, inner_package],
                 inner_inner_package,
                 &[FixtureScope::Function],
-                &[first_test_function],
+                &first_test_function.required_fixtures(py),
             );
 
             assert!(session_fixture_manager.contains_fixture_with_name("x"));
@@ -721,8 +744,8 @@ def z(x, y):
         let first_test_function = test_module.get_test_function("test_1").unwrap();
 
         Python::attach(|py| {
-            let y_fixture = tests_package.get_fixture(py, "y").unwrap();
-            let z_fixture = tests_package.get_fixture(py, "z").unwrap();
+            let y_fixture = tests_package.get_fixture("y").unwrap();
+            let z_fixture = tests_package.get_fixture("z").unwrap();
 
             let mut module_fixture_manager = FixtureManager::new(None, FixtureScope::Module);
 
@@ -731,18 +754,23 @@ def z(x, y):
                 &[],
                 tests_package,
                 &[FixtureScope::Module],
-                &[y_fixture],
+                &y_fixture.required_fixtures(py),
             );
 
             let mut function_fixture_manager =
                 FixtureManager::new(Some(&module_fixture_manager), FixtureScope::Function);
+
+            let mut fixture_names = Vec::new();
+            fixture_names.extend(y_fixture.required_fixtures(py));
+            fixture_names.extend(z_fixture.required_fixtures(py));
+            fixture_names.extend(first_test_function.required_fixtures(py));
 
             function_fixture_manager.add_fixtures(
                 py,
                 &[],
                 tests_package,
                 &[FixtureScope::Function],
-                &[y_fixture, z_fixture, first_test_function],
+                &fixture_names,
             );
 
             assert!(module_fixture_manager.contains_fixture_with_name("x"));
@@ -810,9 +838,9 @@ def test_user_login(auth_token): pass",
         let test_function = test_module.get_test_function("test_user_login").unwrap();
 
         Python::attach(|py| {
-            let api_client_fixture = api_package.get_fixture(py, "api_client").unwrap();
-            let user_fixture = users_package.get_fixture(py, "user").unwrap();
-            let auth_token_fixture = test_module.get_fixture(py, "auth_token").unwrap();
+            let api_client_fixture = api_package.get_fixture("api_client").unwrap();
+            let user_fixture = users_package.get_fixture("user").unwrap();
+            let auth_token_fixture = test_module.get_fixture("auth_token").unwrap();
 
             let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
 
@@ -821,7 +849,7 @@ def test_user_login(auth_token): pass",
                 &[],
                 tests_package,
                 &[FixtureScope::Session],
-                &[api_client_fixture],
+                &api_client_fixture.required_fixtures(py),
             );
 
             let mut package_fixture_manager =
@@ -832,7 +860,7 @@ def test_user_login(auth_token): pass",
                 &[tests_package],
                 api_package,
                 &[FixtureScope::Package],
-                &[user_fixture],
+                &user_fixture.required_fixtures(py),
             );
 
             let mut module_fixture_manager =
@@ -843,7 +871,7 @@ def test_user_login(auth_token): pass",
                 &[],
                 users_package,
                 &[FixtureScope::Module],
-                &[auth_token_fixture],
+                &auth_token_fixture.required_fixtures(py),
             );
 
             let mut function_fixture_manager =
@@ -854,7 +882,7 @@ def test_user_login(auth_token): pass",
                 &[tests_package, api_package, users_package],
                 test_module,
                 &[FixtureScope::Function],
-                &[test_function],
+                &test_function.required_fixtures(py),
             );
 
             assert!(session_fixture_manager.contains_fixture_with_name("database"));
@@ -925,17 +953,21 @@ def service_b(config):
         let test_b = module_b.get_test_function("test_b").unwrap();
 
         Python::attach(|py| {
-            let service_a_fixture = package_a.get_fixture(py, "service_a").unwrap();
-            let service_b_fixture = package_b.get_fixture(py, "service_b").unwrap();
+            let service_a_fixture = package_a.get_fixture("service_a").unwrap();
+            let service_b_fixture = package_b.get_fixture("service_b").unwrap();
 
             let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
+
+            let mut fixture_names = Vec::new();
+            fixture_names.extend(service_a_fixture.required_fixtures(py));
+            fixture_names.extend(service_b_fixture.required_fixtures(py));
 
             session_fixture_manager.add_fixtures(
                 py,
                 &[],
                 tests_package,
                 &[FixtureScope::Session],
-                &[service_a_fixture, service_b_fixture],
+                &fixture_names,
             );
 
             let mut package_fixture_manager =
@@ -946,7 +978,7 @@ def service_b(config):
                 &[tests_package],
                 package_a,
                 &[FixtureScope::Package],
-                &[test_a],
+                &test_a.required_fixtures(py),
             );
 
             package_fixture_manager.add_fixtures(
@@ -954,7 +986,7 @@ def service_b(config):
                 &[tests_package],
                 package_b,
                 &[FixtureScope::Package],
-                &[test_b],
+                &test_b.required_fixtures(py),
             );
 
             assert!(session_fixture_manager.contains_fixture_with_name("config"));
@@ -1017,7 +1049,7 @@ def data():
                 &[],
                 tests_package,
                 &[FixtureScope::Function],
-                &[root_test],
+                &root_test.required_fixtures(py),
             );
 
             manager.reset_fixtures();
@@ -1026,10 +1058,10 @@ def data():
                 &[tests_package],
                 child_package,
                 &[FixtureScope::Function],
-                &[child_test],
+                &child_test.required_fixtures(py),
             );
 
-            assert!(manager.contains_fixture_with_name_at_scope("data", &FixtureScope::Function));
+            assert!(manager.contains_fixture_with_name_at_scope("data", FixtureScope::Function));
         });
     }
 
@@ -1079,18 +1111,18 @@ def combined(derived_a, derived_b):
                 &[],
                 tests_package,
                 &[FixtureScope::Function],
-                &[test_function],
+                &test_function.required_fixtures(py),
             );
 
-            assert!(manager.contains_fixture_with_name_at_scope("base", &FixtureScope::Function));
+            assert!(manager.contains_fixture_with_name_at_scope("base", FixtureScope::Function));
             assert!(
-                manager.contains_fixture_with_name_at_scope("derived_a", &FixtureScope::Function)
+                manager.contains_fixture_with_name_at_scope("derived_a", FixtureScope::Function)
             );
             assert!(
-                manager.contains_fixture_with_name_at_scope("derived_b", &FixtureScope::Function)
+                manager.contains_fixture_with_name_at_scope("derived_b", FixtureScope::Function)
             );
             assert!(
-                manager.contains_fixture_with_name_at_scope("combined", &FixtureScope::Function)
+                manager.contains_fixture_with_name_at_scope("combined", FixtureScope::Function)
             );
         });
     }
@@ -1170,10 +1202,10 @@ def level5(level4):
         let test_function = test_module.get_test_function("test_deep").unwrap();
 
         Python::attach(|py| {
-            let l2_fixture = l2_package.get_fixture(py, "level2").unwrap();
-            let l3_fixture = l3_package.get_fixture(py, "level3").unwrap();
-            let l4_fixture = l4_package.get_fixture(py, "level4").unwrap();
-            let l5_fixture = l5_package.get_fixture(py, "level5").unwrap();
+            let l2_fixture = l2_package.get_fixture("level2").unwrap();
+            let l3_fixture = l3_package.get_fixture("level3").unwrap();
+            let l4_fixture = l4_package.get_fixture("level4").unwrap();
+            let l5_fixture = l5_package.get_fixture("level5").unwrap();
 
             let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
 
@@ -1182,7 +1214,7 @@ def level5(level4):
                 &[],
                 l1_package,
                 &[FixtureScope::Session],
-                &[l2_fixture],
+                &l2_fixture.required_fixtures(py),
             );
             let mut package_fixture_manager =
                 FixtureManager::new(Some(&session_fixture_manager), FixtureScope::Package);
@@ -1192,7 +1224,7 @@ def level5(level4):
                 &[l1_package],
                 l2_package,
                 &[FixtureScope::Package],
-                &[l3_fixture],
+                &l3_fixture.required_fixtures(py),
             );
 
             let mut module_fixture_manager =
@@ -1203,18 +1235,22 @@ def level5(level4):
                 &[l1_package, l2_package],
                 l3_package,
                 &[FixtureScope::Module],
-                &[l4_fixture],
+                &l4_fixture.required_fixtures(py),
             );
 
             let mut function_fixture_manager =
                 FixtureManager::new(Some(&module_fixture_manager), FixtureScope::Function);
+
+            let mut fixture_names = Vec::new();
+            fixture_names.extend(l5_fixture.required_fixtures(py));
+            fixture_names.extend(test_function.required_fixtures(py));
 
             function_fixture_manager.add_fixtures(
                 py,
                 &[l1_package, l2_package, l3_package, l4_package],
                 l5_package,
                 &[FixtureScope::Function],
-                &[l5_fixture, test_function],
+                &fixture_names,
             );
 
             assert!(session_fixture_manager.contains_fixture_with_name("level1"));
@@ -1267,12 +1303,17 @@ def test_three(module_fixture): pass",
         Python::attach(|py| {
             let mut module_fixture_manager = FixtureManager::new(None, FixtureScope::Module);
 
+            let mut fixture_names = Vec::new();
+            fixture_names.extend(test_one.required_fixtures(py));
+            fixture_names.extend(test_two.required_fixtures(py));
+            fixture_names.extend(test_three.required_fixtures(py));
+
             module_fixture_manager.add_fixtures(
                 py,
                 &[],
                 tests_package,
                 &[FixtureScope::Module],
-                &[test_one, test_two, test_three],
+                &fixture_names,
             );
 
             let mut function_fixture_manager =
@@ -1283,7 +1324,7 @@ def test_three(module_fixture): pass",
                 &[tests_package],
                 tests_package,
                 &[FixtureScope::Function],
-                &[test_one, test_two, test_three],
+                &fixture_names,
             );
 
             assert!(module_fixture_manager.contains_fixture_with_name("module_fixture"));
@@ -1342,31 +1383,39 @@ def converged(branch_a2, branch_b2):
         let test_function = test_module.get_test_function("test_converged").unwrap();
 
         Python::attach(|py| {
-            let branch_a1_fixture = tests_package.get_fixture(py, "branch_a1").unwrap();
-            let branch_b1_fixture = tests_package.get_fixture(py, "branch_b1").unwrap();
-            let branch_a2_fixture = tests_package.get_fixture(py, "branch_a2").unwrap();
-            let branch_b2_fixture = tests_package.get_fixture(py, "branch_b2").unwrap();
-            let converged_fixture = tests_package.get_fixture(py, "converged").unwrap();
+            let branch_a1_fixture = tests_package.get_fixture("branch_a1").unwrap();
+            let branch_b1_fixture = tests_package.get_fixture("branch_b1").unwrap();
+            let branch_a2_fixture = tests_package.get_fixture("branch_a2").unwrap();
+            let branch_b2_fixture = tests_package.get_fixture("branch_b2").unwrap();
+            let converged_fixture = tests_package.get_fixture("converged").unwrap();
 
             let mut session_fixture_manager = FixtureManager::new(None, FixtureScope::Session);
+
+            let mut fixture_names = Vec::new();
+            fixture_names.extend(branch_a1_fixture.required_fixtures(py));
+            fixture_names.extend(branch_b1_fixture.required_fixtures(py));
 
             session_fixture_manager.add_fixtures(
                 py,
                 &[],
                 tests_package,
                 &[FixtureScope::Session],
-                &[branch_a1_fixture, branch_b1_fixture],
+                &fixture_names,
             );
 
             let mut package_fixture_manager =
                 FixtureManager::new(Some(&session_fixture_manager), FixtureScope::Package);
+
+            let mut fixture_names = Vec::new();
+            fixture_names.extend(branch_a2_fixture.required_fixtures(py));
+            fixture_names.extend(branch_b2_fixture.required_fixtures(py));
 
             package_fixture_manager.add_fixtures(
                 py,
                 &[tests_package],
                 tests_package,
                 &[FixtureScope::Package],
-                &[branch_a2_fixture, branch_b2_fixture],
+                &fixture_names,
             );
 
             let mut module_fixture_manager =
@@ -1377,7 +1426,7 @@ def converged(branch_a2, branch_b2):
                 &[tests_package],
                 tests_package,
                 &[FixtureScope::Module],
-                &[converged_fixture],
+                &converged_fixture.required_fixtures(py),
             );
 
             let mut function_fixture_manager =
@@ -1388,7 +1437,7 @@ def converged(branch_a2, branch_b2):
                 &[tests_package],
                 tests_package,
                 &[FixtureScope::Function],
-                &[test_function],
+                &test_function.required_fixtures(py),
             );
 
             assert!(session_fixture_manager.contains_fixture_with_name("root"));
@@ -1451,7 +1500,7 @@ def function_fixture():
                 &[],
                 tests_package,
                 &[FixtureScope::Session],
-                &[test_function],
+                &test_function.required_fixtures(py),
             );
 
             let mut package_fixture_manager =
@@ -1462,7 +1511,7 @@ def function_fixture():
                 &[tests_package],
                 tests_package,
                 &[FixtureScope::Package],
-                &[test_function],
+                &test_function.required_fixtures(py),
             );
 
             let mut module_fixture_manager =
@@ -1473,7 +1522,7 @@ def function_fixture():
                 &[tests_package],
                 tests_package,
                 &[FixtureScope::Module],
-                &[test_function],
+                &test_function.required_fixtures(py),
             );
 
             let mut function_fixture_manager =
@@ -1484,7 +1533,7 @@ def function_fixture():
                 &[tests_package],
                 tests_package,
                 &[FixtureScope::Function],
-                &[test_function],
+                &test_function.required_fixtures(py),
             );
 
             assert!(session_fixture_manager.contains_fixture_with_name("session_fixture"));
@@ -1496,26 +1545,26 @@ def function_fixture():
             assert!(
                 !function_fixture_manager.contains_fixture_with_name_at_scope(
                     "function_fixture",
-                    &FixtureScope::Function
+                    FixtureScope::Function
                 )
             );
 
             module_fixture_manager.reset_fixtures();
             assert!(
                 !module_fixture_manager
-                    .contains_fixture_with_name_at_scope("module_fixture", &FixtureScope::Module)
+                    .contains_fixture_with_name_at_scope("module_fixture", FixtureScope::Module)
             );
 
             package_fixture_manager.reset_fixtures();
             assert!(
                 !package_fixture_manager
-                    .contains_fixture_with_name_at_scope("package_fixture", &FixtureScope::Package)
+                    .contains_fixture_with_name_at_scope("package_fixture", FixtureScope::Package)
             );
 
             session_fixture_manager.reset_fixtures();
             assert!(
                 !session_fixture_manager
-                    .contains_fixture_with_name_at_scope("session_fixture", &FixtureScope::Session)
+                    .contains_fixture_with_name_at_scope("session_fixture", FixtureScope::Session)
             );
         });
     }

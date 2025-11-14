@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 
 use camino::Utf8PathBuf;
-use pyo3::prelude::*;
 
 #[cfg(test)]
 use crate::discovery::TestFunction;
 use crate::{
     discovery::{DiscoveredModule, ModuleType},
-    extensions::fixtures::{Fixture, HasFixtures, UsesFixtures},
     name::ModulePath,
 };
 
@@ -200,21 +198,6 @@ impl DiscoveredPackage {
         functions
     }
 
-    /// Get all the test functions and fixtures that are used in this package.
-    pub(crate) fn all_uses_fixtures(&self) -> Vec<&dyn UsesFixtures> {
-        let mut dependencies: Vec<&dyn UsesFixtures> = Vec::new();
-
-        for module in self.modules.values() {
-            dependencies.extend(module.all_uses_fixtures());
-        }
-
-        for package in self.packages.values() {
-            dependencies.extend(package.all_uses_fixtures());
-        }
-
-        dependencies
-    }
-
     pub(crate) fn configuration_module(&self) -> Option<&DiscoveredModule> {
         self.configuration_module_path
             .as_ref()
@@ -246,42 +229,6 @@ impl DiscoveredPackage {
     #[cfg(test)]
     pub(crate) const fn display(&self) -> DisplayDiscoveredPackage<'_> {
         DisplayDiscoveredPackage::new(self)
-    }
-}
-
-impl<'proj> HasFixtures<'proj> for DiscoveredPackage {
-    fn all_fixtures<'a: 'proj>(
-        &'a self,
-        py: Python<'_>,
-        test_cases: &[&dyn UsesFixtures],
-    ) -> Vec<&'proj Fixture> {
-        let mut fixtures = Vec::new();
-
-        if let Some(module) = self.configuration_module() {
-            let module_fixtures = module.all_fixtures(py, test_cases);
-
-            fixtures.extend(module_fixtures);
-        }
-
-        fixtures
-    }
-
-    fn fixture_module<'a: 'proj>(&'a self) -> Option<&'a DiscoveredModule> {
-        self.configuration_module()
-    }
-}
-
-impl<'proj> HasFixtures<'proj> for &'proj DiscoveredPackage {
-    fn all_fixtures<'a: 'proj>(
-        &'a self,
-        py: Python<'_>,
-        test_cases: &[&dyn UsesFixtures],
-    ) -> Vec<&'proj Fixture> {
-        (*self).all_fixtures(py, test_cases)
-    }
-
-    fn fixture_module<'a: 'proj>(&'a self) -> Option<&'a DiscoveredModule> {
-        (*self).fixture_module()
     }
 }
 

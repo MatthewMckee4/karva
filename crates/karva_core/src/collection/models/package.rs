@@ -52,11 +52,12 @@ impl<'proj> CollectedPackage<'proj> {
         total
     }
 
-    pub(crate) fn run_with_reporter(
+    pub(crate) fn run(
         self,
         py: Python<'_>,
         reporter: &dyn Reporter,
-    ) -> TestRunResult {
+        run_result: &mut TestRunResult,
+    ) {
         let Self {
             modules,
             packages,
@@ -64,20 +65,16 @@ impl<'proj> CollectedPackage<'proj> {
             fixture_diagnostics,
         } = self;
 
-        let mut run_result = TestRunResult::default();
-
         for module in modules {
-            run_result.update(module.run_with_reporter(py, reporter));
+            module.run(py, reporter, run_result);
         }
 
         for package in packages {
-            run_result.update(package.run_with_reporter(py, reporter));
+            package.run(py, reporter, run_result);
         }
 
         run_result.add_test_diagnostics(finalizers.run(py));
 
         run_result.add_test_diagnostics(fixture_diagnostics);
-
-        run_result
     }
 }

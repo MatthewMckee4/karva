@@ -37,27 +37,24 @@ impl<'proj> CollectedModule<'proj> {
         self.fixture_diagnostics.extend(diagnostics);
     }
 
-    pub(crate) fn run_with_reporter(
+    pub(crate) fn run(
         self,
         py: Python<'_>,
         reporter: &dyn Reporter,
-    ) -> TestRunResult {
+        run_result: &mut TestRunResult,
+    ) {
         let Self {
             test_cases,
             finalizers,
             fixture_diagnostics,
         } = self;
 
-        let mut run_result = TestRunResult::default();
-
         for test_case in test_cases {
-            run_result.update(test_case.run(py, reporter));
+            test_case.run(py, reporter, run_result);
         }
 
         run_result.add_test_diagnostics(finalizers.run(py));
 
         run_result.add_test_diagnostics(fixture_diagnostics);
-
-        run_result
     }
 }
