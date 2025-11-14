@@ -1,3 +1,4 @@
+#![allow(clippy::print_stdout)]
 use std::{
     fs,
     io::Write,
@@ -75,6 +76,8 @@ fn run(
         .output()
         .context("Failed to run old karva binary")?;
 
+    println!("Old output: {old_output:?}");
+
     let new_output = Command::new("uv")
         .arg("run")
         .arg(&args.new_karva_binary)
@@ -84,6 +87,8 @@ fn run(
         .args(&paths)
         .output()
         .context("Failed to run new karva binary")?;
+
+    println!("New output: {new_output:?}");
 
     let old_result = extract_test_result(&old_output.stdout)?;
 
