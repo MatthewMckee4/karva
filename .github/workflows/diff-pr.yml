@@ -38,7 +38,7 @@ jobs:
           command: build
 
       - name: Build PR branch karva binary
-        run: cargo build -p karva
+        run: cargo build
 
       - name: Save PR branch binary
         run: cp target/debug/karva target/debug/karva-pr
@@ -50,7 +50,7 @@ jobs:
           clean: false
 
       - name: Build main branch karva binary
-        run: cargo build -p karva
+        run: cargo build
 
       - name: Rename main branch binary
         run: cp target/debug/karva target/debug/karva-main
@@ -82,8 +82,8 @@ jobs:
         id: find-comment
         with:
           issue-number: ${{ github.event.pull_request.number }}
-          comment-author: 'github-actions[bot]'
-          body-includes: '<!-- karva-diff-comment -->'
+          comment-author: "github-actions[bot]"
+          body-includes: "<!-- karva-diff-comment -->"
 
       - name: Create or update comment (no changes)
         if: steps.diff.outputs.has_changes == 'false'
