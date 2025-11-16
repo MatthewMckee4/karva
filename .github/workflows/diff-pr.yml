@@ -25,14 +25,14 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
       - name: Build wheels for PR branch
         uses: PyO3/maturin-action@v1
         with:
           command: build
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Build PR branch karva binary
         run: cargo build
