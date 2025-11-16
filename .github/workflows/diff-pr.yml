@@ -20,16 +20,6 @@ jobs:
       - name: Update Rust toolchain
         run: rustup update
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Build wheels for PR branch
-        uses: PyO3/maturin-action@v1
-        with:
-          command: build
-
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
