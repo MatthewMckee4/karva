@@ -23,7 +23,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Build PR branch karva binary
         run: cargo build
@@ -48,9 +48,11 @@ jobs:
         with:
           clean: false
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          activate-environment: "false"
+          enable-cache: "false"
 
       - name: ls
         run: ls -1a
