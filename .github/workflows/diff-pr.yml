@@ -25,7 +25,9 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Set up Python
-        run: uv python install
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
 
       - name: Build PR branch karva binary
         run: cargo build
