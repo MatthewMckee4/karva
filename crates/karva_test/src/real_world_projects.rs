@@ -36,7 +36,7 @@ pub struct RealWorldProject<'a> {
 
 impl<'a> RealWorldProject<'a> {
     /// Setup a real-world project for benchmarking
-    pub fn setup(self) -> Result<InstalledProject<'a>> {
+    pub fn setup(self, venv_in_project_dir: bool) -> Result<InstalledProject<'a>> {
         tracing::debug!("Setting up project {}", self.name);
 
         // Create project directory in cargo target
@@ -66,7 +66,13 @@ impl<'a> RealWorldProject<'a> {
             project: self,
         };
 
-        install_dependencies(&checkout)?;
+        let venv_dir = if venv_in_project_dir {
+            Some(checkout.path.join(".venv").into_std_path_buf())
+        } else {
+            None
+        };
+
+        install_dependencies(&checkout, venv_dir)?;
 
         Ok(InstalledProject {
             path: checkout.path,
@@ -217,7 +223,7 @@ fn clone_repository(repo_url: &str, target_dir: &Utf8PathBuf, commit: &str) -> R
 }
 
 /// Install dependencies using uv with date constraints
-fn install_dependencies(checkout: &Checkout) -> Result<()> {
+fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Result<()> {
     // Check if uv is available
     let uv_check = Command::new("uv")
         .arg("--version")
@@ -230,7 +236,7 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
         );
     }
 
-    let venv_path = global_venv_path();
+    let venv_path = venv_dir.unwrap_or_else(global_venv_path);
     let python_version_str = checkout.project().python_version.to_string();
 
     let output = Command::new("uv")

@@ -23,7 +23,7 @@ struct ProjectBenchmark<'a> {
 
 impl<'a> ProjectBenchmark<'a> {
     fn new(project: RealWorldProject<'a>) -> Self {
-        let installed_project = project.setup().expect("Failed to setup project");
+        let installed_project = project.setup(false).expect("Failed to setup project");
         Self { installed_project }
     }
 

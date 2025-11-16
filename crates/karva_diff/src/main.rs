@@ -57,7 +57,7 @@ fn run(
     old_temp: &mut NamedTempFile,
     new_temp: &mut NamedTempFile,
 ) -> Result<()> {
-    let installed_project = project.setup()?;
+    let installed_project = project.setup(true)?;
 
     let paths: Vec<String> = installed_project
         .config
@@ -68,6 +68,7 @@ fn run(
 
     let old_output = Command::new(&args.old_karva_binary)
         .arg("test")
+        .current_dir(&installed_project.path)
         .arg("-vv")
         .args(&paths)
         .output()
@@ -77,6 +78,7 @@ fn run(
 
     let new_output = Command::new(&args.new_karva_binary)
         .arg("test")
+        .current_dir(&installed_project.path)
         .arg("-vv")
         .args(&paths)
         .output()
