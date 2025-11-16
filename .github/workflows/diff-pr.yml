@@ -47,6 +47,12 @@ jobs:
         with:
           clean: false
 
+      - name: ls
+        run: ls -1a
+
+      - name: Remove global venv
+        run: rm -rf .venv
+
       - name: Run karva_diff
         run: |
           cargo run -p karva_diff -- target/debug/karva-main target/debug/karva-pr out.txt new.txt
