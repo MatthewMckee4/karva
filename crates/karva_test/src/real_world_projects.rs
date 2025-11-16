@@ -330,9 +330,62 @@ pub fn affect_project() -> RealWorldProject<'static> {
     }
 }
 
+pub fn pydantic_settings_project() -> RealWorldProject<'static> {
+    RealWorldProject {
+        name: "pydantic-settings",
+        repository: "https://github.com/pydantic/pydantic-settings",
+        commit: "61e0b46eb96e2f67f390b0371c4297f2d6b24573",
+        paths: vec![Utf8PathBuf::from("tests")],
+        dependencies: vec!["pydantic", "python-dotenv", "typing-extensions", "pytest"],
+        python_version: PythonVersion::PY313,
+    }
+}
+
+pub fn pydantic_project() -> RealWorldProject<'static> {
+    RealWorldProject {
+        name: "pydantic",
+        repository: "https://github.com/pydantic/pydantic",
+        commit: "f42171c760d43b9522fde513ae6e209790f7fefb",
+        paths: vec![Utf8PathBuf::from("tests")],
+        dependencies: vec![
+            "typing-extensions",
+            "annotated-types",
+            "pydantic-core",
+            "typing-inspection",
+            "pytest",
+        ],
+        python_version: PythonVersion::PY313,
+    }
+}
+
+pub fn sqlmodel_project() -> RealWorldProject<'static> {
+    RealWorldProject {
+        name: "sqlmodel",
+        repository: "https://github.com/fastapi/sqlmodel",
+        commit: "43570910db2d7ab2e5efd96f60a0e2a3a61c5474",
+        paths: vec![Utf8PathBuf::from("tests")],
+        dependencies: vec!["pydantic", "SQLAlchemy", "pytest"],
+        python_version: PythonVersion::PY313,
+    }
+}
+
+pub fn typer_project() -> RealWorldProject<'static> {
+    RealWorldProject {
+        name: "typer",
+        repository: "https://github.com/fastapi/typer",
+        commit: "cbca80b94ca7e64899b12d597032fb4fc891b8e7",
+        paths: vec![Utf8PathBuf::from("tests")],
+        dependencies: vec!["click", "typing-extensions", "pytest"],
+        python_version: PythonVersion::PY313,
+    }
+}
+
 pub fn all_projects() -> Vec<RealWorldProject<'static>> {
     vec![
         affect_project(),
-        // Add more projects here
+        pydantic_settings_project(),
+        pydantic_project(),
+        sqlmodel_project(),
+        typer_project(),
     ]
 }
