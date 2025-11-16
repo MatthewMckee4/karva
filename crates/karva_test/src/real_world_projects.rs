@@ -330,34 +330,6 @@ pub fn affect_project() -> RealWorldProject<'static> {
     }
 }
 
-pub fn pydantic_settings_project() -> RealWorldProject<'static> {
-    RealWorldProject {
-        name: "pydantic-settings",
-        repository: "https://github.com/pydantic/pydantic-settings",
-        commit: "61e0b46eb96e2f67f390b0371c4297f2d6b24573",
-        paths: vec![Utf8PathBuf::from("tests")],
-        dependencies: vec!["pydantic", "python-dotenv", "typing-extensions", "pytest"],
-        python_version: PythonVersion::PY313,
-    }
-}
-
-pub fn pydantic_project() -> RealWorldProject<'static> {
-    RealWorldProject {
-        name: "pydantic",
-        repository: "https://github.com/pydantic/pydantic",
-        commit: "f42171c760d43b9522fde513ae6e209790f7fefb",
-        paths: vec![Utf8PathBuf::from("tests")],
-        dependencies: vec![
-            "typing-extensions",
-            "annotated-types",
-            "pydantic-core",
-            "typing-inspection",
-            "pytest",
-        ],
-        python_version: PythonVersion::PY313,
-    }
-}
-
 pub fn sqlmodel_project() -> RealWorldProject<'static> {
     RealWorldProject {
         name: "sqlmodel",
@@ -381,11 +353,5 @@ pub fn typer_project() -> RealWorldProject<'static> {
 }
 
 pub fn all_projects() -> Vec<RealWorldProject<'static>> {
-    vec![
-        affect_project(),
-        pydantic_settings_project(),
-        // pydantic_project(),
-        sqlmodel_project(),
-        typer_project(),
-    ]
+    vec![affect_project(), sqlmodel_project(), typer_project()]
 }
