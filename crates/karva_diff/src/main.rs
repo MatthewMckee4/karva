@@ -86,26 +86,6 @@ fn run(
         .map(|path| installed_project.path.join(path).to_string())
         .collect();
 
-    let pip_list_output = Command::new("uv")
-        .arg("pip")
-        .arg("list")
-        .current_dir(&installed_project.path)
-        .output()
-        .context("Failed to run uv pip list")?;
-
-    if !pip_list_output.stdout.is_empty() {
-        println!(
-            "uv pip list stdout:\n{}",
-            String::from_utf8_lossy(&pip_list_output.stdout)
-        );
-    }
-    if !pip_list_output.stderr.is_empty() {
-        println!(
-            "uv pip list stderr:\n{}",
-            String::from_utf8_lossy(&pip_list_output.stderr)
-        );
-    }
-
     let old_output = Command::new("uv")
         .arg("run")
         .arg("--no-sync")
