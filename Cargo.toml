@@ -20,6 +20,7 @@ clap = { version = "4.5.51", features = ["derive", "wrap_help"] }
 codspeed-criterion-compat = { version = "4.1.0", default-features = false }
 colored = { version = "3.0.0" }
 ctor = "0.6.1"
+ctrlc = { version = "3.5.1" }
 dunce = { version = "1.0.5" }
 ignore = { version = "0.4.25" }
 indexmap = { version = "2.12.0" }
