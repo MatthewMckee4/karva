@@ -967,6 +967,7 @@ dependencies = [
  "anyhow",
  "camino",
  "clap",
+ "karva_project",
  "karva_test",
  "tempfile",
 ]

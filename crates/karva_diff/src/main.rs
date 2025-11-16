@@ -8,6 +8,7 @@ use std::{
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
+use karva_project::path::absolute;
 use karva_test::{RealWorldProject, all_projects};
 use tempfile::NamedTempFile;
 
@@ -23,7 +24,26 @@ struct Args {
 }
 
 fn main() -> Result<ExitCode> {
-    let args = Args::parse();
+    let mut args = Args::parse();
+
+    let cwd = {
+        let cwd = std::env::current_dir().context("Failed to get the current working directory")?;
+        Utf8PathBuf::from_path_buf(cwd)
+                .map_err(|path| {
+                    anyhow::anyhow!(
+                        "The current working directory `{}` contains non-Unicode characters. ty only supports Unicode paths.",
+                        path.display()
+                    )
+                })?
+    };
+
+    if args.old_karva_binary.is_relative() {
+        args.old_karva_binary = absolute(&args.old_karva_binary, &cwd);
+    }
+
+    if args.new_karva_binary.is_relative() {
+        args.new_karva_binary = absolute(&args.new_karva_binary, &cwd);
+    }
 
     let mut old_temp = NamedTempFile::new()?;
     let mut new_temp = NamedTempFile::new()?;
@@ -68,9 +88,9 @@ fn run(
 
     let old_output = Command::new(&args.old_karva_binary)
         .arg("test")
-        .current_dir(&installed_project.path)
         .arg("-vv")
         .args(&paths)
+        .current_dir(&installed_project.path)
         .output()
         .context("Failed to run old karva binary")?;
 
@@ -78,9 +98,9 @@ fn run(
 
     let new_output = Command::new(&args.new_karva_binary)
         .arg("test")
-        .current_dir(&installed_project.path)
         .arg("-vv")
         .args(&paths)
+        .current_dir(&installed_project.path)
         .output()
         .context("Failed to run new karva binary")?;
 
