@@ -164,6 +164,11 @@ jobs:
           cache-target: release
           bins: cargo-codspeed
 
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
+
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}

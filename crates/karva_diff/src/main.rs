@@ -63,13 +63,13 @@ fn run(
         .config
         .paths
         .iter()
-        .map(ToString::to_string)
+        .map(|path| installed_project.path.join(path).to_string())
         .collect();
 
     let old_output = Command::new("uv")
         .arg("run")
+        .arg("--no-project")
         .arg(&args.old_karva_binary)
-        .current_dir(&installed_project.path)
         .arg("test")
         .arg("-vv")
         .args(&paths)
@@ -80,8 +80,8 @@ fn run(
 
     let new_output = Command::new("uv")
         .arg("run")
+        .arg("--no-project")
         .arg(&args.new_karva_binary)
-        .current_dir(&installed_project.path)
         .arg("test")
         .arg("-vv")
         .args(&paths)

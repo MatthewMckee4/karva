@@ -24,11 +24,6 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
       - name: Build wheels for PR branch
         uses: PyO3/maturin-action@v1
         with:
@@ -58,7 +53,9 @@ jobs:
           clean: false
 
       - name: Run karva_diff
-        run: cargo run -p karva_diff -- target/debug/karva-main target/debug/karva-pr out.txt
+        run: |
+          uv venv
+          uv run --no-project cargo run -p karva_diff -- target/debug/karva-main target/debug/karva-pr out.txt new.txt
 
       - name: Read diff output
         id: diff
@@ -68,6 +65,11 @@ jobs:
             {
               echo 'diff<<EOF'
               cat out.txt
+              echo EOF
+            } >> $GITHUB_OUTPUT
+            {
+              echo 'new<<EOF'
+              cat new.txt
               echo EOF
             } >> $GITHUB_OUTPUT
           else
@@ -111,6 +113,15 @@ jobs:
 
             ```diff
             ${{ steps.diff.outputs.diff }}
+            ```
+
+            </details>
+
+            <details>
+            <summary>New outputs</summary>
+
+            ```
+            ${{ steps.diff.outputs.new }}
             ```
 
             </details>

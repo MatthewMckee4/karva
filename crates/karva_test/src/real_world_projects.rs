@@ -234,7 +234,7 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
     let python_version_str = checkout.project().python_version.to_string();
 
     let output = Command::new("uv")
-        .args(["venv", "--python", &python_version_str, "--clear"])
+        .args(["venv", "--python", &python_version_str, "--allow-existing"])
         .arg(&venv_path)
         .output()
         .context("Failed to execute uv venv command")?;
