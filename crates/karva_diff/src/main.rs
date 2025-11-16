@@ -66,9 +66,7 @@ fn run(
         .map(|path| installed_project.path.join(path).to_string())
         .collect();
 
-    let old_output = Command::new("uv")
-        .arg("run")
-        .arg(&args.old_karva_binary)
+    let old_output = Command::new(&args.old_karva_binary)
         .arg("test")
         .arg("-vv")
         .args(&paths)
@@ -77,9 +75,7 @@ fn run(
 
     println!("Old output: {old_output:?}");
 
-    let new_output = Command::new("uv")
-        .arg("run")
-        .arg(&args.new_karva_binary)
+    let new_output = Command::new(&args.new_karva_binary)
         .arg("test")
         .arg("-vv")
         .args(&paths)
