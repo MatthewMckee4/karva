@@ -54,13 +54,8 @@ jobs:
           activate-environment: "false"
           enable-cache: "false"
 
-      - name: ls
-        run: ls -1a
-
       - name: Run karva_diff
         run: |
-          rm -rf .venv
-          unset VIRTUAL_ENV
           cargo run -p karva_diff -- target/debug/karva-main target/debug/karva-pr out.txt new.txt
 
       - name: Read diff output
