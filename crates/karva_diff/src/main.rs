@@ -86,6 +86,26 @@ fn run(
         .map(|path| installed_project.path.join(path).to_string())
         .collect();
 
+    let pip_list_output = Command::new("uv")
+        .arg("pip")
+        .arg("list")
+        .current_dir(&installed_project.path)
+        .output()
+        .context("Failed to run uv pip list")?;
+
+    if !pip_list_output.stdout.is_empty() {
+        println!(
+            "uv pip list stdout:\n{}",
+            String::from_utf8_lossy(&pip_list_output.stdout)
+        );
+    }
+    if !pip_list_output.stderr.is_empty() {
+        println!(
+            "uv pip list stderr:\n{}",
+            String::from_utf8_lossy(&pip_list_output.stderr)
+        );
+    }
+
     let old_output = Command::new("uv")
         .arg("run")
         .arg(&args.old_karva_binary)
@@ -96,7 +116,18 @@ fn run(
         .output()
         .context("Failed to run old karva binary")?;
 
-    println!("Old output: {old_output:?}");
+    if !old_output.stdout.is_empty() {
+        println!(
+            "Old karva stdout:\n{}",
+            String::from_utf8_lossy(&old_output.stdout)
+        );
+    }
+    if !old_output.stderr.is_empty() {
+        println!(
+            "Old karva stderr:\n{}",
+            String::from_utf8_lossy(&old_output.stderr)
+        );
+    }
 
     let new_output = Command::new("uv")
         .arg("run")
@@ -108,7 +139,18 @@ fn run(
         .output()
         .context("Failed to run new karva binary")?;
 
-    println!("New output: {new_output:?}");
+    if !new_output.stdout.is_empty() {
+        println!(
+            "New karva stdout:\n{}",
+            String::from_utf8_lossy(&new_output.stdout)
+        );
+    }
+    if !new_output.stderr.is_empty() {
+        println!(
+            "New karva stderr:\n{}",
+            String::from_utf8_lossy(&new_output.stderr)
+        );
+    }
 
     let old_result = extract_test_result(&old_output.stdout)?;
 

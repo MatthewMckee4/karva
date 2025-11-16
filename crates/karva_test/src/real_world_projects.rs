@@ -259,11 +259,9 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
         return Ok(());
     }
 
-    let mut cmd = Command::new("uv");
-    cmd.args(["pip", "install", "--python", venv_path.to_str().unwrap()])
-        .args(&checkout.project().dependencies);
-
-    let output = cmd
+    let output = Command::new("uv")
+        .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
+        .args(&checkout.project().dependencies)
         .output()
         .context("Failed to execute uv pip install command")?;
 
@@ -273,11 +271,9 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let mut cmd = Command::new("uv");
-    cmd.args(["pip", "install", "--python", venv_path.to_str().unwrap()])
-        .arg(checkout.project_root());
-
-    let output = cmd
+    let output = Command::new("uv")
+        .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
+        .arg(checkout.project_root())
         .output()
         .context("Failed to execute uv pip install command")?;
 
@@ -285,18 +281,6 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
         output.status.success(),
         "Package installation failed: {}",
         String::from_utf8_lossy(&output.stderr)
-    );
-
-    let mut cmd = Command::new("uv");
-    cmd.args(["pip", "list", "--python", venv_path.to_str().unwrap()]);
-
-    let output = cmd
-        .output()
-        .context("Failed to execute uv pip list command")?;
-
-    eprintln!(
-        "uv pip list output:\n{}",
-        String::from_utf8_lossy(&output.stdout)
     );
 
     Ok(())
