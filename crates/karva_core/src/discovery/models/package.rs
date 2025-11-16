@@ -199,21 +199,22 @@ impl DiscoveredPackage {
     }
 
     pub(crate) fn configuration_module(&self) -> Option<&DiscoveredModule> {
-        self.configuration_module_path
-            .as_ref()
-            .map(|module_path| self.modules.get(module_path.path()).unwrap())
+        self.configuration_module_path.as_ref().map(|module_path| {
+            self.modules
+                .get(module_path.path())
+                .expect("If configuration module path is not none, we should be able to find it")
+        })
     }
 
     /// Remove empty modules and packages.
     pub(crate) fn shrink(&mut self) {
-        self.modules.retain(|_, module| {
-            if module.is_empty() {
+        self.modules.retain(|_, module| !module.is_empty());
+
+        if let Some(configuration_module) = self.configuration_module_path.as_ref() {
+            if !self.modules.contains_key(configuration_module.path()) {
                 self.configuration_module_path = None;
-                false
-            } else {
-                true
             }
-        });
+        }
 
         self.packages.retain(|_, package| !package.is_empty());
 
