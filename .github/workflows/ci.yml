@@ -164,19 +164,13 @@ jobs:
           cache-target: release
           bins: cargo-codspeed
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
 
       - name: Build wheels
         run: |
-          pip install maturin pytest
-          maturin build
-
-      - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
+          uv run --no-project --with maturin maturin build
 
       - name: Build benchmarks
         run: cargo codspeed build -m walltime
@@ -187,7 +181,7 @@ jobs:
         uses: CodSpeedHQ/action@v3
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
-          run: cargo codspeed run --bench karva_walltime
+          run: uv run --no-project cargo codspeed run --bench karva_walltime
           mode: walltime
 
   coverage:

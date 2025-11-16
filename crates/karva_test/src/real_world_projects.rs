@@ -230,11 +230,11 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
         );
     }
 
-    let venv_path = checkout.project_root().join(".venv").to_path_buf();
+    let venv_path = global_venv_path();
     let python_version_str = checkout.project().python_version.to_string();
 
     let output = Command::new("uv")
-        .args(["venv", "--python", &python_version_str, "--allow-existing"])
+        .args(["venv", "--python", &python_version_str, "--clear"])
         .arg(&venv_path)
         .output()
         .context("Failed to execute uv venv command")?;
@@ -254,7 +254,7 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
     }
 
     let mut cmd = Command::new("uv");
-    cmd.args(["pip", "install", "--python", venv_path.as_ref()])
+    cmd.args(["pip", "install", "--python", venv_path.to_str().unwrap()])
         .args(&checkout.project().dependencies);
 
     let output = cmd
@@ -268,8 +268,7 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
     );
 
     let mut cmd = Command::new("uv");
-    cmd.args(["pip", "install", "--python", venv_path.as_ref()])
-        .arg("-e")
+    cmd.args(["pip", "install", "--python", venv_path.to_str().unwrap()])
         .arg(checkout.project_root());
 
     let output = cmd
@@ -283,7 +282,7 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
     );
 
     let mut cmd = Command::new("uv");
-    cmd.args(["pip", "list", "--python", venv_path.as_ref()]);
+    cmd.args(["pip", "list", "--python", venv_path.to_str().unwrap()]);
 
     let output = cmd
         .output()
@@ -295,6 +294,15 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
     );
 
     Ok(())
+}
+
+fn global_venv_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join(".venv")
 }
 
 static CARGO_TARGET_DIR: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();

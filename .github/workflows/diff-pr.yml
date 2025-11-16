@@ -29,9 +29,6 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install Python dependencies
-        run: pip install pytest
-
       - name: Build wheels for PR branch
         uses: PyO3/maturin-action@v1
         with:
