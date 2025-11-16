@@ -17,15 +17,6 @@ use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use ruff_python_ast::PythonVersion;
 
-fn global_venv_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join(".venv")
-}
-
 /// Configuration for a real-world project to benchmark
 #[derive(Debug, Clone)]
 pub struct RealWorldProject<'a> {
@@ -45,7 +36,7 @@ pub struct RealWorldProject<'a> {
 
 impl<'a> RealWorldProject<'a> {
     /// Setup a real-world project for benchmarking
-    pub fn setup(self) -> Result<InstalledProject<'a>> {
+    pub fn setup(self, venv_in_project_dir: bool) -> Result<InstalledProject<'a>> {
         tracing::debug!("Setting up project {}", self.name);
 
         // Create project directory in cargo target
@@ -75,7 +66,13 @@ impl<'a> RealWorldProject<'a> {
             project: self,
         };
 
-        install_dependencies(&checkout)?;
+        let venv_dir = if venv_in_project_dir {
+            Some(checkout.path.join(".venv").into_std_path_buf())
+        } else {
+            None
+        };
+
+        install_dependencies(&checkout, venv_dir)?;
 
         Ok(InstalledProject {
             path: checkout.path,
@@ -117,19 +114,6 @@ impl<'a> InstalledProject<'a> {
 
     pub const fn path(&self) -> &Utf8PathBuf {
         &self.path
-    }
-
-    pub fn venv_path(&self) -> Utf8PathBuf {
-        self.path().join(".venv")
-    }
-
-    /// Get the path to the Python executable
-    pub fn python_path(&self) -> Utf8PathBuf {
-        if cfg!(windows) {
-            self.venv_path().join("Scripts/python.exe")
-        } else {
-            self.venv_path().join("bin/python")
-        }
     }
 }
 
@@ -239,7 +223,7 @@ fn clone_repository(repo_url: &str, target_dir: &Utf8PathBuf, commit: &str) -> R
 }
 
 /// Install dependencies using uv with date constraints
-fn install_dependencies(checkout: &Checkout) -> Result<()> {
+fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Result<()> {
     // Check if uv is available
     let uv_check = Command::new("uv")
         .arg("--version")
@@ -252,7 +236,7 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
         );
     }
 
-    let venv_path = global_venv_path();
+    let venv_path = venv_dir.unwrap_or_else(global_venv_path);
     let python_version_str = checkout.project().python_version.to_string();
 
     let output = Command::new("uv")
@@ -275,11 +259,9 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
         return Ok(());
     }
 
-    let mut cmd = Command::new("uv");
-    cmd.args(["pip", "install", "--python", venv_path.to_str().unwrap()])
-        .args(&checkout.project().dependencies);
-
-    let output = cmd
+    let output = Command::new("uv")
+        .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
+        .args(&checkout.project().dependencies)
         .output()
         .context("Failed to execute uv pip install command")?;
 
@@ -289,12 +271,9 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let mut cmd = Command::new("uv");
-    cmd.args(["pip", "install", "--python", venv_path.to_str().unwrap()])
-        .arg("-e")
-        .arg(checkout.project_root());
-
-    let output = cmd
+    let output = Command::new("uv")
+        .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
+        .arg(checkout.project_root())
         .output()
         .context("Failed to execute uv pip install command")?;
 
@@ -304,19 +283,16 @@ fn install_dependencies(checkout: &Checkout) -> Result<()> {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let mut cmd = Command::new("uv");
-    cmd.args(["pip", "list", "--python", venv_path.to_str().unwrap()]);
-
-    let output = cmd
-        .output()
-        .context("Failed to execute uv pip list command")?;
-
-    eprintln!(
-        "uv pip list output:\n{}",
-        String::from_utf8_lossy(&output.stdout)
-    );
-
     Ok(())
+}
+
+fn global_venv_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join(".venv")
 }
 
 static CARGO_TARGET_DIR: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
@@ -341,4 +317,22 @@ fn cargo_target_directory() -> Option<&'static PathBuf> {
                 })
         })
         .as_ref()
+}
+
+pub fn affect_project() -> RealWorldProject<'static> {
+    RealWorldProject {
+        name: "affect",
+        repository: "https://github.com/MatthewMckee4/affect",
+        commit: "803cc916b492378a8ad8966e747cac3325e11b5f",
+        paths: vec![Utf8PathBuf::from("tests")],
+        dependencies: vec!["pydantic", "pydantic-settings", "pytest"],
+        python_version: PythonVersion::PY313,
+    }
+}
+
+pub fn all_projects() -> Vec<RealWorldProject<'static>> {
+    vec![
+        affect_project(),
+        // Add more projects here
+    ]
 }

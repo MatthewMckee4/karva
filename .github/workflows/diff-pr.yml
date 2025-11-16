@@ -1,0 +1,142 @@
+name: Project Diff
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+
+      - name: Update Rust toolchain
+        run: rustup update
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build PR branch karva binary
+        run: cargo build
+
+      - name: Save PR branch binary
+        run: cp target/debug/karva target/debug/karva-pr
+
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          clean: false
+
+      - name: Build main branch karva binary
+        run: cargo build
+
+      - name: Rename main branch binary
+        run: cp target/debug/karva target/debug/karva-main
+
+      - name: Restore PR branch files
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          activate-environment: "false"
+          enable-cache: "false"
+
+      - name: ls
+        run: ls -1a
+
+      - name: Run karva_diff
+        run: |
+          rm -rf .venv
+          unset VIRTUAL_ENV
+          cargo run -p karva_diff -- target/debug/karva-main target/debug/karva-pr out.txt new.txt
+
+      - name: Read diff output
+        id: diff
+        run: |
+          {
+            echo 'diff<<EOF'
+            cat out.txt
+            echo EOF
+          } >> $GITHUB_OUTPUT
+          {
+            echo 'new<<EOF'
+            cat new.txt
+            echo EOF
+          } >> $GITHUB_OUTPUT
+          if [ -s out.txt ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Find existing comment
+        uses: peter-evans/find-comment@v3
+        id: find-comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: "github-actions[bot]"
+          body-includes: "<!-- karva-diff-comment -->"
+
+      - name: Create or update comment (no changes)
+        if: steps.diff.outputs.has_changes == 'false'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          edit-mode: replace
+          body: |
+            <!-- karva-diff-comment -->
+            ## Project Diff Results
+
+            No changes between this PR and main.
+
+            <details>
+            <summary>New outputs</summary>
+
+            ```
+            ${{ steps.diff.outputs.new }}
+            ```
+
+            </details>
+
+      - name: Create or update comment (with changes)
+        if: steps.diff.outputs.has_changes == 'true'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          edit-mode: replace
+          body: |
+            <!-- karva-diff-comment -->
+            ## Project Diff Results
+
+            <details>
+            <summary>View diff</summary>
+
+            ```diff
+            ${{ steps.diff.outputs.diff }}
+            ```
+
+            </details>
+
+            <details>
+            <summary>New outputs</summary>
+
+            ```
+            ${{ steps.diff.outputs.new }}
+            ```
+
+            </details>

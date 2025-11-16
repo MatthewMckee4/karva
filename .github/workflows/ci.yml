@@ -153,8 +153,6 @@ jobs:
   benchmarks-walltime:
     name: Run walltime benchmarks
 
-    if: false # Very flakey as of (12/11/2025)
-
     runs-on: ubuntu-latest # This should be `codspeed-macro`
 
     steps:
@@ -171,14 +169,13 @@ jobs:
         with:
           python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
 
-      - name: Build wheels
-        run: |
-          pip install maturin pytest
-          maturin build
-
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
+
+      - name: Build wheels
+        run: |
+          uv run --no-project --with maturin maturin build
 
       - name: Build benchmarks
         run: cargo codspeed build -m walltime
@@ -189,7 +186,7 @@ jobs:
         uses: CodSpeedHQ/action@v3
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
-          run: cargo codspeed run --bench karva_walltime
+          run: uv run --no-project cargo codspeed run --bench karva_walltime
           mode: walltime
 
   coverage:
