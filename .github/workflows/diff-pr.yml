@@ -60,7 +60,8 @@ jobs:
       - name: Run karva_diff
         run: |
           uv venv
-          uv run --no-project cargo run -p karva_diff -- target/debug/karva-main target/debug/karva-pr out.txt new.txt
+          source .venv/bin/activate
+          cargo run -p karva_diff -- target/debug/karva-main target/debug/karva-pr out.txt new.txt
 
       - name: Read diff output
         id: diff
