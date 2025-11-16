@@ -384,7 +384,7 @@ pub fn all_projects() -> Vec<RealWorldProject<'static>> {
     vec![
         affect_project(),
         // pydantic_settings_project(),
-        // pydantic_project(),
+        pydantic_project(),
         sqlmodel_project(),
         typer_project(),
     ]

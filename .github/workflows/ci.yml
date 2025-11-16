@@ -146,6 +146,8 @@ jobs:
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v3
+        env:
+          CODSPEED_PERF_ENABLED: false
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
           run: cargo codspeed run --bench karva
