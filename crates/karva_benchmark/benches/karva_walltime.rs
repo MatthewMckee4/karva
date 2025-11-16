@@ -7,7 +7,10 @@ use karva_project::{
     project::{Project, ProjectOptions},
     verbosity::VerbosityLevel,
 };
-use karva_test::{InstalledProject, RealWorldProject, affect_project};
+use karva_test::{
+    InstalledProject, RealWorldProject,
+    real_world_projects::{affect_project, sqlmodel_project, typer_project},
+};
 
 static SETUP_MODULE_ONCE: Once = Once::new();
 
@@ -75,6 +78,18 @@ fn affect(criterion: &mut Criterion) {
     bench_project(&benchmark, criterion);
 }
 
-criterion_group!(project, affect);
+fn sqlmodel(criterion: &mut Criterion) {
+    let benchmark = ProjectBenchmark::new(sqlmodel_project());
+
+    bench_project(&benchmark, criterion);
+}
+
+fn typer(criterion: &mut Criterion) {
+    let benchmark = ProjectBenchmark::new(typer_project());
+
+    bench_project(&benchmark, criterion);
+}
+
+criterion_group!(project, affect, sqlmodel, typer);
 
 criterion_main!(project);
