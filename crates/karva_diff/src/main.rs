@@ -156,5 +156,9 @@ fn extract_test_result(output: &[u8]) -> Result<String> {
         .next_back()
         .context("No line starting with 'test result' found")?;
 
-    Ok(result.to_string())
+    let trimmed_result = result
+        .find(" finished")
+        .map_or(result, |pos| &result[..pos]);
+
+    Ok(trimmed_result.to_string())
 }
