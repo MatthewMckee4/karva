@@ -1,3 +1,4 @@
+use codspeed_criterion_compat::SamplingMode;
 use karva_core::{TestRunner, testing::setup_module};
 use karva_project::{
     path::absolute,
@@ -55,7 +56,7 @@ pub fn bench_project(
 
     let mut group = criterion.benchmark_group("project");
 
-    group.sampling_mode(crate::criterion::SamplingMode::Flat);
+    group.sampling_mode(SamplingMode::Auto);
     group.bench_function(benchmark.installed_project.config().name, |b| {
         b.iter_batched_ref(|| benchmark.project(), |db| test_project(db), batch_size);
     });

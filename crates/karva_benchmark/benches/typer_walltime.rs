@@ -9,7 +9,7 @@ fn typer(criterion: &mut Criterion) {
 
     let benchmark = ProjectBenchmark::new(typer_project());
 
-    bench_project(&benchmark, criterion, BatchSize::NumIterations(30));
+    bench_project(&benchmark, criterion, BatchSize::NumIterations(10));
 }
 
 criterion_group!(project, typer);
