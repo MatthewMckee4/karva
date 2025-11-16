@@ -442,6 +442,7 @@ def test_function(): pass
             VerbosityLevel::Default,
             false,
             true,
+            false,
         ));
 
         let discoverer = StandardDiscoverer::new(&project);

@@ -1,3 +1,4 @@
+use codspeed_criterion_compat::SamplingMode;
 use karva_core::{TestRunner, testing::setup_module};
 use karva_project::{
     path::absolute,
@@ -35,11 +36,16 @@ impl<'a> ProjectBenchmark<'a> {
             VerbosityLevel::Default,
             false,
             true,
+            false,
         ))
     }
 }
 
-pub fn bench_project(benchmark: &ProjectBenchmark, criterion: &mut Criterion) {
+pub fn bench_project(
+    benchmark: &ProjectBenchmark,
+    criterion: &mut Criterion,
+    batch_size: BatchSize,
+) {
     fn test_project(project: &Project) {
         let result = project.test();
 
@@ -50,12 +56,8 @@ pub fn bench_project(benchmark: &ProjectBenchmark, criterion: &mut Criterion) {
 
     let mut group = criterion.benchmark_group("project");
 
-    group.sampling_mode(crate::criterion::SamplingMode::Flat);
+    group.sampling_mode(SamplingMode::Auto);
     group.bench_function(benchmark.installed_project.config().name, |b| {
-        b.iter_batched_ref(
-            || benchmark.project(),
-            |db| test_project(db),
-            BatchSize::SmallInput,
-        );
+        b.iter_batched_ref(|| benchmark.project(), |db| test_project(db), batch_size);
     });
 }

@@ -1,3 +1,4 @@
+use karva_project::Project;
 use pyo3::prelude::*;
 
 use crate::{
@@ -55,9 +56,10 @@ impl<'proj> CollectedPackage<'proj> {
     pub(crate) fn run(
         self,
         py: Python<'_>,
+        project: &Project,
         reporter: &dyn Reporter,
         run_result: &mut TestRunResult,
-    ) {
+    ) -> bool {
         let Self {
             modules,
             packages,
@@ -65,16 +67,34 @@ impl<'proj> CollectedPackage<'proj> {
             fixture_diagnostics,
         } = self;
 
+        let mut passed = true;
+
+        let clean_up = |run_result: &mut TestRunResult| {
+            run_result.add_test_diagnostics(finalizers.run(py));
+
+            run_result.add_test_diagnostics(fixture_diagnostics);
+        };
+
         for module in modules {
-            module.run(py, reporter, run_result);
+            passed &= module.run(py, project, reporter, run_result);
+
+            if project.options().fail_fast() && !passed {
+                clean_up(run_result);
+                return false;
+            }
         }
 
         for package in packages {
-            package.run(py, reporter, run_result);
+            passed &= package.run(py, project, reporter, run_result);
+
+            if project.options().fail_fast() && !passed {
+                clean_up(run_result);
+                return false;
+            }
         }
 
-        run_result.add_test_diagnostics(finalizers.run(py));
+        clean_up(run_result);
 
-        run_result.add_test_diagnostics(fixture_diagnostics);
+        passed
     }
 }
