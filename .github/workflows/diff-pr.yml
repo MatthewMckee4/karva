@@ -102,6 +102,15 @@ jobs:
 
             No changes between this PR and main.
 
+            <details>
+            <summary>New outputs</summary>
+
+            ```
+            ${{ steps.diff.outputs.new }}
+            ```
+
+            </details>
+
       - name: Create or update comment (with changes)
         if: steps.diff.outputs.has_changes == 'true'
         uses: peter-evans/create-or-update-comment@v4
