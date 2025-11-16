@@ -30,9 +30,7 @@ impl TestContext {
         )
         .expect("Path is not valid UTF-8");
 
-        let karva_wheel = find_karva_wheel()
-            .map(|wheel| wheel.to_string())
-            .unwrap_or_default();
+        let karva_wheel = find_karva_wheel().map(|wheel| wheel.to_string()).unwrap();
 
         let venv_path = project_path.join(".venv");
 
@@ -40,9 +38,11 @@ impl TestContext {
 
         let env_python_version = std::env::var("PYTHON_VERSION");
 
+        venv_args.push("-p");
         if let Ok(version) = &env_python_version {
-            venv_args.push("-p");
             venv_args.push(version);
+        } else {
+            venv_args.push("3.13");
         }
 
         let command_arguments = [
@@ -59,12 +59,19 @@ impl TestContext {
         ];
 
         for arguments in &command_arguments {
-            Command::new("uv")
+            let output = Command::new("uv")
                 .args(arguments)
                 .current_dir(&project_path)
                 .output()
                 .with_context(|| format!("Failed to run command: {arguments:?}"))
                 .unwrap();
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+
+            let stderr = String::from_utf8_lossy(&output.stderr);
+
+            eprintln!("stdout: {stdout}");
+            eprintln!("stderr: {stderr}");
         }
 
         let mut settings = Settings::clone_current();

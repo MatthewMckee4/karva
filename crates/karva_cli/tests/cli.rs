@@ -763,3 +763,39 @@ def test_normal():
         ");
     }
 }
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_failfast() {
+    let context = IntegrationTestContext::with_file(
+        "test_failfast.py",
+        r"
+        def test_first_fail():
+            assert False, 'First test fails'
+
+        def test_second():
+            assert True
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command().args(["--fail-fast"]), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    running 2 tests
+
+    test test_failfast::test_first_fail ... FAILED
+
+    test failures:
+
+    test `test_failfast::test_first_fail` at <temp_dir>/test_failfast.py:2 failed at <temp_dir>/test_failfast.py:3
+    First test fails
+
+    test failures:
+        test_failfast::test_first_fail at <temp_dir>/test_failfast.py:2
+
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}

@@ -27,6 +27,7 @@ pub struct ProjectOptions {
     verbosity: VerbosityLevel,
     show_output: bool,
     no_ignore: bool,
+    fail_fast: bool,
 }
 
 impl ProjectOptions {
@@ -35,12 +36,14 @@ impl ProjectOptions {
         verbosity: VerbosityLevel,
         show_output: bool,
         no_ignore: bool,
+        fail_fast: bool,
     ) -> Self {
         Self {
             test_prefix,
             verbosity,
             show_output,
             no_ignore,
+            fail_fast,
         }
     }
 
@@ -59,6 +62,16 @@ impl ProjectOptions {
     pub const fn no_ignore(&self) -> bool {
         self.no_ignore
     }
+
+    pub const fn fail_fast(&self) -> bool {
+        self.fail_fast
+    }
+
+    #[must_use]
+    pub const fn with_fail_fast(mut self, fail_fast: bool) -> Self {
+        self.fail_fast = fail_fast;
+        self
+    }
 }
 
 impl Default for ProjectOptions {
@@ -68,6 +81,7 @@ impl Default for ProjectOptions {
             verbosity: VerbosityLevel::default(),
             show_output: false,
             no_ignore: false,
+            fail_fast: false,
         }
     }
 }

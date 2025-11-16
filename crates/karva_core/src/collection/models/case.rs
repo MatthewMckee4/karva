@@ -64,12 +64,15 @@ impl<'proj> TestCase<'proj> {
         self.fixture_diagnostics.extend(diagnostics);
     }
 
+    /// Runs the test case.
+    ///
+    /// Returns `true` if the test case passed or skipped, `false` otherwise.
     pub(crate) fn run(
         self,
         py: Python<'_>,
         reporter: &dyn Reporter,
         run_result: &mut TestRunResult,
-    ) {
+    ) -> bool {
         let Self {
             function,
             kwargs,
@@ -79,7 +82,7 @@ impl<'proj> TestCase<'proj> {
             fixture_diagnostics,
         } = self;
 
-        (|| {
+        let passed = (|| {
             let test_name = full_test_name(py, &function.name().to_string(), &kwargs);
 
             if let Some(skip_tag) = &function.tags().skip_tag() {
@@ -91,7 +94,7 @@ impl<'proj> TestCase<'proj> {
                     Some(reporter),
                 );
 
-                return;
+                return true;
             }
 
             if let Some(skip_if_tag) = &function.tags().skip_if_tag() {
@@ -103,7 +106,7 @@ impl<'proj> TestCase<'proj> {
                         },
                         Some(reporter),
                     );
-                    return;
+                    return true;
                 }
             }
 
@@ -128,7 +131,7 @@ impl<'proj> TestCase<'proj> {
                     Some(reporter),
                 );
 
-                return;
+                return true;
             };
 
             // Check if the exception is a skip exception (karva.SkipError or pytest.Skipped)
@@ -140,7 +143,7 @@ impl<'proj> TestCase<'proj> {
                     Some(reporter),
                 );
 
-                return;
+                return true;
             }
 
             let default_diagnostic = || {
@@ -167,11 +170,15 @@ impl<'proj> TestCase<'proj> {
             );
 
             run_result.add_test_diagnostic(diagnostic);
+
+            false
         })();
 
         run_result.add_test_diagnostics(fixture_diagnostics);
 
         run_result.add_test_diagnostics(finalizers.run(py));
+
+        passed
     }
 }
 

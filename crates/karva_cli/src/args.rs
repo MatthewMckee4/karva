@@ -49,6 +49,13 @@ pub struct TestCommand {
         default_value = "false"
     )]
     pub(crate) no_ignore: bool,
+
+    #[clap(
+        long,
+        help = "When set, the test will fail immediately if any test fails.",
+        default_value = "false"
+    )]
+    pub(crate) fail_fast: bool,
 }
 
 impl TestCommand {
@@ -58,6 +65,7 @@ impl TestCommand {
             self.verbosity.level(),
             self.show_output,
             !self.no_ignore,
+            self.fail_fast,
         )
     }
 }

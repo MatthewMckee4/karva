@@ -35,11 +35,16 @@ impl<'a> ProjectBenchmark<'a> {
             VerbosityLevel::Default,
             false,
             true,
+            false,
         ))
     }
 }
 
-pub fn bench_project(benchmark: &ProjectBenchmark, criterion: &mut Criterion) {
+pub fn bench_project(
+    benchmark: &ProjectBenchmark,
+    criterion: &mut Criterion,
+    batch_size: BatchSize,
+) {
     fn test_project(project: &Project) {
         let result = project.test();
 
@@ -52,10 +57,6 @@ pub fn bench_project(benchmark: &ProjectBenchmark, criterion: &mut Criterion) {
 
     group.sampling_mode(crate::criterion::SamplingMode::Flat);
     group.bench_function(benchmark.installed_project.config().name, |b| {
-        b.iter_batched_ref(
-            || benchmark.project(),
-            |db| test_project(db),
-            BatchSize::SmallInput,
-        );
+        b.iter_batched_ref(|| benchmark.project(), |db| test_project(db), batch_size);
     });
 }
