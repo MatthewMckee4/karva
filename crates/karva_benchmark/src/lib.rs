@@ -1,6 +1,7 @@
 use camino::Utf8PathBuf;
 
 pub mod criterion;
+pub mod walltime;
 
 pub static TRUE_ASSERTIONS: TestFile = TestFile::new(
     "test_true_assertions.py",

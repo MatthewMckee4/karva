@@ -330,9 +330,28 @@ pub fn affect_project() -> RealWorldProject<'static> {
     }
 }
 
+pub fn sqlmodel_project() -> RealWorldProject<'static> {
+    RealWorldProject {
+        name: "sqlmodel",
+        repository: "https://github.com/fastapi/sqlmodel",
+        commit: "43570910db2d7ab2e5efd96f60a0e2a3a61c5474",
+        paths: vec![Utf8PathBuf::from("tests")],
+        dependencies: vec!["pydantic", "SQLAlchemy", "pytest"],
+        python_version: PythonVersion::PY313,
+    }
+}
+
+pub fn typer_project() -> RealWorldProject<'static> {
+    RealWorldProject {
+        name: "typer",
+        repository: "https://github.com/fastapi/typer",
+        commit: "cbca80b94ca7e64899b12d597032fb4fc891b8e7",
+        paths: vec![Utf8PathBuf::from("tests")],
+        dependencies: vec!["click", "typing-extensions", "pytest"],
+        python_version: PythonVersion::PY313,
+    }
+}
+
 pub fn all_projects() -> Vec<RealWorldProject<'static>> {
-    vec![
-        affect_project(),
-        // Add more projects here
-    ]
+    vec![affect_project(), sqlmodel_project(), typer_project()]
 }

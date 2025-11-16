@@ -1,28 +1,19 @@
-use std::sync::Once;
-
-use karva_benchmark::criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use karva_core::{TestRunner, testing::setup_module};
 use karva_project::{
     path::absolute,
     project::{Project, ProjectOptions},
     verbosity::VerbosityLevel,
 };
-use karva_test::{InstalledProject, RealWorldProject, affect_project};
+use karva_test::{InstalledProject, RealWorldProject};
 
-static SETUP_MODULE_ONCE: Once = Once::new();
+use crate::criterion::{BatchSize, Criterion};
 
-fn setup_module_once() {
-    SETUP_MODULE_ONCE.call_once(|| {
-        setup_module();
-    });
-}
-
-struct ProjectBenchmark<'a> {
+pub struct ProjectBenchmark<'a> {
     installed_project: InstalledProject<'a>,
 }
 
 impl<'a> ProjectBenchmark<'a> {
-    fn new(project: RealWorldProject<'a>) -> Self {
+    pub fn new(project: RealWorldProject<'a>) -> Self {
         let installed_project = project.setup(false).expect("Failed to setup project");
         Self { installed_project }
     }
@@ -48,18 +39,18 @@ impl<'a> ProjectBenchmark<'a> {
     }
 }
 
-fn bench_project(benchmark: &ProjectBenchmark, criterion: &mut Criterion) {
+pub fn bench_project(benchmark: &ProjectBenchmark, criterion: &mut Criterion) {
     fn test_project(project: &Project) {
         let result = project.test();
 
         assert!(result.stats().total() > 0, "{:#?}", result.diagnostics());
     }
 
-    setup_module_once();
+    setup_module();
 
     let mut group = criterion.benchmark_group("project");
 
-    group.sampling_mode(karva_benchmark::criterion::SamplingMode::Flat);
+    group.sampling_mode(crate::criterion::SamplingMode::Flat);
     group.bench_function(benchmark.installed_project.config().name, |b| {
         b.iter_batched_ref(
             || benchmark.project(),
@@ -68,13 +59,3 @@ fn bench_project(benchmark: &ProjectBenchmark, criterion: &mut Criterion) {
         );
     });
 }
-
-fn affect(criterion: &mut Criterion) {
-    let benchmark = ProjectBenchmark::new(affect_project());
-
-    bench_project(&benchmark, criterion);
-}
-
-criterion_group!(project, affect);
-
-criterion_main!(project);

@@ -7,3 +7,11 @@ coverage:
     patch:
       default:
         enabled: false
+
+ignore:
+  - "karva"
+  - "karva_benchmark"
+  - "karva_cli"
+  - "karva_dev"
+  - "karva_diff"
+  - "karva_test"

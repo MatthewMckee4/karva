@@ -146,6 +146,8 @@ jobs:
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v3
+        env:
+          CODSPEED_PERF_ENABLED: false
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
           run: cargo codspeed run --bench karva
@@ -154,6 +156,13 @@ jobs:
     name: Run walltime benchmarks
 
     runs-on: ubuntu-latest # This should be `codspeed-macro`
+
+    strategy:
+      matrix:
+        project:
+          - affect_walltime
+          - sqlmodel_walltime
+          - typer_walltime
 
     steps:
       - uses: actions/checkout@v4
@@ -186,7 +195,7 @@ jobs:
         uses: CodSpeedHQ/action@v3
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
-          run: uv run --no-project cargo codspeed run --bench karva_walltime
+          run: cargo codspeed run --bench ${{ matrix.project }}
           mode: walltime
 
   coverage:

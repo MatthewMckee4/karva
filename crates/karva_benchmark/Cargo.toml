@@ -16,7 +16,15 @@ name = "karva"
 harness = false
 
 [[bench]]
-name = "karva_walltime"
+name = "affect_walltime"
+harness = false
+
+[[bench]]
+name = "sqlmodel_walltime"
+harness = false
+
+[[bench]]
+name = "typer_walltime"
 harness = false
 
 [dependencies]
