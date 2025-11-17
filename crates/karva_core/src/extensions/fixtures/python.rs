@@ -10,35 +10,26 @@ use pyo3::{
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct FixtureRequest {
-    /// The current parameter value for parametrized fixtures
     #[pyo3(get)]
     pub param: Py<PyAny>,
 }
 
-#[pymethods]
-impl FixtureRequest {
-    #[new]
-    pub const fn new(param: Py<PyAny>) -> Self {
-        Self { param }
-    }
-}
-
 #[pyclass]
 pub struct FixtureFunctionMarker {
-    #[pyo3(get, set)]
+    #[pyo3(get)]
     pub scope: Py<PyAny>,
-    #[pyo3(get, set)]
+
+    #[pyo3(get)]
     pub name: Option<String>,
-    #[pyo3(get, set)]
+
+    #[pyo3(get)]
     pub auto_use: bool,
-    #[pyo3(get, set)]
+
+    #[pyo3(get)]
     pub params: Option<Vec<Py<PyAny>>>,
 }
 
-#[pymethods]
 impl FixtureFunctionMarker {
-    #[new]
-    #[pyo3(signature = (scope=None, name=None, auto_use=false, params=None))]
     pub fn new(
         py: Python<'_>,
         scope: Option<Py<PyAny>>,
@@ -56,7 +47,10 @@ impl FixtureFunctionMarker {
             params,
         }
     }
+}
 
+#[pymethods]
+impl FixtureFunctionMarker {
     pub fn __call__(
         &self,
         py: Python<'_>,
@@ -83,37 +77,23 @@ impl FixtureFunctionMarker {
 #[derive(Debug)]
 #[pyclass]
 pub struct FixtureFunctionDefinition {
-    #[pyo3(get, set)]
+    #[pyo3(get)]
     pub name: String,
-    #[pyo3(get, set)]
+
+    #[pyo3(get)]
     pub scope: Py<PyAny>,
-    #[pyo3(get, set)]
+
+    #[pyo3(get)]
     pub auto_use: bool,
-    #[pyo3(get, set)]
+
+    #[pyo3(get)]
     pub params: Option<Vec<Py<PyAny>>>,
+
     pub function: Py<PyAny>,
 }
 
 #[pymethods]
 impl FixtureFunctionDefinition {
-    #[new]
-    #[pyo3(signature = (function, name, scope, auto_use, params=None))]
-    pub const fn new(
-        function: Py<PyAny>,
-        name: String,
-        scope: Py<PyAny>,
-        auto_use: bool,
-        params: Option<Vec<Py<PyAny>>>,
-    ) -> Self {
-        Self {
-            name,
-            scope,
-            auto_use,
-            params,
-            function,
-        }
-    }
-
     #[pyo3(signature = (*args, **kwargs))]
     fn __call__(
         &self,
