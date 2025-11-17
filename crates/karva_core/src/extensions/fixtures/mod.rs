@@ -185,7 +185,7 @@ impl Fixture {
 
                 each_call_fixtures = cartesian_insert(each_call_fixtures, params, name, |param| {
                     let param_value = param.clone();
-                    let request = FixtureRequest::new(param_value);
+                    let request = FixtureRequest { param: param_value };
                     let request_obj = Py::new(py, request)?;
                     Ok(request_obj.into_any())
                 })

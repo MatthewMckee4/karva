@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use colored::Colorize;
 use pyo3::marker::Ungil;
 
 use crate::runner::diagnostic::IndividualTestResultKind;
@@ -46,21 +47,23 @@ impl TestCaseReporter {
 impl Reporter for TestCaseReporter {
     fn report_test_case_result(&self, test_name: &str, result_kind: IndividualTestResultKind) {
         let mut stdout = self.output.lock().unwrap();
-        match result_kind {
-            IndividualTestResultKind::Passed => {
-                writeln!(stdout, "test {test_name} ... ok").ok();
-            }
-            IndividualTestResultKind::Failed => {
-                writeln!(stdout, "test {test_name} ... FAILED").ok();
-            }
+
+        let log_start = format!("test {test_name} ...");
+
+        let rest = match result_kind {
+            IndividualTestResultKind::Passed => "ok".green().to_string(),
+            IndividualTestResultKind::Failed => "FAILED".red().to_string(),
             IndividualTestResultKind::Skipped { reason } => {
+                let skipped_string = "skipped".yellow().to_string();
                 if let Some(reason) = reason {
-                    writeln!(stdout, "test {test_name} ... skipped: {reason}").ok();
+                    format!("{skipped_string}: {reason}")
                 } else {
-                    writeln!(stdout, "test {test_name} ... skipped").ok();
+                    skipped_string
                 }
             }
-        }
+        };
+
+        writeln!(stdout, "{log_start} {rest}").ok();
     }
 
     fn log_test_count(&self, test_count: usize) {

@@ -2,7 +2,7 @@ use pyo3::{
     IntoPyObjectExt,
     exceptions::PyTypeError,
     prelude::*,
-    types::{PyDict, PyFunction, PyTuple, PyType},
+    types::{PyDict, PyFunction, PyTuple},
 };
 
 #[derive(Debug, Clone)]
@@ -43,173 +43,13 @@ impl PyTag {
 }
 
 #[derive(Debug, Clone)]
-#[pyclass(name = "tags")]
+#[pyclass(name = "Tags")]
 pub struct PyTags {
     pub inner: Vec<PyTag>,
 }
 
 #[pymethods]
 impl PyTags {
-    #[classmethod]
-    pub fn parametrize(
-        _cls: &Bound<'_, PyType>,
-        arg_names: &Bound<'_, PyAny>,
-        arg_values: &Bound<'_, PyAny>,
-    ) -> PyResult<Self> {
-        let (arg_names, arg_values) = super::parametrize::parse_parametrize_args(arg_names, arg_values)
-            .map_err(|()| {
-                PyErr::new::<PyTypeError, _>(
-                    "Expected a string or a list of strings for the arg_names, and a list of lists of objects for the arg_values",
-                )
-            })?;
-
-        Ok(Self {
-            inner: vec![PyTag::Parametrize {
-                arg_names,
-                arg_values,
-            }],
-        })
-    }
-
-    #[classmethod]
-    #[pyo3(signature = (*fixture_names))]
-    pub fn use_fixtures(
-        _cls: &Bound<'_, PyType>,
-        fixture_names: &Bound<'_, PyTuple>,
-    ) -> PyResult<Self> {
-        let mut names = Vec::new();
-        for item in fixture_names.iter() {
-            if let Ok(name) = item.extract::<String>() {
-                names.push(name);
-            } else {
-                return Err(PyErr::new::<PyTypeError, _>(
-                    "Expected a string or a list of strings for fixture names",
-                ));
-            }
-        }
-        Ok(Self {
-            inner: vec![PyTag::UseFixtures {
-                fixture_names: names,
-            }],
-        })
-    }
-
-    #[classmethod]
-    #[pyo3(signature = (*conditions, reason = None))]
-    pub fn skip(
-        _cls: &Bound<'_, PyType>,
-        py: Python<'_>,
-        conditions: &Bound<'_, PyTuple>,
-        reason: Option<String>,
-    ) -> PyResult<Py<PyAny>> {
-        let mut bool_conditions = Vec::new();
-
-        // Check if the first argument is a function (decorator without parentheses)
-        if conditions.len() == 1 {
-            if let Ok(first_item) = conditions.get_item(0) {
-                if first_item.extract::<Py<PyFunction>>().is_ok() {
-                    return PyTestFunction {
-                        tags: Self {
-                            inner: vec![PyTag::Skip {
-                                conditions: vec![],
-                                reason: None,
-                            }],
-                        },
-                        function: first_item.unbind(),
-                    }
-                    .into_py_any(py);
-                }
-                // Check if the first argument is a string (reason passed as positional arg)
-                if let Ok(reason_str) = first_item.extract::<String>() {
-                    return Self {
-                        inner: vec![PyTag::Skip {
-                            conditions: vec![],
-                            reason: Some(reason_str),
-                        }],
-                    }
-                    .into_py_any(py);
-                }
-            }
-        }
-
-        // Parse boolean conditions from positional arguments
-        for item in conditions.iter() {
-            if let Ok(bool_val) = item.extract::<bool>() {
-                bool_conditions.push(bool_val);
-            } else {
-                return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                    "Expected boolean values for conditions",
-                ));
-            }
-        }
-
-        Self {
-            inner: vec![PyTag::Skip {
-                conditions: bool_conditions,
-                reason,
-            }],
-        }
-        .into_py_any(py)
-    }
-
-    #[classmethod]
-    #[pyo3(signature = (*conditions, reason = None))]
-    pub fn expect_fail(
-        _cls: &Bound<'_, PyType>,
-        py: Python<'_>,
-        conditions: &Bound<'_, PyTuple>,
-        reason: Option<String>,
-    ) -> PyResult<Py<PyAny>> {
-        let mut bool_conditions = Vec::new();
-
-        // Check if the first argument is a function (decorator without parentheses)
-        if conditions.len() == 1 {
-            if let Ok(first_item) = conditions.get_item(0) {
-                if first_item.extract::<Py<PyFunction>>().is_ok() {
-                    return PyTestFunction {
-                        tags: Self {
-                            inner: vec![PyTag::ExpectFail {
-                                conditions: vec![],
-                                reason: None,
-                            }],
-                        },
-                        function: first_item.unbind(),
-                    }
-                    .into_py_any(py);
-                }
-                // Check if the first argument is a string (reason passed as positional arg)
-                if let Ok(reason_str) = first_item.extract::<String>() {
-                    return Self {
-                        inner: vec![PyTag::ExpectFail {
-                            conditions: vec![],
-                            reason: Some(reason_str),
-                        }],
-                    }
-                    .into_py_any(py);
-                }
-            }
-        }
-
-        // Parse boolean conditions from positional arguments
-        for item in conditions.iter() {
-            if let Ok(bool_val) = item.extract::<bool>() {
-                bool_conditions.push(bool_val);
-            } else {
-                return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                    "Expected boolean values for conditions",
-                ));
-            }
-        }
-
-        Self {
-            inner: vec![PyTag::ExpectFail {
-                conditions: bool_conditions,
-                reason,
-            }],
-        }
-        .into_py_any(py)
-    }
-
     #[pyo3(signature = (f, /))]
     pub fn __call__(&self, py: Python<'_>, f: Py<PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(tag_obj) = f.cast_bound::<Self>(py) {
@@ -232,6 +72,173 @@ impl PyTags {
         Err(PyErr::new::<PyTypeError, _>(
             "Expected a Tags, TestCase, or Tag object",
         ))
+    }
+}
+
+#[pymodule]
+pub mod tags {
+    use pyo3::{
+        IntoPyObjectExt,
+        exceptions::PyTypeError,
+        prelude::*,
+        types::{PyFunction, PyTuple},
+    };
+
+    use super::{PyTag, PyTags};
+    use crate::extensions::tags::{parametrize::parse_parametrize_args, python::PyTestFunction};
+
+    #[pyfunction]
+    pub fn parametrize(
+        arg_names: &Bound<'_, PyAny>,
+        arg_values: &Bound<'_, PyAny>,
+    ) -> PyResult<PyTags> {
+        let (arg_names, arg_values) = parse_parametrize_args(arg_names, arg_values)
+            .map_err(|()| {
+                PyErr::new::<PyTypeError, _>(
+                    "Expected a string or a list of strings for the arg_names, and a list of lists of objects for the arg_values",
+                )
+            })?;
+
+        Ok(PyTags {
+            inner: vec![PyTag::Parametrize {
+                arg_names,
+                arg_values,
+            }],
+        })
+    }
+
+    #[pyfunction]
+    #[pyo3(signature = (*fixture_names))]
+    pub fn use_fixtures(fixture_names: &Bound<'_, PyTuple>) -> PyResult<PyTags> {
+        let mut names = Vec::new();
+        for item in fixture_names.iter() {
+            if let Ok(name) = item.extract::<String>() {
+                names.push(name);
+            } else {
+                return Err(PyErr::new::<PyTypeError, _>(
+                    "Expected a string or a list of strings for fixture names",
+                ));
+            }
+        }
+        Ok(PyTags {
+            inner: vec![PyTag::UseFixtures {
+                fixture_names: names,
+            }],
+        })
+    }
+
+    #[pyfunction]
+    #[pyo3(signature = (*conditions, reason = None))]
+    pub fn skip(
+        py: Python<'_>,
+        conditions: &Bound<'_, PyTuple>,
+        reason: Option<String>,
+    ) -> PyResult<Py<PyAny>> {
+        let mut bool_conditions = Vec::new();
+
+        // Check if the first argument is a function (decorator without parentheses)
+        if conditions.len() == 1 {
+            if let Ok(first_item) = conditions.get_item(0) {
+                if first_item.extract::<Py<PyFunction>>().is_ok() {
+                    return PyTestFunction {
+                        tags: PyTags {
+                            inner: vec![PyTag::Skip {
+                                conditions: vec![],
+                                reason: None,
+                            }],
+                        },
+                        function: first_item.unbind(),
+                    }
+                    .into_py_any(py);
+                }
+                // Check if the first argument is a string (reason passed as positional arg)
+                if let Ok(reason_str) = first_item.extract::<String>() {
+                    return PyTags {
+                        inner: vec![PyTag::Skip {
+                            conditions: vec![],
+                            reason: Some(reason_str),
+                        }],
+                    }
+                    .into_py_any(py);
+                }
+            }
+        }
+
+        // Parse boolean conditions from positional arguments
+        for item in conditions.iter() {
+            if let Ok(bool_val) = item.extract::<bool>() {
+                bool_conditions.push(bool_val);
+            } else {
+                return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "Expected boolean values for conditions",
+                ));
+            }
+        }
+
+        PyTags {
+            inner: vec![PyTag::Skip {
+                conditions: bool_conditions,
+                reason,
+            }],
+        }
+        .into_py_any(py)
+    }
+
+    #[pyfunction]
+    #[pyo3(signature = (*conditions, reason = None))]
+    pub fn expect_fail(
+        py: Python<'_>,
+        conditions: &Bound<'_, PyTuple>,
+        reason: Option<String>,
+    ) -> PyResult<Py<PyAny>> {
+        let mut bool_conditions = Vec::new();
+
+        // Check if the first argument is a function (decorator without parentheses)
+        if conditions.len() == 1 {
+            if let Ok(first_item) = conditions.get_item(0) {
+                if first_item.extract::<Py<PyFunction>>().is_ok() {
+                    return PyTestFunction {
+                        tags: PyTags {
+                            inner: vec![PyTag::ExpectFail {
+                                conditions: vec![],
+                                reason: None,
+                            }],
+                        },
+                        function: first_item.unbind(),
+                    }
+                    .into_py_any(py);
+                }
+                // Check if the first argument is a string (reason passed as positional arg)
+                if let Ok(reason_str) = first_item.extract::<String>() {
+                    return PyTags {
+                        inner: vec![PyTag::ExpectFail {
+                            conditions: vec![],
+                            reason: Some(reason_str),
+                        }],
+                    }
+                    .into_py_any(py);
+                }
+            }
+        }
+
+        // Parse boolean conditions from positional arguments
+        for item in conditions.iter() {
+            if let Ok(bool_val) = item.extract::<bool>() {
+                bool_conditions.push(bool_val);
+            } else {
+                return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "Expected boolean values for conditions",
+                ));
+            }
+        }
+
+        PyTags {
+            inner: vec![PyTag::ExpectFail {
+                conditions: bool_conditions,
+                reason,
+            }],
+        }
+        .into_py_any(py)
     }
 }
 
@@ -287,29 +294,17 @@ mod tests {
     use pyo3::{
         ffi::c_str,
         prelude::*,
-        types::{PyDict, PyTuple, PyType},
+        types::{PyDict, PyTuple},
     };
 
-    use crate::extensions::tags::python::{PyTag, PyTags, PyTestFunction};
+    use crate::extensions::tags::python::{PyTag, PyTestFunction, tags};
 
     #[test]
     fn test_parametrize_single_arg() {
         Python::attach(|py| {
-            let locals = PyDict::new(py);
-            Python::run(
-                py,
-                c_str!("import karva;tags = karva.tags"),
-                None,
-                Some(&locals),
-            )
-            .unwrap();
-
-            let binding = locals.get_item("tags").unwrap().unwrap();
-            let cls = binding.cast::<PyType>().unwrap();
-
             let arg_names = py.eval(c_str!("'a'"), None, None).unwrap();
             let arg_values = py.eval(c_str!("[1, 2, 3]"), None, None).unwrap();
-            let tags = PyTags::parametrize(cls, &arg_names, &arg_values).unwrap();
+            let tags = tags::parametrize(&arg_names, &arg_values).unwrap();
             assert_eq!(tags.inner.len(), 1);
             assert_eq!(tags.inner[0].name(), "parametrize");
             if let PyTag::Parametrize {
@@ -338,21 +333,9 @@ mod tests {
     #[test]
     fn test_parametrize_multiple_args() {
         Python::attach(|py| {
-            let locals = PyDict::new(py);
-            Python::run(
-                py,
-                c_str!("import karva;tags = karva.tags"),
-                None,
-                Some(&locals),
-            )
-            .unwrap();
-
-            let binding = locals.get_item("tags").unwrap().unwrap();
-            let cls = binding.cast::<PyType>().unwrap();
-
             let arg_names = py.eval(c_str!("('a', 'b')"), None, None).unwrap();
             let arg_values = py.eval(c_str!("[[1, 2], [3, 4]]"), None, None).unwrap();
-            let tags = PyTags::parametrize(cls, &arg_names, &arg_values).unwrap();
+            let tags = tags::parametrize(&arg_names, &arg_values).unwrap();
             assert_eq!(tags.inner.len(), 1);
             assert_eq!(tags.inner[0].name(), "parametrize");
             if let PyTag::Parametrize {
@@ -375,21 +358,9 @@ mod tests {
     #[test]
     fn test_invalid_parametrize_args() {
         Python::attach(|py| {
-            let locals = PyDict::new(py);
-            Python::run(
-                py,
-                c_str!("import karva;tags = karva.tags"),
-                None,
-                Some(&locals),
-            )
-            .unwrap();
-
-            let binding = locals.get_item("tags").unwrap().unwrap();
-            let cls = binding.cast::<PyType>().unwrap();
-
             let arg_names = py.eval(c_str!("1"), None, None).unwrap();
             let arg_values = py.eval(c_str!("[1, 2, 3]"), None, None).unwrap();
-            let tags = PyTags::parametrize(cls, &arg_names, &arg_values).unwrap_err();
+            let tags = tags::parametrize(&arg_names, &arg_values).unwrap_err();
             assert_eq!(
                 tags.to_string(),
                 "TypeError: Expected a string or a list of strings for the arg_names, and a list of lists of objects for the arg_values"
@@ -429,21 +400,9 @@ def test_function(a):
     #[test]
     fn test_use_fixtures_single_fixture() {
         Python::attach(|py| {
-            let locals = PyDict::new(py);
-            Python::run(
-                py,
-                c_str!("import karva;tags = karva.tags"),
-                None,
-                Some(&locals),
-            )
-            .unwrap();
-
-            let binding = locals.get_item("tags").unwrap().unwrap();
-            let cls = binding.cast::<PyType>().unwrap();
-
             let binding = py.eval(c_str!("('my_fixture',)"), None, None).unwrap();
             let fixture_names = binding.cast::<PyTuple>().unwrap();
-            let tags = PyTags::use_fixtures(cls, fixture_names).unwrap();
+            let tags = tags::use_fixtures(fixture_names).unwrap();
             assert_eq!(tags.inner.len(), 1);
             assert_eq!(tags.inner[0].name(), "use_fixtures");
             if let PyTag::UseFixtures { fixture_names } = &tags.inner[0] {
@@ -455,23 +414,11 @@ def test_function(a):
     #[test]
     fn test_use_fixtures_multiple_fixtures() {
         Python::attach(|py| {
-            let locals = PyDict::new(py);
-            Python::run(
-                py,
-                c_str!("import karva;tags = karva.tags"),
-                None,
-                Some(&locals),
-            )
-            .unwrap();
-
-            let binding = locals.get_item("tags").unwrap().unwrap();
-            let cls = binding.cast::<PyType>().unwrap();
-
             let binding = py
                 .eval(c_str!("('fixture1', 'fixture2', 'fixture3')"), None, None)
                 .unwrap();
             let fixture_names = binding.cast::<PyTuple>().unwrap();
-            let tags = PyTags::use_fixtures(cls, fixture_names).unwrap();
+            let tags = tags::use_fixtures(fixture_names).unwrap();
             assert_eq!(tags.inner.len(), 1);
             assert_eq!(tags.inner[0].name(), "use_fixtures");
             if let PyTag::UseFixtures { fixture_names } = &tags.inner[0] {
@@ -484,20 +431,8 @@ def test_function(a):
     fn test_use_fixtures_invalid_args() {
         Python::attach(|py| {
             let locals = PyDict::new(py);
-            Python::run(
-                py,
-                c_str!("import karva;tags = karva.tags"),
-                None,
-                Some(&locals),
-            )
-            .unwrap();
 
-            let binding = locals.get_item("tags").unwrap().unwrap();
-            let cls = binding.cast::<PyType>().unwrap();
-
-            // Create a Python class whose __str__ raises an exception, and use an instance as fixture name
-            Python::run(
-                py,
+            py.run(
                 c_str!(
                     r#"
 class BadStr:
@@ -512,7 +447,7 @@ bad_tuple = (BadStr(),)
             .unwrap();
             let binding = locals.get_item("bad_tuple").unwrap().unwrap();
             let fixture_names = binding.cast::<PyTuple>().unwrap();
-            let result = PyTags::use_fixtures(cls, fixture_names);
+            let result = tags::use_fixtures(fixture_names);
             assert!(result.is_err());
             assert_eq!(
                 result.unwrap_err().to_string(),
