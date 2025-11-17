@@ -2,7 +2,8 @@ use std::fmt::{self, Display, Formatter};
 
 use crate::diagnostic::{
     Diagnostic, DiscoveryDiagnostic, FunctionKind, InvalidFixtureDiagnostic,
-    MissingFixturesDiagnostic, TestFailureDiagnostic, WarningDiagnostic,
+    MissingFixturesDiagnostic, PassOnExpectFailureDiagnostic, TestFailureDiagnostic,
+    TestRunFailureDiagnostic, WarningDiagnostic,
     diagnostic::{FixtureFailureDiagnostic, FunctionDefinitionLocation},
 };
 
@@ -19,29 +20,51 @@ impl<'a> DisplayDiagnostic<'a> {
 impl Display for DisplayDiagnostic<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.diagnostic {
-            Diagnostic::TestFailure(TestFailureDiagnostic {
-                location:
-                    FunctionDefinitionLocation {
-                        function_name,
-                        location: function_location,
-                    },
-                traceback,
-                message,
-            }) => {
-                let location_fail_string = traceback
-                    .location
-                    .as_ref()
-                    .map(|location| format!("at {location}"))
-                    .unwrap_or_default();
+            Diagnostic::TestFailure(test_failure_diagnostic) => match test_failure_diagnostic {
+                TestFailureDiagnostic::RunFailure(run_failure_diagnostic) => {
+                    let TestRunFailureDiagnostic {
+                        location:
+                            FunctionDefinitionLocation {
+                                function_name,
+                                location: function_location,
+                            },
+                        traceback,
+                        message,
+                    } = run_failure_diagnostic;
 
-                writeln!(
-                    f,
-                    "test `{function_name}` at {function_location} failed {location_fail_string}"
-                )?;
-                if let Some(message) = message {
-                    writeln!(f, "{message}")?;
+                    let location_fail_string = traceback
+                        .location
+                        .as_ref()
+                        .map(|location| format!("at {location}"))
+                        .unwrap_or_default();
+
+                    writeln!(
+                        f,
+                        "test `{function_name}` at {function_location} failed {location_fail_string}"
+                    )?;
+                    if let Some(message) = message {
+                        writeln!(f, "{message}")?;
+                    }
                 }
-            }
+                TestFailureDiagnostic::PassOnExpectFailure(pass_on_expect_failure_diagnostic) => {
+                    let PassOnExpectFailureDiagnostic {
+                        location:
+                            FunctionDefinitionLocation {
+                                function_name,
+                                location: function_location,
+                            },
+                        reason,
+                    } = pass_on_expect_failure_diagnostic;
+
+                    writeln!(
+                        f,
+                        "test `{function_name}` at {function_location} passed when it was expected to fail"
+                    )?;
+                    if let Some(reason) = reason {
+                        writeln!(f, "reason: {reason}")?;
+                    }
+                }
+            },
             Diagnostic::MissingFixtures(MissingFixturesDiagnostic {
                 location:
                     FunctionDefinitionLocation {

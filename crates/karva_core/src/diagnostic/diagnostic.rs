@@ -57,11 +57,22 @@ impl Diagnostic {
             let msg = error.value(py).to_string();
             if msg.is_empty() { None } else { Some(msg) }
         };
-        Self::TestFailure(TestFailureDiagnostic {
-            location,
-            traceback: Traceback::new(py, error),
-            message,
-        })
+        Self::TestFailure(TestFailureDiagnostic::RunFailure(
+            TestRunFailureDiagnostic {
+                location,
+                traceback: Traceback::new(py, error),
+                message,
+            },
+        ))
+    }
+
+    pub(crate) const fn pass_on_expect_fail(
+        reason: Option<String>,
+        location: FunctionDefinitionLocation,
+    ) -> Self {
+        Self::TestFailure(TestFailureDiagnostic::PassOnExpectFailure(
+            PassOnExpectFailureDiagnostic { location, reason },
+        ))
     }
 
     pub(crate) fn from_fixture_fail(
@@ -108,8 +119,8 @@ impl Diagnostic {
 
     pub(crate) const fn location(&self) -> Option<&FunctionDefinitionLocation> {
         match self {
+            Self::TestFailure(diagnostic) => Some(diagnostic.location()),
             Self::MissingFixtures(diagnostic) => Some(&diagnostic.location),
-            Self::TestFailure(diagnostic) => Some(&diagnostic.location),
             Self::FixtureFailure(diagnostic) => Some(&diagnostic.location),
             Self::Warning(_) => None,
         }
@@ -145,7 +156,26 @@ impl DiscoveryDiagnostic {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TestFailureDiagnostic {
+pub enum TestFailureDiagnostic {
+    /// The test failed on execution.
+    RunFailure(TestRunFailureDiagnostic),
+
+    PassOnExpectFailure(PassOnExpectFailureDiagnostic),
+}
+
+impl TestFailureDiagnostic {
+    pub(crate) const fn location(&self) -> &FunctionDefinitionLocation {
+        match self {
+            Self::RunFailure(diagnostic) => &diagnostic.location,
+            Self::PassOnExpectFailure(pass_on_expect_failure_diagnostic) => {
+                &pass_on_expect_failure_diagnostic.location
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TestRunFailureDiagnostic {
     /// The location of the test function.
     ///
     /// This is a string of the format `file.py:line`.
@@ -162,6 +192,17 @@ pub struct TestFailureDiagnostic {
     ///
     /// This is used as the "info" message in the diagnostic.
     pub(crate) message: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PassOnExpectFailureDiagnostic {
+    /// The location of the test function.
+    ///
+    /// This is a string of the format `file.py:line`.
+    pub(crate) location: FunctionDefinitionLocation,
+
+    /// The reason that this test should fail.
+    pub(crate) reason: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
