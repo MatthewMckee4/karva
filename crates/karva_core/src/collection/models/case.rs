@@ -10,7 +10,7 @@ use crate::{
         fixtures::{
             Finalizers, RequiresFixtures, handle_missing_fixtures, missing_arguments_from_error,
         },
-        tags::python::SkipError,
+        tags::{ExpectFailTag, python::SkipError},
     },
 };
 
@@ -85,30 +85,25 @@ impl<'proj> TestCase<'proj> {
         let passed = (|| {
             let test_name = full_test_name(py, &function.name().to_string(), &kwargs);
 
+            // Check if test should be skipped
             if let Some(skip_tag) = &function.tags().skip_tag() {
-                run_result.register_test_case_result(
-                    &test_name,
-                    IndividualTestResultKind::Skipped {
-                        reason: skip_tag.reason(),
-                    },
-                    Some(reporter),
-                );
-
-                return true;
-            }
-
-            if let Some(skip_if_tag) = &function.tags().skip_if_tag() {
-                if skip_if_tag.should_skip() {
+                if skip_tag.should_skip() {
                     run_result.register_test_case_result(
                         &test_name,
                         IndividualTestResultKind::Skipped {
-                            reason: skip_if_tag.reason(),
+                            reason: skip_tag.reason(),
                         },
                         Some(reporter),
                     );
                     return true;
                 }
             }
+
+            // Check if test is expected to fail
+            let expect_fail_tag = function.tags().expect_fail_tag();
+            let expect_fail = expect_fail_tag
+                .as_ref()
+                .is_some_and(ExpectFailTag::should_expect_fail);
 
             let case_call_result = if kwargs.is_empty() {
                 function.py_function().call0(py)
@@ -125,6 +120,28 @@ impl<'proj> TestCase<'proj> {
             };
 
             let Err(err) = case_call_result else {
+                if expect_fail {
+                    // Test was expected to fail but passed - report as failed (unexpected pass)
+
+                    let reason = expect_fail_tag.and_then(|tag| tag.reason());
+                    let diagnostic = Diagnostic::pass_on_expect_fail(
+                        reason,
+                        FunctionDefinitionLocation::new(
+                            function.name().to_string(),
+                            function.display_with_line(module),
+                        ),
+                    );
+
+                    run_result.register_test_case_result(
+                        &test_name,
+                        IndividualTestResultKind::Failed,
+                        Some(reporter),
+                    );
+                    run_result.add_test_diagnostic(diagnostic);
+
+                    return false;
+                }
+
                 run_result.register_test_case_result(
                     &test_name,
                     IndividualTestResultKind::Passed,
@@ -134,12 +151,24 @@ impl<'proj> TestCase<'proj> {
                 return true;
             };
 
-            // Check if the exception is a skip exception (karva.SkipError or pytest.Skipped)
+            // Check if the exception is a skip exception
             if is_skip_exception(py, &err) {
                 let reason = extract_skip_reason(py, &err);
+
                 run_result.register_test_case_result(
                     &test_name,
                     IndividualTestResultKind::Skipped { reason },
+                    Some(reporter),
+                );
+
+                return true;
+            }
+
+            // Test was expected to fail and did fail - report as passed (expected failure)
+            if expect_fail {
+                run_result.register_test_case_result(
+                    &test_name,
+                    IndividualTestResultKind::Passed,
                     Some(reporter),
                 );
 
@@ -182,14 +211,14 @@ impl<'proj> TestCase<'proj> {
     }
 }
 
-/// Check if the given `PyErr` is a skip exception (karva.SkipError or pytest.skip.Exception/Skipped).
+/// Check if the given `PyErr` is a skip exception.
 fn is_skip_exception(py: Python<'_>, err: &PyErr) -> bool {
     // Check for karva.SkipError
     if err.is_instance_of::<SkipError>(py) {
         return true;
     }
 
-    // Check for pytest.skip.Exception (the actual exception raised by pytest.skip())
+    // Check for pytest skip exception (the actual exception raised by pytest.skip())
     if let Ok(pytest_module) = py.import("_pytest.outcomes")
         && let Ok(skipped) = pytest_module.getattr("Skipped")
         && err.matches(py, skipped).unwrap_or(false)

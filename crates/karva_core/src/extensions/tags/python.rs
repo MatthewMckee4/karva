@@ -18,10 +18,13 @@ pub enum PyTag {
     UseFixtures { fixture_names: Vec<String> },
 
     #[pyo3(name = "skip")]
-    Skip { reason: Option<String> },
+    Skip {
+        conditions: Vec<bool>,
+        reason: Option<String>,
+    },
 
-    #[pyo3(name = "skip_if")]
-    SkipIf {
+    #[pyo3(name = "expect_fail")]
+    ExpectFail {
         conditions: Vec<bool>,
         reason: Option<String>,
     },
@@ -34,7 +37,7 @@ impl PyTag {
             Self::Parametrize { .. } => "parametrize".to_string(),
             Self::UseFixtures { .. } => "use_fixtures".to_string(),
             Self::Skip { .. } => "skip".to_string(),
-            Self::SkipIf { .. } => "skip_if".to_string(),
+            Self::ExpectFail { .. } => "expect_fail".to_string(),
         }
     }
 }
@@ -92,45 +95,44 @@ impl PyTags {
     }
 
     #[classmethod]
-    #[pyo3(signature = (reason = None))]
-    pub fn skip(
-        _cls: &Bound<'_, PyType>,
-        py: Python<'_>,
-        reason: Option<Py<PyAny>>,
-    ) -> PyResult<Py<PyAny>> {
-        if let Some(reason) = reason {
-            if reason.extract::<Py<PyFunction>>(py).is_ok() {
-                return PyTestFunction {
-                    tags: Self {
-                        inner: vec![PyTag::Skip { reason: None }],
-                    },
-                    function: reason,
-                }
-                .into_py_any(py);
-            } else if let Ok(reason) = reason.extract::<String>(py) {
-                return Self {
-                    inner: vec![PyTag::Skip {
-                        reason: Some(reason),
-                    }],
-                }
-                .into_py_any(py);
-            }
-        }
-        Self {
-            inner: vec![PyTag::Skip { reason: None }],
-        }
-        .into_py_any(py)
-    }
-
-    #[classmethod]
     #[pyo3(signature = (*conditions, reason = None))]
-    pub fn skip_if(
+    pub fn skip(
         _cls: &Bound<'_, PyType>,
         py: Python<'_>,
         conditions: &Bound<'_, PyTuple>,
         reason: Option<String>,
     ) -> PyResult<Py<PyAny>> {
         let mut bool_conditions = Vec::new();
+
+        // Check if the first argument is a function (decorator without parentheses)
+        if conditions.len() == 1 {
+            if let Ok(first_item) = conditions.get_item(0) {
+                if first_item.extract::<Py<PyFunction>>().is_ok() {
+                    return PyTestFunction {
+                        tags: Self {
+                            inner: vec![PyTag::Skip {
+                                conditions: vec![],
+                                reason: None,
+                            }],
+                        },
+                        function: first_item.unbind(),
+                    }
+                    .into_py_any(py);
+                }
+                // Check if the first argument is a string (reason passed as positional arg)
+                if let Ok(reason_str) = first_item.extract::<String>() {
+                    return Self {
+                        inner: vec![PyTag::Skip {
+                            conditions: vec![],
+                            reason: Some(reason_str),
+                        }],
+                    }
+                    .into_py_any(py);
+                }
+            }
+        }
+
+        // Parse boolean conditions from positional arguments
         for item in conditions.iter() {
             if let Ok(bool_val) = item.extract::<bool>() {
                 bool_conditions.push(bool_val);
@@ -141,14 +143,66 @@ impl PyTags {
             }
         }
 
-        if bool_conditions.is_empty() {
-            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                "At least one condition is required",
-            ));
+        Self {
+            inner: vec![PyTag::Skip {
+                conditions: bool_conditions,
+                reason,
+            }],
+        }
+        .into_py_any(py)
+    }
+
+    #[classmethod]
+    #[pyo3(signature = (*conditions, reason = None))]
+    pub fn expect_fail(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        conditions: &Bound<'_, PyTuple>,
+        reason: Option<String>,
+    ) -> PyResult<Py<PyAny>> {
+        let mut bool_conditions = Vec::new();
+
+        // Check if the first argument is a function (decorator without parentheses)
+        if conditions.len() == 1 {
+            if let Ok(first_item) = conditions.get_item(0) {
+                if first_item.extract::<Py<PyFunction>>().is_ok() {
+                    return PyTestFunction {
+                        tags: Self {
+                            inner: vec![PyTag::ExpectFail {
+                                conditions: vec![],
+                                reason: None,
+                            }],
+                        },
+                        function: first_item.unbind(),
+                    }
+                    .into_py_any(py);
+                }
+                // Check if the first argument is a string (reason passed as positional arg)
+                if let Ok(reason_str) = first_item.extract::<String>() {
+                    return Self {
+                        inner: vec![PyTag::ExpectFail {
+                            conditions: vec![],
+                            reason: Some(reason_str),
+                        }],
+                    }
+                    .into_py_any(py);
+                }
+            }
+        }
+
+        // Parse boolean conditions from positional arguments
+        for item in conditions.iter() {
+            if let Ok(bool_val) = item.extract::<bool>() {
+                bool_conditions.push(bool_val);
+            } else {
+                return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "Expected boolean values for conditions",
+                ));
+            }
         }
 
         Self {
-            inner: vec![PyTag::SkipIf {
+            inner: vec![PyTag::ExpectFail {
                 conditions: bool_conditions,
                 reason,
             }],
@@ -205,6 +259,9 @@ impl PyTestFunction {
 // SkipError exception that can be raised to skip tests at runtime
 pyo3::create_exception!(karva, SkipError, pyo3::exceptions::PyException);
 
+// FailError exception that can be raised to fail tests at runtime with a specific reason
+pyo3::create_exception!(karva, FailError, pyo3::exceptions::PyException);
+
 /// Skip the current test at runtime with an optional reason.
 ///
 /// This function raises a `SkipError` exception which will be caught by the test runner
@@ -214,6 +271,15 @@ pyo3::create_exception!(karva, SkipError, pyo3::exceptions::PyException);
 pub fn skip(_py: Python<'_>, reason: Option<String>) -> PyResult<()> {
     let message = reason.unwrap_or_default();
     Err(SkipError::new_err(message))
+}
+
+/// Fail the current test at runtime with a required reason.
+///
+/// This function raises a `FailError` exception which will be caught by the test runner
+/// and mark the test as failed with the given reason.
+#[pyfunction]
+pub fn fail(_py: Python<'_>, reason: String) -> PyResult<()> {
+    Err(FailError::new_err(reason))
 }
 
 #[cfg(test)]

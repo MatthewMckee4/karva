@@ -1,16 +1,17 @@
 use pyo3::prelude::*;
 
-/// Represents a test that should be skipped.
+/// Represents a test that is expected to fail.
 ///
-/// A given reason will be logged if given.
-/// Can optionally have conditions that determine if the test should be skipped.
+/// If the test fails, it will be reported as passed (expected failure).
+/// If the test passes, it will be reported as failed (unexpected pass).
+/// Can optionally have conditions that determine if the test should be expected to fail.
 #[derive(Debug, Clone)]
-pub struct SkipTag {
+pub struct ExpectFailTag {
     conditions: Vec<bool>,
     reason: Option<String>,
 }
 
-impl SkipTag {
+impl ExpectFailTag {
     pub(crate) const fn new(conditions: Vec<bool>, reason: Option<String>) -> Self {
         Self { conditions, reason }
     }
@@ -19,10 +20,10 @@ impl SkipTag {
         self.reason.clone()
     }
 
-    /// Check if the test should be skipped.
-    /// If there are no conditions, always skip.
-    /// If there are conditions, skip only if any condition is true.
-    pub(crate) fn should_skip(&self) -> bool {
+    /// Check if the test should be expected to fail.
+    /// If there are no conditions, always expect fail.
+    /// If there are conditions, expect fail only if any condition is true.
+    pub(crate) fn should_expect_fail(&self) -> bool {
         if self.conditions.is_empty() {
             true
         } else {
@@ -42,7 +43,7 @@ impl SkipTag {
                     if let Ok(bool_val) = item.extract::<bool>() {
                         conditions.push(bool_val);
                     } else if item.extract::<String>().is_ok() {
-                        // This is a reason passed as positional arg (old pytest style)
+                        // This is a reason passed as positional arg
                         // Skip this, we'll handle it below
                         break;
                     }
@@ -72,7 +73,7 @@ impl SkipTag {
     }
 }
 
-impl TryFrom<&Bound<'_, PyAny>> for SkipTag {
+impl TryFrom<&Bound<'_, PyAny>> for ExpectFailTag {
     type Error = ();
 
     fn try_from(py_mark: &Bound<'_, PyAny>) -> Result<Self, Self::Error> {

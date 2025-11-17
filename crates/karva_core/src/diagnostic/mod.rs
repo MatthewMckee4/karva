@@ -6,5 +6,6 @@ pub mod traceback;
 
 pub(crate) use diagnostic::{
     Diagnostic, DiscoveryDiagnostic, FunctionDefinitionLocation, FunctionKind,
-    InvalidFixtureDiagnostic, MissingFixturesDiagnostic, TestFailureDiagnostic, WarningDiagnostic,
+    InvalidFixtureDiagnostic, MissingFixturesDiagnostic, PassOnExpectFailureDiagnostic,
+    TestFailureDiagnostic, TestRunFailureDiagnostic, WarningDiagnostic,
 };
