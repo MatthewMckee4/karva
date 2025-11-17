@@ -4,7 +4,7 @@ use crate::extensions::{
     fixtures::python::{
         FixtureFunctionDefinition, FixtureFunctionMarker, FixtureRequest, fixture_decorator,
     },
-    tags::python::{FailError, PyTag, PyTags, PyTestFunction, SkipError, fail, skip},
+    tags::python::{FailError, PyTags, PyTestFunction, SkipError, fail, skip},
 };
 
 pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -14,7 +14,6 @@ pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<FixtureFunctionMarker>()?;
     m.add_class::<FixtureFunctionDefinition>()?;
     m.add_class::<FixtureRequest>()?;
-    m.add_class::<PyTag>()?;
     m.add_class::<PyTags>()?;
     m.add_class::<PyTestFunction>()?;
     m.add("SkipError", py.get_type::<SkipError>())?;
