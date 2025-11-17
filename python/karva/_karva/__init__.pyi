@@ -35,6 +35,9 @@ def fixture(
     params: Sequence[object] | None = ...,
 ) -> FixtureFunctionMarker[_P, _T]: ...
 
+class TestFunction(Generic[_P, _T]):
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T: ...
+
 class Tags:
     def __call__(self, f: Callable[_P, _T], /) -> Callable[_P, _T]: ...
 

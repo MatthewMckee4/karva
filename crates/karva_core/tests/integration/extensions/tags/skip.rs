@@ -12,8 +12,6 @@ fn get_skip_decorator(framework: &str) -> &str {
     }
 }
 
-// Tests for basic skip decorator without conditions
-
 #[rstest]
 fn test_skip(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
@@ -105,8 +103,6 @@ def test_1():
         assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]");
     }
 }
-
-// Tests for skip with conditions (formerly skip_if)
 
 #[rstest]
 fn test_skip_with_true_condition(#[values("pytest", "karva")] framework: &str) {
@@ -278,8 +274,6 @@ def test_1():
     }
 }
 
-// Karva-specific tests
-
 #[test]
 fn test_skip_with_empty_conditions_karva() {
     let context = TestContext::with_file(
@@ -295,7 +289,6 @@ def test_1():
 
     let result = context.test();
 
-    // Empty conditions means always skip
     assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]");
 }
 
@@ -314,7 +307,6 @@ def test_1():
 
     let result = context.test();
 
-    // Single string argument is treated as a reason
     assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]");
 }
 
@@ -333,7 +325,6 @@ def test_1():
 
     let result = context.test();
 
-    // Invalid conditions cause the decorator to fail at decoration time, resulting in no tests collected
     assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
@@ -352,11 +343,8 @@ def test_1():
 
     let result = context.test();
 
-    // Invalid conditions cause the decorator to fail at decoration time, resulting in no tests collected
     assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
-
-// Runtime skip tests
 
 #[test]
 fn test_runtime_skip_karva() {

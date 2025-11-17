@@ -9,9 +9,9 @@ coverage:
         enabled: false
 
 ignore:
-  - "crates/karva"
-  - "crates/karva_benchmark"
-  - "crates/karva_cli"
-  - "crates/karva_dev"
-  - "crates/karva_diff"
-  - "crates/karva_test"
+  - "karva"
+  - "karva_benchmark"
+  - "karva_cli"
+  - "karva_dev"
+  - "karva_diff"
+  - "karva_test"

@@ -1,6 +1,10 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from typing import ParamSpec, TypeVar, overload
 
-from karva._karva import Tags
+from karva._karva import Tags, TestFunction
+
+_T = TypeVar("_T")
+_P = ParamSpec("_P")
 
 def parametrize(
     arg_names: Sequence[str] | str,
@@ -15,8 +19,14 @@ def use_fixtures(*fixture_names: str) -> Tags:
     but you need them to be called.
     """
 
+@overload
+def skip(f: Callable[_P, _T]) -> TestFunction[_P, _T]: ...
+@overload
 def skip(*conditions: bool, reason: str | None = ...) -> Tags:
     """Skip the current test given the conditions."""
 
+@overload
+def expect_fail(f: Callable[_P, _T]) -> TestFunction[_P, _T]: ...
+@overload
 def expect_fail(*conditions: bool, reason: str | None = ...) -> Tags:
     """Expect the current test to fail given the conditions."""
