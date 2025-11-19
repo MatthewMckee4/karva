@@ -14,7 +14,6 @@ license = { workspace = true }
 camino = { workspace = true }
 tempfile = { workspace = true }
 insta = { workspace = true, features = ["filters"]}
-insta-cmd = { workspace = true }
 regex = { workspace = true }
 anyhow = { workspace = true }
 ruff_python_trivia = { workspace = true }
@@ -22,7 +21,7 @@ rand = { workspace = true }
 dunce = { workspace = true }
 ruff_python_ast = { workspace = true }
 tracing = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["serde_derive"] }
 serde_json = { workspace = true }
 
 [lints]

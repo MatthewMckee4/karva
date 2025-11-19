@@ -35,10 +35,6 @@ karva_test = { workspace = true }
 
 anyhow = { workspace = true }
 codspeed-criterion-compat = { workspace = true }
-ruff_python_ast = { workspace = true }
-tracing = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 
 [lints]
 workspace = true
