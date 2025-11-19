@@ -64,7 +64,7 @@ jobs:
           architecture: ${{ matrix.platform.python-architecture }}
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@a51956480770cc7c2698e336e1918ffacf5f755c # 1.7
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform.rust-target }}
 

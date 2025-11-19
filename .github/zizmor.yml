@@ -2,3 +2,7 @@ rules:
   template-injection:
     ignore:
       - "diff-pr.yml"
+  unpinned-uses:
+    config:
+      policies:
+        dtolnay/rust-toolchain: any
