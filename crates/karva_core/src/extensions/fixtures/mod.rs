@@ -21,7 +21,7 @@ pub(crate) use utils::{handle_missing_fixtures, missing_arguments_from_error};
 use crate::{
     diagnostic::{Diagnostic, FunctionDefinitionLocation, FunctionKind},
     discovery::DiscoveredModule,
-    extensions::fixtures::python::FixtureRequest,
+    extensions::fixtures::{python::FixtureRequest, utils::handle_custom_fixture_params},
     name::{ModulePath, QualifiedFunctionName},
     utils::{cartesian_insert, function_definition_location},
 };
@@ -127,7 +127,9 @@ pub(crate) struct Fixture {
 }
 
 impl Fixture {
-    pub(crate) const fn new(
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new(
+        py: Python,
         name: QualifiedFunctionName,
         function_definition: StmtFunctionDef,
         scope: FixtureScope,
@@ -143,7 +145,7 @@ impl Fixture {
             auto_use,
             function,
             is_generator,
-            params,
+            params: params.map(|params| handle_custom_fixture_params(py, params)),
         }
     }
 
@@ -350,6 +352,7 @@ impl Fixture {
         let fixture_scope = fixture_scope(py, &scope, &name)?;
 
         Ok(Some(Self::new(
+            py,
             QualifiedFunctionName::new(name, module_name),
             function_definition.clone(),
             fixture_scope,
@@ -386,6 +389,7 @@ impl Fixture {
         let fixture_scope = fixture_scope(py, scope_obj.bind(py), &name)?;
 
         Ok(Some(Self::new(
+            py,
             QualifiedFunctionName::new(name, module_path),
             function_def.clone(),
             fixture_scope,
