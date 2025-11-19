@@ -66,12 +66,12 @@ jobs:
         id: diff
         run: |
           {
-            echo 'diff<<EOF'
+            echo "diff<<EOF"
             cat out.txt
             echo EOF
           } >> $GITHUB_OUTPUT
           {
-            echo 'new<<EOF'
+            echo "new<<EOF"
             cat new.txt
             echo EOF
           } >> $GITHUB_OUTPUT
