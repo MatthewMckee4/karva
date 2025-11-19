@@ -385,3 +385,24 @@ fn test_parametrized_fixture_finalizer_with_state(#[values("pytest", "karva")] f
         assert_snapshot!(result.display(), @"test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
 }
+
+#[test]
+fn test_pytest_param() {
+    let test_context = TestContext::with_file(
+        "<test>/test_file.py",
+        r"
+            import pytest
+
+            @pytest.fixture(params=['resource_1', pytest.param('resource_2'), pytest.param('resource_3')])
+            def resource(request):
+               return request.param
+
+            def test_resource(resource):
+                assert resource in ['resource_1', 'resource_2', 'resource_3']
+   ",
+    );
+
+    let result = test_context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}

@@ -1,5 +1,10 @@
 use std::{collections::HashSet, sync::LazyLock};
 
+use pyo3::{
+    IntoPyObjectExt,
+    prelude::*,
+    types::{PyAnyMethods, PyTypeMethods},
+};
 use regex::Regex;
 
 use crate::diagnostic::{Diagnostic, FunctionDefinitionLocation, MissingFixturesDiagnostic};
@@ -75,6 +80,39 @@ pub(crate) fn missing_arguments_from_error(err: &str) -> HashSet<String> {
             result
         },
     )
+}
+
+/// Check for instances of `pytest.ParameterSet` and extract the parameters
+/// from it.
+pub(super) fn handle_custom_fixture_params(py: Python, params: Vec<Py<PyAny>>) -> Vec<Py<PyAny>> {
+    params
+        .into_iter()
+        .filter_map(|param| {
+            let Ok(bound_param) = param.into_bound_py_any(py) else {
+                return None;
+            };
+
+            let a_type = bound_param.get_type();
+
+            let Ok(type_name) = a_type.name() else {
+                return Some(bound_param.into_py_any(py).unwrap());
+            };
+
+            if !type_name.contains("ParameterSet").unwrap_or_default() {
+                return Some(bound_param.into_py_any(py).unwrap());
+            }
+
+            let Ok(params) = bound_param.getattr("values") else {
+                return Some(bound_param.into_py_any(py).unwrap());
+            };
+
+            let Ok(first_param) = params.get_item(0) else {
+                return Some(bound_param.into_py_any(py).unwrap());
+            };
+
+            Some(first_param.into_py_any(py).unwrap())
+        })
+        .collect()
 }
 
 #[cfg(test)]
