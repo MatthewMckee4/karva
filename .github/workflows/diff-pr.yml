@@ -89,6 +89,25 @@ jobs:
           comment-author: "github-actions[bot]"
           body-includes: "<!-- karva-diff-comment -->"
 
+      - name: Write comment body (no changes)
+        if: steps.diff.outputs.has_changes == 'false'
+        run: |
+          cat > comment-no-changes.md <<'EOF'
+          <!-- karva-diff-comment -->
+          ## Project Diff Results
+
+          No changes between this PR and main.
+
+          <details>
+          <summary>New outputs</summary>
+
+          ```
+          ${{ steps.diff.outputs.new }}
+          ```
+
+          </details>
+          EOF
+
       - name: Create or update comment (no changes)
         if: steps.diff.outputs.has_changes == 'false'
         uses: peter-evans/create-or-update-comment@71345be0265236311c031f5c7866368bd1eff043 # v4.0.0
@@ -96,20 +115,33 @@ jobs:
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
           edit-mode: replace
-          body: |
-            <!-- karva-diff-comment -->
-            ## Project Diff Results
+          body-path: comment-no-changes.md
 
-            No changes between this PR and main.
+      - name: Write comment body (with changes)
+        if: steps.diff.outputs.has_changes == 'true'
+        run: |
+          cat > comment-with-changes.md <<'EOF'
+          <!-- karva-diff-comment -->
+          ## Project Diff Results
 
-            <details>
-            <summary>New outputs</summary>
+          <details>
+          <summary>View diff</summary>
 
-            ```
-            ${{ steps.diff.outputs.new }}
-            ```
+          ```diff
+          ${{ steps.diff.outputs.diff }}
+          ```
 
-            </details>
+          </details>
+
+          <details>
+          <summary>New outputs</summary>
+
+          ```
+          ${{ steps.diff.outputs.new }}
+          ```
+
+          </details>
+          EOF
 
       - name: Create or update comment (with changes)
         if: steps.diff.outputs.has_changes == 'true'
@@ -118,24 +150,4 @@ jobs:
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
           edit-mode: replace
-          body: |
-            <!-- karva-diff-comment -->
-            ## Project Diff Results
-
-            <details>
-            <summary>View diff</summary>
-
-            ```diff
-            ${{ steps.diff.outputs.diff }}
-            ```
-
-            </details>
-
-            <details>
-            <summary>New outputs</summary>
-
-            ```
-            ${{ steps.diff.outputs.new }}
-            ```
-
-            </details>
+          body-path: comment-with-changes.md
