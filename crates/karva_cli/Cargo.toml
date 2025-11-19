@@ -36,7 +36,6 @@ wild = { workspace = true }
 insta = { workspace = true, features = ["filters"] }
 insta-cmd = { workspace = true }
 rstest = { workspace = true }
-ctor = { workspace = true }
 karva_test = { workspace = true }
 
 [lints]
