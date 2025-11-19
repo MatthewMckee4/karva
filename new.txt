@@ -1,0 +1,36 @@
+affect
+
+stdout
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 skipped; finished in 0s
+
+stderr
+
+----------------
+
+sqlmodel
+
+stdout
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 skipped; finished in 0s
+
+stderr
+
+----------------
+
+typer
+
+stdout
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 skipped; finished in 0s
+
+stderr
+
+----------------
+

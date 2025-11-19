@@ -47,9 +47,16 @@ fn main() -> Result<ExitCode> {
 
     let mut old_temp = NamedTempFile::new()?;
     let mut new_temp = NamedTempFile::new()?;
+    let mut accumulation_temp = NamedTempFile::new()?;
 
     for project in all_projects() {
-        run(&args, project, &mut old_temp, &mut new_temp)?;
+        run(
+            &args,
+            project,
+            &mut old_temp,
+            &mut new_temp,
+            &mut accumulation_temp,
+        )?;
     }
 
     old_temp.flush()?;
@@ -64,8 +71,10 @@ fn main() -> Result<ExitCode> {
     fs::write(&args.output_diff_file, &diff_output.stdout)
         .context("Failed to write output file")?;
 
-    if let Some(output_new_file) = args.output_new_file {
-        fs::copy(new_temp.path(), &output_new_file).context("Failed to copy new file")?;
+    if let Some(output_new_file) = &args.output_new_file {
+        accumulation_temp.flush()?;
+        fs::copy(accumulation_temp.path(), output_new_file)
+            .context("Failed to write new output file")?;
     }
 
     Ok(ExitCode::SUCCESS)
@@ -76,6 +85,7 @@ fn run(
     project: RealWorldProject,
     old_temp: &mut NamedTempFile,
     new_temp: &mut NamedTempFile,
+    accumulation_temp: &mut NamedTempFile,
 ) -> Result<()> {
     let installed_project = project.setup(true)?;
 
@@ -131,6 +141,14 @@ fn run(
             String::from_utf8_lossy(&new_output.stderr)
         );
     }
+
+    write!(
+        accumulation_temp,
+        "{}\n\nstdout\n\n{}\nstderr\n\n{}----------------\n\n",
+        installed_project.config.name,
+        String::from_utf8_lossy(&new_output.stdout),
+        String::from_utf8_lossy(&new_output.stderr)
+    )?;
 
     let old_result = extract_test_result(&old_output.stdout)?;
 
