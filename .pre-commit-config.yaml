@@ -80,15 +80,11 @@ repos:
     hooks:
       - id: cargo-sort
 
-  # # `actionlint` hook, for verifying correct syntax in GitHub Actions workflows.
-  # # Some additional configuration for `actionlint` can be found in `.github/actionlint.yaml`.
-  # - repo: https://github.com/rhysd/actionlint
-  #   rev: v1.7.7
-  #   hooks:
-  #     - id: actionlint
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
+    hooks:
+      - id: actionlint
 
-  # zizmor detects security vulnerabilities in GitHub Actions workflows.
-  # Additional configuration for the tool is found in `.github/zizmor.yml`
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
     rev: v1.16.3
     hooks:
