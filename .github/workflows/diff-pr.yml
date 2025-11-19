@@ -15,13 +15,15 @@ jobs:
 
     steps:
       - name: Checkout PR branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Update Rust toolchain
         run: rustup update
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -32,10 +34,11 @@ jobs:
         run: cp target/debug/karva target/debug/karva-pr
 
       - name: Checkout main branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: main
           clean: false
+          persist-credentials: false
 
       - name: Build main branch karva binary
         run: cargo build
@@ -44,11 +47,12 @@ jobs:
         run: cp target/debug/karva target/debug/karva-main
 
       - name: Restore PR branch files
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           clean: false
+          persist-credentials: false
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@5a7eac68fb9809dea845d802897dc5c723910fa3 # v7.1.3
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           activate-environment: "false"
@@ -62,23 +66,23 @@ jobs:
         id: diff
         run: |
           {
-            echo 'diff<<EOF'
+            echo "diff<<EOF"
             cat out.txt
-            echo EOF
-          } >> $GITHUB_OUTPUT
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
           {
-            echo 'new<<EOF'
+            echo "new<<EOF"
             cat new.txt
-            echo EOF
-          } >> $GITHUB_OUTPUT
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
           if [ -s out.txt ]; then
-            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Find existing comment
-        uses: peter-evans/find-comment@v3
+        uses: peter-evans/find-comment@3eae4d37986fb5a8592848f6a574fdf654e61f9e # v3.1.0
         id: find-comment
         with:
           issue-number: ${{ github.event.pull_request.number }}
@@ -87,7 +91,7 @@ jobs:
 
       - name: Create or update comment (no changes)
         if: steps.diff.outputs.has_changes == 'false'
-        uses: peter-evans/create-or-update-comment@v4
+        uses: peter-evans/create-or-update-comment@71345be0265236311c031f5c7866368bd1eff043 # v4.0.0
         with:
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
@@ -109,7 +113,7 @@ jobs:
 
       - name: Create or update comment (with changes)
         if: steps.diff.outputs.has_changes == 'true'
-        uses: peter-evans/create-or-update-comment@v4
+        uses: peter-evans/create-or-update-comment@71345be0265236311c031f5c7866368bd1eff043 # v4.0.0
         with:
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}

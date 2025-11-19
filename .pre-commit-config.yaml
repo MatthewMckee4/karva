@@ -13,7 +13,6 @@ repos:
       - id: check-merge-conflict
       - id: check-symlinks
       - id: check-yaml
-      - id: check-json
       - id: check-toml
       - id: debug-statements
       - id: end-of-file-fixer
@@ -30,6 +29,20 @@ repos:
     rev: v1.32.0
     hooks:
       - id: typos
+
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 0.7.22
+    hooks:
+      - id: mdformat
+        language: python
+        additional_dependencies:
+          - mdformat-mkdocs==4.0.0
+          - mdformat-footnote==0.1.1
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.45.0
+    hooks:
+      - id: markdownlint-fix
 
   - repo: https://github.com/doublify/pre-commit-rust
     rev: v1.0
@@ -65,3 +78,13 @@ repos:
     rev: v2.0.1
     hooks:
       - id: cargo-sort
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
+    hooks:
+      - id: actionlint
+
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.16.3
+    hooks:
+      - id: zizmor

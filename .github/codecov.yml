@@ -7,11 +7,3 @@ coverage:
     patch:
       default:
         enabled: false
-
-ignore:
-  - "crates/karva"
-  - "crates/karva_benchmark"
-  - "crates/karva_cli"
-  - "crates/karva_dev"
-  - "crates/karva_diff"
-  - "crates/karva_test"
