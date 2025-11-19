@@ -68,17 +68,17 @@ jobs:
           {
             echo "diff<<EOF"
             cat out.txt
-            echo EOF
-          } >> $GITHUB_OUTPUT
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
           {
             echo "new<<EOF"
             cat new.txt
-            echo EOF
-          } >> $GITHUB_OUTPUT
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
           if [ -s out.txt ]; then
-            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Find existing comment
