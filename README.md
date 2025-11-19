@@ -67,8 +67,10 @@ Here is a small example usage
 def test_pass():
     assert True
 
+
 def test_fail():
     assert False, "This test should fail"
+
 
 def test_error():
     raise ValueError("This is an error")
