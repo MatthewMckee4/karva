@@ -22,7 +22,7 @@ This means that every package that is a sub-package of the package with the fixt
 
 For example, if we have the following structure:
 
-```test
+```text
 calculator
 ├── src
 └── tests
