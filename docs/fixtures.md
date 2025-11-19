@@ -22,7 +22,7 @@ This means that every package that is a sub-package of the package with the fixt
 
 For example, if we have the following structure:
 
-```
+```test
 calculator
 ├── src
 └── tests
@@ -128,12 +128,12 @@ import karva
 @karva.fixture
 def x():
     # Do something
-    return ...
+    return 1
 
 @karva.fixture
 def y():
     # Do something
-    yield ...
+    yield 1
     # Do something else
 
 @karva.tags.use_fixtures("x", "y")

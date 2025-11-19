@@ -49,9 +49,8 @@ def test_example():
 When a test is marked with the `skip` tag:
 
 1. The test function will not be executed
-2. The test will be counted as "skipped" in the test results
-3. If a reason is provided, it will be shown in the `info` logs (access via using `-v`)
-
+1. The test will be counted as "skipped" in the test results
+1. If a reason is provided, it will be shown in the `info` logs (access via using `-v`)
 
 ## Use Cases
 
@@ -64,7 +63,7 @@ When a test is marked with the `skip` tag:
 
 When running tests with skipped test cases:
 
-```
+```bash
 test result: ok. 2 passed; 0 failed; 1 skipped
 ```
 

@@ -62,14 +62,13 @@ karva test tests/test_example.py
 Here is a small example usage
 
 **tests/test.py**
+
 ```py
 def test_pass():
     assert True
 
-
 def test_fail():
     assert False, "This test should fail"
-
 
 def test_error():
     raise ValueError("This is an error")

@@ -10,7 +10,7 @@ uv init --lib calculator
 
 This will give us a project that looks like this:
 
-```
+```text
 calculator
 ├── pyproject.toml
 ├── README.md
