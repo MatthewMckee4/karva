@@ -3,12 +3,12 @@ use std::collections::HashMap;
 use pyo3::{prelude::*, types::PyDict};
 
 use crate::{
-    IndividualTestResultKind, Reporter, TestRunResult,
+    Context, IndividualTestResultKind,
     diagnostic::{Diagnostic, FunctionDefinitionLocation},
     discovery::{DiscoveredModule, TestFunction},
     extensions::{
         fixtures::{
-            Finalizers, RequiresFixtures, handle_missing_fixtures, missing_arguments_from_error,
+            RequiresFixtures, handle_missing_fixtures, missing_arguments_from_error,
         },
         tags::{ExpectFailTag, python::SkipError},
     },
@@ -26,21 +26,12 @@ pub(crate) struct TestCase<'proj> {
     /// The module containing the test function.
     module: &'proj DiscoveredModule,
 
-    /// Finalizers to run after the test case is executed.
-    finalizers: Finalizers,
-
     /// The missing fixtures diagnostic.
     diagnostic: Option<Diagnostic>,
-
-    /// The diagnostic from collecting the test case.
-    ///
-    /// These fixture diagnostics come from the collection process and are most likely
-    /// diagnostics of failed fixtures.
-    fixture_diagnostics: Vec<Diagnostic>,
 }
 
 impl<'proj> TestCase<'proj> {
-    pub(crate) fn new(
+    pub(crate) const fn new(
         function: &'proj TestFunction,
         kwargs: HashMap<String, Py<PyAny>>,
         module: &'proj DiscoveredModule,
@@ -50,39 +41,27 @@ impl<'proj> TestCase<'proj> {
             function,
             kwargs,
             module,
-            finalizers: Finalizers::default(),
             diagnostic,
-            fixture_diagnostics: Vec::new(),
         }
-    }
-
-    pub(crate) fn add_finalizers(&mut self, finalizers: Finalizers) {
-        self.finalizers.update(finalizers);
-    }
-
-    pub(crate) fn add_fixture_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
-        self.fixture_diagnostics.extend(diagnostics);
     }
 
     /// Runs the test case.
     ///
     /// Returns `true` if the test case passed or skipped, `false` otherwise.
-    pub(crate) fn run(
-        self,
-        py: Python<'_>,
-        reporter: &dyn Reporter,
-        run_result: &mut TestRunResult,
-    ) -> bool {
+    pub(crate) fn run(self, py: Python<'_>, context: &mut Context) -> bool {
         let Self {
             function,
             kwargs,
             module,
-            finalizers,
             diagnostic,
-            fixture_diagnostics,
         } = self;
 
-        let passed = (|| {
+        let reporter = context.reporter();
+        let run_result = context.result_mut();
+
+
+
+        (|| {
             let test_name = full_test_name(py, &function.name().to_string(), &kwargs);
 
             // Check if test should be skipped
@@ -201,13 +180,7 @@ impl<'proj> TestCase<'proj> {
             run_result.add_test_diagnostic(diagnostic);
 
             false
-        })();
-
-        run_result.add_test_diagnostics(fixture_diagnostics);
-
-        run_result.add_test_diagnostics(finalizers.run(py));
-
-        passed
+        })()
     }
 }
 

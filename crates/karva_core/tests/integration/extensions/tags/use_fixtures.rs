@@ -312,8 +312,8 @@ def setup_fixture():
 @pytest.mark.parametrize("value", [1, 2, 3])
 def test_pytest_use_fixtures_with_parametrize(value):
     assert value > 0
-    # Fixtures are called before any run
-    assert arr == [1, 1, 1]
+    # Fixtures are called before each run
+    assert len(arr) == value
 "#,
     );
 

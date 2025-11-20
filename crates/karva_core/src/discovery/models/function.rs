@@ -4,11 +4,12 @@ use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
+    Context,
     collection::TestCase,
     diagnostic::{Diagnostic, FunctionKind},
-    discovery::DiscoveredModule,
+    discovery::{DiscoveredModule, DiscoveredPackage},
     extensions::{
-        fixtures::{FixtureManager, RequiresFixtures},
+        fixtures::{FixtureGetResult, FixtureManager, FixtureScope, RequiresFixtures},
         tags::Tags,
     },
     name::{ModulePath, QualifiedFunctionName},
@@ -72,12 +73,14 @@ impl TestFunction {
     }
 
     /// Collects test cases from this function, resolving fixtures and handling parametrization.
-    pub(crate) fn collect<'a, 'b>(
+    pub(crate) fn run<'a>(
         &'a self,
         py: Python<'_>,
         module: &'a DiscoveredModule,
-        get_fixture_manager: impl Fn() -> FixtureManager<'b>,
-    ) -> Vec<TestCase<'a>> {
+        parents: &[&DiscoveredPackage],
+        fixture_manager: &mut FixtureManager,
+        context: &mut Context,
+    ) {
         tracing::info!(
             "Collecting test cases for function: {}",
             self.function_definition.name
@@ -94,11 +97,7 @@ impl TestFunction {
             parametrize_args.push(HashMap::new());
         }
 
-        let mut test_cases = Vec::with_capacity(parametrize_args.len());
-
         for params in parametrize_args {
-            let mut fixture_manager = get_fixture_manager();
-
             let mut missing_fixtures = Vec::new();
 
             // This is used to collect all fixture for each test case.
@@ -114,19 +113,28 @@ impl TestFunction {
                     for resolved_fixtures in &mut all_resolved_fixtures {
                         resolved_fixtures.insert(fixture_name.clone(), fixture_value.clone());
                     }
-                } else if let Some(fixture_values) =
-                    fixture_manager.get_fixture_with_name(py, fixture_name, None)
+                } else if let Some(fixture_return) =
+                    fixture_manager.get_fixture(py, parents, module, fixture_name)
                 {
-                    // Add this fixture to each test case.
-                    // This may be a parameterized fixture, so we need to cartesian product
-                    // the resolved fixtures with the fixture values.
-                    all_resolved_fixtures = cartesian_insert(
-                        all_resolved_fixtures,
-                        &fixture_values,
-                        fixture_name,
-                        |fixture_value| Ok(fixture_value.clone()),
-                    )
-                    .unwrap();
+                    match fixture_return {
+                        FixtureGetResult::Single(py) => {
+                            for fixtures in &mut all_resolved_fixtures {
+                                fixtures.insert(fixture_name.clone(), py.clone());
+                            }
+                        }
+                        FixtureGetResult::Multiple(items) => {
+                            // Add this fixture to each test case.
+                            // This may be a parameterized fixture, so we need to cartesian product
+                            // the resolved fixtures with the fixture values.
+                            all_resolved_fixtures = cartesian_insert(
+                                all_resolved_fixtures,
+                                &items,
+                                fixture_name,
+                                |fixture_value| Ok(fixture_value.clone()),
+                            )
+                            .unwrap();
+                        }
+                    }
                 } else {
                     missing_fixtures.push(fixture_name.clone());
                 }
@@ -148,17 +156,23 @@ impl TestFunction {
             for resolved_fixtures in all_resolved_fixtures {
                 let test_case = TestCase::new(self, resolved_fixtures, module, diagnostic.clone());
 
-                test_cases.push(test_case);
+                test_case.run(py, context);
+
+                fixture_manager.clear_fixtures(FixtureScope::Function);
+
+                let finalizers = fixture_manager.clear_finalizers(FixtureScope::Function);
+
+                context
+                    .result_mut()
+                    .add_test_diagnostics(finalizers.run(py));
+
+                // test_case.add_finalizers(fixture_manager.get_finalizers(FixtureScope::Function));
             }
 
-            if let Some(first_test) = test_cases.first_mut() {
-                first_test.add_finalizers(fixture_manager.reset_fixtures());
-
-                first_test.add_fixture_diagnostics(fixture_manager.clear_diagnostics());
-            }
+            // if let Some(first_test) = test_cases.first_mut() {
+            //     first_test.add_fixture_diagnostics(fixture_manager.clear_diagnostics());
+            // }
         }
-
-        test_cases
     }
 }
 

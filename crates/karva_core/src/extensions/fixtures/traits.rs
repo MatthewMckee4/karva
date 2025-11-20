@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use pyo3::Python;
 use ruff_python_ast::StmtFunctionDef;
 
@@ -10,7 +12,7 @@ use crate::{
 ///
 /// For example, if we are in a test module, we want to get all fixtures used in the test module.
 /// If we are in a package, we want to get all fixtures used in the package from the configuration module.
-pub trait HasFixtures<'a> {
+pub trait HasFixtures<'a>: Debug {
     /// Get all fixtures with the given names and scopes
     ///
     /// If fixture names is empty, return all fixtures.

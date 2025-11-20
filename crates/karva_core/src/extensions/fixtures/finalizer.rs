@@ -1,9 +1,9 @@
 use pyo3::{prelude::*, types::PyIterator};
 
-use crate::diagnostic::Diagnostic;
+use crate::{diagnostic::Diagnostic, extensions::fixtures::FixtureScope};
 
 /// Represents a collection of finalizers.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct Finalizers(Vec<Finalizer>);
 
 impl Finalizers {
@@ -35,15 +35,21 @@ impl Finalizers {
 /// ```
 #[derive(Debug, Clone)]
 pub(crate) struct Finalizer {
-    fixture_name: String,
-    fixture_return: Py<PyIterator>,
+    pub(crate) fixture_name: String,
+    pub(crate) fixture_return: Py<PyIterator>,
+    pub(crate) scope: FixtureScope,
 }
 
 impl Finalizer {
-    pub(crate) const fn new(fixture_name: String, fixture_return: Py<PyIterator>) -> Self {
+    pub(crate) const fn new(
+        fixture_name: String,
+        fixture_return: Py<PyIterator>,
+        scope: FixtureScope,
+    ) -> Self {
         Self {
             fixture_name,
             fixture_return,
+            scope,
         }
     }
 

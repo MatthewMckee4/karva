@@ -1,8 +1,8 @@
 use karva_project::Project;
 
 use crate::{
-    DummyReporter, Reporter, collection::TestCaseCollector, discovery::StandardDiscoverer,
-    utils::attach,
+    Context, DummyReporter, Reporter, collection::DiscoveredPackageRunner,
+    discovery::StandardDiscoverer, utils::attach,
 };
 
 pub mod diagnostic;
@@ -27,22 +27,18 @@ impl<'proj> StandardTestRunner<'proj> {
 
     fn test_impl(&self, reporter: &dyn Reporter) -> TestRunResult {
         attach(self.project, |py| {
-            let mut run_result = TestRunResult::default();
+            let mut context = Context::new(self.project, reporter);
 
             let (session, discovery_diagnostics) =
                 StandardDiscoverer::new(self.project).discover(py);
 
-            run_result.add_discovery_diagnostics(discovery_diagnostics);
+            context
+                .result_mut()
+                .add_discovery_diagnostics(discovery_diagnostics);
 
-            let collected_session = TestCaseCollector::collect(py, &session);
+            DiscoveredPackageRunner::new(&mut context).run(py, &session);
 
-            let total_test_cases = collected_session.total_test_cases();
-
-            reporter.log_test_count(total_test_cases);
-
-            collected_session.run(py, self.project, reporter, &mut run_result);
-
-            run_result
+            context.into_result()
         })
     }
 }

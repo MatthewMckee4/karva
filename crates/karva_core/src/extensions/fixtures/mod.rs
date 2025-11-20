@@ -3,7 +3,7 @@ use std::{
     fmt::Display,
 };
 
-use pyo3::{prelude::*, types::PyDict};
+use pyo3::{IntoPyObjectExt, prelude::*, types::PyDict};
 use ruff_python_ast::{Expr, StmtFunctionDef};
 
 pub mod builtins;
@@ -20,13 +20,13 @@ pub(crate) use utils::{handle_missing_fixtures, missing_arguments_from_error};
 
 use crate::{
     diagnostic::{Diagnostic, FunctionDefinitionLocation, FunctionKind},
-    discovery::DiscoveredModule,
+    discovery::{DiscoveredModule, DiscoveredPackage},
     extensions::fixtures::{python::FixtureRequest, utils::handle_custom_fixture_params},
     name::{ModulePath, QualifiedFunctionName},
     utils::{cartesian_insert, function_definition_location},
 };
 
-#[derive(Copy, Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Copy, Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub(crate) enum FixtureScope {
     #[default]
     Function,
@@ -116,6 +116,12 @@ pub(crate) fn resolve_dynamic_scope(
     FixtureScope::try_from(scope_str)
 }
 
+#[derive(Debug, Clone)]
+pub(crate) enum FixtureGetResult {
+    Single(Py<PyAny>),
+    Multiple(Vec<Py<PyAny>>),
+}
+
 pub(crate) struct Fixture {
     name: QualifiedFunctionName,
     function_definition: StmtFunctionDef,
@@ -165,12 +171,13 @@ impl Fixture {
         self.auto_use
     }
 
-    pub(crate) fn call<'a>(
+    pub(crate) fn call(
         &self,
-        py: Python<'a>,
+        py: Python<'_>,
         fixture_manager: &mut FixtureManager,
         module: &DiscoveredModule,
-    ) -> Result<Vec<Bound<'a, PyAny>>, Diagnostic> {
+        parents: &[&DiscoveredPackage],
+    ) -> Result<FixtureGetResult, Diagnostic> {
         // A hashmap of fixtures for each param
         let mut each_call_fixtures: Vec<HashMap<String, Py<PyAny>>> = vec![HashMap::new()];
 
@@ -193,15 +200,22 @@ impl Fixture {
                 })
                 .unwrap();
             } else if let Some(fixture_returns) =
-                fixture_manager.get_fixture_with_name(py, name, Some(&[self.name()]))
+                fixture_manager.get_fixture(py, parents, module, name)
             {
-                each_call_fixtures = cartesian_insert(
-                    each_call_fixtures,
-                    &fixture_returns,
-                    name,
-                    |fixture_return| Ok(fixture_return.clone()),
-                )
-                .unwrap();
+                match fixture_returns {
+                    FixtureGetResult::Single(fixture_return) => {
+                        for fixtures in &mut each_call_fixtures {
+                            fixtures.insert(name.clone(), fixture_return.clone());
+                        }
+                    }
+                    FixtureGetResult::Multiple(items) => {
+                        each_call_fixtures =
+                            cartesian_insert(each_call_fixtures, &items, name, |fixture_return| {
+                                Ok(fixture_return.clone())
+                            })
+                            .unwrap();
+                    }
+                }
             } else {
                 missing_fixtures.insert(name.clone());
             }
@@ -243,13 +257,19 @@ impl Fixture {
                     Ok(generator) => {
                         let mut generator = generator.cast_into().unwrap();
 
-                        let finalizer =
-                            Finalizer::new(self.name().to_string(), generator.clone().unbind());
-                        fixture_manager.insert_finalizer(finalizer, self.scope());
+                        let finalizer = Finalizer::new(
+                            self.name().to_string(),
+                            generator.clone().unbind(),
+                            self.scope(),
+                        );
+
+                        fixture_manager.insert_finalizer(finalizer);
 
                         generator
                             .next()
                             .expect("generator should yield at least once")
+                            .unwrap()
+                            .into_py_any(py)
                             .unwrap()
                     }
                     Err(err) => return Err(default_diagnostic(err)),
@@ -257,13 +277,17 @@ impl Fixture {
             } else {
                 let function_return = self.function.call(py, (), Some(&kwargs));
                 match function_return.map(|r| r.into_bound(py)) {
-                    Ok(return_value) => return_value,
+                    Ok(return_value) => return_value.into_py_any(py).unwrap(),
                     Err(err) => return Err(default_diagnostic(err)),
                 }
             });
         }
 
-        Ok(res)
+        if res.len() == 1 {
+            Ok(FixtureGetResult::Single(res[0].clone()))
+        } else {
+            Ok(FixtureGetResult::Multiple(res))
+        }
     }
 
     pub(crate) fn try_from_function(
