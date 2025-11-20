@@ -73,6 +73,11 @@ impl FixtureCollection {
     fn clear_fixtures(&mut self, scope: FixtureScope) {
         self.fixtures.retain(|key, _| key.scope != scope);
     }
+
+    fn remove_fixture(&mut self, name: &str) {
+        self.fixtures
+            .retain(|key, _| !(key.name.function_name() == name));
+    }
 }
 
 /// Manages fixtures for a specific scope in the test execution hierarchy.
@@ -225,6 +230,10 @@ impl FixtureManager {
         }
 
         None
+    }
+
+    pub(crate) fn remove_fixture(&mut self, name: &str) {
+        self.collection.remove_fixture(name);
     }
 
     /// Clears all fixtures and returns finalizers for cleanup.

@@ -122,6 +122,16 @@ pub(crate) enum FixtureGetResult {
     Multiple(Vec<Py<PyAny>>),
 }
 
+impl FixtureGetResult {
+    pub(crate) fn expect_single(&self) -> &Py<PyAny> {
+        if let Self::Single(v) = self {
+            v
+        } else {
+            panic!("Expected single fixture, got multiple")
+        }
+    }
+}
+
 pub(crate) struct Fixture {
     name: QualifiedFunctionName,
     function_definition: StmtFunctionDef,
@@ -204,8 +214,18 @@ impl Fixture {
             {
                 match fixture_returns {
                     FixtureGetResult::Single(fixture_return) => {
-                        for fixtures in &mut each_call_fixtures {
-                            fixtures.insert(name.clone(), fixture_return.clone());
+                        if let Some(first_fixture_set) = each_call_fixtures.first_mut() {
+                            first_fixture_set.insert(name.clone(), fixture_return.clone());
+                        }
+                        for fixtures in &mut each_call_fixtures[1..] {
+                            fixture_manager.remove_fixture(name);
+
+                            if let Some(fixture_returns) =
+                                fixture_manager.get_fixture(py, parents, module, name)
+                            {
+                                fixtures
+                                    .insert(name.clone(), fixture_returns.expect_single().clone());
+                            }
                         }
                     }
                     FixtureGetResult::Multiple(items) => {
