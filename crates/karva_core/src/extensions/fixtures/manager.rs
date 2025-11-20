@@ -6,7 +6,7 @@ use crate::{
     discovery::DiscoveredPackage,
     extensions::fixtures::{
         Finalizer, Finalizers, Fixture, FixtureGetResult, FixtureScope, HasFixtures,
-        RequiresFixtures, builtins,
+        RequiresFixtures, builtins::get_builtin_fixture,
     },
     name::QualifiedFunctionName,
     utils::iter_with_ancestors,
@@ -50,16 +50,7 @@ impl FixtureCollection {
             return Some(fixture.clone());
         }
 
-        match fixture_name {
-            _ if builtins::temp_path::is_temp_path_fixture_name(fixture_name) => {
-                if let Some(path_obj) = builtins::temp_path::create_temp_dir(py) {
-                    return Some(FixtureGetResult::Single(path_obj));
-                }
-            }
-            _ => {}
-        }
-
-        None
+        get_builtin_fixture(py, fixture_name)
     }
 
     fn clear_finalizers(&mut self, scope: FixtureScope) -> Finalizers {
@@ -81,20 +72,6 @@ impl FixtureCollection {
 
     fn clear_fixtures(&mut self, scope: FixtureScope) {
         self.fixtures.retain(|key, _| key.scope != scope);
-    }
-
-    fn reset_finalizers(&mut self) -> Finalizers {
-        Finalizers::new(self.finalizers.drain(..).collect())
-    }
-
-    fn contains_fixture_with_name_and_scope(
-        &self,
-        fixture_name: &str,
-        scope: Option<FixtureScope>,
-    ) -> bool {
-        self.fixtures.iter().any(|(key, _)| {
-            key.name.function_name() == fixture_name && scope.is_none_or(|scope| scope == key.scope)
-        })
     }
 }
 
@@ -125,25 +102,6 @@ impl FixtureManager {
         self.diagnostics.drain(..).collect()
     }
 
-    pub(crate) fn contains_fixture_with_name_and_scope(
-        &self,
-        fixture_name: &str,
-        scope: FixtureScope,
-    ) -> bool {
-        self.collection
-            .contains_fixture_with_name_and_scope(fixture_name, Some(scope))
-    }
-
-    pub(crate) fn contains_fixture_with_name(&self, fixture_name: &str) -> bool {
-        self.collection
-            .contains_fixture_with_name_and_scope(fixture_name, None)
-    }
-
-    pub(crate) fn has_fixture(&self, fixture_name: &QualifiedFunctionName) -> bool {
-        self.collection
-            .contains_fixture_with_name_and_scope(fixture_name.function_name(), None)
-    }
-
     pub(crate) fn insert_fixture(&mut self, fixture_return: FixtureGetResult, fixture: &Fixture) {
         self.collection.insert_fixture(
             FixtureKey {
@@ -170,9 +128,12 @@ impl FixtureManager {
         current: &'proj dyn HasFixtures<'proj>,
         fixture: &Fixture,
     ) -> Option<FixtureGetResult> {
-        if self.has_fixture(fixture.name()) {
+        if let Some(fixture) = self
+            .collection
+            .get_fixture(py, fixture.name().function_name())
+        {
             // We have already called this fixture. So we can return.
-            return None;
+            return Some(fixture);
         }
 
         // To ensure we can call the current fixture, we must first look at all of its dependencies,
@@ -242,29 +203,29 @@ impl FixtureManager {
         current: &'proj dyn HasFixtures<'proj>,
         fixture_name: &str,
     ) -> Option<FixtureGetResult> {
-        let fixture = current.get_fixture(fixture_name)?;
+        if let Some(fixture_return) = get_builtin_fixture(py, fixture_name) {
+            return Some(fixture_return);
+        }
+        let fixture = current.get_fixture(fixture_name);
 
-        self.ensure_fixture_dependencies(py, parents, current, fixture)
+        if let Some(fixture_return) = fixture
+            .and_then(|fixture| self.ensure_fixture_dependencies(py, parents, current, fixture))
+        {
+            return Some(fixture_return);
+        }
+
+        for (current, parents) in iter_with_ancestors(parents) {
+            let fixture = current.get_fixture(fixture_name);
+
+            if let Some(fixture_return) = fixture.and_then(|fixture| {
+                self.ensure_fixture_dependencies(py, &parents, current, fixture)
+            }) {
+                return Some(fixture_return);
+            }
+        }
+
+        None
     }
-
-    // pub(crate) fn from_parent<'proj>(
-    //     py: Python<'_>,
-    //     parent_fixture_manager: &'a mut FixtureManager<'a>,
-    //     parents: &[&'proj DiscoveredPackage],
-    //     current: &'proj dyn HasFixtures<'proj>,
-    //     scope: FixtureScope,
-    //     fixture_names: &[String],
-    // ) -> FixtureManager<'a> {
-    //     let mut fixture_manager = parent_fixture_manager.child();
-
-    //     for (current, parents) in iter_with_ancestors(parents) {
-    //         fixture_manager.add_fixtures(py, &parents, &current, &[scope], fixture_names);
-    //     }
-
-    //     fixture_manager.add_fixtures(py, parents, current, &scope.scopes_above(), fixture_names);
-
-    //     fixture_manager
-    // }
 
     /// Clears all fixtures and returns finalizers for cleanup.
     ///
@@ -276,5 +237,37 @@ impl FixtureManager {
 
     pub(crate) fn clear_fixtures(&mut self, scope: FixtureScope) {
         self.collection.clear_fixtures(scope);
+    }
+
+    pub(crate) fn setup_auto_use_fixtures<'proj>(
+        &mut self,
+        py: Python<'_>,
+        parents: &[&'proj DiscoveredPackage],
+        current: &'proj dyn HasFixtures<'proj>,
+        scopes: &[FixtureScope],
+    ) {
+        let auto_use_fixtures = current.auto_use_fixtures(scopes);
+
+        for fixture in auto_use_fixtures {
+            if self
+                .ensure_fixture_dependencies(py, parents, current, fixture)
+                .is_some()
+            {
+                break;
+            }
+        }
+
+        for (current, parents) in iter_with_ancestors(parents) {
+            let auto_use_fixtures = current.auto_use_fixtures(scopes);
+
+            for fixture in auto_use_fixtures {
+                if self
+                    .ensure_fixture_dependencies(py, &parents, current, fixture)
+                    .is_some()
+                {
+                    break;
+                }
+            }
+        }
     }
 }

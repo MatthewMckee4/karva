@@ -80,11 +80,20 @@ impl TestFunction {
         parents: &[&DiscoveredPackage],
         fixture_manager: &mut FixtureManager,
         context: &mut Context,
-    ) {
+    ) -> bool {
         tracing::info!(
             "Collecting test cases for function: {}",
             self.function_definition.name
         );
+
+        fixture_manager.setup_auto_use_fixtures(
+            py,
+            parents,
+            module,
+            &FixtureScope::Function.scopes_above(),
+        );
+
+        let mut passed = true;
 
         let mut required_fixture_names = self.function_definition.required_fixtures(py);
 
@@ -117,9 +126,9 @@ impl TestFunction {
                     fixture_manager.get_fixture(py, parents, module, fixture_name)
                 {
                     match fixture_return {
-                        FixtureGetResult::Single(py) => {
+                        FixtureGetResult::Single(fixture_return) => {
                             for fixtures in &mut all_resolved_fixtures {
-                                fixtures.insert(fixture_name.clone(), py.clone());
+                                fixtures.insert(fixture_name.clone(), fixture_return.clone());
                             }
                         }
                         FixtureGetResult::Multiple(items) => {
@@ -156,7 +165,7 @@ impl TestFunction {
             for resolved_fixtures in all_resolved_fixtures {
                 let test_case = TestCase::new(self, resolved_fixtures, module, diagnostic.clone());
 
-                test_case.run(py, context);
+                passed &= test_case.run(py, context);
 
                 fixture_manager.clear_fixtures(FixtureScope::Function);
 
@@ -166,13 +175,13 @@ impl TestFunction {
                     .result_mut()
                     .add_test_diagnostics(finalizers.run(py));
 
-                // test_case.add_finalizers(fixture_manager.get_finalizers(FixtureScope::Function));
+                if context.project().options().fail_fast() && !passed {
+                    break;
+                }
             }
-
-            // if let Some(first_test) = test_cases.first_mut() {
-            //     first_test.add_fixture_diagnostics(fixture_manager.clear_diagnostics());
-            // }
         }
+
+        passed
     }
 }
 

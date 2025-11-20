@@ -13,23 +13,6 @@ use crate::{
 /// For example, if we are in a test module, we want to get all fixtures used in the test module.
 /// If we are in a package, we want to get all fixtures used in the package from the configuration module.
 pub trait HasFixtures<'a>: Debug {
-    /// Get all fixtures with the given names and scopes
-    ///
-    /// If fixture names is empty, return all fixtures.
-    fn fixtures(
-        &'a self,
-        scopes: &[FixtureScope],
-        fixture_names: Option<&[String]>,
-    ) -> Vec<&'a Fixture> {
-        let mut fixtures = Vec::new();
-        for fixture in self.all_fixtures(fixture_names) {
-            if scopes.contains(&fixture.scope()) {
-                fixtures.push(fixture);
-            }
-        }
-        fixtures
-    }
-
     /// Get a fixture with the given name
     fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a Fixture>;
 
@@ -40,9 +23,18 @@ pub trait HasFixtures<'a>: Debug {
 
     /// The module where the fixtures are being found in.
     fn fixture_module(&'a self) -> Option<&'a DiscoveredModule>;
+
+    /// Get all autouse fixtures
+    fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a Fixture>;
 }
 
 impl<'a> HasFixtures<'a> for DiscoveredModule {
+    fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a Fixture> {
+        self.fixtures()
+            .iter()
+            .find(|f| f.name().function_name() == fixture_name)
+    }
+
     fn all_fixtures(&'a self, fixture_names: Option<&[String]>) -> Vec<&'a Fixture> {
         let Some(fixture_names) = fixture_names else {
             return self.fixtures().iter().collect();
@@ -64,14 +56,20 @@ impl<'a> HasFixtures<'a> for DiscoveredModule {
         Some(self)
     }
 
-    fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a Fixture> {
+    fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a Fixture> {
         self.fixtures()
             .iter()
-            .find(|f| f.name().function_name() == fixture_name)
+            .filter(|f| f.auto_use() && scopes.contains(&f.scope()))
+            .collect()
     }
 }
 
 impl<'a> HasFixtures<'a> for DiscoveredPackage {
+    fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a Fixture> {
+        self.configuration_module()
+            .and_then(|module| module.get_fixture(fixture_name))
+    }
+
     fn all_fixtures(&'a self, fixture_names: Option<&[String]>) -> Vec<&'a Fixture> {
         let mut fixtures = Vec::new();
 
@@ -86,13 +84,22 @@ impl<'a> HasFixtures<'a> for DiscoveredPackage {
         self.configuration_module()
     }
 
-    fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a Fixture> {
-        self.configuration_module()
-            .and_then(|module| module.get_fixture(fixture_name))
+    fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a Fixture> {
+        let mut fixtures = Vec::new();
+
+        if let Some(module) = self.configuration_module() {
+            fixtures.extend(module.auto_use_fixtures(scopes));
+        }
+
+        fixtures
     }
 }
 
 impl<'a> HasFixtures<'a> for &'a DiscoveredPackage {
+    fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a Fixture> {
+        (*self).get_fixture(fixture_name)
+    }
+
     fn all_fixtures(&'a self, fixture_names: Option<&[String]>) -> Vec<&'a Fixture> {
         (*self).all_fixtures(fixture_names)
     }
@@ -101,8 +108,8 @@ impl<'a> HasFixtures<'a> for &'a DiscoveredPackage {
         (*self).fixture_module()
     }
 
-    fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a Fixture> {
-        (*self).get_fixture(fixture_name)
+    fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a Fixture> {
+        (*self).auto_use_fixtures(scopes)
     }
 }
 

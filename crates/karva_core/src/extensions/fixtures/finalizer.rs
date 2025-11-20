@@ -11,10 +11,6 @@ impl Finalizers {
         Self(finalizers)
     }
 
-    pub(crate) fn update(&mut self, other: Self) {
-        self.0.extend(other.0);
-    }
-
     pub(crate) fn run(&self, py: Python<'_>) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
         for finalizer in &self.0 {

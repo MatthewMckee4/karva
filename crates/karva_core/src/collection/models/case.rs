@@ -7,9 +7,7 @@ use crate::{
     diagnostic::{Diagnostic, FunctionDefinitionLocation},
     discovery::{DiscoveredModule, TestFunction},
     extensions::{
-        fixtures::{
-            RequiresFixtures, handle_missing_fixtures, missing_arguments_from_error,
-        },
+        fixtures::{RequiresFixtures, handle_missing_fixtures, missing_arguments_from_error},
         tags::{ExpectFailTag, python::SkipError},
     },
 };
@@ -58,8 +56,6 @@ impl<'proj> TestCase<'proj> {
 
         let reporter = context.reporter();
         let run_result = context.result_mut();
-
-
 
         (|| {
             let test_name = full_test_name(py, &function.name().to_string(), &kwargs);

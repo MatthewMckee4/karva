@@ -1,13 +1,11 @@
 use karva_project::Project;
 
-use crate::{
-    Context, DummyReporter, Reporter, collection::DiscoveredPackageRunner,
-    discovery::StandardDiscoverer, utils::attach,
-};
+use crate::{Context, DummyReporter, Reporter, discovery::StandardDiscoverer, utils::attach};
 
 pub mod diagnostic;
-
+mod package_runner;
 pub use diagnostic::TestRunResult;
+use package_runner::DiscoveredPackageRunner;
 
 pub trait TestRunner {
     fn test(&self) -> TestRunResult {

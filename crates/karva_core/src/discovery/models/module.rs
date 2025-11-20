@@ -61,13 +61,6 @@ impl DiscoveredModule {
         self.test_functions.retain(|tc| tc.function_name() == name);
     }
 
-    #[cfg(test)]
-    pub(crate) fn get_test_function(&self, name: &str) -> Option<&TestFunction> {
-        self.test_functions
-            .iter()
-            .find(|tc| tc.function_name() == name)
-    }
-
     pub(crate) const fn fixtures(&self) -> &Vec<Fixture> {
         &self.fixtures
     }
@@ -76,6 +69,7 @@ impl DiscoveredModule {
         Self { fixtures, ..self }
     }
 
+    #[cfg(test)]
     pub(crate) fn total_test_functions(&self) -> usize {
         self.test_functions.len()
     }

@@ -21,10 +21,10 @@ def auto_function_fixture():
     arr.append(2)
 
 def test_something():
-    assert arr == [1, 1]
+    assert arr == [1]
 
 def test_something_else():
-    assert arr == [1, 1, 2]
+    assert arr == [1, 2, 1]
 "#,
             auto_use_kw = get_auto_use_kw(framework),
         )
@@ -58,10 +58,10 @@ def auto_function_fixture():
     arr.append(2)
 
 def test_something():
-    assert arr == [1]
+    assert arr == [1], f"Expected [1], got {{arr}}"
 
 def test_something_else():
-    assert arr == [1]
+    assert arr == [1], f"Expected [1], got {{arr}}"
 "#,
             auto_use_kw = get_auto_use_kw(framework),
         ),

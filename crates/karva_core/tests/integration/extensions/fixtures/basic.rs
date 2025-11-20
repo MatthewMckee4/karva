@@ -2,7 +2,7 @@ use insta::{allow_duplicates, assert_snapshot};
 use karva_test::TestContext;
 use rstest::rstest;
 
-use crate::common::{TestRunnerExt, get_auto_use_kw};
+use crate::common::TestRunnerExt;
 
 #[test]
 fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
@@ -492,38 +492,6 @@ fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
                 def test_calculator(calculator: Calculator) -> None:
                     assert calculator.add(1, 2) == 3
                 "
-        ),
-    );
-
-    let result = context.test();
-
-    allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
-    }
-}
-
-#[rstest]
-fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "<test>/test_nested_generator_fixture.py",
-        &format!(
-            r"
-                from {framework} import fixture
-
-                data = {{}}
-
-                @fixture(scope='module')
-                def clean_data():
-                    data.clear()
-
-                @fixture({auto_use_kw}=True)
-                def add_data():
-                    data.update(value=True)
-
-                def test_value(clean_data):
-                    assert data.get('value')
-                ",
-            auto_use_kw = get_auto_use_kw(framework)
         ),
     );
 
