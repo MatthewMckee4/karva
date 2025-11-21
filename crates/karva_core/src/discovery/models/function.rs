@@ -5,15 +5,15 @@ use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
     Context,
-    collection::TestCase,
     diagnostic::{Diagnostic, FunctionKind},
     discovery::{DiscoveredModule, DiscoveredPackage},
     extensions::{
-        fixtures::{FixtureGetResult, FixtureManager, FixtureScope, RequiresFixtures},
+        fixtures::{FixtureManager, RequiresFixtures},
         tags::Tags,
     },
     name::{ModulePath, QualifiedFunctionName},
-    utils::{cartesian_insert, function_definition_location},
+    normalize::models::NormalizedTestFunction,
+    utils::function_definition_location,
 };
 
 /// Represents a single test function discovered from Python source code.
@@ -72,29 +72,14 @@ impl TestFunction {
         function_definition_location(module, &self.function_definition)
     }
 
-    /// Collects test cases from this function, resolving fixtures and handling parametrization.
-    pub(crate) fn run<'a>(
-        &'a self,
+    pub(crate) fn normalize(
+        &self,
         py: Python<'_>,
-        module: &'a DiscoveredModule,
+        context: &mut Context,
+        module: &DiscoveredModule,
         parents: &[&DiscoveredPackage],
         fixture_manager: &mut FixtureManager,
-        context: &mut Context,
-    ) -> bool {
-        tracing::info!(
-            "Collecting test cases for function: {}",
-            self.function_definition.name
-        );
-
-        fixture_manager.setup_auto_use_fixtures(
-            py,
-            parents,
-            module,
-            &FixtureScope::Function.scopes_above(),
-        );
-
-        let mut passed = true;
-
+    ) -> Vec<NormalizedTestFunction> {
         let mut required_fixture_names = self.function_definition.required_fixtures(py);
 
         required_fixture_names.extend(self.tags.required_fixtures_names());
@@ -123,27 +108,8 @@ impl TestFunction {
                         resolved_fixtures.insert(fixture_name.clone(), fixture_value.clone());
                     }
                 } else if let Some(fixture_return) =
-                    fixture_manager.get_fixture(py, parents, module, fixture_name)
+                    fixture_manager.get_fixture(py, context, parents, module, fixture_name, &[])
                 {
-                    match fixture_return {
-                        FixtureGetResult::Single(fixture_return) => {
-                            for fixtures in &mut all_resolved_fixtures {
-                                fixtures.insert(fixture_name.clone(), fixture_return.clone());
-                            }
-                        }
-                        FixtureGetResult::Multiple(items) => {
-                            // Add this fixture to each test case.
-                            // This may be a parameterized fixture, so we need to cartesian product
-                            // the resolved fixtures with the fixture values.
-                            all_resolved_fixtures = cartesian_insert(
-                                all_resolved_fixtures,
-                                &items,
-                                fixture_name,
-                                |fixture_value| Ok(fixture_value.clone()),
-                            )
-                            .unwrap();
-                        }
-                    }
                 } else {
                     missing_fixtures.push(fixture_name.clone());
                 }
@@ -157,31 +123,14 @@ impl TestFunction {
                 Some(Diagnostic::missing_fixtures(
                     missing_fixtures,
                     test_case_location,
-                    self.name().to_string(),
+                    self.name.to_string(),
                     FunctionKind::Test,
                 ))
             };
-
-            for resolved_fixtures in all_resolved_fixtures {
-                let test_case = TestCase::new(self, resolved_fixtures, module, diagnostic.clone());
-
-                passed &= test_case.run(py, context);
-
-                fixture_manager.clear_fixtures(FixtureScope::Function);
-
-                let finalizers = fixture_manager.clear_finalizers(FixtureScope::Function);
-
-                context
-                    .result_mut()
-                    .add_test_diagnostics(finalizers.run(py));
-
-                if context.project().options().fail_fast() && !passed {
-                    break;
-                }
-            }
         }
 
-        passed
+        // TODO: Implement proper normalization
+        vec![]
     }
 }
 

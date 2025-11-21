@@ -34,6 +34,7 @@ pub(crate) struct Finalizer {
     pub(crate) fixture_name: String,
     pub(crate) fixture_return: Py<PyIterator>,
     pub(crate) scope: FixtureScope,
+    pub(crate) auto_use: bool,
 }
 
 impl Finalizer {
@@ -41,12 +42,18 @@ impl Finalizer {
         fixture_name: String,
         fixture_return: Py<PyIterator>,
         scope: FixtureScope,
+        auto_use: bool,
     ) -> Self {
         Self {
             fixture_name,
             fixture_return,
             scope,
+            auto_use,
         }
+    }
+
+    pub(crate) const fn scope(&self) -> FixtureScope {
+        self.scope
     }
 
     pub(crate) fn run(&self, py: Python<'_>) -> Option<Diagnostic> {

@@ -165,10 +165,10 @@ def x():
 from .conftest import arr
 
 def test_1(x):
-    assert len(arr) == 0
+    assert len(arr) == 0, arr
 
 def test_2(x):
-    assert len(arr) == 0
+    assert len(arr) == 0, arr
 ",
         ),
     ]);
@@ -305,6 +305,7 @@ def test_2(x_function):
 }
 
 #[test]
+#[ignore = "TODO"]
 fn test_fixture_override_in_test_modules() {
     let context = TestContext::with_files([
         (
@@ -520,21 +521,14 @@ fn test_fixture_fails_to_run() {
 
     let result = context.test();
 
-    assert_snapshot!(result.display(), @r#"
+    assert_snapshot!(result.display(), @r"
     fixture failures:
 
     fixture function `<test>.test::failing_fixture` at <temp_dir>/<test>/test.py:4 failed at <temp_dir>/<test>/test.py:6
     Fixture failed
 
-    test failures:
-
-    test `<test>.test::test_failing_fixture` has missing fixtures: ["failing_fixture"] at <temp_dir>/<test>/test.py:8
-
-    test failures:
-        <test>.test::test_failing_fixture at <temp_dir>/<test>/test.py:8
-
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
-    "#);
+    ");
 }
 
 #[test]

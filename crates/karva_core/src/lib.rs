@@ -1,9 +1,9 @@
-pub mod collection;
 mod context;
 pub mod diagnostic;
 pub mod discovery;
 pub mod extensions;
 pub mod name;
+pub mod normalize;
 mod python;
 pub mod runner;
 pub mod testing;

@@ -98,7 +98,7 @@ def setup_fixture():
 @karva.tags.use_fixtures("setup_fixture")
 @karva.tags.parametrize("value", [1, 2, 3])
 def test_use_fixtures_with_parametrize(value):
-    assert len(arr) == value
+    assert len(arr) == value, f"Expected length {value} but got {arr}"
 "#,
     );
 

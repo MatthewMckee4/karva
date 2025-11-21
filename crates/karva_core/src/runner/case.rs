@@ -14,7 +14,7 @@ use crate::{
 
 /// A test case represents a test function with a set of arguments.
 #[derive(Debug)]
-pub(crate) struct TestCase<'proj> {
+pub struct TestCase<'proj> {
     /// The test function to run.
     function: &'proj TestFunction,
 
