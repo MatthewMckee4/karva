@@ -18,21 +18,21 @@ static RE_SINGLE: LazyLock<Regex> =
 /// If the error is of the form "missing 1 required positional argument: 'a'", return a set with "a".
 ///
 /// If the error is of the form "missing 2 required positional arguments: 'a' and 'b'", return a set with "a" and "b".
-pub(crate) fn missing_arguments_from_error(err: &str) -> HashSet<String> {
+pub(crate) fn missing_arguments_from_error(err: &str) -> Vec<String> {
     RE_MULTI.captures(err).map_or_else(
         || {
-            RE_SINGLE.captures(err).map_or_else(HashSet::new, |caps| {
-                HashSet::from([caps.get(1).unwrap().as_str().to_string()])
+            RE_SINGLE.captures(err).map_or_else(Vec::new, |caps| {
+                vec![caps.get(1).unwrap().as_str().to_string()]
             })
         },
         |caps| {
             let args_str = caps.get(1).unwrap().as_str();
             let args_str = args_str.replace(" and ", ", ");
-            let mut result = HashSet::new();
+            let mut result = Vec::new();
             for part in args_str.split(',') {
                 let trimmed = part.trim();
                 if trimmed.len() > 2 && trimmed.starts_with('\'') && trimmed.ends_with('\'') {
-                    result.insert(trimmed[1..trimmed.len() - 1].to_string());
+                    result.push(trimmed[1..trimmed.len() - 1].to_string());
                 }
             }
             result
@@ -81,16 +81,13 @@ mod tests {
     fn test_missing_arguments_from_error() {
         let err = "test_func() missing 2 required positional arguments: 'a' and 'b'";
         let missing_args = missing_arguments_from_error(err);
-        assert_eq!(
-            missing_args,
-            HashSet::from([String::from("a"), String::from("b")])
-        );
+        assert_eq!(missing_args, vec![String::from("a"), String::from("b")]);
     }
 
     #[test]
     fn test_missing_arguments_from_error_single() {
         let err = "test_func() missing 1 required positional argument: 'a'";
         let missing_args = missing_arguments_from_error(err);
-        assert_eq!(missing_args, HashSet::from([String::from("a")]));
+        assert_eq!(missing_args, vec![String::from("a")]);
     }
 }

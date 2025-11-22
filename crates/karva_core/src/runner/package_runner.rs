@@ -358,24 +358,11 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
             let missing_args = missing_arguments_from_error(&err.to_string());
 
-            dbg!(&missing_args);
-
-            dbg!(&fixture.missing_fixtures);
-
-            let actually_missing_fixtures = fixture
-                .missing_fixtures
-                .iter()
-                .filter(|fixture_name| missing_args.contains(*fixture_name))
-                .cloned()
-                .collect::<Vec<_>>();
-
-            dbg!(&actually_missing_fixtures);
-
-            if actually_missing_fixtures.is_empty() {
+            if missing_args.is_empty() {
                 default_diagnostic()
             } else {
                 Diagnostic::missing_fixtures(
-                    actually_missing_fixtures,
+                    missing_args,
                     fixture.location.clone(),
                     fixture.name().to_string(),
                     FunctionKind::Fixture,
@@ -525,18 +512,11 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
                     let missing_args = missing_arguments_from_error(&err.to_string());
 
-                    let actually_missing_fixtures = test_fn
-                        .missing_fixtures
-                        .iter()
-                        .filter(|fixture_name| missing_args.contains(*fixture_name))
-                        .cloned()
-                        .collect::<Vec<_>>();
-
-                    let diagnostic = if actually_missing_fixtures.is_empty() {
+                    let diagnostic = if missing_args.is_empty() {
                         default_diagnostic()
                     } else {
                         Diagnostic::missing_fixtures(
-                            actually_missing_fixtures,
+                            missing_args,
                             test_fn.location.clone(),
                             test_name.clone(),
                             FunctionKind::Test,
