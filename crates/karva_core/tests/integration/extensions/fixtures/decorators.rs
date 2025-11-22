@@ -26,16 +26,7 @@ def test_fixtures_given_by_decorator(a):
 
     let result = test_context.test();
 
-    assert_snapshot!(result.display(), @r#"
-    test failures:
-
-    test `<test>.test_fixtures_given_by_decorator::test_fixtures_given_by_decorator` has missing fixtures: ["a"] at <temp_dir>/<test>/test_fixtures_given_by_decorator.py:12
-
-    test failures:
-        <test>.test_fixtures_given_by_decorator::test_fixtures_given_by_decorator at <temp_dir>/<test>/test_fixtures_given_by_decorator.py:12
-
-    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
-    "#);
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -67,16 +58,7 @@ def test_func(a, b):
 
     let result = test_context.test();
 
-    assert_snapshot!(result.display(), @r#"
-    test failures:
-
-    test `<test>.test_fixtures_given_by_decorator_and_fixture::test_func` has missing fixtures: ["a"] at <temp_dir>/<test>/test_fixtures_given_by_decorator_and_fixture.py:17
-
-    test failures:
-        <test>.test_fixtures_given_by_decorator_and_fixture::test_func at <temp_dir>/<test>/test_fixtures_given_by_decorator_and_fixture.py:17
-
-    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
-    "#);
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -105,16 +87,7 @@ def test_func(a, b):
 
     let result = test_context.test();
 
-    assert_snapshot!(result.display(), @r#"
-    test failures:
-
-    test `<test>.test_fixtures_given_by_decorator_and_parametrize::test_func` has missing fixtures: ["a"] at <temp_dir>/<test>/test_fixtures_given_by_decorator_and_parametrize.py:13
-
-    test failures:
-        <test>.test_fixtures_given_by_decorator_and_parametrize::test_func at <temp_dir>/<test>/test_fixtures_given_by_decorator_and_parametrize.py:13
-
-    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
-    "#);
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -148,16 +121,7 @@ def test_func(a, b, c):
 
     let result = test_context.test();
 
-    assert_snapshot!(result.display(), @r#"
-    test failures:
-
-    test `<test>.test_fixtures_given_by_decorator_and_parametrize_and_fixture::test_func` has missing fixtures: ["a"] at <temp_dir>/<test>/test_fixtures_given_by_decorator_and_parametrize_and_fixture.py:17
-
-    test failures:
-        <test>.test_fixtures_given_by_decorator_and_parametrize_and_fixture::test_func at <temp_dir>/<test>/test_fixtures_given_by_decorator_and_parametrize_and_fixture.py:17
-
-    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
-    "#);
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -187,7 +151,7 @@ def test_fixtures_given_by_decorator(a, b):
     assert_snapshot!(result.display(), @r#"
     test failures:
 
-    test `<test>.test_fixtures_given_by_decorator_one_missing::test_fixtures_given_by_decorator` has missing fixtures: ["a", "b"] at <temp_dir>/<test>/test_fixtures_given_by_decorator_one_missing.py:12
+    test `<test>.test_fixtures_given_by_decorator_one_missing::test_fixtures_given_by_decorator` has missing fixtures: ["b"] at <temp_dir>/<test>/test_fixtures_given_by_decorator_one_missing.py:12
 
     test failures:
         <test>.test_fixtures_given_by_decorator_one_missing::test_fixtures_given_by_decorator at <temp_dir>/<test>/test_fixtures_given_by_decorator_one_missing.py:12

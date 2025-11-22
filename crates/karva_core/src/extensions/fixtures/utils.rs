@@ -7,48 +7,6 @@ use pyo3::{
 };
 use regex::Regex;
 
-use crate::diagnostic::{Diagnostic, FunctionDefinitionLocation, MissingFixturesDiagnostic};
-
-/// Handle missing fixtures.
-///
-/// If the diagnostic has a sub-diagnostic with a fixture not found error, and the missing fixture is in the set of missing arguments,
-/// return the diagnostic with the sub-diagnostic removed.
-///
-/// Otherwise, return None.
-pub(crate) fn handle_missing_fixtures(
-    missing_args: &HashSet<String>,
-    diagnostic: Diagnostic,
-) -> Option<Diagnostic> {
-    let missing_fixtures_diagnostic = diagnostic.into_missing_fixtures()?;
-
-    let MissingFixturesDiagnostic {
-        location:
-            FunctionDefinitionLocation {
-                function_name,
-                location,
-            },
-        missing_fixtures,
-        function_kind,
-    } = missing_fixtures_diagnostic;
-
-    let actually_missing_fixtures = missing_fixtures
-        .iter()
-        .filter(|fixture| missing_args.contains(*fixture))
-        .cloned()
-        .collect::<Vec<_>>();
-
-    if actually_missing_fixtures.is_empty() {
-        None
-    } else {
-        Some(Diagnostic::missing_fixtures(
-            actually_missing_fixtures,
-            location,
-            function_name,
-            function_kind,
-        ))
-    }
-}
-
 static RE_MULTI: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"missing \d+ required positional arguments?: (.+)").unwrap());
 

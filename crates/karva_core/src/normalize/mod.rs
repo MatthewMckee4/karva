@@ -73,6 +73,8 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
         // Recursively normalize each dependency
         let mut normalized_deps: Vec<Vec<NormalizedFixture>> = Vec::new();
 
+        let mut missing_fixtures = Vec::new();
+
         for dep_name in &dependency_names {
             // Check for builtin fixtures first
             if let Some(builtin_fixture) =
@@ -83,20 +85,7 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
                 let normalized = self.normalize_fixture(py, dep_fixture, parents, current);
                 normalized_deps.push(normalized);
             } else {
-                // Missing fixture - emit diagnostic and skip
-                let location = function_definition_location(current, fixture.function_definition());
-                self.context
-                    .result_mut()
-                    .add_test_diagnostic(Diagnostic::missing_fixtures(
-                        vec![dep_name.clone()],
-                        location,
-                        fixture.name().to_string(),
-                        FunctionKind::Fixture,
-                    ));
-                // Cache the empty result to avoid duplicate diagnostics
-                self.normalization_cache.insert(cache_key, vec![]);
-                // Return empty to indicate this fixture can't be normalized
-                return vec![];
+                missing_fixtures.push(dep_name.clone());
             }
         }
 
@@ -117,7 +106,8 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
                 Some(fixture.name().clone()),
                 None,
                 dependencies,
-                Some(location),
+                location,
+                missing_fixtures,
                 fixture.scope(),
                 fixture.auto_use(),
                 fixture.is_generator(),
@@ -167,7 +157,8 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
                     Some(fixture.name().clone()),
                     param.cloned(),
                     dep_combination.clone(),
-                    Some(location.clone()),
+                    location.clone(),
+                    missing_fixtures.clone(),
                     fixture.scope(),
                     fixture.auto_use(),
                     fixture.is_generator(),
@@ -194,7 +185,6 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
         module: &DiscoveredModule,
     ) -> Vec<NormalizedTestFunction> {
         // Compute qualified name and location once
-        let qualified_name = test_fn.name().to_string();
         let location = function_definition_location(module, test_fn.definition());
 
         // Get test parametrization (from @pytest.mark.parametrize)
@@ -228,11 +218,7 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
                 normalized_deps.push(vec![builtin_fixture]);
             } else if let Some(fixture) = self.find_fixture(dep_name, parents, module) {
                 let normalized = self.normalize_fixture(py, fixture, parents, module);
-                if normalized.is_empty() {
-                    missing_fixtures.push(dep_name.clone());
-                } else {
-                    normalized_deps.push(normalized);
-                }
+                normalized_deps.push(normalized);
             } else {
                 missing_fixtures.push(dep_name.clone());
             }
@@ -264,32 +250,6 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
             test_params
         };
 
-        // If there are missing fixtures, emit diagnostic and register as failed
-        if !missing_fixtures.is_empty() {
-            let location = function_definition_location(module, test_fn.definition());
-            let test_name = test_fn.name().to_string();
-
-            self.context
-                .result_mut()
-                .add_test_diagnostic(Diagnostic::missing_fixtures(
-                    missing_fixtures,
-                    location.clone(),
-                    test_name.clone(),
-                    FunctionKind::Test,
-                ));
-
-            // Register the test as failed
-            let reporter = self.context.reporter();
-            self.context.result_mut().register_test_case_result(
-                &test_name,
-                crate::IndividualTestResultKind::Failed,
-                Some(reporter),
-            );
-
-            // Return empty - this test can't be run
-            return vec![];
-        }
-
         // If no parametrization needed, create single normalized test
         if test_params.len() == 1
             && test_params[0].is_empty()
@@ -308,14 +268,13 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
 
             return vec![NormalizedTestFunction::new(
                 test_fn.name().function_name().to_string(),
-                test_fn.name().function_name().to_string(),
-                qualified_name.clone(),
-                location.clone(),
+                test_fn.name().clone(),
+                location,
                 HashMap::new(),
                 fixture_dependencies,
                 use_fixture_dependencies,
+                missing_fixtures,
                 test_fn.py_function().clone(),
-                test_fn.definition().clone(),
                 test_fn.tags().clone(),
             )];
         }
@@ -372,14 +331,13 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
 
                     let normalized = NormalizedTestFunction::new(
                         name,
-                        test_fn.name().function_name().to_string(),
-                        qualified_name.clone(),
+                        test_fn.name().clone(),
                         location.clone(),
                         test_param.clone(),
                         dep_combination.clone(),
                         use_fixture_combination.clone(),
+                        missing_fixtures.clone(),
                         test_fn.py_function().clone(),
-                        test_fn.definition().clone(),
                         test_fn.tags().clone(),
                     );
 
@@ -436,7 +394,10 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
             let normalized_tests = self.normalize_test_function(py, test_function, parents, module);
 
             for normalized_test in normalized_tests {
-                tracing::debug!("Normalized test: {}", normalized_test.name());
+                tracing::debug!(
+                    "Normalized test: {}",
+                    normalized_test.synthetic_name.clone()
+                );
                 normalized_test_functions.push(normalized_test);
             }
         }

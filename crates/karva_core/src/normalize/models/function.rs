@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
 use pyo3::prelude::*;
-use ruff_python_ast::StmtFunctionDef;
 
-use crate::extensions::{fixtures::NormalizedFixture, tags::Tags};
+use crate::{
+    extensions::{fixtures::NormalizedFixture, tags::Tags},
+    name::QualifiedFunctionName,
+};
 
 /// A normalized test function represents a concrete variant of a test after parametrization.
 /// For parametrized tests, each parameter combination gets its own `NormalizedTestFunction`.
@@ -11,13 +13,10 @@ use crate::extensions::{fixtures::NormalizedFixture, tags::Tags};
 pub struct NormalizedTestFunction {
     /// Unique name including all parameters: "`test_foo`[x=1,y='a']"
     /// For non-parametrized tests, this is the same as `original_name`
-    pub(crate) name: String,
+    pub(crate) synthetic_name: String,
 
     /// Original test function name: "`test_foo`"
-    pub(crate) original_name: String,
-
-    /// Qualified name with module path: "<module_path>::test_foo"
-    pub(crate) qualified_name: String,
+    pub(crate) original_name: QualifiedFunctionName,
 
     /// Location in source code: "<file_path>:<line_number>"
     pub(crate) location: String,
@@ -35,50 +34,41 @@ pub struct NormalizedTestFunction {
     /// These should NOT be passed as arguments to the test function
     pub(crate) use_fixture_dependencies: Vec<NormalizedFixture>,
 
+    pub(crate) missing_fixtures: Vec<String>,
+
     /// Original test metadata
     pub(crate) function: Py<PyAny>,
-    pub(crate) function_definition: StmtFunctionDef,
     pub(crate) tags: Tags,
 }
 
 impl NormalizedTestFunction {
     #[allow(clippy::too_many_arguments)]
     pub(crate) const fn new(
-        name: String,
-        original_name: String,
-        qualified_name: String,
+        synthetic_name: String,
+        original_name: QualifiedFunctionName,
         location: String,
         params: HashMap<String, Py<PyAny>>,
         fixture_dependencies: Vec<NormalizedFixture>,
         use_fixture_dependencies: Vec<NormalizedFixture>,
+        missing_fixtures: Vec<String>,
         function: Py<PyAny>,
-        function_definition: StmtFunctionDef,
         tags: Tags,
     ) -> Self {
         Self {
-            name,
+            synthetic_name,
             original_name,
-            qualified_name,
             location,
             params,
             fixture_dependencies,
             use_fixture_dependencies,
+            missing_fixtures,
             function,
-            function_definition,
             tags,
         }
     }
 
-    pub(crate) fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub(crate) fn original_name(&self) -> &str {
+    pub(crate) fn original_name(&self) -> &QualifiedFunctionName {
         &self.original_name
-    }
-
-    pub(crate) fn qualified_name(&self) -> &str {
-        &self.qualified_name
     }
 
     pub(crate) fn location(&self) -> &str {
@@ -99,10 +89,6 @@ impl NormalizedTestFunction {
 
     pub(crate) const fn function(&self) -> &Py<PyAny> {
         &self.function
-    }
-
-    pub(crate) const fn function_definition(&self) -> &StmtFunctionDef {
-        &self.function_definition
     }
 
     pub(crate) const fn tags(&self) -> &Tags {

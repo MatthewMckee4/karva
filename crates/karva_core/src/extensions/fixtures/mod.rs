@@ -15,7 +15,7 @@ pub(crate) use finalizer::{Finalizer, Finalizers};
 pub(crate) use manager::FixtureManager;
 pub(crate) use normalized_fixture::NormalizedFixture;
 pub(crate) use traits::{HasFixtures, RequiresFixtures};
-pub(crate) use utils::{handle_missing_fixtures, missing_arguments_from_error};
+pub(crate) use utils::missing_arguments_from_error;
 
 use crate::{
     extensions::fixtures::utils::handle_custom_fixture_params,

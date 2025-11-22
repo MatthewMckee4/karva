@@ -23,7 +23,9 @@ pub(crate) struct NormalizedFixture {
 
     /// Location in source code: "<file_path>:<line_number>"
     /// None for builtin fixtures
-    pub(crate) location: Option<String>,
+    pub(crate) location: String,
+
+    pub(crate) missing_fixtures: Vec<String>,
 
     /// Original fixture metadata
     pub(crate) scope: FixtureScope,
@@ -41,7 +43,8 @@ impl NormalizedFixture {
         original_name: Option<QualifiedFunctionName>,
         param: Option<Py<PyAny>>,
         dependencies: Vec<Self>,
-        location: Option<String>,
+        location: String,
+        missing_fixtures: Vec<String>,
         scope: FixtureScope,
         auto_use: bool,
         is_generator: bool,
@@ -54,6 +57,7 @@ impl NormalizedFixture {
             param,
             dependencies,
             location,
+            missing_fixtures,
             scope,
             auto_use,
             is_generator,
@@ -78,8 +82,8 @@ impl NormalizedFixture {
         &self.dependencies
     }
 
-    pub(crate) fn location(&self) -> Option<&str> {
-        self.location.as_deref()
+    pub(crate) fn location(&self) -> &str {
+        &self.location
     }
 
     pub(crate) const fn scope(&self) -> FixtureScope {
@@ -110,7 +114,8 @@ impl NormalizedFixture {
             None,
             None,
             vec![],
-            None, // No location for builtin fixtures
+            "".to_string(),
+            vec![],
             FixtureScope::Function,
             false,
             false,

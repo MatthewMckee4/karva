@@ -7,9 +7,12 @@ use pyo3::{
 
 use crate::{
     Context, IndividualTestResultKind, TestRunResult,
-    diagnostic::Diagnostic,
+    diagnostic::{Diagnostic, FunctionDefinitionLocation, FunctionKind},
     extensions::{
-        fixtures::{Finalizer, FixtureManager, FixtureScope, NormalizedFixture},
+        fixtures::{
+            Finalizer, FixtureManager, FixtureScope, NormalizedFixture,
+            missing_arguments_from_error,
+        },
         tags::{ExpectFailTag, python::SkipError},
     },
     name::QualifiedFunctionName,
@@ -199,8 +202,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
             // Check if the fixture function expects a 'request' parameter
             // If it does, create a FixtureRequest object with the param value
             if let Some(function_def) = fixture.function_definition() {
-                use crate::extensions::fixtures::RequiresFixtures;
-                use crate::extensions::fixtures::python::FixtureRequest;
+                use crate::extensions::fixtures::{RequiresFixtures, python::FixtureRequest};
                 let required = function_def.required_fixtures(py);
 
                 if required.contains(&"request".to_string()) {
@@ -289,7 +291,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         fixture_cache: &mut FixtureCache,
         finalizer_cache: &mut FinalizerCache,
     ) -> bool {
-        let test_name = test_fn.name();
+        let test_name = &test_fn.original_name().to_string();
 
         // Check if test should be skipped
         if let Some(skip_tag) = test_fn.tags().skip_tag() {
@@ -332,33 +334,41 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     }
                 }
                 Err(err) => {
-                    // Fixture execution failed
-                    let fixture_qualified_name = fixture
-                        .original_name()
-                        .as_ref()
-                        .map_or_else(|| fixture.name().to_string(), |name| name.to_string());
-                    let fixture_location = fixture
-                        .location()
-                        .unwrap_or(&fixture_qualified_name)
-                        .to_string();
+                    let default_diagnostic = || {
+                        Diagnostic::from_test_fail(
+                            py,
+                            &err,
+                            FunctionDefinitionLocation::new(
+                                fixture.original_name().as_ref().unwrap().to_string(),
+                                fixture.location.clone(),
+                            ),
+                        )
+                    };
+                    let diagnostic = if fixture.missing_fixtures.is_empty() {
+                        default_diagnostic()
+                    } else {
+                        let missing_args = missing_arguments_from_error(&err.to_string());
 
-                    let diagnostic = Diagnostic::from_fixture_fail(
-                        py,
-                        &err,
-                        crate::diagnostic::FunctionDefinitionLocation::new(
-                            fixture_qualified_name,
-                            fixture_location,
-                        ),
-                    );
-                    let reporter = self.context.reporter();
-                    let result = self.context.result_mut();
-                    result.register_test_case_result(
-                        test_name,
-                        IndividualTestResultKind::Failed,
-                        Some(reporter),
-                    );
-                    result.add_test_diagnostic(diagnostic);
-                    return false;
+                        let actually_missing_fixtures = fixture
+                            .missing_fixtures
+                            .iter()
+                            .filter(|fixture| missing_args.contains(*fixture))
+                            .cloned()
+                            .collect::<Vec<_>>();
+
+                        if actually_missing_fixtures.is_empty() {
+                            default_diagnostic()
+                        } else {
+                            Diagnostic::missing_fixtures(
+                                actually_missing_fixtures,
+                                fixture.location.clone(),
+                                test_name.clone(),
+                                FunctionKind::Test,
+                            )
+                        }
+                    };
+
+                    self.context.result_mut().add_test_diagnostic(diagnostic);
                 }
             }
         }
@@ -386,33 +396,41 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     }
                 }
                 Err(err) => {
-                    // Fixture execution failed
-                    let fixture_qualified_name = fixture
-                        .original_name()
-                        .as_ref()
-                        .map_or_else(|| fixture.name().to_string(), |name| name.to_string());
-                    let fixture_location = fixture
-                        .location()
-                        .unwrap_or(&fixture_qualified_name)
-                        .to_string();
+                    let default_diagnostic = || {
+                        Diagnostic::from_test_fail(
+                            py,
+                            &err,
+                            FunctionDefinitionLocation::new(
+                                fixture.original_name().as_ref().unwrap().to_string(),
+                                fixture.location.clone(),
+                            ),
+                        )
+                    };
+                    let diagnostic = if fixture.missing_fixtures.is_empty() {
+                        default_diagnostic()
+                    } else {
+                        let missing_args = missing_arguments_from_error(&err.to_string());
 
-                    let diagnostic = Diagnostic::from_fixture_fail(
-                        py,
-                        &err,
-                        crate::diagnostic::FunctionDefinitionLocation::new(
-                            fixture_qualified_name,
-                            fixture_location,
-                        ),
-                    );
-                    let reporter = self.context.reporter();
-                    let result = self.context.result_mut();
-                    result.register_test_case_result(
-                        test_name,
-                        IndividualTestResultKind::Failed,
-                        Some(reporter),
-                    );
-                    result.add_test_diagnostic(diagnostic);
-                    return false;
+                        let actually_missing_fixtures = fixture
+                            .missing_fixtures
+                            .iter()
+                            .filter(|fixture| missing_args.contains(*fixture))
+                            .cloned()
+                            .collect::<Vec<_>>();
+
+                        if actually_missing_fixtures.is_empty() {
+                            default_diagnostic()
+                        } else {
+                            Diagnostic::missing_fixtures(
+                                actually_missing_fixtures,
+                                fixture.location.clone(),
+                                test_name.clone(),
+                                FunctionKind::Test,
+                            )
+                        }
+                    };
+
+                    self.context.result_mut().add_test_diagnostic(diagnostic);
                 }
             }
         }
@@ -441,8 +459,8 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     let reason = expect_fail_tag.and_then(|tag| tag.reason());
                     let diagnostic = Diagnostic::pass_on_expect_fail(
                         reason,
-                        crate::diagnostic::FunctionDefinitionLocation::new(
-                            test_fn.qualified_name().to_string(),
+                        FunctionDefinitionLocation::new(
+                            test_fn.original_name().to_string(),
                             test_fn.location().to_string(),
                         ),
                     );
@@ -482,22 +500,52 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     );
                     true
                 } else {
-                    // Test failed
-                    let diagnostic = Diagnostic::from_test_fail(
-                        py,
-                        &err,
-                        crate::diagnostic::FunctionDefinitionLocation::new(
-                            test_fn.qualified_name().to_string(),
-                            test_fn.location().to_string(),
-                        ),
-                    );
-                    let result = self.context.result_mut();
-                    result.register_test_case_result(
+                    let default_diagnostic = || {
+                        Diagnostic::from_test_fail(
+                            py,
+                            &err,
+                            FunctionDefinitionLocation::new(
+                                test_fn.original_name().to_string(),
+                                test_fn.location.clone(),
+                            ),
+                        )
+                    };
+
+                    println!("Missing fixtures: {:?}", test_fn.missing_fixtures);
+                    dbg!(&test_fn.missing_fixtures);
+
+                    let diagnostic = if test_fn.missing_fixtures.is_empty() {
+                        default_diagnostic()
+                    } else {
+                        let missing_args = missing_arguments_from_error(&err.to_string());
+
+                        let actually_missing_fixtures = test_fn
+                            .missing_fixtures
+                            .iter()
+                            .filter(|fixture| missing_args.contains(*fixture))
+                            .cloned()
+                            .collect::<Vec<_>>();
+
+                        if actually_missing_fixtures.is_empty() {
+                            default_diagnostic()
+                        } else {
+                            Diagnostic::missing_fixtures(
+                                actually_missing_fixtures,
+                                test_fn.location.clone(),
+                                test_name.clone(),
+                                FunctionKind::Test,
+                            )
+                        }
+                    };
+
+                    self.context.result_mut().add_test_diagnostic(diagnostic);
+
+                    self.context.result_mut().register_test_case_result(
                         test_name,
                         IndividualTestResultKind::Failed,
                         Some(reporter),
                     );
-                    result.add_test_diagnostic(diagnostic);
+
                     false
                 }
             }

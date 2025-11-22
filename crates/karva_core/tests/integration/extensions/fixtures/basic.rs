@@ -2,7 +2,7 @@ use insta::{allow_duplicates, assert_snapshot};
 use karva_test::TestContext;
 use rstest::rstest;
 
-use crate::common::TestRunnerExt;
+use crate::common::{TestRunnerExt, get_auto_use_kw};
 
 #[test]
 fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
@@ -165,10 +165,10 @@ def x():
 from .conftest import arr
 
 def test_1(x):
-    assert len(arr) == 0, arr
+    assert len(arr) == 0
 
 def test_2(x):
-    assert len(arr) == 0, arr
+    assert len(arr) == 0
 ",
         ),
     ]);
@@ -503,6 +503,38 @@ fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
     }
 }
 
+#[rstest]
+fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_file(
+        "<test>/test_nested_generator_fixture.py",
+        &format!(
+            r"
+                from {framework} import fixture
+
+                data = {{}}
+
+                @fixture(scope='module')
+                def clean_data():
+                    data.clear()
+
+                @fixture({auto_use_kw}=True)
+                def add_data():
+                    data.update(value=True)
+
+                def test_value(clean_data):
+                    assert data.get('value')
+                ",
+            auto_use_kw = get_auto_use_kw(framework)
+        ),
+    );
+
+    let result = context.test();
+
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    }
+}
+
 #[test]
 fn test_fixture_fails_to_run() {
     let context = TestContext::with_file(
@@ -521,14 +553,21 @@ fn test_fixture_fails_to_run() {
 
     let result = context.test();
 
-    assert_snapshot!(result.display(), @r"
+    assert_snapshot!(result.display(), @r#"
     fixture failures:
 
     fixture function `<test>.test::failing_fixture` at <temp_dir>/<test>/test.py:4 failed at <temp_dir>/<test>/test.py:6
     Fixture failed
 
+    test failures:
+
+    test `<test>.test::test_failing_fixture` has missing fixtures: ["failing_fixture"] at <temp_dir>/<test>/test.py:8
+
+    test failures:
+        <test>.test::test_failing_fixture at <temp_dir>/<test>/test.py:8
+
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
-    ");
+    "#);
 }
 
 #[test]
