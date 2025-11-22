@@ -522,7 +522,7 @@ fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &st
                     data.update(value=True)
 
                 def test_value(clean_data):
-                    assert data.get('value')
+                    assert data.get('value'), data
                 ",
             auto_use_kw = get_auto_use_kw(framework)
         ),

@@ -2,15 +2,26 @@ use std::collections::HashMap;
 
 use camino::Utf8PathBuf;
 
-use crate::{name::ModulePath, normalize::models::NormalizedModule};
+use crate::{extensions::fixtures::NormalizedFixture, normalize::models::NormalizedModule};
 
 #[derive(Debug)]
 pub struct NormalizedPackage {
-    pub(crate) path: Utf8PathBuf,
-
     pub(crate) modules: HashMap<Utf8PathBuf, NormalizedModule>,
 
     pub(crate) packages: HashMap<Utf8PathBuf, NormalizedPackage>,
 
-    pub(crate) configuration_module_path: Option<ModulePath>,
+    pub(crate) auto_use_fixtures: Vec<NormalizedFixture>,
+}
+
+impl NormalizedPackage {
+    pub(crate) const fn new(
+        modules: HashMap<Utf8PathBuf, NormalizedModule>,
+        packages: HashMap<Utf8PathBuf, NormalizedPackage>,
+    ) -> Self {
+        NormalizedPackage {
+            modules,
+            packages,
+            auto_use_fixtures: Vec::new(),
+        }
+    }
 }

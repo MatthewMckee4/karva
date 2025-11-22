@@ -112,6 +112,7 @@ pub(crate) fn resolve_dynamic_scope(
     FixtureScope::try_from(scope_str)
 }
 
+#[derive(Clone)]
 pub(crate) struct Fixture {
     name: QualifiedFunctionName,
     function_definition: StmtFunctionDef,

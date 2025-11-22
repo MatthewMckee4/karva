@@ -36,6 +36,8 @@ pub struct NormalizedTestFunction {
 
     pub(crate) missing_fixtures: Vec<String>,
 
+    pub(crate) auto_use_fixtures: Vec<NormalizedFixture>,
+
     /// Original test metadata
     pub(crate) function: Py<PyAny>,
     pub(crate) tags: Tags,
@@ -51,6 +53,7 @@ impl NormalizedTestFunction {
         fixture_dependencies: Vec<NormalizedFixture>,
         use_fixture_dependencies: Vec<NormalizedFixture>,
         missing_fixtures: Vec<String>,
+        auto_use_fixtures: Vec<NormalizedFixture>,
         function: Py<PyAny>,
         tags: Tags,
     ) -> Self {
@@ -62,12 +65,13 @@ impl NormalizedTestFunction {
             fixture_dependencies,
             use_fixture_dependencies,
             missing_fixtures,
+            auto_use_fixtures,
             function,
             tags,
         }
     }
 
-    pub(crate) fn original_name(&self) -> &QualifiedFunctionName {
+    pub(crate) const fn original_name(&self) -> &QualifiedFunctionName {
         &self.original_name
     }
 

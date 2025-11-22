@@ -6,7 +6,8 @@ use crate::{
     diagnostic::Diagnostic,
     discovery::DiscoveredPackage,
     extensions::fixtures::{
-        Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, NormalizedFixture, builtins::get_builtin_fixture,
+        Finalizer, Finalizers, Fixture, FixtureScope, HasFixtures, NormalizedFixture,
+        builtins::get_builtin_fixture,
     },
     name::QualifiedFunctionName,
     utils::iter_with_ancestors,
@@ -22,7 +23,7 @@ pub(crate) struct FixtureKey {
 #[derive(Debug)]
 pub(crate) struct FixtureManager {
     /// Map of fixture names to their resolved Python values
-    fixtures: IndexMap<FixtureKey, Vec<NormalizedFixture>>,
+    fixtures: IndexMap<FixtureKey, Fixture>,
 
     /// A stack of finalizers.
     ///
@@ -46,66 +47,18 @@ impl FixtureManager {
         self.diagnostics.drain(..).collect()
     }
 
-    pub(crate) fn insert_fixture(&mut self, fixture_return: Vec<NormalizedFixture>, fixture: &Fixture) {
+    pub(crate) fn insert_fixture(&mut self, fixture: Fixture) {
         self.fixtures.insert(
             FixtureKey {
                 name: fixture.name().clone(),
                 scope: fixture.scope(),
                 auto_use: fixture.auto_use(),
             },
-            fixture_return,
+            fixture,
         );
     }
 
-    /// Recursively resolves and executes fixture dependencies.
-    ///
-    /// This method ensures that all dependencies of a fixture are resolved and executed
-    /// before the fixture itself is called. It performs a depth-first traversal of the
-    /// dependency graph, checking both the current scope and parent scopes for required fixtures.
-    ///
-    /// TODO: This method needs to be rewritten to work with the new normalization approach.
-    /// For now, just stub it out to make the code compile.
-    fn get_normalized_fixture<'proj>(
-        &mut self,
-        _py: Python<'_>,
-        _context: &mut Context,
-        _parents: &[&'proj DiscoveredPackage],
-        _current: &'proj dyn HasFixtures<'proj>,
-        _fixture: &Fixture,
-        _ignore_fixtures: &[String],
-    ) -> Option<Vec<NormalizedFixture>> {
-        // TODO: This code needs to be updated to work with the new normalization approach
-        // For now, just return None to make the code compile
-        // The normalization is now handled by DiscoveredPackageNormalizer
-        None
-    }
-
-    /// Add fixtures with the current scope to the fixture manager.
-    ///
-    /// This will ensure that all of the dependencies of the given fixtures are called first.
-    ///
-    /// TODO: This method needs to be updated to work with Vec<NormalizedFixture>
-    /// For now, just stub it out to make the code compile
-    pub(crate) fn get_fixture<'proj>(
-        &mut self,
-        py: Python<'_>,
-        _context: &mut Context,
-        _parents: &[&'proj DiscoveredPackage],
-        _current: &'proj dyn HasFixtures<'proj>,
-        fixture_name: &str,
-        _ignore_fixtures: &[String],
-    ) -> Option<Vec<NormalizedFixture>> {
-        // For built-in fixtures, return them in a Vec
-        if let Some(fixture_return) = get_builtin_fixture(py, fixture_name) {
-            return Some(vec![fixture_return]);
-        }
-
-        // TODO: Implement proper fixture resolution using the new normalization approach
-        None
-    }
-
-    #[allow(dead_code)]
-    fn get_fixture_old<'proj>(
+    fn get_fixture<'proj>(
         &mut self,
         py: Python<'_>,
         context: &mut Context,
@@ -113,32 +66,22 @@ impl FixtureManager {
         current: &'proj dyn HasFixtures<'proj>,
         fixture_name: &str,
         ignore_fixtures: &[String],
-    ) -> Option<Vec<NormalizedFixture>> {
-        if let Some(fixture_return) = get_builtin_fixture(py, fixture_name) {
-            return Some(vec![fixture_return]);
-        }
+    ) -> Option<&'proj Fixture> {
+        // if let Some(fixture_return) = self.get_exact_fixture(fixture_name) {
+        //     return Some(fixture_return);
+        // }
+
         let fixture = current.get_fixture(fixture_name);
 
-        if let Some(fixture_return) = fixture.and_then(|fixture| {
-            self.get_normalized_fixture(py, context, parents, current, fixture, ignore_fixtures)
-        }) {
-            return Some(fixture_return);
+        if let Some(fixture) = fixture {
+            return Some(fixture);
         }
 
         for (current, parents) in iter_with_ancestors(parents) {
             let fixture = current.get_fixture(fixture_name);
 
-            if let Some(fixture_return) = fixture.and_then(|fixture| {
-                self.get_normalized_fixture(
-                    py,
-                    context,
-                    &parents,
-                    current,
-                    fixture,
-                    ignore_fixtures,
-                )
-            }) {
-                return Some(fixture_return);
+            if let Some(fixture) = fixture {
+                return Some(fixture);
             }
         }
 
@@ -153,56 +96,53 @@ impl FixtureManager {
         self.clear_exact_fixtures(auto_use_fixtures_called);
     }
 
-    pub(crate) fn setup_auto_use_fixtures<'proj>(
+    pub(crate) fn get_auto_use_fixtures<'proj>(
         &mut self,
-        py: Python<'_>,
-        context: &mut Context,
-        parents: &[&'proj DiscoveredPackage],
+        parents: &'proj [&'proj DiscoveredPackage],
         current: &'proj dyn HasFixtures<'proj>,
         scopes: &[FixtureScope],
         ignore_fixtures: &[String],
-    ) -> Vec<String> {
-        let mut auto_use_fixtures_called = ignore_fixtures.to_vec();
-
+    ) -> Vec<&'proj Fixture> {
+        let mut auto_use_fixtures_called = Vec::new();
         let auto_use_fixtures = current.auto_use_fixtures(scopes);
 
         for fixture in auto_use_fixtures {
             let fixture_name = fixture.name().function_name().to_string();
-            if auto_use_fixtures_called.contains(&fixture_name) {
+
+            if ignore_fixtures.contains(&fixture_name) {
                 continue;
             }
-            if self
-                .get_normalized_fixture(py, context, parents, current, fixture, ignore_fixtures)
-                .is_some()
+
+            if auto_use_fixtures_called
+                .iter()
+                .any(|fixture: &&Fixture| fixture.name().function_name() == fixture_name)
             {
-                auto_use_fixtures_called.push(fixture_name);
-                break;
+                continue;
             }
+
+            auto_use_fixtures_called.push(fixture);
+            break;
         }
 
-        for (current, parents) in iter_with_ancestors(parents) {
-            let auto_use_fixtures = current.auto_use_fixtures(scopes);
+        for parent in parents {
+            let auto_use_fixtures = parent.auto_use_fixtures(scopes);
 
             for fixture in auto_use_fixtures {
                 let fixture_name = fixture.name().function_name().to_string();
 
-                if auto_use_fixtures_called.contains(&fixture_name) {
+                if ignore_fixtures.contains(&fixture_name) {
                     continue;
                 }
-                if self
-                    .get_normalized_fixture(
-                        py,
-                        context,
-                        &parents,
-                        current,
-                        fixture,
-                        ignore_fixtures,
-                    )
-                    .is_some()
+
+                if auto_use_fixtures_called
+                    .iter()
+                    .any(|fixture| fixture.name().function_name() == fixture_name)
                 {
-                    auto_use_fixtures_called.push(fixture_name);
-                    break;
+                    continue;
                 }
+
+                auto_use_fixtures_called.push(fixture);
+                break;
             }
         }
 
@@ -227,7 +167,7 @@ impl FixtureManager {
     ///
     /// If the fixture name matches a built-in fixture,
     /// it creates the fixture on-demand and stores it.
-    fn get_exact_fixture(&self, py: Python<'_>, fixture_name: &str) -> Option<Vec<NormalizedFixture>> {
+    fn get_exact_fixture(&self, fixture_name: &str) -> Option<Fixture> {
         if let Some((_, fixture)) = self
             .fixtures
             .iter()
@@ -237,7 +177,7 @@ impl FixtureManager {
             return Some(fixture.clone());
         }
 
-        get_builtin_fixture(py, fixture_name).map(|f| vec![f])
+        None
     }
 
     pub(crate) fn clear_finalizers(&mut self) -> Finalizers {

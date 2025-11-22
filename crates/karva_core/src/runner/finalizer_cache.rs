@@ -27,7 +27,7 @@ pub struct FinalizerCache {
 }
 
 impl FinalizerCache {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             session: Vec::new(),
             package: Vec::new(),

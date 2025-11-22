@@ -79,7 +79,7 @@ mod tests {
 
     #[test]
     fn test_missing_arguments_from_error() {
-        let err = "missing 2 required positional arguments: 'a' and 'b'";
+        let err = "test_func() missing 2 required positional arguments: 'a' and 'b'";
         let missing_args = missing_arguments_from_error(err);
         assert_eq!(
             missing_args,
@@ -89,7 +89,7 @@ mod tests {
 
     #[test]
     fn test_missing_arguments_from_error_single() {
-        let err = "missing 1 required positional argument: 'a'";
+        let err = "test_func() missing 1 required positional argument: 'a'";
         let missing_args = missing_arguments_from_error(err);
         assert_eq!(missing_args, HashSet::from([String::from("a")]));
     }
