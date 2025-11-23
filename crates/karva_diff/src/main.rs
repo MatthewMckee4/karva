@@ -52,7 +52,7 @@ fn main() -> Result<ExitCode> {
     for project in all_projects() {
         run(
             &args,
-            project,
+            project.clone(),
             &mut old_temp,
             &mut new_temp,
             &mut accumulation_temp,
