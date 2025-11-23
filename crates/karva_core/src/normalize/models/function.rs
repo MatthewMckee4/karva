@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use pyo3::prelude::*;
 
 use crate::{
+    QualifiedFunctionName,
     extensions::{fixtures::NormalizedFixture, tags::Tags},
-    name::QualifiedFunctionName,
 };
 
 /// A normalized test function represents a concrete variant of a test after parametrization.
@@ -12,7 +12,7 @@ use crate::{
 #[derive(Debug)]
 pub struct NormalizedTestFunction {
     /// Original test function name: "`test_foo`"
-    pub(crate) original_name: QualifiedFunctionName,
+    pub(crate) name: QualifiedFunctionName,
 
     /// Location in source code: "<`file_path>`:<`line_number`>"
     pub(crate) location: String,
@@ -50,7 +50,7 @@ impl NormalizedTestFunction {
         tags: Tags,
     ) -> Self {
         Self {
-            original_name,
+            name: original_name,
             location,
             params,
             fixture_dependencies,
@@ -61,8 +61,8 @@ impl NormalizedTestFunction {
         }
     }
 
-    pub(crate) const fn original_name(&self) -> &QualifiedFunctionName {
-        &self.original_name
+    pub(crate) const fn name(&self) -> &QualifiedFunctionName {
+        &self.name
     }
 
     pub(crate) fn location(&self) -> &str {

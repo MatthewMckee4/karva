@@ -4,7 +4,9 @@ use rstest::rstest;
 
 use crate::common::TestRunnerExt;
 #[rstest]
-fn test_temp_directory_fixture(#[values("tmp_path", "temp_path", "temp_dir")] fixture_name: &str) {
+fn test_temp_directory_fixture(
+    #[values("tmp_path", "temp_path", "temp_dir", "tmpdir")] fixture_name: &str,
+) {
     let test_context = TestContext::with_file(
         "<test>/test.py",
         &format!(

@@ -10,7 +10,7 @@ use crate::{
     utils::add_to_sys_path,
 };
 
-pub(crate) struct StandardDiscoverer<'proj> {
+pub struct StandardDiscoverer<'proj> {
     project: &'proj Project,
 }
 

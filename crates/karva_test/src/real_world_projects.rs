@@ -357,7 +357,7 @@ pub fn typer_project() -> RealWorldProject<'static> {
         repository: "https://github.com/fastapi/typer",
         commit: "cbca80b94ca7e64899b12d597032fb4fc891b8e7",
         paths: vec![Utf8PathBuf::from("tests")],
-        dependencies: vec!["click", "typing-extensions", "pytest"],
+        dependencies: vec!["click", "typing-extensions", "pytest", "coverage"],
         python_version: PythonVersion::PY313,
     }
 }

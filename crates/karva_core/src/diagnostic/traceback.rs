@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Traceback {
+pub struct Traceback {
     pub(crate) lines: Vec<String>,
 
     pub(crate) location: Option<String>,
@@ -59,7 +59,7 @@ fn get_location(traceback: &str) -> Option<String> {
 }
 
 // Simplified traceback filtering that removes unnecessary traceback headers
-pub(crate) fn filter_traceback(traceback: &str) -> String {
+fn filter_traceback(traceback: &str) -> String {
     let lines: Vec<&str> = traceback.lines().collect();
     let mut filtered = String::new();
 

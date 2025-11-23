@@ -16,9 +16,14 @@ static RE_SINGLE: LazyLock<Regex> =
 /// Extract missing arguments from a test function error.
 ///
 /// If the error is of the form "missing 1 required positional argument: 'a'", return a set with "a".
-///
 /// If the error is of the form "missing 2 required positional arguments: 'a' and 'b'", return a set with "a" and "b".
-pub(crate) fn missing_arguments_from_error(err: &str) -> Vec<String> {
+///
+/// We take the test name to ensure we don't provide argument names for inner functions. Only the function we expect.
+pub fn missing_arguments_from_error(test_name: &str, err: &str) -> Vec<String> {
+    if !err.contains(&format!("{test_name}()")) {
+        return Vec::new();
+    }
+
     RE_MULTI.captures(err).map_or_else(
         || {
             RE_SINGLE.captures(err).map_or_else(Vec::new, |caps| {
@@ -80,14 +85,21 @@ mod tests {
     #[test]
     fn test_missing_arguments_from_error() {
         let err = "test_func() missing 2 required positional arguments: 'a' and 'b'";
-        let missing_args = missing_arguments_from_error(err);
+        let missing_args = missing_arguments_from_error("test_func", err);
         assert_eq!(missing_args, vec![String::from("a"), String::from("b")]);
     }
 
     #[test]
     fn test_missing_arguments_from_error_single() {
         let err = "test_func() missing 1 required positional argument: 'a'";
-        let missing_args = missing_arguments_from_error(err);
+        let missing_args = missing_arguments_from_error("test_func", err);
         assert_eq!(missing_args, vec![String::from("a")]);
+    }
+
+    #[test]
+    fn test_missing_arguments_from_different_function() {
+        let err = "test_func() missing 1 required positional argument: 'a'";
+        let missing_args = missing_arguments_from_error("test_funca", err);
+        assert!(missing_args.is_empty());
     }
 }

@@ -84,7 +84,7 @@ impl DiscoveredPackageNormalizer {
         for dep_name in &dependency_names {
             // Check for builtin fixtures first
             if let Some(builtin_fixture) =
-                crate::extensions::fixtures::builtins::get_builtin_fixture(py, dep_name)
+                crate::extensions::fixtures::get_builtin_fixture(py, dep_name)
             {
                 normalized_deps.push(vec![builtin_fixture]);
             } else if let Some(dep_fixture) =
@@ -211,7 +211,7 @@ impl DiscoveredPackageNormalizer {
         for dep_name in &regular_fixture_names {
             // Check for builtin fixtures first
             if let Some(builtin_fixture) =
-                crate::extensions::fixtures::builtins::get_builtin_fixture(py, dep_name)
+                crate::extensions::fixtures::get_builtin_fixture(py, dep_name)
             {
                 normalized_deps.push(vec![builtin_fixture]);
             } else if let Some(fixture) = find_fixture(None, dep_name, parents, module) {
@@ -226,7 +226,7 @@ impl DiscoveredPackageNormalizer {
         for dep_name in &use_fixture_names {
             // Check for builtin fixtures first
             if let Some(builtin_fixture) =
-                crate::extensions::fixtures::builtins::get_builtin_fixture(py, dep_name)
+                crate::extensions::fixtures::get_builtin_fixture(py, dep_name)
             {
                 normalized_use_fixtures.push(vec![builtin_fixture]);
             } else if let Some(fixture) = find_fixture(None, dep_name, parents, module) {

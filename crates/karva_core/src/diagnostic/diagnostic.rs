@@ -198,6 +198,7 @@ pub struct PassOnExpectFailureDiagnostic {
     pub(crate) reason: Option<String>,
 }
 
+/// Custom diagnostic for calling a test function or fixture with missing arguments.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MissingFixturesDiagnostic {
     /// The location of the test function.
@@ -252,7 +253,7 @@ pub struct WarningDiagnostic {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct FunctionDefinitionLocation {
+pub struct FunctionDefinitionLocation {
     pub(crate) function_name: String,
 
     pub(crate) location: String,
@@ -268,7 +269,7 @@ impl FunctionDefinitionLocation {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum FunctionKind {
+pub enum FunctionKind {
     Fixture,
     Test,
 }

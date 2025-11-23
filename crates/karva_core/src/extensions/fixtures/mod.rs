@@ -1,105 +1,30 @@
-use std::fmt::Display;
-
 use pyo3::prelude::*;
 use ruff_python_ast::{Expr, StmtFunctionDef};
 
-pub mod builtins;
-pub mod finalizer;
-pub mod manager;
-pub mod normalized_fixture;
+mod builtins;
+mod finalizer;
+mod manager;
+mod normalized_fixture;
 pub mod python;
+mod scope;
 mod traits;
-pub mod utils;
+mod utils;
 
-pub(crate) use finalizer::Finalizer;
-pub(crate) use manager::{FixtureManager, get_auto_use_fixtures};
-pub(crate) use normalized_fixture::{
-    NormalizedFixture, NormalizedFixtureName, NormalizedFixtureValue,
-};
-pub(crate) use traits::{HasFixtures, RequiresFixtures};
-pub(crate) use utils::missing_arguments_from_error;
+pub use builtins::get_builtin_fixture;
+pub use finalizer::Finalizer;
+pub use manager::{FixtureManager, get_auto_use_fixtures};
+pub use normalized_fixture::{NormalizedFixture, NormalizedFixtureName, NormalizedFixtureValue};
+pub use scope::FixtureScope;
+pub use traits::{HasFixtures, RequiresFixtures};
+pub use utils::missing_arguments_from_error;
 
 use crate::{
-    extensions::fixtures::utils::handle_custom_fixture_params,
-    name::{ModulePath, QualifiedFunctionName},
+    ModulePath, QualifiedFunctionName,
+    extensions::fixtures::{scope::fixture_scope, utils::handle_custom_fixture_params},
 };
 
-#[derive(Copy, Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub(crate) enum FixtureScope {
-    #[default]
-    Function,
-    Module,
-    Package,
-    Session,
-}
-
-impl FixtureScope {
-    pub(crate) fn scopes_above(self) -> Vec<Self> {
-        use FixtureScope::{Function, Module, Package, Session};
-
-        match self {
-            Function => vec![Function, Module, Package, Session],
-            Module => vec![Module, Package, Session],
-            Package => vec![Package, Session],
-            Session => vec![Session],
-        }
-    }
-}
-
-impl TryFrom<String> for FixtureScope {
-    type Error = String;
-
-    fn try_from(s: String) -> Result<Self, Self::Error> {
-        match s.as_str() {
-            "module" => Ok(Self::Module),
-            "session" => Ok(Self::Session),
-            "package" => Ok(Self::Package),
-            "function" => Ok(Self::Function),
-            _ => Err(format!("Invalid fixture scope: {s}")),
-        }
-    }
-}
-
-impl Display for FixtureScope {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Module => write!(f, "module"),
-            Self::Session => write!(f, "session"),
-            Self::Package => write!(f, "package"),
-            Self::Function => write!(f, "function"),
-        }
-    }
-}
-
-/// Resolve a dynamic scope function to a concrete `FixtureScope`
-pub(crate) fn resolve_dynamic_scope(
-    py: Python<'_>,
-    scope_fn: &Bound<'_, PyAny>,
-    fixture_name: &str,
-) -> Result<FixtureScope, String> {
-    let kwargs = pyo3::types::PyDict::new(py);
-    kwargs
-        .set_item("fixture_name", fixture_name)
-        .map_err(|e| format!("Failed to set fixture_name: {e}"))?;
-
-    // TODO: Support config
-    kwargs
-        .set_item("config", py.None())
-        .map_err(|e| format!("Failed to set config: {e}"))?;
-
-    let result = scope_fn
-        .call((), Some(&kwargs))
-        .map_err(|e| format!("Failed to call dynamic scope function: {e}"))?;
-
-    let scope_str = result
-        .extract::<String>()
-        .map_err(|e| format!("Dynamic scope function must return a string: {e}"))?;
-
-    FixtureScope::try_from(scope_str)
-}
-
 #[derive(Clone)]
-pub(crate) struct Fixture {
+pub struct Fixture {
     name: QualifiedFunctionName,
     function_definition: StmtFunctionDef,
     scope: FixtureScope,
@@ -304,20 +229,6 @@ fn get_attribute<'a>(function: Bound<'a, PyAny>, attributes: &[&str]) -> Option<
     Some(current.clone())
 }
 
-fn fixture_scope(
-    py: Python<'_>,
-    scope_obj: &Bound<'_, PyAny>,
-    name: &str,
-) -> Result<FixtureScope, String> {
-    if scope_obj.is_callable() {
-        resolve_dynamic_scope(py, scope_obj, name)
-    } else if let Ok(scope_str) = scope_obj.extract::<String>() {
-        FixtureScope::try_from(scope_str)
-    } else {
-        Err("Scope must be either a string or a callable".to_string())
-    }
-}
-
 impl std::fmt::Debug for Fixture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -330,7 +241,7 @@ impl std::fmt::Debug for Fixture {
     }
 }
 
-pub(crate) fn is_fixture_function(val: &StmtFunctionDef) -> bool {
+pub fn is_fixture_function(val: &StmtFunctionDef) -> bool {
     val.decorator_list
         .iter()
         .any(|decorator| is_fixture(&decorator.expression))
@@ -348,6 +259,7 @@ fn is_fixture(expr: &Expr) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::extensions::fixtures::scope::resolve_dynamic_scope;
 
     #[test]
     fn test_invalid_fixture_scope() {

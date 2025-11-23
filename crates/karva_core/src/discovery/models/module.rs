@@ -5,7 +5,7 @@ use crate::{discovery::TestFunction, extensions::fixtures::Fixture, name::Module
 
 /// A module represents a single python file.
 #[derive(Debug)]
-pub(crate) struct DiscoveredModule {
+pub struct DiscoveredModule {
     path: ModulePath,
     test_functions: Vec<TestFunction>,
     fixtures: Vec<Fixture>,
@@ -119,7 +119,7 @@ impl DiscoveredModule {
 /// The type of module.
 /// This is used to differentiation between files that contain only test functions and files that contain only configuration functions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ModuleType {
+pub enum ModuleType {
     Test,
     Configuration,
 }
@@ -138,7 +138,7 @@ impl From<&Utf8PathBuf> for ModuleType {
 }
 
 #[cfg(test)]
-pub(crate) struct DisplayDiscoveredModule<'proj> {
+pub struct DisplayDiscoveredModule<'proj> {
     module: &'proj DiscoveredModule,
 }
 

@@ -240,5 +240,6 @@ This fixture provides the user with a `pathlib.Path` object that points to a tem
 You can use any of the following fixture names to use this fixture:
 
 - `tmp_path` # from pytest
+- `tmpdir` # from pytest
 - `temp_path` # from karva
 - `temp_dir` # from karva

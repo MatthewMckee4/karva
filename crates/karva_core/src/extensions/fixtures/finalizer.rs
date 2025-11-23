@@ -10,7 +10,7 @@ use crate::{diagnostic::Diagnostic, extensions::fixtures::FixtureScope};
 ///     # Finalizer logic here
 /// ```
 #[derive(Debug, Clone)]
-pub(crate) struct Finalizer {
+pub struct Finalizer {
     pub(crate) fixture_name: String,
     pub(crate) fixture_return: Py<PyIterator>,
     pub(crate) scope: FixtureScope,

@@ -1,21 +1,21 @@
 use indexmap::IndexMap;
 
 use crate::{
+    QualifiedFunctionName,
     diagnostic::Diagnostic,
     discovery::DiscoveredPackage,
     extensions::fixtures::{Finalizer, Fixture, FixtureScope, HasFixtures},
-    name::QualifiedFunctionName,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct FixtureKey {
+pub struct FixtureKey {
     pub(crate) name: QualifiedFunctionName,
     pub(crate) scope: FixtureScope,
     pub(crate) auto_use: bool,
 }
 
 #[derive(Debug)]
-pub(crate) struct FixtureManager {
+pub struct FixtureManager {
     /// Map of fixture names to their resolved Python values
     fixtures: IndexMap<FixtureKey, Fixture>,
 
@@ -51,7 +51,7 @@ impl FixtureManager {
     }
 }
 
-pub(crate) fn get_auto_use_fixtures<'proj>(
+pub fn get_auto_use_fixtures<'proj>(
     parents: &'proj [&'proj DiscoveredPackage],
     current: &'proj dyn HasFixtures<'proj>,
     scope: FixtureScope,

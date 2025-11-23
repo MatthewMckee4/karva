@@ -1,10 +1,10 @@
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::{extensions::fixtures::FixtureScope, name::QualifiedFunctionName};
+use crate::{QualifiedFunctionName, extensions::fixtures::FixtureScope};
 
 #[derive(Debug, Clone)]
-pub(crate) enum NormalizedFixtureName {
+pub enum NormalizedFixtureName {
     BuiltIn(String),
     UserDefined(QualifiedFunctionName),
 }
@@ -28,7 +28,7 @@ impl std::fmt::Display for NormalizedFixtureName {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum NormalizedFixtureValue {
+pub enum NormalizedFixtureValue {
     /// For now, just used for builtin fixtures where we compute the value early
     Computed(Py<PyAny>),
     /// Normal fixtures just have a function that needs to be called to compute the value
@@ -38,7 +38,7 @@ pub(crate) enum NormalizedFixtureValue {
 /// A normalized fixture represents a concrete variant of a fixture after parametrization.
 /// For parametrized fixtures, each parameter value gets its own `NormalizedFixture`.
 #[derive(Debug, Clone)]
-pub(crate) struct NormalizedFixture {
+pub struct NormalizedFixture {
     /// Original fixture name without parameter: "`my_fixture`"
     pub(crate) name: NormalizedFixtureName,
 

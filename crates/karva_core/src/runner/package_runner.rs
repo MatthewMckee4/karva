@@ -10,9 +10,8 @@ use crate::{
     diagnostic::{Diagnostic, FunctionDefinitionLocation, FunctionKind},
     extensions::{
         fixtures::{
-            Finalizer, FixtureManager, FixtureScope, NormalizedFixture, RequiresFixtures,
-            missing_arguments_from_error, normalized_fixture::NormalizedFixtureValue,
-            python::FixtureRequest,
+            Finalizer, FixtureManager, FixtureScope, NormalizedFixture, NormalizedFixtureValue,
+            RequiresFixtures, missing_arguments_from_error, python::FixtureRequest,
         },
         tags::{ExpectFailTag, python::SkipError},
     },
@@ -163,7 +162,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         fixture_cache: &mut FixtureCache,
         finalizer_cache: &mut FinalizerCache,
     ) -> bool {
-        let test_name = &test_fn.original_name().to_string();
+        let test_name = &test_fn.name().to_string();
 
         // Check if test should be skipped
         if let Some(skip_tag) = test_fn.tags().skip_tag() {
@@ -202,7 +201,8 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                 )
             };
 
-            let missing_args = missing_arguments_from_error(&err.to_string());
+            let missing_args =
+                missing_arguments_from_error(fixture.name().function_name(), &err.to_string());
 
             if missing_args.is_empty() {
                 default_diagnostic()
@@ -255,7 +255,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
             kwargs.insert(key, value.clone());
         }
 
-        let full_test_name = full_test_name(py, test_fn.original_name().to_string(), &kwargs);
+        let full_test_name = full_test_name(py, test_fn.name().to_string(), &kwargs);
 
         for fixture in &test_fn.auto_use_fixtures {
             if let Ok((_, Some(finalizer))) =
@@ -285,7 +285,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     let diagnostic = Diagnostic::pass_on_expect_fail(
                         reason,
                         FunctionDefinitionLocation::new(
-                            test_fn.original_name().to_string(),
+                            test_fn.name().to_string(),
                             test_fn.location().to_string(),
                         ),
                     );
@@ -333,13 +333,16 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                             py,
                             &err,
                             FunctionDefinitionLocation::new(
-                                test_fn.original_name().to_string(),
+                                test_fn.name().to_string(),
                                 test_fn.location.clone(),
                             ),
                         )
                     };
 
-                    let missing_args = missing_arguments_from_error(&err.to_string());
+                    let missing_args = missing_arguments_from_error(
+                        test_fn.name().function_name(),
+                        &err.to_string(),
+                    );
 
                     let diagnostic = if missing_args.is_empty() {
                         default_diagnostic()

@@ -2,13 +2,13 @@ use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
+    ModulePath, QualifiedFunctionName,
     extensions::{fixtures::RequiresFixtures, tags::Tags},
-    name::{ModulePath, QualifiedFunctionName},
 };
 
 /// Represents a single test function discovered from Python source code.
 #[derive(Debug)]
-pub(crate) struct TestFunction {
+pub struct TestFunction {
     function_definition: StmtFunctionDef,
 
     py_function: Py<PyAny>,

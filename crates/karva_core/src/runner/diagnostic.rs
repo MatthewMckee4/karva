@@ -4,7 +4,7 @@ use colored::Colorize;
 
 use crate::{
     Reporter,
-    diagnostic::{Diagnostic, DiscoveryDiagnostic, diagnostic::FunctionDefinitionLocation},
+    diagnostic::{Diagnostic, DiscoveryDiagnostic, FunctionDefinitionLocation},
 };
 
 #[derive(Debug, Clone)]
