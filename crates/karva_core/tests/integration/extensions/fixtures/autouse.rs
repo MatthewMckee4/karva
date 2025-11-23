@@ -111,3 +111,38 @@ fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
         assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
 }
+#[test]
+fn test_auto_use_fixture_in_parent_module() {
+    let test_context = TestContext::with_files([
+        (
+            "<test>/conftest.py",
+            "
+            import karva
+
+            arr = []
+
+            @karva.fixture(auto_use=True)
+            def global_fixture():
+                arr.append(1)
+                yield
+                arr.append(2)
+            ",
+        ),
+        (
+            "<test>/foo/test_file2.py",
+            "
+            from ..conftest import arr
+
+            def test_function1():
+                assert arr == [1]
+
+            def test_function2():
+                assert arr == [1, 2, 1]
+            ",
+        ),
+    ]);
+
+    let result = test_context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+}

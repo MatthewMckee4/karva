@@ -36,8 +36,7 @@ impl DiscoveredPackageNormalizer {
     ) -> NormalizedPackage {
         tracing::info!("Normalizing package");
 
-        let session_fixtures =
-            get_auto_use_fixtures(&session, &FixtureScope::Session.scopes_above());
+        let session_fixtures = get_auto_use_fixtures(&[], &session, FixtureScope::Session);
 
         let session_fixtures = session_fixtures
             .into_iter()
@@ -180,7 +179,7 @@ impl DiscoveredPackageNormalizer {
         module: &DiscoveredModule,
     ) -> Vec<NormalizedTestFunction> {
         let function_auto_use_fixtures =
-            get_auto_use_fixtures(module, &FixtureScope::Function.scopes_above());
+            get_auto_use_fixtures(parents, module, FixtureScope::Function);
 
         let function_auto_use_fixtures = function_auto_use_fixtures
             .into_iter()
@@ -273,7 +272,6 @@ impl DiscoveredPackageNormalizer {
             )];
         }
 
-        // Create cartesian product
         let mut result = Vec::new();
 
         let dep_combinations = if normalized_deps.is_empty() {
@@ -316,10 +314,9 @@ impl DiscoveredPackageNormalizer {
         module: &DiscoveredModule,
         parents: &[&DiscoveredPackage],
     ) -> NormalizedModule {
-        tracing::debug!("Normalizing module: {}", module.path());
+        tracing::debug!("Normalizing file: {}", module.path());
 
-        let module_auto_use_fixtures =
-            get_auto_use_fixtures(module, &FixtureScope::Module.scopes_above());
+        let module_auto_use_fixtures = get_auto_use_fixtures(parents, module, FixtureScope::Module);
 
         let module_auto_use_fixtures = module_auto_use_fixtures
             .into_iter()
@@ -353,7 +350,7 @@ impl DiscoveredPackageNormalizer {
         new_parents.push(package);
 
         let package_auto_use_fixtures =
-            get_auto_use_fixtures(package, &FixtureScope::Package.scopes_above());
+            get_auto_use_fixtures(parents, package, FixtureScope::Package);
 
         let package_auto_use_fixtures = package_auto_use_fixtures
             .into_iter()

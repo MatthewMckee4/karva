@@ -2,6 +2,7 @@ use indexmap::IndexMap;
 
 use crate::{
     diagnostic::Diagnostic,
+    discovery::DiscoveredPackage,
     extensions::fixtures::{Finalizer, Fixture, FixtureScope, HasFixtures},
     name::QualifiedFunctionName,
 };
@@ -51,11 +52,12 @@ impl FixtureManager {
 }
 
 pub(crate) fn get_auto_use_fixtures<'proj>(
+    parents: &'proj [&'proj DiscoveredPackage],
     current: &'proj dyn HasFixtures<'proj>,
-    scopes: &[FixtureScope],
+    scope: FixtureScope,
 ) -> Vec<&'proj Fixture> {
     let mut auto_use_fixtures_called = Vec::new();
-    let auto_use_fixtures = current.auto_use_fixtures(scopes);
+    let auto_use_fixtures = current.auto_use_fixtures(&scope.scopes_above());
 
     for fixture in auto_use_fixtures {
         let fixture_name = fixture.name().function_name().to_string();
@@ -69,6 +71,23 @@ pub(crate) fn get_auto_use_fixtures<'proj>(
 
         auto_use_fixtures_called.push(fixture);
         break;
+    }
+
+    for parent in parents {
+        let parent_fixtures = parent.auto_use_fixtures(&[scope]);
+        for fixture in parent_fixtures {
+            let fixture_name = fixture.name().function_name().to_string();
+
+            if auto_use_fixtures_called
+                .iter()
+                .any(|fixture: &&Fixture| fixture.name().function_name() == fixture_name)
+            {
+                continue;
+            }
+
+            auto_use_fixtures_called.push(fixture);
+            break;
+        }
     }
 
     auto_use_fixtures_called
