@@ -336,7 +336,17 @@ pub fn sqlmodel_project() -> RealWorldProject<'static> {
         repository: "https://github.com/fastapi/sqlmodel",
         commit: "43570910db2d7ab2e5efd96f60a0e2a3a61c5474",
         paths: vec![Utf8PathBuf::from("tests")],
-        dependencies: vec!["pydantic", "SQLAlchemy", "pytest"],
+        dependencies: vec![
+            "pydantic",
+            "SQLAlchemy",
+            "pytest",
+            "dirty-equals",
+            "fastapi",
+            "httpx",
+            "coverage",
+            "black",
+            "jinja2",
+        ],
         python_version: PythonVersion::PY313,
     }
 }
