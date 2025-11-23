@@ -95,11 +95,11 @@ fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
                     return order.append(first_entry)
 
                 def test_string_only(order, first_entry):
-                    assert order == [first_entry], order
+                    assert order == [first_entry]
 
                 def test_string_and_int(order, first_entry):
                     order.append(2)
-                    assert order == [first_entry, 2], order
+                    assert order == [first_entry, 2]
                 "#,
             auto_use_kw = get_auto_use_kw(framework)
         ),

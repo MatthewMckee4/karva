@@ -98,7 +98,7 @@ def setup_fixture():
 @karva.tags.use_fixtures("setup_fixture")
 @karva.tags.parametrize("value", [1, 2, 3])
 def test_use_fixtures_with_parametrize(value):
-    assert len(arr) == value, f"Expected length {value} but got {arr}"
+    assert len(arr) == value
 "#,
     );
 
@@ -336,11 +336,11 @@ def session_fixture():
 
 @pytest.mark.usefixtures("session_fixture")
 def test_pytest_session_1():
-    assert arr == [1], arr
+    assert arr == [1]
 
 @pytest.mark.usefixtures("session_fixture")
 def test_pytest_session_2():
-    assert arr == [1], arr
+    assert arr == [1]
 "#,
     )]);
 
