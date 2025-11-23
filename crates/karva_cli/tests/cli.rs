@@ -12,8 +12,6 @@ fn test_no_tests_found() {
     success: true
     exit_code: 0
     ----- stdout -----
-    running 0 tests
-
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
@@ -35,8 +33,6 @@ fn test_one_test_passes() {
     success: true
     exit_code: 0
     ----- stdout -----
-    running 1 test
-
     test test_pass::test_pass ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
@@ -60,8 +56,6 @@ fn test_one_test_fails() {
     success: false
     exit_code: 1
     ----- stdout -----
-    running 1 test
-
     test test_fail::test_fail ... FAILED
 
     test failures:
@@ -95,8 +89,6 @@ fn test_two_test_fails() {
     success: false
     exit_code: 1
     ----- stdout -----
-    running 2 tests
-
     test tests.test_fail::test_fail ... FAILED
     test tests.test_fail::test_fail2 ... FAILED
 
@@ -145,8 +137,6 @@ fn test_file_importing_another_file() {
     success: false
     exit_code: 1
     ----- stdout -----
-    running 1 test
-
     test test_cross_file::test_with_helper ... FAILED
 
     test failures:
@@ -213,8 +203,6 @@ fn test_parametrize(#[values("pytest", "karva")] package: &str) {
         success: true
         exit_code: 0
         ----- stdout -----
-        running 3 tests
-
         test test_parametrize::test_parametrize [a=1, b=2, expected=3] ... ok
         test test_parametrize::test_parametrize [a=2, b=3, expected=5] ... ok
         test test_parametrize::test_parametrize [a=3, b=4, expected=7] ... ok
@@ -241,8 +229,6 @@ fn test_stdout() {
     success: true
     exit_code: 0
     ----- stdout -----
-    running 1 test
-
     test test_std_out_redirected::test_std_out_redirected ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
@@ -255,8 +241,6 @@ fn test_stdout() {
     success: true
     exit_code: 0
     ----- stdout -----
-    running 1 test
-
     test test_std_out_redirected::test_std_out_redirected ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
@@ -277,8 +261,6 @@ fn test_multiple_fixtures_not_found() {
     success: false
     exit_code: 1
     ----- stdout -----
-    running 1 test
-
     test test_multiple_fixtures_not_found::test_multiple_fixtures_not_found ... FAILED
 
     test failures:
@@ -318,8 +300,6 @@ fn test_skip_functionality(#[values("pytest", "karva")] framework: &str) {
         success: true
         exit_code: 0
         ----- stdout -----
-        running 1 test
-
         test test_skip::test_1 ... skipped: This test is skipped
 
         test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]
@@ -341,8 +321,6 @@ fn test_text_file_in_directory() {
     success: true
     exit_code: 0
     ----- stdout -----
-    running 1 test
-
     test test_sample::test_sample ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
@@ -362,8 +340,6 @@ fn test_text_file() {
     success: true
     exit_code: 0
     ----- stdout -----
-    running 0 tests
-
     discovery failures:
 
     path `<temp_dir>/random.txt` has a wrong file extension
@@ -405,8 +381,6 @@ fn test_invalid_path() {
     success: true
     exit_code: 0
     ----- stdout -----
-    running 0 tests
-
     discovery failures:
 
     path `<temp_dir>/non_existing_path.py` could not be found
@@ -439,8 +413,6 @@ fn test_fixture_generator_two_yields_passing_test() {
     success: true
     exit_code: 0
     ----- stdout -----
-    running 1 test
-
     test test::test_fixture_generator [fixture_generator=1] ... ok
 
     warnings:
@@ -475,8 +447,6 @@ fn test_fixture_generator_two_yields_failing_test() {
     success: false
     exit_code: 1
     ----- stdout -----
-    running 1 test
-
     test test::test_fixture_generator [fixture_generator=1] ... FAILED
 
     test failures:
@@ -518,8 +488,6 @@ fn test_fixture_generator_fail_in_teardown() {
     success: true
     exit_code: 0
     ----- stdout -----
-    running 1 test
-
     test test::test_fixture_generator [fixture_generator=1] ... ok
 
     warnings:
@@ -554,8 +522,6 @@ fn test_invalid_fixture() {
     success: false
     exit_code: 1
     ----- stdout -----
-    running 1 test
-
     test test::test_fixture_generator ... FAILED
 
     discovery failures:
@@ -606,8 +572,6 @@ def test_conditional_skip():
         success: true
         exit_code: 0
         ----- stdout -----
-        running 3 tests
-
         test <test>.test_pytest_skip::test_skip_with_reason ... skipped: This test is skipped at runtime
         test <test>.test_pytest_skip::test_skip_without_reason ... skipped
         test <test>.test_pytest_skip::test_conditional_skip ... skipped: Condition was true
@@ -642,8 +606,6 @@ def test_1():
         success: true
         exit_code: 0
         ----- stdout -----
-        running 1 test
-
         test test_skipif::test_1 ... skipped: Condition is true
 
         test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]
@@ -676,8 +638,6 @@ def test_1():
         success: true
         exit_code: 0
         ----- stdout -----
-        running 1 test
-
         test test_skipif::test_1 ... ok
 
         test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
@@ -710,8 +670,6 @@ def test_1():
         success: true
         exit_code: 0
         ----- stdout -----
-        running 1 test
-
         test test_skipif::test_1 ... skipped: One condition is true
 
         test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]
@@ -751,8 +709,6 @@ def test_normal():
         success: true
         exit_code: 0
         ----- stdout -----
-        running 3 tests
-
         test test_skipif::test_skip_this ... skipped: Skipped
         test test_skipif::test_run_this ... ok
         test test_skipif::test_normal ... ok
@@ -782,8 +738,6 @@ fn test_failfast() {
     success: false
     exit_code: 1
     ----- stdout -----
-    running 2 tests
-
     test test_failfast::test_first_fail ... FAILED
 
     test failures:
@@ -831,8 +785,6 @@ def test_1():
         success: true
         exit_code: 0
         ----- stdout -----
-        running 1 test
-
         test test_expect_fail::test_1 ... ok
 
         test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
@@ -865,8 +817,6 @@ def test_1():
         success: false
         exit_code: 1
         ----- stdout -----
-        running 1 test
-
         test test_expect_fail::test_1 ... FAILED
 
         test failures:
@@ -907,8 +857,6 @@ def test_1():
         success: true
         exit_code: 0
         ----- stdout -----
-        running 1 test
-
         test test_expect_fail::test_1 ... ok
 
         test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
@@ -941,8 +889,6 @@ def test_1():
         success: true
         exit_code: 0
         ----- stdout -----
-        running 1 test
-
         test test_expect_fail::test_1 ... ok
 
         test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
@@ -982,8 +928,6 @@ def test_expected_fail_passes():
         success: false
         exit_code: 1
         ----- stdout -----
-        running 3 tests
-
         test test_expect_fail::test_expected_to_fail ... ok
         test test_expect_fail::test_normal_pass ... ok
         test test_expect_fail::test_expected_fail_passes ... FAILED
@@ -1022,8 +966,6 @@ def test_normal():
     success: false
     exit_code: 1
     ----- stdout -----
-    running 2 tests
-
     test test_fail::test_with_fail ... FAILED
     test test_fail::test_normal ... ok
 

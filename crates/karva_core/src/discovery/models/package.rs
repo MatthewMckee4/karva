@@ -162,6 +162,7 @@ impl DiscoveredPackage {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn total_test_functions(&self) -> usize {
         let mut total = 0;
         for module in self.modules.values() {

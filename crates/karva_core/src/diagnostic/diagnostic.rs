@@ -110,13 +110,6 @@ impl Diagnostic {
         })
     }
 
-    pub(crate) fn into_missing_fixtures(self) -> Option<MissingFixturesDiagnostic> {
-        match self {
-            Self::MissingFixtures(diagnostic) => Some(diagnostic),
-            _ => None,
-        }
-    }
-
     pub(crate) const fn location(&self) -> Option<&FunctionDefinitionLocation> {
         match self {
             Self::TestFailure(diagnostic) => Some(diagnostic.location()),

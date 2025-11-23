@@ -1,32 +1,30 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Display,
-};
+use std::fmt::Display;
 
-use pyo3::{prelude::*, types::PyDict};
+use pyo3::prelude::*;
 use ruff_python_ast::{Expr, StmtFunctionDef};
 
 pub mod builtins;
 pub mod finalizer;
 pub mod manager;
+pub mod normalized_fixture;
 pub mod python;
 mod traits;
 pub mod utils;
 
-pub(crate) use finalizer::{Finalizer, Finalizers};
-pub(crate) use manager::FixtureManager;
+pub(crate) use finalizer::Finalizer;
+pub(crate) use manager::{FixtureManager, get_auto_use_fixtures};
+pub(crate) use normalized_fixture::{
+    NormalizedFixture, NormalizedFixtureName, NormalizedFixtureValue,
+};
 pub(crate) use traits::{HasFixtures, RequiresFixtures};
-pub(crate) use utils::{handle_missing_fixtures, missing_arguments_from_error};
+pub(crate) use utils::missing_arguments_from_error;
 
 use crate::{
-    diagnostic::{Diagnostic, FunctionDefinitionLocation, FunctionKind},
-    discovery::DiscoveredModule,
-    extensions::fixtures::{python::FixtureRequest, utils::handle_custom_fixture_params},
+    extensions::fixtures::utils::handle_custom_fixture_params,
     name::{ModulePath, QualifiedFunctionName},
-    utils::{cartesian_insert, function_definition_location},
 };
 
-#[derive(Copy, Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Copy, Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub(crate) enum FixtureScope {
     #[default]
     Function,
@@ -45,22 +43,6 @@ impl FixtureScope {
             Package => vec![Package, Session],
             Session => vec![Session],
         }
-    }
-}
-
-impl PartialOrd for FixtureScope {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        const fn rank(scope: FixtureScope) -> usize {
-            match scope {
-                FixtureScope::Function => 0,
-                FixtureScope::Module => 1,
-                FixtureScope::Package => 2,
-                FixtureScope::Session => 3,
-            }
-        }
-        let self_rank = rank(*self);
-        let other_rank = rank(*other);
-        Some(self_rank.cmp(&other_rank))
     }
 }
 
@@ -116,6 +98,7 @@ pub(crate) fn resolve_dynamic_scope(
     FixtureScope::try_from(scope_str)
 }
 
+#[derive(Clone)]
 pub(crate) struct Fixture {
     name: QualifiedFunctionName,
     function_definition: StmtFunctionDef,
@@ -165,105 +148,16 @@ impl Fixture {
         self.auto_use
     }
 
-    pub(crate) fn call<'a>(
-        &self,
-        py: Python<'a>,
-        fixture_manager: &mut FixtureManager,
-        module: &DiscoveredModule,
-    ) -> Result<Vec<Bound<'a, PyAny>>, Diagnostic> {
-        // A hashmap of fixtures for each param
-        let mut each_call_fixtures: Vec<HashMap<String, Py<PyAny>>> = vec![HashMap::new()];
+    pub(crate) const fn params(&self) -> Option<&Vec<Py<PyAny>>> {
+        self.params.as_ref()
+    }
 
-        let param_names = self.required_fixtures(py);
+    pub(crate) const fn function(&self) -> &Py<PyAny> {
+        &self.function
+    }
 
-        let mut missing_fixtures = HashSet::new();
-
-        for name in &param_names {
-            if name == "request" {
-                let params = match &self.params {
-                    Some(p) if !p.is_empty() => p,
-                    _ => &vec![py.None()],
-                };
-
-                each_call_fixtures = cartesian_insert(each_call_fixtures, params, name, |param| {
-                    let param_value = param.clone();
-                    let request = FixtureRequest { param: param_value };
-                    let request_obj = Py::new(py, request)?;
-                    Ok(request_obj.into_any())
-                })
-                .unwrap();
-            } else if let Some(fixture_returns) =
-                fixture_manager.get_fixture_with_name(py, name, Some(&[self.name()]))
-            {
-                each_call_fixtures = cartesian_insert(
-                    each_call_fixtures,
-                    &fixture_returns,
-                    name,
-                    |fixture_return| Ok(fixture_return.clone()),
-                )
-                .unwrap();
-            } else {
-                missing_fixtures.insert(name.clone());
-            }
-        }
-
-        let test_case_location = function_definition_location(module, &self.function_definition);
-
-        if !missing_fixtures.is_empty() {
-            return Err(Diagnostic::missing_fixtures(
-                missing_fixtures.into_iter().collect(),
-                test_case_location,
-                self.name().to_string(),
-                FunctionKind::Fixture,
-            ));
-        }
-
-        let mut res = Vec::new();
-
-        for fixtures in each_call_fixtures {
-            let kwargs = PyDict::new(py);
-
-            for (key, value) in fixtures {
-                let _ = kwargs.set_item(key, value);
-            }
-
-            let default_diagnostic = |err: PyErr| {
-                Diagnostic::from_fixture_fail(
-                    py,
-                    &err,
-                    FunctionDefinitionLocation::new(
-                        self.name().to_string(),
-                        test_case_location.clone(),
-                    ),
-                )
-            };
-
-            res.push(if self.is_generator() {
-                match self.function.bind(py).call((), Some(&kwargs)) {
-                    Ok(generator) => {
-                        let mut generator = generator.cast_into().unwrap();
-
-                        let finalizer =
-                            Finalizer::new(self.name().to_string(), generator.clone().unbind());
-                        fixture_manager.insert_finalizer(finalizer, self.scope());
-
-                        generator
-                            .next()
-                            .expect("generator should yield at least once")
-                            .unwrap()
-                    }
-                    Err(err) => return Err(default_diagnostic(err)),
-                }
-            } else {
-                let function_return = self.function.call(py, (), Some(&kwargs));
-                match function_return.map(|r| r.into_bound(py)) {
-                    Ok(return_value) => return_value,
-                    Err(err) => return Err(default_diagnostic(err)),
-                }
-            });
-        }
-
-        Ok(res)
+    pub(crate) const fn function_definition(&self) -> &StmtFunctionDef {
+        &self.function_definition
     }
 
     pub(crate) fn try_from_function(

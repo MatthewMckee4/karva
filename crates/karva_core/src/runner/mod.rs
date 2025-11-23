@@ -1,13 +1,19 @@
 use karva_project::Project;
 
 use crate::{
-    DummyReporter, Reporter, collection::TestCaseCollector, discovery::StandardDiscoverer,
-    utils::attach,
+    Context, DummyReporter, Reporter, discovery::StandardDiscoverer,
+    normalize::DiscoveredPackageNormalizer, utils::attach,
 };
 
 pub mod diagnostic;
+mod finalizer_cache;
+mod fixture_cache;
+mod package_runner;
 
 pub use diagnostic::TestRunResult;
+use finalizer_cache::FinalizerCache;
+use fixture_cache::FixtureCache;
+use package_runner::NormalizedPackageRunner;
 
 pub trait TestRunner {
     fn test(&self) -> TestRunResult {
@@ -27,22 +33,23 @@ impl<'proj> StandardTestRunner<'proj> {
 
     fn test_impl(&self, reporter: &dyn Reporter) -> TestRunResult {
         attach(self.project, |py| {
-            let mut run_result = TestRunResult::default();
+            let mut context = Context::new(self.project, reporter);
 
             let (session, discovery_diagnostics) =
                 StandardDiscoverer::new(self.project).discover(py);
 
-            run_result.add_discovery_diagnostics(discovery_diagnostics);
+            context
+                .result_mut()
+                .add_discovery_diagnostics(discovery_diagnostics);
 
-            let collected_session = TestCaseCollector::collect(py, &session);
+            // Normalize the discovered session - this resolves all parametrized fixtures
+            // by splitting them into individual fixtures with new names matching the param.
+            // Test functions are also expanded to match the new fixture names.
+            let normalized_session = DiscoveredPackageNormalizer::new().normalize(py, &session);
 
-            let total_test_cases = collected_session.total_test_cases();
+            NormalizedPackageRunner::new(&mut context).run(py, &normalized_session);
 
-            reporter.log_test_count(total_test_cases);
-
-            collected_session.run(py, self.project, reporter, &mut run_result);
-
-            run_result
+            context.into_result()
         })
     }
 }
