@@ -11,6 +11,7 @@ use crate::extensions::fixtures::FixtureScope;
 /// - Package: Cached for a package (cleared after package completes)
 /// - Module: Cached for a module (cleared after module completes)
 /// - Function: Cached per test function (cleared after each test)
+#[derive(Debug)]
 pub struct FixtureCache {
     /// Session-scoped fixtures - persist for the entire test run
     session: HashMap<String, Py<PyAny>>,
@@ -60,16 +61,6 @@ impl FixtureCache {
             FixtureScope::Function => {
                 self.function.insert(name, value);
             }
-        }
-    }
-
-    /// Clear fixtures at a specific scope level
-    pub fn clear_scope(&mut self, scope: FixtureScope) {
-        match scope {
-            FixtureScope::Session => self.session.clear(),
-            FixtureScope::Package => self.package.clear(),
-            FixtureScope::Module => self.module.clear(),
-            FixtureScope::Function => self.function.clear(),
         }
     }
 

@@ -14,10 +14,8 @@ pub struct FixtureRequest {
     pub param: Py<PyAny>,
 }
 
-#[pymethods]
 impl FixtureRequest {
-    #[new]
-    pub fn new(param: Py<PyAny>) -> Self {
+    pub(crate) const fn new(param: Py<PyAny>) -> Self {
         Self { param }
     }
 }

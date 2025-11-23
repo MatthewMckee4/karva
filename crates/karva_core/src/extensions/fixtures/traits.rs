@@ -16,14 +16,6 @@ pub trait HasFixtures<'a>: Debug {
     /// Get a fixture with the given name
     fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a Fixture>;
 
-    /// Get all fixtures with the given names
-    ///
-    /// If fixture names is empty, return all fixtures.
-    fn all_fixtures(&'a self, fixture_names: Option<&[String]>) -> Vec<&'a Fixture>;
-
-    /// The module where the fixtures are being found in.
-    fn fixture_module(&'a self) -> Option<&'a DiscoveredModule>;
-
     /// Get all autouse fixtures
     fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a Fixture>;
 }
@@ -33,27 +25,6 @@ impl<'a> HasFixtures<'a> for DiscoveredModule {
         self.fixtures()
             .iter()
             .find(|f| f.name().function_name() == fixture_name)
-    }
-
-    fn all_fixtures(&'a self, fixture_names: Option<&[String]>) -> Vec<&'a Fixture> {
-        let Some(fixture_names) = fixture_names else {
-            return self.fixtures().iter().collect();
-        };
-
-        self.fixtures()
-            .iter()
-            .filter(|f| {
-                if f.auto_use() {
-                    true
-                } else {
-                    fixture_names.contains(&f.name().function_name().to_string())
-                }
-            })
-            .collect()
-    }
-
-    fn fixture_module(&'a self) -> Option<&'a DiscoveredModule> {
-        Some(self)
     }
 
     fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a Fixture> {
@@ -70,20 +41,6 @@ impl<'a> HasFixtures<'a> for DiscoveredPackage {
             .and_then(|module| module.get_fixture(fixture_name))
     }
 
-    fn all_fixtures(&'a self, fixture_names: Option<&[String]>) -> Vec<&'a Fixture> {
-        let mut fixtures = Vec::new();
-
-        if let Some(module) = self.configuration_module() {
-            fixtures.extend(module.all_fixtures(fixture_names));
-        }
-
-        fixtures
-    }
-
-    fn fixture_module(&'a self) -> Option<&'a DiscoveredModule> {
-        self.configuration_module()
-    }
-
     fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a Fixture> {
         let mut fixtures = Vec::new();
 
@@ -98,14 +55,6 @@ impl<'a> HasFixtures<'a> for DiscoveredPackage {
 impl<'a> HasFixtures<'a> for &'a DiscoveredPackage {
     fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a Fixture> {
         (*self).get_fixture(fixture_name)
-    }
-
-    fn all_fixtures(&'a self, fixture_names: Option<&[String]>) -> Vec<&'a Fixture> {
-        (*self).all_fixtures(fixture_names)
-    }
-
-    fn fixture_module(&'a self) -> Option<&'a DiscoveredModule> {
-        (*self).fixture_module()
     }
 
     fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a Fixture> {

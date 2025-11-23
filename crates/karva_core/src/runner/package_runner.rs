@@ -6,18 +6,19 @@ use pyo3::{
 };
 
 use crate::{
-    Context, IndividualTestResultKind, TestRunResult,
+    Context, IndividualTestResultKind,
     diagnostic::{Diagnostic, FunctionDefinitionLocation, FunctionKind},
     extensions::{
         fixtures::{
-            Finalizer, Fixture, FixtureManager, FixtureScope, NormalizedFixture,
-            missing_arguments_from_error,
+            Finalizer, FixtureManager, FixtureScope, NormalizedFixture, RequiresFixtures,
+            missing_arguments_from_error, normalized_fixture::NormalizedFixtureValue,
+            python::FixtureRequest,
         },
         tags::{ExpectFailTag, python::SkipError},
     },
-    name::QualifiedFunctionName,
     normalize::models::{NormalizedModule, NormalizedPackage, NormalizedTestFunction},
     runner::{FinalizerCache, FixtureCache},
+    utils::full_test_name,
 };
 
 /// Collects and processes test cases from normalized packages, modules, and test functions.
@@ -31,20 +32,14 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
     }
 
     pub(crate) fn run(&mut self, py: Python<'_>, session: &NormalizedPackage) {
-        tracing::info!("Running normalized test cases");
-
         let mut fixture_manager = FixtureManager::new();
         let mut fixture_cache = FixtureCache::new();
         let mut finalizer_cache = FinalizerCache::new();
 
         for fixture in &session.auto_use_fixtures {
-            if let Ok((_, Some(finalizer))) = self.execute_normalized_fixture(
-                py,
-                fixture,
-                &mut fixture_cache,
-                &mut finalizer_cache,
-                &mut fixture_manager,
-            ) {
+            if let Ok((_, Some(finalizer))) =
+                execute_normalized_fixture(py, fixture, &mut fixture_cache, &mut finalizer_cache)
+            {
                 finalizer_cache.add_finalizer(finalizer);
             }
         }
@@ -58,7 +53,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         );
 
         // Run session-level finalizers
-        let diagnostics = finalizer_cache.run_and_clear_session(py);
+        let diagnostics = finalizer_cache.run_and_clear_scope(py, FixtureScope::Session);
         self.context.result_mut().add_test_diagnostics(diagnostics);
 
         self.context
@@ -81,13 +76,9 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         fixture_manager.new_finalizer_scope();
 
         for fixture in &module.auto_use_fixtures {
-            if let Ok((_, Some(finalizer))) = self.execute_normalized_fixture(
-                py,
-                fixture,
-                fixture_cache,
-                finalizer_cache,
-                fixture_manager,
-            ) {
+            if let Ok((_, Some(finalizer))) =
+                execute_normalized_fixture(py, fixture, fixture_cache, finalizer_cache)
+            {
                 finalizer_cache.add_finalizer(finalizer);
             }
         }
@@ -95,13 +86,8 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         let mut passed = true;
 
         for test_function in &module.test_functions {
-            let test_passed = self.run_normalized_test(
-                py,
-                test_function,
-                fixture_manager,
-                fixture_cache,
-                finalizer_cache,
-            );
+            let test_passed =
+                self.run_normalized_test(py, test_function, fixture_cache, finalizer_cache);
             passed &= test_passed;
 
             if self.context.project().options().fail_fast() && !passed {
@@ -110,7 +96,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         }
 
         // Run module-level finalizers
-        let diagnostics = finalizer_cache.run_and_clear_module(py);
+        let diagnostics = finalizer_cache.run_and_clear_scope(py, FixtureScope::Module);
         self.context.result_mut().add_test_diagnostics(diagnostics);
 
         // Clear module-scoped fixtures
@@ -131,13 +117,9 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         fixture_manager.new_finalizer_scope();
 
         for fixture in &package.auto_use_fixtures {
-            if let Ok((_, Some(finalizer))) = self.execute_normalized_fixture(
-                py,
-                fixture,
-                fixture_cache,
-                finalizer_cache,
-                fixture_manager,
-            ) {
+            if let Ok((_, Some(finalizer))) =
+                execute_normalized_fixture(py, fixture, fixture_cache, finalizer_cache)
+            {
                 finalizer_cache.add_finalizer(finalizer);
             }
         }
@@ -163,7 +145,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         }
 
         // Run package-level finalizers
-        let diagnostics = finalizer_cache.run_and_clear_package(py);
+        let diagnostics = finalizer_cache.run_and_clear_scope(py, FixtureScope::Package);
         self.context.result_mut().add_test_diagnostics(diagnostics);
 
         // Clear package-scoped fixtures
@@ -173,148 +155,11 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         passed
     }
 
-    /// Execute a normalized fixture and all its dependencies, returning the fixture value and optional finalizer.
-    ///
-    /// For function-scoped fixtures, the finalizer (if any) should be run immediately after the test completes.
-    /// For higher-scoped fixtures (module/package/session), finalizers are added to the FinalizerCache.
-    fn execute_normalized_fixture(
-        &mut self,
-        py: Python<'_>,
-        fixture: &NormalizedFixture,
-        fixture_cache: &mut FixtureCache,
-        finalizer_cache: &mut FinalizerCache,
-        fixture_manager: &mut FixtureManager,
-    ) -> PyResult<(Py<PyAny>, Option<Finalizer>)> {
-        // Check if already executed (cached)
-        if let Some(cached) = fixture_cache.get(fixture.name(), fixture.scope()) {
-            // Cached fixtures have already had their finalizers stored/run
-            return Ok((cached.clone(), None));
-        }
-
-        // Execute dependencies first
-        let mut dep_kwargs = HashMap::new();
-        for dep in fixture.dependencies() {
-            let (dep_value, dep_finalizer) = self.execute_normalized_fixture(
-                py,
-                dep,
-                fixture_cache,
-                finalizer_cache,
-                fixture_manager,
-            )?;
-
-            // Dependency finalizers are always added to the cache
-            // They need to outlive the current fixture execution
-            if let Some(finalizer) = dep_finalizer {
-                finalizer_cache.add_finalizer(finalizer);
-            }
-
-            dep_kwargs.insert(
-                dep.original_name()
-                    .as_ref()
-                    .map_or_else(|| dep.name(), QualifiedFunctionName::function_name),
-                dep_value,
-            );
-        }
-
-        // Build kwargs for this fixture
-        let kwargs_dict = PyDict::new(py);
-        for (key, value) in &dep_kwargs {
-            kwargs_dict.set_item(key, value)?;
-        }
-
-        // For builtin fixtures, the value is stored directly in the function field
-        // and function_definition is None. Return the value directly without calling.
-        let result = if fixture.function_definition().is_none() {
-            // Builtin fixture - return value directly
-            fixture.function().clone()
-        } else {
-            // Regular fixture - execute the function
-            // Check if the fixture function expects a 'request' parameter
-            // If it does, create a FixtureRequest object with the param value
-            if let Some(function_def) = fixture.function_definition() {
-                use crate::extensions::fixtures::{RequiresFixtures, python::FixtureRequest};
-                let required = function_def.required_fixtures(py);
-
-                if required.contains(&"request".to_string()) {
-                    // Create FixtureRequest with param (or None if not parametrized)
-                    let param_value = fixture.param().map_or_else(|| py.None(), Clone::clone);
-
-                    let request_obj = Py::new(py, FixtureRequest::new(param_value))?;
-                    kwargs_dict.set_item("request", request_obj)?;
-                }
-            }
-
-            // Call the fixture function
-            if kwargs_dict.is_empty() {
-                fixture.function().call0(py)?
-            } else {
-                fixture.function().call(py, (), Some(&kwargs_dict))?
-            }
-        };
-
-        // If this is a generator fixture, we need to call next() to get the actual value
-        // and create a finalizer for cleanup
-        let (final_result, finalizer) = if fixture.is_generator() {
-            // Try to downcast to PyIterator
-            let bound_result = result.bind(py);
-            if let Ok(py_iter_bound) = bound_result.cast::<PyIterator>() {
-                // Get an unbounded Py<PyIterator>
-                let py_iter: Py<PyIterator> = py_iter_bound.clone().unbind();
-                // Get a mutable iterator
-                let mut iterator = py_iter.bind(py).clone();
-                // Call next() to get the yielded value
-                match iterator.next() {
-                    Some(Ok(value)) => {
-                        // Create the finalizer
-                        let finalizer = Finalizer::new(
-                            fixture.name().to_string(),
-                            py_iter,
-                            fixture.scope(),
-                            fixture.auto_use(),
-                        );
-                        (value.unbind(), Some(finalizer))
-                    }
-                    Some(Err(err)) => return Err(err),
-                    None => (result, None), // No yield statement, use the result as is
-                }
-            } else {
-                (result, None)
-            }
-        } else {
-            (result, None)
-        };
-
-        // Cache the result
-        fixture_cache.insert(
-            fixture.name().to_string(),
-            final_result.clone(),
-            fixture.scope(),
-        );
-
-        // Handle finalizer based on scope
-        // Function-scoped finalizers are returned to be run immediately after the test
-        // Higher-scoped finalizers are added to the cache
-        let return_finalizer = finalizer.map_or_else(
-            || None,
-            |f| {
-                if f.scope() == FixtureScope::Function {
-                    Some(f)
-                } else {
-                    finalizer_cache.add_finalizer(f);
-                    None
-                }
-            },
-        );
-
-        Ok((final_result, return_finalizer))
-    }
-
     /// Run a normalized test function.
     fn run_normalized_test(
         &mut self,
         py: Python<'_>,
         test_fn: &NormalizedTestFunction,
-        fixture_manager: &mut FixtureManager,
         fixture_cache: &mut FixtureCache,
         finalizer_cache: &mut FinalizerCache,
     ) -> bool {
@@ -324,6 +169,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         if let Some(skip_tag) = test_fn.tags().skip_tag() {
             if skip_tag.should_skip() {
                 let reporter = self.context.reporter();
+
                 self.context.result_mut().register_test_case_result(
                     test_name,
                     IndividualTestResultKind::Skipped {
@@ -350,7 +196,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     py,
                     &err,
                     FunctionDefinitionLocation::new(
-                        fixture.original_name().as_ref().unwrap().to_string(),
+                        fixture.name().to_string(),
                         fixture.location.clone(),
                     ),
                 )
@@ -372,13 +218,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
         // Execute use_fixtures (for side effects only, don't pass to test)
         for fixture in test_fn.use_fixture_dependencies() {
-            match self.execute_normalized_fixture(
-                py,
-                fixture,
-                fixture_cache,
-                finalizer_cache,
-                fixture_manager,
-            ) {
+            match execute_normalized_fixture(py, fixture, fixture_cache, finalizer_cache) {
                 Ok((_value, finalizer)) => {
                     // use_fixtures are executed for side effects only
                     // Don't add to kwargs
@@ -396,21 +236,9 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         // Execute regular fixture dependencies and add them to kwargs
         let mut kwargs = HashMap::new();
         for fixture in test_fn.fixture_dependencies() {
-            match self.execute_normalized_fixture(
-                py,
-                fixture,
-                fixture_cache,
-                finalizer_cache,
-                fixture_manager,
-            ) {
+            match execute_normalized_fixture(py, fixture, fixture_cache, finalizer_cache) {
                 Ok((value, finalizer)) => {
-                    kwargs.insert(
-                        fixture
-                            .original_name()
-                            .as_ref()
-                            .map_or_else(|| fixture.name(), QualifiedFunctionName::function_name),
-                        value,
-                    );
+                    kwargs.insert(fixture.name().function_name(), value);
                     if let Some(f) = finalizer {
                         test_finalizers.push(f);
                     }
@@ -427,14 +255,12 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
             kwargs.insert(key, value.clone());
         }
 
+        let full_test_name = full_test_name(py, test_fn.original_name().to_string(), &kwargs);
+
         for fixture in &test_fn.auto_use_fixtures {
-            if let Ok((_, Some(finalizer))) = self.execute_normalized_fixture(
-                py,
-                fixture,
-                fixture_cache,
-                finalizer_cache,
-                fixture_manager,
-            ) {
+            if let Ok((_, Some(finalizer))) =
+                execute_normalized_fixture(py, fixture, fixture_cache, finalizer_cache)
+            {
                 finalizer_cache.add_finalizer(finalizer);
             }
         }
@@ -454,8 +280,8 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         let result = match test_result {
             Ok(_) => {
                 if expect_fail {
-                    // Test was expected to fail but passed
                     let reason = expect_fail_tag.and_then(|tag| tag.reason());
+
                     let diagnostic = Diagnostic::pass_on_expect_fail(
                         reason,
                         FunctionDefinitionLocation::new(
@@ -463,17 +289,21 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                             test_fn.location().to_string(),
                         ),
                     );
+
                     let result = self.context.result_mut();
+
                     result.register_test_case_result(
-                        test_name,
+                        &full_test_name,
                         IndividualTestResultKind::Failed,
                         Some(reporter),
                     );
+
                     result.add_test_diagnostic(diagnostic);
+
                     false
                 } else {
                     self.context.result_mut().register_test_case_result(
-                        test_name,
+                        &full_test_name,
                         IndividualTestResultKind::Passed,
                         Some(reporter),
                     );
@@ -481,11 +311,10 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                 }
             }
             Err(err) => {
-                // Check if it's a skip exception
                 if is_skip_exception(py, &err) {
                     let reason = extract_skip_reason(py, &err);
                     self.context.result_mut().register_test_case_result(
-                        test_name,
+                        &full_test_name,
                         IndividualTestResultKind::Skipped { reason },
                         Some(reporter),
                     );
@@ -493,7 +322,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                 } else if expect_fail {
                     // Test failed and was expected to fail
                     self.context.result_mut().register_test_case_result(
-                        test_name,
+                        &full_test_name,
                         IndividualTestResultKind::Passed,
                         Some(reporter),
                     );
@@ -526,7 +355,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     self.context.result_mut().add_test_diagnostic(diagnostic);
 
                     self.context.result_mut().register_test_case_result(
-                        test_name,
+                        &full_test_name,
                         IndividualTestResultKind::Failed,
                         Some(reporter),
                     );
@@ -544,7 +373,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         }
 
         // Cleanup other function-scoped fixtures (from cache) after the test
-        let cleanup_diagnostics = finalizer_cache.run_and_clear_function(py);
+        let cleanup_diagnostics = finalizer_cache.run_and_clear_scope(py, FixtureScope::Function);
         self.context
             .result_mut()
             .add_test_diagnostics(cleanup_diagnostics);
@@ -589,4 +418,120 @@ fn extract_skip_reason(py: Python<'_>, err: &PyErr) -> Option<String> {
     }
 
     None
+}
+
+/// Execute a normalized fixture and all its dependencies, returning the fixture value and optional finalizer.
+///
+/// For function-scoped fixtures, the finalizer (if any) should be run immediately after the test completes.
+/// For higher-scoped fixtures (module/package/session), finalizers are added to the `FinalizerCache`.
+fn execute_normalized_fixture(
+    py: Python<'_>,
+    fixture: &NormalizedFixture,
+    fixture_cache: &mut FixtureCache,
+    finalizer_cache: &mut FinalizerCache,
+) -> PyResult<(Py<PyAny>, Option<Finalizer>)> {
+    // Check if already executed (cached)
+    if let Some(cached) = fixture_cache.get(fixture.name().function_name(), fixture.scope) {
+        // Cached fixtures have already had their finalizers stored/run
+        return Ok((cached.clone(), None));
+    }
+
+    // Execute dependencies first
+    let mut dep_kwargs = HashMap::new();
+    for dep in fixture.dependencies() {
+        let (dep_value, dep_finalizer) =
+            execute_normalized_fixture(py, dep, fixture_cache, finalizer_cache)?;
+
+        // Dependency finalizers are always added to the cache
+        // They need to outlive the current fixture execution
+        if let Some(finalizer) = dep_finalizer {
+            finalizer_cache.add_finalizer(finalizer);
+        }
+
+        dep_kwargs.insert(dep.name().function_name(), dep_value);
+    }
+
+    // Build kwargs for this fixture
+    let kwargs_dict = PyDict::new(py);
+    for (key, value) in &dep_kwargs {
+        kwargs_dict.set_item(key, value)?;
+    }
+
+    // For builtin fixtures, the value is stored directly in the function field
+    // and function_definition is None. Return the value directly without calling.
+    let result = match &fixture.value {
+        NormalizedFixtureValue::Computed(value) => value.clone(),
+
+        NormalizedFixtureValue::Function(function) => {
+            if let Some(function_def) = fixture.function_definition() {
+                let required = function_def.required_fixtures(py);
+
+                if required.contains(&"request".to_string()) {
+                    // Create FixtureRequest with param (or None if not parametrized)
+                    let param_value = fixture.param().map_or_else(|| py.None(), Clone::clone);
+
+                    let request_obj = Py::new(py, FixtureRequest::new(param_value))?;
+                    kwargs_dict.set_item("request", request_obj)?;
+                }
+            }
+
+            if kwargs_dict.is_empty() {
+                function.call0(py)?
+            } else {
+                function.call(py, (), Some(&kwargs_dict))?
+            }
+        }
+    };
+
+    // If this is a generator fixture, we need to call next() to get the actual value
+    // and create a finalizer for cleanup
+    let (final_result, finalizer) = if fixture.is_generator {
+        // Try to downcast to PyIterator
+        let bound_result = result.bind(py);
+        if let Ok(py_iter_bound) = bound_result.cast::<PyIterator>() {
+            // Get an unbounded Py<PyIterator>
+            let py_iter: Py<PyIterator> = py_iter_bound.clone().unbind();
+            // Get a mutable iterator
+            let mut iterator = py_iter.bind(py).clone();
+            // Call next() to get the yielded value
+            match iterator.next() {
+                Some(Ok(value)) => {
+                    let finalizer =
+                        Finalizer::new(fixture.name().to_string(), py_iter, fixture.scope);
+
+                    (value.unbind(), Some(finalizer))
+                }
+                Some(Err(err)) => return Err(err),
+                None => (result, None), // No yield statement, use the result as is
+            }
+        } else {
+            (result, None)
+        }
+    } else {
+        (result, None)
+    };
+
+    // Cache the result
+    fixture_cache.insert(
+        fixture.name().function_name().to_string(),
+        final_result.clone(),
+        fixture.scope,
+    );
+
+    // Handle finalizer based on scope
+    // Function-scoped finalizers are returned to be run immediately after the test
+    // Higher-scoped finalizers are added to the cache
+    let return_finalizer = finalizer.map_or_else(
+        || None,
+        |f| {
+            if f.scope() == FixtureScope::Function {
+                Some(f)
+            } else {
+                finalizer_cache.add_finalizer(f);
+                None
+            }
+        },
+    );
+
+    Ok((final_result, return_finalizer))
 }

@@ -336,11 +336,11 @@ def session_fixture():
 
 @pytest.mark.usefixtures("session_fixture")
 def test_pytest_session_1():
-    assert arr == [1]
+    assert arr == [1], arr
 
 @pytest.mark.usefixtures("session_fixture")
 def test_pytest_session_2():
-    assert arr == [1]
+    assert arr == [1], arr
 "#,
     )]);
 

@@ -4,7 +4,5 @@ use crate::{extensions::fixtures::NormalizedFixture, normalize::models::Normaliz
 pub struct NormalizedModule {
     pub(crate) test_functions: Vec<NormalizedTestFunction>,
 
-    pub(crate) fixtures: Vec<NormalizedFixture>,
-
     pub(crate) auto_use_fixtures: Vec<NormalizedFixture>,
 }

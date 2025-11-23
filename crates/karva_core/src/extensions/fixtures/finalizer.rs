@@ -2,26 +2,6 @@ use pyo3::{prelude::*, types::PyIterator};
 
 use crate::{diagnostic::Diagnostic, extensions::fixtures::FixtureScope};
 
-/// Represents a collection of finalizers.
-#[derive(Debug, Default, Clone)]
-pub(crate) struct Finalizers(Vec<Finalizer>);
-
-impl Finalizers {
-    pub(crate) const fn new(finalizers: Vec<Finalizer>) -> Self {
-        Self(finalizers)
-    }
-
-    pub(crate) fn run(&self, py: Python<'_>) -> Vec<Diagnostic> {
-        let mut diagnostics = Vec::new();
-        for finalizer in &self.0 {
-            if let Some(diagnostic) = finalizer.run(py) {
-                diagnostics.push(diagnostic);
-            }
-        }
-        diagnostics
-    }
-}
-
 /// Represents a generator function that can be used to run the finalizer section of a fixture.
 ///
 /// ```py
@@ -34,7 +14,6 @@ pub(crate) struct Finalizer {
     pub(crate) fixture_name: String,
     pub(crate) fixture_return: Py<PyIterator>,
     pub(crate) scope: FixtureScope,
-    pub(crate) auto_use: bool,
 }
 
 impl Finalizer {
@@ -42,13 +21,11 @@ impl Finalizer {
         fixture_name: String,
         fixture_return: Py<PyIterator>,
         scope: FixtureScope,
-        auto_use: bool,
     ) -> Self {
         Self {
             fixture_name,
             fixture_return,
             scope,
-            auto_use,
         }
     }
 

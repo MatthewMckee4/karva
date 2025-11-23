@@ -3,15 +3,14 @@ use std::collections::HashMap;
 use pyo3::prelude::*;
 
 use crate::{
-    Context,
-    diagnostic::{Diagnostic, FunctionKind},
     discovery::{DiscoveredModule, DiscoveredPackage, TestFunction},
     extensions::fixtures::{
-        Fixture, FixtureManager, FixtureScope, HasFixtures, NormalizedFixture, RequiresFixtures,
+        Fixture, FixtureScope, HasFixtures, NormalizedFixture, NormalizedFixtureName,
+        NormalizedFixtureValue, RequiresFixtures, get_auto_use_fixtures,
     },
     normalize::{
         models::{NormalizedModule, NormalizedPackage, NormalizedTestFunction},
-        utils::{cartesian_product, stringify_param, stringify_params},
+        utils::cartesian_product,
     },
     utils::{function_definition_location, iter_with_ancestors},
 };
@@ -19,17 +18,13 @@ use crate::{
 pub mod models;
 mod utils;
 
-pub struct DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
-    context: &'ctx mut Context<'proj, 'rep>,
-    /// Cache to avoid re-normalizing the same fixture multiple times
-    /// Key: (`fixture_name`, `sorted_dependency_names`)
+pub struct DiscoveredPackageNormalizer {
     normalization_cache: HashMap<String, Vec<NormalizedFixture>>,
 }
 
-impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
-    pub(crate) fn new(context: &'ctx mut Context<'proj, 'rep>) -> Self {
+impl DiscoveredPackageNormalizer {
+    pub(crate) fn new() -> Self {
         Self {
-            context,
             normalization_cache: HashMap::new(),
         }
     }
@@ -37,20 +32,14 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
     pub(crate) fn normalize(
         &mut self,
         py: Python,
-        session: DiscoveredPackage,
+        session: &DiscoveredPackage,
     ) -> NormalizedPackage {
         tracing::info!("Normalizing package");
 
-        let mut fixture_manager = FixtureManager::new();
+        let session_fixtures =
+            get_auto_use_fixtures(&session, &FixtureScope::Session.scopes_above());
 
-        let session_fixtures = fixture_manager.get_auto_use_fixtures(
-            &[],
-            &session,
-            &FixtureScope::Session.scopes_above(),
-            &[],
-        );
-
-        let normalized_fixtures = session_fixtures
+        let session_fixtures = session_fixtures
             .into_iter()
             .flat_map(|fixture| {
                 self.normalize_fixture(py, fixture, &[], session.configuration_module().unwrap())
@@ -58,12 +47,11 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
             .collect::<Vec<_>>();
 
         // Normalize the package recursively
-        let mut normalized_package =
-            self.normalize_package_impl(py, &session, &[], &mut fixture_manager);
+        let mut normalized_package = self.normalize_package_impl(py, session, &[]);
 
         normalized_package
             .auto_use_fixtures
-            .extend(normalized_fixtures);
+            .extend(session_fixtures);
 
         normalized_package
     }
@@ -94,19 +82,17 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
         // Recursively normalize each dependency
         let mut normalized_deps: Vec<Vec<NormalizedFixture>> = Vec::new();
 
-        let mut missing_fixtures = Vec::new();
-
         for dep_name in &dependency_names {
             // Check for builtin fixtures first
             if let Some(builtin_fixture) =
                 crate::extensions::fixtures::builtins::get_builtin_fixture(py, dep_name)
             {
                 normalized_deps.push(vec![builtin_fixture]);
-            } else if let Some(dep_fixture) = self.find_fixture(dep_name, parents, current) {
+            } else if let Some(dep_fixture) =
+                find_fixture(Some(fixture), dep_name, parents, current)
+            {
                 let normalized = self.normalize_fixture(py, dep_fixture, parents, current);
                 normalized_deps.push(normalized);
-            } else {
-                missing_fixtures.push(dep_name.clone());
             }
         }
 
@@ -123,25 +109,25 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
             let location = function_definition_location(current, fixture.function_definition());
 
             let normalized = NormalizedFixture::new(
-                fixture.name().to_string(),
-                Some(fixture.name().clone()),
+                NormalizedFixtureName::UserDefined(fixture.name().clone()),
                 None,
                 dependencies,
                 location,
-                missing_fixtures,
                 fixture.scope(),
-                fixture.auto_use(),
                 fixture.is_generator(),
-                fixture.function().clone(),
+                NormalizedFixtureValue::Function(fixture.function().clone()),
                 Some(fixture.function_definition().clone()),
             );
 
             let result = vec![normalized];
-            self.normalization_cache.insert(cache_key, result.clone());
+
+            if !(fixture.auto_use() && fixture.scope() == FixtureScope::Function) {
+                self.normalization_cache.insert(cache_key, result.clone());
+            }
+
             return result;
         }
 
-        // Create cartesian product of dependencies and parameters
         let mut result = Vec::new();
 
         // If there are no parameters, use a single None value
@@ -151,40 +137,24 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
             params.iter().map(Some).collect()
         };
 
-        // Get all dependency combinations
         let dep_combinations = if normalized_deps.is_empty() {
             vec![vec![]]
         } else {
             cartesian_product(normalized_deps)
         };
 
-        // Compute location once for all variants
         let location = function_definition_location(current, fixture.function_definition());
 
         for dep_combination in dep_combinations {
             for param in &param_list {
-                let name = param.as_ref().map_or_else(
-                    || fixture.name().function_name().to_string(),
-                    |p| {
-                        format!(
-                            "{}[{}]",
-                            fixture.name().function_name(),
-                            stringify_param(py, p)
-                        )
-                    },
-                );
-
                 let normalized = NormalizedFixture::new(
-                    name,
-                    Some(fixture.name().clone()),
+                    NormalizedFixtureName::UserDefined(fixture.name().clone()),
                     param.cloned(),
                     dep_combination.clone(),
                     location.clone(),
-                    missing_fixtures.clone(),
                     fixture.scope(),
-                    fixture.auto_use(),
                     fixture.is_generator(),
-                    fixture.function().clone(),
+                    NormalizedFixtureValue::Function(fixture.function().clone()),
                     Some(fixture.function_definition().clone()),
                 );
 
@@ -193,7 +163,10 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
         }
 
         // Cache the result
-        self.normalization_cache.insert(cache_key, result.clone());
+        if !(fixture.auto_use() && fixture.scope() == FixtureScope::Function) {
+            self.normalization_cache.insert(cache_key, result.clone());
+        }
+
         result
     }
 
@@ -205,16 +178,9 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
         test_fn: &TestFunction,
         parents: &[&DiscoveredPackage],
         module: &DiscoveredModule,
-        fixture_manager: &mut FixtureManager,
     ) -> Vec<NormalizedTestFunction> {
-        // Compute qualified name and location once
-
-        let function_auto_use_fixtures = fixture_manager.get_auto_use_fixtures(
-            parents,
-            module,
-            &FixtureScope::Function.scopes_above(),
-            &[],
-        );
+        let function_auto_use_fixtures =
+            get_auto_use_fixtures(module, &FixtureScope::Function.scopes_above());
 
         let function_auto_use_fixtures = function_auto_use_fixtures
             .into_iter()
@@ -223,10 +189,8 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
 
         let location = function_definition_location(module, test_fn.definition());
 
-        // Get test parametrization (from @pytest.mark.parametrize)
         let test_params = test_fn.tags().parametrize_args();
 
-        // Get parameter names from parametrize to exclude from fixtures
         let parametrize_param_names: Vec<String> = test_params
             .iter()
             .flat_map(|params| params.keys().cloned())
@@ -244,7 +208,6 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
 
         // Normalize regular fixtures
         let mut normalized_deps: Vec<Vec<NormalizedFixture>> = Vec::new();
-        let mut missing_fixtures = Vec::new();
 
         for dep_name in &regular_fixture_names {
             // Check for builtin fixtures first
@@ -252,11 +215,9 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
                 crate::extensions::fixtures::builtins::get_builtin_fixture(py, dep_name)
             {
                 normalized_deps.push(vec![builtin_fixture]);
-            } else if let Some(fixture) = self.find_fixture(dep_name, parents, module) {
+            } else if let Some(fixture) = find_fixture(None, dep_name, parents, module) {
                 let normalized = self.normalize_fixture(py, fixture, parents, module);
                 normalized_deps.push(normalized);
-            } else {
-                missing_fixtures.push(dep_name.clone());
             }
         }
 
@@ -269,13 +230,11 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
                 crate::extensions::fixtures::builtins::get_builtin_fixture(py, dep_name)
             {
                 normalized_use_fixtures.push(vec![builtin_fixture]);
-            } else if let Some(fixture) = self.find_fixture(dep_name, parents, module) {
+            } else if let Some(fixture) = find_fixture(None, dep_name, parents, module) {
                 let normalized = self.normalize_fixture(py, fixture, parents, module);
                 if !normalized.is_empty() {
                     normalized_use_fixtures.push(normalized);
                 }
-                // Note: we don't add missing use_fixtures to missing_fixtures
-                // because they're optional - if they don't exist, we just don't use them
             }
         }
 
@@ -303,13 +262,11 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
                 .collect();
 
             return vec![NormalizedTestFunction::new(
-                test_fn.name().function_name().to_string(),
                 test_fn.name().clone(),
                 location,
                 HashMap::new(),
                 fixture_dependencies,
                 use_fixture_dependencies,
-                missing_fixtures,
                 function_auto_use_fixtures,
                 test_fn.py_function().clone(),
                 test_fn.tags().clone(),
@@ -334,45 +291,12 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
         for dep_combination in dep_combinations {
             for use_fixture_combination in &use_fixture_combinations {
                 for test_param in &test_params {
-                    // Build the parameter name string
-                    let param_str = if test_param.is_empty() {
-                        // Include fixture params in name
-                        let fixture_params: Vec<String> = dep_combination
-                            .iter()
-                            .filter(|f| f.param().is_some())
-                            .map(|f| {
-                                format!(
-                                    "{}={}",
-                                    f.original_name()
-                                        .as_ref()
-                                        .map_or_else(|| f.name().to_string(), ToString::to_string),
-                                    stringify_param(py, f.param().unwrap())
-                                )
-                            })
-                            .collect();
-                        if fixture_params.is_empty() {
-                            String::new()
-                        } else {
-                            fixture_params.join(",")
-                        }
-                    } else {
-                        stringify_params(py, test_param)
-                    };
-
-                    let name = if param_str.is_empty() {
-                        test_fn.name().function_name().to_string()
-                    } else {
-                        format!("{}[{}]", test_fn.name().function_name(), param_str)
-                    };
-
                     let normalized = NormalizedTestFunction::new(
-                        name,
                         test_fn.name().clone(),
                         location.clone(),
                         test_param.clone(),
                         dep_combination.clone(),
                         use_fixture_combination.clone(),
-                        missing_fixtures.clone(),
                         function_auto_use_fixtures.clone(),
                         test_fn.py_function().clone(),
                         test_fn.tags().clone(),
@@ -386,43 +310,16 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
         result
     }
 
-    /// Finds a fixture by name, searching in the current module and parent packages
-    fn find_fixture<'a>(
-        &self,
-        name: &str,
-        parents: &'a [&'a DiscoveredPackage],
-        current: &'a DiscoveredModule,
-    ) -> Option<&'a Fixture> {
-        // First check the current module
-        if let Some(fixture) = current.get_fixture(name) {
-            return Some(fixture);
-        }
-
-        // Then check parent packages
-        for (parent, _ancestors) in iter_with_ancestors(parents) {
-            if let Some(fixture) = parent.get_fixture(name) {
-                return Some(fixture);
-            }
-        }
-
-        None
-    }
-
     fn normalize_module(
         &mut self,
         py: Python<'_>,
         module: &DiscoveredModule,
         parents: &[&DiscoveredPackage],
-        fixture_manager: &mut FixtureManager,
     ) -> NormalizedModule {
         tracing::debug!("Normalizing module: {}", module.path());
 
-        let module_auto_use_fixtures = fixture_manager.get_auto_use_fixtures(
-            parents,
-            module,
-            &FixtureScope::Module.scopes_above(),
-            &[],
-        );
+        let module_auto_use_fixtures =
+            get_auto_use_fixtures(module, &FixtureScope::Module.scopes_above());
 
         let module_auto_use_fixtures = module_auto_use_fixtures
             .into_iter()
@@ -430,31 +327,17 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
             .collect::<Vec<_>>();
 
         let mut normalized_test_functions = Vec::new();
-        let mut normalized_fixtures = Vec::new();
 
-        // Normalize all fixtures in the module
-        for fixture in module.fixtures() {
-            let normalized = self.normalize_fixture(py, fixture, parents, module);
-            normalized_fixtures.extend(normalized);
-        }
-
-        // Normalize all test functions
         for test_function in module.test_functions() {
-            let normalized_tests =
-                self.normalize_test_function(py, test_function, parents, module, fixture_manager);
+            let normalized_tests = self.normalize_test_function(py, test_function, parents, module);
 
             for normalized_test in normalized_tests {
-                tracing::debug!(
-                    "Normalized test: {}",
-                    normalized_test.synthetic_name.clone()
-                );
                 normalized_test_functions.push(normalized_test);
             }
         }
 
         NormalizedModule {
             test_functions: normalized_test_functions,
-            fixtures: normalized_fixtures,
             auto_use_fixtures: module_auto_use_fixtures,
         }
     }
@@ -464,18 +347,13 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
         py: Python<'_>,
         package: &DiscoveredPackage,
         parents: &[&DiscoveredPackage],
-        fixture_manager: &mut FixtureManager,
     ) -> NormalizedPackage {
         let mut new_parents = parents.to_vec();
 
         new_parents.push(package);
 
-        let package_auto_use_fixtures = fixture_manager.get_auto_use_fixtures(
-            parents,
-            package,
-            &FixtureScope::Package.scopes_above(),
-            &[],
-        );
+        let package_auto_use_fixtures =
+            get_auto_use_fixtures(package, &FixtureScope::Package.scopes_above());
 
         let package_auto_use_fixtures = package_auto_use_fixtures
             .into_iter()
@@ -492,16 +370,14 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
         let mut modules = HashMap::new();
 
         for (path, module) in package.modules() {
-            let normalized_module =
-                self.normalize_module(py, module, &new_parents, fixture_manager);
+            let normalized_module = self.normalize_module(py, module, &new_parents);
             modules.insert(path.clone(), normalized_module);
         }
 
         let mut packages = HashMap::new();
 
         for (path, sub_package) in package.packages() {
-            let normalized_package =
-                self.normalize_package_impl(py, sub_package, &new_parents, fixture_manager);
+            let normalized_package = self.normalize_package_impl(py, sub_package, &new_parents);
             packages.insert(path.clone(), normalized_package);
         }
 
@@ -511,4 +387,34 @@ impl<'ctx, 'proj, 'rep> DiscoveredPackageNormalizer<'ctx, 'proj, 'rep> {
 
         normalized_package
     }
+}
+
+/// Finds a fixture by name, searching in the current module and parent packages
+///
+/// We pass in the current fixture to ensure that we don't return the same fixture twice.
+/// This can cause a stack overflow.
+fn find_fixture<'a>(
+    current_fixture: Option<&Fixture>,
+    name: &str,
+    parents: &'a [&'a DiscoveredPackage],
+    current: &'a DiscoveredModule,
+) -> Option<&'a Fixture> {
+    // First check the current module
+    if let Some(fixture) = current.get_fixture(name)
+        && current_fixture.is_none_or(|current_fixture| current_fixture.name() != fixture.name())
+    {
+        return Some(fixture);
+    }
+
+    // Then check parent packages
+    for (parent, _ancestors) in iter_with_ancestors(parents) {
+        if let Some(fixture) = parent.get_fixture(name)
+            && current_fixture
+                .is_none_or(|current_fixture| current_fixture.name() != fixture.name())
+        {
+            return Some(fixture);
+        }
+    }
+
+    None
 }

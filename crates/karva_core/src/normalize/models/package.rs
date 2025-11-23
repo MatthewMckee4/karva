@@ -16,9 +16,9 @@ pub struct NormalizedPackage {
 impl NormalizedPackage {
     pub(crate) const fn new(
         modules: HashMap<Utf8PathBuf, NormalizedModule>,
-        packages: HashMap<Utf8PathBuf, NormalizedPackage>,
+        packages: HashMap<Utf8PathBuf, Self>,
     ) -> Self {
-        NormalizedPackage {
+        Self {
             modules,
             packages,
             auto_use_fixtures: Vec::new(),

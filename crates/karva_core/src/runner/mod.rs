@@ -1,8 +1,10 @@
 use karva_project::Project;
 
-use crate::{Context, DummyReporter, Reporter, discovery::StandardDiscoverer, normalize::DiscoveredPackageNormalizer, utils::attach};
+use crate::{
+    Context, DummyReporter, Reporter, discovery::StandardDiscoverer,
+    normalize::DiscoveredPackageNormalizer, utils::attach,
+};
 
-mod case;
 pub mod diagnostic;
 mod finalizer_cache;
 mod fixture_cache;
@@ -43,8 +45,7 @@ impl<'proj> StandardTestRunner<'proj> {
             // Normalize the discovered session - this resolves all parametrized fixtures
             // by splitting them into individual fixtures with new names matching the param.
             // Test functions are also expanded to match the new fixture names.
-            let normalized_session = DiscoveredPackageNormalizer::new(&mut context)
-                .normalize(py, session);
+            let normalized_session = DiscoveredPackageNormalizer::new().normalize(py, &session);
 
             NormalizedPackageRunner::new(&mut context).run(py, &normalized_session);
 

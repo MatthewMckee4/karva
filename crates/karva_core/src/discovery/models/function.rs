@@ -1,19 +1,9 @@
-use std::collections::HashMap;
-
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
-    Context,
-    diagnostic::{Diagnostic, FunctionKind},
-    discovery::{DiscoveredModule, DiscoveredPackage},
-    extensions::{
-        fixtures::{FixtureManager, RequiresFixtures},
-        tags::Tags,
-    },
+    extensions::{fixtures::RequiresFixtures, tags::Tags},
     name::{ModulePath, QualifiedFunctionName},
-    normalize::models::NormalizedTestFunction,
-    utils::function_definition_location,
 };
 
 /// Represents a single test function discovered from Python source code.

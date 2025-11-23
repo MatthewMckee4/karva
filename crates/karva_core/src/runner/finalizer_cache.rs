@@ -46,7 +46,7 @@ impl FinalizerCache {
         }
     }
 
-    /// Run and clear finalizers at a specific scope level
+    /// Run and clear finalizers athist a specific scope level
     pub fn run_and_clear_scope(&mut self, py: Python<'_>, scope: FixtureScope) -> Vec<Diagnostic> {
         let finalizers = match scope {
             FixtureScope::Session => std::mem::take(&mut self.session),
@@ -64,36 +64,6 @@ impl FinalizerCache {
         }
 
         diagnostics
-    }
-
-    /// Run and clear function-scoped finalizers
-    pub fn run_and_clear_function(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
-        self.run_and_clear_scope(py, FixtureScope::Function)
-    }
-
-    /// Run and clear module-scoped finalizers
-    pub fn run_and_clear_module(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
-        self.run_and_clear_scope(py, FixtureScope::Module)
-    }
-
-    /// Run and clear package-scoped finalizers
-    pub fn run_and_clear_package(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
-        self.run_and_clear_scope(py, FixtureScope::Package)
-    }
-
-    /// Run and clear session-scoped finalizers
-    pub fn run_and_clear_session(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
-        self.run_and_clear_scope(py, FixtureScope::Session)
-    }
-
-    /// Check if there are any finalizers at a specific scope
-    pub fn has_finalizers(&self, scope: FixtureScope) -> bool {
-        match scope {
-            FixtureScope::Session => !self.session.is_empty(),
-            FixtureScope::Package => !self.package.is_empty(),
-            FixtureScope::Module => !self.module.is_empty(),
-            FixtureScope::Function => !self.function.is_empty(),
-        }
     }
 }
 

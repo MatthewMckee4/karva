@@ -305,7 +305,6 @@ def test_2(x_function):
 }
 
 #[test]
-#[ignore = "TODO"]
 fn test_fixture_override_in_test_modules() {
     let context = TestContext::with_files([
         (

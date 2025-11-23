@@ -11,14 +11,10 @@ use crate::{
 /// For parametrized tests, each parameter combination gets its own `NormalizedTestFunction`.
 #[derive(Debug)]
 pub struct NormalizedTestFunction {
-    /// Unique name including all parameters: "`test_foo`[x=1,y='a']"
-    /// For non-parametrized tests, this is the same as `original_name`
-    pub(crate) synthetic_name: String,
-
     /// Original test function name: "`test_foo`"
     pub(crate) original_name: QualifiedFunctionName,
 
-    /// Location in source code: "<file_path>:<line_number>"
+    /// Location in source code: "<`file_path>`:<`line_number`>"
     pub(crate) location: String,
 
     /// Test-level parameters (from @pytest.mark.parametrize)
@@ -30,11 +26,9 @@ pub struct NormalizedTestFunction {
     /// These are the regular fixtures that should be passed as arguments to the test function
     pub(crate) fixture_dependencies: Vec<NormalizedFixture>,
 
-    /// Fixtures from use_fixtures tag that should only be executed for side effects
+    /// Fixtures from `use_fixtures` tag that should only be executed for side effects
     /// These should NOT be passed as arguments to the test function
     pub(crate) use_fixture_dependencies: Vec<NormalizedFixture>,
-
-    pub(crate) missing_fixtures: Vec<String>,
 
     pub(crate) auto_use_fixtures: Vec<NormalizedFixture>,
 
@@ -44,27 +38,23 @@ pub struct NormalizedTestFunction {
 }
 
 impl NormalizedTestFunction {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub(crate) const fn new(
-        synthetic_name: String,
         original_name: QualifiedFunctionName,
         location: String,
         params: HashMap<String, Py<PyAny>>,
         fixture_dependencies: Vec<NormalizedFixture>,
         use_fixture_dependencies: Vec<NormalizedFixture>,
-        missing_fixtures: Vec<String>,
         auto_use_fixtures: Vec<NormalizedFixture>,
         function: Py<PyAny>,
         tags: Tags,
     ) -> Self {
         Self {
-            synthetic_name,
             original_name,
             location,
             params,
             fixture_dependencies,
             use_fixture_dependencies,
-            missing_fixtures,
             auto_use_fixtures,
             function,
             tags,

@@ -11,9 +11,11 @@ pub mod python;
 mod traits;
 pub mod utils;
 
-pub(crate) use finalizer::{Finalizer, Finalizers};
-pub(crate) use manager::FixtureManager;
-pub(crate) use normalized_fixture::NormalizedFixture;
+pub(crate) use finalizer::Finalizer;
+pub(crate) use manager::{FixtureManager, get_auto_use_fixtures};
+pub(crate) use normalized_fixture::{
+    NormalizedFixture, NormalizedFixtureName, NormalizedFixtureValue,
+};
 pub(crate) use traits::{HasFixtures, RequiresFixtures};
 pub(crate) use utils::missing_arguments_from_error;
 
@@ -41,22 +43,6 @@ impl FixtureScope {
             Package => vec![Package, Session],
             Session => vec![Session],
         }
-    }
-}
-
-impl PartialOrd for FixtureScope {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        const fn rank(scope: FixtureScope) -> usize {
-            match scope {
-                FixtureScope::Function => 0,
-                FixtureScope::Module => 1,
-                FixtureScope::Package => 2,
-                FixtureScope::Session => 3,
-            }
-        }
-        let self_rank = rank(*self);
-        let other_rank = rank(*other);
-        Some(self_rank.cmp(&other_rank))
     }
 }
 
