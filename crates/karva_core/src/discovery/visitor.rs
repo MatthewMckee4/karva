@@ -113,8 +113,9 @@ impl<'proj, 'py, 'a> FunctionDefinitionVisitor<'proj, 'py, 'a> {
                     continue;
                 };
 
-                let source_text =
-                    std::fs::read_to_string(utf8_file_name).expect("Failed to read source file");
+                let Ok(source_text) = std::fs::read_to_string(utf8_file_name) else {
+                    continue;
+                };
 
                 let parsed = parsed_module(&source_text, self.project.metadata().python_version());
 
