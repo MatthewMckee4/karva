@@ -240,7 +240,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     let diagnostic = Diagnostic::pass_on_expect_fail(
                         reason,
                         FunctionDefinitionLocation::new(
-                            test_fn.name().to_string(),
+                            full_test_name.clone(),
                             test_fn.location().to_string(),
                         ),
                     );
@@ -288,7 +288,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                             py,
                             &err,
                             FunctionDefinitionLocation::new(
-                                test_fn.name().to_string(),
+                                full_test_name.clone(),
                                 test_fn.location.clone(),
                             ),
                         )
@@ -305,7 +305,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                         Diagnostic::missing_fixtures(
                             missing_args,
                             test_fn.location.clone(),
-                            test_name.clone(),
+                            full_test_name.clone(),
                             FunctionKind::Test,
                         )
                     };
