@@ -122,15 +122,13 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
     /// Run a normalized test function.
     fn run_normalized_test(&mut self, py: Python<'_>, test_fn: &NormalizedTestFunction) -> bool {
-        let test_name = &test_fn.name().to_string();
-
         // Check if test should be skipped
         if let Some(skip_tag) = test_fn.tags().skip_tag() {
             if skip_tag.should_skip() {
                 let reporter = self.context.reporter();
 
                 self.context.result_mut().register_test_case_result(
-                    test_name,
+                    &test_fn.name().to_string(),
                     IndividualTestResultKind::Skipped {
                         reason: skip_tag.reason(),
                     },
