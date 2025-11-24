@@ -64,7 +64,6 @@ impl DiscoveredPackageNormalizer {
         parents: &[&DiscoveredPackage],
         current: &DiscoveredModule,
     ) -> Vec<NormalizedFixture> {
-        // Check cache first
         let cache_key = fixture.name().to_string();
         if let Some(cached) = self.normalization_cache.get(&cache_key) {
             return cached.clone();

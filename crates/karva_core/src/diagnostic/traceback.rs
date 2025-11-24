@@ -139,7 +139,6 @@ RuntimeError: Something went wrong"#;
   File "helper.py", line 15, in foo
     bar()
 ValueError: Invalid value"#;
-            // Should get the second-to-last line, which is the last File entry
             let location = get_location(traceback);
             assert_eq!(location, Some("helper.py:15".to_string()));
         }
