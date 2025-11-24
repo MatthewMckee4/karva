@@ -59,19 +59,12 @@ impl TestContext {
         ];
 
         for arguments in &command_arguments {
-            let output = Command::new("uv")
+            Command::new("uv")
                 .args(arguments)
                 .current_dir(&project_path)
                 .output()
                 .with_context(|| format!("Failed to run command: {arguments:?}"))
                 .unwrap();
-
-            let stdout = String::from_utf8_lossy(&output.stdout);
-
-            let stderr = String::from_utf8_lossy(&output.stderr);
-
-            eprintln!("stdout: {stdout}");
-            eprintln!("stderr: {stderr}");
         }
 
         let mut settings = Settings::clone_current();

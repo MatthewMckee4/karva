@@ -11,7 +11,7 @@ use crate::{
 
 /// A package represents a single python directory.
 #[derive(Debug)]
-pub(crate) struct DiscoveredPackage {
+pub struct DiscoveredPackage {
     path: Utf8PathBuf,
     modules: HashMap<Utf8PathBuf, DiscoveredModule>,
     packages: HashMap<Utf8PathBuf, DiscoveredPackage>,
@@ -162,6 +162,7 @@ impl DiscoveredPackage {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn total_test_functions(&self) -> usize {
         let mut total = 0;
         for module in self.modules.values() {
@@ -234,7 +235,7 @@ impl DiscoveredPackage {
 }
 
 #[cfg(test)]
-pub(crate) struct DisplayDiscoveredPackage<'proj> {
+pub struct DisplayDiscoveredPackage<'proj> {
     package: &'proj DiscoveredPackage,
 }
 

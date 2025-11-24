@@ -1,23 +1,14 @@
-use std::collections::HashMap;
-
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
-    collection::TestCase,
-    diagnostic::{Diagnostic, FunctionKind},
-    discovery::DiscoveredModule,
-    extensions::{
-        fixtures::{FixtureManager, RequiresFixtures},
-        tags::Tags,
-    },
-    name::{ModulePath, QualifiedFunctionName},
-    utils::{cartesian_insert, function_definition_location},
+    ModulePath, QualifiedFunctionName,
+    extensions::{fixtures::RequiresFixtures, tags::Tags},
 };
 
 /// Represents a single test function discovered from Python source code.
 #[derive(Debug)]
-pub(crate) struct TestFunction {
+pub struct TestFunction {
     function_definition: StmtFunctionDef,
 
     py_function: Py<PyAny>,
@@ -64,101 +55,6 @@ impl TestFunction {
 
     pub(crate) const fn tags(&self) -> &Tags {
         &self.tags
-    }
-
-    /// Creates a display string showing the function's file location and line number.
-    pub(crate) fn display_with_line(&self, module: &DiscoveredModule) -> String {
-        function_definition_location(module, &self.function_definition)
-    }
-
-    /// Collects test cases from this function, resolving fixtures and handling parametrization.
-    pub(crate) fn collect<'a, 'b>(
-        &'a self,
-        py: Python<'_>,
-        module: &'a DiscoveredModule,
-        get_fixture_manager: impl Fn() -> FixtureManager<'b>,
-    ) -> Vec<TestCase<'a>> {
-        tracing::info!(
-            "Collecting test cases for function: {}",
-            self.function_definition.name
-        );
-
-        let mut required_fixture_names = self.function_definition.required_fixtures(py);
-
-        required_fixture_names.extend(self.tags.required_fixtures_names());
-
-        let mut parametrize_args = self.tags.parametrize_args();
-
-        // Ensure at least one test case exists (no parametrization)
-        if parametrize_args.is_empty() {
-            parametrize_args.push(HashMap::new());
-        }
-
-        let mut test_cases = Vec::with_capacity(parametrize_args.len());
-
-        for params in parametrize_args {
-            let mut fixture_manager = get_fixture_manager();
-
-            let mut missing_fixtures = Vec::new();
-
-            // This is used to collect all fixture for each test case.
-            // Currently, the only way we will generate more than one test case here is if
-            // we have a parameterized fixture.
-            let mut all_resolved_fixtures = Vec::new();
-
-            all_resolved_fixtures.push(HashMap::new());
-
-            for fixture_name in &required_fixture_names {
-                if let Some(fixture_value) = params.get(fixture_name) {
-                    // Add this parameterization to each test case.
-                    for resolved_fixtures in &mut all_resolved_fixtures {
-                        resolved_fixtures.insert(fixture_name.clone(), fixture_value.clone());
-                    }
-                } else if let Some(fixture_values) =
-                    fixture_manager.get_fixture_with_name(py, fixture_name, None)
-                {
-                    // Add this fixture to each test case.
-                    // This may be a parameterized fixture, so we need to cartesian product
-                    // the resolved fixtures with the fixture values.
-                    all_resolved_fixtures = cartesian_insert(
-                        all_resolved_fixtures,
-                        &fixture_values,
-                        fixture_name,
-                        |fixture_value| Ok(fixture_value.clone()),
-                    )
-                    .unwrap();
-                } else {
-                    missing_fixtures.push(fixture_name.clone());
-                }
-            }
-
-            let diagnostic = if missing_fixtures.is_empty() {
-                None
-            } else {
-                let test_case_location = self.display_with_line(module);
-
-                Some(Diagnostic::missing_fixtures(
-                    missing_fixtures,
-                    test_case_location,
-                    self.name().to_string(),
-                    FunctionKind::Test,
-                ))
-            };
-
-            for resolved_fixtures in all_resolved_fixtures {
-                let test_case = TestCase::new(self, resolved_fixtures, module, diagnostic.clone());
-
-                test_cases.push(test_case);
-            }
-
-            if let Some(first_test) = test_cases.first_mut() {
-                first_test.add_finalizers(fixture_manager.reset_fixtures());
-
-                first_test.add_fixture_diagnostics(fixture_manager.clear_diagnostics());
-            }
-        }
-
-        test_cases
     }
 }
 

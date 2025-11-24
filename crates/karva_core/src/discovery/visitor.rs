@@ -13,7 +13,7 @@ use crate::{
     utils::function_definition_location,
 };
 
-pub(crate) struct FunctionDefinitionVisitor<'proj, 'py, 'a> {
+struct FunctionDefinitionVisitor<'proj, 'py, 'a> {
     discovered_functions: Vec<TestFunction>,
     fixture_definitions: Vec<Fixture>,
     project: &'proj Project,
@@ -25,7 +25,7 @@ pub(crate) struct FunctionDefinitionVisitor<'proj, 'py, 'a> {
 }
 
 impl<'proj, 'py, 'a> FunctionDefinitionVisitor<'proj, 'py, 'a> {
-    pub(crate) fn new(
+    pub fn new(
         py: Python<'py>,
         project: &'proj Project,
         module: &'a DiscoveredModule,
@@ -105,12 +105,12 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_> {
 }
 
 #[derive(Debug)]
-pub(crate) struct DiscoveredFunctions {
+pub struct DiscoveredFunctions {
     pub(crate) functions: Vec<TestFunction>,
     pub(crate) fixtures: Vec<Fixture>,
 }
 
-pub(crate) fn discover(
+pub fn discover(
     py: Python,
     module: &DiscoveredModule,
     project: &Project,
@@ -141,10 +141,7 @@ pub(crate) fn discover(
     )
 }
 
-pub(crate) fn parsed_module(
-    module: &DiscoveredModule,
-    python_version: PythonVersion,
-) -> Parsed<ModModule> {
+fn parsed_module(module: &DiscoveredModule, python_version: PythonVersion) -> Parsed<ModModule> {
     let mode = Mode::Module;
     let options = ParseOptions::from(mode).with_target_version(python_version);
     let source = module.source_text();
@@ -155,7 +152,7 @@ pub(crate) fn parsed_module(
 }
 
 #[derive(Default)]
-pub(crate) struct GeneratorFunctionVisitor {
+struct GeneratorFunctionVisitor {
     is_generator: bool,
 }
 

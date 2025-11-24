@@ -36,19 +36,6 @@ pub static PARAMETRIZE: TestFile = TestFile::new(
     include_str!("../resources/test_parametrize.py"),
 );
 
-/// Relative size of a test case. Benchmarks can use it to configure the time for how long a benchmark should run to get stable results.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum TestCaseSpeed {
-    /// A test case that is fast to run
-    Fast,
-
-    /// A normal test case
-    Normal,
-
-    /// A slow test case
-    Slow,
-}
-
 #[derive(Debug, Clone)]
 pub struct TestCase {
     file: TestFile,

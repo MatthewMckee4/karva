@@ -1,4 +1,4 @@
-use codspeed_criterion_compat::SamplingMode;
+use divan::Bencher;
 use karva_core::{TestRunner, testing::setup_module};
 use karva_project::{
     path::absolute,
@@ -6,8 +6,6 @@ use karva_project::{
     verbosity::VerbosityLevel,
 };
 use karva_test::{InstalledProject, RealWorldProject};
-
-use crate::criterion::{BatchSize, Criterion};
 
 pub struct ProjectBenchmark<'a> {
     installed_project: InstalledProject<'a>,
@@ -20,7 +18,7 @@ impl<'a> ProjectBenchmark<'a> {
     }
 
     fn project(&self) -> Project {
-        let test_paths = self.installed_project.config().paths.clone();
+        let test_paths = self.installed_project.config().paths;
 
         let absolute_test_paths = test_paths
             .iter()
@@ -41,11 +39,7 @@ impl<'a> ProjectBenchmark<'a> {
     }
 }
 
-pub fn bench_project(
-    benchmark: &ProjectBenchmark,
-    criterion: &mut Criterion,
-    batch_size: BatchSize,
-) {
+pub fn bench_project(bencher: Bencher, benchmark: &ProjectBenchmark) {
     fn test_project(project: &Project) {
         let result = project.test();
 
@@ -54,10 +48,7 @@ pub fn bench_project(
 
     setup_module();
 
-    let mut group = criterion.benchmark_group("project");
-
-    group.sampling_mode(SamplingMode::Auto);
-    group.bench_function(benchmark.installed_project.config().name, |b| {
-        b.iter_batched_ref(|| benchmark.project(), |db| test_project(db), batch_size);
-    });
+    bencher
+        .with_inputs(|| benchmark.project())
+        .bench_local_refs(|db| test_project(db));
 }

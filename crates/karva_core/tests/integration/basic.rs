@@ -57,7 +57,7 @@ fn test_empty_directory() {
 
     let project = Project::new(context.cwd(), vec![mapped_tests_dir.clone()]);
 
-    let test_runner = karva_core::runner::StandardTestRunner::new(&project);
+    let test_runner = StandardTestRunner::new(&project);
 
     let result = test_runner.test();
 
@@ -82,7 +82,7 @@ fn test_single_function() {
         vec![Utf8PathBuf::from(format!("{test_file1_path}::test_1"))],
     );
 
-    let test_runner = karva_core::runner::StandardTestRunner::new(&project);
+    let test_runner = StandardTestRunner::new(&project);
 
     let result = test_runner.test();
 
@@ -110,7 +110,7 @@ def test_2(): pass",
         ],
     );
 
-    let test_runner = karva_core::runner::StandardTestRunner::new(&project);
+    let test_runner = StandardTestRunner::new(&project);
 
     let result = test_runner.test();
 

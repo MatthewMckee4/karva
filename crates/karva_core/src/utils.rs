@@ -114,44 +114,6 @@ pub(crate) fn iter_with_ancestors<'a, T: ?Sized>(
     })
 }
 
-/// Creates a cartesian product by inserting new items into existing `HashMaps`.
-///
-/// For each `HashMap` in `existing` and each item in `new_items`, this creates a new
-/// `HashMap` with the item inserted at `key`. The `create_value` function transforms
-/// each item before insertion.
-///
-/// # Example
-/// // existing = [{"a": 1}, {"b": 2}]
-/// // `new_items` = [10, 20]
-/// // key = "c"
-/// // Result: [{"a": 1, "c": 10}, {"a": 1, "c": 20}, {"b": 2, "c": 10}, {"b": 2, "c": 20}]
-///
-/// This is primarily used for parametrized fixtures where all combinations of
-/// fixture values need to be generated.
-pub(crate) fn cartesian_insert<T, F>(
-    existing: Vec<HashMap<String, T>>,
-    new_items: &[T],
-    key: &str,
-    mut create_value: F,
-) -> PyResult<Vec<HashMap<String, T>>>
-where
-    T: Clone,
-    F: FnMut(&T) -> PyResult<T>,
-{
-    let mut result = Vec::new();
-
-    for fixtures in existing {
-        for item in new_items {
-            let mut new_fixtures = fixtures.clone();
-            let value = create_value(item)?;
-            new_fixtures.insert(key.to_string(), value);
-            result.push(new_fixtures);
-        }
-    }
-
-    Ok(result)
-}
-
 pub(crate) fn function_definition_location(
     module: &DiscoveredModule,
     stmt_function_def: &StmtFunctionDef,
@@ -161,6 +123,30 @@ pub(crate) fn function_definition_location(
     let start = stmt_function_def.range.start();
     let line_number = line_index.line_column(start, source_text);
     format!("{}:{}", module.path(), line_number.line)
+}
+
+pub(crate) fn full_test_name(
+    py: Python,
+    function: String,
+    kwargs: &HashMap<&str, Py<PyAny>>,
+) -> String {
+    if kwargs.is_empty() {
+        function
+    } else {
+        let mut args_str = String::new();
+        let mut sorted_kwargs: Vec<_> = kwargs.iter().collect();
+        sorted_kwargs.sort_by_key(|(key, _)| *key);
+
+        for (i, (key, value)) in sorted_kwargs.iter().enumerate() {
+            if i > 0 {
+                args_str.push_str(", ");
+            }
+            if let Ok(value) = value.cast_bound::<PyAny>(py) {
+                args_str.push_str(&format!("{key}={value:?}"));
+            }
+        }
+        format!("{function} [{args_str}]")
+    }
 }
 
 #[cfg(test)]
@@ -190,138 +176,6 @@ mod tests {
             ];
             let result: Vec<(&str, Vec<&str>)> = iter_with_ancestors(&items).collect();
             assert_eq!(result, expected);
-        }
-    }
-
-    mod cartesian_insert_tests {
-        use super::*;
-
-        #[test]
-        fn test_cartesian_insert_basic() {
-            let mut map1 = HashMap::new();
-            map1.insert("a".to_string(), 1);
-
-            let mut map2 = HashMap::new();
-            map2.insert("b".to_string(), 2);
-
-            let existing = vec![map1, map2];
-            let new_items = vec![10, 20];
-
-            let result = cartesian_insert(existing, &new_items, "c", |item| Ok(*item)).unwrap();
-
-            assert_eq!(result.len(), 4);
-
-            assert_eq!(result[0].get("a"), Some(&1));
-            assert_eq!(result[0].get("c"), Some(&10));
-
-            assert_eq!(result[1].get("a"), Some(&1));
-            assert_eq!(result[1].get("c"), Some(&20));
-
-            assert_eq!(result[2].get("b"), Some(&2));
-            assert_eq!(result[2].get("c"), Some(&10));
-
-            assert_eq!(result[3].get("b"), Some(&2));
-            assert_eq!(result[3].get("c"), Some(&20));
-        }
-
-        #[test]
-        fn test_cartesian_insert_single_existing() {
-            let mut map = HashMap::new();
-            map.insert("x".to_string(), "original");
-
-            let existing = vec![map];
-            let new_items = vec!["foo", "bar", "baz"];
-
-            let result = cartesian_insert(existing, &new_items, "y", |item| Ok(*item)).unwrap();
-
-            assert_eq!(result.len(), 3);
-            assert_eq!(result[0].get("x"), Some(&"original"));
-            assert_eq!(result[0].get("y"), Some(&"foo"));
-            assert_eq!(result[1].get("y"), Some(&"bar"));
-            assert_eq!(result[2].get("y"), Some(&"baz"));
-        }
-
-        #[test]
-        fn test_cartesian_insert_empty_existing() {
-            let existing: Vec<HashMap<String, i32>> = vec![];
-            let new_items = vec![1, 2, 3];
-
-            let result = cartesian_insert(existing, &new_items, "key", |item| Ok(*item)).unwrap();
-
-            assert_eq!(result.len(), 0);
-        }
-
-        #[test]
-        fn test_cartesian_insert_empty_new_items() {
-            let mut map = HashMap::new();
-            map.insert("a".to_string(), 1);
-
-            let existing = vec![map];
-            let new_items: Vec<i32> = vec![];
-
-            let result = cartesian_insert(existing, &new_items, "b", |item| Ok(*item)).unwrap();
-
-            assert_eq!(result.len(), 0);
-        }
-
-        #[test]
-        fn test_cartesian_insert_with_transform() {
-            let mut map = HashMap::new();
-            map.insert("base".to_string(), 0);
-
-            let existing = vec![map];
-            let new_items = vec![1, 2, 3];
-
-            let result =
-                cartesian_insert(existing, &new_items, "doubled", |item| Ok(item * 2)).unwrap();
-
-            assert_eq!(result.len(), 3);
-            assert_eq!(result[0].get("doubled"), Some(&2));
-            assert_eq!(result[1].get("doubled"), Some(&4));
-            assert_eq!(result[2].get("doubled"), Some(&6));
-        }
-
-        #[test]
-        fn test_cartesian_insert_preserves_original_maps() {
-            let mut map1 = HashMap::new();
-            map1.insert("a".to_string(), 1);
-            map1.insert("b".to_string(), 2);
-
-            let mut map2 = HashMap::new();
-            map2.insert("x".to_string(), 10);
-
-            let existing = vec![map1, map2];
-            let new_items = vec![100];
-
-            let result = cartesian_insert(existing, &new_items, "new", |item| Ok(*item)).unwrap();
-
-            assert_eq!(result.len(), 2);
-
-            assert_eq!(result[0].get("a"), Some(&1));
-            assert_eq!(result[0].get("b"), Some(&2));
-            assert_eq!(result[0].get("new"), Some(&100));
-
-            assert_eq!(result[1].get("x"), Some(&10));
-            assert_eq!(result[1].get("new"), Some(&100));
-        }
-
-        #[test]
-        fn test_cartesian_insert_error_propagation() {
-            let mut map = HashMap::new();
-            map.insert("key".to_string(), 1);
-
-            let existing = vec![map];
-            let new_items = vec![1, 2, 3];
-
-            let result = cartesian_insert(existing, &new_items, "value", |item| {
-                if *item == 2 {
-                    Err(pyo3::exceptions::PyValueError::new_err("Test error"))
-                } else {
-                    Ok(*item)
-                }
-            });
-
-            assert!(result.is_err());
         }
     }
 }

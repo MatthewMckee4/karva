@@ -1,17 +1,14 @@
-use codspeed_criterion_compat::BatchSize;
-use karva_benchmark::{
-    criterion::{Criterion, criterion_group, criterion_main},
-    walltime::{ProjectBenchmark, bench_project},
-};
+use divan::{Bencher, bench};
+use karva_benchmark::walltime::{ProjectBenchmark, bench_project};
+use karva_test::real_world_projects::TYPER_PROJECT;
 
-fn typer(criterion: &mut Criterion) {
-    use karva_test::real_world_projects::typer_project;
+#[bench(sample_size = 1, sample_count = 3)]
+fn typer(bencher: Bencher) {
+    let benchmark = ProjectBenchmark::new(TYPER_PROJECT.clone());
 
-    let benchmark = ProjectBenchmark::new(typer_project());
-
-    bench_project(&benchmark, criterion, BatchSize::NumIterations(10));
+    bench_project(bencher, &benchmark);
 }
 
-criterion_group!(project, typer);
-
-criterion_main!(project);
+fn main() {
+    divan::main();
+}

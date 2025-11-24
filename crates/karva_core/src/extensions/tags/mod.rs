@@ -11,14 +11,14 @@ pub mod python;
 mod skip;
 mod use_fixtures;
 
-pub(crate) use expect_fail::ExpectFailTag;
-pub(crate) use parametrize::ParametrizeTag;
-pub(crate) use skip::SkipTag;
-pub(crate) use use_fixtures::UseFixturesTag;
+pub use expect_fail::ExpectFailTag;
+pub use parametrize::ParametrizeTag;
+pub use skip::SkipTag;
+pub use use_fixtures::UseFixturesTag;
 
 /// Represents a decorator function in Python that can be used to extend the functionality of a test.
 #[derive(Debug, Clone)]
-pub(crate) enum Tag {
+pub enum Tag {
     Parametrize(ParametrizeTag),
     UseFixtures(UseFixturesTag),
     Skip(SkipTag),
@@ -66,7 +66,7 @@ impl From<&PyTag> for Tag {
 ///
 /// This means we can collect tags and use them all for the same function.
 #[derive(Debug, Clone, Default)]
-pub(crate) struct Tags {
+pub struct Tags {
     inner: Vec<Tag>,
 }
 

@@ -1,11 +1,12 @@
 #[allow(clippy::module_inception)]
-pub mod diagnostic;
-pub mod render;
-pub mod reporter;
-pub mod traceback;
+mod diagnostic;
+mod render;
+mod reporter;
+mod traceback;
 
-pub(crate) use diagnostic::{
+pub use diagnostic::{
     Diagnostic, DiscoveryDiagnostic, FunctionDefinitionLocation, FunctionKind,
     InvalidFixtureDiagnostic, MissingFixturesDiagnostic, PassOnExpectFailureDiagnostic,
     TestFailureDiagnostic, TestRunFailureDiagnostic, WarningDiagnostic,
 };
+pub use reporter::{DummyReporter, Reporter, TestCaseReporter};

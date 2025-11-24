@@ -265,16 +265,14 @@ fn test_parametrized_generator_fixture_finalizer_order(
                     assert ordered_fixture in ['first', 'second']
 
                 def test_check_order():
-                    assert 'first_setup' in execution_log
-                    assert 'test_one_first' in execution_log
-                    assert 'first_teardown' in execution_log
-                    assert 'second_setup' in execution_log
-                    assert 'test_one_second' in execution_log
-                    assert 'second_teardown' in execution_log
-
-                    first_test_idx = execution_log.index('test_one_first')
-                    first_teardown_idx = execution_log.index('first_teardown')
-                    assert first_teardown_idx > first_test_idx
+                    assert execution_log == [
+                        'first_setup',
+                        'test_one_first',
+                        'first_teardown',
+                        'second_setup',
+                        'test_one_second',
+                        'second_teardown',
+                    ], execution_log
 "
         ),
     );
@@ -405,4 +403,71 @@ fn test_pytest_param() {
     let result = test_context.test();
 
     assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[rstest]
+fn test_complex_parametrized_generator_fixture_finalizer_order(
+    #[values("pytest", "karva")] framework: &str,
+) {
+    let test_context = TestContext::with_file(
+        "<test>/test_file.py",
+        &format!(
+            r#"
+
+            import {framework}
+
+            execution_log: list[str] = []
+
+
+            @{framework}.fixture(params=["1_1", "1_2"])
+            def ordered_fixture(request):
+                execution_log.append(f"{{request.param}}_setup")
+                yield request.param
+                execution_log.append(f"{{request.param}}_teardown")
+
+
+            @{framework}.fixture(params=["2_1", "2_2"])
+            def ordered_fixture2(request):
+                execution_log.append(f"{{request.param}}_setup")
+                yield request.param
+                execution_log.append(f"{{request.param}}_teardown")
+
+
+            def test_one(ordered_fixture, ordered_fixture2):
+                execution_log.append(f"{{ordered_fixture}}-{{ordered_fixture2}}_test")
+
+
+            def test_check_order():
+                assert execution_log == [
+                    "1_1_setup",
+                    "2_1_setup",
+                    "1_1-2_1_test",
+                    "2_1_teardown",
+                    "1_1_teardown",
+                    "1_1_setup",
+                    "2_2_setup",
+                    "1_1-2_2_test",
+                    "2_2_teardown",
+                    "1_1_teardown",
+                    "1_2_setup",
+                    "2_1_setup",
+                    "1_2-2_1_test",
+                    "2_1_teardown",
+                    "1_2_teardown",
+                    "1_2_setup",
+                    "2_2_setup",
+                    "1_2-2_2_test",
+                    "2_2_teardown",
+                    "1_2_teardown",
+                ], execution_log
+
+"#
+        ),
+    );
+
+    let result = test_context.test();
+
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 5 passed; 0 failed; 0 skipped; finished in [TIME]");
+    }
 }

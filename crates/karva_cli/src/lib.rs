@@ -8,7 +8,9 @@ use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
-use karva_core::{DummyReporter, Reporter, TestCaseReporter, TestRunner, current_python_version};
+use karva_core::{
+    DummyReporter, Reporter, TestCaseReporter, TestRunner, utils::current_python_version,
+};
 use karva_project::{
     path::absolute,
     project::{Project, ProjectMetadata},

@@ -14,6 +14,12 @@ pub struct FixtureRequest {
     pub param: Py<PyAny>,
 }
 
+impl FixtureRequest {
+    pub(crate) const fn new(param: Py<PyAny>) -> Self {
+        Self { param }
+    }
+}
+
 #[pyclass]
 pub struct FixtureFunctionMarker {
     #[pyo3(get)]

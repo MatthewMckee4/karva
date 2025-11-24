@@ -3,7 +3,7 @@ use karva_project::utils::module_name;
 
 /// Represents a fully qualified function name including its module path.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct QualifiedFunctionName {
+pub struct QualifiedFunctionName {
     function_name: String,
     module_path: ModulePath,
 }
@@ -33,7 +33,7 @@ impl std::fmt::Display for QualifiedFunctionName {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct ModulePath {
+pub struct ModulePath {
     path: Utf8PathBuf,
     module_name: String,
 }

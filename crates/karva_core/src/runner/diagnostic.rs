@@ -4,7 +4,7 @@ use colored::Colorize;
 
 use crate::{
     Reporter,
-    diagnostic::{Diagnostic, DiscoveryDiagnostic, diagnostic::FunctionDefinitionLocation},
+    diagnostic::{Diagnostic, DiscoveryDiagnostic, FunctionDefinitionLocation},
 };
 
 #[derive(Debug, Clone)]
@@ -36,7 +36,10 @@ impl TestRunResult {
         &self.test_diagnostics
     }
 
-    pub(crate) fn add_test_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
+    pub(crate) fn add_test_diagnostics(
+        &mut self,
+        diagnostics: impl IntoIterator<Item = Diagnostic>,
+    ) {
         for diagnostic in diagnostics {
             self.test_diagnostics.push(diagnostic);
         }

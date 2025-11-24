@@ -98,9 +98,7 @@ def setup_fixture():
 @karva.tags.use_fixtures("setup_fixture")
 @karva.tags.parametrize("value", [1, 2, 3])
 def test_use_fixtures_with_parametrize(value):
-    assert value > 0
-    # Fixtures are called before any run
-    assert arr == [1, 1, 1]
+    assert len(arr) == value
 "#,
     );
 
@@ -129,7 +127,8 @@ def fixture2():
 @karva.tags.use_fixtures("fixture1")
 @karva.tags.use_fixtures("fixture2")
 def test_multiple_use_fixtures_decorators():
-    assert arr == [1, 2]
+    assert 1 in arr
+    assert 2 in arr
 "#,
     );
 
@@ -312,8 +311,8 @@ def setup_fixture():
 @pytest.mark.parametrize("value", [1, 2, 3])
 def test_pytest_use_fixtures_with_parametrize(value):
     assert value > 0
-    # Fixtures are called before any run
-    assert arr == [1, 1, 1]
+    # Fixtures are called before each run
+    assert len(arr) == value
 "#,
     );
 

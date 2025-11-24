@@ -27,9 +27,9 @@ pub struct RealWorldProject<'a> {
     /// Specific commit hash to checkout
     pub commit: &'a str,
     /// List of paths within the project to check (`ty check <paths>`)
-    pub paths: Vec<Utf8PathBuf>,
+    pub paths: &'a [&'a str],
     /// Dependencies to install via uv
-    pub dependencies: Vec<&'a str>,
+    pub dependencies: &'a [&'a str],
     /// Python version to use
     pub python_version: PythonVersion,
 }
@@ -108,8 +108,8 @@ impl<'a> InstalledProject<'a> {
         &self.config
     }
 
-    pub fn test_paths(&self) -> Vec<Utf8PathBuf> {
-        self.config.paths.clone()
+    pub const fn test_paths(&self) -> &[&str] {
+        self.config.paths
     }
 
     pub const fn path(&self) -> &Utf8PathBuf {
@@ -261,7 +261,7 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
 
     let output = Command::new("uv")
         .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
-        .args(&checkout.project().dependencies)
+        .args(checkout.project().dependencies)
         .output()
         .context("Failed to execute uv pip install command")?;
 
@@ -319,39 +319,43 @@ fn cargo_target_directory() -> Option<&'static PathBuf> {
         .as_ref()
 }
 
-pub fn affect_project() -> RealWorldProject<'static> {
-    RealWorldProject {
-        name: "affect",
-        repository: "https://github.com/MatthewMckee4/affect",
-        commit: "803cc916b492378a8ad8966e747cac3325e11b5f",
-        paths: vec![Utf8PathBuf::from("tests")],
-        dependencies: vec!["pydantic", "pydantic-settings", "pytest"],
-        python_version: PythonVersion::PY313,
-    }
-}
+pub static AFFECT_PROJECT: RealWorldProject<'static> = RealWorldProject {
+    name: "affect",
+    repository: "https://github.com/MatthewMckee4/affect",
+    commit: "803cc916b492378a8ad8966e747cac3325e11b5f",
+    paths: &["tests"],
+    dependencies: &["pydantic", "pydantic-settings", "pytest"],
+    python_version: PythonVersion::PY313,
+};
 
-pub fn sqlmodel_project() -> RealWorldProject<'static> {
-    RealWorldProject {
-        name: "sqlmodel",
-        repository: "https://github.com/fastapi/sqlmodel",
-        commit: "43570910db2d7ab2e5efd96f60a0e2a3a61c5474",
-        paths: vec![Utf8PathBuf::from("tests")],
-        dependencies: vec!["pydantic", "SQLAlchemy", "pytest"],
-        python_version: PythonVersion::PY313,
-    }
-}
+pub static SQLMODEL_PROJECT: RealWorldProject<'static> = RealWorldProject {
+    name: "sqlmodel",
+    repository: "https://github.com/fastapi/sqlmodel",
+    commit: "43570910db2d7ab2e5efd96f60a0e2a3a61c5474",
+    paths: &["tests"],
+    dependencies: &[
+        "pydantic",
+        "SQLAlchemy",
+        "pytest",
+        "dirty-equals",
+        "fastapi",
+        "httpx",
+        "coverage",
+        "black",
+        "jinja2",
+    ],
+    python_version: PythonVersion::PY313,
+};
 
-pub fn typer_project() -> RealWorldProject<'static> {
-    RealWorldProject {
-        name: "typer",
-        repository: "https://github.com/fastapi/typer",
-        commit: "cbca80b94ca7e64899b12d597032fb4fc891b8e7",
-        paths: vec![Utf8PathBuf::from("tests")],
-        dependencies: vec!["click", "typing-extensions", "pytest"],
-        python_version: PythonVersion::PY313,
-    }
-}
+pub static TYPER_PROJECT: RealWorldProject<'static> = RealWorldProject {
+    name: "typer",
+    repository: "https://github.com/fastapi/typer",
+    commit: "a9a6595ad74ed59805c085f9d5369e666b955818",
+    paths: &["tests"],
+    dependencies: &["click", "typing-extensions", "pytest", "coverage"],
+    python_version: PythonVersion::PY313,
+};
 
-pub fn all_projects() -> Vec<RealWorldProject<'static>> {
-    vec![affect_project(), sqlmodel_project(), typer_project()]
+pub fn all_projects() -> Vec<&'static RealWorldProject<'static>> {
+    vec![&AFFECT_PROJECT, &SQLMODEL_PROJECT, &TYPER_PROJECT]
 }

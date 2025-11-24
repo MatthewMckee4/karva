@@ -1,17 +1,19 @@
-pub mod collection;
-pub mod diagnostic;
-pub mod discovery;
-pub mod extensions;
-pub mod name;
+mod context;
+pub(crate) mod diagnostic;
+pub(crate) mod discovery;
+pub(crate) mod extensions;
+mod name;
+mod normalize;
 mod python;
-pub mod runner;
+mod runner;
 pub mod testing;
 pub mod utils;
 
-pub use diagnostic::reporter::{DummyReporter, Reporter, TestCaseReporter};
+pub(crate) use context::Context;
+pub use diagnostic::{DummyReporter, Reporter, TestCaseReporter};
+pub(crate) use name::{ModulePath, QualifiedFunctionName};
 pub use python::init_module;
 pub use runner::{
     StandardTestRunner, TestRunner,
     diagnostic::{IndividualTestResultKind, TestResultStats, TestRunResult},
 };
-pub use utils::current_python_version;

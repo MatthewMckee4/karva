@@ -1,7 +1,4 @@
-use karva_core::{
-    TestRunner,
-    runner::{StandardTestRunner, diagnostic::TestRunResult},
-};
+use karva_core::{StandardTestRunner, TestRunResult, TestRunner};
 use karva_project::Project;
 use karva_test::TestContext;
 

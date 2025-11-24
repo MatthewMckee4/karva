@@ -32,7 +32,7 @@ camino = { workspace = true }
 karva_core = { workspace = true }
 karva_project = { workspace = true }
 karva_test = { workspace = true }
-
+divan = { workspace = true }
 anyhow = { workspace = true }
 codspeed-criterion-compat = { workspace = true }
 
