@@ -1,3 +1,6 @@
+use std::path::Path;
+
+use camino::Utf8Path;
 use karva_project::project::Project;
 use pyo3::{prelude::*, types::PyModule};
 use ruff_python_ast::{
@@ -104,9 +107,14 @@ impl<'proj, 'py, 'a> FunctionDefinitionVisitor<'proj, 'py, 'a> {
                 let Ok(file_name) = file_name.extract::<String>() else {
                     continue;
                 };
+                let std_path = Path::new(&file_name);
+
+                let Some(utf8_file_name) = Utf8Path::from_path(std_path) else {
+                    continue;
+                };
 
                 let source_text =
-                    std::fs::read_to_string(file_name).expect("Failed to read source file");
+                    std::fs::read_to_string(utf8_file_name).expect("Failed to read source file");
 
                 let parsed = parsed_module(&source_text, self.project.metadata().python_version());
 
