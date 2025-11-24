@@ -12,7 +12,7 @@ use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 use crate::{
     diagnostic::DiscoveryDiagnostic,
     discovery::{DiscoveredModule, TestFunction},
-    extensions::fixtures::{Fixture, is_fixture_function},
+    extensions::fixtures::{Fixture, RequiresFixtures, is_fixture_function},
     utils::function_definition_location,
 };
 
@@ -46,12 +46,32 @@ impl<'proj, 'py, 'a> FunctionDefinitionVisitor<'proj, 'py, 'a> {
         }
     }
 
+    fn possibly_missing_fixtures(&self) -> Vec<String> {
+        let mut missing_fixtures = Vec::new();
+
+        for fixture in &self.fixture_definitions {
+            missing_fixtures.extend(fixture.required_fixtures(self.py));
+        }
+
+        for function in &self.discovered_functions {
+            missing_fixtures.extend(function.required_fixtures(self.py));
+        }
+
+        missing_fixtures
+    }
+
     fn find_extra_fixtures(&mut self) {
         let module_dict = self.py_module.dict();
+
+        let possible_missing_fixtures = self.possibly_missing_fixtures();
 
         'outer: for (name, value) in module_dict.iter() {
             if value.is_callable() {
                 let name_str = name.extract::<String>().unwrap_or_default();
+
+                if !possible_missing_fixtures.contains(&name_str) {
+                    continue;
+                }
 
                 for fixture in &self.fixture_definitions {
                     if fixture.original_function_name() == name_str {
@@ -214,6 +234,11 @@ pub fn discover(
     module: &DiscoveredModule,
     project: &Project,
 ) -> (DiscoveredFunctions, Vec<DiscoveryDiagnostic>) {
+    tracing::info!(
+        "Discovering test functions and fixtures in module {}",
+        module.name()
+    );
+
     let py_module = match py.import(module.name()) {
         Ok(py_module) => py_module,
         Err(error) => {

@@ -34,8 +34,6 @@ impl DiscoveredPackageNormalizer {
         py: Python,
         session: &DiscoveredPackage,
     ) -> NormalizedPackage {
-        tracing::info!("Normalizing package");
-
         let session_fixtures = get_auto_use_fixtures(&[], &session, FixtureScope::Session);
 
         let session_fixtures = session_fixtures
