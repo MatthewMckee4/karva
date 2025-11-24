@@ -57,6 +57,10 @@ impl Fixture {
         }
     }
 
+    pub(crate) fn original_function_name(&self) -> &str {
+        self.function_definition.name.as_str()
+    }
+
     pub(crate) const fn name(&self) -> &QualifiedFunctionName {
         &self.name
     }
@@ -91,7 +95,7 @@ impl Fixture {
         py_module: &Bound<'_, PyModule>,
         module_path: &ModulePath,
         is_generator_function: bool,
-    ) -> Result<Option<Self>, String> {
+    ) -> Result<Self, String> {
         let function = py_module
             .getattr(function_definition.name.to_string())
             .map_err(|e| e.to_string())?;
@@ -105,8 +109,7 @@ impl Fixture {
         );
 
         let try_karva_err = match try_karva {
-            Ok(Some(fixture)) => return Ok(Some(fixture)),
-            Ok(None) => None,
+            Ok(fixture) => return Ok(fixture),
             Err(e) => Some(e),
         };
 
@@ -119,9 +122,8 @@ impl Fixture {
         );
 
         match try_pytest {
-            Ok(Some(fixture)) => Ok(Some(fixture)),
-            Ok(None) => try_karva_err.map_or_else(|| Ok(None), Err),
-            Err(e) => Err(e),
+            Ok(fixture) => Ok(fixture),
+            Err(e) => Err(try_karva_err.unwrap_or(e)),
         }
     }
 
@@ -131,25 +133,15 @@ impl Fixture {
         function: &Bound<'_, PyAny>,
         module_name: ModulePath,
         is_generator_function: bool,
-    ) -> Result<Option<Self>, String> {
-        let Some(found_name) =
-            get_attribute(function.clone(), &["_fixture_function_marker", "name"])
-        else {
-            return Ok(None);
-        };
+    ) -> Result<Self, String> {
+        let found_name = get_attribute(function.clone(), &["_fixture_function_marker", "name"])?;
 
-        let Some(scope) = get_attribute(function.clone(), &["_fixture_function_marker", "scope"])
-        else {
-            return Ok(None);
-        };
+        let scope = get_attribute(function.clone(), &["_fixture_function_marker", "scope"])?;
 
-        let Some(auto_use) =
-            get_attribute(function.clone(), &["_fixture_function_marker", "autouse"])
-        else {
-            return Ok(None);
-        };
+        let auto_use = get_attribute(function.clone(), &["_fixture_function_marker", "autouse"])?;
 
         let params = get_attribute(function.clone(), &["_fixture_function_marker", "params"])
+            .ok()
             .and_then(|p| {
                 if p.is_none() {
                     None
@@ -158,9 +150,7 @@ impl Fixture {
                 }
             });
 
-        let Some(function) = get_attribute(function.clone(), &["_fixture_function"]) else {
-            return Ok(None);
-        };
+        let function = get_attribute(function.clone(), &["_fixture_function"])?;
 
         let name = if found_name.is_none() {
             function_definition.name.to_string()
@@ -170,7 +160,7 @@ impl Fixture {
 
         let fixture_scope = fixture_scope(py, &scope, &name)?;
 
-        Ok(Some(Self::new(
+        Ok(Self::new(
             py,
             QualifiedFunctionName::new(name, module_name),
             function_definition.clone(),
@@ -179,7 +169,7 @@ impl Fixture {
             function.into(),
             is_generator_function,
             params,
-        )))
+        ))
     }
 
     pub(crate) fn try_from_karva_function(
@@ -188,17 +178,15 @@ impl Fixture {
         function: &Bound<'_, PyAny>,
         module_path: ModulePath,
         is_generator_function: bool,
-    ) -> Result<Option<Self>, String> {
-        let Ok(py_function) = function
+    ) -> Result<Self, String> {
+        let py_function = function
             .clone()
             .cast_into::<python::FixtureFunctionDefinition>()
-        else {
-            return Ok(None);
-        };
+            .map_err(|_| "Failed to parse fixture")?;
 
-        let Ok(py_function_borrow) = py_function.try_borrow_mut() else {
-            return Ok(None);
-        };
+        let py_function_borrow = py_function
+            .try_borrow_mut()
+            .map_err(|err| err.to_string())?;
 
         let scope_obj = py_function_borrow.scope.clone();
         let name = py_function_borrow.name.clone();
@@ -207,7 +195,7 @@ impl Fixture {
 
         let fixture_scope = fixture_scope(py, scope_obj.bind(py), &name)?;
 
-        Ok(Some(Self::new(
+        Ok(Self::new(
             py,
             QualifiedFunctionName::new(name, module_path),
             function_def.clone(),
@@ -216,17 +204,20 @@ impl Fixture {
             py_function.into(),
             is_generator_function,
             params,
-        )))
+        ))
     }
 }
 
-fn get_attribute<'a>(function: Bound<'a, PyAny>, attributes: &[&str]) -> Option<Bound<'a, PyAny>> {
+fn get_attribute<'a>(
+    function: Bound<'a, PyAny>,
+    attributes: &[&str],
+) -> Result<Bound<'a, PyAny>, String> {
     let mut current = function;
     for attribute in attributes {
-        let current_attr = current.getattr(attribute).ok()?;
+        let current_attr = current.getattr(attribute).map_err(|err| err.to_string())?;
         current = current_attr;
     }
-    Some(current.clone())
+    Ok(current.clone())
 }
 
 impl std::fmt::Debug for Fixture {

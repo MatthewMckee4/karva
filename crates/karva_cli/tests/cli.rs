@@ -451,14 +451,14 @@ fn test_fixture_generator_two_yields_failing_test() {
 
     test failures:
 
-    test `test::test_fixture_generator` at <temp_dir>/test.py:9 failed at <temp_dir>/test.py:10
+    test `test::test_fixture_generator [fixture_generator=1]` at <temp_dir>/test.py:9 failed at <temp_dir>/test.py:10
 
     warnings:
 
     warning: Fixture test::fixture_generator had more than one yield statement
 
     test failures:
-        test::test_fixture_generator at <temp_dir>/test.py:9
+        test::test_fixture_generator [fixture_generator=1] at <temp_dir>/test.py:9
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 

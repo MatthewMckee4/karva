@@ -177,7 +177,16 @@ impl TestContext {
                 .with_context(|| format!("Failed to create directory `{parent}`"))
                 .unwrap();
         }
-        std::fs::write(&path, &*ruff_python_trivia::textwrap::dedent(content))
+
+        // Check for mapped paths and replace
+        let mut content = content.to_string();
+
+        for (text, path) in &self.mapped_paths {
+            let folder_name = path.file_name().unwrap_or("");
+            content = content.replace(text, folder_name);
+        }
+
+        std::fs::write(&path, &*ruff_python_trivia::textwrap::dedent(&content))
             .with_context(|| format!("Failed to write file `{path}`"))
             .unwrap();
     }

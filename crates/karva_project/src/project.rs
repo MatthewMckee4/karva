@@ -21,6 +21,7 @@ impl ProjectMetadata {
     }
 }
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone)]
 pub struct ProjectOptions {
     test_prefix: String,
@@ -28,15 +29,18 @@ pub struct ProjectOptions {
     show_output: bool,
     no_ignore: bool,
     fail_fast: bool,
+    try_import_fixtures: bool,
 }
 
 impl ProjectOptions {
+    #[allow(clippy::fn_params_excessive_bools)]
     pub const fn new(
         test_prefix: String,
         verbosity: VerbosityLevel,
         show_output: bool,
         no_ignore: bool,
         fail_fast: bool,
+        try_import_fixtures: bool,
     ) -> Self {
         Self {
             test_prefix,
@@ -44,6 +48,7 @@ impl ProjectOptions {
             show_output,
             no_ignore,
             fail_fast,
+            try_import_fixtures,
         }
     }
 
@@ -67,9 +72,19 @@ impl ProjectOptions {
         self.fail_fast
     }
 
+    pub const fn try_import_fixtures(&self) -> bool {
+        self.try_import_fixtures
+    }
+
     #[must_use]
     pub const fn with_fail_fast(mut self, fail_fast: bool) -> Self {
         self.fail_fast = fail_fast;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_try_import_fixtures(mut self, try_import_fixtures: bool) -> Self {
+        self.try_import_fixtures = try_import_fixtures;
         self
     }
 }
@@ -82,6 +97,7 @@ impl Default for ProjectOptions {
             show_output: false,
             no_ignore: false,
             fail_fast: false,
+            try_import_fixtures: false,
         }
     }
 }
