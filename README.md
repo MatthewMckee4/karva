@@ -85,8 +85,6 @@ uv run karva test tests/test.py
 Provides the following output:
 
 ```bash
-running 3 tests
-
 test tests.test::test_pass ... ok
 test tests.test::test_fail ... FAILED
 test tests.test::test_error ... FAILED

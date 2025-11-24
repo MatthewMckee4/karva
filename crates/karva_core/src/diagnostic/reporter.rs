@@ -12,9 +12,6 @@ use crate::runner::diagnostic::IndividualTestResultKind;
 pub trait Reporter: Send + Sync + Ungil {
     /// Report the completion of a given test.
     fn report_test_case_result(&self, test_name: &str, result_kind: IndividualTestResultKind);
-
-    /// Log the number of test cases that will be run.
-    fn log_test_count(&self, test_count: usize);
 }
 
 /// A no-op implementation of [`Reporter`].
@@ -23,8 +20,6 @@ pub struct DummyReporter;
 
 impl Reporter for DummyReporter {
     fn report_test_case_result(&self, _test_name: &str, _result_kind: IndividualTestResultKind) {}
-
-    fn log_test_count(&self, _test_count: usize) {}
 }
 
 /// A reporter that outputs test results to stdout as they complete.
@@ -64,17 +59,5 @@ impl Reporter for TestCaseReporter {
         };
 
         writeln!(stdout, "{log_start} {rest}").ok();
-    }
-
-    fn log_test_count(&self, test_count: usize) {
-        let mut stdout = self.output.lock().unwrap();
-        writeln!(
-            stdout,
-            "running {test_count} test{}",
-            if test_count == 1 { "" } else { "s" }
-        )
-        .ok();
-
-        writeln!(stdout).ok();
     }
 }
