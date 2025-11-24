@@ -443,6 +443,7 @@ def test_function(): pass
             false,
             true,
             false,
+            false,
         ));
 
         let discoverer = StandardDiscoverer::new(&project);

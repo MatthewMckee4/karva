@@ -237,7 +237,9 @@ pub fn discover(
     let parsed = parsed_module(module.source_text(), project.metadata().python_version());
     visitor.visit_body(&parsed.syntax().body);
 
-    visitor.find_extra_fixtures();
+    if project.options().try_import_fixtures() {
+        visitor.find_extra_fixtures();
+    }
 
     (
         DiscoveredFunctions {

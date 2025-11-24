@@ -21,6 +21,7 @@ pub enum Command {
     Version,
 }
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Parser)]
 pub struct TestCommand {
     /// List of files or directories to test.
@@ -33,29 +34,27 @@ pub struct TestCommand {
     #[clap(flatten)]
     pub(crate) verbosity: Verbosity,
 
-    #[clap(
-        long,
-        help = "The prefix of the test functions",
-        default_value = "test"
-    )]
+    /// The prefix of the test functions.
+    #[clap(long, default_value = "test")]
     pub(crate) test_prefix: String,
 
-    #[clap(short = 's', long, help = "Show Python stdout during test execution")]
+    /// Show Python stdout during test execution.
+    #[clap(short = 's', long)]
     pub(crate) show_output: bool,
 
-    #[clap(
-        long,
-        help = "When set, .gitignore files will not be respected.",
-        default_value = "false"
-    )]
+    /// When set, .gitignore files will not be respected.
+    #[clap(long)]
     pub(crate) no_ignore: bool,
 
-    #[clap(
-        long,
-        help = "When set, the test will fail immediately if any test fails.",
-        default_value = "false"
-    )]
+    /// When set, the test will fail immediately if any test fails.
+    #[clap(long)]
     pub(crate) fail_fast: bool,
+
+    /// When set, we will try to import functions in each test file as well as parsing the ast to find them.
+    ///
+    /// This is often slower, so it is not recommended for large projects.
+    #[clap(long)]
+    pub(crate) try_import_fixtures: bool,
 }
 
 impl TestCommand {
@@ -66,6 +65,7 @@ impl TestCommand {
             self.show_output,
             !self.no_ignore,
             self.fail_fast,
+            self.try_import_fixtures,
         )
     }
 }

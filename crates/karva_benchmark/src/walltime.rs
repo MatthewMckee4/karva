@@ -35,6 +35,7 @@ impl<'a> ProjectBenchmark<'a> {
             false,
             true,
             false,
+            false,
         ))
     }
 }

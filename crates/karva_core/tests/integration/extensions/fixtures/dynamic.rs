@@ -1,6 +1,6 @@
 use insta::{allow_duplicates, assert_snapshot};
 use karva_core::{StandardTestRunner, TestRunner};
-use karva_project::Project;
+use karva_project::{Project, project::ProjectOptions};
 use karva_test::TestContext;
 use rstest::rstest;
 
@@ -40,7 +40,8 @@ def y():
     let mapped_path = context.mapped_path("<test>").unwrap().clone();
     let test_file1_path = mapped_path.join("test_file.py");
 
-    let project = Project::new(context.cwd(), vec![test_file1_path]);
+    let project = Project::new(context.cwd(), vec![test_file1_path])
+        .with_options(ProjectOptions::default().with_try_import_fixtures(true));
 
     let test_runner = StandardTestRunner::new(&project);
 
