@@ -56,6 +56,12 @@ impl<'proj, 'py, 'a> FunctionDefinitionVisitor<'proj, 'py, 'a> {
                     }
                 }
 
+                for function in &self.discovered_functions {
+                    if function.name().function_name() == name_str {
+                        continue 'outer;
+                    }
+                }
+
                 let Ok(module_name) = value.getattr("__module__") else {
                     continue;
                 };
@@ -80,13 +86,18 @@ impl<'proj, 'py, 'a> FunctionDefinitionVisitor<'proj, 'py, 'a> {
                     }
                 }
 
-                let Ok(current_py_module) = self.py.import(&module_name) else {
-                    self.diagnostics
-                        .push(DiscoveryDiagnostic::failed_to_import(&module_name));
-                    continue;
+                let py_module = match self.py.import(&module_name) {
+                    Ok(py_module) => py_module,
+                    Err(error) => {
+                        self.diagnostics.push(DiscoveryDiagnostic::failed_to_import(
+                            &module_name,
+                            &error.to_string(),
+                        ));
+                        continue;
+                    }
                 };
 
-                let Ok(file_name) = current_py_module.getattr("__file__") else {
+                let Ok(file_name) = py_module.getattr("__file__") else {
                     continue;
                 };
 
@@ -116,7 +127,7 @@ impl<'proj, 'py, 'a> FunctionDefinitionVisitor<'proj, 'py, 'a> {
                 if let Ok(fixture_def) = Fixture::try_from_function(
                     self.py,
                     stmt_function_def,
-                    &current_py_module,
+                    &py_module,
                     self.module.module_path(),
                     is_generator_function,
                 ) {
@@ -194,11 +205,17 @@ pub fn discover(
     module: &DiscoveredModule,
     project: &Project,
 ) -> (DiscoveredFunctions, Vec<DiscoveryDiagnostic>) {
-    let Ok(py_module) = py.import(module.name()) else {
-        return (
-            DiscoveredFunctions::default(),
-            vec![DiscoveryDiagnostic::failed_to_import(module.name())],
-        );
+    let py_module = match py.import(module.name()) {
+        Ok(py_module) => py_module,
+        Err(error) => {
+            return (
+                DiscoveredFunctions::default(),
+                vec![DiscoveryDiagnostic::failed_to_import(
+                    module.name(),
+                    &error.to_string(),
+                )],
+            );
+        }
     };
 
     let mut visitor = FunctionDefinitionVisitor::new(py, project, module, py_module);

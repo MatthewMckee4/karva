@@ -182,7 +182,7 @@ impl Fixture {
         let py_function = function
             .clone()
             .cast_into::<python::FixtureFunctionDefinition>()
-            .map_err(|err| err.to_string())?;
+            .map_err(|_| "Failed to parse fixture")?;
 
         let py_function_borrow = py_function
             .try_borrow_mut()

@@ -325,7 +325,13 @@ def test_1():
 
     let result = context.test();
 
-    assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]");
+    assert_snapshot!(result.display(), @r"
+    discovery failures:
+
+    failed to import module `<test>.test_skip`: TypeError: Expected boolean values for conditions
+
+    test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
+    ");
 }
 
 #[test]
@@ -343,7 +349,13 @@ def test_1():
 
     let result = context.test();
 
-    assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]");
+    assert_snapshot!(result.display(), @r"
+    discovery failures:
+
+    failed to import module `<test>.test_skip`: TypeError: Expected boolean values for conditions
+
+    test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
+    ");
 }
 
 #[test]

@@ -140,8 +140,8 @@ impl Display for DisplayDiscoveryDiagnostic<'_> {
             DiscoveryDiagnostic::InvalidPath(test_path_error) => {
                 writeln!(f, "{test_path_error}")?;
             }
-            DiscoveryDiagnostic::FailedToImport(module_name) => {
-                writeln!(f, "failed to import module `{module_name}`")?;
+            DiscoveryDiagnostic::FailedToImport { path, error } => {
+                writeln!(f, "failed to import module `{path}`: {error}")?;
             }
         }
 
