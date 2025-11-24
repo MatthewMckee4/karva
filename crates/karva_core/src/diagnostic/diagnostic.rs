@@ -125,6 +125,8 @@ pub enum DiscoveryDiagnostic {
     InvalidFixture(InvalidFixtureDiagnostic),
 
     InvalidPath(TestPathError),
+
+    FailedToImport(String),
 }
 
 impl DiscoveryDiagnostic {
@@ -134,6 +136,10 @@ impl DiscoveryDiagnostic {
 
     pub(crate) fn invalid_path_error(error: &TestPathError) -> Self {
         Self::InvalidPath(error.clone())
+    }
+
+    pub(crate) fn failed_to_import(error: &str) -> Self {
+        Self::FailedToImport(error.to_string())
     }
 
     pub(crate) const fn invalid_fixture(

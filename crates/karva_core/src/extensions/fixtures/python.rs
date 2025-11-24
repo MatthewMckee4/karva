@@ -95,6 +95,7 @@ pub struct FixtureFunctionDefinition {
     #[pyo3(get)]
     pub params: Option<Vec<Py<PyAny>>>,
 
+    #[pyo3(get)]
     pub function: Py<PyAny>,
 }
 

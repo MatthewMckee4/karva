@@ -1,7 +1,7 @@
 use karva_project::project::Project;
 use pyo3::{prelude::*, types::PyModule};
 use ruff_python_ast::{
-    Expr, ModModule, PythonVersion, Stmt,
+    Expr, ModModule, PythonVersion, Stmt, StmtFunctionDef,
     visitor::source_order::{self, SourceOrderVisitor},
 };
 use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
@@ -25,16 +25,13 @@ struct FunctionDefinitionVisitor<'proj, 'py, 'a> {
 }
 
 impl<'proj, 'py, 'a> FunctionDefinitionVisitor<'proj, 'py, 'a> {
-    pub fn new(
+    const fn new(
         py: Python<'py>,
         project: &'proj Project,
         module: &'a DiscoveredModule,
-    ) -> Result<Self, String> {
-        let py_module = py
-            .import(module.name())
-            .map_err(|e| format!("Failed to import module {e}"))?;
-
-        Ok(Self {
+        py_module: Bound<'py, PyModule>,
+    ) -> Self {
+        Self {
             discovered_functions: Vec::new(),
             fixture_definitions: Vec::new(),
             project,
@@ -43,7 +40,90 @@ impl<'proj, 'py, 'a> FunctionDefinitionVisitor<'proj, 'py, 'a> {
             py_module,
             inside_function: false,
             py,
-        })
+        }
+    }
+
+    fn find_extra_fixtures(&mut self) {
+        let module_dict = self.py_module.dict();
+
+        'outer: for (name, value) in module_dict.iter() {
+            if value.is_callable() {
+                let name_str = name.extract::<String>().unwrap_or_default();
+
+                for fixture in &self.fixture_definitions {
+                    if fixture.original_function_name() == name_str {
+                        continue 'outer;
+                    }
+                }
+
+                let Ok(module_name) = value.getattr("__module__") else {
+                    continue;
+                };
+
+                let Ok(mut module_name) = module_name.extract::<String>() else {
+                    continue;
+                };
+
+                if module_name == "builtins" {
+                    let Ok(function) = value.getattr("function") else {
+                        continue;
+                    };
+
+                    let Ok(function_module_name) = function.getattr("__module__") else {
+                        continue;
+                    };
+
+                    if let Ok(actual_module_name) = function_module_name.extract::<String>() {
+                        module_name = actual_module_name;
+                    } else {
+                        continue;
+                    }
+                }
+
+                let Ok(current_py_module) = self.py.import(&module_name) else {
+                    self.diagnostics
+                        .push(DiscoveryDiagnostic::failed_to_import(&module_name));
+                    continue;
+                };
+
+                let Ok(file_name) = current_py_module.getattr("__file__") else {
+                    continue;
+                };
+
+                let Ok(file_name) = file_name.extract::<String>() else {
+                    continue;
+                };
+
+                let source_text =
+                    std::fs::read_to_string(file_name).expect("Failed to read source file");
+
+                let parsed = parsed_module(&source_text, self.project.metadata().python_version());
+
+                let mut visitor = FindFunctionVisitor::new(name_str);
+
+                visitor.visit_body(&parsed.syntax().body);
+
+                let Some(stmt_function_def) = visitor.function_def else {
+                    continue;
+                };
+
+                let mut generator_function_visitor = GeneratorFunctionVisitor::default();
+
+                source_order::walk_body(&mut generator_function_visitor, &stmt_function_def.body);
+
+                let is_generator_function = generator_function_visitor.is_generator;
+
+                if let Ok(fixture_def) = Fixture::try_from_function(
+                    self.py,
+                    stmt_function_def,
+                    &current_py_module,
+                    self.module.module_path(),
+                    is_generator_function,
+                ) {
+                    self.fixture_definitions.push(fixture_def);
+                }
+            }
+        }
     }
 }
 
@@ -69,8 +149,7 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_> {
                     self.module.module_path(),
                     is_generator_function,
                 ) {
-                    Ok(Some(fixture_def)) => self.fixture_definitions.push(fixture_def),
-                    Ok(None) => {}
+                    Ok(fixture_def) => self.fixture_definitions.push(fixture_def),
                     Err(e) => {
                         self.diagnostics.push(DiscoveryDiagnostic::invalid_fixture(
                             e,
@@ -104,7 +183,7 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DiscoveredFunctions {
     pub(crate) functions: Vec<TestFunction>,
     pub(crate) fixtures: Vec<Fixture>,
@@ -115,22 +194,19 @@ pub fn discover(
     module: &DiscoveredModule,
     project: &Project,
 ) -> (DiscoveredFunctions, Vec<DiscoveryDiagnostic>) {
-    let mut visitor = match FunctionDefinitionVisitor::new(py, project, module) {
-        Ok(visitor) => visitor,
-        Err(e) => {
-            tracing::debug!("Failed to create discovery module: {e}");
-            return (
-                DiscoveredFunctions {
-                    functions: Vec::new(),
-                    fixtures: Vec::new(),
-                },
-                vec![],
-            );
-        }
+    let Ok(py_module) = py.import(module.name()) else {
+        return (
+            DiscoveredFunctions::default(),
+            vec![DiscoveryDiagnostic::failed_to_import(module.name())],
+        );
     };
 
-    let parsed = parsed_module(module, project.metadata().python_version());
+    let mut visitor = FunctionDefinitionVisitor::new(py, project, module, py_module);
+
+    let parsed = parsed_module(module.source_text(), project.metadata().python_version());
     visitor.visit_body(&parsed.syntax().body);
+
+    visitor.find_extra_fixtures();
 
     (
         DiscoveredFunctions {
@@ -141,10 +217,9 @@ pub fn discover(
     )
 }
 
-fn parsed_module(module: &DiscoveredModule, python_version: PythonVersion) -> Parsed<ModModule> {
+fn parsed_module(source: &str, python_version: PythonVersion) -> Parsed<ModModule> {
     let mode = Mode::Module;
     let options = ParseOptions::from(mode).with_target_version(python_version);
-    let source = module.source_text();
 
     parse_unchecked(source, options)
         .try_into_module()
@@ -160,6 +235,30 @@ impl SourceOrderVisitor<'_> for GeneratorFunctionVisitor {
     fn visit_expr(&mut self, expr: &'_ Expr) {
         if let Expr::Yield(_) | Expr::YieldFrom(_) = *expr {
             self.is_generator = true;
+        }
+    }
+}
+
+struct FindFunctionVisitor<'ast> {
+    name: String,
+    function_def: Option<&'ast StmtFunctionDef>,
+}
+
+impl FindFunctionVisitor<'_> {
+    const fn new(name: String) -> Self {
+        Self {
+            name,
+            function_def: None,
+        }
+    }
+}
+
+impl<'ast> SourceOrderVisitor<'ast> for FindFunctionVisitor<'ast> {
+    fn visit_stmt(&mut self, stmt: &'ast Stmt) {
+        if let Stmt::FunctionDef(function_def) = stmt {
+            if function_def.name.as_str() == self.name {
+                self.function_def = Some(function_def);
+            }
         }
     }
 }
