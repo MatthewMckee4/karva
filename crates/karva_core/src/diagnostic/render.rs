@@ -68,6 +68,12 @@ impl Display for DisplayDiagnostic<'_> {
                     } else if let Some(message) = message {
                         writeln!(f, "{message}")?;
                     }
+                    if !self.options.show_traceback {
+                        writeln!(
+                            f,
+                            "note: run with `--show-traceback` to see the full traceback"
+                        )?;
+                    }
                 }
                 TestFailureDiagnostic::PassOnExpectFailure(pass_on_expect_failure_diagnostic) => {
                     let PassOnExpectFailureDiagnostic {

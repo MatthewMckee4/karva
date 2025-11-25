@@ -61,6 +61,7 @@ fn test_one_test_fails() {
     test failures:
 
     test `test_fail::test_fail` at <temp_dir>/test_fail.py:2 failed at <temp_dir>/test_fail.py:3
+    note: run with `--show-traceback` to see the full traceback
 
     test failures:
         test_fail::test_fail at <temp_dir>/test_fail.py:2
@@ -95,9 +96,11 @@ fn test_two_test_fails() {
     test failures:
 
     test `tests.test_fail::test_fail` at <temp_dir>/tests/test_fail.py:2 failed at <temp_dir>/tests/test_fail.py:3
+    note: run with `--show-traceback` to see the full traceback
 
     test `tests.test_fail::test_fail2` at <temp_dir>/tests/test_fail.py:5 failed at <temp_dir>/tests/test_fail.py:6
     Test failed
+    note: run with `--show-traceback` to see the full traceback
 
     test failures:
         tests.test_fail::test_fail at <temp_dir>/tests/test_fail.py:2
@@ -143,6 +146,7 @@ fn test_file_importing_another_file() {
 
     test `test_cross_file::test_with_helper` at <temp_dir>/test_cross_file.py:4 failed at <temp_dir>/helper.py:4
     Data validation failed
+    note: run with `--show-traceback` to see the full traceback
 
     test failures:
         test_cross_file::test_with_helper at <temp_dir>/test_cross_file.py:4
@@ -452,6 +456,7 @@ fn test_fixture_generator_two_yields_failing_test() {
     test failures:
 
     test `test::test_fixture_generator [fixture_generator=1]` at <temp_dir>/test.py:9 failed at <temp_dir>/test.py:10
+    note: run with `--show-traceback` to see the full traceback
 
     warnings:
 
@@ -744,6 +749,7 @@ fn test_failfast() {
 
     test `test_failfast::test_first_fail` at <temp_dir>/test_failfast.py:2 failed at <temp_dir>/test_failfast.py:3
     First test fails
+    note: run with `--show-traceback` to see the full traceback
 
     test failures:
         test_failfast::test_first_fail at <temp_dir>/test_failfast.py:2
@@ -973,6 +979,7 @@ def test_normal():
 
     test `test_fail::test_with_fail` at <temp_dir>/test_fail.py:4 failed at <temp_dir>/test_fail.py:5
     This is a custom failure message
+    note: run with `--show-traceback` to see the full traceback
 
     test failures:
         test_fail::test_with_fail at <temp_dir>/test_fail.py:4
