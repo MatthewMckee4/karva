@@ -982,3 +982,67 @@ def test_normal():
     ----- stderr -----
     ");
 }
+
+#[test]
+fn test_test_prefix() {
+    let context = IntegrationTestContext::with_file(
+        "test_fail.py",
+        r"
+import karva
+
+def test_1(): ...
+def tests_1(): ...
+
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command().arg("--test-prefix").arg("tests_"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test_fail::tests_1 ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_show_traceback() {
+    let context = IntegrationTestContext::with_file(
+        "test_fail.py",
+        r"
+import karva
+
+def foo():
+    raise ValueError('bar')
+
+def test_1():
+    foo()
+
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command().arg("--show-traceback"), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test_fail::test_1 ... FAILED
+
+    test failures:
+
+    test `test_fail::test_1` at <temp_dir>/test_fail.py:7 failed at <temp_dir>/test_fail.py:5
+     | File "<temp_dir>/test_fail.py", line 8, in test_1
+     |   foo()
+     | File "<temp_dir>/test_fail.py", line 5, in foo
+     |   raise ValueError('bar')
+
+    test failures:
+        test_fail::test_1 at <temp_dir>/test_fail.py:7
+
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    "#);
+}

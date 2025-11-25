@@ -41,6 +41,7 @@ karva test [OPTIONS] [PATH]...
 </dd><dt id="karva-test--no-ignore"><a href="#karva-test--no-ignore"><code>--no-ignore</code></a></dt><dd><p>When set, .gitignore files will not be respected</p>
 </dd><dt id="karva-test--quiet"><a href="#karva-test--quiet"><code>--quiet</code></a>, <code>-q</code></dt><dd><p>Use quiet output (or <code>-qq</code> for silent output)</p>
 </dd><dt id="karva-test--show-output"><a href="#karva-test--show-output"><code>--show-output</code></a>, <code>-s</code></dt><dd><p>Show Python stdout during test execution</p>
+</dd><dt id="karva-test--show-traceback"><a href="#karva-test--show-traceback"><code>--show-traceback</code></a></dt><dd><p>When set, we will show the traceback of each test failure</p>
 </dd><dt id="karva-test--test-prefix"><a href="#karva-test--test-prefix"><code>--test-prefix</code></a> <i>test-prefix</i></dt><dd><p>The prefix of the test functions</p>
 <p>[default: test]</p></dd><dt id="karva-test--try-import-fixtures"><a href="#karva-test--try-import-fixtures"><code>--try-import-fixtures</code></a></dt><dd><p>When set, we will try to import functions in each test file as well as parsing the ast to find them.</p>
 <p>This is often slower, so it is not recommended for large projects.</p>
