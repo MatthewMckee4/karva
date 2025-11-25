@@ -5,3 +5,4 @@ ci:
 documentation:
   - changed-files:
       - any-glob-to-any-file: ["docs/**/*", "mkdocs.yml"]
+      - all-glob-to-all-file: ["!docs/cli.md"]
