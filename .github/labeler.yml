@@ -3,8 +3,7 @@ ci:
       - any-glob-to-any-file: [".github/**/*"]
 
 documentation:
-  - changed-files:
-      - any-glob-to-any-file:
-          - "docs/**/*"
-          - "!docs/cli.md"
-          - "mkdocs.yml"
+  - all:
+      - changed-files:
+          - any-glob-to-any-file: ["docs/**/*", "mkdocs.yml"]
+          - all-globs-to-all-files: "!docs/cli.md"
