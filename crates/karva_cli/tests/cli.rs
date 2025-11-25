@@ -61,6 +61,7 @@ fn test_one_test_fails() {
     test failures:
 
     test `test_fail::test_fail` at <temp_dir>/test_fail.py:2 failed at <temp_dir>/test_fail.py:3
+    note: run with `--show-traceback` to see the full traceback
 
     test failures:
         test_fail::test_fail at <temp_dir>/test_fail.py:2
@@ -95,9 +96,11 @@ fn test_two_test_fails() {
     test failures:
 
     test `tests.test_fail::test_fail` at <temp_dir>/tests/test_fail.py:2 failed at <temp_dir>/tests/test_fail.py:3
+    note: run with `--show-traceback` to see the full traceback
 
     test `tests.test_fail::test_fail2` at <temp_dir>/tests/test_fail.py:5 failed at <temp_dir>/tests/test_fail.py:6
     Test failed
+    note: run with `--show-traceback` to see the full traceback
 
     test failures:
         tests.test_fail::test_fail at <temp_dir>/tests/test_fail.py:2
@@ -143,6 +146,7 @@ fn test_file_importing_another_file() {
 
     test `test_cross_file::test_with_helper` at <temp_dir>/test_cross_file.py:4 failed at <temp_dir>/helper.py:4
     Data validation failed
+    note: run with `--show-traceback` to see the full traceback
 
     test failures:
         test_cross_file::test_with_helper at <temp_dir>/test_cross_file.py:4
@@ -452,6 +456,7 @@ fn test_fixture_generator_two_yields_failing_test() {
     test failures:
 
     test `test::test_fixture_generator [fixture_generator=1]` at <temp_dir>/test.py:9 failed at <temp_dir>/test.py:10
+    note: run with `--show-traceback` to see the full traceback
 
     warnings:
 
@@ -744,6 +749,7 @@ fn test_failfast() {
 
     test `test_failfast::test_first_fail` at <temp_dir>/test_failfast.py:2 failed at <temp_dir>/test_failfast.py:3
     First test fails
+    note: run with `--show-traceback` to see the full traceback
 
     test failures:
         test_failfast::test_first_fail at <temp_dir>/test_failfast.py:2
@@ -973,6 +979,7 @@ def test_normal():
 
     test `test_fail::test_with_fail` at <temp_dir>/test_fail.py:4 failed at <temp_dir>/test_fail.py:5
     This is a custom failure message
+    note: run with `--show-traceback` to see the full traceback
 
     test failures:
         test_fail::test_with_fail at <temp_dir>/test_fail.py:4
@@ -981,4 +988,68 @@ def test_normal():
 
     ----- stderr -----
     ");
+}
+
+#[test]
+fn test_test_prefix() {
+    let context = IntegrationTestContext::with_file(
+        "test_fail.py",
+        r"
+import karva
+
+def test_1(): ...
+def tests_1(): ...
+
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command().arg("--test-prefix").arg("tests_"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test_fail::tests_1 ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_show_traceback() {
+    let context = IntegrationTestContext::with_file(
+        "test_fail.py",
+        r"
+import karva
+
+def foo():
+    raise ValueError('bar')
+
+def test_1():
+    foo()
+
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command().arg("--show-traceback"), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test_fail::test_1 ... FAILED
+
+    test failures:
+
+    test `test_fail::test_1` at <temp_dir>/test_fail.py:7 failed at <temp_dir>/test_fail.py:5
+     | File "<temp_dir>/test_fail.py", line 8, in test_1
+     |   foo()
+     | File "<temp_dir>/test_fail.py", line 5, in foo
+     |   raise ValueError('bar')
+
+    test failures:
+        test_fail::test_1 at <temp_dir>/test_fail.py:7
+
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    "#);
 }

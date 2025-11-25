@@ -9,4 +9,5 @@ pub use diagnostic::{
     InvalidFixtureDiagnostic, MissingFixturesDiagnostic, PassOnExpectFailureDiagnostic,
     TestFailureDiagnostic, TestRunFailureDiagnostic, WarningDiagnostic,
 };
+pub use render::DisplayOptions;
 pub use reporter::{DummyReporter, Reporter, TestCaseReporter};

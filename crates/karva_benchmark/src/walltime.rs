@@ -3,7 +3,6 @@ use karva_core::{TestRunner, testing::setup_module};
 use karva_project::{
     path::absolute,
     project::{Project, ProjectOptions},
-    verbosity::VerbosityLevel,
 };
 use karva_test::{InstalledProject, RealWorldProject};
 
@@ -29,14 +28,7 @@ impl<'a> ProjectBenchmark<'a> {
             self.installed_project.path().to_path_buf(),
             absolute_test_paths,
         )
-        .with_options(ProjectOptions::new(
-            "test".to_string(),
-            VerbosityLevel::Default,
-            false,
-            true,
-            false,
-            false,
-        ))
+        .with_options(ProjectOptions::default().with_no_ignore(true))
     }
 }
 

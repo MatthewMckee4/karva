@@ -1,6 +1,6 @@
 use camino::Utf8PathBuf;
 use clap::Parser;
-use karva_project::project::ProjectOptions;
+use karva_project::project::{ProjectOptions, TestPrefix};
 
 use crate::logging::Verbosity;
 
@@ -55,17 +55,22 @@ pub struct TestCommand {
     /// This is often slower, so it is not recommended for large projects.
     #[clap(long)]
     pub(crate) try_import_fixtures: bool,
+
+    /// When set, we will show the traceback of each test failure.
+    #[clap(long)]
+    pub(crate) show_traceback: bool,
 }
 
 impl TestCommand {
     pub(crate) fn into_options(self) -> ProjectOptions {
         ProjectOptions::new(
-            self.test_prefix,
+            TestPrefix::new(self.test_prefix),
             self.verbosity.level(),
             self.show_output,
             !self.no_ignore,
             self.fail_fast,
             self.try_import_fixtures,
+            self.show_traceback,
         )
     }
 }

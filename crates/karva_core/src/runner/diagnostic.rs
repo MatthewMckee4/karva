@@ -4,7 +4,7 @@ use colored::Colorize;
 
 use crate::{
     Reporter,
-    diagnostic::{Diagnostic, DiscoveryDiagnostic, FunctionDefinitionLocation},
+    diagnostic::{Diagnostic, DiscoveryDiagnostic, DisplayOptions, FunctionDefinitionLocation},
 };
 
 #[derive(Debug, Clone)]
@@ -89,8 +89,12 @@ impl TestRunResult {
         }
     }
 
-    pub const fn display(&self) -> DisplayTestRunResult<'_> {
-        DisplayTestRunResult::new(self)
+    pub fn display(&self) -> DisplayTestRunResult<'_> {
+        self.display_with(DisplayOptions::default())
+    }
+
+    pub const fn display_with(&self, options: DisplayOptions) -> DisplayTestRunResult<'_> {
+        DisplayTestRunResult::new(self, options)
     }
 }
 
@@ -171,11 +175,15 @@ impl TestResultStats {
 
 pub struct DisplayTestRunResult<'a> {
     test_run_result: &'a TestRunResult,
+    options: DisplayOptions,
 }
 
 impl<'a> DisplayTestRunResult<'a> {
-    pub(crate) const fn new(test_run_result: &'a TestRunResult) -> Self {
-        Self { test_run_result }
+    pub(crate) const fn new(test_run_result: &'a TestRunResult, options: DisplayOptions) -> Self {
+        Self {
+            test_run_result,
+            options,
+        }
     }
 }
 
@@ -217,7 +225,7 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
             writeln!(f)?;
 
             for diagnostic in &fixture_failures {
-                writeln!(f, "{}", diagnostic.display())?;
+                writeln!(f, "{}", diagnostic.display_with(self.options))?;
             }
         }
 
@@ -226,7 +234,7 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
             writeln!(f)?;
 
             for diagnostic in &test_failures {
-                writeln!(f, "{}", diagnostic.display())?;
+                writeln!(f, "{}", diagnostic.display_with(self.options))?;
             }
         }
 
@@ -235,7 +243,7 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
             writeln!(f)?;
 
             for diagnostic in &warnings {
-                writeln!(f, "{}", diagnostic.display())?;
+                writeln!(f, "{}", diagnostic.display_with(self.options))?;
             }
         }
 

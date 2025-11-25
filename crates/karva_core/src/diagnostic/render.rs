@@ -1,5 +1,7 @@
 use std::fmt::{self, Display, Formatter};
 
+use karva_project::Project;
+
 use crate::diagnostic::{
     Diagnostic, DiscoveryDiagnostic, FunctionKind, InvalidFixtureDiagnostic,
     MissingFixturesDiagnostic, PassOnExpectFailureDiagnostic, TestFailureDiagnostic,
@@ -7,13 +9,30 @@ use crate::diagnostic::{
     diagnostic::{FixtureFailureDiagnostic, FunctionDefinitionLocation},
 };
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DisplayOptions {
+    pub show_traceback: bool,
+}
+
+impl From<&Project> for DisplayOptions {
+    fn from(project: &Project) -> Self {
+        Self {
+            show_traceback: project.options().show_traceback(),
+        }
+    }
+}
+
 pub struct DisplayDiagnostic<'a> {
     diagnostic: &'a Diagnostic,
+    options: DisplayOptions,
 }
 
 impl<'a> DisplayDiagnostic<'a> {
-    pub(crate) const fn new(diagnostic: &'a Diagnostic) -> Self {
-        Self { diagnostic }
+    pub(crate) const fn new(diagnostic: &'a Diagnostic, options: DisplayOptions) -> Self {
+        Self {
+            diagnostic,
+            options,
+        }
     }
 }
 
@@ -42,8 +61,18 @@ impl Display for DisplayDiagnostic<'_> {
                         f,
                         "test `{function_name}` at {function_location} failed {location_fail_string}"
                     )?;
-                    if let Some(message) = message {
+                    if self.options.show_traceback {
+                        for line in &traceback.lines {
+                            writeln!(f, "{line}")?;
+                        }
+                    } else if let Some(message) = message {
                         writeln!(f, "{message}")?;
+                    }
+                    if !self.options.show_traceback {
+                        writeln!(
+                            f,
+                            "note: run with `--show-traceback` to see the full traceback"
+                        )?;
                     }
                 }
                 TestFailureDiagnostic::PassOnExpectFailure(pass_on_expect_failure_diagnostic) => {

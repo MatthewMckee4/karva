@@ -158,6 +158,7 @@ fn missing_arguments_in_nested_function() {
 
     test `<test>.test::test_failing_fixture` at <temp_dir>/<test>/test.py:2 failed at <temp_dir>/<test>/test.py:6
     test_failing_fixture.<locals>.inner() missing 1 required positional argument: 'missing_fixture'
+    note: run with `--show-traceback` to see the full traceback
 
     test failures:
         <test>.test::test_failing_fixture at <temp_dir>/<test>/test.py:2

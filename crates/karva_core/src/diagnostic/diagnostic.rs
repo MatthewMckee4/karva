@@ -2,7 +2,7 @@ use karva_project::path::TestPathError;
 use pyo3::prelude::*;
 
 use crate::diagnostic::{
-    render::{DisplayDiagnostic, DisplayDiscoveryDiagnostic},
+    render::{DisplayDiagnostic, DisplayDiscoveryDiagnostic, DisplayOptions},
     traceback::Traceback,
 };
 
@@ -18,8 +18,8 @@ pub enum Diagnostic {
 }
 
 impl Diagnostic {
-    pub(crate) const fn display(&self) -> DisplayDiagnostic<'_> {
-        DisplayDiagnostic::new(self)
+    pub(crate) const fn display_with(&self, options: DisplayOptions) -> DisplayDiagnostic<'_> {
+        DisplayDiagnostic::new(self, options)
     }
 
     pub(crate) const fn is_test_failure(&self) -> bool {

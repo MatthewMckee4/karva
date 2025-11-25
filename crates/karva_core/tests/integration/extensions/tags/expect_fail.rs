@@ -363,6 +363,7 @@ def test_normal():
 
     test `<test>.test_fail::test_with_fail` at <temp_dir>/<test>/test_fail.py:4 failed at <temp_dir>/<test>/test_fail.py:5
     This is a custom failure message
+    note: run with `--show-traceback` to see the full traceback
 
     test failures:
         <test>.test_fail::test_with_fail at <temp_dir>/<test>/test_fail.py:4
@@ -393,6 +394,7 @@ def test_conditional_fail():
 
     test `<test>.test_fail::test_conditional_fail` at <temp_dir>/<test>/test_fail.py:4 failed at <temp_dir>/<test>/test_fail.py:7
     Condition was true, failing test
+    note: run with `--show-traceback` to see the full traceback
 
     test failures:
         <test>.test_fail::test_conditional_fail at <temp_dir>/<test>/test_fail.py:4
@@ -420,6 +422,7 @@ def test_raise_fail_error():
 
     test `<test>.test_fail::test_raise_fail_error` at <temp_dir>/<test>/test_fail.py:4 failed at <temp_dir>/<test>/test_fail.py:5
     Manually raised FailError
+    note: run with `--show-traceback` to see the full traceback
 
     test failures:
         <test>.test_fail::test_raise_fail_error at <temp_dir>/<test>/test_fail.py:4

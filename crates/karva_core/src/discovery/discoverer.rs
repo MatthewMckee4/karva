@@ -278,7 +278,7 @@ impl DiscoveryMode {
 mod tests {
 
     use insta::{allow_duplicates, assert_snapshot};
-    use karva_project::{project::ProjectOptions, verbosity::VerbosityLevel};
+    use karva_project::project::ProjectOptions;
     use karva_test::TestContext;
 
     use super::*;
@@ -437,14 +437,8 @@ def test_function(): pass
 ",
         )]);
 
-        let project = Project::new(env.cwd(), vec![env.cwd()]).with_options(ProjectOptions::new(
-            "check".to_string(),
-            VerbosityLevel::Default,
-            false,
-            true,
-            false,
-            false,
-        ));
+        let project = Project::new(env.cwd(), vec![env.cwd()])
+            .with_options(ProjectOptions::default().with_test_prefix("check"));
 
         let discoverer = StandardDiscoverer::new(&project);
         let (session, _) = Python::attach(|py| discoverer.discover(py));
