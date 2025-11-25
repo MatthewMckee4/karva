@@ -88,3 +88,8 @@ repos:
     rev: v1.16.3
     hooks:
       - id: zizmor
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
+    hooks:
+      - id: actionlint

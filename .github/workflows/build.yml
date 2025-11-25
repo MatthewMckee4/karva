@@ -8,6 +8,10 @@ on:
     tags:
       - v[0-9]*.[0-9]*.[0-9]*
 
+  pull_request:
+    paths:
+      - ".github/workflows/build.yml"
+
 permissions: {}
 
 jobs:
@@ -17,7 +21,7 @@ jobs:
     runs-on: ${{ matrix.platform.os }}
 
     strategy:
-      fail-fast: ${{ !contains(github.event.pull_request.labels.*.name, 'CI-no-fail-fast') }}
+      fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         platform:
@@ -28,7 +32,7 @@ jobs:
               rust-target: "x86_64-unknown-linux-gnu",
             },
             {
-              os: "macOS-15",
+              os: "macos-latest",
               python-architecture: "x64",
               rust-target: "x86_64-apple-darwin",
             },
@@ -43,15 +47,27 @@ jobs:
               rust-target: "i686-pc-windows-msvc",
             },
           ]
+
+        exclude:
+          - python-version: 3.10
+            platform:
+              os: "macos-latest"
+              python-architecture: "x64"
+              rust-target: "x86_64-apple-darwin"
+
         include:
           # Older versions of CPython are not available for AArch64.
           - python-version: 3.12
             platform:
-              {
-                os: "macOS-latest",
-                python-architecture: "arm64",
-                rust-target: "aarch64-apple-darwin",
-              }
+              os: "macos-latest"
+              python-architecture: "arm64"
+              rust-target: "aarch64-apple-darwin"
+          - python-version: "3.10"
+            platform:
+              os: "macos-latest"
+              python-architecture: "arm64"
+              rust-target: "aarch64-apple-darwin"
+
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
