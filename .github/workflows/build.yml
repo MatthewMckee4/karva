@@ -47,6 +47,7 @@ jobs:
               rust-target: "i686-pc-windows-msvc",
             },
           ]
+
         exclude:
           - python-version: 3.10
             platform:
@@ -58,11 +59,15 @@ jobs:
           # Older versions of CPython are not available for AArch64.
           - python-version: 3.12
             platform:
-              {
-                os: "macos-latest",
-                python-architecture: "arm64",
-                rust-target: "aarch64-apple-darwin",
-              }
+              os: "macos-latest"
+              python-architecture: "arm64"
+              rust-target: "aarch64-apple-darwin"
+          - python-version: 3.10
+            platform:
+              os: "macos-latest"
+              python-architecture: "arm64"
+              rust-target: "aarch64-apple-darwin"
+
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
