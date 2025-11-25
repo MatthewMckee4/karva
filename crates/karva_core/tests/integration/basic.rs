@@ -168,6 +168,7 @@ def test_2():
     test failures:
 
     test `<test>.test_file::test_1` at <temp_dir>/<test>/test_file.py:2 failed at <temp_dir>/<test>/test_file.py:3
+    note: run with `--show-traceback` to see the full traceback
 
     test failures:
         <test>.test_file::test_1 at <temp_dir>/<test>/test_file.py:2
