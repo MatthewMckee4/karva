@@ -28,7 +28,7 @@ jobs:
               rust-target: "x86_64-unknown-linux-gnu",
             },
             {
-              os: "macOS-15",
+              os: "macos-latest",
               python-architecture: "x64",
               rust-target: "x86_64-apple-darwin",
             },
@@ -48,7 +48,7 @@ jobs:
           - python-version: 3.12
             platform:
               {
-                os: "macOS-latest",
+                os: "macos-latest",
                 python-architecture: "arm64",
                 rust-target: "aarch64-apple-darwin",
               }
