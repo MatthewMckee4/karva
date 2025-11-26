@@ -42,7 +42,7 @@ def test_4(): pass",
 
 #[test]
 fn test_empty_file() {
-    let context = TestContext::with_file("<test>/test_empty.py", "");
+    let context = TestContext::with_file("<test>/test.py", "");
 
     let result = context.test();
 
@@ -51,7 +51,7 @@ fn test_empty_file() {
 
 #[test]
 fn test_empty_directory() {
-    let context = TestContext::with_file("<test>/tests/test_empty.py", "");
+    let context = TestContext::with_file("<test>/test.py", "");
 
     let mapped_tests_dir = context.mapped_path("<test>").unwrap();
 
@@ -67,7 +67,7 @@ fn test_empty_directory() {
 #[test]
 fn test_single_function() {
     let context = TestContext::with_files([(
-        "<test>/test_file.py",
+        "<test>/test.py",
         r"
             def test_1(): pass
             def test_2(): pass",
@@ -75,7 +75,7 @@ fn test_single_function() {
 
     let mapped_path = context.mapped_path("<test>").unwrap().clone();
 
-    let test_file1_path = mapped_path.join("test_file.py");
+    let test_file1_path = mapped_path.join("test.py");
 
     let project = Project::new(
         context.cwd(),
@@ -92,7 +92,7 @@ fn test_single_function() {
 #[test]
 fn test_single_function_shadowed_by_file() {
     let context = TestContext::with_files([(
-        "<test>/test_file.py",
+        "<test>/test.py",
         r"
 def test_1(): pass
 def test_2(): pass",
@@ -100,7 +100,7 @@ def test_2(): pass",
 
     let mapped_path = context.mapped_path("<test>").unwrap().clone();
 
-    let test_file1_path = mapped_path.join("test_file.py");
+    let test_file1_path = mapped_path.join("test.py");
 
     let project = Project::new(
         context.cwd(),
@@ -120,7 +120,7 @@ def test_2(): pass",
 #[test]
 fn test_single_function_shadowed_by_directory() {
     let context = TestContext::with_files([(
-        "<test>/test_file.py",
+        "<test>/test.py",
         r"
 def test_1(): pass
 def test_2(): pass",
@@ -128,7 +128,7 @@ def test_2(): pass",
 
     let mapped_path = context.mapped_path("<test>").unwrap().clone();
 
-    let test_file1_path = mapped_path.join("test_file.py");
+    let test_file1_path = mapped_path.join("test.py");
 
     let project = Project::new(
         context.cwd(),
@@ -148,7 +148,7 @@ def test_2(): pass",
 #[test]
 fn test_fail_fast() {
     let context = TestContext::with_files([(
-        "<test>/test_file.py",
+        "<test>/test.py",
         r"
 def test_1():
     assert False
@@ -167,11 +167,11 @@ def test_2():
     assert_snapshot!(result.display(), @r"
     test failures:
 
-    test `<test>.test_file::test_1` at <temp_dir>/<test>/test_file.py:2 failed at <temp_dir>/<test>/test_file.py:3
+    test `<test>.test::test_1` at <test>/test.py:2 failed at <test>/test.py:3
     note: run with `--show-traceback` to see the full traceback
 
     test failures:
-        <test>.test_file::test_1 at <temp_dir>/<test>/test_file.py:2
+        <test>.test::test_1 at <test>/test.py:2
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");

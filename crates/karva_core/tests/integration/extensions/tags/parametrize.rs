@@ -7,7 +7,7 @@ use crate::common::{TestRunnerExt, get_parametrize_function};
 #[test]
 fn test_parametrize_with_fixture() {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         r#"
 import karva
 
@@ -29,7 +29,7 @@ def test_parametrize_with_fixture(a, fixture_value):
 #[test]
 fn test_parametrize_with_fixture_parametrize_priority() {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         r#"import karva
 
 @karva.fixture
@@ -49,7 +49,7 @@ def test_parametrize_with_fixture(a):
 #[test]
 fn test_parametrize_two_decorators() {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         r#"import karva
 
 @karva.tags.parametrize("a", [1, 2])
@@ -67,7 +67,7 @@ def test_function(a: int, b: int):
 #[test]
 fn test_parametrize_three_decorators() {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         r#"
 import karva
 

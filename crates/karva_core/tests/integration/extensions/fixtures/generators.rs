@@ -7,7 +7,7 @@ use crate::common::TestRunnerExt;
 #[test]
 fn test_fixture_generator() {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         r"
 import karva
 
@@ -28,7 +28,7 @@ def test_fixture_generator(fixture_generator):
 #[rstest]
 fn test_fixture_generator_with_second_fixture(#[values("karva", "pytest")] framework: &str) {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}

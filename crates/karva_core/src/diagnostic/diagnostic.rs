@@ -1,3 +1,4 @@
+use camino::Utf8PathBuf;
 use karva_project::path::TestPathError;
 use pyo3::prelude::*;
 
@@ -50,6 +51,7 @@ impl Diagnostic {
 
     pub(crate) fn from_test_fail(
         py: Python<'_>,
+        cwd: &Utf8PathBuf,
         error: &PyErr,
         location: FunctionDefinitionLocation,
     ) -> Self {
@@ -60,7 +62,7 @@ impl Diagnostic {
         Self::TestFailure(TestFailureDiagnostic::RunFailure(
             TestRunFailureDiagnostic {
                 location,
-                traceback: Traceback::new(py, error),
+                traceback: Traceback::new(py, cwd, error),
                 message,
             },
         ))
@@ -77,6 +79,7 @@ impl Diagnostic {
 
     pub(crate) fn from_fixture_fail(
         py: Python<'_>,
+        cwd: &Utf8PathBuf,
         error: &PyErr,
         location: FunctionDefinitionLocation,
     ) -> Self {
@@ -86,7 +89,7 @@ impl Diagnostic {
         };
         Self::FixtureFailure(FixtureFailureDiagnostic {
             location,
-            traceback: Traceback::new(py, error),
+            traceback: Traceback::new(py, cwd, error),
             message,
         })
     }

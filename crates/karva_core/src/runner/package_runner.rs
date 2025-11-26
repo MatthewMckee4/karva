@@ -146,10 +146,13 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
         let mut test_finalizers = Vec::new();
 
+        let cwd = self.context.project().cwd().clone();
+
         let handle_fixture_fail = |fixture: &NormalizedFixture, err: PyErr| {
             let default_diagnostic = || {
                 Diagnostic::from_fixture_fail(
                     py,
+                    &cwd,
                     &err,
                     FunctionDefinitionLocation::new(
                         fixture.name().to_string(),
@@ -239,7 +242,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                         reason,
                         FunctionDefinitionLocation::new(
                             full_test_name.clone(),
-                            test_fn.location().to_string(),
+                            test_fn.location.clone(),
                         ),
                     );
 
@@ -284,6 +287,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     let default_diagnostic = || {
                         Diagnostic::from_test_fail(
                             py,
+                            &cwd,
                             &err,
                             FunctionDefinitionLocation::new(
                                 full_test_name.clone(),

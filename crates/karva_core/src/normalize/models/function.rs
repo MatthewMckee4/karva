@@ -65,10 +65,6 @@ impl NormalizedTestFunction {
         &self.name
     }
 
-    pub(crate) fn location(&self) -> &str {
-        &self.location
-    }
-
     pub(crate) const fn params(&self) -> &HashMap<String, Py<PyAny>> {
         &self.params
     }

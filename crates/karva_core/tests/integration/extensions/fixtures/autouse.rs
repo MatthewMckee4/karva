@@ -7,7 +7,7 @@ use crate::common::{TestRunnerExt, get_auto_use_kw};
 #[rstest]
 fn test_function_scope_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
     let test_context = TestContext::with_file(
-        "<test>/test_function_scope_auto_use_fixture.py",
+        "<test>/test.py",
         format!(
             r#"
 import {framework}
@@ -44,7 +44,7 @@ fn test_scope_auto_use_fixture(
     #[values("module", "package", "session")] scope: &str,
 ) {
     let test_context = TestContext::with_file(
-        "<test>/test_function_scope_auto_use_fixture.py",
+        "<test>/test.py",
         &format!(
             r#"
 import {framework}
@@ -77,7 +77,7 @@ def test_something_else():
 #[rstest]
 fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
     let test_context = TestContext::with_file(
-        "<test>/test_nested_generator_fixture.py",
+        "<test>/test.py",
         &format!(
             r#"
                 from {framework} import fixture

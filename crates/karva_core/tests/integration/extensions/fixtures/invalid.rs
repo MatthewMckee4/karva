@@ -26,14 +26,14 @@ fn test_invalid_pytest_fixture_scope() {
     assert_snapshot!(result.display(), @r#"
     discovery failures:
 
-    invalid fixture `some_fixture`: Failed to parse fixture at <temp_dir>/<test>/test.py:4
+    invalid fixture `some_fixture`: Failed to parse fixture at <test>/test.py:4
 
     test failures:
 
-    test `<test>.test::test_all_scopes` has missing fixtures: ["some_fixture"] at <temp_dir>/<test>/test.py:8
+    test `<test>.test::test_all_scopes` has missing fixtures: ["some_fixture"] at <test>/test.py:8
 
     test failures:
-        <test>.test::test_all_scopes at <temp_dir>/<test>/test.py:8
+        <test>.test::test_all_scopes at <test>/test.py:8
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     "#);
@@ -58,10 +58,10 @@ fn test_missing_fixture() {
     assert_snapshot!(result.display(), @r#"
     test failures:
 
-    test `<test>.test::test_all_scopes` has missing fixtures: ["missing_fixture"] at <temp_dir>/<test>/test.py:2
+    test `<test>.test::test_all_scopes` has missing fixtures: ["missing_fixture"] at <test>/test.py:2
 
     test failures:
-        <test>.test::test_all_scopes at <temp_dir>/<test>/test.py:2
+        <test>.test::test_all_scopes at <test>/test.py:2
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     "#);
@@ -90,15 +90,15 @@ fn test_fixture_fails_to_run() {
     assert_snapshot!(result.display(), @r#"
     fixture failures:
 
-    fixture function `<test>.test::failing_fixture` at <temp_dir>/<test>/test.py:4 failed at <temp_dir>/<test>/test.py:6
+    fixture function `<test>.test::failing_fixture` at <test>/test.py:4 failed at <test>/test.py:6
     Fixture failed
 
     test failures:
 
-    test `<test>.test::test_failing_fixture` has missing fixtures: ["failing_fixture"] at <temp_dir>/<test>/test.py:8
+    test `<test>.test::test_failing_fixture` has missing fixtures: ["failing_fixture"] at <test>/test.py:8
 
     test failures:
-        <test>.test::test_failing_fixture at <temp_dir>/<test>/test.py:8
+        <test>.test::test_failing_fixture at <test>/test.py:8
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     "#);
@@ -125,14 +125,14 @@ fn test_fixture_missing_fixtures() {
     assert_snapshot!(result.display(), @r#"
     fixture failures:
 
-    fixture `<test>.test::failing_fixture` has missing fixtures: ["missing_fixture"] at <temp_dir>/<test>/test.py:4
+    fixture `<test>.test::failing_fixture` has missing fixtures: ["missing_fixture"] at <test>/test.py:4
 
     test failures:
 
-    test `<test>.test::test_failing_fixture` has missing fixtures: ["failing_fixture"] at <temp_dir>/<test>/test.py:8
+    test `<test>.test::test_failing_fixture` has missing fixtures: ["failing_fixture"] at <test>/test.py:8
 
     test failures:
-        <test>.test::test_failing_fixture at <temp_dir>/<test>/test.py:8
+        <test>.test::test_failing_fixture at <test>/test.py:8
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     "#);
@@ -156,12 +156,12 @@ fn missing_arguments_in_nested_function() {
     assert_snapshot!(result.display(), @r"
     test failures:
 
-    test `<test>.test::test_failing_fixture` at <temp_dir>/<test>/test.py:2 failed at <temp_dir>/<test>/test.py:6
+    test `<test>.test::test_failing_fixture` at <test>/test.py:2 failed at <test>/test.py:6
     test_failing_fixture.<locals>.inner() missing 1 required positional argument: 'missing_fixture'
     note: run with `--show-traceback` to see the full traceback
 
     test failures:
-        <test>.test::test_failing_fixture at <temp_dir>/<test>/test.py:2
+        <test>.test::test_failing_fixture at <test>/test.py:2
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");
