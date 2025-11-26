@@ -6,7 +6,7 @@ use crate::common::TestRunnerExt;
 #[test]
 fn test_fixtures_given_by_decorator() {
     let test_context = TestContext::with_file(
-        "<test>/test_fixtures_given_by_decorator.py",
+        "<test>/test.py",
         r"
 import functools
 
@@ -32,7 +32,7 @@ def test_fixtures_given_by_decorator(a):
 #[test]
 fn test_fixtures_given_by_decorator_and_fixture() {
     let test_context = TestContext::with_file(
-        "<test>/test_fixtures_given_by_decorator_and_fixture.py",
+        "<test>/test.py",
         r"
 import karva
 
@@ -64,7 +64,7 @@ def test_func(a, b):
 #[test]
 fn test_fixtures_given_by_decorator_and_parametrize() {
     let test_context = TestContext::with_file(
-        "<test>/test_fixtures_given_by_decorator_and_parametrize.py",
+        "<test>/test.py",
         r#"
 import karva
 import functools
@@ -93,7 +93,7 @@ def test_func(a, b):
 #[test]
 fn test_fixtures_given_by_decorator_and_parametrize_and_fixture() {
     let test_context = TestContext::with_file(
-        "<test>/test_fixtures_given_by_decorator_and_parametrize_and_fixture.py",
+        "<test>/test.py",
         r#"
 import karva
 import functools
@@ -127,7 +127,7 @@ def test_func(a, b, c):
 #[test]
 fn test_fixtures_given_by_decorator_one_missing() {
     let test_context = TestContext::with_file(
-        "<test>/test_fixtures_given_by_decorator_one_missing.py",
+        "<test>/test.py",
         r"
 import functools
 
@@ -151,10 +151,10 @@ def test_fixtures_given_by_decorator(a, b):
     assert_snapshot!(result.display(), @r#"
     test failures:
 
-    test `<test>.test_fixtures_given_by_decorator_one_missing::test_fixtures_given_by_decorator` has missing fixtures: ["b"] at <temp_dir>/<test>/test_fixtures_given_by_decorator_one_missing.py:12
+    test `<test>.test::test_fixtures_given_by_decorator` has missing fixtures: ["b"] at <test>/test.py:12
 
     test failures:
-        <test>.test_fixtures_given_by_decorator_one_missing::test_fixtures_given_by_decorator at <temp_dir>/<test>/test_fixtures_given_by_decorator_one_missing.py:12
+        <test>.test::test_fixtures_given_by_decorator at <test>/test.py:12
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     "#);

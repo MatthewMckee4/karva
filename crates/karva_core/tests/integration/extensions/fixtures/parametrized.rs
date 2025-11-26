@@ -7,7 +7,7 @@ use crate::common::{TestRunnerExt, get_parametrize_function};
 #[rstest]
 fn test_parametrized_fixture(#[values("pytest", "karva")] framework: &str) {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         &format!(
             r"
                 import {framework}
@@ -48,7 +48,7 @@ fn test_parametrized_fixture_in_conftest(#[values("pytest", "karva")] framework:
             .as_str(),
         ),
         (
-            "<test>/test_file.py",
+            "<test>/test.py",
             r"
                     def test_with_number(number_fixture):
                         assert number_fixture in [10, 20, 30]
@@ -80,7 +80,7 @@ fn test_parametrized_fixture_module_scope(#[values("pytest", "karva")] framework
             .as_str(),
         ),
         (
-            "<test>/test_file.py",
+            "<test>/test.py",
             r"
                     def test_first(module_fixture):
                         assert module_fixture in ['X', 'Y']
@@ -101,7 +101,7 @@ fn test_parametrized_fixture_module_scope(#[values("pytest", "karva")] framework
 #[rstest]
 fn test_parametrized_fixture_with_generator(#[values("pytest", "karva")] framework: &str) {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         &format!(
             r"
                 import {framework}
@@ -157,7 +157,7 @@ fn test_parametrized_fixture_session_scope(#[values("pytest", "karva")] framewor
             .as_str(),
         ),
         (
-            "<test>/test_a.py",
+            "<test>/test_1.py",
             r"
                     def test_a1(session_fixture):
                         assert session_fixture in ['session_1', 'session_2']
@@ -167,7 +167,7 @@ fn test_parametrized_fixture_session_scope(#[values("pytest", "karva")] framewor
                 ",
         ),
         (
-            "<test>/test_b.py",
+            "<test>/test_2.py",
             r"
                     def test_b1(session_fixture):
                         assert session_fixture in ['session_1', 'session_2']
@@ -185,7 +185,7 @@ fn test_parametrized_fixture_session_scope(#[values("pytest", "karva")] framewor
 #[rstest]
 fn test_parametrized_fixture_with_multiple_params(#[values("pytest", "karva")] framework: &str) {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         &format!(
             r"
                 import {framework}
@@ -217,7 +217,7 @@ fn test_parametrized_fixture_with_regular_parametrize(
     #[values("pytest", "karva")] framework: &str,
 ) {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         &format!(
             r"
                 import {framework}
@@ -247,7 +247,7 @@ fn test_parametrized_generator_fixture_finalizer_order(
     #[values("pytest", "karva")] framework: &str,
 ) {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         &format!(
             r"
                 import {framework}
@@ -326,7 +326,7 @@ fn test_parametrized_fixture_package_scope(#[values("pytest", "karva")] framewor
 #[rstest]
 fn test_parametrized_fixture_with_dependency(#[values("pytest", "karva")] framework: &str) {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         &format!(
             r"
                 import {framework}
@@ -355,7 +355,7 @@ fn test_parametrized_fixture_with_dependency(#[values("pytest", "karva")] framew
 #[rstest]
 fn test_parametrized_fixture_finalizer_with_state(#[values("pytest", "karva")] framework: &str) {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         &format!(
             r"
                 import {framework}
@@ -387,7 +387,7 @@ fn test_parametrized_fixture_finalizer_with_state(#[values("pytest", "karva")] f
 #[test]
 fn test_pytest_param() {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         r"
             import pytest
 
@@ -410,7 +410,7 @@ fn test_complex_parametrized_generator_fixture_finalizer_order(
     #[values("pytest", "karva")] framework: &str,
 ) {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         &format!(
             r#"
 

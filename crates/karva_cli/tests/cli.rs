@@ -60,11 +60,11 @@ fn test_one_test_fails() {
 
     test failures:
 
-    test `test_fail::test_fail` at <temp_dir>/test_fail.py:2 failed at <temp_dir>/test_fail.py:3
+    test `test_fail::test_fail` at test_fail.py:2 failed at test_fail.py:3
     note: run with `--show-traceback` to see the full traceback
 
     test failures:
-        test_fail::test_fail at <temp_dir>/test_fail.py:2
+        test_fail::test_fail at test_fail.py:2
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -95,16 +95,16 @@ fn test_two_test_fails() {
 
     test failures:
 
-    test `tests.test_fail::test_fail` at <temp_dir>/tests/test_fail.py:2 failed at <temp_dir>/tests/test_fail.py:3
+    test `tests.test_fail::test_fail` at tests/test_fail.py:2 failed at tests/test_fail.py:3
     note: run with `--show-traceback` to see the full traceback
 
-    test `tests.test_fail::test_fail2` at <temp_dir>/tests/test_fail.py:5 failed at <temp_dir>/tests/test_fail.py:6
+    test `tests.test_fail::test_fail2` at tests/test_fail.py:5 failed at tests/test_fail.py:6
     Test failed
     note: run with `--show-traceback` to see the full traceback
 
     test failures:
-        tests.test_fail::test_fail at <temp_dir>/tests/test_fail.py:2
-        tests.test_fail::test_fail2 at <temp_dir>/tests/test_fail.py:5
+        tests.test_fail::test_fail at tests/test_fail.py:2
+        tests.test_fail::test_fail2 at tests/test_fail.py:5
 
     test result: FAILED. 0 passed; 2 failed; 0 skipped; finished in [TIME]
 
@@ -144,12 +144,12 @@ fn test_file_importing_another_file() {
 
     test failures:
 
-    test `test_cross_file::test_with_helper` at <temp_dir>/test_cross_file.py:4 failed at <temp_dir>/helper.py:4
+    test `test_cross_file::test_with_helper` at test_cross_file.py:4 failed at helper.py:4
     Data validation failed
     note: run with `--show-traceback` to see the full traceback
 
     test failures:
-        test_cross_file::test_with_helper at <temp_dir>/test_cross_file.py:4
+        test_cross_file::test_with_helper at test_cross_file.py:4
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -269,10 +269,10 @@ fn test_multiple_fixtures_not_found() {
 
     test failures:
 
-    test `test_multiple_fixtures_not_found::test_multiple_fixtures_not_found` has missing fixtures: ["a", "b", "c"] at <temp_dir>/test_multiple_fixtures_not_found.py:1
+    test `test_multiple_fixtures_not_found::test_multiple_fixtures_not_found` has missing fixtures: ["a", "b", "c"] at test_multiple_fixtures_not_found.py:1
 
     test failures:
-        test_multiple_fixtures_not_found::test_multiple_fixtures_not_found at <temp_dir>/test_multiple_fixtures_not_found.py:1
+        test_multiple_fixtures_not_found::test_multiple_fixtures_not_found at test_multiple_fixtures_not_found.py:1
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -455,7 +455,7 @@ fn test_fixture_generator_two_yields_failing_test() {
 
     test failures:
 
-    test `test::test_fixture_generator [fixture_generator=1]` at <temp_dir>/test.py:9 failed at <temp_dir>/test.py:10
+    test `test::test_fixture_generator [fixture_generator=1]` at test.py:9 failed at test.py:10
     note: run with `--show-traceback` to see the full traceback
 
     warnings:
@@ -463,7 +463,7 @@ fn test_fixture_generator_two_yields_failing_test() {
     warning: Fixture test::fixture_generator had more than one yield statement
 
     test failures:
-        test::test_fixture_generator [fixture_generator=1] at <temp_dir>/test.py:9
+        test::test_fixture_generator [fixture_generator=1] at test.py:9
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -531,14 +531,14 @@ fn test_invalid_fixture() {
 
     discovery failures:
 
-    invalid fixture `fixture_generator`: Invalid fixture scope: ssession at <temp_dir>/test.py:4
+    invalid fixture `fixture_generator`: Invalid fixture scope: ssession at test.py:4
 
     test failures:
 
-    test `test::test_fixture_generator` has missing fixtures: ["fixture_generator"] at <temp_dir>/test.py:8
+    test `test::test_fixture_generator` has missing fixtures: ["fixture_generator"] at test.py:8
 
     test failures:
-        test::test_fixture_generator at <temp_dir>/test.py:8
+        test::test_fixture_generator at test.py:8
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -747,12 +747,12 @@ fn test_failfast() {
 
     test failures:
 
-    test `test_failfast::test_first_fail` at <temp_dir>/test_failfast.py:2 failed at <temp_dir>/test_failfast.py:3
+    test `test_failfast::test_first_fail` at test_failfast.py:2 failed at test_failfast.py:3
     First test fails
     note: run with `--show-traceback` to see the full traceback
 
     test failures:
-        test_failfast::test_first_fail at <temp_dir>/test_failfast.py:2
+        test_failfast::test_first_fail at test_failfast.py:2
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -827,11 +827,11 @@ def test_1():
 
         test failures:
 
-        test `test_expect_fail::test_1` at <temp_dir>/test_expect_fail.py:4 passed when it was expected to fail
+        test `test_expect_fail::test_1` at test_expect_fail.py:4 passed when it was expected to fail
         reason: Expected to fail but passes
 
         test failures:
-            test_expect_fail::test_1 at <temp_dir>/test_expect_fail.py:4
+            test_expect_fail::test_1 at test_expect_fail.py:4
 
         test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -940,10 +940,10 @@ def test_expected_fail_passes():
 
         test failures:
 
-        test `test_expect_fail::test_expected_fail_passes` at <temp_dir>/test_expect_fail.py:11 passed when it was expected to fail
+        test `test_expect_fail::test_expected_fail_passes` at test_expect_fail.py:11 passed when it was expected to fail
 
         test failures:
-            test_expect_fail::test_expected_fail_passes at <temp_dir>/test_expect_fail.py:11
+            test_expect_fail::test_expected_fail_passes at test_expect_fail.py:11
 
         test result: FAILED. 2 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -977,12 +977,12 @@ def test_normal():
 
     test failures:
 
-    test `test_fail::test_with_fail` at <temp_dir>/test_fail.py:4 failed at <temp_dir>/test_fail.py:5
+    test `test_fail::test_with_fail` at test_fail.py:4 failed at test_fail.py:5
     This is a custom failure message
     note: run with `--show-traceback` to see the full traceback
 
     test failures:
-        test_fail::test_with_fail at <temp_dir>/test_fail.py:4
+        test_fail::test_with_fail at test_fail.py:4
 
     test result: FAILED. 1 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -1041,14 +1041,14 @@ def test_1():
 
     test failures:
 
-    test `test_fail::test_1` at <temp_dir>/test_fail.py:7 failed at <temp_dir>/test_fail.py:5
+    test `test_fail::test_1` at test_fail.py:7 failed at test_fail.py:5
      | File "<temp_dir>/test_fail.py", line 8, in test_1
      |   foo()
      | File "<temp_dir>/test_fail.py", line 5, in foo
      |   raise ValueError('bar')
 
     test failures:
-        test_fail::test_1 at <temp_dir>/test_fail.py:7
+        test_fail::test_1 at test_fail.py:7
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 

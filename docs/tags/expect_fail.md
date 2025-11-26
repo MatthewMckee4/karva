@@ -87,11 +87,11 @@ test test::test_function ... FAILED
 
 test failures:
 
-test `test::test_function` at /home/matthew/develop/personal/karva-test/tests/test_file.py:3 passed when it was expected to fail
+test `test::test_function` at test.py:3 passed when it was expected to fail
 reason: This test is expected to fail
 
 test failures:
-    test::test_function at /home/matthew/develop/personal/karva-test/tests/test_file.py:3
+    test::test_function at test.py:3
 
 test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in 0s
 ```
@@ -171,10 +171,10 @@ test test::test_function ... FAILED
 
 test failures:
 
-test `test::test_function` at /home/matthew/develop/personal/karva-test/tests/test_file.py:3 passed when it was expected to fail
+test `test::test_function` at test.py:3 passed when it was expected to fail
 
 test failures:
-    test::test_function at /home/matthew/develop/personal/karva-test/tests/test_file.py:3
+    test::test_function at test.py:3
 
 test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in 0s
 ```

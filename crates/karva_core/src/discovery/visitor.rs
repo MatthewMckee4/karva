@@ -173,7 +173,11 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_> {
                     Err(e) => {
                         self.diagnostics.push(DiscoveryDiagnostic::invalid_fixture(
                             e,
-                            function_definition_location(self.module, stmt_function_def),
+                            function_definition_location(
+                                self.project.cwd(),
+                                self.module,
+                                stmt_function_def,
+                            ),
                             stmt_function_def.name.to_string(),
                         ));
                     }

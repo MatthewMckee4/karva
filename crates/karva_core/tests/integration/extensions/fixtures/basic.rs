@@ -25,7 +25,7 @@ def z(x, y):
     return 1
             ",
         ),
-        ("<test>/inner/test_file.py", "def test_1(z): pass"),
+        ("<test>/test.py", "def test_1(z): pass"),
     ]);
 
     let result = context.test();
@@ -45,7 +45,7 @@ def x():
     return 1
             ",
         ),
-        ("<test>/test_file.py", "def test_1(x): pass"),
+        ("<test>/test.py", "def test_1(x): pass"),
     ]);
 
     let result = context.test();
@@ -56,7 +56,7 @@ def x():
 #[test]
 fn test_fixture_with_name_parameter() {
     let context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         r#"import karva
 
 @karva.fixture(name="fixture_name")
@@ -76,7 +76,7 @@ def test_fixture_with_name_parameter(fixture_name):
 #[test]
 fn test_fixture_is_different_in_different_functions() {
     let context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         r"import karva
 
 class Testcontext:
@@ -115,7 +115,7 @@ def x():
     return 1
             ",
         ),
-        ("<test>/tests/test_file.py", "def test_1(x): pass"),
+        ("<test>/tests/test.py", "def test_1(x): pass"),
     ]);
 
     let result = context.test();
@@ -135,7 +135,7 @@ def x():
     return 1
             ",
         ),
-        ("<test>/tests/test_file.py", "def test_1(x): pass"),
+        ("<test>/tests/test.py", "def test_1(x): pass"),
     ]);
 
     let result = context.test();
@@ -160,7 +160,7 @@ def x():
             ",
         ),
         (
-            "<test>/tests/test_file.py",
+            "<test>/tests/test.py",
             r"
 from .conftest import arr
 
@@ -195,7 +195,7 @@ def x():
             ",
         ),
         (
-            "<test>/tests/test_file.py",
+            "<test>/tests/test.py",
             r"
 from .conftest import arr
 
@@ -226,7 +226,7 @@ def x():
     return 1
 ",
         ),
-        ("<test>/tests/test_1.py", "def test_1(x): pass"),
+        ("<test>/tests/test.py", "def test_1(x): pass"),
     ]);
 
     let result = context.test();
@@ -237,7 +237,7 @@ def x():
 #[rstest]
 fn test_dynamic_fixture_scope_session_scope(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_dynamic_scope.py",
+        "<test>/test.py",
         &format!(
             r#"
 from {framework} import fixture
@@ -272,7 +272,7 @@ def test_2(x_session):
 #[rstest]
 fn test_dynamic_fixture_scope_function_scope(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_dynamic_scope.py",
+        "<test>/test.py",
         &format!(
             r#"
 from {framework} import fixture
@@ -318,7 +318,7 @@ def username():
 ",
         ),
         (
-            "<test>/tests/test_something.py",
+            "<test>/tests/test_1.py",
             r"
 import karva
 
@@ -331,7 +331,7 @@ def test_username(username):
 ",
         ),
         (
-            "<test>/tests/test_something_else.py",
+            "<test>/tests/test_2.py",
             r"
 import karva
 
@@ -407,7 +407,7 @@ fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &st
 #[rstest]
 fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_nested_generator_fixture.py",
+        "<test>/test.py",
         &format!(
             r"
                 from {framework} import fixture
@@ -439,7 +439,7 @@ fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
 #[rstest]
 fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_nested_generator_fixture.py",
+        "<test>/test.py",
         &format!(
             r"
                 from {framework} import fixture

@@ -7,7 +7,7 @@ use crate::common::TestRunnerExt;
 #[rstest]
 fn test_fixture_request(#[values("pytest", "karva")] framework: &str) {
     let test_context = TestContext::with_file(
-        "<test>/test_file.py",
+        "<test>/test.py",
         &format!(
             r"
                 import {framework}

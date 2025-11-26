@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use karva_project::Project;
 use pyo3::prelude::*;
 
 use crate::{
@@ -18,13 +19,15 @@ use crate::{
 pub mod models;
 mod utils;
 
-pub struct DiscoveredPackageNormalizer {
+pub struct DiscoveredPackageNormalizer<'proj> {
+    project: &'proj Project,
     normalization_cache: HashMap<String, Vec<NormalizedFixture>>,
 }
 
-impl DiscoveredPackageNormalizer {
-    pub(crate) fn new() -> Self {
+impl<'proj> DiscoveredPackageNormalizer<'proj> {
+    pub fn new(project: &'proj Project) -> Self {
         Self {
+            project,
             normalization_cache: HashMap::new(),
         }
     }
@@ -102,7 +105,11 @@ impl DiscoveredPackageNormalizer {
                 .filter_map(|mut deps| deps.pop())
                 .collect();
 
-            let location = function_definition_location(current, fixture.function_definition());
+            let location = function_definition_location(
+                self.project.cwd(),
+                current,
+                fixture.function_definition(),
+            );
 
             let normalized = NormalizedFixture::new(
                 NormalizedFixtureName::UserDefined(fixture.name().clone()),
@@ -139,7 +146,11 @@ impl DiscoveredPackageNormalizer {
             cartesian_product(normalized_deps)
         };
 
-        let location = function_definition_location(current, fixture.function_definition());
+        let location = function_definition_location(
+            self.project.cwd(),
+            current,
+            fixture.function_definition(),
+        );
 
         for dep_combination in dep_combinations {
             for param in &param_list {
@@ -183,7 +194,8 @@ impl DiscoveredPackageNormalizer {
             .flat_map(|fixture| self.normalize_fixture(py, fixture, &[], module))
             .collect::<Vec<_>>();
 
-        let location = function_definition_location(module, test_fn.definition());
+        let location =
+            function_definition_location(self.project.cwd(), module, test_fn.definition());
 
         let test_params = test_fn.tags().parametrize_args();
 

@@ -1,3 +1,4 @@
+use camino::Utf8PathBuf;
 use pyo3::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -8,7 +9,7 @@ pub struct Traceback {
 }
 
 impl Traceback {
-    pub(crate) fn new(py: Python<'_>, error: &PyErr) -> Self {
+    pub(crate) fn new(py: Python<'_>, cwd: &Utf8PathBuf, error: &PyErr) -> Self {
         if let Some(traceback) = error.traceback(py) {
             let traceback_str = traceback.format().unwrap_or_default();
             if traceback_str.is_empty() {
@@ -21,10 +22,17 @@ impl Traceback {
                 .lines()
                 .map(|line| format!(" | {line}"))
                 .collect::<Vec<_>>();
-            Self {
-                lines,
-                location: get_location(&traceback_str),
-            }
+
+            // strip cwd from start of location
+            let location = get_location(&traceback_str).map(|location| {
+                location
+                    .strip_prefix(&cwd.to_string())
+                    .and_then(|s| s.strip_prefix('/'))
+                    .unwrap_or(&location)
+                    .to_string()
+            });
+
+            Self { lines, location }
         } else {
             Self {
                 lines: vec![],

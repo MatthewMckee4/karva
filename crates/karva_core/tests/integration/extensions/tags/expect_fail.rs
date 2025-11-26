@@ -15,7 +15,7 @@ fn get_expect_fail_decorator(framework: &str) -> &str {
 #[rstest]
 fn test_expect_fail_that_fails(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -38,7 +38,7 @@ def test_1():
 #[rstest]
 fn test_expect_fail_that_passes(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -57,11 +57,11 @@ def test_1():
         assert_snapshot!(result.display(), @r"
         test failures:
 
-        test `<test>.test_expect_fail::test_1` at <temp_dir>/<test>/test_expect_fail.py:4 passed when it was expected to fail
+        test `<test>.test::test_1` at <test>/test.py:4 passed when it was expected to fail
         reason: Expected to fail but passes
 
         test failures:
-            <test>.test_expect_fail::test_1 at <temp_dir>/<test>/test_expect_fail.py:4
+            <test>.test::test_1 at <test>/test.py:4
 
         test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
         ");
@@ -71,7 +71,7 @@ def test_1():
 #[rstest]
 fn test_expect_fail_no_reason(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -94,7 +94,7 @@ def test_1():
 #[rstest]
 fn test_expect_fail_with_call(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -117,7 +117,7 @@ def test_1():
 #[rstest]
 fn test_expect_fail_with_true_condition(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -140,7 +140,7 @@ def test_1():
 #[rstest]
 fn test_expect_fail_with_false_condition(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -163,7 +163,7 @@ def test_1():
 #[rstest]
 fn test_expect_fail_with_expression(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -187,7 +187,7 @@ def test_1():
 #[rstest]
 fn test_expect_fail_with_multiple_conditions(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -210,7 +210,7 @@ def test_1():
 #[rstest]
 fn test_expect_fail_with_all_false_conditions(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -233,7 +233,7 @@ def test_1():
 #[test]
 fn test_expect_fail_with_single_string_as_reason_karva() {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         r"
 import karva
 
@@ -251,7 +251,7 @@ def test_1():
 #[test]
 fn test_expect_fail_with_empty_conditions_karva() {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         r"
 import karva
 
@@ -269,7 +269,7 @@ def test_1():
 #[rstest]
 fn test_expect_fail_mixed_tests(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -295,10 +295,10 @@ def test_expected_fail_passes():
         assert_snapshot!(result.display(), @r"
         test failures:
 
-        test `<test>.test_expect_fail::test_expected_fail_passes` at <temp_dir>/<test>/test_expect_fail.py:11 passed when it was expected to fail
+        test `<test>.test::test_expected_fail_passes` at <test>/test.py:11 passed when it was expected to fail
 
         test failures:
-            <test>.test_expect_fail::test_expected_fail_passes at <temp_dir>/<test>/test_expect_fail.py:11
+            <test>.test::test_expected_fail_passes at <test>/test.py:11
 
         test result: FAILED. 2 passed; 1 failed; 0 skipped; finished in [TIME]
         ");
@@ -308,7 +308,7 @@ def test_expected_fail_passes():
 #[test]
 fn test_expect_fail_with_runtime_error() {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         r"
 import karva
 
@@ -326,7 +326,7 @@ def test_1():
 #[test]
 fn test_expect_fail_with_assertion_error() {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         r"
 import karva
 
@@ -344,7 +344,7 @@ def test_1():
 #[test]
 fn test_fail_function() {
     let context = TestContext::with_file(
-        "<test>/test_fail.py",
+        "<test>/test.py",
         r"
 import karva
 
@@ -361,12 +361,12 @@ def test_normal():
     assert_snapshot!(result.display(), @r"
     test failures:
 
-    test `<test>.test_fail::test_with_fail` at <temp_dir>/<test>/test_fail.py:4 failed at <temp_dir>/<test>/test_fail.py:5
+    test `<test>.test::test_with_fail` at <test>/test.py:4 failed at <test>/test.py:5
     This is a custom failure message
     note: run with `--show-traceback` to see the full traceback
 
     test failures:
-        <test>.test_fail::test_with_fail at <temp_dir>/<test>/test_fail.py:4
+        <test>.test::test_with_fail at <test>/test.py:4
 
     test result: FAILED. 1 passed; 1 failed; 0 skipped; finished in [TIME]
     ");
@@ -375,14 +375,14 @@ def test_normal():
 #[test]
 fn test_fail_function_conditional() {
     let context = TestContext::with_file(
-        "<test>/test_fail.py",
+        "<test>/test.py",
         r"
 import karva
 
 def test_conditional_fail():
     condition = True
     if condition:
-        karva.fail('Condition was true, failing test')
+        karva.fail('failing test')
     assert True
         ",
     );
@@ -392,12 +392,12 @@ def test_conditional_fail():
     assert_snapshot!(result.display(), @r"
     test failures:
 
-    test `<test>.test_fail::test_conditional_fail` at <temp_dir>/<test>/test_fail.py:4 failed at <temp_dir>/<test>/test_fail.py:7
-    Condition was true, failing test
+    test `<test>.test::test_conditional_fail` at <test>/test.py:4 failed at <test>/test.py:7
+    failing test
     note: run with `--show-traceback` to see the full traceback
 
     test failures:
-        <test>.test_fail::test_conditional_fail at <temp_dir>/<test>/test_fail.py:4
+        <test>.test::test_conditional_fail at <test>/test.py:4
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");
@@ -406,7 +406,7 @@ def test_conditional_fail():
 #[test]
 fn test_fail_error_exception() {
     let context = TestContext::with_file(
-        "<test>/test_fail.py",
+        "<test>/test.py",
         r"
 import karva
 
@@ -420,12 +420,12 @@ def test_raise_fail_error():
     assert_snapshot!(result.display(), @r"
     test failures:
 
-    test `<test>.test_fail::test_raise_fail_error` at <temp_dir>/<test>/test_fail.py:4 failed at <temp_dir>/<test>/test_fail.py:5
+    test `<test>.test::test_raise_fail_error` at <test>/test.py:4 failed at <test>/test.py:5
     Manually raised FailError
     note: run with `--show-traceback` to see the full traceback
 
     test failures:
-        <test>.test_fail::test_raise_fail_error at <temp_dir>/<test>/test_fail.py:4
+        <test>.test::test_raise_fail_error at <test>/test.py:4
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");
@@ -434,7 +434,7 @@ def test_raise_fail_error():
 #[test]
 fn test_expect_fail_with_skip() {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         r"
 import karva
 
@@ -454,7 +454,7 @@ def test_1():
 #[test]
 fn test_expect_fail_then_unexpected_pass() {
     let context = TestContext::with_file(
-        "<test>/test_expect_fail.py",
+        "<test>/test.py",
         r"
 import karva
 
@@ -469,11 +469,11 @@ def test_should_fail():
     assert_snapshot!(result.display(), @r"
     test failures:
 
-    test `<test>.test_expect_fail::test_should_fail` at <temp_dir>/<test>/test_expect_fail.py:4 passed when it was expected to fail
+    test `<test>.test::test_should_fail` at <test>/test.py:4 passed when it was expected to fail
     reason: This should fail but passes
 
     test failures:
-        <test>.test_expect_fail::test_should_fail at <temp_dir>/<test>/test_expect_fail.py:4
+        <test>.test::test_should_fail at <test>/test.py:4
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");

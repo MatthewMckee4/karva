@@ -6,7 +6,7 @@ use crate::common::TestRunnerExt;
 #[test]
 fn test_use_fixtures_single_fixture() {
     let test_context = TestContext::with_file(
-        "<test>/test_use_fixtures.py",
+        "<test>/test.py",
         r#"
 import karva
 
@@ -30,7 +30,7 @@ def test_with_use_fixture():
 #[test]
 fn test_use_fixtures_multiple_fixtures() {
     let test_context = TestContext::with_file(
-        "<test>/test_use_fixtures.py",
+        "<test>/test.py",
         r#"
 import karva
 
@@ -58,7 +58,7 @@ def test_with_multiple_use_fixtures():
 #[test]
 fn test_use_fixtures_combined_with_parameter_fixtures() {
     let test_context = TestContext::with_file(
-        "<test>/test_use_fixtures.py",
+        "<test>/test.py",
         r#"
 import karva
 
@@ -85,7 +85,7 @@ def test_combined_fixtures(param_fixture):
 #[test]
 fn test_use_fixtures_with_parametrize() {
     let test_context = TestContext::with_file(
-        "<test>/test_use_fixtures.py",
+        "<test>/test.py",
         r#"
 import karva
 
@@ -110,7 +110,7 @@ def test_use_fixtures_with_parametrize(value):
 #[test]
 fn test_use_fixtures_multiple_decorators() {
     let test_context = TestContext::with_file(
-        "<test>/test_use_fixtures.py",
+        "<test>/test.py",
         r#"
 import karva
 
@@ -140,7 +140,7 @@ def test_multiple_use_fixtures_decorators():
 #[test]
 fn test_use_fixtures_fixture_not_found_but_not_used() {
     let test_context = TestContext::with_file(
-        "<test>/test_use_fixtures.py",
+        "<test>/test.py",
         r#"
 import karva
 
@@ -158,7 +158,7 @@ def test_missing_fixture():
 #[test]
 fn test_use_fixtures_generator_fixture() {
     let test_context = TestContext::with_file(
-        "<test>/test_use_fixtures.py",
+        "<test>/test.py",
         r#"
 import karva
 
@@ -183,7 +183,7 @@ def test_use_fixtures_with_generator():
 #[test]
 fn test_use_fixtures_session_scope() {
     let test_context = TestContext::with_files([(
-        "<test>/test_use_fixtures.py",
+        "<test>/test.py",
         r#"
 import karva
 
@@ -226,7 +226,7 @@ def use_fixture_only():
 "#,
         ),
         (
-            "<test>/test_use_fixtures.py",
+            "<test>/test.py",
             r#"
 import karva
 
@@ -245,7 +245,7 @@ def test_mixed_fixtures(shared_fixture):
 #[test]
 fn test_pytest_mark_usefixtures_single_fixture() {
     let test_context = TestContext::with_file(
-        "<test>/test_pytest_use_fixtures.py",
+        "<test>/test.py",
         r#"
 import pytest
 
@@ -269,7 +269,7 @@ def test_with_pytest_use_fixture():
 #[test]
 fn test_pytest_mark_usefixtures_multiple_fixtures() {
     let test_context = TestContext::with_file(
-        "<test>/test_pytest_use_fixtures.py",
+        "<test>/test.py",
         r#"
 import pytest
 
@@ -297,7 +297,7 @@ def test_with_multiple_pytest_use_fixtures():
 #[test]
 fn test_pytest_mark_usefixtures_with_parametrize() {
     let test_context = TestContext::with_file(
-        "<test>/test_pytest_use_fixtures.py",
+        "<test>/test.py",
         r#"
 import pytest
 
@@ -324,7 +324,7 @@ def test_pytest_use_fixtures_with_parametrize(value):
 #[test]
 fn test_pytest_mark_usefixtures_session_scope() {
     let test_context = TestContext::with_files([(
-        "<test>/test_pytest_use_fixtures.py",
+        "<test>/test.py",
         r#"
 import pytest
 

@@ -45,7 +45,8 @@ impl<'proj> StandardTestRunner<'proj> {
             // Normalize the discovered session - this resolves all parametrized fixtures
             // by splitting them into individual fixtures with new names matching the param.
             // Test functions are also expanded to match the new fixture names.
-            let normalized_session = DiscoveredPackageNormalizer::new().normalize(py, &session);
+            let normalized_session =
+                DiscoveredPackageNormalizer::new(self.project).normalize(py, &session);
 
             NormalizedPackageRunner::new(&mut context).run(py, &normalized_session);
 

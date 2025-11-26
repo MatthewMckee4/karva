@@ -15,7 +15,7 @@ fn get_skip_decorator(framework: &str) -> &str {
 #[rstest]
 fn test_skip(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_skip.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -39,7 +39,7 @@ def test_1():
 #[rstest]
 fn test_skip_keyword(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_skip.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -61,7 +61,7 @@ def test_1():
 #[rstest]
 fn test_skip_functionality_no_reason(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_skip.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -84,7 +84,7 @@ def test_1():
 #[rstest]
 fn test_skip_reason_function_call(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_skip.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -107,7 +107,7 @@ def test_1():
 #[rstest]
 fn test_skip_with_true_condition(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_skip.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -131,7 +131,7 @@ def test_1():
 #[rstest]
 fn test_skip_with_false_condition(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_skip.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -154,7 +154,7 @@ def test_1():
 #[rstest]
 fn test_skip_with_expression(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_skip.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -178,7 +178,7 @@ def test_1():
 #[rstest]
 fn test_skip_with_multiple_conditions(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_skip.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -201,7 +201,7 @@ def test_1():
 #[rstest]
 fn test_skip_with_condition_without_reason(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_skip.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -224,7 +224,7 @@ def test_1():
 #[rstest]
 fn test_skip_with_multiple_tests(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_skip.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -254,7 +254,7 @@ def test_normal():
 #[rstest]
 fn test_skip_with_all_false_conditions(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_skip.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -277,7 +277,7 @@ def test_1():
 #[test]
 fn test_skip_with_empty_conditions_karva() {
     let context = TestContext::with_file(
-        "<test>/test_skip.py",
+        "<test>/test.py",
         r"
 import karva
 
@@ -295,7 +295,7 @@ def test_1():
 #[test]
 fn test_skip_with_single_string_as_reason_karva() {
     let context = TestContext::with_file(
-        "<test>/test_skip.py",
+        "<test>/test.py",
         r"
 import karva
 
@@ -313,7 +313,7 @@ def test_1():
 #[test]
 fn test_skip_with_invalid_condition_integer_karva() {
     let context = TestContext::with_file(
-        "<test>/test_skip.py",
+        "<test>/test.py",
         r"
 import karva
 
@@ -328,7 +328,7 @@ def test_1():
     assert_snapshot!(result.display(), @r"
     discovery failures:
 
-    failed to import module `<test>.test_skip`: TypeError: Expected boolean values for conditions
+    failed to import module `<test>.test`: TypeError: Expected boolean values for conditions
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
     ");
@@ -337,7 +337,7 @@ def test_1():
 #[test]
 fn test_skip_with_mixed_valid_invalid_conditions_karva() {
     let context = TestContext::with_file(
-        "<test>/test_skip.py",
+        "<test>/test.py",
         r"
 import karva
 
@@ -352,44 +352,16 @@ def test_1():
     assert_snapshot!(result.display(), @r"
     discovery failures:
 
-    failed to import module `<test>.test_skip`: TypeError: Expected boolean values for conditions
+    failed to import module `<test>.test`: TypeError: Expected boolean values for conditions
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
     ");
 }
 
-#[test]
-fn test_runtime_skip_karva() {
-    let context = TestContext::with_file(
-        "<test>/test_runtime_skip.py",
-        r"
-import karva
-
-def test_skip_with_reason():
-    karva.skip('This test is skipped at runtime')
-    assert False, 'This should not be reached'
-
-def test_skip_without_reason():
-    karva.skip()
-    assert False, 'This should not be reached'
-
-def test_conditional_skip():
-    condition = True
-    if condition:
-        karva.skip('Condition was true')
-    assert False, 'This should not be reached'
-        ",
-    );
-
-    let result = context.test();
-
-    assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 3 skipped; finished in [TIME]");
-}
-
 #[rstest]
 fn test_runtime_skip_pytest(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
-        "<test>/test_pytest_skip.py",
+        "<test>/test.py",
         &format!(
             r"
 import {framework}
@@ -421,7 +393,7 @@ def test_conditional_skip():
 #[test]
 fn test_mixed_skip_and_pass() {
     let context = TestContext::with_file(
-        "<test>/test_mixed.py",
+        "<test>/test.py",
         r"
 import karva
 
@@ -445,7 +417,7 @@ def test_another_pass():
 #[test]
 fn test_skip_error_exception() {
     let context = TestContext::with_file(
-        "<test>/test_skip_error.py",
+        "<test>/test.py",
         r"
 import karva
 
