@@ -4,7 +4,7 @@ use karva_project::{Project, path::TestPath};
 use pyo3::prelude::*;
 
 #[cfg(test)]
-use crate::utils::attach;
+use crate::utils::attach_with_project;
 use crate::{
     diagnostic::DiscoveryDiagnostic,
     discovery::{DiscoveredModule, DiscoveredPackage, ModuleType, discover},
@@ -23,7 +23,7 @@ impl<'proj> StandardDiscoverer<'proj> {
 
     #[cfg(test)]
     pub(crate) fn discover(self) -> (DiscoveredPackage, Vec<DiscoveryDiagnostic>) {
-        attach(self.project, |py| self.discover_with_py(py))
+        attach_with_project(self.project, |py| self.discover_with_py(py))
     }
 
     pub(crate) fn discover_with_py(

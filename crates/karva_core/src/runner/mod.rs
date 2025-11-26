@@ -2,7 +2,7 @@ use karva_project::Project;
 
 use crate::{
     Context, DummyReporter, Reporter, discovery::StandardDiscoverer,
-    normalize::DiscoveredPackageNormalizer, utils::attach,
+    normalize::DiscoveredPackageNormalizer, utils::attach_with_project,
 };
 
 pub mod diagnostic;
@@ -32,7 +32,7 @@ impl<'proj> StandardTestRunner<'proj> {
     }
 
     fn test_impl(&self, reporter: &dyn Reporter) -> TestRunResult {
-        attach(self.project, |py| {
+        attach_with_project(self.project, |py| {
             let mut context = Context::new(self.project, reporter);
 
             let (session, discovery_diagnostics) =

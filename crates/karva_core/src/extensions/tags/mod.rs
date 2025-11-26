@@ -192,6 +192,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+    use crate::utils::attach;
 
     fn get_parametrize_decorator(framework: &str) -> &'static str {
         match framework {
@@ -219,7 +220,7 @@ mod tests {
 
     #[rstest]
     fn test_parametrize_args_single_arg(#[values("karva", "pytest")] framework: &str) {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -258,7 +259,7 @@ def test_parametrize(arg1):
 
     #[rstest]
     fn test_parametrize_args_two_args(#[values("karva", "pytest")] framework: &str) {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -297,7 +298,7 @@ def test_parametrize(arg1, arg2):
 
     #[rstest]
     fn test_parametrize_args_multiple_tags(#[values("karva", "pytest")] framework: &str) {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -344,7 +345,7 @@ def test_parametrize(arg1):
 
     #[rstest]
     fn test_use_fixtures_names_single(#[values("karva", "pytest")] framework: &str) {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -371,7 +372,7 @@ def test_function():
 
     #[rstest]
     fn test_use_fixtures_names_multiple(#[values("karva", "pytest")] framework: &str) {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -398,7 +399,7 @@ def test_function():
 
     #[rstest]
     fn test_use_fixtures_names_multiple_tags(#[values("karva", "pytest")] framework: &str) {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -432,7 +433,7 @@ def test_function():
 
     #[rstest]
     fn test_empty_parametrize_values(#[values("karva", "pytest")] framework: &str) {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -459,7 +460,7 @@ def test_parametrize(arg1):
 
     #[rstest]
     fn test_mixed_parametrize_and_fixtures(#[values("karva", "pytest")] framework: &str) {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -491,7 +492,7 @@ def test_function(arg1):
 
     #[rstest]
     fn test_complex_parametrize_data_types(#[values("karva", "pytest")] framework: &str) {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -526,7 +527,7 @@ def test_parametrize(arg1):
 
     #[rstest]
     fn test_no_decorators(#[values("karva", "pytest")] framework: &str) {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r"
@@ -549,7 +550,7 @@ def test_function():
 
     #[rstest]
     fn test_single_arg_tuple_parametrize(#[values("karva", "pytest")] framework: &str) {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -583,7 +584,7 @@ def test_parametrize(arg1):
 
     #[rstest]
     fn test_skip_mark_with_reason_kwarg(#[values("pytest")] framework: &str) {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -614,7 +615,7 @@ def test_skipped():
 
     #[rstest]
     fn test_skip_mark_with_positional_reason(#[values("pytest")] framework: &str) {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r#"
@@ -645,7 +646,7 @@ def test_skipped():
 
     #[rstest]
     fn test_skip_mark_without_reason(#[values("pytest")] framework: &str) {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
             let code = format!(
                 r"

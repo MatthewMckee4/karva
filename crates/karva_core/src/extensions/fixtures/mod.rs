@@ -250,7 +250,7 @@ fn is_fixture(expr: &Expr) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::extensions::fixtures::scope::resolve_dynamic_scope;
+    use crate::{extensions::fixtures::scope::resolve_dynamic_scope, utils::attach};
 
     #[test]
     fn test_invalid_fixture_scope() {
@@ -270,7 +270,7 @@ mod tests {
 
     #[test]
     fn test_resolve_dynamic_scope() {
-        Python::attach(|py| {
+        attach(|py| {
             let func = py.eval(c"lambda **kwargs: 'session'", None, None).unwrap();
 
             let resolved = resolve_dynamic_scope(py, &func, "test_fixture").unwrap();
@@ -280,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_resolve_dynamic_scope_with_fixture_name() {
-        Python::attach(|py| {
+        attach(|py| {
             let func = py.eval(
                 c"lambda **kwargs: 'session' if kwargs.get('fixture_name') == 'important_fixture' else 'function'",
                 None,
@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn test_resolve_dynamic_scope_invalid_return() {
-        Python::attach(|py| {
+        attach(|py| {
             let func = py
                 .eval(c"lambda **kwargs: 'invalid_scope'", None, None)
                 .unwrap();
@@ -310,7 +310,7 @@ mod tests {
 
     #[test]
     fn test_resolve_dynamic_scope_exception() {
-        Python::attach(|py| {
+        attach(|py| {
             let func = py.eval(c"lambda **kwargs: 1/0", None, None).unwrap();
 
             let result = resolve_dynamic_scope(py, &func, "test_fixture");

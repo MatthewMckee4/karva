@@ -73,9 +73,10 @@ mod tests {
 
     use karva_project::project::Project;
     use karva_test::TestContext;
-    use pyo3::prelude::*;
 
-    use crate::{discovery::StandardDiscoverer, extensions::fixtures::RequiresFixtures};
+    use crate::{
+        discovery::StandardDiscoverer, extensions::fixtures::RequiresFixtures, utils::attach,
+    };
 
     #[test]
     fn test_case_construction_and_getters() {
@@ -98,7 +99,7 @@ mod tests {
 
     #[test]
     fn test_case_with_fixtures() {
-        Python::attach(|py| {
+        attach(|py| {
             let env = TestContext::with_files([(
                 "<test>/test.py",
                 "def test_with_fixtures(fixture1, fixture2): pass",
