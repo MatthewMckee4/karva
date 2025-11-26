@@ -23,16 +23,10 @@ impl Traceback {
                 .map(|line| format!(" | {line}"))
                 .collect::<Vec<_>>();
 
-            // strip cwd from start of location
-            let location = get_location(&traceback_str).map(|location| {
-                location
-                    .strip_prefix(&cwd.to_string())
-                    .and_then(|s| s.strip_prefix('/'))
-                    .unwrap_or(&location)
-                    .to_string()
-            });
-
-            Self { lines, location }
+            Self {
+                lines,
+                location: get_location(cwd, &traceback_str),
+            }
         } else {
             Self {
                 lines: vec![],
@@ -42,7 +36,7 @@ impl Traceback {
     }
 }
 
-fn get_location(traceback: &str) -> Option<String> {
+fn get_location(cwd: &Utf8PathBuf, traceback: &str) -> Option<String> {
     let lines: Vec<&str> = traceback.lines().collect();
 
     // Find the last line that starts with "File \"" (ignoring leading whitespace)
@@ -51,12 +45,14 @@ fn get_location(traceback: &str) -> Option<String> {
         if let Some(after_file) = trimmed.strip_prefix("File \"") {
             if let Some(quote_end) = after_file.find('"') {
                 let filename = &after_file[..quote_end];
+                let file = Utf8PathBuf::from(filename);
+                let relative_path = file.strip_prefix(cwd).unwrap_or(&file);
                 let rest = &after_file[quote_end + 1..];
                 if let Some(line_start) = rest.find("line ") {
                     let line_part = &rest[line_start + 5..];
                     if let Some(comma_pos) = line_part.find(',') {
                         let line_number = &line_part[..comma_pos];
-                        return Some(format!("{filename}:{line_number}"));
+                        return Some(format!("{relative_path}:{line_number}"));
                     }
                 }
             }
@@ -125,7 +121,7 @@ Exception: Test error"#
   File "test.py", line 10, in <module>
     raise Exception('Test error')
 Exception: Test error"#;
-            let location = get_location(traceback);
+            let location = get_location(&Utf8PathBuf::new(), traceback);
             assert_eq!(location, Some("test.py:10".to_string()));
         }
 
@@ -135,7 +131,7 @@ Exception: Test error"#;
   File "/path/to/script.py", line 42, in function_name
     some_code()
 RuntimeError: Something went wrong"#;
-            let location = get_location(traceback);
+            let location = get_location(&Utf8PathBuf::new(), traceback);
             assert_eq!(location, Some("/path/to/script.py:42".to_string()));
         }
 
@@ -147,21 +143,21 @@ RuntimeError: Something went wrong"#;
   File "helper.py", line 15, in foo
     bar()
 ValueError: Invalid value"#;
-            let location = get_location(traceback);
+            let location = get_location(&Utf8PathBuf::new(), traceback);
             assert_eq!(location, Some("helper.py:15".to_string()));
         }
 
         #[test]
         fn test_get_location_empty_traceback() {
             let traceback = "";
-            let location = get_location(traceback);
+            let location = get_location(&Utf8PathBuf::new(), traceback);
             assert_eq!(location, None);
         }
 
         #[test]
         fn test_get_location_single_line() {
             let traceback = "Exception: Test error";
-            let location = get_location(traceback);
+            let location = get_location(&Utf8PathBuf::new(), traceback);
             assert_eq!(location, None);
         }
 
@@ -170,7 +166,7 @@ ValueError: Invalid value"#;
             let traceback = r"Traceback (most recent call last):
 Some random line
 Exception: Test error";
-            let location = get_location(traceback);
+            let location = get_location(&Utf8PathBuf::new(), traceback);
             assert_eq!(location, None);
         }
 
@@ -179,7 +175,7 @@ Exception: Test error";
             let traceback = r#"Traceback (most recent call last):
   File "test.py", in <module>
 Exception: Test error"#;
-            let location = get_location(traceback);
+            let location = get_location(&Utf8PathBuf::new(), traceback);
             assert_eq!(location, None);
         }
 
@@ -188,7 +184,7 @@ Exception: Test error"#;
             let traceback = r#"Traceback (most recent call last):
   File "test.py, line 10, in <module>
 Exception: Test error"#;
-            let location = get_location(traceback);
+            let location = get_location(&Utf8PathBuf::new(), traceback);
             assert_eq!(location, None);
         }
 
@@ -198,7 +194,7 @@ Exception: Test error"#;
   File "test.py", line 99999, in <module>
     code()
 Exception: Test error"#;
-            let location = get_location(traceback);
+            let location = get_location(&Utf8PathBuf::new(), traceback);
             assert_eq!(location, Some("test.py:99999".to_string()));
         }
     }
