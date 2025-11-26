@@ -64,9 +64,6 @@ src = "crates/karva_cli/Cargo.toml"
 [[tool.tbump.file]]
 src = "python/karva/__init__.py"
 
-[[tool.tbump.file]]
-src = "docs/index.md"
-
 [tool.tbump.git]
 message_template = "Bump to v{new_version}"
 tag_template = "v{new_version}"
