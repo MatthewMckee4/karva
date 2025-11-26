@@ -1055,3 +1055,37 @@ def test_1():
     ----- stderr -----
     "#);
 }
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_no_ignore() {
+    let mut context = IntegrationTestContext::with_file(
+        "test_file.py",
+        r"
+import karva
+
+def test_1():
+    assert True
+        ",
+    );
+
+    context.write_file(
+        "foo/test_pass.py",
+        "
+        def test_1():
+            assert True",
+    );
+
+    context.write_file(".gitignore", "foo/");
+
+    assert_cmd_snapshot!(context.command().arg("--show-traceback"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test_file::test_1 ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
