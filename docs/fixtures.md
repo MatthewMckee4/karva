@@ -74,7 +74,7 @@ def function_fixture() -> str:
 
 @fixture
 def dependent_fixture(function_fixture: str) -> str:
-    return "dependent_" + function_fixture 
+    return "dependent_" + function_fixture
 
 def test_dependent(dependent_fixture: str):
     assert dependent_fixture == "dependent_fixture"
@@ -142,7 +142,7 @@ def test_db():
     print("running test")
 ```
 
-## Use-fixtures 
+## Use-fixtures
 
 We can use the `use_fixtures` tag to specify fixtures that should be run before a function.
 
@@ -154,7 +154,7 @@ import karva
 @karva.fixture
 def x():
     # Do something
-    
+
 
 @karva.fixture
 def y():
@@ -170,7 +170,6 @@ def test():
 ## Overriding fixtures
 
 We can _override_ fixtures by giving them the same name. When overriding a fixture, we can still use the parent fixture.
-
 
 ```py title="conftest.py"
 import pytest
@@ -194,7 +193,6 @@ def username(username: str) -> str:
     return 'overridden-' + username
 ```
 
-
 ```py title="foo/test.py"
 def test_username(username: str) -> None:
     assert username == 'overridden-username'
@@ -202,7 +200,7 @@ def test_username(username: str) -> None:
 
 ## Parametrizing fixtures
 
-You can parametrize fixtures allowing us to run a test multiple times for each param of the fixture.  
+You can parametrize fixtures allowing us to run a test multiple times for each param of the fixture.
 
 ```py
 import karva

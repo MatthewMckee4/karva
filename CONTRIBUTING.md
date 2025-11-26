@@ -51,11 +51,19 @@ Then you can run the tests with:
 cargo test
 ```
 
-### Documentation
-
-We use mkdocs to build the documentation.
+If you want to run the cli tests, you need to build a wheel file, so you need to run the following:
 
 ```bash
+maturin build
+cargo test -- --include-ignored
+```
+
+### Documentation
+
+We use zensical to build the documentation.
+
+```bash
+uv run -s scripts/prepare_docs.py
 uv run --isolated --only-group docs zensical build
 ```
 

@@ -5,32 +5,31 @@ This tutorial will walk you through the basics of using Karva.
 We will first create a new project using `uv`.
 
 ```bash
-uv init --lib calculator
+uv init --lib .
+mkdir tests
 ```
 
 This will give us a project that looks like this:
 
 ```text
-calculator
+.
 ├── pyproject.toml
 ├── README.md
-└── src
-    └── calculator
-        ├── __init__.py
-        └── py.typed
+├── src
+│   └── karva_test
+│       ├── __init__.py
+│       └── py.typed
+└── tests
+
 ```
 
-We can then create our core logic in `src/calculator/__init__.py`.
-
-```py
+```python title="src/calculator/__init__.py"
 class Calculator:
     def add(self, a: int, b: int) -> int:
         return a + b
 ```
 
-We can then create our tests in `tests/test_add.py`.
-
-```py
+```python title="tests/test_add.py"
 from calculator import Calculator
 
 def test_add():

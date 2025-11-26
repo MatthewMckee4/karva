@@ -61,9 +61,7 @@ karva test tests/test_example.py
 
 Here is a small example usage
 
-**tests/test.py**
-
-```py
+```py title="tests/test.py"
 def test_pass():
     assert True
 
@@ -79,7 +77,7 @@ def test_error():
 Running karva:
 
 ```bash
-uv run karva test tests/test.py
+uv run karva test tests/
 ```
 
 Provides the following output:
