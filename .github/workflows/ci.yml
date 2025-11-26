@@ -83,32 +83,6 @@ jobs:
         run: |
           cargo test -- --include-ignored
 
-  build:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      max-parallel: 18
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.14"]
-
-    env:
-      PYTHON_VERSION: ${{ matrix.python-version }}
-
-    steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-        with:
-          persist-credentials: false
-
-      - name: Update Rust toolchain
-        run: rustup update
-
-      - name: Build wheels
-        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        with:
-          command: build
-
   build-docs:
     runs-on: ubuntu-latest
 
