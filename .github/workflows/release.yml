@@ -52,6 +52,9 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: false
 
+      - name: Prepare docs
+        run: uv run --script scripts/prepare_docs.py
+
       - name: Build docs
         run: uv run --isolated --only-group docs zensical build
 
