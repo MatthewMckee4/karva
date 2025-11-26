@@ -5,5 +5,5 @@ ci:
 documentation:
   - all:
       - changed-files:
-          - any-glob-to-any-file: ["docs/**/*", "zensical.yml"]
+          - any-glob-to-any-file: ["docs/**/*", "zensical.toml"]
           - all-globs-to-all-files: "!docs/cli.md"
