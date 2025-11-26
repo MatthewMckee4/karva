@@ -16,7 +16,7 @@ The fixture is created once per test module.
 
 ### Package Scope
 
-The fixture is created once per test package.
+The fixture is created once per folder.
 
 This means that every package that is a sub-package of the package with the fixture will create the fixture if and only if it has a module that requires the fixture.
 
@@ -33,16 +33,16 @@ calculator
         └── test_foo.py
 ```
 
-If we have the following fixture in `tests/conftest.py`:
+And the following fixture:
 
-```py
+```py title="tests/conftest.py"
 @fixture(scope="package")
 def package_fixture():
     return "package"
 ```
 
-And if the fixtures is used in `tests/foo/test_foo.py` and `tests/bar/test_bar.py`
-then fixture will be created once for the `foo` package and once for the `bar` package.
+If the fixture is used in `tests/foo/test_foo.py` and `tests/bar/test_bar.py`
+then fixture will be created once for the `foo` folder and once for the `bar` folder.
 
 If you wanted it to only create the fixture once you should use the `session` scope.
 
@@ -55,7 +55,7 @@ The fixture is created once per test session.
 A dynamic scope is given as a function that returns a valid scope string.
 
 ```py
-def dynamic_scope(fixture_name, config):
+def dynamic_scope(fixture_name: str, config: object) -> str:
     return "module"
 ```
 
@@ -63,43 +63,56 @@ Currently, we do not support config and that value is passed as `None`. The `fix
 
 ## Dependent fixtures
 
-We support fixtures that depend on other fixtures.
+Fixture are allowed to depend on other fixtures, and so on.
 
 ```py
 from karva import fixture
 
 @fixture
-def function_fixture():
-    return "function"
+def function_fixture() -> str:
+    return "fixture"
 
 @fixture
 def dependent_fixture(function_fixture: str) -> str:
-    return function_fixture + "dependent"
+    return "dependent_" + function_fixture 
 
 def test_dependent(dependent_fixture: str):
-    assert dependent_fixture == "functiondependent"
+    assert dependent_fixture == "dependent_fixture"
 ```
 
 ## Finalizers
 
-We support finalizers. These are called after the scope of the fixture has finished running.
+Finalizers are called after the scope of the fixture has finished running.
+
+Here we do some setup for the fixture, then yield the value. Once the requesting function, here `test_finalizer`, is done, we run the finalizer, and the teardown logic is run.
+
+This can be useful for setting up a database, then deleting it after the test is done.
 
 ```py
 from karva import fixture
 
 @fixture
-def finalizer_fixture():
-    print("Finalizer fixture initialized")
+def finalizer_fixture() -> Iterator[int]:
+    print("setup")
     yield 1
-    print("Finalizer fixture finalizer called")
+    print("teardown")
 
-def test_finalizer(finalizer_fixture: int):
+def test_finalizer(finalizer_fixture: int) -> None:
+    print("running test")
     assert finalizer_fixture == 1
+```
+
+If we ran `karva test -s` here, we would see the following output:
+
+```text
+setup
+running test
+teardown
 ```
 
 ## Auto-use fixtures
 
-We support auto-use fixtures. These are fixtures that are automatically used in their scope.
+Auto-use fixtures are run before any functions in their scope.
 
 ```py
 from karva import fixture
@@ -114,13 +127,26 @@ def test_value():
     assert data.get('value')
 ```
 
-## Other ways to use fixtures
+These can be useful with finalizers, since the requesting function may not need any value.
 
-Seen [here](https://docs.pytest.org/en/7.1.x/how-to/fixtures.html#use-fixtures-in-classes-and-modules-with-usefixtures) in pytest.
+```py
+from karva import fixture
 
-You can wrap your test function with a decorator specifying what fixtures you would like to call before running the function.
+@fixture(auto_use=True)
+def setup_db():
+    print("setup")
+    yield
+    print("teardown")
 
-This is technically a tag, but we reference it here has it refers to fixtures.
+def test_db():
+    print("running test")
+```
+
+## Use-fixtures 
+
+We can use the `use_fixtures` tag to specify fixtures that should be run before a function.
+
+This is useful when we don't need a value from the fixture, but we want to run some code before the test.
 
 ```py
 import karva
@@ -128,12 +154,12 @@ import karva
 @karva.fixture
 def x():
     # Do something
-    return 1
+    
 
 @karva.fixture
 def y():
     # Do something
-    yield 1
+    yield
     # Do something else
 
 @karva.tags.use_fixtures("x", "y")
@@ -143,55 +169,49 @@ def test():
 
 ## Overriding fixtures
 
-We can _override_ fixtures by giving them the same name. When overriding them we can also use them as arguments.
+We can _override_ fixtures by giving them the same name. When overriding a fixture, we can still use the parent fixture.
 
-**conftest.py**
 
-```py
+```py title="conftest.py"
 import pytest
 
 @pytest.fixture
-def username():
+def username() -> str:
     return 'username'
 
 ```
 
-**test_something.py**
-
-```py
-def test_username(username):
+```py title="test.py"
+def test_username(username: str) -> None:
     assert username == 'username'
 ```
 
-**subfolder/conftest.py**
-
-```py
+```py title="foo/conftest.py"
 import pytest
 
 @pytest.fixture
-def username(username):
+def username(username: str) -> str:
     return 'overridden-' + username
 ```
 
-**subfolder/test_something_else.py**
 
-```py
-def test_username(username):
+```py title="foo/test.py"
+def test_username(username: str) -> None:
     assert username == 'overridden-username'
 ```
 
 ## Parametrizing fixtures
 
-You can parametrize fixtures by using the `@karva.fixture(params=...)` decorator.
+You can parametrize fixtures allowing us to run a test multiple times for each param of the fixture.  
 
 ```py
 import karva
 
 @karva.fixture(params=['username', 'email'])
-def some_fixture(request):
+def some_fixture(request) -> str:
     return request.param
 
-def test_username_email(some_fixture):
+def test_username_email(some_fixture: str):
     assert some_fixture in ['username', 'email']
 ```
 
@@ -206,32 +226,11 @@ In future you will be able to access other parameters.
 It is important to note that this request object is not the same as the pytest `FixtureRequest` object. It is a custom object provided by Karva.
 And so it may not have all of the information that the pytest `FixtureRequest` object has.
 
-### Fixture scopes with parametrized fixtures
-
-See this example:
-
-```py
-import karva
-
-@karva.fixture(params=['username', 'email'])
-def some_fixture(request):
-    return request.param
-
-@karva.fixture(scope="function")
-def another_fixture():
-    return "another_fixture"
-
-def test_username_email(some_fixture, another_fixture):
-    assert some_fixture in ['username', 'email']
-```
-
-Our current implementation means that we will only run `another_fixture` once.
-
-While this may not be ideal for all scenarios, it is a trade-off that we have made to ensure that our fixtures are efficient and performant.
-
 ## Built-in fixtures
 
 Karva provides a few built-in fixtures that can be used in your tests.
+
+We will try to add more built-in fixtures from pytest in the future.
 
 ### Temporary Directory
 
@@ -239,7 +238,7 @@ This fixture provides the user with a `pathlib.Path` object that points to a tem
 
 You can use any of the following fixture names to use this fixture:
 
-- `tmp_path` # from pytest
-- `tmpdir` # from pytest
-- `temp_path` # from karva
-- `temp_dir` # from karva
+- `tmp_path` (from pytest)
+- `tmpdir` (from pytest)
+- `temp_path` (from karva)
+- `temp_dir` (from karva)
