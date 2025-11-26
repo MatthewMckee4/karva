@@ -56,7 +56,7 @@ cargo test
 We use mkdocs to build the documentation.
 
 ```bash
-uv run --isolated --only-group docs mkdocs build
+uv run --isolated --only-group docs zensical build
 ```
 
 ## Release Process
