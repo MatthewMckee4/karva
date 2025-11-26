@@ -82,6 +82,7 @@ pub(crate) fn attach<F, R>(project: &Project, f: F) -> R
 where
     F: for<'py> FnOnce(Python<'py>) -> R,
 {
+    Python::initialize();
     Python::attach(|py| {
         let null_file = redirect_python_output(py, project.options());
         let result = f(py);

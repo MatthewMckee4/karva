@@ -84,7 +84,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![path]);
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::attach(|py| discoverer.discover(py));
+        let (session, _) = discoverer.discover();
 
         let test_case = session.test_functions()[0];
 
@@ -106,7 +106,7 @@ mod tests {
 
             let project = Project::new(env.cwd(), vec![env.cwd()]);
             let discoverer = StandardDiscoverer::new(&project);
-            let (session, _) = Python::attach(|py| discoverer.discover(py));
+            let (session, _) = discoverer.discover();
 
             let test_case = session.test_functions()[0];
 
@@ -129,7 +129,7 @@ mod tests {
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
         let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = Python::attach(|py| discoverer.discover(py));
+        let (session, _) = discoverer.discover();
 
         let tests_package = session.get_package(mapped_dir).unwrap();
 

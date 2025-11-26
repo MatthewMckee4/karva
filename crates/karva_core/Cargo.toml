@@ -15,7 +15,7 @@ camino = { workspace = true }
 karva_project = { workspace = true }
 
 colored = { workspace = true }
-pyo3 = { workspace = true, features = ["py-clone", "auto-initialize"] }
+pyo3 = { workspace = true }
 ruff_python_ast = { workspace = true }
 ruff_python_parser = { workspace = true }
 ruff_source_file = { workspace = true }

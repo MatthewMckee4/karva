@@ -36,7 +36,7 @@ impl<'proj> StandardTestRunner<'proj> {
             let mut context = Context::new(self.project, reporter);
 
             let (session, discovery_diagnostics) =
-                StandardDiscoverer::new(self.project).discover(py);
+                StandardDiscoverer::new(self.project).discover_with_py(py);
 
             context
                 .result_mut()

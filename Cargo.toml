@@ -34,7 +34,7 @@ karva_project = { path = "crates/karva_project" }
 karva_test = { path = "crates/karva_test" }
 markdown = { version = "1.0.0" }
 pretty_assertions = { version = "1.4.1" }
-pyo3 = { version = "0.27.1", features = ["auto-initialize"] }
+pyo3 = { version = "0.27.1", features = [ "abi3-py310", "py-clone"] }
 rand = { version = "0.9.2" }
 regex = { version = "1.12.2" }
 rstest = { version = "0.26" }

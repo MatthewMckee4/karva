@@ -2,7 +2,7 @@ use pyo3::{
     IntoPyObjectExt,
     exceptions::PyTypeError,
     prelude::*,
-    types::{PyDict, PyFunction, PyTuple},
+    types::{PyDict, PyTuple},
 };
 
 #[derive(Debug, Clone)]
@@ -58,7 +58,7 @@ impl PyTags {
         } else if let Ok(test_case) = f.cast_bound::<PyTestFunction>(py) {
             test_case.borrow_mut().tags.inner.extend(self.inner.clone());
             return test_case.into_py_any(py);
-        } else if f.extract::<Py<PyFunction>>(py).is_ok() {
+        } else if f.bind(py).is_callable() {
             let test_case = PyTestFunction {
                 tags: self.clone(),
                 function: f,
@@ -77,12 +77,7 @@ impl PyTags {
 
 #[pymodule]
 pub mod tags {
-    use pyo3::{
-        IntoPyObjectExt,
-        exceptions::PyTypeError,
-        prelude::*,
-        types::{PyFunction, PyTuple},
-    };
+    use pyo3::{IntoPyObjectExt, exceptions::PyTypeError, prelude::*, types::PyTuple};
 
     use super::{PyTag, PyTags};
     use crate::extensions::tags::{parametrize::parse_parametrize_args, python::PyTestFunction};
@@ -139,7 +134,7 @@ pub mod tags {
         // Check if the first argument is a function (decorator without parentheses)
         if conditions.len() == 1 {
             if let Ok(first_item) = conditions.get_item(0) {
-                if first_item.extract::<Py<PyFunction>>().is_ok() {
+                if first_item.is_callable() {
                     return PyTestFunction {
                         tags: PyTags {
                             inner: vec![PyTag::Skip {
@@ -196,7 +191,7 @@ pub mod tags {
         // Check if the first argument is a function (decorator without parentheses)
         if conditions.len() == 1 {
             if let Ok(first_item) = conditions.get_item(0) {
-                if first_item.extract::<Py<PyFunction>>().is_ok() {
+                if first_item.is_callable() {
                     return PyTestFunction {
                         tags: PyTags {
                             inner: vec![PyTag::ExpectFail {
