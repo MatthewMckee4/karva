@@ -1,5 +1,6 @@
 use camino::Utf8PathBuf;
 use pyo3::prelude::*;
+use ruff_source_file::OneIndexed;
 
 use crate::Location;
 
@@ -43,25 +44,27 @@ fn get_location(cwd: &Utf8PathBuf, traceback: &str) -> Option<Location> {
 
     // Find the last line that starts with "File \"" (ignoring leading whitespace)
     for line in lines.iter().rev() {
-        let trimmed = line.trim_start();
-        if let Some(after_file) = trimmed.strip_prefix("File \"") {
-            if let Some(quote_end) = after_file.find('"') {
-                let filename = &after_file[..quote_end];
-                let file = Utf8PathBuf::from(filename);
-                let relative_path = file.strip_prefix(cwd).unwrap_or(&file).to_path_buf();
-                let rest = &after_file[quote_end + 1..];
-                if let Some(line_start) = rest.find("line ") {
-                    let line_part = &rest[line_start + 5..];
-                    if let Some(comma_pos) = line_part.find(',') {
-                        let line_number = &line_part[..comma_pos];
-                        return Some(Location::new(relative_path, line_number.parse().unwrap()));
-                    }
-                }
-            }
+        if let Some(location) = parse_traceback_line(cwd, line) {
+            return Some(location);
         }
     }
 
     None
+}
+
+/// Wow this is ugly, but it works!
+fn parse_traceback_line(cwd: &Utf8PathBuf, line: &str) -> Option<Location> {
+    let trimmed = line.trim_start();
+    let after_file = trimmed.strip_prefix("File \"")?;
+
+    let (filename, rest) = after_file.split_once('"')?;
+    let file = Utf8PathBuf::from(filename);
+    let relative_path = file.strip_prefix(cwd).unwrap_or(&file).to_path_buf();
+
+    let line_str = rest.strip_prefix(", line ")?.split_once(',')?.0;
+    let line_number = line_str.parse::<OneIndexed>().ok()?;
+
+    Some(Location::new(relative_path, line_number))
 }
 
 // Simplified traceback filtering that removes unnecessary traceback headers
