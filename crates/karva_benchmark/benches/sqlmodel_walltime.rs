@@ -1,8 +1,8 @@
 use divan::{Bencher, bench};
-use karva_benchmark::walltime::{ProjectBenchmark, bench_project};
+use karva_benchmark::walltime::{ProjectBenchmark, bench_project, warmup_project};
 use karva_test::real_world_projects::SQLMODEL_PROJECT;
 
-#[bench(sample_size = 1, sample_count = 3)]
+#[bench(sample_size = 3, sample_count = 4)]
 fn sqlmodel(bencher: Bencher) {
     let benchmark = ProjectBenchmark::new(SQLMODEL_PROJECT.clone());
 
@@ -10,5 +10,9 @@ fn sqlmodel(bencher: Bencher) {
 }
 
 fn main() {
+    let benchmark = ProjectBenchmark::new(SQLMODEL_PROJECT.clone());
+
+    warmup_project(&benchmark);
+
     divan::main();
 }

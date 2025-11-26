@@ -45,3 +45,16 @@ pub fn bench_project(bencher: Bencher, benchmark: &ProjectBenchmark) {
         .with_inputs(|| benchmark.project())
         .bench_local_refs(|db| test_project(db));
 }
+
+pub fn warmup_project(benchmark: &ProjectBenchmark) {
+    fn test_project(project: &Project) {
+        let result = project.test();
+
+        assert!(result.stats().total() > 0, "{:#?}", result.diagnostics());
+    }
+
+    setup_module();
+
+    let project = benchmark.project();
+    test_project(&project);
+}
