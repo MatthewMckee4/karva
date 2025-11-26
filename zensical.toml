@@ -1,0 +1,54 @@
+[project]
+site_name = "Karva"
+site_url = "https://matthewmckee4.github.io/karva"
+site_description = "A Python test framework, written in Rust"
+site_author = "Matthew McKee"
+repo_url = "https://github.com/MatthewMckee4/karva"
+repo_name = "MatthewMckee4/karva"
+
+docs_dir = "docs"
+site_dir = "site"
+dev_addr = "localhost:3000"
+
+extra_css = ["stylesheets/extra.css"]
+
+nav = [
+    { "Home" = "index.md"},
+    { "Installation" = "installation.md"},
+    { "Tutorial" = "tutorial.md"},
+    { "Fixtures" = "fixtures.md"},
+    { "Tags" = [
+        { "Parametrize" = "tags/parametrize.md"},
+        { "Skip" = "tags/skip.md"},
+        { "Expect Fail" = "tags/expect_fail.md"}
+    ]},
+    { "CLI" = "cli.md"},
+]
+
+[project.theme]
+language = "en"
+features = [
+    "navigation.expand",
+    "navigation.instant",
+    "search.highlight"
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+primary = "custom"
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+primary = "custom"
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[project.markdown_extensions.pymdownx.highlight]
+linenums = true
+auto_title = true
+
+[project.markdown_extensions.pymdownx.superfences]
