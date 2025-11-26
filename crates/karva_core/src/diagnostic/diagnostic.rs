@@ -2,12 +2,15 @@ use camino::Utf8PathBuf;
 use karva_project::path::TestPathError;
 use pyo3::prelude::*;
 
-use crate::diagnostic::{
-    render::{DisplayDiagnostic, DisplayDiscoveryDiagnostic, DisplayOptions},
-    traceback::Traceback,
+use crate::{
+    Location,
+    diagnostic::{
+        render::{DisplayDiagnostic, DisplayDiscoveryDiagnostic, DisplayOptions},
+        traceback::Traceback,
+    },
 };
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum Diagnostic {
     TestFailure(TestFailureDiagnostic),
 
@@ -102,7 +105,7 @@ impl Diagnostic {
 
     pub(crate) const fn missing_fixtures(
         missing_fixtures: Vec<String>,
-        location: String,
+        location: Option<Location>,
         function_name: String,
         function_kind: FunctionKind,
     ) -> Self {
@@ -123,7 +126,7 @@ impl Diagnostic {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum DiscoveryDiagnostic {
     InvalidFixture(InvalidFixtureDiagnostic),
 
@@ -150,7 +153,7 @@ impl DiscoveryDiagnostic {
 
     pub(crate) const fn invalid_fixture(
         message: String,
-        location: String,
+        location: Option<Location>,
         function_name: String,
     ) -> Self {
         Self::InvalidFixture(InvalidFixtureDiagnostic {
@@ -160,7 +163,7 @@ impl DiscoveryDiagnostic {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum TestFailureDiagnostic {
     /// The test failed on execution.
     RunFailure(TestRunFailureDiagnostic),
@@ -179,7 +182,7 @@ impl TestFailureDiagnostic {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct TestRunFailureDiagnostic {
     /// The location of the test function.
     ///
@@ -199,7 +202,7 @@ pub struct TestRunFailureDiagnostic {
     pub(crate) message: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct PassOnExpectFailureDiagnostic {
     /// The location of the test function.
     ///
@@ -211,7 +214,7 @@ pub struct PassOnExpectFailureDiagnostic {
 }
 
 /// Custom diagnostic for calling a test function or fixture with missing arguments.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct MissingFixturesDiagnostic {
     /// The location of the test function.
     ///
@@ -225,7 +228,7 @@ pub struct MissingFixturesDiagnostic {
     pub(crate) function_kind: FunctionKind,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct FixtureFailureDiagnostic {
     /// The location of the fixture function.
     ///
@@ -243,7 +246,7 @@ pub struct FixtureFailureDiagnostic {
     pub(crate) message: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct InvalidFixtureDiagnostic {
     /// The location of the fixture function.
     ///
@@ -256,7 +259,7 @@ pub struct InvalidFixtureDiagnostic {
     pub(crate) message: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct WarningDiagnostic {
     /// The message of the warning.
     ///
@@ -264,15 +267,15 @@ pub struct WarningDiagnostic {
     pub(crate) message: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct FunctionDefinitionLocation {
     pub(crate) function_name: String,
 
-    pub(crate) location: String,
+    pub(crate) location: Option<Location>,
 }
 
 impl FunctionDefinitionLocation {
-    pub(crate) const fn new(function_name: String, location: String) -> Self {
+    pub(crate) const fn new(function_name: String, location: Option<Location>) -> Self {
         Self {
             function_name,
             location,

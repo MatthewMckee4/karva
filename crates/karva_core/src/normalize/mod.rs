@@ -1,3 +1,28 @@
+//! Normalization of discovered tests.
+//!
+//! ## What is normalization?
+//! There is one main reason we need to "normalize" tests.
+//!
+//! When tests depend on fixtures that are parameterized, like the following:
+//! ```python
+//! from karva import fixture
+//!
+//! @karva.fixture(params=["a", "b"])
+//! def fixture_function(request):
+//!     return request.param
+//!
+//! def test_function(fixture_function):
+//!     ...
+//! ```
+//!
+//! We are in a weird situation when we come to resolve fixtures for `test_function`.
+//!
+//! We need to know about the number of parameters for the fixture,
+//! so that we can first generate all combinations of parameters for the function,
+//! and run them while respecting auto fixtures and finalizers.
+//!
+//! If we got all of the fixture values at the start, we would not be able to run auto use fixtures
+//! and finalizers in a predictable way.
 use std::collections::HashMap;
 
 use karva_project::Project;
@@ -32,26 +57,41 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
         }
     }
 
+    fn get_normalized_auto_use_fixtures<'a>(
+        &mut self,
+        py: Python,
+        scope: FixtureScope,
+        parents: &'a [&'a DiscoveredPackage],
+        current: &'a dyn HasFixtures<'a>,
+    ) -> Vec<NormalizedFixture> {
+        let auto_use_fixtures = get_auto_use_fixtures(parents, current, scope);
+
+        let mut normalized_auto_use_fixtures = Vec::new();
+
+        let Some(configuration_module) = current.configuration_module() else {
+            return normalized_auto_use_fixtures;
+        };
+
+        for fixture in auto_use_fixtures {
+            let normalized_fixture =
+                self.normalize_fixture(py, fixture, parents, configuration_module);
+            normalized_auto_use_fixtures.extend(normalized_fixture);
+        }
+
+        normalized_auto_use_fixtures
+    }
+
     pub(crate) fn normalize(
         &mut self,
         py: Python,
         session: &DiscoveredPackage,
     ) -> NormalizedPackage {
-        let session_fixtures = get_auto_use_fixtures(&[], &session, FixtureScope::Session);
+        let session_auto_use_fixtures =
+            self.get_normalized_auto_use_fixtures(py, FixtureScope::Session, &[], &session);
 
-        let session_fixtures = session_fixtures
-            .into_iter()
-            .flat_map(|fixture| {
-                self.normalize_fixture(py, fixture, &[], session.configuration_module().unwrap())
-            })
-            .collect::<Vec<_>>();
+        let mut normalized_package = self.normalize_package(py, session, &[]);
 
-        // Normalize the package recursively
-        let mut normalized_package = self.normalize_package_impl(py, session, &[]);
-
-        normalized_package
-            .auto_use_fixtures
-            .extend(session_fixtures);
+        normalized_package.extend_auto_use_fixtures(session_auto_use_fixtures);
 
         normalized_package
     }
@@ -98,6 +138,12 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
         // Get fixture parameters
         let params = fixture.params().cloned().unwrap_or_default();
 
+        let location = function_definition_location(
+            self.project.cwd(),
+            current,
+            fixture.function_definition(),
+        );
+
         // If no parameters and all dependencies have single variants, no expansion needed
         if params.is_empty() && normalized_deps.iter().all(|deps| deps.len() == 1) {
             let dependencies = normalized_deps
@@ -105,17 +151,11 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
                 .filter_map(|mut deps| deps.pop())
                 .collect();
 
-            let location = function_definition_location(
-                self.project.cwd(),
-                current,
-                fixture.function_definition(),
-            );
-
             let normalized = NormalizedFixture::new(
                 NormalizedFixtureName::UserDefined(fixture.name().clone()),
                 None,
                 dependencies,
-                location,
+                Some(location),
                 fixture.scope(),
                 fixture.is_generator(),
                 NormalizedFixtureValue::Function(fixture.function().clone()),
@@ -146,19 +186,13 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
             cartesian_product(normalized_deps)
         };
 
-        let location = function_definition_location(
-            self.project.cwd(),
-            current,
-            fixture.function_definition(),
-        );
-
         for dep_combination in dep_combinations {
             for param in &param_list {
                 let normalized = NormalizedFixture::new(
                     NormalizedFixtureName::UserDefined(fixture.name().clone()),
                     param.cloned(),
                     dep_combination.clone(),
-                    location.clone(),
+                    Some(location.clone()),
                     fixture.scope(),
                     fixture.is_generator(),
                     NormalizedFixtureValue::Function(fixture.function().clone()),
@@ -187,12 +221,7 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
         module: &DiscoveredModule,
     ) -> Vec<NormalizedTestFunction> {
         let function_auto_use_fixtures =
-            get_auto_use_fixtures(parents, module, FixtureScope::Function);
-
-        let function_auto_use_fixtures = function_auto_use_fixtures
-            .into_iter()
-            .flat_map(|fixture| self.normalize_fixture(py, fixture, &[], module))
-            .collect::<Vec<_>>();
+            self.get_normalized_auto_use_fixtures(py, FixtureScope::Function, parents, module);
 
         let location =
             function_definition_location(self.project.cwd(), module, test_fn.definition());
@@ -325,21 +354,15 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
     ) -> NormalizedModule {
         tracing::debug!("Normalizing file: {}", module.path());
 
-        let module_auto_use_fixtures = get_auto_use_fixtures(parents, module, FixtureScope::Module);
-
-        let module_auto_use_fixtures = module_auto_use_fixtures
-            .into_iter()
-            .flat_map(|fixture| self.normalize_fixture(py, fixture, parents, module))
-            .collect::<Vec<_>>();
+        let module_auto_use_fixtures =
+            self.get_normalized_auto_use_fixtures(py, FixtureScope::Module, parents, module);
 
         let mut normalized_test_functions = Vec::new();
 
         for test_function in module.test_functions() {
             let normalized_tests = self.normalize_test_function(py, test_function, parents, module);
 
-            for normalized_test in normalized_tests {
-                normalized_test_functions.push(normalized_test);
-            }
+            normalized_test_functions.extend(normalized_tests);
         }
 
         NormalizedModule {
@@ -348,7 +371,7 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
         }
     }
 
-    fn normalize_package_impl(
+    fn normalize_package(
         &mut self,
         py: Python<'_>,
         package: &DiscoveredPackage,
@@ -359,19 +382,7 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
         new_parents.push(package);
 
         let package_auto_use_fixtures =
-            get_auto_use_fixtures(parents, package, FixtureScope::Package);
-
-        let package_auto_use_fixtures = package_auto_use_fixtures
-            .into_iter()
-            .flat_map(|fixture| {
-                self.normalize_fixture(
-                    py,
-                    fixture,
-                    parents,
-                    package.configuration_module().unwrap(),
-                )
-            })
-            .collect::<Vec<_>>();
+            self.get_normalized_auto_use_fixtures(py, FixtureScope::Package, parents, package);
 
         let mut modules = HashMap::new();
 
@@ -383,15 +394,15 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
         let mut packages = HashMap::new();
 
         for (path, sub_package) in package.packages() {
-            let normalized_package = self.normalize_package_impl(py, sub_package, &new_parents);
+            let normalized_package = self.normalize_package(py, sub_package, &new_parents);
             packages.insert(path.clone(), normalized_package);
         }
 
-        let mut normalized_package = NormalizedPackage::new(modules, packages);
-
-        normalized_package.auto_use_fixtures = package_auto_use_fixtures;
-
-        normalized_package
+        NormalizedPackage {
+            modules,
+            packages,
+            auto_use_fixtures: package_auto_use_fixtures,
+        }
     }
 }
 

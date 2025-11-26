@@ -10,8 +10,8 @@ use crate::{
     diagnostic::{Diagnostic, FunctionDefinitionLocation, FunctionKind},
     extensions::{
         fixtures::{
-            Finalizer, FixtureManager, FixtureScope, NormalizedFixture, NormalizedFixtureValue,
-            RequiresFixtures, missing_arguments_from_error, python::FixtureRequest,
+            Finalizer, FixtureScope, NormalizedFixture, NormalizedFixtureValue, RequiresFixtures,
+            missing_arguments_from_error, python::FixtureRequest,
         },
         tags::{ExpectFailTag, python::SkipError},
     },
@@ -20,10 +20,8 @@ use crate::{
     utils::full_test_name,
 };
 
-/// Collects and processes test cases from normalized packages, modules, and test functions.
 pub struct NormalizedPackageRunner<'ctx, 'proj, 'rep> {
     context: &'ctx mut Context<'proj, 'rep>,
-    fixture_manager: FixtureManager,
     fixture_cache: FixtureCache,
     finalizer_cache: FinalizerCache,
 }
@@ -32,7 +30,6 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
     pub(crate) fn new(context: &'ctx mut Context<'proj, 'rep>) -> Self {
         Self {
             context,
-            fixture_manager: FixtureManager::new(),
             fixture_cache: FixtureCache::default(),
             finalizer_cache: FinalizerCache::default(),
         }
@@ -42,9 +39,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         let diagnostics = self.finalizer_cache.run_and_clear_scope(py, scope);
 
         self.context.result_mut().add_test_diagnostics(diagnostics);
-
         self.fixture_cache.clear_fixtures(scope);
-        self.fixture_manager.clear_fixtures(scope);
     }
 
     pub(crate) fn run(&mut self, py: Python<'_>, session: &NormalizedPackage) {
@@ -57,15 +52,9 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         self.run_package(py, session);
 
         self.clean_up(py, FixtureScope::Session);
-
-        self.context
-            .result_mut()
-            .add_test_diagnostics(self.fixture_manager.clear_diagnostics());
     }
 
     fn run_module(&mut self, py: Python<'_>, module: &NormalizedModule) -> bool {
-        self.fixture_manager.new_finalizer_scope();
-
         for fixture in &module.auto_use_fixtures {
             if let Ok((_, Some(finalizer))) = self.execute_normalized_fixture(py, fixture) {
                 self.finalizer_cache.add_finalizer(finalizer);
@@ -89,8 +78,6 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
     }
 
     fn run_package(&mut self, py: Python<'_>, package: &NormalizedPackage) -> bool {
-        self.fixture_manager.new_finalizer_scope();
-
         for fixture in &package.auto_use_fixtures {
             if let Ok((_, Some(finalizer))) = self.execute_normalized_fixture(py, fixture) {
                 self.finalizer_cache.add_finalizer(finalizer);
@@ -242,7 +229,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                         reason,
                         FunctionDefinitionLocation::new(
                             full_test_name.clone(),
-                            test_fn.location.clone(),
+                            Some(test_fn.location.clone()),
                         ),
                     );
 
@@ -291,7 +278,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                             &err,
                             FunctionDefinitionLocation::new(
                                 full_test_name.clone(),
-                                test_fn.location.clone(),
+                                Some(test_fn.location.clone()),
                             ),
                         )
                     };
@@ -306,7 +293,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     } else {
                         Diagnostic::missing_fixtures(
                             missing_args,
-                            test_fn.location.clone(),
+                            Some(test_fn.location.clone()),
                             full_test_name.clone(),
                             FunctionKind::Test,
                         )

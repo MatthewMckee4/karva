@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use pyo3::prelude::*;
 
 use crate::{
-    QualifiedFunctionName,
+    Location, QualifiedFunctionName,
     extensions::{fixtures::NormalizedFixture, tags::Tags},
 };
 
@@ -15,7 +15,7 @@ pub struct NormalizedTestFunction {
     pub(crate) name: QualifiedFunctionName,
 
     /// Location in source code: "<`file_path>`:<`line_number`>"
-    pub(crate) location: String,
+    pub(crate) location: Location,
 
     /// Test-level parameters (from @pytest.mark.parametrize)
     /// Maps parameter name to its value for this variant
@@ -41,7 +41,7 @@ impl NormalizedTestFunction {
     #[expect(clippy::too_many_arguments)]
     pub(crate) const fn new(
         original_name: QualifiedFunctionName,
-        location: String,
+        location: Location,
         params: HashMap<String, Py<PyAny>>,
         fixture_dependencies: Vec<NormalizedFixture>,
         use_fixture_dependencies: Vec<NormalizedFixture>,

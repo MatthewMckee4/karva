@@ -259,7 +259,12 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
                     continue;
                 };
 
-                writeln!(f, "    {function_name} at {location}")?;
+                let location_string = location
+                    .as_ref()
+                    .map(|location| format!(" at {location}"))
+                    .unwrap_or_default();
+
+                writeln!(f, "    {function_name}{location_string}")?;
             }
 
             writeln!(f)?;

@@ -1,11 +1,14 @@
 use camino::Utf8PathBuf;
 use pyo3::prelude::*;
+use ruff_source_file::OneIndexed;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+use crate::Location;
+
+#[derive(Debug, Clone)]
 pub struct Traceback {
     pub(crate) lines: Vec<String>,
 
-    pub(crate) location: Option<String>,
+    pub(crate) location: Option<Location>,
 }
 
 impl Traceback {
@@ -36,30 +39,32 @@ impl Traceback {
     }
 }
 
-fn get_location(cwd: &Utf8PathBuf, traceback: &str) -> Option<String> {
+fn get_location(cwd: &Utf8PathBuf, traceback: &str) -> Option<Location> {
     let lines: Vec<&str> = traceback.lines().collect();
 
     // Find the last line that starts with "File \"" (ignoring leading whitespace)
     for line in lines.iter().rev() {
-        let trimmed = line.trim_start();
-        if let Some(after_file) = trimmed.strip_prefix("File \"") {
-            if let Some(quote_end) = after_file.find('"') {
-                let filename = &after_file[..quote_end];
-                let file = Utf8PathBuf::from(filename);
-                let relative_path = file.strip_prefix(cwd).unwrap_or(&file);
-                let rest = &after_file[quote_end + 1..];
-                if let Some(line_start) = rest.find("line ") {
-                    let line_part = &rest[line_start + 5..];
-                    if let Some(comma_pos) = line_part.find(',') {
-                        let line_number = &line_part[..comma_pos];
-                        return Some(format!("{relative_path}:{line_number}"));
-                    }
-                }
-            }
+        if let Some(location) = parse_traceback_line(cwd, line) {
+            return Some(location);
         }
     }
 
     None
+}
+
+/// Wow this is ugly, but it works!
+fn parse_traceback_line(cwd: &Utf8PathBuf, line: &str) -> Option<Location> {
+    let trimmed = line.trim_start();
+    let after_file = trimmed.strip_prefix("File \"")?;
+
+    let (filename, rest) = after_file.split_once('"')?;
+    let file = Utf8PathBuf::from(filename);
+    let relative_path = file.strip_prefix(cwd).unwrap_or(&file).to_path_buf();
+
+    let line_str = rest.strip_prefix(", line ")?.split_once(',')?.0;
+    let line_number = line_str.parse::<OneIndexed>().ok()?;
+
+    Some(Location::new(relative_path, line_number))
 }
 
 // Simplified traceback filtering that removes unnecessary traceback headers
@@ -113,6 +118,8 @@ Exception: Test error"#
     }
 
     mod get_location_tests {
+        use ruff_source_file::OneIndexed;
+
         use super::*;
 
         #[test]
@@ -122,7 +129,11 @@ Exception: Test error"#
     raise Exception('Test error')
 Exception: Test error"#;
             let location = get_location(&Utf8PathBuf::new(), traceback);
-            assert_eq!(location, Some("test.py:10".to_string()));
+            let expected_location = Some(Location::new(
+                "test.py".into(),
+                OneIndexed::new(10).unwrap(),
+            ));
+            assert_eq!(location, expected_location);
         }
 
         #[test]
@@ -132,7 +143,11 @@ Exception: Test error"#;
     some_code()
 RuntimeError: Something went wrong"#;
             let location = get_location(&Utf8PathBuf::new(), traceback);
-            assert_eq!(location, Some("/path/to/script.py:42".to_string()));
+            let expected_location = Some(Location::new(
+                "/path/to/script.py".into(),
+                OneIndexed::new(42).unwrap(),
+            ));
+            assert_eq!(location, expected_location);
         }
 
         #[test]
@@ -144,7 +159,11 @@ RuntimeError: Something went wrong"#;
     bar()
 ValueError: Invalid value"#;
             let location = get_location(&Utf8PathBuf::new(), traceback);
-            assert_eq!(location, Some("helper.py:15".to_string()));
+            let expected_location = Some(Location::new(
+                "helper.py".into(),
+                OneIndexed::new(15).unwrap(),
+            ));
+            assert_eq!(location, expected_location);
         }
 
         #[test]
@@ -195,7 +214,11 @@ Exception: Test error"#;
     code()
 Exception: Test error"#;
             let location = get_location(&Utf8PathBuf::new(), traceback);
-            assert_eq!(location, Some("test.py:99999".to_string()));
+            let expected_location = Some(Location::new(
+                "test.py".into(),
+                OneIndexed::new(99999).unwrap(),
+            ));
+            assert_eq!(location, expected_location);
         }
     }
 }
