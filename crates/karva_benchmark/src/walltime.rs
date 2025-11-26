@@ -1,3 +1,5 @@
+use std::sync::Once;
+
 use divan::Bencher;
 use karva_core::{TestRunner, testing::setup_module};
 use karva_project::{
@@ -9,6 +11,8 @@ use karva_test::{InstalledProject, RealWorldProject};
 pub struct ProjectBenchmark<'a> {
     installed_project: InstalledProject<'a>,
 }
+
+static SETUP_MODULE_ONCE: Once = Once::new();
 
 impl<'a> ProjectBenchmark<'a> {
     pub fn new(project: RealWorldProject<'a>) -> Self {
@@ -39,7 +43,9 @@ pub fn bench_project(bencher: Bencher, benchmark: &ProjectBenchmark) {
         assert!(result.stats().total() > 0, "{:#?}", result.diagnostics());
     }
 
-    setup_module();
+    SETUP_MODULE_ONCE.call_once(|| {
+        setup_module();
+    });
 
     bencher
         .with_inputs(|| benchmark.project())
@@ -53,7 +59,9 @@ pub fn warmup_project(benchmark: &ProjectBenchmark) {
         assert!(result.stats().total() > 0, "{:#?}", result.diagnostics());
     }
 
-    setup_module();
+    SETUP_MODULE_ONCE.call_once(|| {
+        setup_module();
+    });
 
     let project = benchmark.project();
     test_project(&project);
