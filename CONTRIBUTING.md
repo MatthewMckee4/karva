@@ -74,5 +74,13 @@ Currently, everything is automated for releasing a new version of Karva.
 Simply run the following command with your new version (eg `0.1.0`):
 
 ```bash
-uv run --isolated --only-group release tbump <new-version>
+gcb bump-<new-version>
+uv run --isolated --only-group release tbump <new-version> --no-tag --no-push
+```
+
+Once you have merged this branch, checkout main and pull the latest changes. Then run:
+
+```bash
+git tag --annotate --message v<new-version> v<new-version>
+git push --atomic origin main v<new-version>
 ```

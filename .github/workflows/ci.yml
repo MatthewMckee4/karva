@@ -121,6 +121,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Prepare docs
+        run: uv run --script scripts/prepare_docs.py
+
       - name: Build docs
         run: uv run --isolated --only-group docs zensical build
 
