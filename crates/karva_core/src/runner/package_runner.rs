@@ -242,7 +242,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                         reason,
                         FunctionDefinitionLocation::new(
                             full_test_name.clone(),
-                            test_fn.location.to_string(),
+                            test_fn.location.clone(),
                         ),
                     );
 
