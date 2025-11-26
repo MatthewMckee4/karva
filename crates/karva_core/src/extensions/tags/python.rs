@@ -2,7 +2,7 @@ use pyo3::{
     IntoPyObjectExt,
     exceptions::PyTypeError,
     prelude::*,
-    types::{PyDict, PyFunction, PyTuple},
+    types::{PyDict, PyTuple},
 };
 
 #[derive(Debug, Clone)]
@@ -58,7 +58,7 @@ impl PyTags {
         } else if let Ok(test_case) = f.cast_bound::<PyTestFunction>(py) {
             test_case.borrow_mut().tags.inner.extend(self.inner.clone());
             return test_case.into_py_any(py);
-        } else if f.extract::<Py<PyFunction>>(py).is_ok() {
+        } else if f.bind(py).is_callable() {
             let test_case = PyTestFunction {
                 tags: self.clone(),
                 function: f,
@@ -77,12 +77,7 @@ impl PyTags {
 
 #[pymodule]
 pub mod tags {
-    use pyo3::{
-        IntoPyObjectExt,
-        exceptions::PyTypeError,
-        prelude::*,
-        types::{PyFunction, PyTuple},
-    };
+    use pyo3::{IntoPyObjectExt, exceptions::PyTypeError, prelude::*, types::PyTuple};
 
     use super::{PyTag, PyTags};
     use crate::extensions::tags::{parametrize::parse_parametrize_args, python::PyTestFunction};
@@ -139,7 +134,7 @@ pub mod tags {
         // Check if the first argument is a function (decorator without parentheses)
         if conditions.len() == 1 {
             if let Ok(first_item) = conditions.get_item(0) {
-                if first_item.extract::<Py<PyFunction>>().is_ok() {
+                if first_item.is_callable() {
                     return PyTestFunction {
                         tags: PyTags {
                             inner: vec![PyTag::Skip {
@@ -196,7 +191,7 @@ pub mod tags {
         // Check if the first argument is a function (decorator without parentheses)
         if conditions.len() == 1 {
             if let Ok(first_item) = conditions.get_item(0) {
-                if first_item.extract::<Py<PyFunction>>().is_ok() {
+                if first_item.is_callable() {
                     return PyTestFunction {
                         tags: PyTags {
                             inner: vec![PyTag::ExpectFail {
@@ -297,11 +292,14 @@ mod tests {
         types::{PyDict, PyTuple},
     };
 
-    use crate::extensions::tags::python::{PyTag, PyTestFunction, tags};
+    use crate::{
+        extensions::tags::python::{PyTag, PyTestFunction, tags},
+        utils::attach,
+    };
 
     #[test]
     fn test_parametrize_single_arg() {
-        Python::attach(|py| {
+        attach(|py| {
             let arg_names = py.eval(c_str!("'a'"), None, None).unwrap();
             let arg_values = py.eval(c_str!("[1, 2, 3]"), None, None).unwrap();
             let tags = tags::parametrize(&arg_names, &arg_values).unwrap();
@@ -332,7 +330,7 @@ mod tests {
 
     #[test]
     fn test_parametrize_multiple_args() {
-        Python::attach(|py| {
+        attach(|py| {
             let arg_names = py.eval(c_str!("('a', 'b')"), None, None).unwrap();
             let arg_values = py.eval(c_str!("[[1, 2], [3, 4]]"), None, None).unwrap();
             let tags = tags::parametrize(&arg_names, &arg_values).unwrap();
@@ -357,7 +355,7 @@ mod tests {
 
     #[test]
     fn test_invalid_parametrize_args() {
-        Python::attach(|py| {
+        attach(|py| {
             let arg_names = py.eval(c_str!("1"), None, None).unwrap();
             let arg_values = py.eval(c_str!("[1, 2, 3]"), None, None).unwrap();
             let tags = tags::parametrize(&arg_names, &arg_values).unwrap_err();
@@ -370,7 +368,7 @@ mod tests {
 
     #[test]
     fn test_parametrize_multiple_args_with_fixture() {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
 
             py.run(
@@ -399,7 +397,7 @@ def test_function(a):
 
     #[test]
     fn test_use_fixtures_single_fixture() {
-        Python::attach(|py| {
+        attach(|py| {
             let binding = py.eval(c_str!("('my_fixture',)"), None, None).unwrap();
             let fixture_names = binding.cast::<PyTuple>().unwrap();
             let tags = tags::use_fixtures(fixture_names).unwrap();
@@ -413,7 +411,7 @@ def test_function(a):
 
     #[test]
     fn test_use_fixtures_multiple_fixtures() {
-        Python::attach(|py| {
+        attach(|py| {
             let binding = py
                 .eval(c_str!("('fixture1', 'fixture2', 'fixture3')"), None, None)
                 .unwrap();
@@ -429,7 +427,7 @@ def test_function(a):
 
     #[test]
     fn test_use_fixtures_invalid_args() {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
 
             py.run(
@@ -458,7 +456,7 @@ bad_tuple = (BadStr(),)
 
     #[test]
     fn test_use_fixtures_decorator() {
-        Python::attach(|py| {
+        attach(|py| {
             let locals = PyDict::new(py);
 
             py.run(

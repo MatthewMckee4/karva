@@ -13,7 +13,7 @@ use crate::discovery::DiscoveredModule;
 /// the major and minor version numbers, which are used for AST parsing
 /// compatibility and feature detection.
 pub fn current_python_version() -> PythonVersion {
-    PythonVersion::from(Python::attach(|py| {
+    PythonVersion::from(attach(|py| {
         let version_info = py.version_info();
         (version_info.major, version_info.minor)
     }))
@@ -78,11 +78,11 @@ fn restore_python_output<'py>(py: Python<'py>, null_file: &Bound<'py, PyAny>) ->
 }
 
 /// A wrapper around `Python::attach` so we can manage the stdout and stderr redirection.
-pub(crate) fn attach<F, R>(project: &Project, f: F) -> R
+pub(crate) fn attach_with_project<F, R>(project: &Project, f: F) -> R
 where
     F: for<'py> FnOnce(Python<'py>) -> R,
 {
-    Python::attach(|py| {
+    attach(|py| {
         let null_file = redirect_python_output(py, project.options());
         let result = f(py);
         if let Ok(Some(null_file)) = null_file {
@@ -90,6 +90,14 @@ where
         }
         result
     })
+}
+
+pub(crate) fn attach<F, R>(f: F) -> R
+where
+    F: for<'py> FnOnce(Python<'py>) -> R,
+{
+    Python::initialize();
+    Python::attach(f)
 }
 
 /// Creates an iterator that yields each item with all items after it.

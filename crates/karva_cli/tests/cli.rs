@@ -991,6 +991,7 @@ def test_normal():
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_test_prefix() {
     let context = IntegrationTestContext::with_file(
         "test_fail.py",
@@ -1016,6 +1017,7 @@ def tests_1(): ...
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_show_traceback() {
     let context = IntegrationTestContext::with_file(
         "test_fail.py",

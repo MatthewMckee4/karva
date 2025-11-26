@@ -30,7 +30,9 @@ impl TestContext {
         )
         .expect("Path is not valid UTF-8");
 
-        let karva_wheel = find_karva_wheel().map(|wheel| wheel.to_string()).unwrap();
+        let karva_wheel = find_karva_wheel()
+            .map(|wheel| wheel.to_string())
+            .unwrap_or_default();
 
         let venv_path = project_path.join(".venv");
 

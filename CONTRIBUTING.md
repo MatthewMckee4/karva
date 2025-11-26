@@ -84,3 +84,11 @@ Once you have merged this branch, checkout main and pull the latest changes. The
 git tag --annotate --message v<new-version> v<new-version>
 git push --atomic origin main v<new-version>
 ```
+
+## GitHub Actions
+
+If you are updating github actions, ensure to run `pinact` to pin action versions.
+
+```bash
+pinact run
+```
