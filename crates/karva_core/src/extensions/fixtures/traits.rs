@@ -17,7 +17,12 @@ pub trait HasFixtures<'a>: Debug {
     fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a Fixture>;
 
     /// Get all autouse fixtures
+    ///
+    /// If this returns a non-empty list, it means that the module or package has a configuration module.
     fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a Fixture>;
+
+    /// Get the configuration module for this module or package.
+    fn configuration_module(&'a self) -> Option<&'a DiscoveredModule>;
 }
 
 impl<'a> HasFixtures<'a> for DiscoveredModule {
@@ -33,22 +38,30 @@ impl<'a> HasFixtures<'a> for DiscoveredModule {
             .filter(|f| f.auto_use() && scopes.contains(&f.scope()))
             .collect()
     }
+
+    fn configuration_module(&'a self) -> Option<&'a DiscoveredModule> {
+        Some(self)
+    }
 }
 
 impl<'a> HasFixtures<'a> for DiscoveredPackage {
     fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a Fixture> {
-        self.configuration_module()
+        self.configuration_module_impl()
             .and_then(|module| module.get_fixture(fixture_name))
     }
 
     fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a Fixture> {
         let mut fixtures = Vec::new();
 
-        if let Some(module) = self.configuration_module() {
+        if let Some(module) = self.configuration_module_impl() {
             fixtures.extend(module.auto_use_fixtures(scopes));
         }
 
         fixtures
+    }
+
+    fn configuration_module(&'a self) -> Option<&'a DiscoveredModule> {
+        self.configuration_module_impl()
     }
 }
 
@@ -59,6 +72,10 @@ impl<'a> HasFixtures<'a> for &'a DiscoveredPackage {
 
     fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a Fixture> {
         (*self).auto_use_fixtures(scopes)
+    }
+
+    fn configuration_module(&'a self) -> Option<&'a DiscoveredModule> {
+        self.configuration_module_impl()
     }
 }
 

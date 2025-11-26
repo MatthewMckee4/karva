@@ -5,7 +5,7 @@ use karva_project::project::{Project, ProjectOptions};
 use pyo3::{PyResult, Python, prelude::*, types::PyAnyMethods};
 use ruff_python_ast::{PythonVersion, StmtFunctionDef};
 
-use crate::discovery::DiscoveredModule;
+use crate::{Location, discovery::DiscoveredModule};
 
 /// Retrieves the current Python interpreter version.
 ///
@@ -126,14 +126,14 @@ pub(crate) fn function_definition_location(
     cwd: &Utf8PathBuf,
     module: &DiscoveredModule,
     stmt_function_def: &StmtFunctionDef,
-) -> String {
+) -> Location {
     let line_index = module.line_index();
     let source_text = module.source_text();
     let start = stmt_function_def.range.start();
     let line_number = line_index.line_column(start, source_text);
 
     let path = module.path().strip_prefix(cwd).unwrap_or(module.path());
-    format!("{}:{}", path, line_number.line)
+    Location::new(path.to_path_buf(), line_number.line)
 }
 
 pub(crate) fn full_test_name(

@@ -3,7 +3,6 @@ use ruff_python_ast::{Expr, StmtFunctionDef};
 
 mod builtins;
 mod finalizer;
-mod manager;
 mod normalized_fixture;
 pub mod python;
 mod scope;
@@ -12,7 +11,6 @@ mod utils;
 
 pub use builtins::get_builtin_fixture;
 pub use finalizer::Finalizer;
-pub use manager::{FixtureManager, get_auto_use_fixtures};
 pub use normalized_fixture::{NormalizedFixture, NormalizedFixtureName, NormalizedFixtureValue};
 pub use scope::FixtureScope;
 pub use traits::{HasFixtures, RequiresFixtures};
@@ -20,6 +18,7 @@ pub use utils::missing_arguments_from_error;
 
 use crate::{
     ModulePath, QualifiedFunctionName,
+    discovery::DiscoveredPackage,
     extensions::fixtures::{scope::fixture_scope, utils::handle_custom_fixture_params},
 };
 
@@ -245,6 +244,48 @@ fn is_fixture(expr: &Expr) -> bool {
         Expr::Call(call) => is_fixture(call.func.as_ref()),
         _ => false,
     }
+}
+
+pub fn get_auto_use_fixtures<'a>(
+    parents: &'a [&'a DiscoveredPackage],
+    current: &'a dyn HasFixtures<'a>,
+    scope: FixtureScope,
+) -> Vec<&'a Fixture> {
+    let mut auto_use_fixtures_called = Vec::new();
+    let auto_use_fixtures = current.auto_use_fixtures(&scope.scopes_above());
+
+    for fixture in auto_use_fixtures {
+        let fixture_name = fixture.name().function_name().to_string();
+
+        if auto_use_fixtures_called
+            .iter()
+            .any(|fixture: &&Fixture| fixture.name().function_name() == fixture_name)
+        {
+            continue;
+        }
+
+        auto_use_fixtures_called.push(fixture);
+        break;
+    }
+
+    for parent in parents {
+        let parent_fixtures = parent.auto_use_fixtures(&[scope]);
+        for fixture in parent_fixtures {
+            let fixture_name = fixture.name().function_name().to_string();
+
+            if auto_use_fixtures_called
+                .iter()
+                .any(|fixture: &&Fixture| fixture.name().function_name() == fixture_name)
+            {
+                continue;
+            }
+
+            auto_use_fixtures_called.push(fixture);
+            break;
+        }
+    }
+
+    auto_use_fixtures_called
 }
 
 #[cfg(test)]

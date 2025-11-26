@@ -531,7 +531,7 @@ fn test_invalid_fixture() {
 
     discovery failures:
 
-    invalid fixture `fixture_generator`: Invalid fixture scope: ssession at test.py:4
+    invalid fixture `fixture_generator` at test.py:4: Invalid fixture scope: ssession
 
     test failures:
 

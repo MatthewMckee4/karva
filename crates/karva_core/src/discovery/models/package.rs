@@ -199,7 +199,7 @@ impl DiscoveredPackage {
         functions
     }
 
-    pub(crate) fn configuration_module(&self) -> Option<&DiscoveredModule> {
+    pub(crate) fn configuration_module_impl(&self) -> Option<&DiscoveredModule> {
         self.configuration_module_path.as_ref().map(|module_path| {
             self.modules
                 .get(module_path.path())

@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::{QualifiedFunctionName, extensions::fixtures::FixtureScope};
+use crate::{Location, QualifiedFunctionName, extensions::fixtures::FixtureScope};
 
 #[derive(Debug, Clone)]
 pub enum NormalizedFixtureName {
@@ -51,7 +51,7 @@ pub struct NormalizedFixture {
 
     /// Location in source code: "<`file_path>`:<`line_number`>"
     /// None for builtin fixtures
-    pub(crate) location: String,
+    pub(crate) location: Option<Location>,
 
     /// Original fixture metadata
     pub(crate) scope: FixtureScope,
@@ -69,7 +69,7 @@ impl NormalizedFixture {
         name: NormalizedFixtureName,
         param: Option<Py<PyAny>>,
         dependencies: Vec<Self>,
-        location: String,
+        location: Option<Location>,
         scope: FixtureScope,
         is_generator: bool,
         value: NormalizedFixtureValue,
@@ -110,7 +110,7 @@ impl NormalizedFixture {
             NormalizedFixtureName::BuiltIn(name),
             None,
             vec![],
-            String::new(),
+            None,
             FixtureScope::Function,
             false,
             NormalizedFixtureValue::Computed(value),

@@ -26,7 +26,7 @@ fn test_invalid_pytest_fixture_scope() {
     assert_snapshot!(result.display(), @r#"
     discovery failures:
 
-    invalid fixture `some_fixture`: Failed to parse fixture at <test>/test.py:4
+    invalid fixture `some_fixture` at <test>/test.py:4: Failed to parse fixture
 
     test failures:
 

@@ -57,9 +57,14 @@ impl Display for DisplayDiagnostic<'_> {
                         .map(|location| format!("at {location}"))
                         .unwrap_or_default();
 
+                    let function_location_string = function_location
+                        .as_ref()
+                        .map(|location| format!("at {location}"))
+                        .unwrap_or_default();
+
                     writeln!(
                         f,
-                        "test `{function_name}` at {function_location} failed {location_fail_string}"
+                        "test `{function_name}` {function_location_string} failed {location_fail_string}"
                     )?;
                     if self.options.show_traceback {
                         for line in &traceback.lines {
@@ -85,9 +90,14 @@ impl Display for DisplayDiagnostic<'_> {
                         reason,
                     } = pass_on_expect_failure_diagnostic;
 
+                    let function_location_string = function_location
+                        .as_ref()
+                        .map(|location| format!("at {location}"))
+                        .unwrap_or_default();
+
                     writeln!(
                         f,
-                        "test `{function_name}` at {function_location} passed when it was expected to fail"
+                        "test `{function_name}` {function_location_string} passed when it was expected to fail"
                     )?;
                     if let Some(reason) = reason {
                         writeln!(f, "reason: {reason}")?;
@@ -103,9 +113,14 @@ impl Display for DisplayDiagnostic<'_> {
                 missing_fixtures,
                 function_kind,
             }) => {
+                let function_location_string = location
+                    .as_ref()
+                    .map(|location| format!("at {location}"))
+                    .unwrap_or_default();
+
                 writeln!(
                     f,
-                    "{function_kind} `{function_name}` has missing fixtures: {missing_fixtures:?} at {location}",
+                    "{function_kind} `{function_name}` has missing fixtures: {missing_fixtures:?} {function_location_string}",
                 )?;
             }
             Diagnostic::Warning(WarningDiagnostic { message }) => {
@@ -126,9 +141,14 @@ impl Display for DisplayDiagnostic<'_> {
                     .map(|location| format!("at {location}"))
                     .unwrap_or_default();
 
+                let function_location_string = function_location
+                    .as_ref()
+                    .map(|location| format!("at {location}"))
+                    .unwrap_or_default();
+
                 writeln!(
                     f,
-                    "fixture function `{function_name}` at {function_location} failed {location_fail_string}"
+                    "fixture function `{function_name}` {function_location_string} failed {location_fail_string}"
                 )?;
                 if let Some(message) = message {
                     writeln!(f, "{message}")?;
@@ -161,9 +181,14 @@ impl Display for DisplayDiscoveryDiagnostic<'_> {
                     },
                 message,
             }) => {
+                let function_location_string = location
+                    .as_ref()
+                    .map(|location| format!(" at {location}"))
+                    .unwrap_or_default();
+
                 writeln!(
                     f,
-                    "invalid fixture `{function_name}`: {message} at {location}"
+                    "invalid fixture `{function_name}`{function_location_string}: {message}"
                 )?;
             }
             DiscoveryDiagnostic::InvalidPath(test_path_error) => {

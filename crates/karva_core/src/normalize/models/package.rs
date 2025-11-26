@@ -14,14 +14,7 @@ pub struct NormalizedPackage {
 }
 
 impl NormalizedPackage {
-    pub(crate) const fn new(
-        modules: HashMap<Utf8PathBuf, NormalizedModule>,
-        packages: HashMap<Utf8PathBuf, Self>,
-    ) -> Self {
-        Self {
-            modules,
-            packages,
-            auto_use_fixtures: Vec::new(),
-        }
+    pub(crate) fn extend_auto_use_fixtures(&mut self, fixtures: Vec<NormalizedFixture>) {
+        self.auto_use_fixtures.extend(fixtures);
     }
 }
