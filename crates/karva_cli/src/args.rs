@@ -67,7 +67,7 @@ impl TestCommand {
             TestPrefix::new(self.test_prefix),
             self.verbosity.level(),
             self.show_output,
-            !self.no_ignore,
+            self.no_ignore,
             self.fail_fast,
             self.try_import_fixtures,
             self.show_traceback,
