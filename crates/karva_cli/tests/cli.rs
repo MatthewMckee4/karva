@@ -1058,6 +1058,63 @@ def test_1():
 
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
+fn test_unused_files_are_imported() {
+    let mut context = IntegrationTestContext::with_file(
+        "test_fail.py",
+        r"
+def test_1():
+    assert True
+
+        ",
+    );
+
+    context.write_file("foo.py", "print('hello world')");
+
+    assert_cmd_snapshot!(context.command().arg("-s"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test_fail::test_1 ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_unused_files_that_fail_are_not_imported() {
+    let mut context = IntegrationTestContext::with_file(
+        "test_fail.py",
+        r"
+def test_1():
+    assert True
+
+        ",
+    );
+
+    context.write_file(
+        "foo.py",
+        "
+    import sys
+    sys.exit(1)",
+    );
+
+    assert_cmd_snapshot!(context.command().arg("-s"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test_fail::test_1 ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_no_ignore() {
     let mut context = IntegrationTestContext::with_file(
         "test_file.py",

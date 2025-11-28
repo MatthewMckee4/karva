@@ -22,32 +22,65 @@ struct FunctionDefinitionVisitor<'proj, 'py, 'a> {
     project: &'proj Project,
     module: &'a DiscoveredModule,
     diagnostics: Vec<DiscoveryDiagnostic>,
-    py_module: Bound<'py, PyModule>,
+    /// We only import the module once we actually need it, this ensures we don't import random files.
+    /// Which has a side effect of running them.
+    py_module: Option<Bound<'py, PyModule>>,
     py: Python<'py>,
     inside_function: bool,
+    tried_to_import_module: bool,
 }
 
 impl<'proj, 'py, 'a> FunctionDefinitionVisitor<'proj, 'py, 'a> {
-    const fn new(
-        py: Python<'py>,
-        project: &'proj Project,
-        module: &'a DiscoveredModule,
-        py_module: Bound<'py, PyModule>,
-    ) -> Self {
+    const fn new(py: Python<'py>, project: &'proj Project, module: &'a DiscoveredModule) -> Self {
         Self {
             discovered_functions: Vec::new(),
             fixture_definitions: Vec::new(),
             project,
             module,
             diagnostics: Vec::new(),
-            py_module,
+            py_module: None,
             inside_function: false,
             py,
+            tried_to_import_module: false,
         }
     }
 
+    /// Try to import the current python module.
+    ///
+    /// If we have already tried to import the module, we don't try again.
+    /// This ensures that we only first import the module when we need to.
+    fn try_import_module(&mut self) {
+        if self.tried_to_import_module {
+            return;
+        }
+
+        self.tried_to_import_module = true;
+
+        match self.py.import(self.module.name()) {
+            Ok(py_module) => {
+                self.py_module = Some(py_module);
+            }
+            Err(error) => {
+                self.diagnostics.push(DiscoveryDiagnostic::failed_to_import(
+                    self.module.name(),
+                    &error.to_string(),
+                ));
+            }
+        }
+    }
+
+    /// Sometimes users may import a fixture function that they want to use in the current module.
+    ///
+    /// This is not common and can add a lot of overhead so is disabled by default.
+    /// Seen in <https://github.com/MatthewMckee4/karva/issues/253>
     fn find_extra_fixtures(&mut self) {
-        let module_dict = self.py_module.dict();
+        self.try_import_module();
+
+        let Some(py_module) = self.py_module.as_ref() else {
+            return;
+        };
+
+        let module_dict = py_module.dict();
 
         'outer: for (name, value) in module_dict.iter() {
             if value.is_callable() {
@@ -154,8 +187,16 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_> {
             if self.inside_function {
                 return;
             }
+
             self.inside_function = true;
+
             if is_fixture_function(stmt_function_def) {
+                self.try_import_module();
+
+                let Some(py_module) = self.py_module.as_ref() else {
+                    return;
+                };
+
                 let mut generator_function_visitor = GeneratorFunctionVisitor::default();
 
                 source_order::walk_body(&mut generator_function_visitor, &stmt_function_def.body);
@@ -165,7 +206,7 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_> {
                 match Fixture::try_from_function(
                     self.py,
                     stmt_function_def,
-                    &self.py_module,
+                    py_module,
                     self.module.module_path(),
                     is_generator_function,
                 ) {
@@ -187,8 +228,13 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_> {
                 .to_string()
                 .starts_with(self.project.options().test_prefix())
             {
-                if let Ok(py_function) = self.py_module.getattr(stmt_function_def.name.to_string())
-                {
+                self.try_import_module();
+
+                let Some(py_module) = self.py_module.as_ref() else {
+                    return;
+                };
+
+                if let Ok(py_function) = py_module.getattr(stmt_function_def.name.to_string()) {
                     self.discovered_functions.push(TestFunction::new(
                         self.py,
                         self.module.module_path().clone(),
@@ -197,12 +243,10 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_> {
                     ));
                 }
             }
-            source_order::walk_stmt(self, stmt);
 
             self.inside_function = false;
-            return;
         }
-        // For all other statements, walk as normal
+
         source_order::walk_stmt(self, stmt);
     }
 }
@@ -223,22 +267,10 @@ pub fn discover(
         module.name()
     );
 
-    let py_module = match py.import(module.name()) {
-        Ok(py_module) => py_module,
-        Err(error) => {
-            return (
-                DiscoveredFunctions::default(),
-                vec![DiscoveryDiagnostic::failed_to_import(
-                    module.name(),
-                    &error.to_string(),
-                )],
-            );
-        }
-    };
-
-    let mut visitor = FunctionDefinitionVisitor::new(py, project, module, py_module);
+    let mut visitor = FunctionDefinitionVisitor::new(py, project, module);
 
     let parsed = parsed_module(module.source_text(), project.metadata().python_version());
+
     visitor.visit_body(&parsed.syntax().body);
 
     if project.options().try_import_fixtures() {
