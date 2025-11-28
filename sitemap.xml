@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <url>
+        <loc>https://matthewmckee4.github.io/karva/</loc>
+      </url>
+      <url>
+        <loc>https://matthewmckee4.github.io/karva/installation/</loc>
+      </url>
+      <url>
+        <loc>https://matthewmckee4.github.io/karva/tutorial/</loc>
+      </url>
+      <url>
+        <loc>https://matthewmckee4.github.io/karva/fixtures/</loc>
+      </url>
+      <url>
+        <loc>https://matthewmckee4.github.io/karva/tags/parametrize/</loc>
+      </url>
+      <url>
+        <loc>https://matthewmckee4.github.io/karva/tags/skip/</loc>
+      </url>
+      <url>
+        <loc>https://matthewmckee4.github.io/karva/tags/expect_fail/</loc>
+      </url>
+      <url>
+        <loc>https://matthewmckee4.github.io/karva/functions/</loc>
+      </url>
+      <url>
+        <loc>https://matthewmckee4.github.io/karva/cli/</loc>
+      </url>
+</urlset>
