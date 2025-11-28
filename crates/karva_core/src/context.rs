@@ -32,6 +32,6 @@ impl<'proj, 'rep> Context<'proj, 'rep> {
     }
 
     pub(crate) fn into_result(self) -> TestRunResult {
-        self.result.lock().unwrap().clone()
+        self.result.lock().unwrap().clone().into_sorted()
     }
 }

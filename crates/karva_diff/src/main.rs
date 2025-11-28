@@ -19,6 +19,8 @@ struct Args {
     new_karva_binary: Utf8PathBuf,
 
     output_diff_file: Utf8PathBuf,
+
+    output_new_file: Option<Utf8PathBuf>,
 }
 
 fn main() -> Result<ExitCode> {
@@ -68,6 +70,12 @@ fn main() -> Result<ExitCode> {
 
     fs::write(&args.output_diff_file, &diff_output.stdout)
         .context("Failed to write output file")?;
+
+    if let Some(output_new_file) = &args.output_new_file {
+        accumulation_temp.flush()?;
+        fs::copy(accumulation_temp.path(), output_new_file)
+            .context("Failed to write new output file")?;
+    }
 
     Ok(ExitCode::SUCCESS)
 }

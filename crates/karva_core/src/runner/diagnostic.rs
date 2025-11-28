@@ -90,7 +90,7 @@ impl TestRunResult {
     }
 
     #[must_use]
-    pub fn into_sorted(mut self) -> Self {
+    pub(crate) fn into_sorted(mut self) -> Self {
         self.discovery_diagnostics
             .sort_by(|left, right| left.rendering_sort_key().cmp(&right.rendering_sort_key()));
         self.test_diagnostics

@@ -65,7 +65,7 @@ def test_fixture_generator(fixture_generator):
         assert_snapshot!(result.display(), @r"
         warnings:
 
-        warning: Fixture <test>.test_file::fixture_generator had more than one yield statement
+        warning at <test>/test_file.py:4: Fixture had more than one yield statement
 
         test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
         ");
@@ -93,8 +93,7 @@ def test_fixture_generator(fixture_generator):
         assert_snapshot!(result.display(), @r"
         warnings:
 
-        warning: Failed to reset fixture <test>.test_file::fixture_generator
-        fixture-error
+        warning at <test>/test_file.py:4: Failed to reset fixture: fixture-error
 
         test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
         ");
