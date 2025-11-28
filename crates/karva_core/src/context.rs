@@ -1,10 +1,12 @@
+use std::sync::Mutex;
+
 use karva_project::Project;
 
 use crate::{Reporter, TestRunResult};
 
 pub struct Context<'proj, 'rep> {
     project: &'proj Project,
-    result: TestRunResult,
+    result: Mutex<TestRunResult>,
     reporter: &'rep dyn Reporter,
 }
 
@@ -12,7 +14,7 @@ impl<'proj, 'rep> Context<'proj, 'rep> {
     pub fn new(project: &'proj Project, reporter: &'rep dyn Reporter) -> Self {
         Self {
             project,
-            result: TestRunResult::default(),
+            result: Mutex::new(TestRunResult::default()),
             reporter,
         }
     }
@@ -21,8 +23,8 @@ impl<'proj, 'rep> Context<'proj, 'rep> {
         self.project
     }
 
-    pub const fn result_mut(&mut self) -> &mut TestRunResult {
-        &mut self.result
+    pub fn result_mut(&self) -> std::sync::MutexGuard<'_, TestRunResult> {
+        self.result.lock().unwrap()
     }
 
     pub fn reporter(&self) -> &'rep dyn Reporter {
@@ -30,6 +32,6 @@ impl<'proj, 'rep> Context<'proj, 'rep> {
     }
 
     pub(crate) fn into_result(self) -> TestRunResult {
-        self.result
+        self.result.lock().unwrap().clone()
     }
 }

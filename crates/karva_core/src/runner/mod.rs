@@ -33,7 +33,7 @@ impl<'proj> StandardTestRunner<'proj> {
 
     fn test_impl(&self, reporter: &dyn Reporter) -> TestRunResult {
         attach_with_project(self.project, |py| {
-            let mut context = Context::new(self.project, reporter);
+            let context = Context::new(self.project, reporter);
 
             let (session, discovery_diagnostics) =
                 StandardDiscoverer::new(self.project).discover_with_py(py);
@@ -48,7 +48,7 @@ impl<'proj> StandardTestRunner<'proj> {
             let normalized_session =
                 DiscoveredPackageNormalizer::new(self.project).normalize(py, &session);
 
-            NormalizedPackageRunner::new(&mut context).run(py, &normalized_session);
+            NormalizedPackageRunner::new(&context).run(py, &normalized_session);
 
             context.into_result()
         })

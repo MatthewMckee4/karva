@@ -39,7 +39,7 @@ pub enum NormalizedFixtureValue {
 /// For parametrized fixtures, each parameter value gets its own `NormalizedFixture`.
 #[derive(Debug, Clone)]
 pub struct NormalizedFixture {
-    /// Original fixture name without parameter: "`my_fixture`"
+    /// Original fixture name
     pub(crate) name: NormalizedFixtureName,
 
     /// The specific parameter value for this variant (if parametrized)
@@ -56,65 +56,29 @@ pub struct NormalizedFixture {
     /// Original fixture metadata
     pub(crate) scope: FixtureScope,
 
+    /// If this fixture is a generator
     pub(crate) is_generator: bool,
 
+    /// The computed value or imported python function to compute the value
     pub(crate) value: NormalizedFixtureValue,
 
+    /// The function definition for this fixture
+    /// None for builtin fixtures
     pub(crate) function_definition: Option<StmtFunctionDef>,
 }
 
 impl NormalizedFixture {
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) const fn new(
-        name: NormalizedFixtureName,
-        param: Option<Py<PyAny>>,
-        dependencies: Vec<Self>,
-        location: Option<Location>,
-        scope: FixtureScope,
-        is_generator: bool,
-        value: NormalizedFixtureValue,
-        function_definition: Option<StmtFunctionDef>,
-    ) -> Self {
+    /// Creates a built-in fixture that doesn't have a Python definition.
+    pub(crate) const fn built_in(name: String, value: Py<PyAny>) -> Self {
         Self {
-            name,
-            param,
-            dependencies,
-            location,
-            scope,
-            is_generator,
-            value,
-            function_definition,
+            name: NormalizedFixtureName::BuiltIn(name),
+            param: None,
+            dependencies: vec![],
+            location: None,
+            scope: FixtureScope::Function,
+            is_generator: false,
+            value: NormalizedFixtureValue::Computed(value),
+            function_definition: None,
         }
-    }
-
-    pub(crate) const fn name(&self) -> &NormalizedFixtureName {
-        &self.name
-    }
-
-    pub(crate) const fn param(&self) -> Option<&Py<PyAny>> {
-        self.param.as_ref()
-    }
-
-    pub(crate) fn dependencies(&self) -> &[Self] {
-        &self.dependencies
-    }
-
-    pub(crate) const fn function_definition(&self) -> Option<&StmtFunctionDef> {
-        self.function_definition.as_ref()
-    }
-
-    /// Creates a built-in fixture (like `tmp_path`) that doesn't have a Python definition.
-    /// These fixtures are provided by the framework itself.
-    pub(crate) const fn built_in(_py: Python<'_>, name: String, value: Py<PyAny>) -> Self {
-        Self::new(
-            NormalizedFixtureName::BuiltIn(name),
-            None,
-            vec![],
-            None,
-            FixtureScope::Function,
-            false,
-            NormalizedFixtureValue::Computed(value),
-            None,
-        )
     }
 }
