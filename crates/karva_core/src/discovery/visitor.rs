@@ -27,7 +27,7 @@ struct FunctionDefinitionVisitor<'proj, 'py, 'a> {
     py_module: Option<Bound<'py, PyModule>>,
     py: Python<'py>,
     inside_function: bool,
-    failed_to_import_module: bool,
+    tried_to_import_module: bool,
 }
 
 impl<'proj, 'py, 'a> FunctionDefinitionVisitor<'proj, 'py, 'a> {
@@ -41,32 +41,45 @@ impl<'proj, 'py, 'a> FunctionDefinitionVisitor<'proj, 'py, 'a> {
             py_module: None,
             inside_function: false,
             py,
-            failed_to_import_module: false,
+            tried_to_import_module: false,
         }
     }
 
+    /// Try to import the current python module.
+    ///
+    /// If we have already tried to import the module, we don't try again.
+    /// This ensures that we only first import the module when we need to.
     fn try_import_module(&mut self) {
-        if self.py_module.is_none() && !self.failed_to_import_module {
-            match self.py.import(self.module.name()) {
-                Ok(py_module) => {
-                    self.py_module = Some(py_module);
-                }
-                Err(error) => {
-                    self.failed_to_import_module = true;
-                    self.diagnostics.push(DiscoveryDiagnostic::failed_to_import(
-                        self.module.name(),
-                        &error.to_string(),
-                    ));
-                }
+        if self.tried_to_import_module {
+            return;
+        }
+
+        self.tried_to_import_module = true;
+
+        match self.py.import(self.module.name()) {
+            Ok(py_module) => {
+                self.py_module = Some(py_module);
+            }
+            Err(error) => {
+                self.diagnostics.push(DiscoveryDiagnostic::failed_to_import(
+                    self.module.name(),
+                    &error.to_string(),
+                ));
             }
         }
     }
 
+    /// Sometimes users may import a fixture function that they want to use in the current module.
+    ///
+    /// This is not common and can add a lot of overhead so is disabled by default.
+    /// Seen in <https://github.com/MatthewMckee4/karva/issues/253>
     fn find_extra_fixtures(&mut self) {
         self.try_import_module();
+
         let Some(py_module) = self.py_module.as_ref() else {
             return;
         };
+
         let module_dict = py_module.dict();
 
         'outer: for (name, value) in module_dict.iter() {
@@ -174,9 +187,12 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_> {
             if self.inside_function {
                 return;
             }
+
             self.inside_function = true;
+
             if is_fixture_function(stmt_function_def) {
                 self.try_import_module();
+
                 let Some(py_module) = self.py_module.as_ref() else {
                     return;
                 };
@@ -213,9 +229,11 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_> {
                 .starts_with(self.project.options().test_prefix())
             {
                 self.try_import_module();
+
                 let Some(py_module) = self.py_module.as_ref() else {
                     return;
                 };
+
                 if let Ok(py_function) = py_module.getattr(stmt_function_def.name.to_string()) {
                     self.discovered_functions.push(TestFunction::new(
                         self.py,
@@ -225,12 +243,10 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_> {
                     ));
                 }
             }
-            source_order::walk_stmt(self, stmt);
 
             self.inside_function = false;
-            return;
         }
-        // For all other statements, walk as normal
+
         source_order::walk_stmt(self, stmt);
     }
 }
@@ -254,6 +270,7 @@ pub fn discover(
     let mut visitor = FunctionDefinitionVisitor::new(py, project, module);
 
     let parsed = parsed_module(module.source_text(), project.metadata().python_version());
+
     visitor.visit_body(&parsed.syntax().body);
 
     if project.options().try_import_fixtures() {
