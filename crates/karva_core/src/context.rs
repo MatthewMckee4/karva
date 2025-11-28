@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use karva_project::Project;
 
@@ -6,7 +6,7 @@ use crate::{Reporter, TestRunResult};
 
 pub struct Context<'proj, 'rep> {
     project: &'proj Project,
-    result: Mutex<TestRunResult>,
+    result: Arc<Mutex<TestRunResult>>,
     reporter: &'rep dyn Reporter,
 }
 
@@ -14,7 +14,7 @@ impl<'proj, 'rep> Context<'proj, 'rep> {
     pub fn new(project: &'proj Project, reporter: &'rep dyn Reporter) -> Self {
         Self {
             project,
-            result: Mutex::new(TestRunResult::default()),
+            result: Arc::new(Mutex::new(TestRunResult::default())),
             reporter,
         }
     }
