@@ -13,7 +13,6 @@ license = { workspace = true }
 [dependencies]
 camino = { workspace = true }
 karva_project = { workspace = true }
-
 colored = { workspace = true }
 pyo3 = { workspace = true }
 ruff_python_ast = { workspace = true }

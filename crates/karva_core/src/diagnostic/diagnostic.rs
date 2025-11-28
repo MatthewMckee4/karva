@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use camino::Utf8PathBuf;
 use karva_project::path::TestPathError;
 use pyo3::prelude::*;
@@ -97,8 +99,9 @@ impl Diagnostic {
         })
     }
 
-    pub(crate) fn warning(message: &str) -> Self {
+    pub(crate) fn warning(location: Option<Location>, message: &str) -> Self {
         Self::Warning(WarningDiagnostic {
+            location,
             message: message.to_string(),
         })
     }
@@ -110,7 +113,10 @@ impl Diagnostic {
         function_kind: FunctionKind,
     ) -> Self {
         Self::MissingFixtures(MissingFixturesDiagnostic {
-            location: FunctionDefinitionLocation::new(function_name, location),
+            location: FunctionDefinitionLocation {
+                function_name,
+                location,
+            },
             missing_fixtures,
             function_kind,
         })
@@ -123,6 +129,10 @@ impl Diagnostic {
             Self::FixtureFailure(diagnostic) => Some(&diagnostic.location),
             Self::Warning(_) => None,
         }
+    }
+
+    pub(crate) fn rendering_sort_key(&self) -> impl Ord + '_ {
+        DiagnosticSortKey { diagnostic: self }
     }
 }
 
@@ -160,6 +170,17 @@ impl DiscoveryDiagnostic {
             message,
             location: FunctionDefinitionLocation::new(function_name, location),
         })
+    }
+
+    pub(crate) const fn location(&self) -> Option<&FunctionDefinitionLocation> {
+        match self {
+            Self::InvalidFixture(diagnostic) => Some(&diagnostic.location),
+            Self::InvalidPath(_) | Self::FailedToImport { .. } => None,
+        }
+    }
+
+    pub(crate) fn rendering_sort_key(&self) -> impl Ord + '_ {
+        DiscoveryDiagnosticSortKey { diagnostic: self }
     }
 }
 
@@ -249,8 +270,6 @@ pub struct FixtureFailureDiagnostic {
 #[derive(Clone, Debug)]
 pub struct InvalidFixtureDiagnostic {
     /// The location of the fixture function.
-    ///
-    /// This is a string of the format `file.py:line`.
     pub(crate) location: FunctionDefinitionLocation,
 
     /// The message of the fixture failure.
@@ -261,6 +280,8 @@ pub struct InvalidFixtureDiagnostic {
 
 #[derive(Clone, Debug)]
 pub struct WarningDiagnostic {
+    /// The location of the warning.
+    pub(crate) location: Option<Location>,
     /// The message of the warning.
     ///
     /// This is used as the "info" message in the diagnostic.
@@ -281,6 +302,10 @@ impl FunctionDefinitionLocation {
             location,
         }
     }
+
+    pub(crate) fn rendering_sort_key(&self) -> impl Ord + '_ {
+        (&self.location, &self.function_name)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -288,3 +313,64 @@ pub enum FunctionKind {
     Fixture,
     Test,
 }
+
+pub struct DiagnosticSortKey<'a> {
+    diagnostic: &'a Diagnostic,
+}
+
+impl Ord for DiagnosticSortKey<'_> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self.diagnostic.location(), other.diagnostic.location()) {
+            (Some(left), Some(right)) => left.rendering_sort_key().cmp(&right.rendering_sort_key()),
+            (None, None) => Ordering::Equal,
+            (None, Some(_)) => Ordering::Less,
+            (Some(_), None) => Ordering::Greater,
+        }
+    }
+}
+
+impl PartialOrd for DiagnosticSortKey<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for DiagnosticSortKey<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.diagnostic.rendering_sort_key() == other.diagnostic.rendering_sort_key()
+    }
+}
+
+impl Eq for DiagnosticSortKey<'_> {}
+
+pub struct DiscoveryDiagnosticSortKey<'a> {
+    diagnostic: &'a DiscoveryDiagnostic,
+}
+
+impl Ord for DiscoveryDiagnosticSortKey<'_> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self.diagnostic.location(), other.diagnostic.location()) {
+            (Some(left), Some(right)) => left.rendering_sort_key().cmp(&right.rendering_sort_key()),
+            (None, None) => Ordering::Equal,
+            (None, Some(_)) => Ordering::Less,
+            (Some(_), None) => Ordering::Greater,
+        }
+    }
+}
+
+impl PartialOrd for DiscoveryDiagnosticSortKey<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for DiscoveryDiagnosticSortKey<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self.diagnostic.location(), other.diagnostic.location()) {
+            (Some(left), Some(right)) => left.rendering_sort_key() == right.rendering_sort_key(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for DiscoveryDiagnosticSortKey<'_> {}

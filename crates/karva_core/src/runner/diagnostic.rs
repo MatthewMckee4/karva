@@ -89,6 +89,15 @@ impl TestRunResult {
         }
     }
 
+    #[must_use]
+    pub fn into_sorted(mut self) -> Self {
+        self.discovery_diagnostics
+            .sort_by(|left, right| left.rendering_sort_key().cmp(&right.rendering_sort_key()));
+        self.test_diagnostics
+            .sort_by(|left, right| left.rendering_sort_key().cmp(&right.rendering_sort_key()));
+        self
+    }
+
     pub fn display(&self) -> DisplayTestRunResult<'_> {
         self.display_with(DisplayOptions::default())
     }
@@ -303,13 +312,20 @@ impl std::fmt::Display for DisplayTestResultStats<'_> {
             write!(f, "{}", "FAILED".red())?;
         }
 
+        let elapsed = self.start_time.elapsed();
+        let time_display = if elapsed.as_secs() < 2 {
+            format!("{}ms", elapsed.as_millis())
+        } else {
+            format!("{}s", elapsed.as_millis() / 1000)
+        };
+
         writeln!(
             f,
-            ". {} passed; {} failed; {} skipped; finished in {}s",
+            ". {} passed; {} failed; {} skipped; finished in {}",
             self.stats.passed(),
             self.stats.failed(),
             self.stats.skipped(),
-            self.start_time.elapsed().as_millis() / 1000
+            time_display
         )
     }
 }

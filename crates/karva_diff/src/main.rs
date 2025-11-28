@@ -19,8 +19,6 @@ struct Args {
     new_karva_binary: Utf8PathBuf,
 
     output_diff_file: Utf8PathBuf,
-
-    output_new_file: Option<Utf8PathBuf>,
 }
 
 fn main() -> Result<ExitCode> {
@@ -70,12 +68,6 @@ fn main() -> Result<ExitCode> {
 
     fs::write(&args.output_diff_file, &diff_output.stdout)
         .context("Failed to write output file")?;
-
-    if let Some(output_new_file) = &args.output_new_file {
-        accumulation_temp.flush()?;
-        fs::copy(accumulation_temp.path(), output_new_file)
-            .context("Failed to write new output file")?;
-    }
 
     Ok(ExitCode::SUCCESS)
 }
@@ -150,9 +142,9 @@ fn run(
         String::from_utf8_lossy(&new_output.stderr)
     )?;
 
-    let old_result = extract_test_result(&old_output.stdout)?;
+    let old_result = extract_test_result(&old_output.stdout);
 
-    let new_result = extract_test_result(&new_output.stdout)?;
+    let new_result = extract_test_result(&new_output.stdout);
 
     writeln!(old_temp, "{}", installed_project.config.name)?;
     writeln!(old_temp, "{old_result}")?;
@@ -163,18 +155,8 @@ fn run(
     Ok(())
 }
 
-fn extract_test_result(output: &[u8]) -> Result<String> {
+fn extract_test_result(output: &[u8]) -> String {
     let output_str = String::from_utf8_lossy(output);
 
-    let result = output_str
-        .lines()
-        .filter(|line| line.starts_with("test result"))
-        .next_back()
-        .context("No line starting with 'test result' found")?;
-
-    let trimmed_result = result
-        .find(" finished")
-        .map_or(result, |pos| &result[..pos]);
-
-    Ok(trimmed_result.to_string())
+    output_str.to_string()
 }

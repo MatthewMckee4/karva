@@ -123,8 +123,13 @@ impl Display for DisplayDiagnostic<'_> {
                     "{function_kind} `{function_name}` has missing fixtures: {missing_fixtures:?} {function_location_string}",
                 )?;
             }
-            Diagnostic::Warning(WarningDiagnostic { message }) => {
-                writeln!(f, "warning: {message}")?;
+            Diagnostic::Warning(WarningDiagnostic { location, message }) => {
+                let location_string = location
+                    .as_ref()
+                    .map(|location| format!(" at {location}"))
+                    .unwrap_or_default();
+
+                writeln!(f, "warning{location_string}: {message}")?;
             }
             Diagnostic::FixtureFailure(FixtureFailureDiagnostic {
                 location:

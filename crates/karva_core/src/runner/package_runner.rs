@@ -109,6 +109,8 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
     /// Run a normalized test function.
     fn run_normalized_test(&self, py: Python<'_>, test_fn: &NormalizedTestFunction) -> bool {
+        tracing::info!("Running test {}", test_fn.name);
+
         // Check if test should be skipped
         if let Some(skip_tag) = test_fn.tags.skip_tag() {
             if skip_tag.should_skip() {
@@ -394,8 +396,13 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                 let mut iterator = py_iter.bind(py).clone();
                 match iterator.next() {
                     Some(Ok(value)) => {
-                        let finalizer =
-                            Finalizer::new(fixture.name.to_string(), py_iter, fixture.scope);
+                        let finalizer = {
+                            Finalizer {
+                                location: fixture.location.clone(),
+                                fixture_return: py_iter,
+                                scope: fixture.scope,
+                            }
+                        };
 
                         (value.unbind(), Some(finalizer))
                     }

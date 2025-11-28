@@ -1,6 +1,6 @@
 use pyo3::{prelude::*, types::PyIterator};
 
-use crate::{diagnostic::Diagnostic, extensions::fixtures::FixtureScope};
+use crate::{Location, diagnostic::Diagnostic, extensions::fixtures::FixtureScope};
 
 /// Represents a generator function that can be used to run the finalizer section of a fixture.
 ///
@@ -11,40 +11,27 @@ use crate::{diagnostic::Diagnostic, extensions::fixtures::FixtureScope};
 /// ```
 #[derive(Debug, Clone)]
 pub struct Finalizer {
-    pub(crate) fixture_name: String,
+    pub(crate) location: Option<Location>,
     pub(crate) fixture_return: Py<PyIterator>,
     pub(crate) scope: FixtureScope,
 }
 
 impl Finalizer {
-    pub(crate) const fn new(
-        fixture_name: String,
-        fixture_return: Py<PyIterator>,
-        scope: FixtureScope,
-    ) -> Self {
-        Self {
-            fixture_name,
-            fixture_return,
-            scope,
-        }
-    }
-
     pub(crate) const fn scope(&self) -> FixtureScope {
         self.scope
     }
 
-    pub(crate) fn run(&self, py: Python<'_>) -> Option<Diagnostic> {
+    pub(crate) fn run(self, py: Python<'_>) -> Option<Diagnostic> {
         let mut generator = self.fixture_return.bind(py).clone();
         match generator.next()? {
-            Ok(_) => Some(Diagnostic::warning(&format!(
-                "Fixture {} had more than one yield statement",
-                self.fixture_name
-            ))),
-            Err(err) => Some(Diagnostic::warning(&format!(
-                "Failed to reset fixture {}\n{}",
-                self.fixture_name,
-                err.value(py)
-            ))),
+            Ok(_) => Some(Diagnostic::warning(
+                self.location,
+                "Fixture had more than one yield statement",
+            )),
+            Err(err) => Some(Diagnostic::warning(
+                self.location,
+                &format!("Failed to reset fixture: {}", err.value(py)),
+            )),
         }
     }
 }

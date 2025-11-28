@@ -1,7 +1,7 @@
 use camino::Utf8PathBuf;
 use ruff_source_file::OneIndexed;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Location {
     path: Utf8PathBuf,
     line: OneIndexed,
