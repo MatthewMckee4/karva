@@ -38,7 +38,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
     fn clean_up(&self, py: Python, scope: FixtureScope) {
         let diagnostics = self.finalizer_cache.run_and_clear_scope(py, scope);
 
-        self.context.result_mut().add_test_diagnostics(diagnostics);
+        self.context.result().add_test_diagnostics(diagnostics);
         self.fixture_cache.clear_fixtures(scope);
     }
 
@@ -114,7 +114,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
             if skip_tag.should_skip() {
                 let reporter = self.context.reporter();
 
-                self.context.result_mut().register_test_case_result(
+                self.context.result().register_test_case_result(
                     &test_fn.name.to_string(),
                     IndividualTestResultKind::Skipped {
                         reason: skip_tag.reason(),
@@ -173,7 +173,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                 }
                 Err(err) => {
                     let diagnostic = handle_fixture_fail(fixture, err);
-                    self.context.result_mut().add_test_diagnostic(diagnostic);
+                    self.context.result().add_test_diagnostic(diagnostic);
                 }
             }
         }
@@ -190,7 +190,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                 }
                 Err(err) => {
                     let diagnostic = handle_fixture_fail(fixture, err);
-                    self.context.result_mut().add_test_diagnostic(diagnostic);
+                    self.context.result().add_test_diagnostic(diagnostic);
                 }
             }
         }
@@ -233,17 +233,17 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                         ),
                     );
 
-                    self.context.result_mut().register_test_case_result(
+                    self.context.result().register_test_case_result(
                         &full_test_name,
                         IndividualTestResultKind::Failed,
                         Some(reporter),
                     );
 
-                    self.context.result_mut().add_test_diagnostic(diagnostic);
+                    self.context.result().add_test_diagnostic(diagnostic);
 
                     false
                 } else {
-                    self.context.result_mut().register_test_case_result(
+                    self.context.result().register_test_case_result(
                         &full_test_name,
                         IndividualTestResultKind::Passed,
                         Some(reporter),
@@ -255,14 +255,14 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
             Err(err) => {
                 if is_skip_exception(py, &err) {
                     let reason = extract_skip_reason(py, &err);
-                    self.context.result_mut().register_test_case_result(
+                    self.context.result().register_test_case_result(
                         &full_test_name,
                         IndividualTestResultKind::Skipped { reason },
                         Some(reporter),
                     );
                     true
                 } else if expect_fail {
-                    self.context.result_mut().register_test_case_result(
+                    self.context.result().register_test_case_result(
                         &full_test_name,
                         IndividualTestResultKind::Passed,
                         Some(reporter),
@@ -297,9 +297,9 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                         )
                     };
 
-                    self.context.result_mut().add_test_diagnostic(diagnostic);
+                    self.context.result().add_test_diagnostic(diagnostic);
 
-                    self.context.result_mut().register_test_case_result(
+                    self.context.result().register_test_case_result(
                         &full_test_name,
                         IndividualTestResultKind::Failed,
                         Some(reporter),
@@ -313,7 +313,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         // Run function-scoped finalizers for this test in reverse order (LIFO)
         for finalizer in test_finalizers.into_iter().rev() {
             if let Some(diagnostic) = finalizer.run(py) {
-                self.context.result_mut().add_test_diagnostic(diagnostic);
+                self.context.result().add_test_diagnostic(diagnostic);
             }
         }
 

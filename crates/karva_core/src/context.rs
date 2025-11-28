@@ -23,7 +23,7 @@ impl<'proj, 'rep> Context<'proj, 'rep> {
         self.project
     }
 
-    pub fn result_mut(&self) -> std::sync::MutexGuard<'_, TestRunResult> {
+    pub fn result(&self) -> std::sync::MutexGuard<'_, TestRunResult> {
         self.result.lock().unwrap()
     }
 

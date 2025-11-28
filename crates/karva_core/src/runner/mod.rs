@@ -39,7 +39,7 @@ impl<'proj> StandardTestRunner<'proj> {
                 StandardDiscoverer::new(self.project).discover_with_py(py);
 
             context
-                .result_mut()
+                .result()
                 .add_discovery_diagnostics(discovery_diagnostics);
 
             // Normalize the discovered session - this resolves all parametrized fixtures
