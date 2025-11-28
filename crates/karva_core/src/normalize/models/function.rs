@@ -32,56 +32,9 @@ pub struct NormalizedTestFunction {
 
     pub(crate) auto_use_fixtures: Vec<NormalizedFixture>,
 
-    /// Original test metadata
+    /// Imported Python function
     pub(crate) function: Py<PyAny>,
+
+    /// Resolved tags
     pub(crate) tags: Tags,
-}
-
-impl NormalizedTestFunction {
-    #[expect(clippy::too_many_arguments)]
-    pub(crate) const fn new(
-        original_name: QualifiedFunctionName,
-        location: Location,
-        params: HashMap<String, Py<PyAny>>,
-        fixture_dependencies: Vec<NormalizedFixture>,
-        use_fixture_dependencies: Vec<NormalizedFixture>,
-        auto_use_fixtures: Vec<NormalizedFixture>,
-        function: Py<PyAny>,
-        tags: Tags,
-    ) -> Self {
-        Self {
-            name: original_name,
-            location,
-            params,
-            fixture_dependencies,
-            use_fixture_dependencies,
-            auto_use_fixtures,
-            function,
-            tags,
-        }
-    }
-
-    pub(crate) const fn name(&self) -> &QualifiedFunctionName {
-        &self.name
-    }
-
-    pub(crate) const fn params(&self) -> &HashMap<String, Py<PyAny>> {
-        &self.params
-    }
-
-    pub(crate) fn fixture_dependencies(&self) -> &[NormalizedFixture] {
-        &self.fixture_dependencies
-    }
-
-    pub(crate) fn use_fixture_dependencies(&self) -> &[NormalizedFixture] {
-        &self.use_fixture_dependencies
-    }
-
-    pub(crate) const fn function(&self) -> &Py<PyAny> {
-        &self.function
-    }
-
-    pub(crate) const fn tags(&self) -> &Tags {
-        &self.tags
-    }
 }

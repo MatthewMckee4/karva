@@ -151,16 +151,16 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
                 .filter_map(|mut deps| deps.pop())
                 .collect();
 
-            let normalized = NormalizedFixture::new(
-                NormalizedFixtureName::UserDefined(fixture.name().clone()),
-                None,
+            let normalized = NormalizedFixture {
+                name: NormalizedFixtureName::UserDefined(fixture.name().clone()),
+                param: None,
                 dependencies,
-                Some(location),
-                fixture.scope(),
-                fixture.is_generator(),
-                NormalizedFixtureValue::Function(fixture.function().clone()),
-                Some(fixture.function_definition().clone()),
-            );
+                location: Some(location),
+                scope: fixture.scope(),
+                is_generator: fixture.is_generator(),
+                value: NormalizedFixtureValue::Function(fixture.function().clone()),
+                function_definition: Some(fixture.function_definition().clone()),
+            };
 
             let result = vec![normalized];
 
@@ -188,16 +188,16 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
 
         for dep_combination in dep_combinations {
             for param in &param_list {
-                let normalized = NormalizedFixture::new(
-                    NormalizedFixtureName::UserDefined(fixture.name().clone()),
-                    param.cloned(),
-                    dep_combination.clone(),
-                    Some(location.clone()),
-                    fixture.scope(),
-                    fixture.is_generator(),
-                    NormalizedFixtureValue::Function(fixture.function().clone()),
-                    Some(fixture.function_definition().clone()),
-                );
+                let normalized = NormalizedFixture {
+                    name: NormalizedFixtureName::UserDefined(fixture.name().clone()),
+                    param: param.cloned(),
+                    dependencies: dep_combination.clone(),
+                    location: Some(location.clone()),
+                    scope: fixture.scope(),
+                    is_generator: fixture.is_generator(),
+                    value: NormalizedFixtureValue::Function(fixture.function().clone()),
+                    function_definition: Some(fixture.function_definition().clone()),
+                };
 
                 result.push(normalized);
             }
@@ -298,16 +298,18 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
                 .filter_map(|mut deps| deps.pop())
                 .collect();
 
-            return vec![NormalizedTestFunction::new(
-                test_fn.name().clone(),
+            let normalized_test_function = NormalizedTestFunction {
+                name: test_fn.name().clone(),
                 location,
-                HashMap::new(),
+                params: HashMap::new(),
                 fixture_dependencies,
                 use_fixture_dependencies,
-                function_auto_use_fixtures,
-                test_fn.py_function().clone(),
-                test_fn.tags().clone(),
-            )];
+                auto_use_fixtures: function_auto_use_fixtures,
+                function: test_fn.py_function().clone(),
+                tags: test_fn.tags().clone(),
+            };
+
+            return vec![normalized_test_function];
         }
 
         let mut result = Vec::new();
@@ -327,16 +329,16 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
         for dep_combination in dep_combinations {
             for use_fixture_combination in &use_fixture_combinations {
                 for test_param in &test_params {
-                    let normalized = NormalizedTestFunction::new(
-                        test_fn.name().clone(),
-                        location.clone(),
-                        test_param.clone(),
-                        dep_combination.clone(),
-                        use_fixture_combination.clone(),
-                        function_auto_use_fixtures.clone(),
-                        test_fn.py_function().clone(),
-                        test_fn.tags().clone(),
-                    );
+                    let normalized = NormalizedTestFunction {
+                        name: test_fn.name().clone(),
+                        location: location.clone(),
+                        params: test_param.clone(),
+                        fixture_dependencies: dep_combination.clone(),
+                        use_fixture_dependencies: use_fixture_combination.clone(),
+                        auto_use_fixtures: function_auto_use_fixtures.clone(),
+                        function: test_fn.py_function().clone(),
+                        tags: test_fn.tags().clone(),
+                    };
 
                     result.push(normalized);
                 }

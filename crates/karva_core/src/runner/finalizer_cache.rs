@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use pyo3::prelude::*;
 
 use crate::{
@@ -8,31 +10,43 @@ use crate::{
 /// Manages finalizers for fixtures at different scope levels.
 #[derive(Debug, Default)]
 pub struct FinalizerCache {
-    session: Vec<Finalizer>,
+    session: Arc<Mutex<Vec<Finalizer>>>,
 
-    package: Vec<Finalizer>,
+    package: Arc<Mutex<Vec<Finalizer>>>,
 
-    module: Vec<Finalizer>,
+    module: Arc<Mutex<Vec<Finalizer>>>,
 
-    function: Vec<Finalizer>,
+    function: Arc<Mutex<Vec<Finalizer>>>,
 }
 
 impl FinalizerCache {
-    pub fn add_finalizer(&mut self, finalizer: Finalizer) {
+    pub fn add_finalizer(&self, finalizer: Finalizer) {
         match finalizer.scope() {
-            FixtureScope::Session => self.session.push(finalizer),
-            FixtureScope::Package => self.package.push(finalizer),
-            FixtureScope::Module => self.module.push(finalizer),
-            FixtureScope::Function => self.function.push(finalizer),
+            FixtureScope::Session => self.session.lock().unwrap().push(finalizer),
+            FixtureScope::Package => self.package.lock().unwrap().push(finalizer),
+            FixtureScope::Module => self.module.lock().unwrap().push(finalizer),
+            FixtureScope::Function => self.function.lock().unwrap().push(finalizer),
         }
     }
 
-    pub fn run_and_clear_scope(&mut self, py: Python<'_>, scope: FixtureScope) -> Vec<Diagnostic> {
+    pub fn run_and_clear_scope(&self, py: Python<'_>, scope: FixtureScope) -> Vec<Diagnostic> {
         let finalizers = match scope {
-            FixtureScope::Session => std::mem::take(&mut self.session),
-            FixtureScope::Package => std::mem::take(&mut self.package),
-            FixtureScope::Module => std::mem::take(&mut self.module),
-            FixtureScope::Function => std::mem::take(&mut self.function),
+            FixtureScope::Session => {
+                let mut guard = self.session.lock().unwrap();
+                guard.drain(..).collect::<Vec<_>>()
+            }
+            FixtureScope::Package => {
+                let mut guard = self.package.lock().unwrap();
+                guard.drain(..).collect::<Vec<_>>()
+            }
+            FixtureScope::Module => {
+                let mut guard = self.module.lock().unwrap();
+                guard.drain(..).collect::<Vec<_>>()
+            }
+            FixtureScope::Function => {
+                let mut guard = self.function.lock().unwrap();
+                guard.drain(..).collect::<Vec<_>>()
+            }
         };
 
         // Run finalizers in reverse order (LIFO)
