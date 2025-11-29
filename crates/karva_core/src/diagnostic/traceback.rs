@@ -2,8 +2,6 @@ use camino::Utf8PathBuf;
 use pyo3::prelude::*;
 use ruff_source_file::OneIndexed;
 
-use crate::Location;
-
 #[derive(Debug, Clone)]
 pub struct Traceback {
     pub(crate) lines: Vec<String>,

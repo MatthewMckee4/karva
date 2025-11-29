@@ -1,39 +1,47 @@
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
+use ruff_source_file::SourceFile;
 
 use crate::{
-    ModulePath, QualifiedFunctionName,
+    QualifiedFunctionName,
+    discovery::DiscoveredModule,
     extensions::{fixtures::RequiresFixtures, tags::Tags},
 };
 
 /// Represents a single test function discovered from Python source code.
 #[derive(Debug)]
 pub struct TestFunction {
-    function_definition: StmtFunctionDef,
+    stmt_function_def: StmtFunctionDef,
 
     py_function: Py<PyAny>,
 
     name: QualifiedFunctionName,
 
     tags: Tags,
+
+    pub(crate) source_file: SourceFile,
 }
 
 impl TestFunction {
     pub(crate) fn new(
         py: Python<'_>,
-        module_path: ModulePath,
-        function_definition: StmtFunctionDef,
+        module: &DiscoveredModule,
+        stmt_function_def: StmtFunctionDef,
         py_function: Py<PyAny>,
     ) -> Self {
-        let name = QualifiedFunctionName::new(function_definition.name.to_string(), module_path);
+        let name = QualifiedFunctionName::new(
+            stmt_function_def.name.to_string(),
+            module.module_path().clone(),
+        );
 
-        let tags = Tags::from_py_any(py, &py_function, Some(&function_definition));
+        let tags = Tags::from_py_any(py, &py_function, Some(&stmt_function_def));
 
         Self {
-            function_definition,
+            stmt_function_def,
             py_function,
             name,
             tags,
+            source_file: module.source_file(),
         }
     }
 
@@ -42,11 +50,11 @@ impl TestFunction {
     }
 
     pub(crate) fn function_name(&self) -> &str {
-        &self.function_definition.name
+        &self.stmt_function_def.name
     }
 
-    pub(crate) const fn definition(&self) -> &StmtFunctionDef {
-        &self.function_definition
+    pub(crate) const fn stmt_function_def(&self) -> &StmtFunctionDef {
+        &self.stmt_function_def
     }
 
     pub(crate) const fn py_function(&self) -> &Py<PyAny> {
@@ -60,7 +68,7 @@ impl TestFunction {
 
 impl RequiresFixtures for TestFunction {
     fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
-        let mut required_fixtures = self.function_definition.required_fixtures(py);
+        let mut required_fixtures = self.stmt_function_def.required_fixtures(py);
 
         required_fixtures.extend(self.tags.required_fixtures_names());
 
@@ -82,7 +90,7 @@ mod tests {
     };
 
     fn session(project: &Project) -> DiscoveredPackage {
-        let binding = DummyReporter::default();
+        let binding = DummyReporter;
         let context = Context::new(project, &binding);
         let discoverer = StandardDiscoverer::new(&context);
         discoverer.discover()

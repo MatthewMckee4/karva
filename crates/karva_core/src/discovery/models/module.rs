@@ -1,5 +1,5 @@
 use camino::Utf8PathBuf;
-use ruff_source_file::{LineIndex, SourceFile, SourceFileBuilder};
+use ruff_source_file::{SourceFile, SourceFileBuilder};
 
 use crate::{discovery::TestFunction, extensions::fixtures::Fixture, name::ModulePath};
 
@@ -11,14 +11,11 @@ pub struct DiscoveredModule {
     fixtures: Vec<Fixture>,
     type_: ModuleType,
     source_text: String,
-    line_index: LineIndex,
 }
 
 impl DiscoveredModule {
     pub(crate) fn new(path: ModulePath, module_type: ModuleType) -> Self {
         let source_text = std::fs::read_to_string(path.path()).expect("Failed to read source file");
-
-        let line_index = LineIndex::from_source_text(&source_text);
 
         Self {
             path,
@@ -26,7 +23,6 @@ impl DiscoveredModule {
             fixtures: Vec::new(),
             type_: module_type,
             source_text,
-            line_index,
         }
     }
 
@@ -77,10 +73,6 @@ impl DiscoveredModule {
 
     pub(crate) fn source_file(&self) -> SourceFile {
         SourceFileBuilder::new(self.path().as_str(), self.source_text()).finish()
-    }
-
-    pub(crate) const fn line_index(&self) -> &LineIndex {
-        &self.line_index
     }
 
     pub(crate) fn update(&mut self, module: Self) {

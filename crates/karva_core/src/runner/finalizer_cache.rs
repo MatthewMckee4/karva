@@ -4,7 +4,6 @@ use pyo3::prelude::*;
 
 use crate::{
     Context,
-    diagnostic::Diagnostic,
     extensions::fixtures::{Finalizer, FixtureScope},
 };
 

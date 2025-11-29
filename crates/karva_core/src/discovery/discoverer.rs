@@ -20,7 +20,7 @@ pub struct StandardDiscoverer<'ctx, 'proj, 'rep> {
 }
 
 impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
-    pub fn new(context: &'ctx Context<'proj, 'rep>) -> Self {
+    pub const fn new(context: &'ctx Context<'proj, 'rep>) -> Self {
         Self { context }
     }
 
@@ -76,10 +76,10 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
                         }
                     }
 
-                    self.add_parent_configuration_packages(py, path.path(), &mut session_package)
+                    self.add_parent_configuration_packages(py, path.path(), &mut session_package);
                 }
                 Err(error) => {
-                    report_invalid_path(self.context, error);
+                    report_invalid_path(self.context, &error);
                 }
             }
         }
@@ -273,7 +273,7 @@ mod tests {
     use crate::DummyReporter;
 
     fn session(project: &Project) -> DiscoveredPackage {
-        let binding = DummyReporter::default();
+        let binding = DummyReporter;
         let context = Context::new(project, &binding);
         let discoverer = StandardDiscoverer::new(&context);
         discoverer.discover()

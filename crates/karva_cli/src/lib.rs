@@ -99,8 +99,6 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         paths.push(cwd.clone());
     }
 
-    let system = OsSystem::new(&cwd);
-
     let options = args.into_options();
 
     let project = Project::new(cwd, paths)
@@ -125,7 +123,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         writeln!(stdout)?;
     }
 
-    write!(stdout, "{}", result.display_with((&project).into()))?;
+    write!(stdout, "{}", result.display())?;
 
     if result.stats().is_success() {
         Ok(ExitStatus::Success)

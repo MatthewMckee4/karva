@@ -1,21 +1,39 @@
 mod metadata;
 mod reporter;
-mod traceback;
+mod result;
+// mod traceback;
 
 use karva_project::path::TestPathError;
 pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
+use pyo3::{PyErr, Python};
 pub use reporter::{DummyReporter, Reporter, TestCaseReporter};
-use ruff_db::diagnostic::{Annotation, Diagnostic, Severity, Span};
+pub use result::{IndividualTestResultKind, TestResultStats, TestRunResult};
+use ruff_db::diagnostic::{Annotation, Severity, Span};
 use ruff_python_ast::StmtFunctionDef;
-use ruff_source_file::{SourceFile, SourceFileBuilder};
+use ruff_source_file::SourceFile;
 
-use crate::{Context, declare_diagnostic_type, discovery::DiscoveredModule};
+use crate::{Context, declare_diagnostic_type};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FunctionKind {
+    Test,
+    Fixture,
+}
+
+impl std::fmt::Display for FunctionKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Test => write!(f, "test"),
+            Self::Fixture => write!(f, "fixture"),
+        }
+    }
+}
 
 declare_diagnostic_type! {
     /// ## Invalid path
     ///
     /// User gave an invalid path
-    pub(crate) static INVALID_PATH = {
+    pub static INVALID_PATH = {
         summary: "User provided an invalid path",
         severity: Severity::Error,
     }
@@ -23,7 +41,7 @@ declare_diagnostic_type! {
 
 declare_diagnostic_type! {
     /// ## Failed to import module
-    pub(crate) static FAILED_TO_IMPORT_MODULE = {
+    pub static FAILED_TO_IMPORT_MODULE = {
         summary: "Failed to import python module",
         severity: Severity::Error,
     }
@@ -31,7 +49,7 @@ declare_diagnostic_type! {
 
 declare_diagnostic_type! {
     /// ## Invalid fixture
-    pub(crate) static INVALID_FIXTURE = {
+    pub static INVALID_FIXTURE = {
         summary: "Discovered an invalid fixture",
         severity: Severity::Error,
     }
@@ -39,24 +57,48 @@ declare_diagnostic_type! {
 
 declare_diagnostic_type! {
     /// ## Invalid fixture finalizer
-    pub(crate) static INVALID_FIXTURE_FINALIZER = {
+    pub static INVALID_FIXTURE_FINALIZER = {
         summary: "Tried to run an invalid fixture finalizer",
         severity: Severity::Warning,
     }
 }
 
 declare_diagnostic_type! {
+    /// ## Missing fixtures
+    pub static MISSING_FIXTURES = {
+        summary: "Missing fixtures",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
+    /// ## Failed Fixture
+    pub static FIXTURE_FAILURE = {
+        summary: "Fixture raises exception when run",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
+    /// ## Test Passes when expected to fail
+    pub static TEST_PASS_ON_EXPECT_FAILURE = {
+        summary: "Test passes when expected to fail",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
     /// ## Failed Test
-    pub(crate) static TEST_FAILURE = {
+    pub static TEST_FAILURE = {
         summary: "Test raises exception when run",
         severity: Severity::Error,
     }
 }
 
-pub(crate) fn report_invalid_path(context: &Context, error: TestPathError) {
+pub fn report_invalid_path(context: &Context, error: &TestPathError) {
     let builder = context.report_diagnostic(&INVALID_PATH);
 
-    builder.into_diagnostic(format!("Invalid path: {}", error));
+    builder.into_diagnostic(format!("Invalid path: {error}"));
 }
 
 pub fn report_failed_to_import_module(context: &Context, module_name: &str) {
@@ -80,9 +122,9 @@ pub fn report_invalid_fixture(
 
     let primary_span = Span::from(source_file).with_range(stmt_function_def.name.range);
 
-    diagnostic.annotate(Annotation::primary(primary_span.clone()));
+    diagnostic.annotate(Annotation::primary(primary_span));
 
-    diagnostic.info(format!("Reason: {}", reason));
+    diagnostic.info(format!("Reason: {reason}"));
 }
 
 pub fn report_invalid_fixture_finalizer(
@@ -100,7 +142,88 @@ pub fn report_invalid_fixture_finalizer(
 
     let primary_span = Span::from(source_file).with_range(stmt_function_def.name.range);
 
-    diagnostic.annotate(Annotation::primary(primary_span.clone()));
+    diagnostic.annotate(Annotation::primary(primary_span));
 
-    diagnostic.info(format!("Reason: {}", reason));
+    diagnostic.info(format!("Reason: {reason}"));
+}
+
+pub fn report_missing_fixtures(
+    context: &Context,
+    source_file: SourceFile,
+    stmt_function_def: &StmtFunctionDef,
+    missing_fixtures: &[String],
+    function_kind: FunctionKind,
+) {
+    let builder = context.report_diagnostic(&MISSING_FIXTURES);
+
+    let mut diagnostic = builder.into_diagnostic(format!(
+        "Discovered missing fixtures for {} `{}`",
+        function_kind, stmt_function_def.name
+    ));
+
+    let primary_span = Span::from(source_file).with_range(stmt_function_def.name.range);
+
+    diagnostic.annotate(Annotation::primary(primary_span));
+
+    diagnostic.info(format!("Missing fixtures: {missing_fixtures:?}"));
+}
+
+pub fn report_fixture_failure(
+    context: &Context,
+    py: Python,
+    source_file: SourceFile,
+    stmt_function_def: &StmtFunctionDef,
+    error: &PyErr,
+) {
+    let builder = context.report_diagnostic(&FIXTURE_FAILURE);
+
+    let mut diagnostic =
+        builder.into_diagnostic(format!("Fixture `{}` failed", stmt_function_def.name));
+
+    let primary_span = Span::from(source_file).with_range(stmt_function_def.name.range);
+
+    diagnostic.annotate(Annotation::primary(primary_span));
+
+    diagnostic.info(format!("Reason: {}", error.value(py)));
+}
+
+pub fn report_test_pass_on_expect_failure(
+    context: &Context,
+    source_file: SourceFile,
+    stmt_function_def: &StmtFunctionDef,
+    reason: Option<String>,
+) {
+    let builder = context.report_diagnostic(&TEST_PASS_ON_EXPECT_FAILURE);
+
+    let mut diagnostic = builder.into_diagnostic(format!(
+        "Test `{}` passes when expected to fail",
+        stmt_function_def.name
+    ));
+
+    let primary_span = Span::from(source_file).with_range(stmt_function_def.name.range);
+
+    diagnostic.annotate(Annotation::primary(primary_span));
+
+    if let Some(reason) = reason {
+        diagnostic.info(format!("Reason: {reason}"));
+    }
+}
+
+pub fn report_test_failure(
+    context: &Context,
+    py: Python,
+    source_file: SourceFile,
+    stmt_function_def: &StmtFunctionDef,
+    error: &PyErr,
+) {
+    let builder = context.report_diagnostic(&TEST_FAILURE);
+
+    let mut diagnostic =
+        builder.into_diagnostic(format!("Test `{}` failed", stmt_function_def.name));
+
+    let primary_span = Span::from(source_file).with_range(stmt_function_def.name.range);
+
+    diagnostic.annotate(Annotation::primary(primary_span));
+
+    diagnostic.info(format!("Reason: {}", error.value(py)));
 }

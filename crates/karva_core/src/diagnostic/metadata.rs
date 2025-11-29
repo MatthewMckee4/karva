@@ -8,6 +8,7 @@ pub struct DiagnosticType {
     pub name: LintName,
 
     /// A one-sentence summary of what the rule catches.
+    #[expect(unused)]
     pub summary: &'static str,
 
     /// The level of the diagnostic.
@@ -39,7 +40,7 @@ pub struct DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
 }
 
 impl<'ctx, 'proj, 'rep> DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
-    pub(crate) fn new(
+    pub(crate) const fn new(
         context: &'ctx Context<'proj, 'rep>,
         diagnostic_type: &'static DiagnosticType,
     ) -> Self {

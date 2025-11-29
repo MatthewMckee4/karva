@@ -165,13 +165,16 @@ def test_2():
     let result = test_runner.test();
 
     assert_snapshot!(result.display(), @r"
-    test failures:
-
-    test `<test>.test::test_1` at <test>/test.py:2 failed at <test>/test.py:3
-    note: run with `--show-traceback` to see the full traceback
-
-    test failures:
-        <test>.test::test_1 at <test>/test.py:2
+    diagnostics:
+    test-failure: Test `test_1` failed
+     --> <test>/test.py:2:5
+      |
+    2 | def test_1():
+      |     ^^^^^^
+    3 |     assert False
+    4 | def test_2():
+      |
+    info: Reason: 
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");

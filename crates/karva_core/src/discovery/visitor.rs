@@ -28,7 +28,7 @@ struct FunctionDefinitionVisitor<'ctx, 'proj, 'rep, 'py, 'a> {
     tried_to_import_module: bool,
 }
 
-impl<'ctx, 'proj, 'rep, 'py, 'a> FunctionDefinitionVisitor<'ctx, 'proj, 'rep, 'py, 'a> {
+impl<'proj, 'rep, 'py, 'a> FunctionDefinitionVisitor<'_, 'proj, 'rep, 'py, 'a> {
     const fn new(
         py: Python<'py>,
         context: &'proj Context<'proj, 'rep>,
@@ -120,12 +120,9 @@ impl<'ctx, 'proj, 'rep, 'py, 'a> FunctionDefinitionVisitor<'ctx, 'proj, 'rep, 'p
                     }
                 }
 
-                let py_module = match self.py.import(&module_name) {
-                    Ok(py_module) => py_module,
-                    Err(_) => {
-                        report_failed_to_import_module(self.context, &module_name);
-                        continue;
-                    }
+                let Ok(py_module) = self.py.import(&module_name) else {
+                    report_failed_to_import_module(self.context, &module_name);
+                    continue;
                 };
 
                 let Ok(file_name) = py_module.getattr("__file__") else {
@@ -232,7 +229,7 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_, '_, '_> {
                 if let Ok(py_function) = py_module.getattr(stmt_function_def.name.to_string()) {
                     self.discovered_functions.push(TestFunction::new(
                         self.py,
-                        self.module.module_path().clone(),
+                        self.module,
                         stmt_function_def.clone(),
                         py_function.unbind(),
                     ));
@@ -247,7 +244,7 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_, '_, '_> {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct DiscoveredFunctions {
+pub struct DiscoveredFunctions {
     pub(crate) functions: Vec<TestFunction>,
     pub(crate) fixtures: Vec<Fixture>,
 }

@@ -25,34 +25,28 @@
 //! and finalizers in a predictable way.
 use std::collections::HashMap;
 
-use karva_project::Project;
+pub use models::{NormalizedModule, NormalizedPackage, NormalizedTestFunction};
 use pyo3::prelude::*;
 
 use crate::{
     discovery::{DiscoveredModule, DiscoveredPackage, TestFunction},
     extensions::fixtures::{
-        Fixture, FixtureScope, HasFixtures, NormalizedFixture, NormalizedFixtureName,
-        NormalizedFixtureValue, RequiresFixtures, get_auto_use_fixtures,
+        Fixture, FixtureScope, HasFixtures, NormalizedFixture, NormalizedFixtureValue,
+        RequiresFixtures, UserDefinedFixture, get_auto_use_fixtures,
     },
-    normalize::{
-        models::{NormalizedModule, NormalizedPackage, NormalizedTestFunction},
-        utils::cartesian_product,
-    },
-    utils::{function_definition_location, iter_with_ancestors},
+    normalize::utils::cartesian_product,
+    utils::iter_with_ancestors,
 };
-
-pub mod models;
+mod models;
 mod utils;
 
-pub struct DiscoveredPackageNormalizer<'proj> {
-    project: &'proj Project,
+pub struct DiscoveredPackageNormalizer {
     normalization_cache: HashMap<String, Vec<NormalizedFixture>>,
 }
 
-impl<'proj> DiscoveredPackageNormalizer<'proj> {
-    pub fn new(project: &'proj Project) -> Self {
+impl DiscoveredPackageNormalizer {
+    pub fn new() -> Self {
         Self {
-            project,
             normalization_cache: HashMap::new(),
         }
     }
@@ -138,12 +132,6 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
         // Get fixture parameters
         let params = fixture.params().cloned().unwrap_or_default();
 
-        let location = function_definition_location(
-            self.project.cwd(),
-            current,
-            fixture.function_definition(),
-        );
-
         // If no parameters and all dependencies have single variants, no expansion needed
         if params.is_empty() && normalized_deps.iter().all(|deps| deps.len() == 1) {
             let dependencies = normalized_deps
@@ -151,16 +139,16 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
                 .filter_map(|mut deps| deps.pop())
                 .collect();
 
-            let normalized = NormalizedFixture {
-                name: NormalizedFixtureName::UserDefined(fixture.name().clone()),
+            let normalized = NormalizedFixture::UserDefined(UserDefinedFixture {
+                name: fixture.name().clone(),
                 param: None,
                 dependencies,
-                location: Some(location),
                 scope: fixture.scope(),
                 is_generator: fixture.is_generator(),
                 value: NormalizedFixtureValue::Function(fixture.function().clone()),
-                function_definition: Some(fixture.function_definition().clone()),
-            };
+                source_file: current.source_file(),
+                stmt_function_def: fixture.function_definition().clone(),
+            });
 
             let result = vec![normalized];
 
@@ -188,16 +176,16 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
 
         for dep_combination in dep_combinations {
             for param in &param_list {
-                let normalized = NormalizedFixture {
-                    name: NormalizedFixtureName::UserDefined(fixture.name().clone()),
+                let normalized = NormalizedFixture::UserDefined(UserDefinedFixture {
+                    name: fixture.name().clone(),
                     param: param.cloned(),
                     dependencies: dep_combination.clone(),
-                    location: Some(location.clone()),
                     scope: fixture.scope(),
                     is_generator: fixture.is_generator(),
                     value: NormalizedFixtureValue::Function(fixture.function().clone()),
-                    function_definition: Some(fixture.function_definition().clone()),
-                };
+                    source_file: current.source_file(),
+                    stmt_function_def: fixture.function_definition().clone(),
+                });
 
                 result.push(normalized);
             }
@@ -223,9 +211,6 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
         let function_auto_use_fixtures =
             self.get_normalized_auto_use_fixtures(py, FixtureScope::Function, parents, module);
 
-        let location =
-            function_definition_location(self.project.cwd(), module, test_fn.definition());
-
         let test_params = test_fn.tags().parametrize_args();
 
         let parametrize_param_names: Vec<String> = test_params
@@ -234,7 +219,7 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
             .collect();
 
         // Get regular fixtures (from function parameters, excluding parametrize params)
-        let all_param_names = test_fn.definition().required_fixtures(py);
+        let all_param_names = test_fn.stmt_function_def().required_fixtures(py);
         let regular_fixture_names: Vec<String> = all_param_names
             .into_iter()
             .filter(|name| !parametrize_param_names.contains(name))
@@ -300,13 +285,14 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
 
             let normalized_test_function = NormalizedTestFunction {
                 name: test_fn.name().clone(),
-                location,
                 params: HashMap::new(),
                 fixture_dependencies,
                 use_fixture_dependencies,
                 auto_use_fixtures: function_auto_use_fixtures,
                 function: test_fn.py_function().clone(),
                 tags: test_fn.tags().clone(),
+                source_file: test_fn.source_file.clone(),
+                stmt_function_def: test_fn.stmt_function_def().clone(),
             };
 
             return vec![normalized_test_function];
@@ -331,13 +317,14 @@ impl<'proj> DiscoveredPackageNormalizer<'proj> {
                 for test_param in &test_params {
                     let normalized = NormalizedTestFunction {
                         name: test_fn.name().clone(),
-                        location: location.clone(),
                         params: test_param.clone(),
                         fixture_dependencies: dep_combination.clone(),
                         use_fixture_dependencies: use_fixture_combination.clone(),
                         auto_use_fixtures: function_auto_use_fixtures.clone(),
                         function: test_fn.py_function().clone(),
                         tags: test_fn.tags().clone(),
+                        source_file: test_fn.source_file.clone(),
+                        stmt_function_def: test_fn.stmt_function_def().clone(),
                     };
 
                     result.push(normalized);

@@ -1163,6 +1163,7 @@ dependencies = [
  "rstest",
  "ruff_db",
  "ruff_macros",
+ "ruff_notebook",
  "ruff_python_ast",
  "ruff_python_parser",
  "ruff_source_file",

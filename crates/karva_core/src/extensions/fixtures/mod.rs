@@ -11,7 +11,11 @@ mod utils;
 
 pub use builtins::get_builtin_fixture;
 pub use finalizer::Finalizer;
-pub use normalized_fixture::{NormalizedFixture, NormalizedFixtureName, NormalizedFixtureValue};
+pub use normalized_fixture::{
+    NormalizedFixture, NormalizedFixtureValue,
+    UserDefinedFixture,
+};
+pub use python::FixtureRequest;
 pub use scope::FixtureScope;
 pub use traits::{HasFixtures, RequiresFixtures};
 pub use utils::missing_arguments_from_error;

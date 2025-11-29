@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
 use pyo3::prelude::*;
+use ruff_python_ast::StmtFunctionDef;
+use ruff_source_file::SourceFile;
 
 use crate::{
-    Location, QualifiedFunctionName,
+    QualifiedFunctionName,
     extensions::{fixtures::NormalizedFixture, tags::Tags},
 };
 
@@ -13,9 +15,6 @@ use crate::{
 pub struct NormalizedTestFunction {
     /// Original test function name: "`test_foo`"
     pub(crate) name: QualifiedFunctionName,
-
-    /// Location in source code: "<`file_path>`:<`line_number`>"
-    pub(crate) location: Location,
 
     /// Test-level parameters (from @pytest.mark.parametrize)
     /// Maps parameter name to its value for this variant
@@ -37,4 +36,9 @@ pub struct NormalizedTestFunction {
 
     /// Resolved tags
     pub(crate) tags: Tags,
+
+    /// The source file for this fixture
+    pub(crate) source_file: SourceFile,
+    /// The function definition for this fixture
+    pub(crate) stmt_function_def: StmtFunctionDef,
 }

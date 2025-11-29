@@ -38,6 +38,7 @@ pyo3 = { version = "0.27.1", features = ["abi3-py310", "py-clone"] }
 rand = { version = "0.9.2" }
 regex = { version = "1.12.2" }
 rstest = { version = "0.26" }
+ruff_notebook = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_macros = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_text_size = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_db = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
