@@ -1,26 +1,26 @@
 use std::{collections::HashMap, fmt::Debug, time::Instant};
 
 use colored::Colorize;
+use ruff_db::diagnostic::{Diagnostic, DisplayDiagnostics};
 
 use crate::{
     Reporter,
-    diagnostic::{Diagnostic, DiscoveryDiagnostic, DisplayOptions, FunctionDefinitionLocation},
+    diagnostic::{DisplayOptions, FunctionDefinitionLocation},
 };
 
 #[derive(Debug, Clone)]
 pub struct TestRunResult {
-    discovery_diagnostics: Vec<DiscoveryDiagnostic>,
-    test_diagnostics: Vec<Diagnostic>,
+    diagnostics: Vec<Diagnostic>,
 
     stats: TestResultStats,
+
     start_time: Instant,
 }
 
 impl Default for TestRunResult {
     fn default() -> Self {
         Self {
-            discovery_diagnostics: Vec::new(),
-            test_diagnostics: Vec::new(),
+            diagnostics: Vec::new(),
             stats: TestResultStats::default(),
             start_time: Instant::now(),
         }
@@ -29,43 +29,19 @@ impl Default for TestRunResult {
 
 impl TestRunResult {
     pub fn total_diagnostics(&self) -> usize {
-        self.discovery_diagnostics.len() + self.test_diagnostics.len()
+        self.diagnostics.len()
     }
 
     pub const fn diagnostics(&self) -> &Vec<Diagnostic> {
-        &self.test_diagnostics
+        &self.diagnostics
     }
 
-    pub(crate) fn add_test_diagnostics(
-        &mut self,
-        diagnostics: impl IntoIterator<Item = Diagnostic>,
-    ) {
-        for diagnostic in diagnostics {
-            self.test_diagnostics.push(diagnostic);
-        }
-    }
-
-    pub(crate) fn add_test_diagnostic(&mut self, diagnostic: Diagnostic) {
-        self.test_diagnostics.push(diagnostic);
-    }
-
-    pub(crate) const fn discovery_diagnostics(&self) -> &Vec<DiscoveryDiagnostic> {
-        &self.discovery_diagnostics
-    }
-
-    pub(crate) fn add_discovery_diagnostics(&mut self, diagnostics: Vec<DiscoveryDiagnostic>) {
-        for diagnostic in diagnostics {
-            self.discovery_diagnostics.push(diagnostic);
-        }
+    pub(crate) fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
+        self.diagnostics.push(diagnostic);
     }
 
     pub fn passed(&self) -> bool {
-        for diagnostic in &self.test_diagnostics {
-            if diagnostic.is_test_failure() {
-                return false;
-            }
-        }
-        true
+        self.stats().is_success()
     }
 
     pub const fn stats(&self) -> &TestResultStats {
@@ -92,9 +68,9 @@ impl TestRunResult {
     #[must_use]
     pub(crate) fn into_sorted(mut self) -> Self {
         self.discovery_diagnostics
-            .sort_by(|left, right| left.rendering_sort_key().cmp(&right.rendering_sort_key()));
+            .sort_by(Diagnostic::ruff_start_ordering);
         self.test_diagnostics
-            .sort_by(|left, right| left.rendering_sort_key().cmp(&right.rendering_sort_key()));
+            .sort_by(Diagnostic::ruff_start_ordering);
         self
     }
 
@@ -208,75 +184,15 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
             }
         }
 
-        let test_failures = self
-            .test_run_result
-            .diagnostics()
-            .iter()
-            .filter(|d| d.is_test_failure())
-            .collect::<Vec<_>>();
-
-        let fixture_failures = self
-            .test_run_result
-            .diagnostics()
-            .iter()
-            .filter(|d| d.is_fixture_failure())
-            .collect::<Vec<_>>();
-
-        let warnings = self
-            .test_run_result
-            .diagnostics()
-            .iter()
-            .filter(|d| d.is_warning())
-            .collect::<Vec<_>>();
-
-        if !fixture_failures.is_empty() {
-            writeln!(f, "fixture failures:")?;
-            writeln!(f)?;
-
-            for diagnostic in &fixture_failures {
-                writeln!(f, "{}", diagnostic.display_with(self.options))?;
-            }
-        }
+        let test_failures = self.test_run_result.diagnostics();
 
         if !test_failures.is_empty() {
-            writeln!(f, "test failures:")?;
-            writeln!(f)?;
-
-            for diagnostic in &test_failures {
-                writeln!(f, "{}", diagnostic.display_with(self.options))?;
-            }
-        }
-
-        if !warnings.is_empty() {
-            writeln!(f, "warnings:")?;
-            writeln!(f)?;
-
-            for diagnostic in &warnings {
-                writeln!(f, "{}", diagnostic.display_with(self.options))?;
-            }
-        }
-
-        if !test_failures.is_empty() {
-            writeln!(f, "test failures:")?;
-
-            for diagnostic in &test_failures {
-                let Some(FunctionDefinitionLocation {
-                    location,
-                    function_name,
-                }) = diagnostic.location()
-                else {
-                    continue;
-                };
-
-                let location_string = location
-                    .as_ref()
-                    .map(|location| format!(" at {location}"))
-                    .unwrap_or_default();
-
-                writeln!(f, "    {function_name}{location_string}")?;
-            }
-
-            writeln!(f)?;
+            writeln!(f, "diagnostics:")?;
+            write!(
+                f,
+                "{}",
+                DisplayDiagnostics::new(&db, &display_config, &diagnostics)
+            )?;
         }
 
         write!(

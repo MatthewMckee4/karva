@@ -1,6 +1,11 @@
 use pyo3::{prelude::*, types::PyIterator};
+use ruff_python_ast::StmtFunctionDef;
+use ruff_source_file::SourceFile;
 
-use crate::{Location, diagnostic::Diagnostic, extensions::fixtures::FixtureScope};
+use crate::{
+    Context, Location, diagnostic::report_invalid_fixture_finalizer,
+    extensions::fixtures::FixtureScope,
+};
 
 /// Represents a generator function that can be used to run the finalizer section of a fixture.
 ///
@@ -14,6 +19,8 @@ pub struct Finalizer {
     pub(crate) location: Option<Location>,
     pub(crate) fixture_return: Py<PyIterator>,
     pub(crate) scope: FixtureScope,
+    pub(crate) source_file: SourceFile,
+    pub(crate) stmt_function_def: StmtFunctionDef,
 }
 
 impl Finalizer {
@@ -21,18 +28,23 @@ impl Finalizer {
         self.scope
     }
 
-    pub(crate) fn run(self, py: Python<'_>) -> Option<Diagnostic> {
+    pub(crate) fn run(self, context: &Context, py: Python<'_>) {
         let mut generator = self.fixture_return.bind(py).clone();
-        match generator.next()? {
-            Ok(_) => Some(Diagnostic::warning(
-                self.location,
-                "Fixture had more than one yield statement",
-            )),
-            Err(err) => Some(Diagnostic::warning(
-                self.location,
-                &format!("Failed to reset fixture: {}", err.value(py)),
-            )),
-        }
+        let Some(generator_next_result) = generator.next() else {
+            // We do not care if the `next` function fails, this should not happen.
+            return;
+        };
+        let invalid_finalizer_reason = match generator_next_result {
+            Ok(_) => "Fixture had more than one yield statement",
+            Err(err) => &format!("Failed to reset fixture: {}", err.value(py)),
+        };
+
+        report_invalid_fixture_finalizer(
+            &context,
+            self.source_file,
+            &self.stmt_function_def,
+            invalid_finalizer_reason,
+        );
     }
 }
 

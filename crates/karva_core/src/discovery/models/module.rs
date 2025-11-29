@@ -1,5 +1,5 @@
 use camino::Utf8PathBuf;
-use ruff_source_file::LineIndex;
+use ruff_source_file::{LineIndex, SourceFile, SourceFileBuilder};
 
 use crate::{discovery::TestFunction, extensions::fixtures::Fixture, name::ModulePath};
 
@@ -50,11 +50,8 @@ impl DiscoveredModule {
         self.test_functions.iter().collect()
     }
 
-    pub(crate) fn with_test_functions(self, test_functions: Vec<TestFunction>) -> Self {
-        Self {
-            test_functions,
-            ..self
-        }
+    pub(crate) fn extend_test_functions(&mut self, test_functions: Vec<TestFunction>) {
+        self.test_functions.extend(test_functions);
     }
 
     pub(crate) fn filter_test_functions(&mut self, name: &str) {
@@ -65,8 +62,8 @@ impl DiscoveredModule {
         &self.fixtures
     }
 
-    pub(crate) fn with_fixtures(self, fixtures: Vec<Fixture>) -> Self {
-        Self { fixtures, ..self }
+    pub(crate) fn extend_fixtures(&mut self, fixtures: Vec<Fixture>) {
+        self.fixtures.extend(fixtures);
     }
 
     #[cfg(test)]
@@ -74,8 +71,12 @@ impl DiscoveredModule {
         self.test_functions.len()
     }
 
-    pub(crate) const fn source_text(&self) -> &String {
+    pub(crate) fn source_text(&self) -> &str {
         &self.source_text
+    }
+
+    pub(crate) fn source_file(&self) -> SourceFile {
+        SourceFileBuilder::new(self.path().as_str(), self.source_text()).finish()
     }
 
     pub(crate) const fn line_index(&self) -> &LineIndex {

@@ -401,6 +401,8 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                                 location: fixture.location.clone(),
                                 fixture_return: py_iter,
                                 scope: fixture.scope,
+                                source_file: self.source_file.clone(),
+                                stmt_function_def: self.stmt_function_def.clone(),
                             }
                         };
 

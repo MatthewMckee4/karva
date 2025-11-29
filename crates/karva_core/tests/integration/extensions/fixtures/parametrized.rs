@@ -372,7 +372,7 @@ fn test_parametrized_fixture_finalizer_with_state(#[values("pytest", "karva")] f
                     assert resource in ['resource_1', 'resource_2', 'resource_3']
 
                 def test_all_cleaned_up():
-                    assert arr == ['resource_1', 'resource_2', 'resource_3'], arr
+                    assert arr == ['resource_1', 'resource_2', 'resource_3']
 "
         ),
     );

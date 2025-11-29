@@ -15,8 +15,11 @@ camino = { workspace = true }
 karva_project = { workspace = true }
 colored = { workspace = true }
 pyo3 = { workspace = true }
+ruff_db = { workspace = true }
 ruff_python_ast = { workspace = true }
+ruff_text_size = { workspace = true }
 ruff_python_parser = { workspace = true }
+ruff_macros = { workspace = true }
 ruff_source_file = { workspace = true }
 tempfile = { workspace = true }
 tracing = { workspace = true }

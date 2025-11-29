@@ -2,7 +2,10 @@ use std::sync::{Arc, Mutex};
 
 use karva_project::Project;
 
-use crate::{Reporter, TestRunResult};
+use crate::{
+    Reporter, TestRunResult,
+    diagnostic::{DiagnosticGuardBuilder, DiagnosticType},
+};
 
 pub struct Context<'proj, 'rep> {
     project: &'proj Project,
@@ -33,5 +36,12 @@ impl<'proj, 'rep> Context<'proj, 'rep> {
 
     pub(crate) fn into_result(self) -> TestRunResult {
         self.result.lock().unwrap().clone().into_sorted()
+    }
+
+    pub(crate) fn report_diagnostic<'ctx>(
+        &'ctx self,
+        rule: &'static DiagnosticType,
+    ) -> DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
+        DiagnosticGuardBuilder::new(self, rule)
     }
 }

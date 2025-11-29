@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
+use ruff_source_file::SourceFile;
 
 use crate::{Location, QualifiedFunctionName, extensions::fixtures::FixtureScope};
 
@@ -61,6 +62,9 @@ pub struct NormalizedFixture {
 
     /// The computed value or imported python function to compute the value
     pub(crate) value: NormalizedFixtureValue,
+
+    /// The source file for this fixture
+    pub(crate) source_file: SourceFile,
 
     /// The function definition for this fixture
     /// None for builtin fixtures

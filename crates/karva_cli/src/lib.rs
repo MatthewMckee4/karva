@@ -99,6 +99,8 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         paths.push(cwd.clone());
     }
 
+    let system = OsSystem::new(&cwd);
+
     let options = args.into_options();
 
     let project = Project::new(cwd, paths)

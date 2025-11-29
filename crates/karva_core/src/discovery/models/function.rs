@@ -75,8 +75,18 @@ mod tests {
     use karva_test::TestContext;
 
     use crate::{
-        discovery::StandardDiscoverer, extensions::fixtures::RequiresFixtures, utils::attach,
+        Context, DummyReporter,
+        discovery::{DiscoveredPackage, StandardDiscoverer},
+        extensions::fixtures::RequiresFixtures,
+        utils::attach,
     };
+
+    fn session(project: &Project) -> DiscoveredPackage {
+        let binding = DummyReporter::default();
+        let context = Context::new(project, &binding);
+        let discoverer = StandardDiscoverer::new(&context);
+        discoverer.discover()
+    }
 
     #[test]
     fn test_case_construction_and_getters() {
@@ -84,8 +94,7 @@ mod tests {
         let path = env.create_file("test.py", "def test_function(): pass");
 
         let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         let test_case = session.test_functions()[0];
 
@@ -106,8 +115,7 @@ mod tests {
             )]);
 
             let project = Project::new(env.cwd(), vec![env.cwd()]);
-            let discoverer = StandardDiscoverer::new(&project);
-            let (session, _) = discoverer.discover();
+            let session = session(&project);
 
             let test_case = session.test_functions()[0];
 
@@ -129,8 +137,7 @@ mod tests {
         let mapped_dir = env.mapped_path("<test>").unwrap();
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         let tests_package = session.get_package(mapped_dir).unwrap();
 
