@@ -327,6 +327,7 @@ def test_1():
 
     assert_snapshot!(result.display(), @r"
     diagnostics:
+
     failed-to-import-module: Failed to import python module `<test>.test`
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
@@ -350,6 +351,7 @@ def test_1():
 
     assert_snapshot!(result.display(), @r"
     diagnostics:
+
     failed-to-import-module: Failed to import python module `<test>.test`
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]

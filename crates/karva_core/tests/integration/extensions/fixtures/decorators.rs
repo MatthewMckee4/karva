@@ -150,6 +150,7 @@ def test_fixtures_given_by_decorator(a, b):
 
     assert_snapshot!(result.display(), @r#"
     diagnostics:
+
     missing-fixtures: Discovered missing fixtures for test `test_fixtures_given_by_decorator`
       --> <test>/test.py:13:5
        |

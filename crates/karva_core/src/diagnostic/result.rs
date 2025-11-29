@@ -160,6 +160,7 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
 
         if !test_failures.is_empty() {
             writeln!(f, "diagnostics:")?;
+            writeln!(f)?;
             write!(
                 f,
                 "{}",

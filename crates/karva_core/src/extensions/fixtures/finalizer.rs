@@ -74,6 +74,7 @@ def test_fixture_generator(fixture_generator):
 
         assert_snapshot!(result.display(), @r"
         diagnostics:
+
         invalid-fixture-finalizer: Discovered an invalid fixture finalizer `fixture_generator`
          --> <test>/test_file.py:5:5
           |
@@ -110,6 +111,7 @@ def test_fixture_generator(fixture_generator):
 
         assert_snapshot!(result.display(), @r#"
         diagnostics:
+
         invalid-fixture-finalizer: Discovered an invalid fixture finalizer `fixture_generator`
          --> <test>/test_file.py:5:5
           |

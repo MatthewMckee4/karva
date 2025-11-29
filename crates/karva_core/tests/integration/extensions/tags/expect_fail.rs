@@ -53,6 +53,7 @@ def test_1():
     allow_duplicates! {
         assert_snapshot!(result.display(), @r"
         diagnostics:
+
         test-pass-on-expect-failure: Test `test_1` passes when expected to fail
          --> <test>/test.py:5:5
           |
@@ -86,6 +87,7 @@ def test_1():
     allow_duplicates! {
         assert_snapshot!(result.display(), @r"
         diagnostics:
+
         test-pass-on-expect-failure: Test `test_1` passes when expected to fail
          --> <test>/test.py:5:5
           |
@@ -324,6 +326,7 @@ def test_expected_fail_passes():
     allow_duplicates! {
         assert_snapshot!(result.display(), @r"
         diagnostics:
+
         test-pass-on-expect-failure: Test `test_expected_fail_passes` passes when expected to fail
           --> <test>/test.py:12:5
            |
@@ -363,6 +366,7 @@ def test_expected_fail_passes():
     allow_duplicates! {
         assert_snapshot!(result.display(), @r"
         diagnostics:
+
         test-pass-on-expect-failure: Test `test_expected_fail_passes` passes when expected to fail
           --> <test>/test.py:12:5
            |
@@ -432,6 +436,7 @@ def test_normal():
 
     assert_snapshot!(result.display(), @r"
     diagnostics:
+
     test-failure: Test `test_with_fail` failed
      --> <test>/test.py:4:5
       |
@@ -441,7 +446,16 @@ def test_normal():
       |     ^^^^^^^^^^^^^^
     5 |     karva.fail('This is a custom failure message')
       |
-    info: Reason: This is a custom failure message
+    info: Test failed here
+     --> <test>/test.py:5:5
+      |
+    4 | def test_with_fail():
+    5 |     karva.fail('This is a custom failure message')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    6 |
+    7 | def test_normal():
+      |
+    info: Error message: This is a custom failure message
 
     test result: FAILED. 1 passed; 1 failed; 0 skipped; finished in [TIME]
     ");
@@ -466,6 +480,7 @@ def test_conditional_fail():
 
     assert_snapshot!(result.display(), @r"
     diagnostics:
+
     test-failure: Test `test_conditional_fail` failed
      --> <test>/test.py:4:5
       |
@@ -476,7 +491,16 @@ def test_conditional_fail():
     5 |     condition = True
     6 |     if condition:
       |
-    info: Reason: failing test
+    info: Test failed here
+     --> <test>/test.py:7:9
+      |
+    5 |     condition = True
+    6 |     if condition:
+    7 |         karva.fail('failing test')
+      |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    8 |     assert True
+      |
+    info: Error message: failing test
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");
@@ -498,6 +522,7 @@ def test_raise_fail_error():
 
     assert_snapshot!(result.display(), @r"
     diagnostics:
+
     test-failure: Test `test_raise_fail_error` failed
      --> <test>/test.py:4:5
       |
@@ -507,7 +532,14 @@ def test_raise_fail_error():
       |     ^^^^^^^^^^^^^^^^^^^^^
     5 |     raise karva.FailError('Manually raised FailError')
       |
-    info: Reason: Manually raised FailError
+    info: Test failed here
+     --> <test>/test.py:5:5
+      |
+    4 | def test_raise_fail_error():
+    5 |     raise karva.FailError('Manually raised FailError')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Error message: Manually raised FailError
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");
@@ -550,6 +582,7 @@ def test_should_fail():
 
     assert_snapshot!(result.display(), @r"
     diagnostics:
+
     test-pass-on-expect-failure: Test `test_should_fail` passes when expected to fail
      --> <test>/test.py:5:5
       |

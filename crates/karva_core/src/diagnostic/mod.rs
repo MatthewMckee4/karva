@@ -1,18 +1,20 @@
 mod metadata;
 mod reporter;
 mod result;
-// mod traceback;
+mod traceback;
 
 use karva_project::path::TestPathError;
 pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
 use pyo3::{PyErr, Python};
 pub use reporter::{DummyReporter, Reporter, TestCaseReporter};
 pub use result::{IndividualTestResultKind, TestResultStats, TestRunResult};
-use ruff_db::diagnostic::{Annotation, Severity, Span};
+use ruff_db::diagnostic::{
+    Annotation, Diagnostic, Severity, Span, SubDiagnostic, SubDiagnosticSeverity,
+};
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
 
-use crate::{Context, declare_diagnostic_type};
+use crate::{Context, declare_diagnostic_type, diagnostic::traceback::Traceback};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FunctionKind {
@@ -180,11 +182,7 @@ pub fn report_fixture_failure(
     let mut diagnostic =
         builder.into_diagnostic(format!("Fixture `{}` failed", stmt_function_def.name));
 
-    let primary_span = Span::from(source_file).with_range(stmt_function_def.name.range);
-
-    diagnostic.annotate(Annotation::primary(primary_span));
-
-    diagnostic.info(format!("Reason: {}", error.value(py)));
+    handle_failed_function_call(&mut diagnostic, py, source_file, stmt_function_def, error);
 }
 
 pub fn report_test_pass_on_expect_failure(
@@ -221,9 +219,38 @@ pub fn report_test_failure(
     let mut diagnostic =
         builder.into_diagnostic(format!("Test `{}` failed", stmt_function_def.name));
 
+    handle_failed_function_call(&mut diagnostic, py, source_file, stmt_function_def, error);
+}
+
+fn handle_failed_function_call(
+    diagnostic: &mut Diagnostic,
+    py: Python,
+    source_file: SourceFile,
+    stmt_function_def: &StmtFunctionDef,
+    error: &PyErr,
+) {
     let primary_span = Span::from(source_file).with_range(stmt_function_def.name.range);
 
     diagnostic.annotate(Annotation::primary(primary_span));
 
-    diagnostic.info(format!("Reason: {}", error.value(py)));
+    if let Some(Traceback {
+        lines: _,
+        error_source_file,
+        location,
+    }) = Traceback::from_error(py, error)
+    {
+        let mut sub = SubDiagnostic::new(SubDiagnosticSeverity::Info, "Test failed here");
+
+        let secondary_span = Span::from(error_source_file).with_range(location);
+
+        sub.annotate(Annotation::primary(secondary_span));
+
+        diagnostic.sub(sub);
+    }
+
+    let error_string = error.value(py).to_string();
+
+    if !error_string.is_empty() {
+        diagnostic.info(format!("Error message: {error_string}"));
+    }
 }

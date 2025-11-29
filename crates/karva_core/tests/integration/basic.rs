@@ -166,6 +166,7 @@ def test_2():
 
     assert_snapshot!(result.display(), @r"
     diagnostics:
+
     test-failure: Test `test_1` failed
      --> <test>/test.py:2:5
       |
@@ -174,7 +175,15 @@ def test_2():
     3 |     assert False
     4 | def test_2():
       |
-    info: Reason: 
+    info: Test failed here
+     --> <test>/test.py:3:5
+      |
+    2 | def test_1():
+    3 |     assert False
+      |     ^^^^^^^^^^^^
+    4 | def test_2():
+    5 |     assert False
+      |
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");

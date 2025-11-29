@@ -25,6 +25,7 @@ fn test_invalid_pytest_fixture_scope() {
 
     assert_snapshot!(result.display(), @r#"
     diagnostics:
+
     invalid-fixture: Discovered an invalid fixture `some_fixture`
      --> <test>/test.py:5:5
       |
@@ -69,6 +70,7 @@ fn test_missing_fixture() {
 
     assert_snapshot!(result.display(), @r#"
     diagnostics:
+
     missing-fixtures: Discovered missing fixtures for test `test_all_scopes`
      --> <test>/test.py:2:5
       |
@@ -105,6 +107,7 @@ fn test_fixture_fails_to_run() {
 
     assert_snapshot!(result.display(), @r#"
     diagnostics:
+
     fixture-failure: Fixture `failing_fixture` failed
      --> <test>/test.py:5:5
       |
@@ -113,7 +116,17 @@ fn test_fixture_fails_to_run() {
       |     ^^^^^^^^^^^^^^^
     6 |     raise Exception('Fixture failed')
       |
-    info: Reason: Fixture failed
+    info: Test failed here
+     --> <test>/test.py:6:5
+      |
+    4 | @fixture
+    5 | def failing_fixture():
+    6 |     raise Exception('Fixture failed')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    7 |
+    8 | def test_failing_fixture(failing_fixture):
+      |
+    info: Error message: Fixture failed
 
     missing-fixtures: Discovered missing fixtures for test `test_failing_fixture`
      --> <test>/test.py:8:5
@@ -150,6 +163,7 @@ fn test_fixture_missing_fixtures() {
 
     assert_snapshot!(result.display(), @r#"
     diagnostics:
+
     missing-fixtures: Discovered missing fixtures for fixture `failing_fixture`
      --> <test>/test.py:5:5
       |
@@ -192,6 +206,7 @@ fn missing_arguments_in_nested_function() {
 
     assert_snapshot!(result.display(), @r"
     diagnostics:
+
     test-failure: Test `test_failing_fixture` failed
      --> <test>/test.py:2:5
       |
@@ -200,7 +215,15 @@ fn missing_arguments_in_nested_function() {
     3 |
     4 |     def inner(missing_fixture): ...
       |
-    info: Reason: test_failing_fixture.<locals>.inner() missing 1 required positional argument: 'missing_fixture'
+    info: Test failed here
+     --> <test>/test.py:6:5
+      |
+    4 |     def inner(missing_fixture): ...
+    5 |
+    6 |     inner()
+      |     ^^^^^^^
+      |
+    info: Error message: test_failing_fixture.<locals>.inner() missing 1 required positional argument: 'missing_fixture'
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");
