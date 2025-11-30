@@ -228,3 +228,61 @@ fn missing_arguments_in_nested_function() {
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");
 }
+
+#[test]
+fn test_failing_yield_fixture() {
+    let context = TestContext::with_file(
+        "<test>/test.py",
+        r"
+            import karva
+
+            @karva.fixture
+            def fixture():
+                def foo():
+                    raise ValueError('foo')
+                yield foo()
+
+            def test_failing_fixture(fixture):
+                assert True
+                   ",
+    );
+
+    let result = context.test();
+
+    assert_snapshot!(result.display(), @r#"
+    diagnostics:
+
+    error[fixture-failure]: Fixture `fixture` failed
+     --> <test>/test.py:5:5
+      |
+    4 | @karva.fixture
+    5 | def fixture():
+      |     ^^^^^^^
+    6 |     def foo():
+    7 |         raise ValueError('foo')
+      |
+    info: Test failed here
+     --> <test>/test.py:7:9
+      |
+    5 | def fixture():
+    6 |     def foo():
+    7 |         raise ValueError('foo')
+      |         ^^^^^^^^^^^^^^^^^^^^^^^
+    8 |     yield foo()
+      |
+    info: Error message: foo
+
+    error[missing-fixtures]: Discovered missing fixtures for test `test_failing_fixture`
+      --> <test>/test.py:10:5
+       |
+     8 |     yield foo()
+     9 |
+    10 | def test_failing_fixture(fixture):
+       |     ^^^^^^^^^^^^^^^^^^^^
+    11 |     assert True
+       |
+    info: Missing fixtures: ["fixture"]
+
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+    "#);
+}
