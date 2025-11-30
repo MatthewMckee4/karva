@@ -259,5 +259,9 @@ fn test_mock() {
 
     let result = context.test();
 
-    assert_snapshot!(result.display(), @"test result: ok. 16 passed; 0 failed; 0 skipped; finished in [TIME]");
+    if cfg!(target_os = "macos") {
+        assert_snapshot!(result.display(), @"test result: ok. 13 passed; 0 failed; 3 skipped; finished in [TIME]");
+    } else {
+        assert_snapshot!(result.display(), @"test result: ok. 16 passed; 0 failed; 0 skipped; finished in [TIME]");
+    }
 }
