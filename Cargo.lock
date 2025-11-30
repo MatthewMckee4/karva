@@ -1203,6 +1203,7 @@ version = "0.0.0"
 dependencies = [
  "camino",
  "karva_test",
+ "ruff_db",
  "ruff_python_ast",
  "tracing-subscriber",
 ]

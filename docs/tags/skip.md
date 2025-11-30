@@ -142,13 +142,7 @@ def test_function():
     assert False
 ```
 
-Then running `uv run karva test` will provide the following output:
-
-```text
-test test::test_function ... FAILED
-
-test result: ok. 0 passed; 1 failed; 0 skipped; finished in 0s
-```
+Then running `uv run karva test` will result in one failed test.
 
 ### Pytest
 

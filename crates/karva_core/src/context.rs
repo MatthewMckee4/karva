@@ -4,7 +4,7 @@ use karva_project::Project;
 
 use crate::{
     IndividualTestResultKind, Reporter, TestRunResult,
-    diagnostic::{DiagnosticGuardBuilder, DiagnosticType},
+    diagnostic::{DiagnosticGuardBuilder, DiagnosticType, TestRunResultDisplayOptions},
 };
 
 pub struct Context<'proj, 'rep> {
@@ -19,6 +19,9 @@ impl<'proj, 'rep> Context<'proj, 'rep> {
             project,
             result: Arc::new(Mutex::new(TestRunResult::new(
                 project.cwd().as_std_path().to_path_buf(),
+                TestRunResultDisplayOptions {
+                    diagnostic_format: project.options().diagnostic_format(),
+                },
             ))),
             reporter,
         }

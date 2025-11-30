@@ -21,7 +21,7 @@ karva_core = { workspace = true }
 karva_project = { workspace = true }
 
 ctrlc = { workspace = true }
-clap = { workspace = true, features = ["wrap_help"] }
+clap = { workspace = true, features = ["wrap_help", "string"] }
 anyhow = { workspace = true }
 argfile = { workspace = true }
 chrono = { workspace = true }

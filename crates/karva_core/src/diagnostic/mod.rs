@@ -9,19 +9,32 @@ use karva_project::path::TestPathError;
 pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
 use pyo3::{Py, PyAny, PyErr, Python};
 pub use reporter::{DummyReporter, Reporter, TestCaseReporter};
-pub use result::{IndividualTestResultKind, TestResultStats, TestRunResult};
+pub use result::{
+    IndividualTestResultKind, TestResultStats, TestRunResult, TestRunResultDisplayOptions,
+};
 use ruff_db::diagnostic::{
     Annotation, Diagnostic, Severity, Span, SubDiagnostic, SubDiagnosticSeverity,
 };
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
 
-use crate::{Context, declare_diagnostic_type, diagnostic::traceback::Traceback};
+use crate::{
+    Context, declare_diagnostic_type, diagnostic::traceback::Traceback, utils::truncate_string,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FunctionKind {
     Test,
     Fixture,
+}
+
+impl FunctionKind {
+    pub(crate) const fn capitalised(self) -> &'static str {
+        match self {
+            Self::Test => "Test",
+            Self::Fixture => "Fixture",
+        }
+    }
 }
 
 impl std::fmt::Display for FunctionKind {
@@ -161,15 +174,28 @@ pub fn report_missing_fixtures(
     let builder = context.report_diagnostic(&MISSING_FIXTURES);
 
     let mut diagnostic = builder.into_diagnostic(format!(
-        "Discovered missing fixtures for {} `{}`",
-        function_kind, stmt_function_def.name
+        "{} `{}` has missing fixtures",
+        function_kind.capitalised(),
+        stmt_function_def.name
     ));
 
     let primary_span = Span::from(source_file).with_range(stmt_function_def.name.range);
 
     diagnostic.annotate(Annotation::primary(primary_span));
 
-    diagnostic.info(format!("Missing fixtures: {missing_fixtures:?}"));
+    let missing_fixtures_string = missing_fixtures
+        .iter()
+        .map(|fixture| format!("`{}`", truncate_string(fixture)))
+        .collect::<Vec<String>>()
+        .join(", ");
+
+    diagnostic.info(format!("Missing fixtures: {missing_fixtures_string}"));
+
+    diagnostic.set_concise_message(format!(
+        "{} `{}` has missing fixtures: {missing_fixtures_string}",
+        function_kind.capitalised(),
+        stmt_function_def.name,
+    ));
 }
 
 pub fn report_fixture_failure(
@@ -260,7 +286,10 @@ fn handle_failed_function_call(
     sorted_arguments.sort_by_key(|&(name, _)| *name);
 
     for (name, value) in sorted_arguments {
-        diagnostic.info(format!("`{name}`: {:?}", value.bind(py)));
+        let value_str = value.bind(py).to_string();
+        let truncated_value = truncate_string(&value_str);
+        let truncated_name = truncate_string(name);
+        diagnostic.info(format!("`{truncated_name}`: `{truncated_value}`"));
     }
 
     if let Some(Traceback {

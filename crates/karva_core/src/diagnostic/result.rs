@@ -8,25 +8,42 @@ use ruff_db::diagnostic::{
 use crate::{DefaultFileResolver, Reporter};
 
 #[derive(Debug, Clone)]
+pub struct TestRunResultDisplayOptions {
+    pub(crate) diagnostic_format: DiagnosticFormat,
+}
+
+#[derive(Debug, Clone)]
 pub struct TestRunResult {
+    /// Diagnostics generated during test discovery.
     discovery_diagnostics: Vec<Diagnostic>,
+
+    /// Diagnostics generated during test collection and  execution.
     diagnostics: Vec<Diagnostic>,
 
+    /// Stats generated during test execution.
     stats: TestResultStats,
 
+    /// Start time of the test run.
     start_time: Instant,
 
+    /// Current working directory.
+    ///
+    /// This is used
     cwd: std::path::PathBuf,
+
+    /// Display options
+    display_options: TestRunResultDisplayOptions,
 }
 
 impl TestRunResult {
-    pub fn new(cwd: std::path::PathBuf) -> Self {
+    pub fn new(cwd: std::path::PathBuf, display_options: TestRunResultDisplayOptions) -> Self {
         Self {
             discovery_diagnostics: Vec::new(),
             diagnostics: Vec::new(),
             stats: TestResultStats::default(),
             start_time: Instant::now(),
             cwd,
+            display_options,
         }
     }
 
@@ -153,8 +170,13 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
         let discovery_diagnostics = self.result.discovery_diagnostics();
 
         let config = DisplayDiagnosticConfig::default()
-            .format(DiagnosticFormat::Full)
+            .format(self.result.display_options.diagnostic_format)
             .color(true);
+
+        let is_concise = matches!(
+            self.result.display_options.diagnostic_format,
+            DiagnosticFormat::Concise
+        );
 
         if !discovery_diagnostics.is_empty() {
             writeln!(f, "discovery diagnostics:")?;
@@ -168,6 +190,9 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
                     discovery_diagnostics,
                 )
             )?;
+            if is_concise {
+                writeln!(f)?;
+            }
         }
 
         let diagnostics = self.result.diagnostics();
@@ -184,6 +209,10 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
                     diagnostics,
                 )
             )?;
+
+            if is_concise {
+                writeln!(f)?;
+            }
         }
 
         write!(f, "{}", self.result.stats().display(self.result.start_time))

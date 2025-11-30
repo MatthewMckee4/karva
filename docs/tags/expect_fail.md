@@ -80,21 +80,7 @@ def test_function():
     assert True
 ```
 
-Then running `uv run karva test` will provide the following output:
-
-```text
-test test::test_function ... FAILED
-
-test failures:
-
-test `test::test_function` at test.py:3 passed when it was expected to fail
-reason: This test is expected to fail
-
-test failures:
-    test::test_function at test.py:3
-
-test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in 0s
-```
+Then running `uv run karva test` will result in one failed test.
 
 ## Pytest
 
@@ -164,17 +150,4 @@ def test_function():
     assert True
 ```
 
-Then running `uv run karva test` will provide the following output:
-
-```text
-test test::test_function ... FAILED
-
-test failures:
-
-test `test::test_function` at test.py:3 passed when it was expected to fail
-
-test failures:
-    test::test_function at test.py:3
-
-test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in 0s
-```
+Then running `uv run karva test` will result in one failed test.

@@ -36,7 +36,7 @@ fn test_invalid_pytest_fixture_scope() {
       |
     info: Failed to parse fixture
 
-    error[missing-fixtures]: Discovered missing fixtures for test `test_all_scopes`
+    error[missing-fixtures]: Test `test_all_scopes` has missing fixtures
       --> <test>/test.py:8:5
        |
      6 |     return 1
@@ -46,7 +46,7 @@ fn test_invalid_pytest_fixture_scope() {
      9 |     some_fixture: int,
     10 | ) -> None:
        |
-    info: Missing fixtures: ["some_fixture"]
+    info: Missing fixtures: `some_fixture`
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     "#);
@@ -68,10 +68,10 @@ fn test_missing_fixture() {
 
     let result = context.test();
 
-    assert_snapshot!(result.display(), @r#"
+    assert_snapshot!(result.display(), @r"
     diagnostics:
 
-    error[missing-fixtures]: Discovered missing fixtures for test `test_all_scopes`
+    error[missing-fixtures]: Test `test_all_scopes` has missing fixtures
      --> <test>/test.py:2:5
       |
     2 | def test_all_scopes(
@@ -79,10 +79,10 @@ fn test_missing_fixture() {
     3 |     missing_fixture: int,
     4 | ) -> None:
       |
-    info: Missing fixtures: ["missing_fixture"]
+    info: Missing fixtures: `missing_fixture`
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
-    "#);
+    ");
 
     assert!(result.diagnostics().len() == 1);
 }
@@ -105,7 +105,7 @@ fn test_fixture_fails_to_run() {
 
     let result = context.test();
 
-    assert_snapshot!(result.display(), @r#"
+    assert_snapshot!(result.display(), @r"
     diagnostics:
 
     error[fixture-failure]: Fixture `failing_fixture` failed
@@ -128,7 +128,7 @@ fn test_fixture_fails_to_run() {
       |
     info: Error message: Fixture failed
 
-    error[missing-fixtures]: Discovered missing fixtures for test `test_failing_fixture`
+    error[missing-fixtures]: Test `test_failing_fixture` has missing fixtures
      --> <test>/test.py:8:5
       |
     6 |     raise Exception('Fixture failed')
@@ -137,10 +137,10 @@ fn test_fixture_fails_to_run() {
       |     ^^^^^^^^^^^^^^^^^^^^
     9 |     pass
       |
-    info: Missing fixtures: ["failing_fixture"]
+    info: Missing fixtures: `failing_fixture`
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
-    "#);
+    ");
 }
 
 #[test]
@@ -161,10 +161,10 @@ fn test_fixture_missing_fixtures() {
 
     let result = context.test();
 
-    assert_snapshot!(result.display(), @r#"
+    assert_snapshot!(result.display(), @r"
     diagnostics:
 
-    error[missing-fixtures]: Discovered missing fixtures for fixture `failing_fixture`
+    error[missing-fixtures]: Fixture `failing_fixture` has missing fixtures
      --> <test>/test.py:5:5
       |
     4 | @fixture
@@ -172,9 +172,9 @@ fn test_fixture_missing_fixtures() {
       |     ^^^^^^^^^^^^^^^
     6 |     return 1
       |
-    info: Missing fixtures: ["missing_fixture"]
+    info: Missing fixtures: `missing_fixture`
 
-    error[missing-fixtures]: Discovered missing fixtures for test `test_failing_fixture`
+    error[missing-fixtures]: Test `test_failing_fixture` has missing fixtures
      --> <test>/test.py:8:5
       |
     6 |     return 1
@@ -183,10 +183,10 @@ fn test_fixture_missing_fixtures() {
       |     ^^^^^^^^^^^^^^^^^^^^
     9 |     pass
       |
-    info: Missing fixtures: ["failing_fixture"]
+    info: Missing fixtures: `failing_fixture`
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
-    "#);
+    ");
 }
 
 #[test]
@@ -249,7 +249,7 @@ fn test_failing_yield_fixture() {
 
     let result = context.test();
 
-    assert_snapshot!(result.display(), @r#"
+    assert_snapshot!(result.display(), @r"
     diagnostics:
 
     error[fixture-failure]: Fixture `fixture` failed
@@ -272,7 +272,7 @@ fn test_failing_yield_fixture() {
       |
     info: Error message: foo
 
-    error[missing-fixtures]: Discovered missing fixtures for test `test_failing_fixture`
+    error[missing-fixtures]: Test `test_failing_fixture` has missing fixtures
       --> <test>/test.py:10:5
        |
      8 |     yield foo()
@@ -281,8 +281,8 @@ fn test_failing_yield_fixture() {
        |     ^^^^^^^^^^^^^^^^^^^^
     11 |     assert True
        |
-    info: Missing fixtures: ["fixture"]
+    info: Missing fixtures: `fixture`
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
-    "#);
+    ");
 }

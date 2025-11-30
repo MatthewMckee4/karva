@@ -43,7 +43,7 @@ fn test_one_test_passes() {
 
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
-fn test_one_test_fails() {
+fn test_one_test_fail() {
     let context = IntegrationTestContext::with_file(
         "test_fail.py",
         r"
@@ -76,6 +76,56 @@ fn test_one_test_fails() {
       |
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_fail_concise_output() {
+    let context = IntegrationTestContext::with_file(
+        "test_fail.py",
+        r"
+        import karva
+
+        @karva.fixture
+        def fixture_1():
+            yield 1
+            raise ValueError('Teardown error')
+
+        def test_1(fixture_1):
+            assert fixture == 2
+
+        @karva.fixture
+        def fixture_2():
+            raise ValueError('fixture error')
+
+        def test_2(fixture_2):
+            assert False
+
+        def test_3():
+            assert False
+    ",
+    );
+
+    assert_cmd_snapshot!(context.command().arg("--output-format").arg("concise"), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test_fail::test_1(fixture_1=1) ... FAILED
+    test test_fail::test_2 ... FAILED
+    test test_fail::test_3 ... FAILED
+
+    diagnostics:
+
+    test_fail.py:5:5: warning[invalid-fixture-finalizer] Discovered an invalid fixture finalizer `fixture_1`
+    test_fail.py:9:5: error[test-failure] Test `test_1` failed
+    test_fail.py:13:5: error[fixture-failure] Fixture `fixture_2` failed
+    test_fail.py:16:5: error[missing-fixtures] Test `test_2` has missing fixtures: `fixture_2`
+    test_fail.py:19:5: error[test-failure] Test `test_3` failed
+
+    test result: FAILED. 0 passed; 3 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
     ");
@@ -307,7 +357,7 @@ fn test_multiple_fixtures_not_found() {
         "def test_multiple_fixtures_not_found(a, b, c): ...",
     );
 
-    assert_cmd_snapshot!(context.command(), @r#"
+    assert_cmd_snapshot!(context.command(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -315,18 +365,18 @@ fn test_multiple_fixtures_not_found() {
 
     diagnostics:
 
-    error[missing-fixtures]: Discovered missing fixtures for test `test_multiple_fixtures_not_found`
+    error[missing-fixtures]: Test `test_multiple_fixtures_not_found` has missing fixtures
      --> test_multiple_fixtures_not_found.py:1:5
       |
     1 | def test_multiple_fixtures_not_found(a, b, c): ...
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
-    info: Missing fixtures: ["a", "b", "c"]
+    info: Missing fixtures: `a`, `b`, `c`
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
-    "#);
+    ");
 }
 
 #[rstest]
@@ -534,7 +584,7 @@ fn test_fixture_generator_two_yields_failing_test() {
     10 |     assert fixture_generator == 2
        |
     info: Test ran with arguments:
-    info: `fixture_generator`: 1
+    info: `fixture_generator`: `1`
     info: Test failed here
       --> test.py:10:5
        |
@@ -627,7 +677,7 @@ fn test_invalid_fixture() {
       |
     info: Invalid fixture scope: ssession
 
-    error[missing-fixtures]: Discovered missing fixtures for test `test_fixture_generator`
+    error[missing-fixtures]: Test `test_fixture_generator` has missing fixtures
      --> test.py:8:5
       |
     6 |     raise ValueError("fixture-error")
@@ -636,7 +686,7 @@ fn test_invalid_fixture() {
       |     ^^^^^^^^^^^^^^^^^^^^^^
     9 |     assert fixture_generator == 1
       |
-    info: Missing fixtures: ["fixture_generator"]
+    info: Missing fixtures: `fixture_generator`
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -1370,6 +1420,56 @@ def test_1():
     test test_file::test_1 ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_fixture_argument_truncated() {
+    let context = IntegrationTestContext::with_file(
+        "test_file.py",
+        r"
+import karva
+
+@karva.fixture
+def fixture_very_very_very_very_very_long_name():
+    return 'fixture_very_very_very_very_very_long_name'
+
+def test_1(fixture_very_very_very_very_very_long_name):
+    assert False
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test_file::test_1(fixture_very_very_very_very...=fixture_very_very_very_very...) ... FAILED
+
+    diagnostics:
+
+    error[test-failure]: Test `test_1` failed
+     --> test_file.py:8:5
+      |
+    6 |     return 'fixture_very_very_very_very_very_long_name'
+    7 |
+    8 | def test_1(fixture_very_very_very_very_very_long_name):
+      |     ^^^^^^
+    9 |     assert False
+      |
+    info: Test ran with arguments:
+    info: `fixture_very_very_very_very...`: `fixture_very_very_very_very...`
+    info: Test failed here
+     --> test_file.py:9:5
+      |
+    8 | def test_1(fixture_very_very_very_very_very_long_name):
+    9 |     assert False
+      |     ^^^^^^^^^^^^
+      |
+
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
     ");

@@ -147,16 +147,22 @@ pub(crate) fn full_test_name(
                 args_str.push_str(", ");
             }
             if let Ok(value) = value.cast_bound::<PyAny>(py) {
-                let value_str = format!("{value:?}");
-                let trimmed_value_str = if value_str.len() > 20 {
-                    format!("{}...", &value_str[..17])
-                } else {
-                    value_str
-                };
-                args_str.push_str(&format!("{key}={trimmed_value_str}"));
+                let trimmed_value_str = truncate_string(&value.to_string());
+                let truncated_key = truncate_string(key);
+                args_str.push_str(&format!("{truncated_key}={trimmed_value_str}"));
             }
         }
         format!("{function}({args_str})")
+    }
+}
+
+const TRUNCATE_LENGTH: usize = 30;
+
+pub(crate) fn truncate_string(value: &str) -> String {
+    if value.len() > TRUNCATE_LENGTH {
+        format!("{}...", &value[..TRUNCATE_LENGTH - 3])
+    } else {
+        value.to_string()
     }
 }
 
