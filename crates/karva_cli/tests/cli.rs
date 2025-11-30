@@ -253,9 +253,9 @@ fn test_parametrize(#[values("pytest", "karva")] package: &str) {
         success: true
         exit_code: 0
         ----- stdout -----
-        test test_parametrize::test_parametrize [a=1, b=2, expected=3] ... ok
-        test test_parametrize::test_parametrize [a=2, b=3, expected=5] ... ok
-        test test_parametrize::test_parametrize [a=3, b=4, expected=7] ... ok
+        test test_parametrize::test_parametrize(a=1, b=2, expected=3) ... ok
+        test test_parametrize::test_parametrize(a=2, b=3, expected=5) ... ok
+        test test_parametrize::test_parametrize(a=3, b=4, expected=7) ... ok
 
         test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
 
@@ -466,7 +466,7 @@ fn test_fixture_generator_two_yields_passing_test() {
     success: true
     exit_code: 0
     ----- stdout -----
-    test test::test_fixture_generator [fixture_generator=1] ... ok
+    test test::test_fixture_generator(fixture_generator=1) ... ok
 
     diagnostics:
 
@@ -509,7 +509,7 @@ fn test_fixture_generator_two_yields_failing_test() {
     success: false
     exit_code: 1
     ----- stdout -----
-    test test::test_fixture_generator [fixture_generator=1] ... FAILED
+    test test::test_fixture_generator(fixture_generator=1) ... FAILED
 
     diagnostics:
 
@@ -571,7 +571,7 @@ fn test_fixture_generator_fail_in_teardown() {
     success: true
     exit_code: 0
     ----- stdout -----
-    test test::test_fixture_generator [fixture_generator=1] ... ok
+    test test::test_fixture_generator(fixture_generator=1) ... ok
 
     diagnostics:
 

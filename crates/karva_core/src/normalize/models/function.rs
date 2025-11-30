@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use camino::Utf8PathBuf;
 use pyo3::prelude::*;
@@ -38,7 +38,7 @@ pub struct NormalizedTestFunction {
     pub(crate) tags: Tags,
 
     /// The function definition for this fixture
-    pub(crate) stmt_function_def: StmtFunctionDef,
+    pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
 }
 
 impl NormalizedTestFunction {

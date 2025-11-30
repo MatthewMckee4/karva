@@ -146,7 +146,7 @@ impl DiscoveredPackageNormalizer {
                 scope: fixture.scope(),
                 is_generator: fixture.is_generator(),
                 value: NormalizedFixtureValue::Function(fixture.function().clone()),
-                stmt_function_def: fixture.function_definition().clone(),
+                stmt_function_def: fixture.stmt_function_def().clone(),
             });
 
             let result = vec![normalized];
@@ -182,7 +182,7 @@ impl DiscoveredPackageNormalizer {
                     scope: fixture.scope(),
                     is_generator: fixture.is_generator(),
                     value: NormalizedFixtureValue::Function(fixture.function().clone()),
-                    stmt_function_def: fixture.function_definition().clone(),
+                    stmt_function_def: fixture.stmt_function_def().clone(),
                 });
 
                 result.push(normalized);

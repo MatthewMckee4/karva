@@ -139,18 +139,6 @@ impl TestResultStats {
         self.inner.entry(kind).and_modify(|v| *v += 1).or_insert(1);
     }
 
-    pub fn add_failed(&mut self) {
-        self.add(TestResultKind::Failed);
-    }
-
-    pub fn add_passed(&mut self) {
-        self.add(TestResultKind::Passed);
-    }
-
-    pub fn add_skipped(&mut self) {
-        self.add(TestResultKind::Skipped);
-    }
-
     pub const fn display(&self, start_time: Instant) -> DisplayTestResultStats<'_> {
         DisplayTestResultStats::new(self, start_time)
     }

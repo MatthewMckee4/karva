@@ -104,7 +104,7 @@ impl RequiresFixtures for StmtFunctionDef {
 
 impl RequiresFixtures for Fixture {
     fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
-        self.function_definition.required_fixtures(py)
+        self.stmt_function_def.required_fixtures(py)
     }
 }
 

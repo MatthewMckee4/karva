@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use camino::Utf8Path;
 use pyo3::{prelude::*, types::PyModule};
@@ -163,7 +163,7 @@ impl<'proj, 'rep, 'py, 'a> FunctionDefinitionVisitor<'_, 'proj, 'rep, 'py, 'a> {
 
                 if let Ok(fixture_def) = Fixture::try_from_function(
                     self.py,
-                    stmt_function_def,
+                    &Arc::new(stmt_function_def.clone()),
                     &py_module,
                     self.module.module_path(),
                     is_generator_function,
@@ -200,7 +200,7 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_, '_, '_> {
 
                 match Fixture::try_from_function(
                     self.py,
-                    stmt_function_def,
+                    &Arc::new(stmt_function_def.clone()),
                     py_module,
                     self.module.module_path(),
                     is_generator_function,

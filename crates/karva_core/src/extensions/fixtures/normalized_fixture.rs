@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use camino::Utf8PathBuf;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
@@ -43,16 +45,12 @@ pub struct UserDefinedFixture {
     /// The computed value or imported python function to compute the value
     pub(crate) value: NormalizedFixtureValue,
     /// The function definition for this fixture
-    pub(crate) stmt_function_def: StmtFunctionDef,
+    pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
 }
 
 impl UserDefinedFixture {
     pub(crate) const fn module_path(&self) -> &Utf8PathBuf {
         self.name.module_path().path()
-    }
-
-    pub(crate) const fn stmt_function_def(&self) -> &StmtFunctionDef {
-        &self.stmt_function_def
     }
 }
 
@@ -125,7 +123,7 @@ impl NormalizedFixture {
     }
 
     /// Returns the function definition (None for built-in fixtures)
-    pub(crate) const fn stmt_function_def(&self) -> Option<&StmtFunctionDef> {
+    pub(crate) const fn stmt_function_def(&self) -> Option<&Arc<StmtFunctionDef>> {
         match self {
             Self::BuiltIn(_) => None,
             Self::UserDefined(fixture) => Some(&fixture.stmt_function_def),

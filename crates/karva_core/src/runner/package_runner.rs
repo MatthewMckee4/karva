@@ -275,11 +275,11 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         // Execute dependencies first
         let mut dep_kwargs = HashMap::new();
         for dep in fixture.dependencies() {
-            let (dep_value, dep_finalizer) = self.execute_normalized_fixture(py, dep)?;
+            let (dep_value, finalizer) = self.execute_normalized_fixture(py, dep)?;
 
             // Dependency finalizers are always added to the cache
             // They need to outlive the current fixture execution
-            if let Some(finalizer) = dep_finalizer {
+            if let Some(finalizer) = finalizer {
                 self.finalizer_cache.add_finalizer(finalizer);
             }
 
@@ -333,7 +333,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     self.context,
                     py,
                     source_file(fixture.module_path()),
-                    fixture.stmt_function_def(),
+                    &fixture.stmt_function_def,
                     &dep_kwargs,
                     &err,
                 );
@@ -341,7 +341,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                 report_missing_fixtures(
                     self.context,
                     source_file(fixture.module_path()),
-                    fixture.stmt_function_def(),
+                    &fixture.stmt_function_def,
                     &missing_args,
                     FunctionKind::Fixture,
                 );

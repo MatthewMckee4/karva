@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pyo3::prelude::*;
 use ruff_python_ast::{Expr, StmtFunctionDef};
 
@@ -26,7 +28,7 @@ use crate::{
 #[derive(Clone)]
 pub struct Fixture {
     name: QualifiedFunctionName,
-    function_definition: StmtFunctionDef,
+    stmt_function_def: Arc<StmtFunctionDef>,
     scope: FixtureScope,
     auto_use: bool,
     function: Py<PyAny>,
@@ -39,7 +41,7 @@ impl Fixture {
     pub(crate) fn new(
         py: Python,
         name: QualifiedFunctionName,
-        function_definition: StmtFunctionDef,
+        stmt_function_def: Arc<StmtFunctionDef>,
         scope: FixtureScope,
         auto_use: bool,
         function: Py<PyAny>,
@@ -48,7 +50,7 @@ impl Fixture {
     ) -> Self {
         Self {
             name,
-            function_definition,
+            stmt_function_def,
             scope,
             auto_use,
             function,
@@ -58,7 +60,7 @@ impl Fixture {
     }
 
     pub(crate) fn original_function_name(&self) -> &str {
-        self.function_definition.name.as_str()
+        self.stmt_function_def.name.as_str()
     }
 
     pub(crate) const fn name(&self) -> &QualifiedFunctionName {
@@ -85,24 +87,24 @@ impl Fixture {
         &self.function
     }
 
-    pub(crate) const fn function_definition(&self) -> &StmtFunctionDef {
-        &self.function_definition
+    pub(crate) const fn stmt_function_def(&self) -> &Arc<StmtFunctionDef> {
+        &self.stmt_function_def
     }
 
     pub(crate) fn try_from_function(
         py: Python<'_>,
-        function_definition: &StmtFunctionDef,
+        stmt_function_def: &Arc<StmtFunctionDef>,
         py_module: &Bound<'_, PyModule>,
         module_path: &ModulePath,
         is_generator_function: bool,
     ) -> Result<Self, String> {
         let function = py_module
-            .getattr(function_definition.name.to_string())
+            .getattr(stmt_function_def.name.to_string())
             .map_err(|e| e.to_string())?;
 
         let try_karva = Self::try_from_karva_function(
             py,
-            function_definition,
+            stmt_function_def,
             &function,
             module_path.clone(),
             is_generator_function,
@@ -115,7 +117,7 @@ impl Fixture {
 
         let try_pytest = Self::try_from_pytest_function(
             py,
-            function_definition,
+            stmt_function_def,
             &function,
             module_path.clone(),
             is_generator_function,
@@ -129,7 +131,7 @@ impl Fixture {
 
     pub(crate) fn try_from_pytest_function(
         py: Python<'_>,
-        function_definition: &StmtFunctionDef,
+        stmt_function_def: &Arc<StmtFunctionDef>,
         function: &Bound<'_, PyAny>,
         module_name: ModulePath,
         is_generator_function: bool,
@@ -153,7 +155,7 @@ impl Fixture {
         let function = get_attribute(function.clone(), &["_fixture_function"])?;
 
         let name = if found_name.is_none() {
-            function_definition.name.to_string()
+            stmt_function_def.name.to_string()
         } else {
             found_name.to_string()
         };
@@ -163,7 +165,7 @@ impl Fixture {
         Ok(Self::new(
             py,
             QualifiedFunctionName::new(name, module_name),
-            function_definition.clone(),
+            stmt_function_def.clone(),
             fixture_scope,
             auto_use.extract::<bool>().unwrap_or(false),
             function.into(),
@@ -174,7 +176,7 @@ impl Fixture {
 
     pub(crate) fn try_from_karva_function(
         py: Python<'_>,
-        function_def: &StmtFunctionDef,
+        stmt_function_def: &Arc<StmtFunctionDef>,
         function: &Bound<'_, PyAny>,
         module_path: ModulePath,
         is_generator_function: bool,
@@ -198,7 +200,7 @@ impl Fixture {
         Ok(Self::new(
             py,
             QualifiedFunctionName::new(name, module_path),
-            function_def.clone(),
+            stmt_function_def.clone(),
             fixture_scope,
             auto_use,
             py_function.into(),

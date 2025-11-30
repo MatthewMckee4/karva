@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pyo3::{prelude::*, types::PyIterator};
 use ruff_python_ast::StmtFunctionDef;
 
@@ -18,7 +20,7 @@ pub struct Finalizer {
     pub(crate) fixture_return: Py<PyIterator>,
     pub(crate) scope: FixtureScope,
     pub(crate) fixture_name: QualifiedFunctionName,
-    pub(crate) stmt_function_def: StmtFunctionDef,
+    pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
 }
 
 impl Finalizer {

@@ -156,7 +156,7 @@ pub(crate) fn full_test_name(
                 args_str.push_str(&format!("{key}={trimmed_value_str}"));
             }
         }
-        format!("{function} [{args_str}]")
+        format!("{function}({args_str})")
     }
 }
 

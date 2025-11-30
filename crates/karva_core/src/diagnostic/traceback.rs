@@ -120,19 +120,6 @@ fn calculate_line_range(source_text: &str, line_number: OneIndexed) -> Option<Te
         }
     }
 
-    // If we're on the last line and it doesn't end with a newline
-    if current_line == target_line {
-        let line_end = TextSize::new(source_text.len() as u32);
-        let line_text = &source_text[line_start.to_usize()..line_end.to_usize()];
-        let trimmed_start = line_text.len() - line_text.trim_start().len();
-        let trimmed_length = line_text.trim().len();
-
-        let range_start = line_start + TextSize::new(trimmed_start as u32);
-        let range_end = range_start + TextSize::new(trimmed_length as u32);
-
-        return Some(TextRange::new(range_start, range_end));
-    }
-
     None
 }
 
