@@ -123,7 +123,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         writeln!(stdout)?;
     }
 
-    write!(stdout, "{}", result.display_with((&project).into()))?;
+    write!(stdout, "{}", result.display())?;
 
     if result.stats().is_success() {
         Ok(ExitStatus::Success)

@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use pyo3::prelude::*;
 
 use crate::{
-    diagnostic::Diagnostic,
+    Context,
     extensions::fixtures::{Finalizer, FixtureScope},
 };
 
@@ -21,7 +21,7 @@ pub struct FinalizerCache {
 
 impl FinalizerCache {
     pub fn add_finalizer(&self, finalizer: Finalizer) {
-        match finalizer.scope() {
+        match finalizer.scope {
             FixtureScope::Session => self.session.lock().unwrap().push(finalizer),
             FixtureScope::Package => self.package.lock().unwrap().push(finalizer),
             FixtureScope::Module => self.module.lock().unwrap().push(finalizer),
@@ -29,7 +29,7 @@ impl FinalizerCache {
         }
     }
 
-    pub fn run_and_clear_scope(&self, py: Python<'_>, scope: FixtureScope) -> Vec<Diagnostic> {
+    pub fn run_and_clear_scope(&self, context: &Context, py: Python<'_>, scope: FixtureScope) {
         let finalizers = match scope {
             FixtureScope::Session => {
                 let mut guard = self.session.lock().unwrap();
@@ -53,7 +53,6 @@ impl FinalizerCache {
         finalizers
             .into_iter()
             .rev()
-            .filter_map(|finalizer| finalizer.run(py))
-            .collect()
+            .for_each(|finalizer| finalizer.run(context, py));
     }
 }

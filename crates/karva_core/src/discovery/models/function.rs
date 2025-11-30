@@ -1,66 +1,60 @@
+use std::sync::Arc;
+
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
-    ModulePath, QualifiedFunctionName,
+    QualifiedFunctionName,
+    discovery::DiscoveredModule,
     extensions::{fixtures::RequiresFixtures, tags::Tags},
 };
 
 /// Represents a single test function discovered from Python source code.
 #[derive(Debug)]
 pub struct TestFunction {
-    function_definition: StmtFunctionDef,
+    /// The name of the test function.
+    pub(crate) name: QualifiedFunctionName,
 
-    py_function: Py<PyAny>,
+    /// The ast function statement.
+    pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
 
-    name: QualifiedFunctionName,
+    /// The Python function object.
+    pub(crate) py_function: Py<PyAny>,
 
-    tags: Tags,
+    /// The tags associated with the test function.
+    pub(crate) tags: Tags,
 }
 
 impl TestFunction {
     pub(crate) fn new(
         py: Python<'_>,
-        module_path: ModulePath,
-        function_definition: StmtFunctionDef,
+        module: &DiscoveredModule,
+        stmt_function_def: StmtFunctionDef,
         py_function: Py<PyAny>,
     ) -> Self {
-        let name = QualifiedFunctionName::new(function_definition.name.to_string(), module_path);
+        let name = QualifiedFunctionName::new(
+            stmt_function_def.name.to_string(),
+            module.module_path().clone(),
+        );
 
-        let tags = Tags::from_py_any(py, &py_function, Some(&function_definition));
+        let tags = Tags::from_py_any(py, &py_function, Some(&stmt_function_def));
 
         Self {
-            function_definition,
-            py_function,
             name,
+            stmt_function_def: Arc::new(stmt_function_def),
+            py_function,
             tags,
         }
     }
 
-    pub(crate) const fn name(&self) -> &QualifiedFunctionName {
-        &self.name
-    }
-
     pub(crate) fn function_name(&self) -> &str {
-        &self.function_definition.name
-    }
-
-    pub(crate) const fn definition(&self) -> &StmtFunctionDef {
-        &self.function_definition
-    }
-
-    pub(crate) const fn py_function(&self) -> &Py<PyAny> {
-        &self.py_function
-    }
-
-    pub(crate) const fn tags(&self) -> &Tags {
-        &self.tags
+        &self.stmt_function_def.name
     }
 }
 
 impl RequiresFixtures for TestFunction {
     fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
-        let mut required_fixtures = self.function_definition.required_fixtures(py);
+        let mut required_fixtures = self.stmt_function_def.required_fixtures(py);
 
         required_fixtures.extend(self.tags.required_fixtures_names());
 
@@ -75,8 +69,18 @@ mod tests {
     use karva_test::TestContext;
 
     use crate::{
-        discovery::StandardDiscoverer, extensions::fixtures::RequiresFixtures, utils::attach,
+        Context, DummyReporter,
+        discovery::{DiscoveredPackage, StandardDiscoverer},
+        extensions::fixtures::RequiresFixtures,
+        utils::attach,
     };
+
+    fn session(project: &Project) -> DiscoveredPackage {
+        let binding = DummyReporter;
+        let context = Context::new(project, &binding);
+        let discoverer = StandardDiscoverer::new(&context);
+        discoverer.discover()
+    }
 
     #[test]
     fn test_case_construction_and_getters() {
@@ -84,17 +88,11 @@ mod tests {
         let path = env.create_file("test.py", "def test_function(): pass");
 
         let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         let test_case = session.test_functions()[0];
 
-        assert!(
-            test_case
-                .name()
-                .to_string()
-                .ends_with("test::test_function")
-        );
+        assert!(test_case.name.to_string().ends_with("test::test_function"));
     }
 
     #[test]
@@ -106,8 +104,7 @@ mod tests {
             )]);
 
             let project = Project::new(env.cwd(), vec![env.cwd()]);
-            let discoverer = StandardDiscoverer::new(&project);
-            let (session, _) = discoverer.discover();
+            let session = session(&project);
 
             let test_case = session.test_functions()[0];
 
@@ -129,8 +126,7 @@ mod tests {
         let mapped_dir = env.mapped_path("<test>").unwrap();
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         let tests_package = session.get_package(mapped_dir).unwrap();
 
@@ -141,7 +137,7 @@ mod tests {
         let test_case = session.test_functions()[0];
 
         assert_eq!(
-            test_case.name().to_string(),
+            test_case.name.to_string(),
             format!("{}::test_display", test_module.name())
         );
     }

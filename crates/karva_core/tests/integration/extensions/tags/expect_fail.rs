@@ -36,32 +36,67 @@ def test_1():
 }
 
 #[rstest]
-fn test_expect_fail_that_passes(#[values("pytest", "karva")] framework: &str) {
+fn test_expect_fail_that_passes_karva() {
     let context = TestContext::with_file(
         "<test>/test.py",
-        &format!(
-            r"
-import {framework}
+        r"
+import karva
 
-@{decorator}(reason='Expected to fail but passes')
+@karva.tags.expect_fail(reason='Expected to fail but passes')
 def test_1():
     assert True
         ",
-            decorator = get_expect_fail_decorator(framework)
-        ),
     );
 
     let result = context.test();
 
     allow_duplicates! {
         assert_snapshot!(result.display(), @r"
-        test failures:
+        diagnostics:
 
-        test `<test>.test::test_1` at <test>/test.py:4 passed when it was expected to fail
-        reason: Expected to fail but passes
+        error[test-pass-on-expect-failure]: Test `test_1` passes when expected to fail
+         --> <test>/test.py:5:5
+          |
+        4 | @karva.tags.expect_fail(reason='Expected to fail but passes')
+        5 | def test_1():
+          |     ^^^^^^
+        6 |     assert True
+          |
+        info: Reason: Expected to fail but passes
 
-        test failures:
-            <test>.test::test_1 at <test>/test.py:4
+        test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+        ");
+    }
+}
+
+#[rstest]
+fn test_expect_fail_that_passes_pytest() {
+    let context = TestContext::with_file(
+        "<test>/test.py",
+        r"
+import pytest
+
+@pytest.mark.xfail(reason='Expected to fail but passes')
+def test_1():
+    assert True
+        ",
+    );
+
+    let result = context.test();
+
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @r"
+        diagnostics:
+
+        error[test-pass-on-expect-failure]: Test `test_1` passes when expected to fail
+         --> <test>/test.py:5:5
+          |
+        4 | @pytest.mark.xfail(reason='Expected to fail but passes')
+        5 | def test_1():
+          |     ^^^^^^
+        6 |     assert True
+          |
+        info: Reason: Expected to fail but passes
 
         test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
         ");
@@ -267,38 +302,79 @@ def test_1():
 }
 
 #[rstest]
-fn test_expect_fail_mixed_tests(#[values("pytest", "karva")] framework: &str) {
+fn test_expect_fail_mixed_tests_karva() {
     let context = TestContext::with_file(
         "<test>/test.py",
-        &format!(
-            r"
-import {framework}
+        r"
+import karva
 
-@{decorator}(reason='Expected to fail')
+@karva.tags.expect_fail(reason='Expected to fail')
 def test_expected_to_fail():
     assert False
 
 def test_normal_pass():
     assert True
 
-@{decorator}
+@karva.tags.expect_fail()
 def test_expected_fail_passes():
     assert True
         ",
-            decorator = get_expect_fail_decorator(framework)
-        ),
     );
 
     let result = context.test();
 
     allow_duplicates! {
         assert_snapshot!(result.display(), @r"
-        test failures:
+        diagnostics:
 
-        test `<test>.test::test_expected_fail_passes` at <test>/test.py:11 passed when it was expected to fail
+        error[test-pass-on-expect-failure]: Test `test_expected_fail_passes` passes when expected to fail
+          --> <test>/test.py:12:5
+           |
+        11 | @karva.tags.expect_fail()
+        12 | def test_expected_fail_passes():
+           |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+        13 |     assert True
+           |
 
-        test failures:
-            <test>.test::test_expected_fail_passes at <test>/test.py:11
+        test result: FAILED. 2 passed; 1 failed; 0 skipped; finished in [TIME]
+        ");
+    }
+}
+
+#[rstest]
+fn test_expect_fail_mixed_tests_pytest() {
+    let context = TestContext::with_file(
+        "<test>/test.py",
+        r"
+import pytest
+
+@pytest.mark.xfail(reason='Expected to fail')
+def test_expected_to_fail():
+    assert False
+
+def test_normal_pass():
+    assert True
+
+@pytest.mark.xfail
+def test_expected_fail_passes():
+    assert True
+        ",
+    );
+
+    let result = context.test();
+
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @r"
+        diagnostics:
+
+        error[test-pass-on-expect-failure]: Test `test_expected_fail_passes` passes when expected to fail
+          --> <test>/test.py:12:5
+           |
+        11 | @pytest.mark.xfail
+        12 | def test_expected_fail_passes():
+           |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+        13 |     assert True
+           |
 
         test result: FAILED. 2 passed; 1 failed; 0 skipped; finished in [TIME]
         ");
@@ -359,14 +435,27 @@ def test_normal():
     let result = context.test();
 
     assert_snapshot!(result.display(), @r"
-    test failures:
+    diagnostics:
 
-    test `<test>.test::test_with_fail` at <test>/test.py:4 failed at <test>/test.py:5
-    This is a custom failure message
-    note: run with `--show-traceback` to see the full traceback
-
-    test failures:
-        <test>.test::test_with_fail at <test>/test.py:4
+    error[test-failure]: Test `test_with_fail` failed
+     --> <test>/test.py:4:5
+      |
+    2 | import karva
+    3 |
+    4 | def test_with_fail():
+      |     ^^^^^^^^^^^^^^
+    5 |     karva.fail('This is a custom failure message')
+      |
+    info: Test failed here
+     --> <test>/test.py:5:5
+      |
+    4 | def test_with_fail():
+    5 |     karva.fail('This is a custom failure message')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    6 |
+    7 | def test_normal():
+      |
+    info: Error message: This is a custom failure message
 
     test result: FAILED. 1 passed; 1 failed; 0 skipped; finished in [TIME]
     ");
@@ -390,14 +479,28 @@ def test_conditional_fail():
     let result = context.test();
 
     assert_snapshot!(result.display(), @r"
-    test failures:
+    diagnostics:
 
-    test `<test>.test::test_conditional_fail` at <test>/test.py:4 failed at <test>/test.py:7
-    failing test
-    note: run with `--show-traceback` to see the full traceback
-
-    test failures:
-        <test>.test::test_conditional_fail at <test>/test.py:4
+    error[test-failure]: Test `test_conditional_fail` failed
+     --> <test>/test.py:4:5
+      |
+    2 | import karva
+    3 |
+    4 | def test_conditional_fail():
+      |     ^^^^^^^^^^^^^^^^^^^^^
+    5 |     condition = True
+    6 |     if condition:
+      |
+    info: Test failed here
+     --> <test>/test.py:7:9
+      |
+    5 |     condition = True
+    6 |     if condition:
+    7 |         karva.fail('failing test')
+      |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    8 |     assert True
+      |
+    info: Error message: failing test
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");
@@ -418,14 +521,25 @@ def test_raise_fail_error():
     let result = context.test();
 
     assert_snapshot!(result.display(), @r"
-    test failures:
+    diagnostics:
 
-    test `<test>.test::test_raise_fail_error` at <test>/test.py:4 failed at <test>/test.py:5
-    Manually raised FailError
-    note: run with `--show-traceback` to see the full traceback
-
-    test failures:
-        <test>.test::test_raise_fail_error at <test>/test.py:4
+    error[test-failure]: Test `test_raise_fail_error` failed
+     --> <test>/test.py:4:5
+      |
+    2 | import karva
+    3 |
+    4 | def test_raise_fail_error():
+      |     ^^^^^^^^^^^^^^^^^^^^^
+    5 |     raise karva.FailError('Manually raised FailError')
+      |
+    info: Test failed here
+     --> <test>/test.py:5:5
+      |
+    4 | def test_raise_fail_error():
+    5 |     raise karva.FailError('Manually raised FailError')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Error message: Manually raised FailError
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");
@@ -467,13 +581,17 @@ def test_should_fail():
     let result = context.test();
 
     assert_snapshot!(result.display(), @r"
-    test failures:
+    diagnostics:
 
-    test `<test>.test::test_should_fail` at <test>/test.py:4 passed when it was expected to fail
-    reason: This should fail but passes
-
-    test failures:
-        <test>.test::test_should_fail at <test>/test.py:4
+    error[test-pass-on-expect-failure]: Test `test_should_fail` passes when expected to fail
+     --> <test>/test.py:5:5
+      |
+    4 | @karva.tags.expect_fail(reason='This should fail but passes')
+    5 | def test_should_fail():
+      |     ^^^^^^^^^^^^^^^^
+    6 |     assert 1 + 1 == 2
+      |
+    info: Reason: This should fail but passes
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");

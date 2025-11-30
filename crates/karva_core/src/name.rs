@@ -19,6 +19,10 @@ impl QualifiedFunctionName {
     pub(crate) fn function_name(&self) -> &str {
         &self.function_name
     }
+
+    pub(crate) const fn module_path(&self) -> &ModulePath {
+        &self.module_path
+    }
 }
 
 impl std::fmt::Display for QualifiedFunctionName {

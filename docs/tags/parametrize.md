@@ -17,9 +17,9 @@ def test_function(a: int):
 Then running `uv run karva test` will provide the following output:
 
 ```text
-test test::test_function [a=1] ... ok
-test test::test_function [a=2] ... ok
-test test::test_function [a=3] ... ok
+test test::test_function(a=1) ... ok
+test test::test_function(a=2) ... ok
+test test::test_function(a=3) ... ok
 
 test result: ok. 3 passed; 0 failed; 0 skipped; finished in 0s
 ```
@@ -39,9 +39,9 @@ def test_function(a: int, b: int):
 Then running `uv run karva test` will provide the following output:
 
 ```text
-test test::test_function [a=1, b=4] ... ok
-test test::test_function [a=2, b=5] ... ok
-test test::test_function [a=3, b=6] ... ok
+test test::test_function(a=1, b=4) ... ok
+test test::test_function(a=2, b=5) ... ok
+test test::test_function(a=3, b=6) ... ok
 
 test result: ok. 3 passed; 0 failed; 0 skipped; finished in 0s
 ```
@@ -59,9 +59,9 @@ def test_function(a: int, b: int):
 Then running `uv run karva test` will provide the following output:
 
 ```text
-test test::test_function [a=1, b=4] ... ok
-test test::test_function [a=2, b=5] ... ok
-test test::test_function [a=3, b=6] ... ok
+test test::test_function(a=1, b=4) ... ok
+test test::test_function(a=2, b=5) ... ok
+test test::test_function(a=3, b=6) ... ok
 
 test result: ok. 3 passed; 0 failed; 0 skipped; finished in 0s
 ```
@@ -85,8 +85,8 @@ def test_function(a: int, b: int):
 Then running `uv run karva test -v` will provide the following output:
 
 ```text
-test test::test_function [a=1, b=1] ... ok
-test test::test_function [a=2, b=1] ... ok
+test test::test_function(a=1, b=1) ... ok
+test test::test_function(a=2, b=1) ... ok
 
 test result: ok. 2 passed; 0 failed; 0 skipped; finished in 0s
 ```
@@ -109,10 +109,10 @@ def test_function(a: int, b: int):
 Then running `uv run karva test -v` will provide the following output:
 
 ```text
-test test::test_function [a=1, b=1] ... ok
-test test::test_function [a=2, b=1] ... ok
-test test::test_function [a=1, b=2] ... ok
-test test::test_function [a=2, b=2] ... ok
+test test::test_function(a=1, b=1) ... ok
+test test::test_function(a=2, b=1) ... ok
+test test::test_function(a=1, b=2) ... ok
+test test::test_function(a=2, b=2) ... ok
 
 test result: ok. 4 passed; 0 failed; 0 skipped; finished in 0s
 ```
@@ -132,8 +132,8 @@ def test_function(a: int):
 Then running `uv run karva test -v` will provide the following output:
 
 ```text
-test test::test_function [a=1] ... ok
-test test::test_function [a=2] ... ok
+test test::test_function(a=1) ... ok
+test test::test_function(a=2) ... ok
 
 test result: ok. 2 passed; 0 failed; 0 skipped; finished in 0s
 ```

@@ -1,5 +1,5 @@
 use camino::Utf8PathBuf;
-use ruff_source_file::LineIndex;
+use ruff_source_file::{SourceFile, SourceFileBuilder};
 
 use crate::{discovery::TestFunction, extensions::fixtures::Fixture, name::ModulePath};
 
@@ -11,14 +11,11 @@ pub struct DiscoveredModule {
     fixtures: Vec<Fixture>,
     type_: ModuleType,
     source_text: String,
-    line_index: LineIndex,
 }
 
 impl DiscoveredModule {
     pub(crate) fn new(path: ModulePath, module_type: ModuleType) -> Self {
         let source_text = std::fs::read_to_string(path.path()).expect("Failed to read source file");
-
-        let line_index = LineIndex::from_source_text(&source_text);
 
         Self {
             path,
@@ -26,7 +23,6 @@ impl DiscoveredModule {
             fixtures: Vec::new(),
             type_: module_type,
             source_text,
-            line_index,
         }
     }
 
@@ -50,11 +46,8 @@ impl DiscoveredModule {
         self.test_functions.iter().collect()
     }
 
-    pub(crate) fn with_test_functions(self, test_functions: Vec<TestFunction>) -> Self {
-        Self {
-            test_functions,
-            ..self
-        }
+    pub(crate) fn extend_test_functions(&mut self, test_functions: Vec<TestFunction>) {
+        self.test_functions.extend(test_functions);
     }
 
     pub(crate) fn filter_test_functions(&mut self, name: &str) {
@@ -65,8 +58,8 @@ impl DiscoveredModule {
         &self.fixtures
     }
 
-    pub(crate) fn with_fixtures(self, fixtures: Vec<Fixture>) -> Self {
-        Self { fixtures, ..self }
+    pub(crate) fn extend_fixtures(&mut self, fixtures: Vec<Fixture>) {
+        self.fixtures.extend(fixtures);
     }
 
     #[cfg(test)]
@@ -74,12 +67,12 @@ impl DiscoveredModule {
         self.test_functions.len()
     }
 
-    pub(crate) const fn source_text(&self) -> &String {
+    pub(crate) fn source_text(&self) -> &str {
         &self.source_text
     }
 
-    pub(crate) const fn line_index(&self) -> &LineIndex {
-        &self.line_index
+    pub(crate) fn source_file(&self) -> SourceFile {
+        SourceFileBuilder::new(self.path().as_str(), self.source_text()).finish()
     }
 
     pub(crate) fn update(&mut self, module: Self) {
@@ -88,7 +81,7 @@ impl DiscoveredModule {
                 if !self
                     .test_functions
                     .iter()
-                    .any(|existing| existing.name() == test_case.name())
+                    .any(|existing| existing.name == test_case.name)
                 {
                     self.test_functions.push(test_case);
                 }
@@ -159,7 +152,7 @@ impl std::fmt::Display for DisplayDiscoveredModule<'_> {
             if i > 0 {
                 write!(f, " ")?;
             }
-            write!(f, "{}", test.name().function_name())?;
+            write!(f, "{}", test.name.function_name())?;
         }
         write!(f, "]\n└── fixtures [")?;
         let fixtures = self.module.fixtures();
