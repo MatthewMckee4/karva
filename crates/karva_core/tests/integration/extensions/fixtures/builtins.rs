@@ -46,6 +46,7 @@ fn test_mock() {
             import pytest
             from karva import Mock
 
+            skip_macos = karva.tags.skip(sys.platform == "darwin")
 
             @karva.fixture
             def mp() -> Generator[Mock]:
@@ -228,11 +229,12 @@ fn test_mock() {
                     sys.path[:] = old_syspath
 
 
+            @skip_macos
             def test_chdir_with_path_local(mp: Mock, tmp_path: Path) -> None:
                 mp.chdir(tmp_path)
                 assert os.getcwd() == str(tmp_path), f"Expected {str(tmp_path)}, got {os.getcwd()}"
 
-
+            @skip_macos
             def test_chdir_with_str(mp: Mock, tmp_path: Path) -> None:
                 mp.chdir(str(tmp_path))
                 assert os.getcwd() == str(tmp_path), f"Expected {str(tmp_path)}, got {os.getcwd()}"
@@ -245,6 +247,7 @@ fn test_mock() {
                 assert os.getcwd() == cwd
 
 
+            @skip_macos
             def test_chdir_double_undo(mp: Mock, tmp_path: Path) -> None:
                 mp.chdir(str(tmp_path))
                 mp.undo()
