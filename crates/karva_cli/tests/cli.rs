@@ -393,7 +393,7 @@ fn test_text_file() {
     success: true
     exit_code: 0
     ----- stdout -----
-    diagnostics:
+    discovery diagnostics:
 
     invalid-path: Invalid path: path `<temp_dir>/random.txt` has a wrong file extension
 
@@ -434,7 +434,7 @@ fn test_invalid_path() {
     success: true
     exit_code: 0
     ----- stdout -----
-    diagnostics:
+    discovery diagnostics:
 
     invalid-path: Invalid path: path `<temp_dir>/non_existing_path.py` could not be found
 
@@ -533,6 +533,8 @@ fn test_fixture_generator_two_yields_failing_test() {
        |     ^^^^^^^^^^^^^^^^^^^^^^
     10 |     assert fixture_generator == 2
        |
+    info: Test ran with arguments:
+    info: `fixture_generator`: 1
     info: Test failed here
       --> test.py:10:5
        |

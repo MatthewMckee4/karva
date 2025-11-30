@@ -3,9 +3,11 @@ mod reporter;
 mod result;
 mod traceback;
 
+use std::collections::HashMap;
+
 use karva_project::path::TestPathError;
 pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
-use pyo3::{PyErr, Python};
+use pyo3::{Py, PyAny, PyErr, Python};
 pub use reporter::{DummyReporter, Reporter, TestCaseReporter};
 pub use result::{IndividualTestResultKind, TestResultStats, TestRunResult};
 use ruff_db::diagnostic::{
@@ -98,13 +100,13 @@ declare_diagnostic_type! {
 }
 
 pub fn report_invalid_path(context: &Context, error: &TestPathError) {
-    let builder = context.report_diagnostic(&INVALID_PATH);
+    let builder = context.report_discovery_diagnostic(&INVALID_PATH);
 
     builder.into_diagnostic(format!("Invalid path: {error}"));
 }
 
 pub fn report_failed_to_import_module(context: &Context, module_name: &str) {
-    let builder = context.report_diagnostic(&FAILED_TO_IMPORT_MODULE);
+    let builder = context.report_discovery_diagnostic(&FAILED_TO_IMPORT_MODULE);
 
     builder.into_diagnostic(format!("Failed to import python module `{module_name}`"));
 }
@@ -175,6 +177,7 @@ pub fn report_fixture_failure(
     py: Python,
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
+    arguments: &HashMap<&str, Py<PyAny>>,
     error: &PyErr,
 ) {
     let builder = context.report_diagnostic(&FIXTURE_FAILURE);
@@ -182,7 +185,14 @@ pub fn report_fixture_failure(
     let mut diagnostic =
         builder.into_diagnostic(format!("Fixture `{}` failed", stmt_function_def.name));
 
-    handle_failed_function_call(&mut diagnostic, py, source_file, stmt_function_def, error);
+    handle_failed_function_call(
+        &mut diagnostic,
+        py,
+        source_file,
+        stmt_function_def,
+        arguments,
+        error,
+    );
 }
 
 pub fn report_test_pass_on_expect_failure(
@@ -212,6 +222,7 @@ pub fn report_test_failure(
     py: Python,
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
+    arguments: &HashMap<&str, Py<PyAny>>,
     error: &PyErr,
 ) {
     let builder = context.report_diagnostic(&TEST_FAILURE);
@@ -219,7 +230,14 @@ pub fn report_test_failure(
     let mut diagnostic =
         builder.into_diagnostic(format!("Test `{}` failed", stmt_function_def.name));
 
-    handle_failed_function_call(&mut diagnostic, py, source_file, stmt_function_def, error);
+    handle_failed_function_call(
+        &mut diagnostic,
+        py,
+        source_file,
+        stmt_function_def,
+        arguments,
+        error,
+    );
 }
 
 fn handle_failed_function_call(
@@ -227,11 +245,23 @@ fn handle_failed_function_call(
     py: Python,
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
+    arguments: &HashMap<&str, Py<PyAny>>,
     error: &PyErr,
 ) {
     let primary_span = Span::from(source_file).with_range(stmt_function_def.name.range);
 
     diagnostic.annotate(Annotation::primary(primary_span));
+
+    if !arguments.is_empty() {
+        diagnostic.info("Test ran with arguments:");
+    }
+
+    let mut sorted_arguments = arguments.iter().collect::<Vec<_>>();
+    sorted_arguments.sort_by_key(|&(name, _)| *name);
+
+    for (name, value) in sorted_arguments {
+        diagnostic.info(format!("`{name}`: {:?}", value.bind(py)));
+    }
 
     if let Some(Traceback {
         lines: _,

@@ -60,6 +60,13 @@ impl<'proj, 'rep> Context<'proj, 'rep> {
         &'ctx self,
         rule: &'static DiagnosticType,
     ) -> DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
-        DiagnosticGuardBuilder::new(self, rule)
+        DiagnosticGuardBuilder::new(self, rule, false)
+    }
+
+    pub(crate) const fn report_discovery_diagnostic<'ctx>(
+        &'ctx self,
+        rule: &'static DiagnosticType,
+    ) -> DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
+        DiagnosticGuardBuilder::new(self, rule, true)
     }
 }

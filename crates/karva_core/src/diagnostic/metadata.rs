@@ -37,17 +37,20 @@ pub struct DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
     context: &'ctx Context<'proj, 'rep>,
     id: DiagnosticId,
     severity: Severity,
+    is_discovery: bool,
 }
 
 impl<'ctx, 'proj, 'rep> DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
     pub(crate) const fn new(
         context: &'ctx Context<'proj, 'rep>,
         diagnostic_type: &'static DiagnosticType,
+        is_discovery: bool,
     ) -> Self {
         DiagnosticGuardBuilder {
             context,
             id: DiagnosticId::Lint(diagnostic_type.name),
             severity: diagnostic_type.severity,
+            is_discovery,
         }
     }
 
@@ -58,6 +61,7 @@ impl<'ctx, 'proj, 'rep> DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
         DiagnosticGuard {
             context: self.context,
             diag: Some(Diagnostic::new(self.id, self.severity, message)),
+            is_discovery: self.is_discovery,
         }
     }
 }
@@ -67,6 +71,8 @@ pub struct DiagnosticGuard<'ctx, 'proj, 'rep> {
     context: &'ctx Context<'proj, 'rep>,
 
     diag: Option<Diagnostic>,
+
+    is_discovery: bool,
 }
 
 impl std::ops::Deref for DiagnosticGuard<'_, '_, '_> {
@@ -88,6 +94,10 @@ impl Drop for DiagnosticGuard<'_, '_, '_> {
     fn drop(&mut self) {
         let diag = self.diag.take().unwrap();
 
-        self.context.result().add_diagnostic(diag);
+        if self.is_discovery {
+            self.context.result().add_discovery_diagnostic(diag);
+        } else {
+            self.context.result().add_diagnostic(diag);
+        }
     }
 }

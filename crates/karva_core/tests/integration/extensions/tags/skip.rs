@@ -326,7 +326,7 @@ def test_1():
     let result = context.test();
 
     assert_snapshot!(result.display(), @r"
-    diagnostics:
+    discovery diagnostics:
 
     failed-to-import-module: Failed to import python module `<test>.test`
 
@@ -350,7 +350,7 @@ def test_1():
     let result = context.test();
 
     assert_snapshot!(result.display(), @r"
-    diagnostics:
+    discovery diagnostics:
 
     failed-to-import-module: Failed to import python module `<test>.test`
 

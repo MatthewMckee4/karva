@@ -9,6 +9,7 @@ use crate::{DefaultFileResolver, Reporter};
 
 #[derive(Debug, Clone)]
 pub struct TestRunResult {
+    discovery_diagnostics: Vec<Diagnostic>,
     diagnostics: Vec<Diagnostic>,
 
     stats: TestResultStats,
@@ -21,6 +22,7 @@ pub struct TestRunResult {
 impl TestRunResult {
     pub fn new(cwd: std::path::PathBuf) -> Self {
         Self {
+            discovery_diagnostics: Vec::new(),
             diagnostics: Vec::new(),
             stats: TestResultStats::default(),
             start_time: Instant::now(),
@@ -29,11 +31,19 @@ impl TestRunResult {
     }
 
     pub fn total_diagnostics(&self) -> usize {
-        self.diagnostics.len()
+        self.discovery_diagnostics.len() + self.diagnostics.len()
     }
 
     pub const fn diagnostics(&self) -> &Vec<Diagnostic> {
         &self.diagnostics
+    }
+
+    pub const fn discovery_diagnostics(&self) -> &Vec<Diagnostic> {
+        &self.discovery_diagnostics
+    }
+
+    pub(crate) fn add_discovery_diagnostic(&mut self, diagnostic: Diagnostic) {
+        self.discovery_diagnostics.push(diagnostic);
     }
 
     pub(crate) fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
@@ -152,13 +162,29 @@ pub struct DisplayTestRunResult<'a> {
 
 impl std::fmt::Display for DisplayTestRunResult<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let test_failures = self.result.diagnostics();
+        let discovery_diagnostics = self.result.discovery_diagnostics();
 
         let config = DisplayDiagnosticConfig::default()
             .format(DiagnosticFormat::Full)
             .hide_severity(true);
 
-        if !test_failures.is_empty() {
+        if !discovery_diagnostics.is_empty() {
+            writeln!(f, "discovery diagnostics:")?;
+            writeln!(f)?;
+            write!(
+                f,
+                "{}",
+                DisplayDiagnostics::new(
+                    &DefaultFileResolver::new(self.result.cwd.clone()),
+                    &config,
+                    discovery_diagnostics,
+                )
+            )?;
+        }
+
+        let diagnostics = self.result.diagnostics();
+
+        if !diagnostics.is_empty() {
             writeln!(f, "diagnostics:")?;
             writeln!(f)?;
             write!(
@@ -167,7 +193,7 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
                 DisplayDiagnostics::new(
                     &DefaultFileResolver::new(self.result.cwd.clone()),
                     &config,
-                    test_failures,
+                    diagnostics,
                 )
             )?;
         }
