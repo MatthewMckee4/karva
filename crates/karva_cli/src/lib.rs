@@ -17,7 +17,7 @@ use karva_project::{
 };
 
 use crate::{
-    args::{Command, TestCommand},
+    args::{Command, TerminalColor, TestCommand},
     logging::setup_tracing,
 };
 
@@ -77,6 +77,9 @@ pub(crate) fn version() -> Result<()> {
 
 pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let verbosity = args.verbosity.level();
+
+    set_colored_override(args.color);
+
     let _guard = setup_tracing(verbosity);
 
     let cwd = {
@@ -153,5 +156,23 @@ impl Termination for ExitStatus {
 impl ExitStatus {
     pub const fn to_i32(self) -> i32 {
         self as i32
+    }
+}
+
+fn set_colored_override(color: Option<TerminalColor>) {
+    let Some(color) = color else {
+        return;
+    };
+
+    match color {
+        TerminalColor::Auto => {
+            colored::control::unset_override();
+        }
+        TerminalColor::Always => {
+            colored::control::set_override(true);
+        }
+        TerminalColor::Never => {
+            colored::control::set_override(false);
+        }
     }
 }

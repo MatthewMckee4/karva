@@ -81,6 +81,10 @@ pub struct TestCommand {
     /// When set, we will not show individual test case results during execution.
     #[clap(long)]
     pub(crate) no_progress: bool,
+
+    /// Control when colored output is used.
+    #[arg(long)]
+    pub(crate) color: Option<TerminalColor>,
 }
 
 /// The diagnostic output format.
@@ -103,6 +107,20 @@ impl From<OutputFormat> for DiagnosticFormat {
             OutputFormat::Concise => Self::Concise,
         }
     }
+}
+
+/// Control when colored output is used.
+#[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Default, clap::ValueEnum)]
+pub enum TerminalColor {
+    /// Display colors if the output goes to an interactive terminal.
+    #[default]
+    Auto,
+
+    /// Always display colors.
+    Always,
+
+    /// Never display colors.
+    Never,
 }
 
 impl TestCommand {

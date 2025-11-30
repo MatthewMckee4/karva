@@ -171,7 +171,7 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
 
         let config = DisplayDiagnosticConfig::default()
             .format(self.result.display_options.diagnostic_format)
-            .color(true);
+            .color(colored::control::SHOULD_COLORIZE.should_colorize());
 
         let is_concise = matches!(
             self.result.display_options.diagnostic_format,
