@@ -328,7 +328,7 @@ def test_1():
     assert_snapshot!(result.display(), @r"
     discovery diagnostics:
 
-    error[failed-to-import-module]: Failed to import python module `<test>.test`
+    error[failed-to-import-module]: Failed to import python module `<test>.test`: Expected boolean values for conditions
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
     ");
@@ -352,7 +352,7 @@ def test_1():
     assert_snapshot!(result.display(), @r"
     discovery diagnostics:
 
-    error[failed-to-import-module]: Failed to import python module `<test>.test`
+    error[failed-to-import-module]: Failed to import python module `<test>.test`: Expected boolean values for conditions
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
     ");
