@@ -30,6 +30,7 @@ fn test_temp_directory_fixture(
     }
 }
 
+/// Taken from <https://github.com/pytest-dev/pytest/blob/main/testing/test_monkeypatch.py>
 #[test]
 fn test_mock() {
     let context = TestContext::with_file(
