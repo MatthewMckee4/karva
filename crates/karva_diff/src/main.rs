@@ -105,6 +105,8 @@ fn run(
         .arg("--output-format")
         .arg("concise")
         .arg("--no-progress")
+        .arg("--color")
+        .arg("never")
         .current_dir(&installed_project.path)
         .output()
         .context("Failed to run old karva binary")?;
@@ -131,6 +133,8 @@ fn run(
         .arg("--output-format")
         .arg("concise")
         .arg("--no-progress")
+        .arg("--color")
+        .arg("never")
         .current_dir(&installed_project.path)
         .output()
         .context("Failed to run new karva binary")?;
