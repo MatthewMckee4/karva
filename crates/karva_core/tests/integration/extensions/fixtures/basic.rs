@@ -467,3 +467,31 @@ fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &st
         assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
 }
+
+#[test]
+fn test_fixture_depends_on_fixture_with_finalizer() {
+    let context = TestContext::with_file(
+        "<test>/test_file.py",
+        r"
+import karva
+
+arr = []
+
+@karva.fixture
+def x():
+    yield len(arr)
+    arr.append(1)
+
+@karva.fixture
+def y(x):
+    yield x
+
+def test_z(y):
+    assert y == len(arr)
+            ",
+    );
+
+    let result = context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+}

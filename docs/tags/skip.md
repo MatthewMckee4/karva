@@ -12,13 +12,7 @@ def test_function():
     assert False
 ```
 
-Then running `uv run karva test` will provide the following output:
-
-```text
-test test::test_function ... skipped
-
-test result: ok. 0 passed; 0 failed; 1 skipped; finished in 0s
-```
+Then running `uv run karva test` will result in one skipped test.
 
 ```python title="test.py"
 import karva
@@ -28,13 +22,7 @@ def test_function():
     assert False
 ```
 
-Then running `uv run karva test` will provide the following output:
-
-```text
-test test::test_function ... skipped
-
-test result: ok. 0 passed; 0 failed; 1 skipped; finished in 0s
-```
+Then running `uv run karva test` will result in one skipped test.
 
 ## Reason
 
@@ -48,13 +36,7 @@ def test_function():
     assert False
 ```
 
-Then running `uv run karva test` will provide the following output:
-
-```text
-test test::test_function ... skipped: Waiting for feature X to be implemented
-
-test result: ok. 0 passed; 0 failed; 1 skipped; finished in 0s
-```
+Then running `uv run karva test` will result in one skipped test.
 
 ```python title="test.py"
 import karva
@@ -64,13 +46,7 @@ def test_function():
     assert False
 ```
 
-Then running `uv run karva test` will provide the following output:
-
-```text
-test test::test_function ... skipped: Waiting for feature X to be implemented
-
-test result: ok. 0 passed; 0 failed; 1 skipped; finished in 0s
-```
+Then running `uv run karva test` will result in one skipped test.
 
 ## Pytest
 
@@ -84,13 +60,7 @@ def test_function():
     assert False
 ```
 
-Then running `uv run karva test` will provide the following output:
-
-```text
-test test::test_function ... skipped: Waiting for feature X to be implemented
-
-test result: ok. 0 passed; 0 failed; 1 skipped; finished in 0s
-```
+Then running `uv run karva test` will result in one skipped test.
 
 ## Conditions
 
@@ -106,13 +76,7 @@ def test_function():
     assert False
 ```
 
-Then running `uv run karva test` will provide the following output:
-
-```text
-test test::test_function ... skipped
-
-test result: ok. 0 passed; 0 failed; 1 skipped; finished in 0s
-```
+Then running `uv run karva test` will result in one skipped test.
 
 You can still provide a reason as a keyword argument.
 
@@ -124,13 +88,7 @@ def test_function():
     assert False
 ```
 
-Then running `uv run karva test` will provide the following output:
-
-```text
-test test::test_function ... skipped: Waiting for feature X to be implemented
-
-test result: ok. 0 passed; 0 failed; 1 skipped; finished in 0s
-```
+Then running `uv run karva test` will result in one skipped test.
 
 ### Multiple Conditions
 
@@ -142,13 +100,7 @@ def test_function():
     assert False
 ```
 
-Then running `uv run karva test` will provide the following output:
-
-```text
-test test::test_function ... FAILED
-
-test result: ok. 0 passed; 1 failed; 0 skipped; finished in 0s
-```
+Then running `uv run karva test` will result in one failed test.
 
 ### Pytest
 
@@ -162,10 +114,4 @@ def test_function():
     assert False
 ```
 
-Then running `uv run karva test` will provide the following output:
-
-```text
-test test::test_function ... skipped: Waiting for feature X to be implemented
-
-test result: ok. 0 passed; 0 failed; 1 skipped; finished in 0s
-```
+Then running `uv run karva test` will result in one skipped test.

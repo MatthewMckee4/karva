@@ -7,17 +7,20 @@ use pyo3::{
 
 use crate::{
     Context, IndividualTestResultKind,
-    diagnostic::{Diagnostic, FunctionDefinitionLocation, FunctionKind},
+    diagnostic::{
+        FunctionKind, report_fixture_failure, report_missing_fixtures, report_test_failure,
+        report_test_pass_on_expect_failure,
+    },
     extensions::{
         fixtures::{
-            Finalizer, FixtureScope, NormalizedFixture, NormalizedFixtureValue, RequiresFixtures,
-            missing_arguments_from_error, python::FixtureRequest,
+            Finalizer, FixtureRequest, FixtureScope, NormalizedFixture, NormalizedFixtureValue,
+            RequiresFixtures, missing_arguments_from_error,
         },
         tags::{ExpectFailTag, python::SkipError},
     },
-    normalize::models::{NormalizedModule, NormalizedPackage, NormalizedTestFunction},
+    normalize::{NormalizedModule, NormalizedPackage, NormalizedTestFunction},
     runner::{FinalizerCache, FixtureCache},
-    utils::full_test_name,
+    utils::{full_test_name, source_file},
 };
 
 pub struct NormalizedPackageRunner<'ctx, 'proj, 'rep> {
@@ -36,15 +39,15 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
     }
 
     fn clean_up(&self, py: Python, scope: FixtureScope) {
-        let diagnostics = self.finalizer_cache.run_and_clear_scope(py, scope);
+        self.finalizer_cache
+            .run_and_clear_scope(self.context, py, scope);
 
-        self.context.result().add_test_diagnostics(diagnostics);
         self.fixture_cache.clear_fixtures(scope);
     }
 
     pub(crate) fn run(&self, py: Python<'_>, session: &NormalizedPackage) {
         for fixture in &session.auto_use_fixtures {
-            if let Ok((_, Some(finalizer))) = self.execute_normalized_fixture(py, fixture) {
+            if let Some((_, Some(finalizer))) = self.execute_normalized_fixture(py, fixture) {
                 self.finalizer_cache.add_finalizer(finalizer);
             }
         }
@@ -56,7 +59,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
     fn run_module(&self, py: Python<'_>, module: &NormalizedModule) -> bool {
         for fixture in &module.auto_use_fixtures {
-            if let Ok((_, Some(finalizer))) = self.execute_normalized_fixture(py, fixture) {
+            if let Some((_, Some(finalizer))) = self.execute_normalized_fixture(py, fixture) {
                 self.finalizer_cache.add_finalizer(finalizer);
             }
         }
@@ -79,7 +82,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
     fn run_package(&self, py: Python<'_>, package: &NormalizedPackage) -> bool {
         for fixture in &package.auto_use_fixtures {
-            if let Ok((_, Some(finalizer))) = self.execute_normalized_fixture(py, fixture) {
+            if let Some((_, Some(finalizer))) = self.execute_normalized_fixture(py, fixture) {
                 self.finalizer_cache.add_finalizer(finalizer);
             }
         }
@@ -109,6 +112,8 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
     /// Run a normalized test function.
     fn run_normalized_test(&self, py: Python<'_>, test_fn: &NormalizedTestFunction) -> bool {
+        tracing::info!("Running test {}", test_fn.name);
+
         // Check if test should be skipped
         if let Some(skip_tag) = test_fn.tags.skip_tag() {
             if skip_tag.should_skip() {
@@ -133,64 +138,20 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
         let mut test_finalizers = Vec::new();
 
-        let cwd = self.context.project().cwd().clone();
-
-        let handle_fixture_fail = |fixture: &NormalizedFixture, err: PyErr| {
-            let default_diagnostic = || {
-                Diagnostic::from_fixture_fail(
-                    py,
-                    &cwd,
-                    &err,
-                    FunctionDefinitionLocation::new(
-                        fixture.name.to_string(),
-                        fixture.location.clone(),
-                    ),
-                )
-            };
-
-            let missing_args =
-                missing_arguments_from_error(fixture.name.function_name(), &err.to_string());
-
-            if missing_args.is_empty() {
-                default_diagnostic()
-            } else {
-                Diagnostic::missing_fixtures(
-                    missing_args,
-                    fixture.location.clone(),
-                    fixture.name.to_string(),
-                    FunctionKind::Fixture,
-                )
-            }
-        };
-
         // Execute use_fixtures (for side effects only, don't pass to test)
         for fixture in &test_fn.use_fixture_dependencies {
-            match self.execute_normalized_fixture(py, fixture) {
-                Ok((_, finalizer)) => {
-                    if let Some(f) = finalizer {
-                        test_finalizers.push(f);
-                    }
-                }
-                Err(err) => {
-                    let diagnostic = handle_fixture_fail(fixture, err);
-                    self.context.result().add_test_diagnostic(diagnostic);
-                }
+            if let Some((_, Some(finalizer))) = self.execute_normalized_fixture(py, fixture) {
+                test_finalizers.push(finalizer);
             }
         }
 
         // Execute regular fixture dependencies and add them to kwargs
         let mut kwargs = HashMap::new();
         for fixture in &test_fn.fixture_dependencies {
-            match self.execute_normalized_fixture(py, fixture) {
-                Ok((value, finalizer)) => {
-                    kwargs.insert(fixture.name.function_name(), value);
-                    if let Some(f) = finalizer {
-                        test_finalizers.push(f);
-                    }
-                }
-                Err(err) => {
-                    let diagnostic = handle_fixture_fail(fixture, err);
-                    self.context.result().add_test_diagnostic(diagnostic);
+            if let Some((value, finalizer)) = self.execute_normalized_fixture(py, fixture) {
+                kwargs.insert(fixture.function_name(), value);
+                if let Some(finalizer) = finalizer {
+                    test_finalizers.push(finalizer);
                 }
             }
         }
@@ -203,7 +164,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         let full_test_name = full_test_name(py, test_fn.name.to_string(), &kwargs);
 
         for fixture in &test_fn.auto_use_fixtures {
-            if let Ok((_, Some(finalizer))) = self.execute_normalized_fixture(py, fixture) {
+            if let Some((_, Some(finalizer))) = self.execute_normalized_fixture(py, fixture) {
                 self.finalizer_cache.add_finalizer(finalizer);
             }
         }
@@ -219,102 +180,77 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
             test_fn.function.call(py, (), Some(&py_dict))
         };
 
-        let reporter = self.context.reporter();
         let passed = match test_result {
             Ok(_) => {
                 if expect_fail {
                     let reason = expect_fail_tag.and_then(|tag| tag.reason());
 
-                    let diagnostic = Diagnostic::pass_on_expect_fail(
+                    report_test_pass_on_expect_failure(
+                        self.context,
+                        source_file(test_fn.module_path()),
+                        &test_fn.stmt_function_def,
                         reason,
-                        FunctionDefinitionLocation::new(
-                            full_test_name.clone(),
-                            Some(test_fn.location.clone()),
-                        ),
                     );
 
-                    self.context.result().register_test_case_result(
+                    self.context.register_test_case_result(
                         &full_test_name,
                         IndividualTestResultKind::Failed,
-                        Some(reporter),
-                    );
-
-                    self.context.result().add_test_diagnostic(diagnostic);
-
-                    false
+                    )
                 } else {
-                    self.context.result().register_test_case_result(
+                    self.context.register_test_case_result(
                         &full_test_name,
                         IndividualTestResultKind::Passed,
-                        Some(reporter),
-                    );
-
-                    true
+                    )
                 }
             }
             Err(err) => {
                 if is_skip_exception(py, &err) {
                     let reason = extract_skip_reason(py, &err);
-                    self.context.result().register_test_case_result(
+                    self.context.register_test_case_result(
                         &full_test_name,
                         IndividualTestResultKind::Skipped { reason },
-                        Some(reporter),
-                    );
-                    true
+                    )
                 } else if expect_fail {
-                    self.context.result().register_test_case_result(
+                    self.context.register_test_case_result(
                         &full_test_name,
                         IndividualTestResultKind::Passed,
-                        Some(reporter),
-                    );
-                    true
+                    )
                 } else {
-                    let default_diagnostic = || {
-                        Diagnostic::from_test_fail(
-                            py,
-                            &cwd,
-                            &err,
-                            FunctionDefinitionLocation::new(
-                                full_test_name.clone(),
-                                Some(test_fn.location.clone()),
-                            ),
-                        )
-                    };
-
                     let missing_args = missing_arguments_from_error(
                         test_fn.name.function_name(),
                         &err.to_string(),
                     );
 
-                    let diagnostic = if missing_args.is_empty() {
-                        default_diagnostic()
+                    if missing_args.is_empty() {
+                        report_test_failure(
+                            self.context,
+                            py,
+                            source_file(test_fn.module_path()),
+                            &test_fn.stmt_function_def,
+                            &kwargs,
+                            &err,
+                        );
                     } else {
-                        Diagnostic::missing_fixtures(
-                            missing_args,
-                            Some(test_fn.location.clone()),
-                            full_test_name.clone(),
+                        report_missing_fixtures(
+                            self.context,
+                            source_file(test_fn.module_path()),
+                            &test_fn.stmt_function_def,
+                            &missing_args,
                             FunctionKind::Test,
-                        )
-                    };
+                        );
+                    }
 
-                    self.context.result().add_test_diagnostic(diagnostic);
-
-                    self.context.result().register_test_case_result(
+                    self.context.register_test_case_result(
                         &full_test_name,
                         IndividualTestResultKind::Failed,
-                        Some(reporter),
-                    );
-
-                    false
+                    )
                 }
             }
         };
 
         // Run function-scoped finalizers for this test in reverse order (LIFO)
         for finalizer in test_finalizers.into_iter().rev() {
-            if let Some(diagnostic) = finalizer.run(py) {
-                self.context.result().add_test_diagnostic(diagnostic);
-            }
+            finalizer.run(self.context, py);
         }
 
         self.clean_up(py, FixtureScope::Function);
@@ -327,79 +263,126 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         &self,
         py: Python<'_>,
         fixture: &NormalizedFixture,
-    ) -> PyResult<(Py<PyAny>, Option<Finalizer>)> {
+    ) -> Option<(Py<PyAny>, Option<Finalizer>)> {
         if let Some(cached) = self
             .fixture_cache
-            .get(fixture.name.function_name(), fixture.scope)
+            .get(fixture.function_name(), fixture.scope())
         {
             // Cached fixtures have already had their finalizers stored/run
-            return Ok((cached, None));
+            return Some((cached, None));
         }
 
         // Execute dependencies first
         let mut dep_kwargs = HashMap::new();
-        for dep in &fixture.dependencies {
-            let (dep_value, dep_finalizer) = self.execute_normalized_fixture(py, dep)?;
+        for dep in fixture.dependencies() {
+            let (dep_value, finalizer) = self.execute_normalized_fixture(py, dep)?;
 
             // Dependency finalizers are always added to the cache
             // They need to outlive the current fixture execution
-            if let Some(finalizer) = dep_finalizer {
+            if let Some(finalizer) = finalizer {
                 self.finalizer_cache.add_finalizer(finalizer);
             }
 
-            dep_kwargs.insert(dep.name.function_name(), dep_value);
+            dep_kwargs.insert(dep.function_name(), dep_value);
         }
 
         // Build kwargs for this fixture
         let kwargs_dict = PyDict::new(py);
         for (key, value) in &dep_kwargs {
-            kwargs_dict.set_item(key, value)?;
+            kwargs_dict.set_item(key, value).ok();
         }
 
         // For builtin fixtures, the value is stored directly in the function field
         // and function_definition is None. Return the value directly without calling.
-        let result = match &fixture.value {
-            NormalizedFixtureValue::Computed(value) => value.clone(),
+        let result = match fixture.value() {
+            NormalizedFixtureValue::Computed(value) => Ok(value.clone()),
 
             NormalizedFixtureValue::Function(function) => {
-                if let Some(function_def) = &fixture.function_definition {
+                if let Some(function_def) = fixture.stmt_function_def() {
                     let required = function_def.required_fixtures(py);
 
                     if required.contains(&"request".to_string()) {
                         // Create FixtureRequest with param (or None if not parametrized)
-                        let param_value = fixture
-                            .param
-                            .as_ref()
-                            .map_or_else(|| py.None(), Clone::clone);
+                        let param_value = fixture.param().map_or_else(|| py.None(), Clone::clone);
 
-                        let request_obj = Py::new(py, FixtureRequest::new(param_value))?;
-                        kwargs_dict.set_item("request", request_obj)?;
+                        if let Ok(request_obj) = Py::new(py, FixtureRequest::new(param_value)) {
+                            kwargs_dict.set_item("request", request_obj).ok();
+                        }
                     }
                 }
 
                 if kwargs_dict.is_empty() {
-                    function.call0(py)?
+                    function.call0(py)
                 } else {
-                    function.call(py, (), Some(&kwargs_dict))?
+                    function.call(py, (), Some(&kwargs_dict))
                 }
+            }
+        };
+
+        let handle_fixture_error = |err: PyErr| {
+            let Some(fixture) = fixture.as_user_defined() else {
+                // Assume that builtin fixtures don't fail
+                return;
+            };
+
+            let missing_args =
+                missing_arguments_from_error(fixture.name.function_name(), &err.to_string());
+
+            if missing_args.is_empty() {
+                report_fixture_failure(
+                    self.context,
+                    py,
+                    source_file(fixture.module_path()),
+                    &fixture.stmt_function_def,
+                    &dep_kwargs,
+                    &err,
+                );
+            } else {
+                report_missing_fixtures(
+                    self.context,
+                    source_file(fixture.module_path()),
+                    &fixture.stmt_function_def,
+                    &missing_args,
+                    FunctionKind::Fixture,
+                );
+            }
+        };
+
+        let result = match result {
+            Ok(result) => result,
+            Err(err) => {
+                handle_fixture_error(err);
+                return None;
             }
         };
 
         // If this is a generator fixture, we need to call next() to get the actual value
         // and create a finalizer for cleanup
-        let (final_result, finalizer) = if fixture.is_generator {
+        let (final_result, finalizer) = if let Some(user_defined_fixture) =
+            fixture.as_user_defined()
+            && fixture.is_generator()
+        {
             let bound_result = result.bind(py);
             if let Ok(py_iter_bound) = bound_result.cast::<PyIterator>() {
                 let py_iter: Py<PyIterator> = py_iter_bound.clone().unbind();
                 let mut iterator = py_iter.bind(py).clone();
                 match iterator.next() {
                     Some(Ok(value)) => {
-                        let finalizer =
-                            Finalizer::new(fixture.name.to_string(), py_iter, fixture.scope);
+                        let finalizer = {
+                            Finalizer {
+                                fixture_return: py_iter,
+                                scope: fixture.scope(),
+                                fixture_name: user_defined_fixture.name.clone(),
+                                stmt_function_def: user_defined_fixture.stmt_function_def.clone(),
+                            }
+                        };
 
                         (value.unbind(), Some(finalizer))
                     }
-                    Some(Err(err)) => return Err(err),
+                    Some(Err(err)) => {
+                        handle_fixture_error(err);
+                        return None;
+                    }
                     None => (result, None),
                 }
             } else {
@@ -411,9 +394,9 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
         // Cache the result
         self.fixture_cache.insert(
-            fixture.name.function_name().to_string(),
+            fixture.function_name().to_string(),
             final_result.clone(),
-            fixture.scope,
+            fixture.scope(),
         );
 
         // Handle finalizer based on scope
@@ -422,7 +405,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         let return_finalizer = finalizer.map_or_else(
             || None,
             |f| {
-                if f.scope() == FixtureScope::Function {
+                if f.scope == FixtureScope::Function {
                     Some(f)
                 } else {
                     self.finalizer_cache.add_finalizer(f);
@@ -431,7 +414,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
             },
         );
 
-        Ok((final_result, return_finalizer))
+        Some((final_result, return_finalizer))
     }
 }
 

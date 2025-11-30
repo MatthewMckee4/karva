@@ -1,6 +1,12 @@
-use pyo3::{prelude::*, types::PyIterator};
+use std::sync::Arc;
 
-use crate::{diagnostic::Diagnostic, extensions::fixtures::FixtureScope};
+use pyo3::{prelude::*, types::PyIterator};
+use ruff_python_ast::StmtFunctionDef;
+
+use crate::{
+    Context, QualifiedFunctionName, diagnostic::report_invalid_fixture_finalizer,
+    extensions::fixtures::FixtureScope, utils::source_file,
+};
 
 /// Represents a generator function that can be used to run the finalizer section of a fixture.
 ///
@@ -11,41 +17,30 @@ use crate::{diagnostic::Diagnostic, extensions::fixtures::FixtureScope};
 /// ```
 #[derive(Debug, Clone)]
 pub struct Finalizer {
-    pub(crate) fixture_name: String,
     pub(crate) fixture_return: Py<PyIterator>,
     pub(crate) scope: FixtureScope,
+    pub(crate) fixture_name: QualifiedFunctionName,
+    pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
 }
 
 impl Finalizer {
-    pub(crate) const fn new(
-        fixture_name: String,
-        fixture_return: Py<PyIterator>,
-        scope: FixtureScope,
-    ) -> Self {
-        Self {
-            fixture_name,
-            fixture_return,
-            scope,
-        }
-    }
-
-    pub(crate) const fn scope(&self) -> FixtureScope {
-        self.scope
-    }
-
-    pub(crate) fn run(&self, py: Python<'_>) -> Option<Diagnostic> {
+    pub(crate) fn run(self, context: &Context, py: Python<'_>) {
         let mut generator = self.fixture_return.bind(py).clone();
-        match generator.next()? {
-            Ok(_) => Some(Diagnostic::warning(&format!(
-                "Fixture {} had more than one yield statement",
-                self.fixture_name
-            ))),
-            Err(err) => Some(Diagnostic::warning(&format!(
-                "Failed to reset fixture {}\n{}",
-                self.fixture_name,
-                err.value(py)
-            ))),
-        }
+        let Some(generator_next_result) = generator.next() else {
+            // We do not care if the `next` function fails, this should not happen.
+            return;
+        };
+        let invalid_finalizer_reason = match generator_next_result {
+            Ok(_) => "Fixture had more than one yield statement",
+            Err(err) => &format!("Failed to reset fixture: {}", err.value(py)),
+        };
+
+        report_invalid_fixture_finalizer(
+            context,
+            source_file(self.fixture_name.module_path().path()),
+            &self.stmt_function_def,
+            invalid_finalizer_reason,
+        );
     }
 }
 
@@ -76,9 +71,18 @@ def test_fixture_generator(fixture_generator):
         let result = test_context.test();
 
         assert_snapshot!(result.display(), @r"
-        warnings:
+        diagnostics:
 
-        warning: Fixture <test>.test_file::fixture_generator had more than one yield statement
+        warning[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
+         --> <test>/test_file.py:5:5
+          |
+        4 | @karva.fixture
+        5 | def fixture_generator():
+          |     ^^^^^^^^^^^^^^^^^
+        6 |     yield 1
+        7 |     yield 2
+          |
+        info: Fixture had more than one yield statement
 
         test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
         ");
@@ -103,13 +107,21 @@ def test_fixture_generator(fixture_generator):
 
         let result = test_context.test();
 
-        assert_snapshot!(result.display(), @r"
-        warnings:
+        assert_snapshot!(result.display(), @r#"
+        diagnostics:
 
-        warning: Failed to reset fixture <test>.test_file::fixture_generator
-        fixture-error
+        warning[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
+         --> <test>/test_file.py:5:5
+          |
+        4 | @karva.fixture
+        5 | def fixture_generator():
+          |     ^^^^^^^^^^^^^^^^^
+        6 |     yield 1
+        7 |     raise ValueError("fixture-error")
+          |
+        info: Failed to reset fixture: fixture-error
 
         test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
-        ");
+        "#);
     }
 }

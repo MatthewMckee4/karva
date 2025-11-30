@@ -6,7 +6,7 @@ use std::{
 use colored::Colorize;
 use pyo3::marker::Ungil;
 
-use crate::runner::diagnostic::IndividualTestResultKind;
+use crate::IndividualTestResultKind;
 
 /// A progress reporter.
 pub trait Reporter: Send + Sync + Ungil {

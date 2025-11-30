@@ -1,75 +1,68 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use ignore::WalkBuilder;
-use karva_project::{Project, path::TestPath};
+use karva_project::path::TestPath;
 use pyo3::prelude::*;
 
 #[cfg(test)]
 use crate::utils::attach_with_project;
 use crate::{
-    diagnostic::DiscoveryDiagnostic,
-    discovery::{DiscoveredModule, DiscoveredPackage, ModuleType, discover},
+    Context,
+    diagnostic::report_invalid_path,
+    discovery::{
+        DiscoveredModule, DiscoveredPackage, ModuleType, discover, visitor::DiscoveredFunctions,
+    },
     name::ModulePath,
     utils::add_to_sys_path,
 };
 
-pub struct StandardDiscoverer<'proj> {
-    project: &'proj Project,
+pub struct StandardDiscoverer<'ctx, 'proj, 'rep> {
+    context: &'ctx Context<'proj, 'rep>,
 }
 
-impl<'proj> StandardDiscoverer<'proj> {
-    pub(crate) const fn new(project: &'proj Project) -> Self {
-        Self { project }
+impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
+    pub const fn new(context: &'ctx Context<'proj, 'rep>) -> Self {
+        Self { context }
     }
 
     #[cfg(test)]
-    pub(crate) fn discover(self) -> (DiscoveredPackage, Vec<DiscoveryDiagnostic>) {
-        attach_with_project(self.project, |py| self.discover_with_py(py))
+    pub(crate) fn discover(self) -> DiscoveredPackage {
+        attach_with_project(self.context.project(), |py| self.discover_with_py(py))
     }
 
-    pub(crate) fn discover_with_py(
-        self,
-        py: Python<'_>,
-    ) -> (DiscoveredPackage, Vec<DiscoveryDiagnostic>) {
-        let mut session_package = DiscoveredPackage::new(self.project.cwd().clone());
+    pub(crate) fn discover_with_py(self, py: Python<'_>) -> DiscoveredPackage {
+        let mut session_package = DiscoveredPackage::new(self.context.project().cwd().clone());
 
-        let mut discovery_diagnostics = Vec::new();
-
-        let cwd = self.project.cwd();
+        let cwd = self.context.project().cwd();
 
         if add_to_sys_path(py, cwd, 0).is_err() {
-            return (session_package, discovery_diagnostics);
+            return session_package;
         }
 
         tracing::info!("Discovering tests...");
 
-        for path in self.project.test_paths() {
+        for path in self.context.project().test_paths() {
             match path {
                 Ok(path) => {
                     match &path {
                         TestPath::File(path) => {
-                            let Some((module, diagnostics)) =
+                            let Some(module) =
                                 self.discover_test_file(py, path, DiscoveryMode::All)
                             else {
                                 continue;
                             };
 
                             session_package.add_module(module);
-
-                            discovery_diagnostics.extend(diagnostics);
                         }
                         TestPath::Directory(path) => {
-                            let (package, diagnostics) =
-                                self.discover_directory(py, path, DiscoveryMode::All);
+                            let package = self.discover_directory(py, path, DiscoveryMode::All);
 
                             session_package.add_package(package);
-
-                            discovery_diagnostics.extend(diagnostics);
                         }
                         TestPath::Function {
                             path,
                             function_name,
                         } => {
-                            let Some((mut module, diagnostics)) =
+                            let Some(mut module) =
                                 self.discover_test_file(py, path, DiscoveryMode::All)
                             else {
                                 continue;
@@ -80,26 +73,20 @@ impl<'proj> StandardDiscoverer<'proj> {
                             if !module.test_functions().is_empty() {
                                 session_package.add_module(module);
                             }
-
-                            discovery_diagnostics.extend(diagnostics);
                         }
                     }
 
-                    discovery_diagnostics.extend(self.add_parent_configuration_packages(
-                        py,
-                        path.path(),
-                        &mut session_package,
-                    ));
+                    self.add_parent_configuration_packages(py, path.path(), &mut session_package);
                 }
-                Err(e) => {
-                    discovery_diagnostics.push(DiscoveryDiagnostic::invalid_path_error(&e));
+                Err(error) => {
+                    report_invalid_path(self.context, &error);
                 }
             }
         }
 
         session_package.shrink();
 
-        (session_package, discovery_diagnostics)
+        session_package
     }
 
     // Parse and run discovery on a single file
@@ -108,20 +95,23 @@ impl<'proj> StandardDiscoverer<'proj> {
         py: Python,
         path: &Utf8PathBuf,
         discovery_mode: DiscoveryMode,
-    ) -> Option<(DiscoveredModule, Vec<DiscoveryDiagnostic>)> {
-        let module_path = ModulePath::new(path, self.project.cwd())?;
+    ) -> Option<DiscoveredModule> {
+        let module_path = ModulePath::new(path, self.context.project().cwd())?;
 
         let mut module = DiscoveredModule::new(module_path, path.into());
 
-        let (discovered, diagnostics) = discover(py, &module, self.project);
+        let DiscoveredFunctions {
+            functions,
+            fixtures,
+        } = discover(self.context, py, &module);
 
         if !discovery_mode.is_configuration_only() {
-            module = module.with_test_functions(discovered.functions);
+            module.extend_test_functions(functions);
         }
 
-        module = module.with_fixtures(discovered.fixtures);
+        module.extend_fixtures(fixtures);
 
-        Some((module, diagnostics))
+        Some(module)
     }
 
     // This should look from the parent of path to the cwd for configuration files
@@ -130,24 +120,22 @@ impl<'proj> StandardDiscoverer<'proj> {
         py: Python,
         path: &Utf8Path,
         session_package: &mut DiscoveredPackage,
-    ) -> Vec<DiscoveryDiagnostic> {
+    ) {
         let mut current_path = if path.is_dir() {
             path
         } else {
             match path.parent() {
                 Some(parent) => parent,
-                None => return Vec::new(),
+                None => return,
             }
         };
-
-        let mut diagnostics = Vec::new();
 
         loop {
             let conftest_path = current_path.join("conftest.py");
             if conftest_path.exists() {
                 let mut package = DiscoveredPackage::new(current_path.to_path_buf());
 
-                let Some((module, sub_diagnostics)) =
+                let Some(module) =
                     self.discover_test_file(py, &conftest_path, DiscoveryMode::ConfigurationOnly)
                 else {
                     break;
@@ -156,11 +144,9 @@ impl<'proj> StandardDiscoverer<'proj> {
                 package.add_configuration_module(module);
 
                 session_package.add_package(package);
-
-                diagnostics.extend(sub_diagnostics);
             }
 
-            if current_path == *self.project.cwd() {
+            if current_path == *self.context.project().cwd() {
                 break;
             }
 
@@ -169,8 +155,6 @@ impl<'proj> StandardDiscoverer<'proj> {
                 None => break,
             };
         }
-
-        diagnostics
     }
 
     /// Discovers test files and packages within a directory.
@@ -183,12 +167,10 @@ impl<'proj> StandardDiscoverer<'proj> {
         py: Python,
         path: &Utf8PathBuf,
         discovery_mode: DiscoveryMode,
-    ) -> (DiscoveredPackage, Vec<DiscoveryDiagnostic>) {
+    ) -> DiscoveredPackage {
         let walker = self.create_directory_walker(path);
 
         let mut package = DiscoveredPackage::new(path.clone());
-
-        let mut diagnostics = Vec::new();
 
         for entry in walker {
             let Ok(entry) = entry else {
@@ -208,11 +190,9 @@ impl<'proj> StandardDiscoverer<'proj> {
                         continue;
                     }
 
-                    let (subpackage, sub_package_diagnostics) =
-                        self.discover_directory(py, &current_path, discovery_mode);
+                    let subpackage = self.discover_directory(py, &current_path, discovery_mode);
 
                     package.add_package(subpackage);
-                    diagnostics.extend(sub_package_diagnostics);
                 }
                 Some(file_type) if file_type.is_file() => match (&current_path).into() {
                     ModuleType::Test => {
@@ -220,17 +200,16 @@ impl<'proj> StandardDiscoverer<'proj> {
                             continue;
                         }
 
-                        let Some((module, module_diagnostics)) =
+                        let Some(module) =
                             self.discover_test_file(py, &current_path, DiscoveryMode::All)
                         else {
                             continue;
                         };
 
                         package.add_module(module);
-                        diagnostics.extend(module_diagnostics);
                     }
                     ModuleType::Configuration => {
-                        let Some((module, module_diagnostics)) = self.discover_test_file(
+                        let Some(module) = self.discover_test_file(
                             py,
                             &current_path,
                             DiscoveryMode::ConfigurationOnly,
@@ -239,14 +218,13 @@ impl<'proj> StandardDiscoverer<'proj> {
                         };
 
                         package.add_configuration_module(module);
-                        diagnostics.extend(module_diagnostics);
                     }
                 },
                 _ => {}
             }
         }
 
-        (package, diagnostics)
+        package
     }
 
     /// Creates a configured directory walker for Python file discovery.
@@ -257,7 +235,7 @@ impl<'proj> StandardDiscoverer<'proj> {
             .require_git(false)
             .git_global(false)
             .parents(true)
-            .git_ignore(!self.project.options().no_ignore())
+            .git_ignore(!self.context.project().options().no_ignore())
             .types({
                 let mut types = ignore::types::TypesBuilder::new();
                 types.add("python", "*.py").unwrap();
@@ -273,7 +251,7 @@ impl<'proj> StandardDiscoverer<'proj> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DiscoveryMode {
+pub(super) enum DiscoveryMode {
     All,
     ConfigurationOnly,
 }
@@ -288,18 +266,25 @@ impl DiscoveryMode {
 mod tests {
 
     use insta::{allow_duplicates, assert_snapshot};
-    use karva_project::project::ProjectOptions;
+    use karva_project::{Project, project::ProjectOptions};
     use karva_test::TestContext;
 
     use super::*;
+    use crate::DummyReporter;
+
+    fn session(project: &Project) -> DiscoveredPackage {
+        let binding = DummyReporter;
+        let context = Context::new(project, &binding);
+        let discoverer = StandardDiscoverer::new(&context);
+        discoverer.discover()
+    }
 
     #[test]
     fn test_discover_files() {
         let env = TestContext::with_files([("<test>/test.py", "def test_function(): pass")]);
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -321,8 +306,7 @@ mod tests {
         ]);
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -343,8 +327,7 @@ mod tests {
         ]);
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -367,8 +350,7 @@ mod tests {
         ]);
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -400,8 +382,7 @@ def not_a_test(): pass
         )]);
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -417,8 +398,7 @@ def not_a_test(): pass
         let env = TestContext::with_files([("<test>/test_file.py", "def test_function1(): pass")]);
 
         let project = Project::new(env.cwd(), vec![Utf8PathBuf::from("non_existent_path")]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @"");
         assert_eq!(session.total_test_functions(), 0);
@@ -429,8 +409,7 @@ def not_a_test(): pass
         let env = TestContext::with_files([("<test>/test_file.py", "test_function1 = None")]);
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @"");
         assert_eq!(session.total_test_functions(), 0);
@@ -450,8 +429,7 @@ def test_function(): pass
         let project = Project::new(env.cwd(), vec![env.cwd()])
             .with_options(ProjectOptions::default().with_test_prefix("check"));
 
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -476,8 +454,7 @@ def test_function(): pass
         let path_3 = mapped_dir.join("tests/test3.py");
 
         let project = Project::new(env.cwd(), vec![path_1, path_2, path_3]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -506,8 +483,7 @@ def test_function(): pass
         let path_1 = mapped_dir.join("test_file.py");
 
         let project = Project::new(env.cwd(), vec![mapped_dir.clone(), path_1]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             └── <test>.test_file
@@ -529,8 +505,7 @@ def test_function(): pass
         let path_2 = mapped_dir.join("test_file2.py");
 
         let project = Project::new(env.cwd(), vec![path_1, path_2]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             ├── <test>.test_file
@@ -554,8 +529,7 @@ def test_function(): pass
         let conftest_path = mapped_dir.join("conftest.py");
 
         let project = Project::new(env.cwd(), vec![conftest_path]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -577,8 +551,7 @@ def test_function(): pass
         let conftest_path = mapped_dir.join("conftest.py");
 
         let project = Project::new(env.cwd(), vec![conftest_path]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -597,8 +570,7 @@ def test_function(): pass
         let path = mapped_dir.join("test_file.py");
 
         let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -620,8 +592,7 @@ def test_function(): pass
         let path = mapped_dir.join("test_file.py");
 
         let project = Project::new(env.cwd(), vec![path]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @"");
     }
@@ -644,8 +615,7 @@ def test_1(x): pass",
 
         for path in [env.cwd(), test_path] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let discoverer = StandardDiscoverer::new(&project);
-            let (session, _) = discoverer.discover();
+            let session = session(&project);
 
             allow_duplicates!(assert_snapshot!(session.display(), @r"
             └── <temp_dir>/<test>/
@@ -673,8 +643,7 @@ def test_1(x): pass",
 
         for path in [env.cwd(), test_dir, test_path] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let discoverer = StandardDiscoverer::new(&project);
-            let (session, _) = discoverer.discover();
+            let session = session(&project);
             allow_duplicates!(assert_snapshot!(session.display(), @r"
             └── <temp_dir>/<test>/
                 └── <temp_dir>/<test>/tests/
@@ -706,8 +675,7 @@ def x():
 
         for path in [env.cwd(), test_dir, test_path] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let discoverer = StandardDiscoverer::new(&project);
-            let (session, _) = discoverer.discover();
+            let session = session(&project);
 
             allow_duplicates!(assert_snapshot!(session.display(), @r"
             └── <temp_dir>/<test>/
@@ -781,8 +749,7 @@ def w(x, y, z):
             test_path,
         ] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let discoverer = StandardDiscoverer::new(&project);
-            let (session, _) = discoverer.discover();
+            let session = session(&project);
             allow_duplicates!(assert_snapshot!(session.display(), @r"
             └── <temp_dir>/<test>/
                 ├── <test>.conftest
@@ -822,8 +789,7 @@ def w(x, y, z):
 
         let project = Project::new(env.cwd(), vec![test_dir_1, test_dir_2, test_file_3]);
 
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -864,8 +830,7 @@ def root_fixture():
         let middle_dir = test_dir.join("middle_dir");
 
         let project = Project::new(env.cwd(), vec![middle_dir]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -902,8 +867,7 @@ def x():
         let test_dir = mapped_dir.join("tests");
 
         let project = Project::new(env.cwd(), vec![test_dir]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -937,8 +901,7 @@ def x():
         let conftest_path = mapped_dir.join("conftest.py");
 
         let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         let mapped_package = session.get_package(mapped_dir).unwrap();
 
@@ -976,8 +939,7 @@ def x():
 
         let project = Project::new(env.cwd(), vec![path.clone(), path]);
 
-        let discoverer = StandardDiscoverer::new(&project);
-        let (session, _) = discoverer.discover();
+        let session = session(&project);
 
         assert_eq!(session.total_test_functions(), 1);
     }

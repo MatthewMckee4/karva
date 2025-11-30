@@ -46,27 +46,6 @@ def test_function2():
     karva.fail(reason="This test is not ready yet")
 ```
 
-Then running `uv run karva test` will provide the following output:
-
-```text
-test test::test_function ... FAILED
-test test::test_function2 ... FAILED
-
-test failures:
-
-test `test::test_function` at test.py:3 failed at test.py:4
-This test is not ready yet
-note: run with `--show-traceback` to see the full traceback
-
-test `test::test_function2` at test.py:6 failed at test.py:7
-This test is not ready yet
-note: run with `--show-traceback` to see the full traceback
-
-test failures:
-    test::test_function at test.py:3
-    test::test_function2 at test.py:6
-
-test result: FAILED. 0 passed; 2 failed; 0 skipped; finished in 0s
-```
+Then running `uv run karva test` will result in two test fails.
 
 You can still use `pytest.fail()` to fail tests.

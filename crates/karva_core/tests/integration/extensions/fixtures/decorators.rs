@@ -148,14 +148,20 @@ def test_fixtures_given_by_decorator(a, b):
 
     let result = test_context.test();
 
-    assert_snapshot!(result.display(), @r#"
-    test failures:
+    assert_snapshot!(result.display(), @r"
+    diagnostics:
 
-    test `<test>.test::test_fixtures_given_by_decorator` has missing fixtures: ["b"] at <test>/test.py:12
-
-    test failures:
-        <test>.test::test_fixtures_given_by_decorator at <test>/test.py:12
+    error[missing-fixtures]: Test `test_fixtures_given_by_decorator` has missing fixtures
+      --> <test>/test.py:13:5
+       |
+    12 | @given(a=1)
+    13 | def test_fixtures_given_by_decorator(a, b):
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    14 |     assert a == 1
+    15 |     assert b == 1
+       |
+    info: Missing fixtures: `b`
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
-    "#);
+    ");
 }

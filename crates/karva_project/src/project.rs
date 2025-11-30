@@ -1,4 +1,5 @@
 use camino::Utf8PathBuf;
+use ruff_db::diagnostic::DiagnosticFormat;
 use ruff_python_ast::PythonVersion;
 
 use crate::{
@@ -47,11 +48,14 @@ pub struct ProjectOptions {
     fail_fast: bool,
     try_import_fixtures: bool,
     show_traceback: bool,
+    diagnostic_format: DiagnosticFormat,
+    no_progress: bool,
 }
 
 impl ProjectOptions {
     #[allow(clippy::fn_params_excessive_bools)]
-    pub const fn new(
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
         test_prefix: TestPrefix,
         verbosity: VerbosityLevel,
         show_output: bool,
@@ -59,6 +63,8 @@ impl ProjectOptions {
         fail_fast: bool,
         try_import_fixtures: bool,
         show_traceback: bool,
+        diagnostic_format: impl Into<DiagnosticFormat>,
+        no_progress: bool,
     ) -> Self {
         Self {
             test_prefix,
@@ -68,6 +74,8 @@ impl ProjectOptions {
             fail_fast,
             try_import_fixtures,
             show_traceback,
+            diagnostic_format: diagnostic_format.into(),
+            no_progress,
         }
     }
 
@@ -127,6 +135,14 @@ impl ProjectOptions {
     pub const fn with_show_traceback(mut self, show_traceback: bool) -> Self {
         self.show_traceback = show_traceback;
         self
+    }
+
+    pub const fn diagnostic_format(&self) -> DiagnosticFormat {
+        self.diagnostic_format
+    }
+
+    pub const fn no_progress(&self) -> bool {
+        self.no_progress
     }
 }
 
