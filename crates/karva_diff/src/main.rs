@@ -102,6 +102,9 @@ fn run(
         .arg(&args.old_karva_binary)
         .arg("test")
         .args(&paths)
+        .arg("--output-format")
+        .arg("concise")
+        .arg("--no-progress")
         .current_dir(&installed_project.path)
         .output()
         .context("Failed to run old karva binary")?;
@@ -125,6 +128,9 @@ fn run(
         .arg(&args.new_karva_binary)
         .arg("test")
         .args(&paths)
+        .arg("--output-format")
+        .arg("concise")
+        .arg("--no-progress")
         .current_dir(&installed_project.path)
         .output()
         .context("Failed to run new karva binary")?;

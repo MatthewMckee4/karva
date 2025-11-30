@@ -1,0 +1,12 @@
+10c10
+< test result: ok. 0 passed; 0 failed; 0 skipped; finished in 177ms
+---
+> test result: ok. 0 passed; 0 failed; 0 skipped; finished in 55ms
+227c227
+< test result: ok. 0 passed; 0 failed; 0 skipped; finished in 1326ms
+---
+> test result: ok. 0 passed; 0 failed; 0 skipped; finished in 1065ms
+474c474
+< test result: ok. 0 passed; 0 failed; 0 skipped; finished in 938ms
+---
+> test result: ok. 0 passed; 0 failed; 0 skipped; finished in 738ms

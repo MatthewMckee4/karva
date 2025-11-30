@@ -43,6 +43,28 @@ fn test_one_test_passes() {
 
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
+fn test_one_test_passes_no_progress() {
+    let context = IntegrationTestContext::with_file(
+        "test_pass.py",
+        r"
+        def test_pass():
+            assert True
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command().args(["--no-progress"]), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_one_test_fail() {
     let context = IntegrationTestContext::with_file(
         "test_fail.py",

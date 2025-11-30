@@ -77,6 +77,10 @@ pub struct TestCommand {
     /// When set, we will show the traceback of each test failure.
     #[clap(long)]
     pub(crate) show_traceback: bool,
+
+    /// When set, we will not show individual test case results during execution.
+    #[clap(long)]
+    pub(crate) no_progress: bool,
 }
 
 /// The diagnostic output format.
@@ -112,6 +116,7 @@ impl TestCommand {
             self.try_import_fixtures,
             self.show_traceback,
             self.output_format,
+            self.no_progress,
         )
     }
 }

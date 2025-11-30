@@ -49,6 +49,7 @@ pub struct ProjectOptions {
     try_import_fixtures: bool,
     show_traceback: bool,
     diagnostic_format: DiagnosticFormat,
+    no_progress: bool,
 }
 
 impl ProjectOptions {
@@ -63,6 +64,7 @@ impl ProjectOptions {
         try_import_fixtures: bool,
         show_traceback: bool,
         diagnostic_format: impl Into<DiagnosticFormat>,
+        no_progress: bool,
     ) -> Self {
         Self {
             test_prefix,
@@ -73,6 +75,7 @@ impl ProjectOptions {
             try_import_fixtures,
             show_traceback,
             diagnostic_format: diagnostic_format.into(),
+            no_progress,
         }
     }
 
@@ -136,6 +139,10 @@ impl ProjectOptions {
 
     pub const fn diagnostic_format(&self) -> DiagnosticFormat {
         self.diagnostic_format
+    }
+
+    pub const fn no_progress(&self) -> bool {
+        self.no_progress
     }
 }
 

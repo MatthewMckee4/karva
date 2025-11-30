@@ -109,7 +109,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         std::process::exit(0);
     })?;
 
-    let reporter: Box<dyn Reporter> = if verbosity.is_quiet() {
+    let reporter: Box<dyn Reporter> = if verbosity.is_quiet() || project.options().no_progress() {
         Box::new(DummyReporter)
     } else {
         Box::new(TestCaseReporter::default())
