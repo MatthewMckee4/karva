@@ -11,7 +11,7 @@ mod scope;
 mod traits;
 mod utils;
 
-pub use builtins::get_builtin_fixture;
+pub use builtins::{Mock, get_builtin_fixture};
 pub use finalizer::Finalizer;
 pub use normalized_fixture::{NormalizedFixture, NormalizedFixtureValue, UserDefinedFixture};
 pub use python::FixtureRequest;

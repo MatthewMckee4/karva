@@ -118,10 +118,12 @@ pub fn report_invalid_path(context: &Context, error: &TestPathError) {
     builder.into_diagnostic(format!("Invalid path: {error}"));
 }
 
-pub fn report_failed_to_import_module(context: &Context, module_name: &str) {
+pub fn report_failed_to_import_module(context: &Context, module_name: &str, error: &str) {
     let builder = context.report_discovery_diagnostic(&FAILED_TO_IMPORT_MODULE);
 
-    builder.into_diagnostic(format!("Failed to import python module `{module_name}`"));
+    builder.into_diagnostic(format!(
+        "Failed to import python module `{module_name}`: {error}"
+    ));
 }
 
 pub fn report_invalid_fixture(

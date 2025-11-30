@@ -38,11 +38,58 @@ target-version = "py311"
 [tool.ruff.lint]
 exclude = [
     "python/karva/__main__.py",
-    "crates/karva_benchmark/resources/test_*.py",
+    "python/tests/"
 ]
-select = ["ALL"]
-ignore = ["D", "S", "ANN401", "PYI021"]
-
+select = [
+    "ARG",
+    "B",
+    "B9",
+    "D",
+    "E",
+    "EXE",
+    "F",
+    "I",
+    "ISC",
+    "PGH",
+    "PYI",
+    "PT",
+    "RUF",
+    "SIM",
+    "UP",
+    "PLW0127",
+    "FURB101",
+    "FURB103",
+    "PLW1510",
+]
+ignore = [
+    # Unnecessarily strict/pedantic
+    "D107",
+    "D202",
+    "D204",
+    "D205",
+    # These are all enforced by, or incompatible with, the ruff formatter:
+    "E203",
+    "E501",
+    "W291",
+    "W293",
+    # It's often necessary to compare types instead of using isinstance()
+    "E721",
+    "RUF005",
+    # Let mypy/pyright complain about blanket type ignores or implicit optional
+    "PGH004",
+    "RUF013",
+    # Makes code slower and more verbose
+    # https://github.com/astral-sh/ruff/issues/7871
+    "UP038",
+]
+unfixable = [
+    "F841",    # unused variable. ruff keeps the call, but mostly we want to get rid of it all
+    "F601",    # automatic fix might obscure issue
+    "F602",    # automatic fix might obscure issue
+    "B018",    # automatic fix might obscure issue
+    "PLW1510", # automatic fix might obscure issue
+    "RUF017",  # Ruff's fix is faster, but I prefer using itertools.chain_from_iterable
+]
 [tool.tbump]
 
 [[tool.tbump.before_commit]]

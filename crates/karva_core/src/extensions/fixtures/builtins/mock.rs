@@ -1,0 +1,555 @@
+use std::sync::{Arc, Mutex};
+
+use pyo3::{
+    IntoPyObjectExt, PyResult,
+    exceptions::{PyAttributeError, PyTypeError},
+    prelude::*,
+    types::{PyString, PyType},
+};
+
+pub fn is_mock_fixture_name(fixture_name: &str) -> bool {
+    match fixture_name {
+        // pytest names
+        "monkeypatch" => true,
+        _ => false,
+    }
+}
+
+pub fn create_mock_fixture(py: Python<'_>) -> Option<Py<PyAny>> {
+    let mock = Mock::new();
+    mock.into_py_any(py).ok()
+}
+
+/// Sentinel value representing "not set"
+#[pyclass]
+#[derive(Clone)]
+struct NotSetType;
+
+#[pymethods]
+impl NotSetType {
+    #[allow(clippy::unused_self)]
+    const fn __repr__(&self) -> &'static str {
+        "NOTSET"
+    }
+}
+
+type SetAttr = Arc<Mutex<Vec<(Py<PyAny>, String, Py<PyAny>)>>>;
+type SetItem = Arc<Mutex<Vec<(Py<PyAny>, Py<PyAny>, Py<PyAny>)>>>;
+
+/// Helper to conveniently monkeypatch attributes/items/environment variables/syspath.
+#[pyclass]
+pub struct Mock {
+    setattr: SetAttr,
+    setitem: SetItem,
+    cwd: Arc<Mutex<Option<String>>>,
+    savesyspath: Arc<Mutex<Option<Vec<String>>>>,
+}
+
+#[pymethods]
+impl Mock {
+    #[new]
+    fn new() -> Self {
+        Self {
+            setattr: Arc::new(Mutex::new(Vec::new())),
+            setitem: Arc::new(Mutex::new(Vec::new())),
+            cwd: Arc::new(Mutex::new(None)),
+            savesyspath: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// Context manager that returns a new Mock object which undoes any patching
+    /// done inside the with block upon exit.
+    #[classmethod]
+    fn context(_cls: &Bound<'_, PyType>) -> MockContext {
+        MockContext { mock: Self::new() }
+    }
+
+    /// Set attribute value on target, memorising the old value.
+    #[pyo3(signature = (target, name, value = None, raising = true))]
+    fn setattr(
+        &mut self,
+        py: Python<'_>,
+        target: Py<PyAny>,
+        name: Py<PyAny>,
+        value: Option<Py<PyAny>>,
+        raising: bool,
+    ) -> PyResult<()> {
+        let (actual_target, actual_name, actual_value) = if target
+            .bind(py)
+            .is_instance_of::<PyString>()
+        {
+            // String target case - dotted import path
+            let target_str = target.extract::<String>(py)?;
+
+            if !target_str.contains('.') {
+                return Err(PyAttributeError::new_err(format!(
+                    "must be absolute import path string, not {target_str:?}"
+                )));
+            }
+
+            let actual_value = value.map_or(name, |v| v);
+
+            let (attr_name, resolved_target) = derive_importpath(py, &target_str, raising)?;
+
+            (resolved_target, attr_name, actual_value)
+        } else {
+            // Object target case
+            let actual_name = name.extract::<String>(py)?;
+            let actual_value = value.ok_or_else(|| {
+                PyTypeError::new_err(
+                    "use setattr(target, name, value) or setattr(target, value) with target being a dotted import string"
+                )
+            })?;
+
+            (target, actual_name, actual_value)
+        };
+
+        // Get old value
+        let oldval = if let Ok(val) = actual_target.bind(py).getattr(&actual_name) {
+            val.into()
+        } else {
+            if raising {
+                return Err(PyAttributeError::new_err(format!(
+                    "{actual_target:?} has no attribute {actual_name:?}"
+                )));
+            }
+            py.None()
+        };
+
+        // Handle class descriptors
+        let final_oldval = if actual_target
+            .bind(py)
+            .is_instance_of::<pyo3::types::PyType>()
+        {
+            actual_target
+                .bind(py)
+                .getattr("__dict__")?
+                .get_item(&actual_name)
+                .ok()
+                .map_or_else(|| py.None(), std::convert::Into::into)
+        } else {
+            oldval
+        };
+
+        // Store for undo
+        self.setattr.lock().unwrap().push((
+            actual_target.clone(),
+            actual_name.clone(),
+            final_oldval,
+        ));
+
+        // Set new value
+        actual_target.bind(py).setattr(&actual_name, actual_value)?;
+
+        Ok(())
+    }
+
+    /// Delete attribute name from target.
+    #[pyo3(signature = (target, name = None, raising = true))]
+    fn delattr(
+        &mut self,
+        py: Python<'_>,
+        target: Py<PyAny>,
+        name: Option<Py<PyAny>>,
+        raising: bool,
+    ) -> PyResult<()> {
+        let (actual_name, actual_target) = if target.bind(py).is_instance_of::<PyString>() {
+            let target_str = target.extract::<String>(py)?;
+
+            if name.is_some() {
+                return Err(PyAttributeError::new_err(
+                    "use delattr(target, name) or delattr(target) with target being a dotted import string",
+                ));
+            }
+
+            derive_importpath(py, &target_str, raising)?
+        } else {
+            let name_str = name
+                .ok_or_else(|| {
+                    PyAttributeError::new_err(
+                        "use delattr(target, name) or delattr(target) with target being a dotted import string"
+                    )
+                })?
+                .extract::<String>(py)?;
+
+            (name_str, target)
+        };
+
+        if !actual_target.bind(py).hasattr(&actual_name)? {
+            if raising {
+                return Err(PyAttributeError::new_err(actual_name));
+            }
+            return Ok(());
+        }
+
+        // Get old value
+        let oldval = if let Ok(val) = actual_target.bind(py).getattr(&actual_name) {
+            // Handle class descriptors
+            if actual_target
+                .bind(py)
+                .is_instance_of::<pyo3::types::PyType>()
+            {
+                actual_target
+                    .bind(py)
+                    .getattr("__dict__")?
+                    .get_item(&actual_name)
+                    .ok()
+                    .map_or_else(|| py.None(), std::convert::Into::into)
+            } else {
+                val.into()
+            }
+        } else {
+            py.None()
+        };
+
+        // Store for undo
+        self.setattr
+            .lock()
+            .unwrap()
+            .push((actual_target.clone(), actual_name.clone(), oldval));
+
+        // Delete attribute
+        actual_target.bind(py).delattr(&actual_name)?;
+
+        Ok(())
+    }
+
+    /// Set dictionary entry name to value.
+    #[allow(clippy::needless_pass_by_value)]
+    fn setitem(
+        &mut self,
+        py: Python<'_>,
+        dic: Py<PyAny>,
+        name: Py<PyAny>,
+        value: Py<PyAny>,
+    ) -> PyResult<()> {
+        let bound_dic = dic.bind(py);
+
+        // Get old value if it exists
+        let oldval = bound_dic
+            .get_item(&name)
+            .ok()
+            .map_or_else(|| py.None(), std::convert::Into::into);
+
+        // Store for undo
+        self.setitem
+            .lock()
+            .unwrap()
+            .push((dic.clone(), name.clone(), oldval));
+
+        // Set new value
+        bound_dic.set_item(&name, value)?;
+
+        Ok(())
+    }
+
+    /// Delete name from dict.
+    #[allow(clippy::needless_pass_by_value)]
+    #[pyo3(signature = (dic, name, raising = true))]
+    fn delitem(
+        &mut self,
+        py: Python<'_>,
+        dic: Py<PyAny>,
+        name: Py<PyAny>,
+        raising: bool,
+    ) -> PyResult<()> {
+        let bound_dic = dic.bind(py);
+
+        if !bound_dic.contains(&name)? {
+            if raising {
+                return Err(pyo3::exceptions::PyKeyError::new_err(format!("{name:?}")));
+            }
+            return Ok(());
+        }
+
+        // Get old value
+        let oldval = bound_dic.get_item(&name)?.into();
+
+        // Store for undo
+        self.setitem
+            .lock()
+            .unwrap()
+            .push((dic.clone(), name.clone(), oldval));
+
+        // Delete item
+        bound_dic.del_item(&name)?;
+
+        Ok(())
+    }
+
+    /// Set environment variable name to value.
+    #[pyo3(signature = (name, value, prepend = None))]
+    #[allow(clippy::needless_pass_by_value)]
+    fn setenv(
+        &mut self,
+        py: Python<'_>,
+        name: String,
+        value: Py<PyAny>,
+        prepend: Option<String>,
+    ) -> PyResult<()> {
+        let os_module = py.import("os")?;
+        let environ = os_module.getattr("environ")?;
+
+        let value_string = value.to_string();
+
+        let final_value = if let Some(prep_char) = prepend {
+            if environ.contains(&name)? {
+                let current = environ.get_item(&name)?.extract::<String>()?;
+                format!("{value}{prep_char}{current}")
+            } else {
+                value_string
+            }
+        } else {
+            value_string
+        };
+
+        self.setitem(
+            py,
+            environ.into(),
+            name.into_pyobject(py).unwrap().into_any().unbind(),
+            final_value.into_pyobject(py).unwrap().into_any().unbind(),
+        )
+    }
+
+    /// Delete name from the environment.
+    #[pyo3(signature = (name, raising = true))]
+    fn delenv(&mut self, py: Python<'_>, name: String, raising: bool) -> PyResult<()> {
+        let os_module = py.import("os")?;
+        let environ = os_module.getattr("environ")?;
+
+        self.delitem(
+            py,
+            environ.into(),
+            name.into_pyobject(py).unwrap().into_any().unbind(),
+            raising,
+        )
+    }
+
+    /// Prepend path to sys.path list of import locations.
+    fn syspath_prepend(&mut self, py: Python<'_>, path: String) -> PyResult<()> {
+        let sys_module = py.import("sys")?;
+        let sys_path = sys_module.getattr("path")?;
+
+        // Save original sys.path if not already saved
+        {
+            let mut save = self.savesyspath.lock().unwrap();
+            if save.is_none() {
+                let saved: Vec<String> = sys_path.extract()?;
+                *save = Some(saved);
+            }
+        }
+
+        // Insert at beginning
+        sys_path.call_method1("insert", (0, path))?;
+
+        // Invalidate import caches
+        let importlib = py.import("importlib")?;
+        importlib.call_method0("invalidate_caches")?;
+
+        Ok(())
+    }
+
+    /// Change the current working directory to the specified path.
+    #[allow(clippy::needless_pass_by_value)]
+    fn chdir(&mut self, py: Python<'_>, path: Py<PyAny>) -> PyResult<()> {
+        let os_module = py.import("os")?;
+        let path_string = path.to_string();
+
+        // Save current directory if not already saved
+        {
+            let mut cwd = self.cwd.lock().unwrap();
+            if cwd.is_none() {
+                let current = os_module.call_method0("getcwd")?.extract::<String>()?;
+                *cwd = Some(current);
+            }
+        }
+
+        // Change directory
+        os_module.call_method1("chdir", (path_string,))?;
+
+        Ok(())
+    }
+
+    /// Undo previous changes.
+    fn undo(&mut self, py: Python<'_>) -> PyResult<()> {
+        // Restore setattr changes in reverse order
+        {
+            let mut setattr_list = self.setattr.lock().unwrap();
+            for (obj, name, value) in setattr_list.drain(..).rev() {
+                if value.is_none(py) {
+                    let _ = obj.bind(py).delattr(&name);
+                } else {
+                    obj.bind(py).setattr(&name, value)?;
+                }
+            }
+        }
+
+        // Restore setitem changes in reverse order
+        {
+            let mut setitem_list = self.setitem.lock().unwrap();
+            for (dictionary, key, value) in setitem_list.drain(..).rev() {
+                let bound_dict = dictionary.bind(py);
+                if value.is_none(py) {
+                    let _ = bound_dict.del_item(&key);
+                } else {
+                    bound_dict.set_item(&key, value)?;
+                }
+            }
+        }
+
+        // Restore sys.path
+        {
+            let mut savesyspath = self.savesyspath.lock().unwrap();
+            if let Some(saved_path) = savesyspath.take() {
+                let sys_module = py.import("sys")?;
+                let sys_path = sys_module.getattr("path")?;
+
+                // Clear and restore
+                sys_path.call_method0("clear")?;
+                for item in saved_path {
+                    sys_path.call_method1("append", (item,))?;
+                }
+            }
+        }
+
+        // Restore working directory
+        {
+            let mut cwd = self.cwd.lock().unwrap();
+            if let Some(saved_cwd) = cwd.take() {
+                let os_module = py.import("os")?;
+                os_module.call_method1("chdir", (saved_cwd,))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    const fn __enter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __exit__(
+        &mut self,
+        py: Python<'_>,
+        _exc_type: Py<PyAny>,
+        _exc_val: Py<PyAny>,
+        _exc_tb: Py<PyAny>,
+    ) -> PyResult<bool> {
+        self.undo(py)?;
+        Ok(false)
+    }
+}
+
+/// Context manager wrapper for Mock
+#[pyclass]
+struct MockContext {
+    mock: Mock,
+}
+
+#[pymethods]
+impl MockContext {
+    #[allow(clippy::needless_pass_by_value)]
+    fn __enter__(slf: PyRef<'_, Self>) -> PyResult<Py<Mock>> {
+        let py = slf.py();
+        // We need to return the Mock instance
+        Py::new(py, Mock::new())
+    }
+
+    fn __exit__(
+        &mut self,
+        py: Python<'_>,
+        _exc_type: Py<PyAny>,
+        _exc_val: Py<PyAny>,
+        _exc_tb: Py<PyAny>,
+    ) -> PyResult<bool> {
+        self.mock.undo(py)?;
+        Ok(false)
+    }
+}
+
+/// Helper function to resolve dotted import paths
+fn resolve(py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
+    let parts: Vec<&str> = name.split('.').collect();
+
+    if parts.is_empty() {
+        return Err(PyAttributeError::new_err("Empty import path"));
+    }
+
+    let importlib = py.import("importlib")?;
+    let mut used = parts[0].to_string();
+    let mut found = importlib.call_method1("import_module", (used.clone(),))?;
+
+    for part in &parts[1..] {
+        used.push('.');
+        used.push_str(part);
+
+        if let Ok(attr) = found.getattr(part) {
+            found = attr;
+            continue;
+        }
+
+        // Try importing as module
+        match importlib.call_method1("import_module", (used.clone(),)) {
+            Ok(module) => {
+                found = module;
+            }
+            Err(e) => {
+                // Check if this is the expected import error
+                let err_str = format!("{e}");
+                if err_str.contains(&used) {
+                    return Err(e);
+                }
+                return Err(pyo3::exceptions::PyImportError::new_err(format!(
+                    "import error in {used}: {e}"
+                )));
+            }
+        }
+
+        found = annotated_getattr(py, &found, part, &used)?;
+    }
+
+    Ok(found.into())
+}
+
+/// Helper to get attribute with better error messages
+fn annotated_getattr<'py>(
+    _py: Python<'py>,
+    obj: &Bound<'py, PyAny>,
+    name: &str,
+    ann: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    obj.getattr(name).map_err(|_e| {
+        let type_name = obj
+            .get_type()
+            .name()
+            .map_or_else(|_| "Unknown".to_string(), |n| n.to_string());
+        PyAttributeError::new_err(format!(
+            "{type_name:?} object at {ann} has no attribute {name:?}"
+        ))
+    })
+}
+
+/// Derive import path into (`attribute_name`, `target_object`)
+fn derive_importpath(
+    py: Python<'_>,
+    import_path: &str,
+    raising: bool,
+) -> PyResult<(String, Py<PyAny>)> {
+    if !import_path.contains('.') {
+        return Err(PyAttributeError::new_err(format!(
+            "must be absolute import path string, not {import_path:?}"
+        )));
+    }
+
+    let parts: Vec<&str> = import_path.rsplitn(2, '.').collect();
+    let attr = parts[0].to_string();
+    let module = parts[1];
+
+    let target = resolve(py, module)?;
+
+    if raising {
+        annotated_getattr(py, target.bind(py), &attr, module)?;
+    }
+
+    Ok((attr, target))
+}

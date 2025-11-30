@@ -13,7 +13,7 @@ from karva._karva import (
 
 __version__ = "0.1.10"
 
-__all__ = [
+__all__: list[str] = [
     "FailError",
     "FixtureRequest",
     "SkipError",
