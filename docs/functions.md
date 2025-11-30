@@ -46,6 +46,6 @@ def test_function2():
     karva.fail(reason="This test is not ready yet")
 ```
 
-Then running `uv run karva test` will result in two test fails. 
+Then running `uv run karva test` will result in two test fails.
 
 You can still use `pytest.fail()` to fail tests.
