@@ -21,7 +21,7 @@ pub struct FinalizerCache {
 
 impl FinalizerCache {
     pub fn add_finalizer(&self, finalizer: Finalizer) {
-        match finalizer.scope() {
+        match finalizer.scope {
             FixtureScope::Session => self.session.lock().unwrap().push(finalizer),
             FixtureScope::Package => self.package.lock().unwrap().push(finalizer),
             FixtureScope::Module => self.module.lock().unwrap().push(finalizer),

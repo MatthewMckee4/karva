@@ -26,7 +26,7 @@ fn test_invalid_pytest_fixture_scope() {
     assert_snapshot!(result.display(), @r#"
     diagnostics:
 
-    invalid-fixture: Discovered an invalid fixture `some_fixture`
+    error[invalid-fixture]: Discovered an invalid fixture `some_fixture`
      --> <test>/test.py:5:5
       |
     4 | @pytest.fixture(scope="sessionss")
@@ -34,9 +34,9 @@ fn test_invalid_pytest_fixture_scope() {
       |     ^^^^^^^^^^^^
     6 |     return 1
       |
-    info: Reason: Failed to parse fixture
+    info: Failed to parse fixture
 
-    missing-fixtures: Discovered missing fixtures for test `test_all_scopes`
+    error[missing-fixtures]: Discovered missing fixtures for test `test_all_scopes`
       --> <test>/test.py:8:5
        |
      6 |     return 1
@@ -71,7 +71,7 @@ fn test_missing_fixture() {
     assert_snapshot!(result.display(), @r#"
     diagnostics:
 
-    missing-fixtures: Discovered missing fixtures for test `test_all_scopes`
+    error[missing-fixtures]: Discovered missing fixtures for test `test_all_scopes`
      --> <test>/test.py:2:5
       |
     2 | def test_all_scopes(
@@ -108,7 +108,7 @@ fn test_fixture_fails_to_run() {
     assert_snapshot!(result.display(), @r#"
     diagnostics:
 
-    fixture-failure: Fixture `failing_fixture` failed
+    error[fixture-failure]: Fixture `failing_fixture` failed
      --> <test>/test.py:5:5
       |
     4 | @fixture
@@ -128,7 +128,7 @@ fn test_fixture_fails_to_run() {
       |
     info: Error message: Fixture failed
 
-    missing-fixtures: Discovered missing fixtures for test `test_failing_fixture`
+    error[missing-fixtures]: Discovered missing fixtures for test `test_failing_fixture`
      --> <test>/test.py:8:5
       |
     6 |     raise Exception('Fixture failed')
@@ -164,7 +164,7 @@ fn test_fixture_missing_fixtures() {
     assert_snapshot!(result.display(), @r#"
     diagnostics:
 
-    missing-fixtures: Discovered missing fixtures for fixture `failing_fixture`
+    error[missing-fixtures]: Discovered missing fixtures for fixture `failing_fixture`
      --> <test>/test.py:5:5
       |
     4 | @fixture
@@ -174,7 +174,7 @@ fn test_fixture_missing_fixtures() {
       |
     info: Missing fixtures: ["missing_fixture"]
 
-    missing-fixtures: Discovered missing fixtures for test `test_failing_fixture`
+    error[missing-fixtures]: Discovered missing fixtures for test `test_failing_fixture`
      --> <test>/test.py:8:5
       |
     6 |     return 1
@@ -207,7 +207,7 @@ fn missing_arguments_in_nested_function() {
     assert_snapshot!(result.display(), @r"
     diagnostics:
 
-    test-failure: Test `test_failing_fixture` failed
+    error[test-failure]: Test `test_failing_fixture` failed
      --> <test>/test.py:2:5
       |
     2 | def test_failing_fixture():

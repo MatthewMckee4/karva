@@ -166,7 +166,7 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
 
         let config = DisplayDiagnosticConfig::default()
             .format(DiagnosticFormat::Full)
-            .hide_severity(true);
+            .color(true);
 
         if !discovery_diagnostics.is_empty() {
             writeln!(f, "discovery diagnostics:")?;

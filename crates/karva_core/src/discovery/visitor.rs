@@ -91,7 +91,7 @@ impl<'proj, 'rep, 'py, 'a> FunctionDefinitionVisitor<'_, 'proj, 'rep, 'py, 'a> {
                 }
 
                 for function in &self.discovered_functions {
-                    if function.name().function_name() == name_str {
+                    if function.name.function_name() == name_str {
                         continue 'outer;
                     }
                 }

@@ -1,9 +1,9 @@
 use pyo3::{prelude::*, types::PyIterator};
 use ruff_python_ast::StmtFunctionDef;
-use ruff_source_file::SourceFile;
 
 use crate::{
-    Context, diagnostic::report_invalid_fixture_finalizer, extensions::fixtures::FixtureScope,
+    Context, QualifiedFunctionName, diagnostic::report_invalid_fixture_finalizer,
+    extensions::fixtures::FixtureScope, utils::source_file,
 };
 
 /// Represents a generator function that can be used to run the finalizer section of a fixture.
@@ -17,15 +17,11 @@ use crate::{
 pub struct Finalizer {
     pub(crate) fixture_return: Py<PyIterator>,
     pub(crate) scope: FixtureScope,
-    pub(crate) source_file: SourceFile,
+    pub(crate) fixture_name: QualifiedFunctionName,
     pub(crate) stmt_function_def: StmtFunctionDef,
 }
 
 impl Finalizer {
-    pub(crate) const fn scope(&self) -> FixtureScope {
-        self.scope
-    }
-
     pub(crate) fn run(self, context: &Context, py: Python<'_>) {
         let mut generator = self.fixture_return.bind(py).clone();
         let Some(generator_next_result) = generator.next() else {
@@ -39,7 +35,7 @@ impl Finalizer {
 
         report_invalid_fixture_finalizer(
             context,
-            self.source_file,
+            source_file(self.fixture_name.module_path().path()),
             &self.stmt_function_def,
             invalid_finalizer_reason,
         );
@@ -75,7 +71,7 @@ def test_fixture_generator(fixture_generator):
         assert_snapshot!(result.display(), @r"
         diagnostics:
 
-        invalid-fixture-finalizer: Discovered an invalid fixture finalizer `fixture_generator`
+        warning[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
          --> <test>/test_file.py:5:5
           |
         4 | @karva.fixture
@@ -84,7 +80,7 @@ def test_fixture_generator(fixture_generator):
         6 |     yield 1
         7 |     yield 2
           |
-        info: Reason: Fixture had more than one yield statement
+        info: Fixture had more than one yield statement
 
         test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
         ");
@@ -112,7 +108,7 @@ def test_fixture_generator(fixture_generator):
         assert_snapshot!(result.display(), @r#"
         diagnostics:
 
-        invalid-fixture-finalizer: Discovered an invalid fixture finalizer `fixture_generator`
+        warning[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
          --> <test>/test_file.py:5:5
           |
         4 | @karva.fixture
@@ -121,7 +117,7 @@ def test_fixture_generator(fixture_generator):
         6 |     yield 1
         7 |     raise ValueError("fixture-error")
           |
-        info: Reason: Failed to reset fixture: fixture-error
+        info: Failed to reset fixture: fixture-error
 
         test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
         "#);

@@ -81,7 +81,7 @@ impl DiscoveredModule {
                 if !self
                     .test_functions
                     .iter()
-                    .any(|existing| existing.name() == test_case.name())
+                    .any(|existing| existing.name == test_case.name)
                 {
                     self.test_functions.push(test_case);
                 }
@@ -152,7 +152,7 @@ impl std::fmt::Display for DisplayDiscoveredModule<'_> {
             if i > 0 {
                 write!(f, " ")?;
             }
-            write!(f, "{}", test.name().function_name())?;
+            write!(f, "{}", test.name.function_name())?;
         }
         write!(f, "]\n└── fixtures [")?;
         let fixtures = self.module.fixtures();

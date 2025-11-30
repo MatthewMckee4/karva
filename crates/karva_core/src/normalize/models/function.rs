@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
+use camino::Utf8PathBuf;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
-use ruff_source_file::SourceFile;
 
 use crate::{
     QualifiedFunctionName,
@@ -37,8 +37,12 @@ pub struct NormalizedTestFunction {
     /// Resolved tags
     pub(crate) tags: Tags,
 
-    /// The source file for this fixture
-    pub(crate) source_file: SourceFile,
     /// The function definition for this fixture
     pub(crate) stmt_function_def: StmtFunctionDef,
+}
+
+impl NormalizedTestFunction {
+    pub(crate) const fn module_path(&self) -> &Utf8PathBuf {
+        self.name.module_path().path()
+    }
 }

@@ -54,7 +54,7 @@ def test_1():
         assert_snapshot!(result.display(), @r"
         diagnostics:
 
-        test-pass-on-expect-failure: Test `test_1` passes when expected to fail
+        error[test-pass-on-expect-failure]: Test `test_1` passes when expected to fail
          --> <test>/test.py:5:5
           |
         4 | @karva.tags.expect_fail(reason='Expected to fail but passes')
@@ -88,7 +88,7 @@ def test_1():
         assert_snapshot!(result.display(), @r"
         diagnostics:
 
-        test-pass-on-expect-failure: Test `test_1` passes when expected to fail
+        error[test-pass-on-expect-failure]: Test `test_1` passes when expected to fail
          --> <test>/test.py:5:5
           |
         4 | @pytest.mark.xfail(reason='Expected to fail but passes')
@@ -327,7 +327,7 @@ def test_expected_fail_passes():
         assert_snapshot!(result.display(), @r"
         diagnostics:
 
-        test-pass-on-expect-failure: Test `test_expected_fail_passes` passes when expected to fail
+        error[test-pass-on-expect-failure]: Test `test_expected_fail_passes` passes when expected to fail
           --> <test>/test.py:12:5
            |
         11 | @karva.tags.expect_fail()
@@ -367,7 +367,7 @@ def test_expected_fail_passes():
         assert_snapshot!(result.display(), @r"
         diagnostics:
 
-        test-pass-on-expect-failure: Test `test_expected_fail_passes` passes when expected to fail
+        error[test-pass-on-expect-failure]: Test `test_expected_fail_passes` passes when expected to fail
           --> <test>/test.py:12:5
            |
         11 | @pytest.mark.xfail
@@ -437,7 +437,7 @@ def test_normal():
     assert_snapshot!(result.display(), @r"
     diagnostics:
 
-    test-failure: Test `test_with_fail` failed
+    error[test-failure]: Test `test_with_fail` failed
      --> <test>/test.py:4:5
       |
     2 | import karva
@@ -481,7 +481,7 @@ def test_conditional_fail():
     assert_snapshot!(result.display(), @r"
     diagnostics:
 
-    test-failure: Test `test_conditional_fail` failed
+    error[test-failure]: Test `test_conditional_fail` failed
      --> <test>/test.py:4:5
       |
     2 | import karva
@@ -523,7 +523,7 @@ def test_raise_fail_error():
     assert_snapshot!(result.display(), @r"
     diagnostics:
 
-    test-failure: Test `test_raise_fail_error` failed
+    error[test-failure]: Test `test_raise_fail_error` failed
      --> <test>/test.py:4:5
       |
     2 | import karva
@@ -583,7 +583,7 @@ def test_should_fail():
     assert_snapshot!(result.display(), @r"
     diagnostics:
 
-    test-pass-on-expect-failure: Test `test_should_fail` passes when expected to fail
+    error[test-pass-on-expect-failure]: Test `test_should_fail` passes when expected to fail
      --> <test>/test.py:5:5
       |
     4 | @karva.tags.expect_fail(reason='This should fail but passes')

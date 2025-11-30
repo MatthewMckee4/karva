@@ -60,7 +60,7 @@ fn test_one_test_fails() {
 
     diagnostics:
 
-    test-failure: Test `test_fail` failed
+    error[test-failure]: Test `test_fail` failed
      --> test_fail.py:2:5
       |
     2 | def test_fail():
@@ -104,7 +104,7 @@ fn test_two_test_fails() {
 
     diagnostics:
 
-    test-failure: Test `test_fail` failed
+    error[test-failure]: Test `test_fail` failed
      --> tests/test_fail.py:2:5
       |
     2 | def test_fail():
@@ -121,7 +121,7 @@ fn test_two_test_fails() {
     5 | def test_fail2():
       |
 
-    test-failure: Test `test_fail2` failed
+    error[test-failure]: Test `test_fail2` failed
      --> tests/test_fail.py:5:5
       |
     3 |     assert False
@@ -177,7 +177,7 @@ fn test_file_importing_another_file() {
 
     diagnostics:
 
-    test-failure: Test `test_with_helper` failed
+    error[test-failure]: Test `test_with_helper` failed
      --> test_cross_file.py:4:5
       |
     2 | from helper import validate_data
@@ -315,7 +315,7 @@ fn test_multiple_fixtures_not_found() {
 
     diagnostics:
 
-    missing-fixtures: Discovered missing fixtures for test `test_multiple_fixtures_not_found`
+    error[missing-fixtures]: Discovered missing fixtures for test `test_multiple_fixtures_not_found`
      --> test_multiple_fixtures_not_found.py:1:5
       |
     1 | def test_multiple_fixtures_not_found(a, b, c): ...
@@ -395,7 +395,7 @@ fn test_text_file() {
     ----- stdout -----
     discovery diagnostics:
 
-    invalid-path: Invalid path: path `<temp_dir>/random.txt` has a wrong file extension
+    error[invalid-path]: Invalid path: path `<temp_dir>/random.txt` has a wrong file extension
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
 
@@ -436,7 +436,7 @@ fn test_invalid_path() {
     ----- stdout -----
     discovery diagnostics:
 
-    invalid-path: Invalid path: path `<temp_dir>/non_existing_path.py` could not be found
+    error[invalid-path]: Invalid path: path `<temp_dir>/non_existing_path.py` could not be found
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
 
@@ -470,7 +470,7 @@ fn test_fixture_generator_two_yields_passing_test() {
 
     diagnostics:
 
-    invalid-fixture-finalizer: Discovered an invalid fixture finalizer `fixture_generator`
+    warning[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
       |
     4 | @karva.fixture
@@ -479,7 +479,7 @@ fn test_fixture_generator_two_yields_passing_test() {
     6 |     yield 1
     7 |     yield 2
       |
-    info: Reason: Fixture had more than one yield statement
+    info: Fixture had more than one yield statement
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
 
@@ -513,7 +513,7 @@ fn test_fixture_generator_two_yields_failing_test() {
 
     diagnostics:
 
-    invalid-fixture-finalizer: Discovered an invalid fixture finalizer `fixture_generator`
+    warning[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
       |
     4 | @karva.fixture
@@ -522,9 +522,9 @@ fn test_fixture_generator_two_yields_failing_test() {
     6 |     yield 1
     7 |     yield 2
       |
-    info: Reason: Fixture had more than one yield statement
+    info: Fixture had more than one yield statement
 
-    test-failure: Test `test_fixture_generator` failed
+    error[test-failure]: Test `test_fixture_generator` failed
       --> test.py:9:5
        |
      7 |     yield 2
@@ -575,7 +575,7 @@ fn test_fixture_generator_fail_in_teardown() {
 
     diagnostics:
 
-    invalid-fixture-finalizer: Discovered an invalid fixture finalizer `fixture_generator`
+    warning[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
       |
     4 | @karva.fixture
@@ -584,7 +584,7 @@ fn test_fixture_generator_fail_in_teardown() {
     6 |     yield 1
     7 |     raise ValueError("fixture error")
       |
-    info: Reason: Failed to reset fixture: fixture error
+    info: Failed to reset fixture: fixture error
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
 
@@ -617,7 +617,7 @@ fn test_invalid_fixture() {
 
     diagnostics:
 
-    invalid-fixture: Discovered an invalid fixture `fixture_generator`
+    error[invalid-fixture]: Discovered an invalid fixture `fixture_generator`
      --> test.py:5:5
       |
     4 | @karva.fixture(scope='ssession')
@@ -625,9 +625,9 @@ fn test_invalid_fixture() {
       |     ^^^^^^^^^^^^^^^^^
     6 |     raise ValueError("fixture-error")
       |
-    info: Reason: Invalid fixture scope: ssession
+    info: Invalid fixture scope: ssession
 
-    missing-fixtures: Discovered missing fixtures for test `test_fixture_generator`
+    error[missing-fixtures]: Discovered missing fixtures for test `test_fixture_generator`
      --> test.py:8:5
       |
     6 |     raise ValueError("fixture-error")
@@ -845,7 +845,7 @@ fn test_failfast() {
 
     diagnostics:
 
-    test-failure: Test `test_first_fail` failed
+    error[test-failure]: Test `test_first_fail` failed
      --> test_failfast.py:2:5
       |
     2 | def test_first_fail():
@@ -935,7 +935,7 @@ def test_1():
 
     diagnostics:
 
-    test-pass-on-expect-failure: Test `test_1` passes when expected to fail
+    error[test-pass-on-expect-failure]: Test `test_1` passes when expected to fail
      --> test_expect_fail.py:5:5
       |
     4 | @karva.tags.expect_fail(reason='Expected to fail but passes')
@@ -970,27 +970,27 @@ def test_1():
     );
 
     assert_cmd_snapshot!(context.command(), @r"
-        success: false
-        exit_code: 1
-        ----- stdout -----
-        test test_expect_fail::test_1 ... FAILED
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test_expect_fail::test_1 ... FAILED
 
-        diagnostics:
+    diagnostics:
 
-        test-pass-on-expect-failure: Test `test_1` passes when expected to fail
-         --> test_expect_fail.py:5:5
-          |
-        4 | @pytest.mark.xfail(reason='Expected to fail but passes')
-        5 | def test_1():
-          |     ^^^^^^
-        6 |     assert True
-          |
-        info: Reason: Expected to fail but passes
+    error[test-pass-on-expect-failure]: Test `test_1` passes when expected to fail
+     --> test_expect_fail.py:5:5
+      |
+    4 | @pytest.mark.xfail(reason='Expected to fail but passes')
+    5 | def test_1():
+      |     ^^^^^^
+    6 |     assert True
+      |
+    info: Reason: Expected to fail but passes
 
-        test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
-        ----- stderr -----
-        ");
+    ----- stderr -----
+    ");
 }
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
@@ -1091,7 +1091,7 @@ def test_expected_fail_passes():
 
     diagnostics:
 
-    test-pass-on-expect-failure: Test `test_expected_fail_passes` passes when expected to fail
+    error[test-pass-on-expect-failure]: Test `test_expected_fail_passes` passes when expected to fail
       --> test_expect_fail.py:12:5
        |
     11 | @karva.tags.expect_fail
@@ -1132,28 +1132,28 @@ def test_expected_fail_passes():
     );
 
     assert_cmd_snapshot!(context.command(), @r"
-        success: false
-        exit_code: 1
-        ----- stdout -----
-        test test_expect_fail::test_expected_to_fail ... ok
-        test test_expect_fail::test_normal_pass ... ok
-        test test_expect_fail::test_expected_fail_passes ... FAILED
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test_expect_fail::test_expected_to_fail ... ok
+    test test_expect_fail::test_normal_pass ... ok
+    test test_expect_fail::test_expected_fail_passes ... FAILED
 
-        diagnostics:
+    diagnostics:
 
-        test-pass-on-expect-failure: Test `test_expected_fail_passes` passes when expected to fail
-          --> test_expect_fail.py:12:5
-           |
-        11 | @pytest.mark.xfail
-        12 | def test_expected_fail_passes():
-           |     ^^^^^^^^^^^^^^^^^^^^^^^^^
-        13 |     assert True
-           |
+    error[test-pass-on-expect-failure]: Test `test_expected_fail_passes` passes when expected to fail
+      --> test_expect_fail.py:12:5
+       |
+    11 | @pytest.mark.xfail
+    12 | def test_expected_fail_passes():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    13 |     assert True
+       |
 
-        test result: FAILED. 2 passed; 1 failed; 0 skipped; finished in [TIME]
+    test result: FAILED. 2 passed; 1 failed; 0 skipped; finished in [TIME]
 
-        ----- stderr -----
-        ");
+    ----- stderr -----
+    ");
 }
 
 #[test]
@@ -1181,7 +1181,7 @@ def test_normal():
 
     diagnostics:
 
-    test-failure: Test `test_with_fail` failed
+    error[test-failure]: Test `test_with_fail` failed
      --> test_fail.py:4:5
       |
     2 | import karva
@@ -1258,7 +1258,7 @@ def test_1():
 
     diagnostics:
 
-    test-failure: Test `test_1` failed
+    error[test-failure]: Test `test_1` failed
      --> test_fail.py:7:5
       |
     5 |     raise ValueError('bar')

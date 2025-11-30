@@ -167,7 +167,7 @@ def test_2():
     assert_snapshot!(result.display(), @r"
     diagnostics:
 
-    test-failure: Test `test_1` failed
+    error[test-failure]: Test `test_1` failed
      --> <test>/test.py:2:5
       |
     2 | def test_1():

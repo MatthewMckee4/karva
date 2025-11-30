@@ -20,7 +20,7 @@ use crate::{
     },
     normalize::{NormalizedModule, NormalizedPackage, NormalizedTestFunction},
     runner::{FinalizerCache, FixtureCache},
-    utils::full_test_name,
+    utils::{full_test_name, source_file},
 };
 
 pub struct NormalizedPackageRunner<'ctx, 'proj, 'rep> {
@@ -187,7 +187,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
                     report_test_pass_on_expect_failure(
                         self.context,
-                        test_fn.source_file.clone(),
+                        source_file(test_fn.module_path()),
                         &test_fn.stmt_function_def,
                         reason,
                     );
@@ -225,7 +225,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                         report_test_failure(
                             self.context,
                             py,
-                            test_fn.source_file.clone(),
+                            source_file(test_fn.module_path()),
                             &test_fn.stmt_function_def,
                             &kwargs,
                             &err,
@@ -233,7 +233,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     } else {
                         report_missing_fixtures(
                             self.context,
-                            test_fn.source_file.clone(),
+                            source_file(test_fn.module_path()),
                             &test_fn.stmt_function_def,
                             &missing_args,
                             FunctionKind::Test,
@@ -332,16 +332,16 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                 report_fixture_failure(
                     self.context,
                     py,
-                    fixture.source_file.clone(),
-                    &fixture.stmt_function_def,
+                    source_file(fixture.module_path()),
+                    fixture.stmt_function_def(),
                     &dep_kwargs,
                     &err,
                 );
             } else {
                 report_missing_fixtures(
                     self.context,
-                    fixture.source_file.clone(),
-                    &fixture.stmt_function_def,
+                    source_file(fixture.module_path()),
+                    fixture.stmt_function_def(),
                     &missing_args,
                     FunctionKind::Fixture,
                 );
@@ -372,7 +372,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                             Finalizer {
                                 fixture_return: py_iter,
                                 scope: fixture.scope(),
-                                source_file: user_defined_fixture.source_file.clone(),
+                                fixture_name: user_defined_fixture.name.clone(),
                                 stmt_function_def: user_defined_fixture.stmt_function_def.clone(),
                             }
                         };
@@ -405,7 +405,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         let return_finalizer = finalizer.map_or_else(
             || None,
             |f| {
-                if f.scope() == FixtureScope::Function {
+                if f.scope == FixtureScope::Function {
                     Some(f)
                 } else {
                     self.finalizer_cache.add_finalizer(f);

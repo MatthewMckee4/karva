@@ -128,7 +128,7 @@ pub fn report_invalid_fixture(
 
     diagnostic.annotate(Annotation::primary(primary_span));
 
-    diagnostic.info(format!("Reason: {reason}"));
+    diagnostic.info(reason);
 }
 
 pub fn report_invalid_fixture_finalizer(
@@ -148,7 +148,7 @@ pub fn report_invalid_fixture_finalizer(
 
     diagnostic.annotate(Annotation::primary(primary_span));
 
-    diagnostic.info(format!("Reason: {reason}"));
+    diagnostic.info(reason);
 }
 
 pub fn report_missing_fixtures(

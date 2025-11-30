@@ -4,6 +4,7 @@ use camino::Utf8Path;
 use karva_project::project::{Project, ProjectOptions};
 use pyo3::{PyResult, Python, prelude::*, types::PyAnyMethods};
 use ruff_python_ast::PythonVersion;
+use ruff_source_file::{SourceFile, SourceFileBuilder};
 
 /// Retrieves the current Python interpreter version.
 ///
@@ -15,6 +16,15 @@ pub fn current_python_version() -> PythonVersion {
         let version_info = py.version_info();
         (version_info.major, version_info.minor)
     }))
+}
+
+/// Get the source file for the given utf8 path.
+pub(crate) fn source_file(path: &Utf8Path) -> SourceFile {
+    SourceFileBuilder::new(
+        path.as_str(),
+        std::fs::read_to_string(path).expect("Failed to read source file"),
+    )
+    .finish()
 }
 
 /// Adds a directory path to Python's sys.path at the specified index.

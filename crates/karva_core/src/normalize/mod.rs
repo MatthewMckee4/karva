@@ -146,7 +146,6 @@ impl DiscoveredPackageNormalizer {
                 scope: fixture.scope(),
                 is_generator: fixture.is_generator(),
                 value: NormalizedFixtureValue::Function(fixture.function().clone()),
-                source_file: current.source_file(),
                 stmt_function_def: fixture.function_definition().clone(),
             });
 
@@ -183,7 +182,6 @@ impl DiscoveredPackageNormalizer {
                     scope: fixture.scope(),
                     is_generator: fixture.is_generator(),
                     value: NormalizedFixtureValue::Function(fixture.function().clone()),
-                    source_file: current.source_file(),
                     stmt_function_def: fixture.function_definition().clone(),
                 });
 
@@ -204,14 +202,14 @@ impl DiscoveredPackageNormalizer {
     fn normalize_test_function(
         &mut self,
         py: Python<'_>,
-        test_fn: &TestFunction,
+        test_function: &TestFunction,
         parents: &[&DiscoveredPackage],
         module: &DiscoveredModule,
     ) -> Vec<NormalizedTestFunction> {
         let function_auto_use_fixtures =
             self.get_normalized_auto_use_fixtures(py, FixtureScope::Function, parents, module);
 
-        let test_params = test_fn.tags().parametrize_args();
+        let test_params = test_function.tags.parametrize_args();
 
         let parametrize_param_names: Vec<String> = test_params
             .iter()
@@ -219,14 +217,14 @@ impl DiscoveredPackageNormalizer {
             .collect();
 
         // Get regular fixtures (from function parameters, excluding parametrize params)
-        let all_param_names = test_fn.stmt_function_def().required_fixtures(py);
+        let all_param_names = test_function.stmt_function_def.required_fixtures(py);
         let regular_fixture_names: Vec<String> = all_param_names
             .into_iter()
             .filter(|name| !parametrize_param_names.contains(name))
             .collect();
 
         // Get use_fixtures (from tags - should only be executed, not passed as args)
-        let use_fixture_names = test_fn.tags().required_fixtures_names();
+        let use_fixture_names = test_function.tags.required_fixtures_names();
 
         // Normalize regular fixtures
         let mut normalized_deps: Vec<Vec<NormalizedFixture>> = Vec::new();
@@ -284,15 +282,14 @@ impl DiscoveredPackageNormalizer {
                 .collect();
 
             let normalized_test_function = NormalizedTestFunction {
-                name: test_fn.name().clone(),
+                name: test_function.name.clone(),
                 params: HashMap::new(),
                 fixture_dependencies,
                 use_fixture_dependencies,
                 auto_use_fixtures: function_auto_use_fixtures,
-                function: test_fn.py_function().clone(),
-                tags: test_fn.tags().clone(),
-                source_file: test_fn.source_file.clone(),
-                stmt_function_def: test_fn.stmt_function_def().clone(),
+                function: test_function.py_function.clone(),
+                tags: test_function.tags.clone(),
+                stmt_function_def: test_function.stmt_function_def.clone(),
             };
 
             return vec![normalized_test_function];
@@ -316,15 +313,14 @@ impl DiscoveredPackageNormalizer {
             for use_fixture_combination in &use_fixture_combinations {
                 for test_param in &test_params {
                     let normalized = NormalizedTestFunction {
-                        name: test_fn.name().clone(),
+                        name: test_function.name.clone(),
                         params: test_param.clone(),
                         fixture_dependencies: dep_combination.clone(),
                         use_fixture_dependencies: use_fixture_combination.clone(),
                         auto_use_fixtures: function_auto_use_fixtures.clone(),
-                        function: test_fn.py_function().clone(),
-                        tags: test_fn.tags().clone(),
-                        source_file: test_fn.source_file.clone(),
-                        stmt_function_def: test_fn.stmt_function_def().clone(),
+                        function: test_function.py_function.clone(),
+                        tags: test_function.tags.clone(),
+                        stmt_function_def: test_function.stmt_function_def.clone(),
                     };
 
                     result.push(normalized);

@@ -1,6 +1,5 @@
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
-use ruff_source_file::SourceFile;
 
 use crate::{
     QualifiedFunctionName,
@@ -11,15 +10,17 @@ use crate::{
 /// Represents a single test function discovered from Python source code.
 #[derive(Debug)]
 pub struct TestFunction {
-    stmt_function_def: StmtFunctionDef,
+    /// The name of the test function.
+    pub(crate) name: QualifiedFunctionName,
 
-    py_function: Py<PyAny>,
+    /// The ast function statement.
+    pub(crate) stmt_function_def: StmtFunctionDef,
 
-    name: QualifiedFunctionName,
+    /// The Python function object.
+    pub(crate) py_function: Py<PyAny>,
 
-    tags: Tags,
-
-    pub(crate) source_file: SourceFile,
+    /// The tags associated with the test function.
+    pub(crate) tags: Tags,
 }
 
 impl TestFunction {
@@ -37,32 +38,15 @@ impl TestFunction {
         let tags = Tags::from_py_any(py, &py_function, Some(&stmt_function_def));
 
         Self {
+            name,
             stmt_function_def,
             py_function,
-            name,
             tags,
-            source_file: module.source_file(),
         }
-    }
-
-    pub(crate) const fn name(&self) -> &QualifiedFunctionName {
-        &self.name
     }
 
     pub(crate) fn function_name(&self) -> &str {
         &self.stmt_function_def.name
-    }
-
-    pub(crate) const fn stmt_function_def(&self) -> &StmtFunctionDef {
-        &self.stmt_function_def
-    }
-
-    pub(crate) const fn py_function(&self) -> &Py<PyAny> {
-        &self.py_function
-    }
-
-    pub(crate) const fn tags(&self) -> &Tags {
-        &self.tags
     }
 }
 
@@ -106,12 +90,7 @@ mod tests {
 
         let test_case = session.test_functions()[0];
 
-        assert!(
-            test_case
-                .name()
-                .to_string()
-                .ends_with("test::test_function")
-        );
+        assert!(test_case.name.to_string().ends_with("test::test_function"));
     }
 
     #[test]
@@ -156,7 +135,7 @@ mod tests {
         let test_case = session.test_functions()[0];
 
         assert_eq!(
-            test_case.name().to_string(),
+            test_case.name.to_string(),
             format!("{}::test_display", test_module.name())
         );
     }

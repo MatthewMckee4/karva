@@ -1,6 +1,6 @@
+use camino::Utf8PathBuf;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
-use ruff_source_file::SourceFile;
 
 use crate::{QualifiedFunctionName, extensions::fixtures::FixtureScope};
 
@@ -42,10 +42,18 @@ pub struct UserDefinedFixture {
     pub(crate) is_generator: bool,
     /// The computed value or imported python function to compute the value
     pub(crate) value: NormalizedFixtureValue,
-    /// The source file for this fixture
-    pub(crate) source_file: SourceFile,
     /// The function definition for this fixture
     pub(crate) stmt_function_def: StmtFunctionDef,
+}
+
+impl UserDefinedFixture {
+    pub(crate) const fn module_path(&self) -> &Utf8PathBuf {
+        self.name.module_path().path()
+    }
+
+    pub(crate) const fn stmt_function_def(&self) -> &StmtFunctionDef {
+        &self.stmt_function_def
+    }
 }
 
 /// A normalized fixture represents a concrete variant of a fixture after parametrization.
