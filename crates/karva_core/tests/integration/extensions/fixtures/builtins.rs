@@ -230,12 +230,12 @@ fn test_mock() {
 
             def test_chdir_with_path_local(mp: Mock, tmp_path: Path) -> None:
                 mp.chdir(tmp_path)
-                assert os.getcwd() == str(tmp_path)
+                assert os.getcwd() == str(tmp_path), f"Expected {str(tmp_path)}, got {os.getcwd()}"
 
 
             def test_chdir_with_str(mp: Mock, tmp_path: Path) -> None:
                 mp.chdir(str(tmp_path))
-                assert os.getcwd() == str(tmp_path)
+                assert os.getcwd() == str(tmp_path), f"Expected {str(tmp_path)}, got {os.getcwd()}"
 
 
             def test_chdir_undo(mp: Mock, tmp_path: Path) -> None:
@@ -250,7 +250,7 @@ fn test_mock() {
                 mp.undo()
                 os.chdir(tmp_path)
                 mp.undo()
-                assert os.getcwd() == str(tmp_path)
+                assert os.getcwd() == str(tmp_path), f"Expected {str(tmp_path)}, got {os.getcwd()}"
                 "#,
     );
 

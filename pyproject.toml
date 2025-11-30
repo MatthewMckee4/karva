@@ -38,7 +38,7 @@ target-version = "py311"
 [tool.ruff.lint]
 exclude = [
     "python/karva/__main__.py",
-    "python/tests/"
+    "crates/karva_benchmark/resources/test_*.py",
 ]
 select = [
     "ARG",
@@ -63,10 +63,7 @@ select = [
 ]
 ignore = [
     # Unnecessarily strict/pedantic
-    "D107",
-    "D202",
-    "D204",
-    "D205",
+    "D",
     # These are all enforced by, or incompatible with, the ruff formatter:
     "E203",
     "E501",
@@ -81,6 +78,8 @@ ignore = [
     # Makes code slower and more verbose
     # https://github.com/astral-sh/ruff/issues/7871
     "UP038",
+
+    "S", "ANN401", "PYI021"
 ]
 unfixable = [
     "F841",    # unused variable. ruff keeps the call, but mostly we want to get rid of it all
@@ -90,6 +89,7 @@ unfixable = [
     "PLW1510", # automatic fix might obscure issue
     "RUF017",  # Ruff's fix is faster, but I prefer using itertools.chain_from_iterable
 ]
+
 [tool.tbump]
 
 [[tool.tbump.before_commit]]
