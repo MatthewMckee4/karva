@@ -1,5 +1,7 @@
 use pyo3::prelude::*;
 
+use crate::extensions::functions::SkipError;
+
 /// Represents a test that should be skipped.
 ///
 /// A given reason will be logged if given.
@@ -75,7 +77,7 @@ impl SkipTag {
 /// Check if the given `PyErr` is a skip exception.
 pub fn is_skip_exception(py: Python<'_>, err: &PyErr) -> bool {
     // Check for karva.SkipError
-    if err.is_instance_of::<super::python::SkipError>(py) {
+    if err.is_instance_of::<SkipError>(py) {
         return true;
     }
 

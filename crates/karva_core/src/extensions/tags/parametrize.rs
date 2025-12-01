@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use pyo3::{IntoPyObjectExt, prelude::*};
 
-use crate::extensions::tags::Tags;
+use crate::extensions::{functions::Param, tags::Tags};
 
 /// A single parametrization of a function
 #[derive(Debug, Clone)]
@@ -10,19 +10,24 @@ pub struct Parametrization {
     /// The values of the arguments
     ///
     /// These are used as values for the test function.
-    values: Vec<Py<PyAny>>,
+    pub(crate) values: Vec<Py<PyAny>>,
 
     /// Tags associated with this parametrization
-    tags: Tags,
+    pub(crate) tags: Tags,
 }
 
 impl Parametrization {
-    pub(crate) fn into_values(self) -> Vec<Py<PyAny>> {
-        self.values
-    }
-
     pub(crate) const fn tags(&self) -> &Tags {
         &self.tags
+    }
+}
+
+impl From<PyRef<'_, Param>> for Parametrization {
+    fn from(param: PyRef<'_, Param>) -> Self {
+        Self {
+            values: param.values().clone(),
+            tags: param.tags().clone(),
+        }
     }
 }
 
@@ -118,15 +123,12 @@ impl ParametrizeTag {
         }
     }
 
-    pub(crate) fn from_karva(arg_names: Vec<String>, arg_values: Vec<Vec<Py<PyAny>>>) -> Self {
+    pub(crate) fn from_karva(arg_names: Vec<String>, arg_values: Vec<Param>) -> Self {
         Self::new(
             arg_names,
             arg_values
                 .into_iter()
-                .map(|values| Parametrization {
-                    values,
-                    tags: Tags::default(),
-                })
+                .map(|Param { values, tags }| Parametrization { values, tags })
                 .collect(),
         )
     }
@@ -178,6 +180,12 @@ pub(super) fn handle_custom_parametrize_param(
         values: vec![param.clone()],
         tags: Tags::default(),
     };
+
+    if let Ok(param) = param.cast_bound::<Param>(py) {
+        let param = param.borrow();
+        return Parametrization::from(param);
+    }
+
     let Ok(bound_param) = param.clone().into_bound_py_any(py) else {
         return default_parametrization();
     };

@@ -47,6 +47,33 @@ def skip(reason: str | None = ...) -> NoReturn:
 def fail(reason: str | None = ...) -> NoReturn:
     """Fail the current test."""
 
+class Param:
+    @property
+    def values(self) -> list[object]:
+        """The values to parameterize the test case with."""
+
+def param(*values: object, tags: Sequence[str] | None = None) -> None:
+    """Define a parameterized test case.
+
+    Args:
+        *values: The values to parameterize the test case with.
+        tags: The tag or tag functions.
+
+    .. code-block:: python
+
+    import karva
+
+    @karva.tags.parametrize("input,expected", [
+        karva.param(2, 4),
+        karva.param(4, 17, tags=(karva.tags.skip,)),
+        karva.param(5, 26, tags=(karva.tags.expect_fail,)),
+        karva.param(6, 36, tags=(karva.tags.skip(True,))),
+        karva.param(7, 50, tags=(karva.tags.expect_fail(True),)),
+    ])
+    def test_square(input, expected):
+        assert input ** 2 == expected
+    """
+
 class SkipError(Exception):
     """Raised when `karva.skip` is called."""
 

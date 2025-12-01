@@ -1,7 +1,9 @@
+use std::ops::Deref;
+
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::extensions::tags::python::{PyTag, PyTestFunction};
+use crate::extensions::tags::python::{PyTag, PyTags, PyTestFunction};
 
 pub mod expect_fail;
 pub mod parametrize;
@@ -38,9 +40,38 @@ impl Tag {
         }
     }
 
+    pub(crate) fn from_py_any(py: Python, py_any: &Py<PyAny>) -> Option<Self> {
+        if let Ok(tag) = py_any.cast_bound::<PyTag>(py) {
+            let py_tag = tag.borrow();
+            return Some(Self::from_karva_tag(py_tag));
+        } else if let Ok(tag) = py_any.cast_bound::<PyTags>(py) {
+            let py_tags = tag.borrow();
+
+            if let Some(tag) = py_tags.inner.first() {
+                return Some(Self::from_karva_tag(tag));
+            }
+        } else if let Ok(tag) = py_any.call0(py) {
+            if let Ok(tag) = tag.cast_bound::<PyTag>(py) {
+                let py_tag = tag.borrow();
+                return Some(Self::from_karva_tag(py_tag));
+            }
+            if let Ok(tag) = tag.cast_bound::<PyTags>(py) {
+                let py_tags = tag.borrow();
+
+                if let Some(tag) = py_tags.inner.first() {
+                    return Some(Self::from_karva_tag(tag));
+                }
+            }
+        }
+        None
+    }
+
     /// Converts a Karva Python tag into our internal representation.
-    fn from_karva_tag(py_tag: &PyTag) -> Self {
-        match py_tag {
+    pub(crate) fn from_karva_tag<T>(py_tag: T) -> Self
+    where
+        T: Deref<Target = PyTag>,
+    {
+        match &*py_tag {
             PyTag::Parametrize {
                 arg_names,
                 arg_values,
