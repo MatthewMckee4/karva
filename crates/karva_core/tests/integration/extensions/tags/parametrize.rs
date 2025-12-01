@@ -110,3 +110,141 @@ fn test_parametrize_multiple_args_single_string(#[values("pytest", "karva")] fra
         assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
     }
 }
+
+#[test]
+fn test_parametrize_with_pytest_param_single_arg() {
+    let test_context = TestContext::with_file(
+        "<test>/test.py",
+        r#"
+import pytest
+
+@pytest.mark.parametrize("a", [
+    pytest.param(1),
+    pytest.param(2),
+    pytest.param(3),
+])
+def test_single_arg(a):
+    assert a > 0
+"#,
+    );
+
+    let result = test_context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_parametrize_with_pytest_param_multiple_args() {
+    let test_context = TestContext::with_file(
+        "<test>/test.py",
+        r#"
+import pytest
+
+@pytest.mark.parametrize("input,expected", [
+    pytest.param(2, 4),
+    pytest.param(3, 9),
+    pytest.param(4, 16),
+])
+def test_square(input, expected):
+    assert input ** 2 == expected
+"#,
+    );
+
+    let result = test_context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_parametrize_with_pytest_param_list_args() {
+    let test_context = TestContext::with_file(
+        "<test>/test.py",
+        r#"
+import pytest
+
+@pytest.mark.parametrize(["input", "expected"], [
+    pytest.param(2, 4),
+    pytest.param(3, 9),
+    pytest.param(4, 16),
+])
+def test_square(input, expected):
+    assert input ** 2 == expected
+"#,
+    );
+
+    let result = test_context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_parametrize_with_mixed_pytest_param_and_tuples() {
+    let test_context = TestContext::with_file(
+        "<test>/test.py",
+        r#"
+import pytest
+
+@pytest.mark.parametrize("input,expected", [
+    pytest.param(2, 4),
+    (3, 9),
+    pytest.param(4, 16),
+])
+def test_square(input, expected):
+    assert input ** 2 == expected
+"#,
+    );
+
+    let result = test_context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_parametrize_with_list_inside_param() {
+    let test_context = TestContext::with_file(
+        "<test>/test.py",
+        r#"
+import pytest
+
+@pytest.mark.parametrize(
+    "length,nums",
+    [
+        pytest.param(1, [1]),
+        pytest.param(2, [1, 2]),
+        pytest.param(None, []),
+    ],
+)
+def test_markup_mode_bullets_single_newline(length: int | None, nums: list[int]):
+    if length is not None:
+        assert len(nums) == length
+    else:
+        assert len(nums) == 0
+"#,
+    );
+
+    let result = test_context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_parametrize_with_pytest_param_and_skip() {
+    let test_context = TestContext::with_file(
+        "<test>/test.py",
+        r#"
+import pytest
+
+@pytest.mark.parametrize("input,expected", [
+    pytest.param(2, 4),
+    pytest.param(4, 17, marks=pytest.mark.skip),
+    pytest.param(5, 26, marks=pytest.mark.xfail),
+])
+def test_square(input, expected):
+    assert input ** 2 == expected
+"#,
+    );
+
+    let result = test_context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+}

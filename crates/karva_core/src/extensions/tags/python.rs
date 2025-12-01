@@ -80,24 +80,29 @@ pub mod tags {
     use pyo3::{IntoPyObjectExt, exceptions::PyTypeError, prelude::*, types::PyTuple};
 
     use super::{PyTag, PyTags};
-    use crate::extensions::tags::{parametrize::parse_parametrize_args, python::PyTestFunction};
+    use crate::extensions::tags::{
+        parametrize::{Parametrization, parse_parametrize_args},
+        python::PyTestFunction,
+    };
 
     #[pyfunction]
     pub fn parametrize(
         arg_names: &Bound<'_, PyAny>,
         arg_values: &Bound<'_, PyAny>,
     ) -> PyResult<PyTags> {
-        let (arg_names, arg_values) = parse_parametrize_args(arg_names, arg_values)
-            .map_err(|()| {
-                PyErr::new::<PyTypeError, _>(
-                    "Expected a string or a list of strings for the arg_names, and a list of lists of objects for the arg_values",
-                )
-            })?;
+        let Some((names, parametrization)) = parse_parametrize_args(arg_names, arg_values) else {
+            return Err(PyErr::new::<PyTypeError, _>(
+                "Expected a string or a list of strings for the arg_names, and a list of lists of objects for the arg_values",
+            ));
+        };
 
         Ok(PyTags {
             inner: vec![PyTag::Parametrize {
-                arg_names,
-                arg_values,
+                arg_names: names,
+                arg_values: parametrization
+                    .into_iter()
+                    .map(Parametrization::into_values)
+                    .collect(),
             }],
         })
     }

@@ -1,9 +1,48 @@
 use std::collections::HashMap;
 
-use pyo3::prelude::*;
+use pyo3::{IntoPyObjectExt, prelude::*};
 
-type ArgNames = Vec<String>;
-type ArgValues = Vec<Vec<Py<PyAny>>>;
+use crate::extensions::tags::Tags;
+
+/// A single parametrization of a function
+#[derive(Debug, Clone)]
+pub struct Parametrization {
+    /// The values of the arguments
+    ///
+    /// These are used as values for the test function.
+    values: Vec<Py<PyAny>>,
+
+    /// Tags associated with this parametrization
+    tags: Tags,
+}
+
+impl Parametrization {
+    pub(crate) fn into_values(self) -> Vec<Py<PyAny>> {
+        self.values
+    }
+
+    pub(crate) const fn tags(&self) -> &Tags {
+        &self.tags
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ParametrizationArgs {
+    pub(crate) values: HashMap<String, Py<PyAny>>,
+
+    pub(crate) tags: Tags,
+}
+
+impl ParametrizationArgs {
+    pub(crate) const fn values(&self) -> &HashMap<String, Py<PyAny>> {
+        &self.values
+    }
+
+    pub(crate) fn extend(&mut self, other: Self) {
+        self.values.extend(other.values);
+        self.tags.extend(other.tags);
+    }
+}
 
 /// Parse parametrize arguments from Python objects.
 ///
@@ -11,10 +50,14 @@ type ArgValues = Vec<Vec<Py<PyAny>>>;
 /// - `("arg1, arg2", [(1, 2), (3, 4)])` - single arg name with values (wrapped into Vec<Vec>)
 /// - `("arg1", [3, 4])` - comma-separated arg names (re-extracted as Vec<Vec>)
 /// - `(["arg1", "arg2"], [(1, 2), (3, 4)])` - direct arg names and nested values
+/// - `(["arg1", "arg2"], [pytest.param(1, 2), pytest.param(3, 4)])` - direct arg names and single values
+/// - `(["arg1"], [pytest.param(1), pytest.param(3)])` - direct arg names and single values
 pub(super) fn parse_parametrize_args(
     arg_names: &Bound<'_, PyAny>,
     arg_values: &Bound<'_, PyAny>,
-) -> Result<(ArgNames, ArgValues), ()> {
+) -> Option<(Vec<String>, Vec<Parametrization>)> {
+    let py = arg_values.py();
+
     // Try extracting as (String, Vec<Py<PyAny>>)
     if let (Ok(name), Ok(values)) = (
         arg_names.extract::<String>(),
@@ -22,24 +65,36 @@ pub(super) fn parse_parametrize_args(
     ) {
         // Check if the string contains comma-separated argument names
         if name.contains(',') {
-            let names = name.split(',').map(|s| s.trim().to_string()).collect();
-            let values = arg_values
-                .extract::<Vec<Vec<Py<PyAny>>>>()
-                .map_err(|_| ())?;
-            Ok((names, values))
+            let names: Vec<String> = name.split(',').map(|s| s.trim().to_string()).collect();
+            let parametrizations = arg_values
+                .extract::<Vec<Py<PyAny>>>()
+                .ok()?
+                .into_iter()
+                .map(|param| handle_custom_parametrize_param(py, param, true))
+                .collect();
+
+            Some((names, parametrizations))
         } else {
             // Single argument name - wrap each value in a Vec
-            let values = values.into_iter().map(|v| vec![v]).collect();
-            Ok((vec![name], values))
+            let parametrizations = values
+                .into_iter()
+                .map(|param| handle_custom_parametrize_param(py, param, false))
+                .collect();
+
+            Some((vec![name], parametrizations))
         }
     } else if let (Ok(names), Ok(values)) = (
         arg_names.extract::<Vec<String>>(),
-        arg_values.extract::<Vec<Vec<Py<PyAny>>>>(),
+        arg_values.extract::<Vec<Py<PyAny>>>(),
     ) {
+        let parametrizations = values
+            .into_iter()
+            .map(|param| handle_custom_parametrize_param(py, param, true))
+            .collect();
         // Direct extraction of Vec<String> and Vec<Vec<Py<PyAny>>>
-        Ok((names, values))
+        Some((names, parametrizations))
     } else {
-        Err(())
+        None
     }
 }
 
@@ -48,21 +103,32 @@ pub(super) fn parse_parametrize_args(
 /// This is most useful to repeat a test multiple times with different arguments instead of duplicating the test.
 #[derive(Debug, Clone)]
 pub struct ParametrizeTag {
-    /// The names of the arguments
+    /// The names and values of the arguments
     ///
     /// These are used as keyword argument names for the test function.
-    arg_names: ArgNames,
-
-    /// The values associated with each argument name.
-    arg_values: ArgValues,
+    names: Vec<String>,
+    parametrizations: Vec<Parametrization>,
 }
 
 impl ParametrizeTag {
-    pub(crate) const fn new(arg_names: ArgNames, arg_values: ArgValues) -> Self {
+    pub(crate) const fn new(names: Vec<String>, parametrizations: Vec<Parametrization>) -> Self {
         Self {
-            arg_names,
-            arg_values,
+            names,
+            parametrizations,
         }
+    }
+
+    pub(crate) fn from_karva(arg_names: Vec<String>, arg_values: Vec<Vec<Py<PyAny>>>) -> Self {
+        Self::new(
+            arg_names,
+            arg_values
+                .into_iter()
+                .map(|values| Parametrization {
+                    values,
+                    tags: Tags::default(),
+                })
+                .collect(),
+        )
     }
 
     fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
@@ -71,27 +137,31 @@ impl ParametrizeTag {
         let arg_names = args.get_item(0).ok()?;
         let arg_values = args.get_item(1).ok()?;
 
-        let (arg_names, arg_values) = parse_parametrize_args(&arg_names, &arg_values).ok()?;
+        let (arg_names, parametrizations) = parse_parametrize_args(&arg_names, &arg_values)?;
 
-        Some(Self {
-            arg_names,
-            arg_values,
-        })
+        Some(Self::new(arg_names, parametrizations))
     }
 
     /// Returns each parameterize case.
     ///
     /// Each [`HashMap`] is used as keyword arguments for the test function.
-    pub(crate) fn each_arg_value(&self) -> Vec<HashMap<String, Py<PyAny>>> {
-        let total_combinations = self.arg_values.len();
+    pub(crate) fn each_arg_value(&self) -> Vec<ParametrizationArgs> {
+        let total_combinations = self.parametrizations.len();
         let mut param_args = Vec::with_capacity(total_combinations);
 
-        for values in &self.arg_values {
-            let mut current_parameratisation = HashMap::with_capacity(self.arg_names.len());
-            for (arg_name, arg_value) in self.arg_names.iter().zip(values.iter()) {
+        for parametrization in &self.parametrizations {
+            if parametrization.tags().should_skip().0 {
+                continue;
+            }
+            let mut current_parameratisation = HashMap::with_capacity(self.names.len());
+            for (arg_name, arg_value) in self.names.iter().zip(parametrization.values.iter()) {
                 current_parameratisation.insert(arg_name.clone(), arg_value.clone());
             }
-            param_args.push(current_parameratisation);
+            let current_param_args = ParametrizationArgs {
+                values: current_parameratisation,
+                tags: parametrization.tags().clone(),
+            };
+            param_args.push(current_param_args);
         }
         param_args
     }
@@ -102,5 +172,68 @@ impl TryFrom<&Bound<'_, PyAny>> for ParametrizeTag {
 
     fn try_from(py_mark: &Bound<'_, PyAny>) -> Result<Self, Self::Error> {
         Self::try_from_pytest_mark(py_mark).ok_or(())
+    }
+}
+
+/// Check for instances of `pytest.ParameterSet` and extract the parameters
+/// from it. Also handles regular tuples by extracting their values.
+pub(super) fn handle_custom_parametrize_param(
+    py: Python,
+    param: Py<PyAny>,
+    expect_multiple: bool,
+) -> Parametrization {
+    let default_parametrization = || Parametrization {
+        values: vec![param.clone()],
+        tags: Tags::default(),
+    };
+    let Ok(bound_param) = param.clone().into_bound_py_any(py) else {
+        return default_parametrization();
+    };
+
+    let a_type = bound_param.get_type();
+
+    let Ok(type_name) = a_type.name() else {
+        return default_parametrization();
+    };
+
+    let Some(type_name_str) = type_name.to_str().ok() else {
+        return default_parametrization();
+    };
+
+    if type_name_str.contains("ParameterSet") {
+        // Handle pytest.param - extract the values attribute
+        let Ok(values_attr) = bound_param.getattr("values") else {
+            return default_parametrization();
+        };
+
+        // The values attribute is a tuple - extract it as a list
+        let values = values_attr
+            .extract::<Vec<Py<PyAny>>>()
+            .unwrap_or_else(|_| vec![param]);
+
+        let Ok(marks) = bound_param.getattr("marks") else {
+            return Parametrization {
+                values,
+                tags: Tags::default(),
+            };
+        };
+
+        let Ok(marks) = marks.into_py_any(py) else {
+            return Parametrization {
+                values,
+                tags: Tags::default(),
+            };
+        };
+
+        let tags = Tags::from_pytest_marks(py, &marks).unwrap_or_default();
+
+        Parametrization { values, tags }
+    } else if expect_multiple && let Ok(params) = bound_param.extract::<Vec<Py<PyAny>>>() {
+        Parametrization {
+            values: params,
+            tags: Tags::default(),
+        }
+    } else {
+        default_parametrization()
     }
 }
