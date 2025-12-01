@@ -391,7 +391,13 @@ fn test_pytest_param() {
         r"
             import pytest
 
-            @pytest.fixture(params=['resource_1', pytest.param('resource_2'), pytest.param('resource_3')])
+            @pytest.fixture(params=[
+                'resource_1',
+                pytest.param('resource_2'),
+                pytest.param('resource_3'),
+                pytest.param('resource_4', marks=pytest.mark.skip),
+                pytest.param('resource_5', marks=pytest.mark.xfail)
+            ])
             def resource(request):
                return request.param
 
@@ -402,7 +408,34 @@ fn test_pytest_param() {
 
     let result = test_context.test();
 
-    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+    assert_snapshot!(result.display(), @"test result: ok. 4 passed; 0 failed; 1 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_karva_param() {
+    let test_context = TestContext::with_file(
+        "<test>/test.py",
+        r"
+            import karva
+
+            @karva.fixture(params=[
+                'resource_1',
+                karva.param('resource_2'),
+                karva.param('resource_3'),
+                karva.param('resource_4', tags=[karva.tags.skip]),
+                karva.param('resource_5', tags=[karva.tags.expect_fail]),
+            ])
+            def resource(request):
+               return request.param
+
+            def test_resource(resource):
+                assert resource in ['resource_1', 'resource_2', 'resource_3']
+   ",
+    );
+
+    let result = test_context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 4 passed; 0 failed; 1 skipped; finished in [TIME]");
 }
 
 #[rstest]

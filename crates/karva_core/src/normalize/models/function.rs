@@ -45,4 +45,21 @@ impl NormalizedTestFunction {
     pub(crate) const fn module_path(&self) -> &Utf8PathBuf {
         self.name.module_path().path()
     }
+
+    pub(crate) fn resolved_tags(&self) -> Tags {
+        let mut tags = self.tags.clone();
+
+        for dependency in &self.fixture_dependencies {
+            tags.extend(dependency.resolved_tags());
+        }
+
+        for dependency in &self.use_fixture_dependencies {
+            tags.extend(dependency.resolved_tags());
+        }
+
+        for dependency in &self.auto_use_fixtures {
+            tags.extend(dependency.resolved_tags());
+        }
+        tags
+    }
 }

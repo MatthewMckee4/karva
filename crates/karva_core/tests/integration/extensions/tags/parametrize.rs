@@ -246,7 +246,7 @@ def test_square(input, expected):
 
     let result = test_context.test();
 
-    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 1 skipped; finished in [TIME]");
 }
 
 #[test]
@@ -386,5 +386,5 @@ def test_square(input, expected):
 
     let result = test_context.test();
 
-    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 2 skipped; finished in [TIME]");
 }

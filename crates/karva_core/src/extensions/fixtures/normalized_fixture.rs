@@ -4,7 +4,13 @@ use camino::Utf8PathBuf;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::{QualifiedFunctionName, extensions::fixtures::FixtureScope};
+use crate::{
+    QualifiedFunctionName,
+    extensions::{
+        fixtures::FixtureScope,
+        tags::{Parametrization, Tags},
+    },
+};
 
 #[derive(Debug, Clone)]
 pub enum NormalizedFixtureValue {
@@ -21,8 +27,6 @@ pub struct BuiltInFixture {
     pub(crate) name: String,
     /// Pre-computed value for the built-in fixture
     pub(crate) value: NormalizedFixtureValue,
-    /// The specific parameter value for this variant (if parametrized)
-    pub(crate) param: Option<Py<PyAny>>,
     /// Normalized dependencies (already expanded for their params)
     pub(crate) dependencies: Vec<NormalizedFixture>,
     /// Fixture scope
@@ -37,7 +41,7 @@ pub struct UserDefinedFixture {
     /// Qualified function name
     pub(crate) name: QualifiedFunctionName,
     /// The specific parameter value for this variant (if parametrized)
-    pub(crate) param: Option<Py<PyAny>>,
+    pub(crate) param: Option<Parametrization>,
     /// Normalized dependencies (already expanded for their params)
     pub(crate) dependencies: Vec<NormalizedFixture>,
     /// Fixture scope
@@ -70,7 +74,6 @@ impl NormalizedFixture {
         Self::BuiltIn(BuiltInFixture {
             name,
             value: NormalizedFixtureValue::Computed(value),
-            param: None,
             dependencies: vec![],
             scope: FixtureScope::Function,
             finalizer: None,
@@ -86,7 +89,6 @@ impl NormalizedFixture {
         Self::BuiltIn(BuiltInFixture {
             name,
             value: NormalizedFixtureValue::Computed(value),
-            param: None,
             dependencies: vec![],
             scope: FixtureScope::Function,
             finalizer: Some(finalizer),
@@ -102,9 +104,9 @@ impl NormalizedFixture {
     }
 
     /// Returns the parameter value if this is a parametrized fixture
-    pub(crate) const fn param(&self) -> Option<&Py<PyAny>> {
+    pub(crate) const fn param(&self) -> Option<&Parametrization> {
         match self {
-            Self::BuiltIn(fixture) => fixture.param.as_ref(),
+            Self::BuiltIn(_) => None,
             Self::UserDefined(fixture) => fixture.param.as_ref(),
         }
     }
@@ -149,7 +151,7 @@ impl NormalizedFixture {
         }
     }
 
-    pub const fn as_user_defined(&self) -> Option<&UserDefinedFixture> {
+    pub(crate) const fn as_user_defined(&self) -> Option<&UserDefinedFixture> {
         if let Self::UserDefined(v) = self {
             Some(v)
         } else {
@@ -157,11 +159,24 @@ impl NormalizedFixture {
         }
     }
 
-    pub const fn as_builtin(&self) -> Option<&BuiltInFixture> {
+    pub(crate) const fn as_builtin(&self) -> Option<&BuiltInFixture> {
         if let Self::BuiltIn(v) = self {
             Some(v)
         } else {
             None
         }
+    }
+
+    pub(crate) fn resolved_tags(&self) -> Tags {
+        let mut tags = self
+            .param()
+            .map(|param| param.tags().clone())
+            .unwrap_or_default();
+
+        for dependency in self.dependencies() {
+            tags.extend(dependency.resolved_tags());
+        }
+
+        tags
     }
 }

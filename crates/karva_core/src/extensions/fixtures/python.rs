@@ -11,11 +11,11 @@ use pyo3::{
 #[derive(Debug, Clone)]
 pub struct FixtureRequest {
     #[pyo3(get)]
-    pub param: Py<PyAny>,
+    pub param: Option<Py<PyAny>>,
 }
 
 impl FixtureRequest {
-    pub(crate) const fn new(param: Py<PyAny>) -> Self {
+    pub(crate) const fn new(param: Option<Py<PyAny>>) -> Self {
         Self { param }
     }
 }
