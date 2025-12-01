@@ -248,3 +248,143 @@ def test_square(input, expected):
 
     assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
 }
+
+#[test]
+fn test_parametrize_with_karva_param_single_arg() {
+    let test_context = TestContext::with_file(
+        "<test>/test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize("a", [
+    karva.param(1),
+    karva.param(2),
+    karva.param(3),
+])
+def test_single_arg(a):
+    assert a > 0
+"#,
+    );
+
+    let result = test_context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_parametrize_with_karva_param_multiple_args() {
+    let test_context = TestContext::with_file(
+        "<test>/test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize("input,expected", [
+    karva.param(2, 4),
+    karva.param(3, 9),
+    karva.param(4, 16),
+])
+def test_square(input, expected):
+    assert input ** 2 == expected
+"#,
+    );
+
+    let result = test_context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_parametrize_with_karva_param_list_args() {
+    let test_context = TestContext::with_file(
+        "<test>/test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize(["input", "expected"], [
+    karva.param(2, 4),
+    karva.param(3, 9),
+    karva.param(4, 16),
+])
+def test_square(input, expected):
+    assert input ** 2 == expected
+"#,
+    );
+
+    let result = test_context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_parametrize_with_mixed_karva_param_and_tuples() {
+    let test_context = TestContext::with_file(
+        "<test>/test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize("input,expected", [
+    karva.param(2, 4),
+    (3, 9),
+    karva.param(4, 16),
+])
+def test_square(input, expected):
+    assert input ** 2 == expected
+"#,
+    );
+
+    let result = test_context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_parametrize_with_karva_list_inside_param() {
+    let test_context = TestContext::with_file(
+        "<test>/test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize(
+    "length,nums",
+    [
+        karva.param(1, [1]),
+        karva.param(2, [1, 2]),
+        karva.param(None, []),
+    ],
+)
+def test_markup_mode_bullets_single_newline(length: int | None, nums: list[int]):
+    if length is not None:
+        assert len(nums) == length
+    else:
+        assert len(nums) == 0
+"#,
+    );
+
+    let result = test_context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_parametrize_with_karva_param_and_skip() {
+    let test_context = TestContext::with_file(
+        "<test>/test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize("input,expected", [
+    karva.param(2, 4),
+    karva.param(4, 17, tags=(karva.tags.skip,)),
+    karva.param(5, 26, tags=(karva.tags.expect_fail,)),
+    karva.param(6, 36, tags=(karva.tags.skip(True),)),
+    karva.param(7, 50, tags=(karva.tags.expect_fail(True),)),
+])
+def test_square(input, expected):
+    assert input ** 2 == expected
+"#,
+    );
+
+    let result = test_context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}

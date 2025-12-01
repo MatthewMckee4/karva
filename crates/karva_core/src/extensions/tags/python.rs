@@ -5,13 +5,15 @@ use pyo3::{
     types::{PyDict, PyTuple},
 };
 
+use crate::extensions::functions::python::Param;
+
 #[derive(Debug, Clone)]
 #[pyclass(name = "tag")]
 pub enum PyTag {
     #[pyo3(name = "parametrize")]
     Parametrize {
         arg_names: Vec<String>,
-        arg_values: Vec<Vec<Py<PyAny>>>,
+        arg_values: Vec<Param>,
     },
 
     #[pyo3(name = "use_fixtures")]
@@ -80,9 +82,9 @@ pub mod tags {
     use pyo3::{IntoPyObjectExt, exceptions::PyTypeError, prelude::*, types::PyTuple};
 
     use super::{PyTag, PyTags};
-    use crate::extensions::tags::{
-        parametrize::{Parametrization, parse_parametrize_args},
-        python::PyTestFunction,
+    use crate::extensions::{
+        functions::python::Param,
+        tags::{parametrize::parse_parametrize_args, python::PyTestFunction},
     };
 
     #[pyfunction]
@@ -101,7 +103,7 @@ pub mod tags {
                 arg_names: names,
                 arg_values: parametrization
                     .into_iter()
-                    .map(Parametrization::into_values)
+                    .map(Param::from_parametrization)
                     .collect(),
             }],
         })
@@ -263,32 +265,6 @@ impl PyTestFunction {
     }
 }
 
-// SkipError exception that can be raised to skip tests at runtime
-pyo3::create_exception!(karva, SkipError, pyo3::exceptions::PyException);
-
-// FailError exception that can be raised to fail tests at runtime with a specific reason
-pyo3::create_exception!(karva, FailError, pyo3::exceptions::PyException);
-
-/// Skip the current test at runtime with an optional reason.
-///
-/// This function raises a `SkipError` exception which will be caught by the test runner
-/// and mark the test as skipped.
-#[pyfunction]
-#[pyo3(signature = (reason = None))]
-pub fn skip(_py: Python<'_>, reason: Option<String>) -> PyResult<()> {
-    let message = reason.unwrap_or_default();
-    Err(SkipError::new_err(message))
-}
-
-/// Fail the current test at runtime with a required reason.
-///
-/// This function raises a `FailError` exception which will be caught by the test runner
-/// and mark the test as failed with the given reason.
-#[pyfunction]
-pub fn fail(_py: Python<'_>, reason: String) -> PyResult<()> {
-    Err(FailError::new_err(reason))
-}
-
 #[cfg(test)]
 mod tests {
     use pyo3::{
@@ -318,15 +294,30 @@ mod tests {
                 assert_eq!(arg_names, &vec!["a"]);
                 assert_eq!(arg_values.len(), 3);
                 assert_eq!(
-                    arg_values[0].first().unwrap().extract::<i32>(py).unwrap(),
+                    arg_values[0]
+                        .values()
+                        .first()
+                        .unwrap()
+                        .extract::<i32>(py)
+                        .unwrap(),
                     1
                 );
                 assert_eq!(
-                    arg_values[1].first().unwrap().extract::<i32>(py).unwrap(),
+                    arg_values[1]
+                        .values()
+                        .first()
+                        .unwrap()
+                        .extract::<i32>(py)
+                        .unwrap(),
                     2
                 );
                 assert_eq!(
-                    arg_values[2].first().unwrap().extract::<i32>(py).unwrap(),
+                    arg_values[2]
+                        .values()
+                        .first()
+                        .unwrap()
+                        .extract::<i32>(py)
+                        .unwrap(),
                     3
                 );
             }
@@ -348,12 +339,12 @@ mod tests {
             {
                 assert_eq!(arg_names, &vec!["a", "b"]);
                 assert_eq!(arg_values.len(), 2);
-                assert_eq!(arg_values[0].len(), 2);
-                assert_eq!(arg_values[0][0].extract::<i32>(py).unwrap(), 1);
-                assert_eq!(arg_values[0][1].extract::<i32>(py).unwrap(), 2);
-                assert_eq!(arg_values[1].len(), 2);
-                assert_eq!(arg_values[1][0].extract::<i32>(py).unwrap(), 3);
-                assert_eq!(arg_values[1][1].extract::<i32>(py).unwrap(), 4);
+                assert_eq!(arg_values[0].values().len(), 2);
+                assert_eq!(arg_values[0].values()[0].extract::<i32>(py).unwrap(), 1);
+                assert_eq!(arg_values[0].values()[1].extract::<i32>(py).unwrap(), 2);
+                assert_eq!(arg_values[1].values().len(), 2);
+                assert_eq!(arg_values[1].values()[0].extract::<i32>(py).unwrap(), 3);
+                assert_eq!(arg_values[1].values()[1].extract::<i32>(py).unwrap(), 4);
             }
         });
     }
