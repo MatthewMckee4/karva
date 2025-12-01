@@ -21,7 +21,8 @@ impl Param {
 
         for tag in tags {
             new_tags.push(
-                Tag::from_py_any(py, &tag).ok_or_else(|| PyTypeError::new_err("Invalid tag"))?,
+                Tag::try_from_py_any(py, &tag)
+                    .ok_or_else(|| PyTypeError::new_err("Invalid tag"))?,
             );
         }
 

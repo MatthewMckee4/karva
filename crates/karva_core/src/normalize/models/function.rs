@@ -23,13 +23,13 @@ pub struct NormalizedTestFunction {
     /// Normalized fixture dependencies (already expanded)
     /// Each fixture dependency is a specific variant
     /// These are the regular fixtures that should be passed as arguments to the test function
-    pub(crate) fixture_dependencies: Vec<NormalizedFixture>,
+    pub(crate) fixture_dependencies: Arc<Vec<NormalizedFixture>>,
 
     /// Fixtures from `use_fixtures` tag that should only be executed for side effects
     /// These should NOT be passed as arguments to the test function
-    pub(crate) use_fixture_dependencies: Vec<NormalizedFixture>,
+    pub(crate) use_fixture_dependencies: Arc<Vec<NormalizedFixture>>,
 
-    pub(crate) auto_use_fixtures: Vec<NormalizedFixture>,
+    pub(crate) auto_use_fixtures: Arc<Vec<NormalizedFixture>>,
 
     /// Imported Python function
     pub(crate) function: Py<PyAny>,
@@ -49,16 +49,16 @@ impl NormalizedTestFunction {
     pub(crate) fn resolved_tags(&self) -> Tags {
         let mut tags = self.tags.clone();
 
-        for dependency in &self.fixture_dependencies {
-            tags.extend(dependency.resolved_tags());
+        for dependency in self.fixture_dependencies.iter() {
+            tags.extend(&dependency.resolved_tags());
         }
 
-        for dependency in &self.use_fixture_dependencies {
-            tags.extend(dependency.resolved_tags());
+        for dependency in self.use_fixture_dependencies.iter() {
+            tags.extend(&dependency.resolved_tags());
         }
 
-        for dependency in &self.auto_use_fixtures {
-            tags.extend(dependency.resolved_tags());
+        for dependency in self.auto_use_fixtures.iter() {
+            tags.extend(&dependency.resolved_tags());
         }
         tags
     }

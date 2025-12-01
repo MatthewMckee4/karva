@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use camino::Utf8PathBuf;
 
@@ -10,11 +10,13 @@ pub struct NormalizedPackage {
 
     pub(crate) packages: HashMap<Utf8PathBuf, NormalizedPackage>,
 
-    pub(crate) auto_use_fixtures: Vec<NormalizedFixture>,
+    pub(crate) auto_use_fixtures: Arc<Vec<NormalizedFixture>>,
 }
 
 impl NormalizedPackage {
     pub(crate) fn extend_auto_use_fixtures(&mut self, fixtures: Vec<NormalizedFixture>) {
-        self.auto_use_fixtures.extend(fixtures);
+        let mut combined = (*self.auto_use_fixtures).clone();
+        combined.extend(fixtures);
+        self.auto_use_fixtures = Arc::new(combined);
     }
 }

@@ -45,7 +45,7 @@ impl ParametrizationArgs {
 
     pub(crate) fn extend(&mut self, other: Self) {
         self.values.extend(other.values);
-        self.tags.extend(other.tags);
+        self.tags.extend(&other.tags);
     }
 }
 

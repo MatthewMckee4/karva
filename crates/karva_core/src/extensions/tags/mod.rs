@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{ops::Deref, sync::Arc};
 
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
@@ -41,29 +41,28 @@ impl Tag {
         }
     }
 
-    pub(crate) fn from_py_any(py: Python, py_any: &Py<PyAny>) -> Option<Self> {
+    /// Try to create a tag object from a Python object.
+    ///
+    /// We first check if the object is a `PyTag` or `PyTags`.
+    /// If not, we try to call it to see if it returns a `PyTag` or `PyTags`.
+    pub(crate) fn try_from_py_any(py: Python, py_any: &Py<PyAny>) -> Option<Self> {
         if let Ok(tag) = py_any.cast_bound::<PyTag>(py) {
-            let py_tag = tag.borrow();
-            return Some(Self::from_karva_tag(py_tag));
-        } else if let Ok(tag) = py_any.cast_bound::<PyTags>(py) {
-            let py_tags = tag.borrow();
-
-            if let Some(tag) = py_tags.inner.first() {
-                return Some(Self::from_karva_tag(tag));
-            }
+            return Some(Self::from_karva_tag(tag.borrow()));
+        } else if let Ok(tag) = py_any.cast_bound::<PyTags>(py)
+            && let Some(tag) = tag.borrow().inner.first()
+        {
+            return Some(Self::from_karva_tag(tag));
         } else if let Ok(tag) = py_any.call0(py) {
             if let Ok(tag) = tag.cast_bound::<PyTag>(py) {
-                let py_tag = tag.borrow();
-                return Some(Self::from_karva_tag(py_tag));
+                return Some(Self::from_karva_tag(tag.borrow()));
             }
-            if let Ok(tag) = tag.cast_bound::<PyTags>(py) {
-                let py_tags = tag.borrow();
-
-                if let Some(tag) = py_tags.inner.first() {
-                    return Some(Self::from_karva_tag(tag));
-                }
+            if let Ok(tag) = tag.cast_bound::<PyTags>(py)
+                && let Some(tag) = tag.borrow().inner.first()
+            {
+                return Some(Self::from_karva_tag(tag));
             }
         }
+
         None
     }
 
@@ -96,18 +95,21 @@ impl Tag {
 /// Represents a collection of tags associated with a test function.
 ///
 /// This means we can collect tags and use them all for the same function.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Tags {
-    inner: Vec<Tag>,
+    inner: Arc<Vec<Tag>>,
 }
 
 impl Tags {
-    pub(crate) const fn new(tags: Vec<Tag>) -> Self {
-        Self { inner: tags }
+    pub(crate) fn new(tags: Vec<Tag>) -> Self {
+        Self {
+            inner: Arc::new(tags),
+        }
     }
 
-    pub(crate) fn extend(&mut self, other: Self) {
-        self.inner.extend(other.inner);
+    pub(crate) fn extend(&mut self, other: &Self) {
+        let self_vec = Arc::make_mut(&mut self.inner);
+        self_vec.extend(other.inner.iter().cloned());
     }
 
     pub(crate) fn from_py_any(
@@ -155,7 +157,9 @@ impl Tags {
         } else {
             return None;
         }
-        Some(Self { inner: tags })
+        Some(Self {
+            inner: Arc::new(tags),
+        })
     }
 
     /// Return all parametrizations
@@ -164,7 +168,7 @@ impl Tags {
     pub(crate) fn parametrize_args(&self) -> Vec<ParametrizationArgs> {
         let mut param_args: Vec<ParametrizationArgs> = vec![ParametrizationArgs::default()];
 
-        for tag in &self.inner {
+        for tag in self.inner.iter() {
             if let Tag::Parametrize(parametrize_tag) = tag {
                 let current_values = parametrize_tag.each_arg_value();
 
@@ -187,7 +191,7 @@ impl Tags {
     /// Get all required fixture names for the given test.
     pub(crate) fn required_fixtures_names(&self) -> Vec<String> {
         let mut fixture_names = Vec::new();
-        for tag in &self.inner {
+        for tag in self.inner.iter() {
             if let Tag::UseFixtures(use_fixtures_tag) = tag {
                 fixture_names.extend_from_slice(use_fixtures_tag.fixture_names());
             }
@@ -197,7 +201,7 @@ impl Tags {
 
     /// Returns true if any skip tag should be skipped.
     pub(crate) fn should_skip(&self) -> (bool, Option<String>) {
-        for tag in &self.inner {
+        for tag in self.inner.iter() {
             if let Tag::Skip(skip_tag) = tag {
                 if skip_tag.should_skip() {
                     return (true, skip_tag.reason());
@@ -209,12 +213,20 @@ impl Tags {
 
     /// Return the `ExpectFailTag` if it exists.
     pub(crate) fn expect_fail_tag(&self) -> Option<ExpectFailTag> {
-        for tag in &self.inner {
+        for tag in self.inner.iter() {
             if let Tag::ExpectFail(expect_fail_tag) = tag {
                 return Some(expect_fail_tag.clone());
             }
         }
         None
+    }
+}
+
+impl Default for Tags {
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(Vec::new()),
+        }
     }
 }
 

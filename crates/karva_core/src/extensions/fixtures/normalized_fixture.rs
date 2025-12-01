@@ -28,7 +28,7 @@ pub struct BuiltInFixture {
     /// Pre-computed value for the built-in fixture
     pub(crate) value: NormalizedFixtureValue,
     /// Normalized dependencies (already expanded for their params)
-    pub(crate) dependencies: Vec<NormalizedFixture>,
+    pub(crate) dependencies: Arc<Vec<NormalizedFixture>>,
     /// Fixture scope
     pub(crate) scope: FixtureScope,
     /// Optional finalizer to call after the fixture is used
@@ -43,7 +43,7 @@ pub struct UserDefinedFixture {
     /// The specific parameter value for this variant (if parametrized)
     pub(crate) param: Option<Parametrization>,
     /// Normalized dependencies (already expanded for their params)
-    pub(crate) dependencies: Vec<NormalizedFixture>,
+    pub(crate) dependencies: Arc<Vec<NormalizedFixture>>,
     /// Fixture scope
     pub(crate) scope: FixtureScope,
     /// If this fixture is a generator
@@ -70,18 +70,18 @@ pub enum NormalizedFixture {
 
 impl NormalizedFixture {
     /// Creates a built-in fixture that doesn't have a Python definition.
-    pub(crate) const fn built_in(name: String, value: Py<PyAny>) -> Self {
+    pub(crate) fn built_in(name: String, value: Py<PyAny>) -> Self {
         Self::BuiltIn(BuiltInFixture {
             name,
             value: NormalizedFixtureValue::Computed(value),
-            dependencies: vec![],
+            dependencies: Arc::new(vec![]),
             scope: FixtureScope::Function,
             finalizer: None,
         })
     }
 
     /// Creates a built-in fixture with a finalizer.
-    pub(crate) const fn built_in_with_finalizer(
+    pub(crate) fn built_in_with_finalizer(
         name: String,
         value: Py<PyAny>,
         finalizer: Py<PyAny>,
@@ -89,7 +89,7 @@ impl NormalizedFixture {
         Self::BuiltIn(BuiltInFixture {
             name,
             value: NormalizedFixtureValue::Computed(value),
-            dependencies: vec![],
+            dependencies: Arc::new(vec![]),
             scope: FixtureScope::Function,
             finalizer: Some(finalizer),
         })
@@ -112,7 +112,7 @@ impl NormalizedFixture {
     }
 
     /// Returns the fixture dependencies
-    pub(crate) const fn dependencies(&self) -> &Vec<Self> {
+    pub(crate) fn dependencies(&self) -> &[Self] {
         match self {
             Self::BuiltIn(fixture) => &fixture.dependencies,
             Self::UserDefined(fixture) => &fixture.dependencies,
@@ -174,7 +174,7 @@ impl NormalizedFixture {
             .unwrap_or_default();
 
         for dependency in self.dependencies() {
-            tags.extend(dependency.resolved_tags());
+            tags.extend(&dependency.resolved_tags());
         }
 
         tags
