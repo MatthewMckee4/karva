@@ -1,5 +1,5 @@
 from collections.abc import Callable, Sequence
-from typing import Generic, Literal, NoReturn, TypeAlias, TypeVar, overload
+from typing import Generic, Literal, NoReturn, Self, TypeAlias, TypeVar, overload
 
 from typing_extensions import ParamSpec
 
@@ -52,3 +52,159 @@ class SkipError(Exception):
 
 class FailError(Exception):
     """Raised when `karva.fail` is called."""
+
+class Mock:
+    """Helper to conveniently monkeypatch attributes/items/environment variables/syspath.
+
+    This class is compatible with pytest's monkeypatch fixture.
+    """
+
+    def __init__(self) -> None: ...
+    @classmethod
+    def context(cls) -> Mock:
+        """Context manager that returns a new Mock object which undoes any patching
+        done inside the with block upon exit.
+        """
+
+    @overload
+    def setattr(
+        self,
+        target: object,
+        name: str,
+        value: object,
+        raising: bool = True,
+    ) -> None:
+        """Set attribute value on target, memorising the old value.
+
+        Args:
+            target: The object to set the attribute on
+            name: The attribute name
+            value: The value to set
+            raising: Whether to raise an error if the attribute doesn't exist
+        """
+
+    @overload
+    def setattr(
+        self,
+        target: str,
+        name: object,
+        value: None = None,
+        raising: bool = True,
+    ) -> None:
+        """Set attribute using dotted import path.
+
+        Args:
+            target: Dotted import path (e.g., 'os.path.exists')
+            name: The value to set
+            value: Not used in this overload
+            raising: Whether to raise an error if the attribute doesn't exist
+        """
+
+    @overload
+    def delattr(
+        self,
+        target: object,
+        name: str,
+        raising: bool = True,
+    ) -> None:
+        """Delete attribute from target.
+
+        Args:
+            target: The object to delete the attribute from
+            name: The attribute name
+            raising: Whether to raise an error if the attribute doesn't exist
+        """
+
+    @overload
+    def delattr(
+        self,
+        target: str,
+        name: None = None,
+        raising: bool = True,
+    ) -> None:
+        """Delete attribute using dotted import path.
+
+        Args:
+            target: Dotted import path (e.g., 'os.path.exists')
+            name: Not used in this overload
+            raising: Whether to raise an error if the attribute doesn't exist
+        """
+
+    def setitem(
+        self,
+        dic: dict[object, object],
+        name: object,
+        value: object,
+    ) -> None:
+        """Set dictionary entry name to value.
+
+        Args:
+            dic: The dictionary to modify
+            name: The key
+            value: The value to set
+        """
+
+    def delitem(
+        self,
+        dic: dict[object, object],
+        name: object,
+        raising: bool = True,
+    ) -> None:
+        """Delete name from dict.
+
+        Args:
+            dic: The dictionary to modify
+            name: The key to delete
+            raising: Whether to raise an error if the key doesn't exist
+        """
+
+    def setenv(
+        self,
+        name: str,
+        value: object,
+        prepend: str | None = None,
+    ) -> None:
+        """Set environment variable name to value.
+
+        Args:
+            name: The environment variable name
+            value: The value to set (will be converted to string)
+            prepend: If provided, prepend value with this separator to existing value
+        """
+
+    def delenv(
+        self,
+        name: str,
+        raising: bool = True,
+    ) -> None:
+        """Delete environment variable.
+
+        Args:
+            name: The environment variable name
+            raising: Whether to raise an error if the variable doesn't exist
+        """
+
+    def syspath_prepend(self, path: str) -> None:
+        """Prepend path to sys.path list of import locations.
+
+        Args:
+            path: The path to prepend
+        """
+
+    def chdir(self, path: str | object) -> None:
+        """Change the current working directory to the specified path.
+
+        Args:
+            path: The path to change to (string or Path object)
+        """
+
+    def undo(self) -> None:
+        """Undo all changes made by this Mock instance."""
+
+    def __enter__(self) -> Self: ...
+    def __exit__(
+        self,
+        exc_type: object,
+        exc_val: object,
+        exc_tb: object,
+    ) -> bool: ...

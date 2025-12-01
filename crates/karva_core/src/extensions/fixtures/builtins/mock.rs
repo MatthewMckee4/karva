@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use pyo3::{
-    IntoPyObjectExt, PyResult,
+    PyResult,
     exceptions::{PyAttributeError, PyTypeError},
     prelude::*,
     types::{PyString, PyType},
@@ -15,9 +15,12 @@ pub fn is_mock_fixture_name(fixture_name: &str) -> bool {
     }
 }
 
-pub fn create_mock_fixture(py: Python<'_>) -> Option<Py<PyAny>> {
-    let mock = Mock::new();
-    mock.into_py_any(py).ok()
+pub fn create_mock_fixture(py: Python<'_>) -> Option<(Py<PyAny>, Py<PyAny>)> {
+    let mock = Py::new(py, Mock::new()).ok()?;
+    let undo_method = mock.getattr(py, "undo").ok()?;
+
+    // Return both the mock instance and its undo method as the finalizer
+    Some((mock.into_any(), undo_method))
 }
 
 /// Sentinel value representing "not set"
@@ -295,7 +298,7 @@ impl Mock {
         let final_value = if let Some(prep_char) = prepend {
             if environ.contains(&name)? {
                 let current = environ.get_item(&name)?.extract::<String>()?;
-                format!("{value}{prep_char}{current}")
+                format!("{value_string}{prep_char}{current}")
             } else {
                 value_string
             }
@@ -303,26 +306,55 @@ impl Mock {
             value_string
         };
 
-        self.setitem(
-            py,
-            environ.into(),
-            name.into_pyobject(py).unwrap().into_any().unbind(),
-            final_value.into_pyobject(py).unwrap().into_any().unbind(),
-        )
+        let name_key = name.into_pyobject(py)?.into_any().unbind();
+        let value_obj = final_value.into_pyobject(py)?.into_any().unbind();
+
+        // Get old value if it exists
+        let oldval = environ
+            .get_item(&name_key)
+            .map_or_else(|_| py.None(), Into::into);
+
+        // Store for undo
+        self.setitem
+            .lock()
+            .unwrap()
+            .push((environ.clone().unbind(), name_key.clone(), oldval));
+
+        // Set new value
+        environ.set_item(&name_key, value_obj)?;
+
+        Ok(())
     }
 
     /// Delete name from the environment.
     #[pyo3(signature = (name, raising = true))]
+    #[allow(clippy::needless_pass_by_value)]
     fn delenv(&mut self, py: Python<'_>, name: String, raising: bool) -> PyResult<()> {
         let os_module = py.import("os")?;
         let environ = os_module.getattr("environ")?;
 
-        self.delitem(
-            py,
-            environ.into(),
-            name.into_pyobject(py).unwrap().into_any().unbind(),
-            raising,
-        )
+        let name_key = name.clone().into_pyobject(py)?.into_any().unbind();
+
+        if !environ.contains(&name_key)? {
+            if raising {
+                return Err(pyo3::exceptions::PyKeyError::new_err(format!("{name:?}")));
+            }
+            return Ok(());
+        }
+
+        // Get old value
+        let oldval = environ.get_item(&name_key)?.into();
+
+        // Store for undo
+        self.setitem
+            .lock()
+            .unwrap()
+            .push((environ.clone().unbind(), name_key.clone(), oldval));
+
+        // Delete item
+        environ.del_item(&name_key)?;
+
+        Ok(())
     }
 
     /// Prepend path to sys.path list of import locations.
@@ -331,12 +363,10 @@ impl Mock {
         let sys_path = sys_module.getattr("path")?;
 
         // Save original sys.path if not already saved
-        {
-            let mut save = self.savesyspath.lock().unwrap();
-            if save.is_none() {
-                let saved: Vec<String> = sys_path.extract()?;
-                *save = Some(saved);
-            }
+        let mut save = self.savesyspath.lock().unwrap();
+        if save.is_none() {
+            let saved: Vec<String> = sys_path.extract()?;
+            *save = Some(saved);
         }
 
         // Insert at beginning
@@ -356,12 +386,10 @@ impl Mock {
         let path_string = path.to_string();
 
         // Save current directory if not already saved
-        {
-            let mut cwd = self.cwd.lock().unwrap();
-            if cwd.is_none() {
-                let current = os_module.call_method0("getcwd")?.extract::<String>()?;
-                *cwd = Some(current);
-            }
+        let mut cwd = self.cwd.lock().unwrap();
+        if cwd.is_none() {
+            let current = os_module.call_method0("getcwd")?.extract::<String>()?;
+            *cwd = Some(current);
         }
 
         // Change directory
@@ -376,7 +404,8 @@ impl Mock {
         {
             let mut setattr_list = self.setattr.lock().unwrap();
             for (obj, name, value) in setattr_list.drain(..).rev() {
-                if value.is_none(py) {
+                // Check if the value is Python's None (meaning the attribute didn't exist before)
+                if value.bind(py).is_none() {
                     let _ = obj.bind(py).delattr(&name);
                 } else {
                     obj.bind(py).setattr(&name, value)?;
@@ -389,7 +418,10 @@ impl Mock {
             let mut setitem_list = self.setitem.lock().unwrap();
             for (dictionary, key, value) in setitem_list.drain(..).rev() {
                 let bound_dict = dictionary.bind(py);
-                if value.is_none(py) {
+                let bound_value = value.bind(py);
+
+                // Check if the value is Python's None (meaning the key didn't exist before)
+                if bound_value.is_none() {
                     let _ = bound_dict.del_item(&key);
                 } else {
                     bound_dict.set_item(&key, value)?;
@@ -401,6 +433,7 @@ impl Mock {
         {
             let mut savesyspath = self.savesyspath.lock().unwrap();
             if let Some(saved_path) = savesyspath.take() {
+                drop(savesyspath);
                 let sys_module = py.import("sys")?;
                 let sys_path = sys_module.getattr("path")?;
 
@@ -416,6 +449,7 @@ impl Mock {
         {
             let mut cwd = self.cwd.lock().unwrap();
             if let Some(saved_cwd) = cwd.take() {
+                drop(cwd);
                 let os_module = py.import("os")?;
                 os_module.call_method1("chdir", (saved_cwd,))?;
             }

@@ -30,6 +30,217 @@ fn test_temp_directory_fixture(
     }
 }
 
+#[test]
+fn test_monkeypatch_setattr() {
+    let context = TestContext::with_file(
+        "<test>/test.py",
+        r"
+from karva import Mock
+
+def test_setattr_simple(monkeypatch):
+    class A:
+        x = 1
+
+    monkeypatch.setattr(A, 'x', 2)
+    assert A.x == 2
+
+def test_setattr_new_attribute(monkeypatch):
+    class A:
+        x = 1
+
+    monkeypatch.setattr(A, 'y', 2, raising=False)
+    assert A.y == 2
+
+def test_setattr_undo(monkeypatch):
+    class A:
+        x = 1
+
+    monkeypatch.setattr(A, 'x', 2)
+    assert A.x == 2
+    monkeypatch.undo()
+    assert A.x == 1
+        ",
+    );
+
+    let result = context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_monkeypatch_setitem() {
+    let context = TestContext::with_file(
+        "<test>/test.py",
+        r"
+def test_setitem_dict(monkeypatch):
+    d = {'x': 1}
+    monkeypatch.setitem(d, 'x', 2)
+    assert d['x'] == 2
+
+def test_setitem_new_key(monkeypatch):
+    d = {'x': 1}
+    monkeypatch.setitem(d, 'y', 2)
+    assert d['y'] == 2
+    monkeypatch.undo()
+    assert 'y' not in d
+
+def test_setitem_undo(monkeypatch):
+    d = {'x': 1}
+    monkeypatch.setitem(d, 'x', 2)
+    monkeypatch.undo()
+    assert d['x'] == 1
+        ",
+    );
+
+    let result = context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_monkeypatch_env() {
+    let context = TestContext::with_file(
+        "<test>/test.py",
+        r"
+import os
+
+def test_setenv(monkeypatch):
+    monkeypatch.setenv('TEST_VAR', 'test_value')
+    assert os.environ['TEST_VAR'] == 'test_value'
+
+def test_setenv_undo(monkeypatch):
+    monkeypatch.setenv('TEST_VAR', 'test_value')
+    assert os.environ['TEST_VAR'] == 'test_value'
+    monkeypatch.undo()
+    assert 'TEST_VAR' not in os.environ
+
+def test_delenv(monkeypatch):
+    os.environ['TEST_VAR'] = 'value'
+    monkeypatch.delenv('TEST_VAR')
+    assert 'TEST_VAR' not in os.environ
+    monkeypatch.undo()
+    assert os.environ['TEST_VAR'] == 'value'
+    del os.environ['TEST_VAR']
+        ",
+    );
+
+    let result = context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_monkeypatch_syspath() {
+    let context = TestContext::with_file(
+        "<test>/test.py",
+        r"
+import sys
+
+def test_syspath_prepend(monkeypatch):
+    old_path = sys.path.copy()
+    monkeypatch.syspath_prepend('/test/path')
+    assert sys.path[0] == '/test/path'
+    monkeypatch.undo()
+    assert sys.path == old_path
+
+def test_syspath_prepend_multiple(monkeypatch):
+    old_path = sys.path.copy()
+    monkeypatch.syspath_prepend('/first')
+    monkeypatch.syspath_prepend('/second')
+    assert sys.path[0] == '/second'
+    assert sys.path[1] == '/first'
+    monkeypatch.undo()
+    assert sys.path == old_path
+        ",
+    );
+
+    let result = context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_monkeypatch_delattr() {
+    let context = TestContext::with_file(
+        "<test>/test.py",
+        r"
+def test_delattr(monkeypatch):
+    class A:
+        x = 1
+
+    monkeypatch.delattr(A, 'x')
+    assert not hasattr(A, 'x')
+
+def test_delattr_undo(monkeypatch):
+    class A:
+        x = 1
+
+    monkeypatch.delattr(A, 'x')
+    assert not hasattr(A, 'x')
+    monkeypatch.undo()
+    assert A.x == 1
+        ",
+    );
+
+    let result = context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_monkeypatch_context_manager() {
+    let context = TestContext::with_file(
+        "<test>/test.py",
+        r"
+from karva import Mock
+
+def test_context_manager():
+    class A:
+        x = 1
+
+    with Mock() as m:
+        m.setattr(A, 'x', 2)
+        assert A.x == 2
+
+    assert A.x == 1
+
+def test_context_manager_auto_undo():
+    d = {'x': 1}
+
+    with Mock() as m:
+        m.setitem(d, 'x', 2)
+        assert d['x'] == 2
+
+    assert d['x'] == 1
+        ",
+    );
+
+    let result = context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
+#[test]
+fn test_finalizer() {
+    let context = TestContext::with_file(
+        "<test>/test.py",
+        r"
+import os
+
+def test_setenv(monkeypatch):
+    monkeypatch.setenv('TEST_VAR', 'test_value')
+    assert os.environ['TEST_VAR'] == 'test_value'
+
+def test_1():
+    assert 'TEST_VAR' not in os.environ
+        ",
+    );
+
+    let result = context.test();
+
+    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+}
+
 /// Taken from <https://github.com/pytest-dev/pytest/blob/main/testing/test_monkeypatch.py>
 #[test]
 fn test_mock() {

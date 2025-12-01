@@ -27,6 +27,8 @@ pub struct BuiltInFixture {
     pub(crate) dependencies: Vec<NormalizedFixture>,
     /// Fixture scope
     pub(crate) scope: FixtureScope,
+    /// Optional finalizer to call after the fixture is used
+    pub(crate) finalizer: Option<Py<PyAny>>,
 }
 
 /// User-defined fixture data
@@ -71,6 +73,23 @@ impl NormalizedFixture {
             param: None,
             dependencies: vec![],
             scope: FixtureScope::Function,
+            finalizer: None,
+        })
+    }
+
+    /// Creates a built-in fixture with a finalizer.
+    pub(crate) const fn built_in_with_finalizer(
+        name: String,
+        value: Py<PyAny>,
+        finalizer: Py<PyAny>,
+    ) -> Self {
+        Self::BuiltIn(BuiltInFixture {
+            name,
+            value: NormalizedFixtureValue::Computed(value),
+            param: None,
+            dependencies: vec![],
+            scope: FixtureScope::Function,
+            finalizer: Some(finalizer),
         })
     }
 
@@ -132,6 +151,14 @@ impl NormalizedFixture {
 
     pub const fn as_user_defined(&self) -> Option<&UserDefinedFixture> {
         if let Self::UserDefined(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub const fn as_builtin(&self) -> Option<&BuiltInFixture> {
+        if let Self::BuiltIn(v) = self {
             Some(v)
         } else {
             None

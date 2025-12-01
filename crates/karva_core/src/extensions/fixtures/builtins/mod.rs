@@ -17,10 +17,11 @@ pub fn get_builtin_fixture(py: Python<'_>, fixture_name: &str) -> Option<Normali
             }
         }
         _ if mock::is_mock_fixture_name(fixture_name) => {
-            if let Some(mock_class) = mock::create_mock_fixture(py) {
-                return Some(NormalizedFixture::built_in(
+            if let Some((mock_instance, finalizer)) = mock::create_mock_fixture(py) {
+                return Some(NormalizedFixture::built_in_with_finalizer(
                     fixture_name.to_string(),
-                    mock_class,
+                    mock_instance,
+                    finalizer,
                 ));
             }
         }

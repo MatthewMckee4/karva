@@ -431,3 +431,28 @@ def test_raise_skip_error():
 
     assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]");
 }
+
+#[rstest]
+fn test_skipif_true_and_false_conditions(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_file(
+        "<test>/test.py",
+        &format!(
+            r"
+import {framework}
+
+@{decorator}(True)
+@{decorator}(False)
+def test_skip_with_true():
+    assert False
+
+        ",
+            decorator = get_skip_decorator(framework)
+        ),
+    );
+
+    let result = context.test();
+
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]");
+    }
+}

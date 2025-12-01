@@ -67,8 +67,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         let mut passed = true;
 
         for test_function in &module.test_functions {
-            let test_passed = self.run_normalized_test(py, test_function);
-            passed &= test_passed;
+            passed &= self.run_normalized_test(py, test_function);
 
             if self.context.project().options().fail_fast() && !passed {
                 break;
@@ -97,11 +96,13 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
             }
         }
 
-        for sub_package in package.packages.values() {
-            passed &= self.run_package(py, sub_package);
+        if !self.context.project().options().fail_fast() || passed {
+            for sub_package in package.packages.values() {
+                passed &= self.run_package(py, sub_package);
 
-            if self.context.project().options().fail_fast() && !passed {
-                break;
+                if self.context.project().options().fail_fast() && !passed {
+                    break;
+                }
             }
         }
 
@@ -115,19 +116,15 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         tracing::info!("Running test {}", test_fn.name);
 
         // Check if test should be skipped
-        if let Some(skip_tag) = test_fn.tags.skip_tag() {
-            if skip_tag.should_skip() {
-                let reporter = self.context.reporter();
+        if let (true, reason) = test_fn.tags.should_skip() {
+            let reporter = self.context.reporter();
 
-                self.context.result().register_test_case_result(
-                    &test_fn.name.to_string(),
-                    IndividualTestResultKind::Skipped {
-                        reason: skip_tag.reason(),
-                    },
-                    Some(reporter),
-                );
-                return true;
-            }
+            self.context.result().register_test_case_result(
+                &test_fn.name.to_string(),
+                IndividualTestResultKind::Skipped { reason },
+                Some(reporter),
+            );
+            return true;
         }
 
         // Check if test is expected to fail
@@ -372,8 +369,10 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                             Finalizer {
                                 fixture_return: py_iter,
                                 scope: fixture.scope(),
-                                fixture_name: user_defined_fixture.name.clone(),
-                                stmt_function_def: user_defined_fixture.stmt_function_def.clone(),
+                                fixture_name: Some(user_defined_fixture.name.clone()),
+                                stmt_function_def: Some(
+                                    user_defined_fixture.stmt_function_def.clone(),
+                                ),
                             }
                         };
 
@@ -384,6 +383,48 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                         return None;
                     }
                     None => (result, None),
+                }
+            } else {
+                (result, None)
+            }
+        } else if let Some(builtin_fixture) = fixture.as_builtin()
+            && let Some(finalizer_fn) = &builtin_fixture.finalizer
+        {
+            // Built-in fixtures with finalizers (like monkeypatch)
+            // We create a simple finalizer that calls the finalizer function
+            let finalizer_fn_clone = finalizer_fn.clone();
+            let result_clone = result.clone();
+
+            // Create a Python generator that yields the result and then calls the finalizer
+            let code = r"
+def _builtin_finalizer(value, finalizer):
+    yield value
+    finalizer()
+_builtin_finalizer
+";
+
+            let locals = PyDict::new(py);
+            if py
+                .run(&std::ffi::CString::new(code).unwrap(), None, Some(&locals))
+                .is_ok()
+                && let Ok(Some(gen_fn)) = locals.get_item("_builtin_finalizer")
+                && let Ok(generator) = gen_fn.call1((result_clone, finalizer_fn_clone))
+                && let Ok(py_iter) = generator.cast::<PyIterator>()
+            {
+                let py_iter_unbound: Py<PyIterator> = py_iter.clone().unbind();
+                let mut iterator = py_iter.clone();
+
+                if let Some(Ok(value)) = iterator.next() {
+                    let finalizer = Finalizer {
+                        fixture_return: py_iter_unbound,
+                        scope: builtin_fixture.scope,
+                        fixture_name: None,
+                        stmt_function_def: None,
+                    };
+
+                    (value.unbind(), Some(finalizer))
+                } else {
+                    (result, None)
                 }
             } else {
                 (result, None)
