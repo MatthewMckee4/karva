@@ -61,8 +61,12 @@ impl<'proj, 'rep, 'py, 'a> FunctionDefinitionVisitor<'_, 'proj, 'rep, 'py, 'a> {
             Ok(py_module) => {
                 self.py_module = Some(py_module);
             }
-            Err(_) => {
-                report_failed_to_import_module(self.context, self.module.name());
+            Err(error) => {
+                report_failed_to_import_module(
+                    self.context,
+                    self.module.name(),
+                    &error.value(self.py).to_string(),
+                );
             }
         }
     }
@@ -120,9 +124,16 @@ impl<'proj, 'rep, 'py, 'a> FunctionDefinitionVisitor<'_, 'proj, 'rep, 'py, 'a> {
                     }
                 }
 
-                let Ok(py_module) = self.py.import(&module_name) else {
-                    report_failed_to_import_module(self.context, &module_name);
-                    continue;
+                let py_module = match self.py.import(&module_name) {
+                    Ok(py_module) => py_module,
+                    Err(error) => {
+                        report_failed_to_import_module(
+                            self.context,
+                            &module_name,
+                            &error.value(self.py).to_string(),
+                        );
+                        continue;
+                    }
                 };
 
                 let Ok(file_name) = py_module.getattr("__file__") else {

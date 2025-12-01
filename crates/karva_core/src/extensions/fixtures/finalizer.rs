@@ -19,8 +19,8 @@ use crate::{
 pub struct Finalizer {
     pub(crate) fixture_return: Py<PyIterator>,
     pub(crate) scope: FixtureScope,
-    pub(crate) fixture_name: QualifiedFunctionName,
-    pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
+    pub(crate) fixture_name: Option<QualifiedFunctionName>,
+    pub(crate) stmt_function_def: Option<Arc<StmtFunctionDef>>,
 }
 
 impl Finalizer {
@@ -35,12 +35,16 @@ impl Finalizer {
             Err(err) => &format!("Failed to reset fixture: {}", err.value(py)),
         };
 
-        report_invalid_fixture_finalizer(
-            context,
-            source_file(self.fixture_name.module_path().path()),
-            &self.stmt_function_def,
-            invalid_finalizer_reason,
-        );
+        if let Some(stmt_function_def) = self.stmt_function_def
+            && let Some(fixture_name) = self.fixture_name
+        {
+            report_invalid_fixture_finalizer(
+                context,
+                source_file(fixture_name.module_path().path()),
+                &stmt_function_def,
+                invalid_finalizer_reason,
+            );
+        }
     }
 }
 

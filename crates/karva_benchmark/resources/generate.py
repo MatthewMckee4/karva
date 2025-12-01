@@ -1,4 +1,3 @@
-# noqa: INP001
 from dataclasses import dataclass
 from io import TextIOWrapper
 from pathlib import Path

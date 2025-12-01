@@ -328,7 +328,7 @@ def test_1():
     assert_snapshot!(result.display(), @r"
     discovery diagnostics:
 
-    error[failed-to-import-module]: Failed to import python module `<test>.test`
+    error[failed-to-import-module]: Failed to import python module `<test>.test`: Expected boolean values for conditions
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
     ");
@@ -352,7 +352,7 @@ def test_1():
     assert_snapshot!(result.display(), @r"
     discovery diagnostics:
 
-    error[failed-to-import-module]: Failed to import python module `<test>.test`
+    error[failed-to-import-module]: Failed to import python module `<test>.test`: Expected boolean values for conditions
 
     test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
     ");
@@ -430,4 +430,29 @@ def test_raise_skip_error():
     let result = context.test();
 
     assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]");
+}
+
+#[rstest]
+fn test_skipif_true_and_false_conditions(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_file(
+        "<test>/test.py",
+        &format!(
+            r"
+import {framework}
+
+@{decorator}(True)
+@{decorator}(False)
+def test_skip_with_true():
+    assert False
+
+        ",
+            decorator = get_skip_decorator(framework)
+        ),
+    );
+
+    let result = context.test();
+
+    allow_duplicates! {
+        assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]");
+    }
 }

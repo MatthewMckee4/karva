@@ -240,3 +240,21 @@ You can use any of the following fixture names to use this fixture:
 - `tmpdir` (from pytest)
 - `temp_path` (from karva)
 - `temp_dir` (from karva)
+
+### Monkeypatch
+
+The `monkeypatch` fixture allows you to safely modify objects, dictionaries, environment variables, and the system path during tests. All changes are automatically undone after the test completes.
+
+This fixture is compatible with pytest's `monkeypatch` fixture.
+
+```py
+def test_setattr(monkeypatch):
+    import os
+    monkeypatch.setattr(os, 'getcwd', lambda: '/fake/path')
+    assert os.getcwd() == '/fake/path'
+
+def test_setenv(monkeypatch):
+    monkeypatch.setenv('MY_VAR', 'test_value')
+    import os
+    assert os.environ['MY_VAR'] == 'test_value'
+```

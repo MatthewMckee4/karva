@@ -163,14 +163,15 @@ impl Tags {
         fixture_names
     }
 
-    /// Return the `SkipTag` if it exists.
-    pub(crate) fn skip_tag(&self) -> Option<SkipTag> {
+    pub(crate) fn should_skip(&self) -> (bool, Option<String>) {
         for tag in &self.inner {
             if let Tag::Skip(skip_tag) = tag {
-                return Some(skip_tag.clone());
+                if skip_tag.should_skip() {
+                    return (true, skip_tag.reason());
+                }
             }
         }
-        None
+        (false, None)
     }
 
     /// Return the `ExpectFailTag` if it exists.

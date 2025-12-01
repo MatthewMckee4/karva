@@ -356,6 +356,20 @@ pub static TYPER_PROJECT: RealWorldProject<'static> = RealWorldProject {
     python_version: PythonVersion::PY313,
 };
 
+pub static PYDANTIC_SETTINGS_PROJECT: RealWorldProject<'static> = RealWorldProject {
+    name: "pydantic-settings",
+    repository: "https://github.com/pydantic/pydantic-settings",
+    commit: "ffb3ac673633e4f26a512b0fbf986d9bf8821a50",
+    paths: &["tests"],
+    dependencies: &["pydantic", "pytest", "python-dotenv", "typing-extensions"],
+    python_version: PythonVersion::PY313,
+};
+
 pub fn all_projects() -> Vec<&'static RealWorldProject<'static>> {
-    vec![&AFFECT_PROJECT, &SQLMODEL_PROJECT, &TYPER_PROJECT]
+    vec![
+        &AFFECT_PROJECT,
+        &SQLMODEL_PROJECT,
+        &TYPER_PROJECT,
+        &PYDANTIC_SETTINGS_PROJECT,
+    ]
 }
