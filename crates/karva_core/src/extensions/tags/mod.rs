@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
@@ -12,7 +10,7 @@ mod skip;
 mod use_fixtures;
 
 pub use expect_fail::ExpectFailTag;
-pub use parametrize::ParametrizeTag;
+pub use parametrize::{ParametrizationArgs, ParametrizeTag};
 pub use skip::SkipTag;
 pub use use_fixtures::UseFixturesTag;
 
@@ -48,7 +46,10 @@ impl From<&PyTag> for Tag {
             PyTag::Parametrize {
                 arg_names,
                 arg_values,
-            } => Self::Parametrize(ParametrizeTag::new(arg_names.clone(), arg_values.clone())),
+            } => Self::Parametrize(ParametrizeTag::from_karva(
+                arg_names.clone(),
+                arg_values.clone(),
+            )),
             PyTag::UseFixtures { fixture_names } => {
                 Self::UseFixtures(UseFixturesTag::new(fixture_names.clone()))
             }
@@ -73,6 +74,10 @@ pub struct Tags {
 impl Tags {
     pub(crate) const fn new(tags: Vec<Tag>) -> Self {
         Self { inner: tags }
+    }
+
+    pub(crate) fn extend(&mut self, other: Self) {
+        self.inner.extend(other.inner);
     }
 
     pub(crate) fn from_py_any(
@@ -100,24 +105,21 @@ impl Tags {
             }
         }
 
-        if let Some(tags) = Self::from_pytest_function(py, py_function) {
+        if let Ok(marks) = py_function.getattr(py, "pytestmark")
+            && let Some(tags) = Self::from_pytest_marks(py, &marks)
+        {
             return tags;
         }
 
         Self::default()
     }
 
-    pub(crate) fn from_pytest_function(
-        py: Python<'_>,
-        py_test_function: &Py<PyAny>,
-    ) -> Option<Self> {
+    pub(crate) fn from_pytest_marks(py: Python<'_>, marks: &Py<PyAny>) -> Option<Self> {
         let mut tags = Vec::new();
-        if let Ok(marks) = py_test_function.getattr(py, "pytestmark") {
-            if let Ok(marks_list) = marks.extract::<Vec<Bound<'_, PyAny>>>(py) {
-                for mark in marks_list {
-                    if let Some(tag) = Tag::try_from_pytest_mark(&mark) {
-                        tags.push(tag);
-                    }
+        if let Ok(marks_list) = marks.extract::<Vec<Bound<'_, PyAny>>>(py) {
+            for mark in marks_list {
+                if let Some(tag) = Tag::try_from_pytest_mark(&mark) {
+                    tags.push(tag);
                 }
             }
         } else {
@@ -129,8 +131,8 @@ impl Tags {
     /// Return all parametrizations
     ///
     /// This function ensures that if we have multiple parametrize tags, we combine them together.
-    pub(crate) fn parametrize_args(&self) -> Vec<HashMap<String, Py<PyAny>>> {
-        let mut param_args: Vec<HashMap<String, Py<PyAny>>> = vec![HashMap::new()];
+    pub(crate) fn parametrize_args(&self) -> Vec<ParametrizationArgs> {
+        let mut param_args: Vec<ParametrizationArgs> = vec![ParametrizationArgs::default()];
 
         for tag in &self.inner {
             if let Tag::Parametrize(parametrize_tag) = tag {
@@ -187,7 +189,10 @@ impl Tags {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, ffi::CString};
+    use std::{
+        collections::{HashMap, HashSet},
+        ffi::CString,
+    };
 
     use pyo3::{prelude::*, types::PyDict};
     use rstest::rstest;
@@ -248,7 +253,7 @@ def test_parametrize(arg1):
             ];
 
             for (i, parametrize_arg) in tags.parametrize_args().iter().enumerate() {
-                for (key, value) in parametrize_arg {
+                for (key, value) in parametrize_arg.values() {
                     assert_eq!(
                         value.extract::<i32>(py).unwrap(),
                         expected_parametrize_args[i][key]
@@ -287,7 +292,7 @@ def test_parametrize(arg1, arg2):
             ];
 
             for (i, parametrize_arg) in tags.parametrize_args().iter().enumerate() {
-                for (key, value) in parametrize_arg {
+                for (key, value) in parametrize_arg.values() {
                     assert_eq!(
                         value.extract::<i32>(py).unwrap(),
                         expected_parametrize_args[i][key]
@@ -334,7 +339,7 @@ def test_parametrize(arg1):
             ];
 
             for (i, parametrize_arg) in tags.parametrize_args().iter().enumerate() {
-                for (key, value) in parametrize_arg {
+                for (key, value) in parametrize_arg.values() {
                     assert_eq!(
                         value.extract::<i32>(py).unwrap(),
                         expected_parametrize_args[i][key]
@@ -517,12 +522,23 @@ def test_parametrize(arg1):
             assert_eq!(parametrize_args.len(), 4);
 
             assert_eq!(
-                parametrize_args[0]["arg1"].extract::<String>(py).unwrap(),
+                parametrize_args[0].values()["arg1"]
+                    .extract::<String>(py)
+                    .unwrap(),
                 "string"
             );
-            assert_eq!(parametrize_args[1]["arg1"].extract::<i32>(py).unwrap(), 42);
-            assert!(parametrize_args[2]["arg1"].extract::<bool>(py).unwrap());
-            assert!(parametrize_args[3]["arg1"].is_none(py));
+            assert_eq!(
+                parametrize_args[1].values()["arg1"]
+                    .extract::<i32>(py)
+                    .unwrap(),
+                42
+            );
+            assert!(
+                parametrize_args[2].values()["arg1"]
+                    .extract::<bool>(py)
+                    .unwrap()
+            );
+            assert!(parametrize_args[3].values()["arg1"].is_none(py));
         });
     }
 
@@ -576,7 +592,9 @@ def test_parametrize(arg1):
 
             for (i, expected_val) in [1, 2, 3].iter().enumerate() {
                 assert_eq!(
-                    parametrize_args[i]["arg1"].extract::<i32>(py).unwrap(),
+                    parametrize_args[i].values()["arg1"]
+                        .extract::<i32>(py)
+                        .unwrap(),
                     *expected_val
                 );
             }

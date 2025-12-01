@@ -23,16 +23,19 @@
 //!
 //! If we got all of the fixture values at the start, we would not be able to run auto use fixtures
 //! and finalizers in a predictable way.
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub use models::{NormalizedModule, NormalizedPackage, NormalizedTestFunction};
 use pyo3::prelude::*;
 
 use crate::{
     discovery::{DiscoveredModule, DiscoveredPackage, TestFunction},
-    extensions::fixtures::{
-        Fixture, FixtureScope, HasFixtures, NormalizedFixture, NormalizedFixtureValue,
-        RequiresFixtures, UserDefinedFixture, get_auto_use_fixtures,
+    extensions::{
+        fixtures::{
+            Fixture, FixtureScope, HasFixtures, NormalizedFixture, NormalizedFixtureValue,
+            RequiresFixtures, UserDefinedFixture, get_auto_use_fixtures,
+        },
+        tags::ParametrizationArgs,
     },
     normalize::utils::cartesian_product,
     utils::iter_with_ancestors,
@@ -211,9 +214,9 @@ impl DiscoveredPackageNormalizer {
 
         let test_params = test_function.tags.parametrize_args();
 
-        let parametrize_param_names: Vec<String> = test_params
+        let parametrize_param_names: HashSet<String> = test_params
             .iter()
-            .flat_map(|params| params.keys().cloned())
+            .flat_map(|params| params.values().keys().cloned())
             .collect();
 
         // Get regular fixtures (from function parameters, excluding parametrize params)
@@ -260,14 +263,14 @@ impl DiscoveredPackageNormalizer {
 
         // Ensure at least one test case exists (no parametrization)
         let test_params = if test_params.is_empty() {
-            vec![HashMap::new()]
+            vec![ParametrizationArgs::default()]
         } else {
             test_params
         };
 
         // If no parametrization needed, create single normalized test
         if test_params.len() == 1
-            && test_params[0].is_empty()
+            && test_params[0].values().is_empty()
             && normalized_deps.iter().all(|deps| deps.len() == 1)
             && normalized_use_fixtures.iter().all(|deps| deps.len() == 1)
         {
@@ -311,15 +314,21 @@ impl DiscoveredPackageNormalizer {
 
         for dep_combination in dep_combinations {
             for use_fixture_combination in &use_fixture_combinations {
-                for test_param in &test_params {
+                for ParametrizationArgs {
+                    values: parametrize_values,
+                    tags,
+                } in test_params.clone()
+                {
+                    let mut new_tags = test_function.tags.clone();
+                    new_tags.extend(tags);
                     let normalized = NormalizedTestFunction {
                         name: test_function.name.clone(),
-                        params: test_param.clone(),
+                        params: parametrize_values,
                         fixture_dependencies: dep_combination.clone(),
                         use_fixture_dependencies: use_fixture_combination.clone(),
                         auto_use_fixtures: function_auto_use_fixtures.clone(),
                         function: test_function.py_function.clone(),
-                        tags: test_function.tags.clone(),
+                        tags: new_tags,
                         stmt_function_def: test_function.stmt_function_def.clone(),
                     };
 
