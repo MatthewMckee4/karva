@@ -88,19 +88,41 @@ test tests.test::test_pass ... ok
 test tests.test::test_fail ... FAILED
 test tests.test::test_error ... FAILED
 
-failures:
+diagnostics:
 
-test `tests.test::test_fail` at tests/test.py:5 failed at tests/test.py:6
-This test should fail
+error[test-failure]: Test `test_fail` failed
+ --> tests/test.py:5:5
+  |
+5 | def test_fail():
+  |     ^^^^^^^^^
+6 |     assert False, "This test should fail"
+  |
+info: Test failed here
+ --> tests/test.py:6:5
+  |
+5 | def test_fail():
+6 |     assert False, "This test should fail"
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+info: Error message: This test should fail
 
-test `tests.test::test_error` at tests/test.py:9 failed at tests/test.py:10
-This is an error
+error[test-failure]: Test `test_error` failed
+  --> tests/test.py:9:5
+   |
+ 9 | def test_error():
+   |     ^^^^^^^^^^
+10 |     raise ValueError("This is an error")
+   |
+info: Test failed here
+  --> tests/test.py:10:5
+   |
+ 9 | def test_error():
+10 |     raise ValueError("This is an error")
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+info: Error message: This is an error
 
-failures:
-    tests.test::test_fail at tests/test.py:5
-    tests.test::test_error at tests/test.py:9
-
-test result: FAILED. 1 passed; 2 failed; 0 skipped; finished in 0s
+test result: FAILED. 1 passed; 2 failed; 0 skipped; finished in 8ms
 ```
 
 ## Contributing
