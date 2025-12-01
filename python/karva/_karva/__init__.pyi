@@ -52,7 +52,9 @@ class Param:
     def values(self) -> list[object]:
         """The values to parameterize the test case with."""
 
-def param(*values: object, tags: Sequence[str] | None = None) -> None:
+def param(
+    *values: object, tags: Sequence[Tags | Callable[[], Tags]] | None = None
+) -> None:
     """Define a parameterized test case.
 
     Args:

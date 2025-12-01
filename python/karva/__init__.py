@@ -7,6 +7,7 @@ from karva._karva import (
     fail,
     fixture,
     karva_run,
+    param,
     skip,
     tags,
 )
@@ -20,6 +21,7 @@ __all__: list[str] = [
     "fail",
     "fixture",
     "karva_run",
+    "param",
     "skip",
     "tags",
 ]
