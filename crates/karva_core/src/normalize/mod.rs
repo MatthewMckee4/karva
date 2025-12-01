@@ -23,7 +23,10 @@
 //!
 //! If we got all of the fixture values at the start, we would not be able to run auto use fixtures
 //! and finalizers in a predictable way.
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 pub use models::{NormalizedModule, NormalizedPackage, NormalizedTestFunction};
 use pyo3::prelude::*;
@@ -44,7 +47,7 @@ mod models;
 mod utils;
 
 pub struct DiscoveredPackageNormalizer {
-    normalization_cache: HashMap<String, Vec<NormalizedFixture>>,
+    normalization_cache: HashMap<String, Arc<Vec<NormalizedFixture>>>,
 }
 
 impl DiscoveredPackageNormalizer {
@@ -105,7 +108,7 @@ impl DiscoveredPackageNormalizer {
         let cache_key = fixture.name().to_string();
 
         if let Some(cached) = self.normalization_cache.get(&cache_key) {
-            return cached.clone();
+            return (**cached).clone();
         }
 
         // Get all required fixtures (dependencies)
@@ -150,11 +153,12 @@ impl DiscoveredPackageNormalizer {
         };
 
         for dep_combination in dep_combinations {
+            let deps_arc = Arc::new(dep_combination);
             for param in &param_list {
                 let normalized = NormalizedFixture::UserDefined(UserDefinedFixture {
                     name: fixture.name().clone(),
                     param: param.clone(),
-                    dependencies: dep_combination.clone(),
+                    dependencies: Arc::clone(&deps_arc),
                     scope: fixture.scope(),
                     is_generator: fixture.is_generator(),
                     value: NormalizedFixtureValue::Function(fixture.function().clone()),
@@ -165,9 +169,11 @@ impl DiscoveredPackageNormalizer {
             }
         }
 
-        self.normalization_cache.insert(cache_key, result.clone());
+        let result_arc = Arc::new(result);
+        self.normalization_cache
+            .insert(cache_key, Arc::clone(&result_arc));
 
-        result
+        Arc::try_unwrap(result_arc).unwrap_or_else(|arc| (*arc).clone())
     }
 
     /// Normalizes a test function, handling parametrization and fixture dependencies.
@@ -243,22 +249,26 @@ impl DiscoveredPackageNormalizer {
 
         let use_fixture_combinations = cartesian_product(normalized_use_fixtures);
 
+        let auto_use_fixtures_arc = Arc::new(function_auto_use_fixtures);
+
         for dep_combination in dep_combinations {
+            let dep_combination_arc = Arc::new(dep_combination);
             for use_fixture_combination in &use_fixture_combinations {
+                let use_fixture_combination_arc = Arc::new(use_fixture_combination.clone());
                 for ParametrizationArgs {
                     values: parametrize_values,
                     tags,
                 } in test_params.clone()
                 {
                     let mut new_tags = test_function.tags.clone();
-                    new_tags.extend(tags);
+                    new_tags.extend(&tags);
 
                     let normalized = NormalizedTestFunction {
                         name: test_function.name.clone(),
                         params: parametrize_values,
-                        fixture_dependencies: dep_combination.clone(),
-                        use_fixture_dependencies: use_fixture_combination.clone(),
-                        auto_use_fixtures: function_auto_use_fixtures.clone(),
+                        fixture_dependencies: Arc::clone(&dep_combination_arc),
+                        use_fixture_dependencies: Arc::clone(&use_fixture_combination_arc),
+                        auto_use_fixtures: Arc::clone(&auto_use_fixtures_arc),
                         function: test_function.py_function.clone(),
                         tags: new_tags,
                         stmt_function_def: test_function.stmt_function_def.clone(),
@@ -293,7 +303,7 @@ impl DiscoveredPackageNormalizer {
 
         NormalizedModule {
             test_functions: normalized_test_functions,
-            auto_use_fixtures: module_auto_use_fixtures,
+            auto_use_fixtures: Arc::new(module_auto_use_fixtures),
         }
     }
 
@@ -327,7 +337,7 @@ impl DiscoveredPackageNormalizer {
         NormalizedPackage {
             modules,
             packages,
-            auto_use_fixtures: package_auto_use_fixtures,
+            auto_use_fixtures: Arc::new(package_auto_use_fixtures),
         }
     }
 }

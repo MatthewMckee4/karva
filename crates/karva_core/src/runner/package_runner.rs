@@ -140,7 +140,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
         // Execute regular fixture dependencies and add them to kwargs
         let mut kwargs = HashMap::new();
-        for fixture in &test_function.fixture_dependencies {
+        for fixture in test_function.fixture_dependencies.iter() {
             if let Some((value, finalizer)) = self.execute_normalized_fixture(py, fixture) {
                 kwargs.insert(fixture.function_name(), value);
                 if let Some(finalizer) = finalizer {
