@@ -60,6 +60,12 @@ impl Mock {
         }
     }
 
+    /// Return a string representation of the Mock object.
+    #[allow(clippy::unused_self)]
+    pub fn __repr__(&self) -> String {
+        "<Mock object>".to_string()
+    }
+
     /// Context manager that returns a new Mock object which undoes any patching
     /// done inside the with block upon exit.
     #[classmethod]
