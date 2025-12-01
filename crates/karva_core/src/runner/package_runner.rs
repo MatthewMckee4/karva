@@ -400,8 +400,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 def _builtin_finalizer(value, finalizer):
     yield value
     finalizer()
-_builtin_finalizer
-";
+            ";
 
             let locals = PyDict::new(py);
             if py
@@ -411,7 +410,7 @@ _builtin_finalizer
                 && let Ok(generator) = gen_fn.call1((result_clone, finalizer_fn_clone))
                 && let Ok(py_iter) = generator.cast::<PyIterator>()
             {
-                let py_iter_unbound: Py<PyIterator> = py_iter.clone().unbind();
+                let py_iter_unbound = py_iter.clone().unbind();
                 let mut iterator = py_iter.clone();
 
                 if let Some(Ok(value)) = iterator.next() {

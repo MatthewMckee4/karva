@@ -1496,3 +1496,33 @@ def test_1(fixture_very_very_very_very_very_long_name):
     ----- stderr -----
     ");
 }
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_finalizer() {
+    let context = IntegrationTestContext::with_file(
+        "<test>/test.py",
+        r"
+import os
+
+def test_setenv(monkeypatch):
+    monkeypatch.setenv('TEST_VAR_5', 'test_value_5')
+    assert os.environ['TEST_VAR_5'] == 'test_value_5'
+
+def test_1():
+    assert 'TEST_VAR_5' not in os.environ
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command().arg("-s"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test <test>.test::test_setenv(monkeypatch=<Mock object>) ... ok
+    test <test>.test::test_1 ... ok
+
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}

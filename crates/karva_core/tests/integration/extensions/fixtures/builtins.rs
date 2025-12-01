@@ -109,18 +109,18 @@ def test_setenv(monkeypatch):
     assert os.environ['TEST_VAR'] == 'test_value'
 
 def test_setenv_undo(monkeypatch):
-    monkeypatch.setenv('TEST_VAR', 'test_value')
-    assert os.environ['TEST_VAR'] == 'test_value'
+    monkeypatch.setenv('TEST_VAR_2', 'test_value')
+    assert os.environ['TEST_VAR_2'] == 'test_value'
     monkeypatch.undo()
-    assert 'TEST_VAR' not in os.environ
+    assert 'TEST_VAR_2' not in os.environ
 
 def test_delenv(monkeypatch):
-    os.environ['TEST_VAR'] = 'value'
-    monkeypatch.delenv('TEST_VAR')
-    assert 'TEST_VAR' not in os.environ
+    os.environ['TEST_VAR_3'] = 'value'
+    monkeypatch.delenv('TEST_VAR_3')
+    assert 'TEST_VAR_3' not in os.environ
     monkeypatch.undo()
-    assert os.environ['TEST_VAR'] == 'value'
-    del os.environ['TEST_VAR']
+    assert os.environ['TEST_VAR_3'] == 'value'
+    del os.environ['TEST_VAR_3']
         ",
     );
 
@@ -228,11 +228,11 @@ fn test_finalizer() {
 import os
 
 def test_setenv(monkeypatch):
-    monkeypatch.setenv('TEST_VAR', 'test_value')
-    assert os.environ['TEST_VAR'] == 'test_value'
+    monkeypatch.setenv('TEST_VAR_4', 'test_value')
+    assert os.environ['TEST_VAR_4'] == 'test_value'
 
 def test_1():
-    assert 'TEST_VAR' not in os.environ
+    assert 'TEST_VAR_4' not in os.environ
         ",
     );
 
