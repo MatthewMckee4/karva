@@ -8,4 +8,3 @@ pub use models::{
     module::{DiscoveredModule, ModuleType},
     package::DiscoveredPackage,
 };
-pub use visitor::discover;

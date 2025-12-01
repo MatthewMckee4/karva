@@ -146,23 +146,43 @@ impl<'proj> DisplayDiscoveredModule<'proj> {
 impl std::fmt::Display for DisplayDiscoveredModule<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = self.module.name();
-        write!(f, "{name}\n├── test_cases [")?;
-        let test_cases = self.module.test_functions();
-        for (i, test) in test_cases.iter().enumerate() {
-            if i > 0 {
-                write!(f, " ")?;
-            }
-            write!(f, "{}", test.name.function_name())?;
-        }
-        write!(f, "]\n└── fixtures [")?;
+        let test_functions = self.module.test_functions();
         let fixtures = self.module.fixtures();
-        for (i, fixture) in fixtures.iter().enumerate() {
-            if i > 0 {
-                write!(f, " ")?;
+
+        let indent_string = "├── ";
+        let last_indent_string = "└── ";
+
+        if !test_functions.is_empty() {
+            if fixtures.is_empty() {
+                write!(f, "{name}\n{last_indent_string}test_cases [")?;
+            } else {
+                write!(f, "{name}\n{indent_string}test_cases [")?;
             }
-            write!(f, "{}", fixture.name().function_name())?;
+            for (i, test) in test_functions.iter().enumerate() {
+                if i > 0 {
+                    write!(f, " ")?;
+                }
+                write!(f, "{}", test.name.function_name())?;
+            }
+            write!(f, "]")?;
+            if !fixtures.is_empty() {
+                writeln!(f)?;
+            }
         }
-        write!(f, "]")?;
+        if !fixtures.is_empty() {
+            if test_functions.is_empty() {
+                write!(f, "{name}\n{last_indent_string}fixtures [")?;
+            } else {
+                write!(f, "{last_indent_string}fixtures [")?;
+            }
+            for (i, fixture) in fixtures.iter().enumerate() {
+                if i > 0 {
+                    write!(f, " ")?;
+                }
+                write!(f, "{}", fixture.name().function_name())?;
+            }
+            write!(f, "]")?;
+        }
         Ok(())
     }
 }

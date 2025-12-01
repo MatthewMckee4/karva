@@ -19,17 +19,9 @@ impl UseFixturesTag {
         &self.fixture_names
     }
 
-    fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
+    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let args = py_mark.getattr("args").ok()?;
         args.extract::<Vec<String>>()
             .map_or(None, |fixture_names| Some(Self::new(fixture_names)))
-    }
-}
-
-impl TryFrom<&Bound<'_, PyAny>> for UseFixturesTag {
-    type Error = ();
-
-    fn try_from(py_mark: &Bound<'_, PyAny>) -> Result<Self, Self::Error> {
-        Self::try_from_pytest_mark(py_mark).ok_or(())
     }
 }

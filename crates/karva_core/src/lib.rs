@@ -3,6 +3,7 @@ pub(crate) mod diagnostic;
 pub(crate) mod discovery;
 pub(crate) mod extensions;
 mod file_resolver;
+mod function_kind;
 mod name;
 mod normalize;
 mod python;
@@ -16,6 +17,7 @@ pub use diagnostic::{
     TestRunResult,
 };
 pub(crate) use file_resolver::DefaultFileResolver;
+pub use function_kind::FunctionKind;
 pub(crate) use name::{ModulePath, QualifiedFunctionName};
 pub use python::init_module;
 pub use runner::{StandardTestRunner, TestRunner};

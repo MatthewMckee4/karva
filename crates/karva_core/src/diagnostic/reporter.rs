@@ -8,7 +8,7 @@ use pyo3::marker::Ungil;
 
 use crate::IndividualTestResultKind;
 
-/// A progress reporter.
+/// A reporter for test execution time logging to the user.
 pub trait Reporter: Send + Sync + Ungil {
     /// Report the completion of a given test.
     fn report_test_case_result(&self, test_name: &str, result_kind: IndividualTestResultKind);

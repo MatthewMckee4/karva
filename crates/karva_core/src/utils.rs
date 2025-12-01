@@ -176,7 +176,7 @@ mod tests {
         #[test]
         fn test_current_python_version() {
             let version = current_python_version();
-            assert!(version >= PythonVersion::from((3, 7)));
+            assert!(version >= PythonVersion::PY37);
         }
     }
 

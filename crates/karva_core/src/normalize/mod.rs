@@ -35,7 +35,7 @@ use crate::{
             Fixture, FixtureScope, HasFixtures, NormalizedFixture, NormalizedFixtureValue,
             RequiresFixtures, UserDefinedFixture, get_auto_use_fixtures,
         },
-        tags::ParametrizationArgs,
+        tags::parametrize::ParametrizationArgs,
     },
     normalize::utils::cartesian_product,
     utils::iter_with_ancestors,
@@ -103,6 +103,7 @@ impl DiscoveredPackageNormalizer {
         current: &DiscoveredModule,
     ) -> Vec<NormalizedFixture> {
         let cache_key = fixture.name().to_string();
+
         if let Some(cached) = self.normalization_cache.get(&cache_key) {
             return cached.clone();
         }
@@ -119,7 +120,6 @@ impl DiscoveredPackageNormalizer {
         let mut normalized_deps: Vec<Vec<NormalizedFixture>> = Vec::new();
 
         for dep_name in &dependency_names {
-            // Check for builtin fixtures first
             if let Some(builtin_fixture) =
                 crate::extensions::fixtures::get_builtin_fixture(py, dep_name)
             {
@@ -132,34 +132,7 @@ impl DiscoveredPackageNormalizer {
             }
         }
 
-        // Get fixture parameters
         let params = fixture.params().cloned().unwrap_or_default();
-
-        // If no parameters and all dependencies have single variants, no expansion needed
-        if params.is_empty() && normalized_deps.iter().all(|deps| deps.len() == 1) {
-            let dependencies = normalized_deps
-                .into_iter()
-                .filter_map(|mut deps| deps.pop())
-                .collect();
-
-            let normalized = NormalizedFixture::UserDefined(UserDefinedFixture {
-                name: fixture.name().clone(),
-                param: None,
-                dependencies,
-                scope: fixture.scope(),
-                is_generator: fixture.is_generator(),
-                value: NormalizedFixtureValue::Function(fixture.function().clone()),
-                stmt_function_def: fixture.stmt_function_def().clone(),
-            });
-
-            let result = vec![normalized];
-
-            if !(fixture.auto_use() && fixture.scope() == FixtureScope::Function) {
-                self.normalization_cache.insert(cache_key, result.clone());
-            }
-
-            return result;
-        }
 
         let mut result = Vec::new();
 
@@ -192,10 +165,7 @@ impl DiscoveredPackageNormalizer {
             }
         }
 
-        // Cache the result
-        if !(fixture.auto_use() && fixture.scope() == FixtureScope::Function) {
-            self.normalization_cache.insert(cache_key, result.clone());
-        }
+        self.normalization_cache.insert(cache_key, result.clone());
 
         result
     }
@@ -233,7 +203,6 @@ impl DiscoveredPackageNormalizer {
         let mut normalized_deps: Vec<Vec<NormalizedFixture>> = Vec::new();
 
         for dep_name in &regular_fixture_names {
-            // Check for builtin fixtures first
             if let Some(builtin_fixture) =
                 crate::extensions::fixtures::get_builtin_fixture(py, dep_name)
             {
@@ -268,49 +237,11 @@ impl DiscoveredPackageNormalizer {
             test_params
         };
 
-        // If no parametrization needed, create single normalized test
-        if test_params.len() == 1
-            && test_params[0].values().is_empty()
-            && normalized_deps.iter().all(|deps| deps.len() == 1)
-            && normalized_use_fixtures.iter().all(|deps| deps.len() == 1)
-        {
-            let fixture_dependencies = normalized_deps
-                .into_iter()
-                .filter_map(|mut deps| deps.pop())
-                .collect();
-
-            let use_fixture_dependencies = normalized_use_fixtures
-                .into_iter()
-                .filter_map(|mut deps| deps.pop())
-                .collect();
-
-            let normalized_test_function = NormalizedTestFunction {
-                name: test_function.name.clone(),
-                params: HashMap::new(),
-                fixture_dependencies,
-                use_fixture_dependencies,
-                auto_use_fixtures: function_auto_use_fixtures,
-                function: test_function.py_function.clone(),
-                tags: test_function.tags.clone(),
-                stmt_function_def: test_function.stmt_function_def.clone(),
-            };
-
-            return vec![normalized_test_function];
-        }
-
         let mut result = Vec::new();
 
-        let dep_combinations = if normalized_deps.is_empty() {
-            vec![vec![]]
-        } else {
-            cartesian_product(normalized_deps)
-        };
+        let dep_combinations = cartesian_product(normalized_deps);
 
-        let use_fixture_combinations = if normalized_use_fixtures.is_empty() {
-            vec![vec![]]
-        } else {
-            cartesian_product(normalized_use_fixtures)
-        };
+        let use_fixture_combinations = cartesian_product(normalized_use_fixtures);
 
         for dep_combination in dep_combinations {
             for use_fixture_combination in &use_fixture_combinations {
@@ -321,6 +252,7 @@ impl DiscoveredPackageNormalizer {
                 {
                     let mut new_tags = test_function.tags.clone();
                     new_tags.extend(tags);
+
                     let normalized = NormalizedTestFunction {
                         name: test_function.name.clone(),
                         params: parametrize_values,

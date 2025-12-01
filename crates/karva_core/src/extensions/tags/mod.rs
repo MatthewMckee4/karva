@@ -3,16 +3,16 @@ use ruff_python_ast::StmtFunctionDef;
 
 use crate::extensions::tags::python::{PyTag, PyTestFunction};
 
-mod expect_fail;
-mod parametrize;
+pub mod expect_fail;
+pub mod parametrize;
 pub mod python;
-mod skip;
+pub mod skip;
 mod use_fixtures;
 
-pub use expect_fail::ExpectFailTag;
-pub use parametrize::{ParametrizationArgs, ParametrizeTag};
-pub use skip::SkipTag;
-pub use use_fixtures::UseFixturesTag;
+use expect_fail::ExpectFailTag;
+use parametrize::{ParametrizationArgs, ParametrizeTag};
+use skip::SkipTag;
+use use_fixtures::UseFixturesTag;
 
 /// Represents a decorator function in Python that can be used to extend the functionality of a test.
 #[derive(Debug, Clone)]
@@ -27,21 +27,19 @@ impl Tag {
     /// Converts a Pytest mark into an Karva Tag.
     ///
     /// This is used to allow Pytest marks to be used as Karva tags.
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
+    fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let name = py_mark.getattr("name").ok()?.extract::<String>().ok()?;
         match name.as_str() {
-            "parametrize" => ParametrizeTag::try_from(py_mark).map(Self::Parametrize),
-            "usefixtures" => UseFixturesTag::try_from(py_mark).map(Self::UseFixtures),
-            "skip" | "skipif" => SkipTag::try_from(py_mark).map(Self::Skip),
-            "xfail" => ExpectFailTag::try_from(py_mark).map(Self::ExpectFail),
-            _ => Err(()),
+            "parametrize" => ParametrizeTag::try_from_pytest_mark(py_mark).map(Self::Parametrize),
+            "usefixtures" => UseFixturesTag::try_from_pytest_mark(py_mark).map(Self::UseFixtures),
+            "skip" | "skipif" => SkipTag::try_from_pytest_mark(py_mark).map(Self::Skip),
+            "xfail" => ExpectFailTag::try_from_pytest_mark(py_mark).map(Self::ExpectFail),
+            _ => None,
         }
-        .ok()
     }
-}
 
-impl From<&PyTag> for Tag {
-    fn from(py_tag: &PyTag) -> Self {
+    /// Converts a Karva Python tag into our internal representation.
+    fn from_karva_tag(py_tag: &PyTag) -> Self {
         match py_tag {
             PyTag::Parametrize {
                 arg_names,
@@ -92,14 +90,14 @@ impl Tags {
         if let Ok(py_test_function) = py_function.extract::<Py<PyTestFunction>>(py) {
             let mut tags = Vec::new();
             for tag in &py_test_function.borrow(py).tags.inner {
-                tags.push(Tag::from(tag));
+                tags.push(Tag::from_karva_tag(tag));
             }
             return Self::new(tags);
         } else if let Ok(wrapped) = py_function.getattr(py, "__wrapped__") {
             if let Ok(py_wrapped_function) = wrapped.extract::<Py<PyTestFunction>>(py) {
                 let mut tags = Vec::new();
                 for tag in &py_wrapped_function.borrow(py).tags.inner {
-                    tags.push(Tag::from(tag));
+                    tags.push(Tag::from_karva_tag(tag));
                 }
                 return Self::new(tags);
             }
@@ -165,6 +163,7 @@ impl Tags {
         fixture_names
     }
 
+    /// Returns true if any skip tag should be skipped.
     pub(crate) fn should_skip(&self) -> (bool, Option<String>) {
         for tag in &self.inner {
             if let Tag::Skip(skip_tag) = tag {
@@ -224,27 +223,32 @@ mod tests {
         }
     }
 
+    fn get_tags(py: Python<'_>, source: &str) -> Tags {
+        let locals = PyDict::new(py);
+        Python::run(py, &CString::new(source).unwrap(), None, Some(&locals)).unwrap();
+
+        let test_function = locals.get_item("test_function").unwrap().unwrap();
+        let test_function = test_function.as_unbound();
+        Tags::from_py_any(py, test_function, None)
+    }
+
     #[rstest]
-    fn test_parametrize_args_single_arg(#[values("karva", "pytest")] framework: &str) {
+    fn test_function_args_single_arg(#[values("karva", "pytest")] framework: &str) {
         attach(|py| {
-            let locals = PyDict::new(py);
-            let code = format!(
-                r#"
+            let tags = get_tags(
+                py,
+                &format!(
+                    r#"
 import {}
 
 {}("arg1", [1, 2, 3])
-def test_parametrize(arg1):
+def test_function(arg1):
     pass
                 "#,
-                framework,
-                get_parametrize_decorator(framework)
+                    framework,
+                    get_parametrize_decorator(framework)
+                ),
             );
-
-            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
-
-            let test_function = locals.get_item("test_parametrize").unwrap().unwrap();
-            let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None);
 
             let expected_parametrize_args = [
                 HashMap::from([(String::from("arg1"), 1)]),
@@ -264,26 +268,22 @@ def test_parametrize(arg1):
     }
 
     #[rstest]
-    fn test_parametrize_args_two_args(#[values("karva", "pytest")] framework: &str) {
+    fn test_function_args_two_args(#[values("karva", "pytest")] framework: &str) {
         attach(|py| {
-            let locals = PyDict::new(py);
-            let code = format!(
-                r#"
+            let tags = get_tags(
+                py,
+                &format!(
+                    r#"
 import {}
 
 {}(("arg1", "arg2"), [(1, 4), (2, 5), (3, 6)])
-def test_parametrize(arg1, arg2):
+def test_function(arg1, arg2):
     pass
                 "#,
-                framework,
-                get_parametrize_decorator(framework)
+                    framework,
+                    get_parametrize_decorator(framework)
+                ),
             );
-
-            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
-
-            let test_function = locals.get_item("test_parametrize").unwrap().unwrap();
-            let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None);
 
             let expected_parametrize_args = [
                 HashMap::from([(String::from("arg1"), 1), (String::from("arg2"), 4)]),
@@ -303,28 +303,24 @@ def test_parametrize(arg1, arg2):
     }
 
     #[rstest]
-    fn test_parametrize_args_multiple_tags(#[values("karva", "pytest")] framework: &str) {
+    fn test_function_args_multiple_tags(#[values("karva", "pytest")] framework: &str) {
         attach(|py| {
-            let locals = PyDict::new(py);
-            let code = format!(
-                r#"
+            let tags = get_tags(
+                py,
+                &format!(
+                    r#"
 import {}
 
 {}("arg1", [1, 2, 3])
 {}("arg2", [4, 5, 6])
-def test_parametrize(arg1):
+def test_function(arg1):
     pass
                 "#,
-                framework,
-                get_parametrize_decorator(framework),
-                get_parametrize_decorator(framework)
+                    framework,
+                    get_parametrize_decorator(framework),
+                    get_parametrize_decorator(framework)
+                ),
             );
-
-            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
-
-            let test_function = locals.get_item("test_parametrize").unwrap().unwrap();
-            let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None);
 
             let expected_parametrize_args = [
                 HashMap::from([(String::from("arg1"), 1), (String::from("arg2"), 4)]),
@@ -352,24 +348,20 @@ def test_parametrize(arg1):
     #[rstest]
     fn test_use_fixtures_names_single(#[values("karva", "pytest")] framework: &str) {
         attach(|py| {
-            let locals = PyDict::new(py);
-            let code = format!(
-                r#"
+            let tags = get_tags(
+                py,
+                &format!(
+                    r#"
 import {}
 
 {}("my_fixture")
 def test_function():
     pass
                 "#,
-                framework,
-                get_usefixtures_decorator(framework)
+                    framework,
+                    get_usefixtures_decorator(framework)
+                ),
             );
-
-            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
-
-            let test_function = locals.get_item("test_function").unwrap().unwrap();
-            let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None);
 
             let fixture_names = tags.required_fixtures_names();
             assert_eq!(fixture_names, vec!["my_fixture"]);
@@ -379,24 +371,20 @@ def test_function():
     #[rstest]
     fn test_use_fixtures_names_multiple(#[values("karva", "pytest")] framework: &str) {
         attach(|py| {
-            let locals = PyDict::new(py);
-            let code = format!(
-                r#"
+            let tags = get_tags(
+                py,
+                &format!(
+                    r#"
 import {}
 
 {}("fixture1", "fixture2", "fixture3")
 def test_function():
     pass
                 "#,
-                framework,
-                get_usefixtures_decorator(framework)
+                    framework,
+                    get_usefixtures_decorator(framework)
+                ),
             );
-
-            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
-
-            let test_function = locals.get_item("test_function").unwrap().unwrap();
-            let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None);
 
             let fixture_names = tags.required_fixtures_names();
             assert_eq!(fixture_names, vec!["fixture1", "fixture2", "fixture3"]);
@@ -406,9 +394,10 @@ def test_function():
     #[rstest]
     fn test_use_fixtures_names_multiple_tags(#[values("karva", "pytest")] framework: &str) {
         attach(|py| {
-            let locals = PyDict::new(py);
-            let code = format!(
-                r#"
+            let tags = get_tags(
+                py,
+                &format!(
+                    r#"
 import {}
 
 {}("fixture1", "fixture2")
@@ -416,16 +405,11 @@ import {}
 def test_function():
     pass
                 "#,
-                framework,
-                get_usefixtures_decorator(framework),
-                get_usefixtures_decorator(framework)
+                    framework,
+                    get_usefixtures_decorator(framework),
+                    get_usefixtures_decorator(framework)
+                ),
             );
-
-            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
-
-            let test_function = locals.get_item("test_function").unwrap().unwrap();
-            let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None);
 
             let fixture_names: HashSet<_> = tags.required_fixtures_names().into_iter().collect();
             let expected: HashSet<_> = ["fixture1", "fixture2", "fixture3"]
@@ -440,24 +424,20 @@ def test_function():
     #[rstest]
     fn test_empty_parametrize_values(#[values("karva", "pytest")] framework: &str) {
         attach(|py| {
-            let locals = PyDict::new(py);
-            let code = format!(
-                r#"
+            let tags = get_tags(
+                py,
+                &format!(
+                    r#"
 import {}
 
 {}("arg1", [])
-def test_parametrize(arg1):
+def test_function(arg1):
     pass
                 "#,
-                framework,
-                get_parametrize_decorator(framework)
+                    framework,
+                    get_parametrize_decorator(framework)
+                ),
             );
-
-            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
-
-            let test_function = locals.get_item("test_parametrize").unwrap().unwrap();
-            let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None);
 
             let parametrize_args = tags.parametrize_args();
             assert_eq!(parametrize_args.len(), 0);
@@ -467,9 +447,10 @@ def test_parametrize(arg1):
     #[rstest]
     fn test_mixed_parametrize_and_fixtures(#[values("karva", "pytest")] framework: &str) {
         attach(|py| {
-            let locals = PyDict::new(py);
-            let code = format!(
-                r#"
+            let tags = get_tags(
+                py,
+                &format!(
+                    r#"
 import {}
 
 {}("arg1", [1, 2])
@@ -477,16 +458,11 @@ import {}
 def test_function(arg1):
     pass
                 "#,
-                framework,
-                get_parametrize_decorator(framework),
-                get_usefixtures_decorator(framework)
+                    framework,
+                    get_parametrize_decorator(framework),
+                    get_usefixtures_decorator(framework)
+                ),
             );
-
-            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
-
-            let test_function = locals.get_item("test_function").unwrap().unwrap();
-            let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None);
 
             let parametrize_args = tags.parametrize_args();
             assert_eq!(parametrize_args.len(), 2);
@@ -499,24 +475,20 @@ def test_function(arg1):
     #[rstest]
     fn test_complex_parametrize_data_types(#[values("karva", "pytest")] framework: &str) {
         attach(|py| {
-            let locals = PyDict::new(py);
-            let code = format!(
-                r#"
+            let tags = get_tags(
+                py,
+                &format!(
+                    r#"
 import {}
 
 {}("arg1", ["string", 42, True, None])
-def test_parametrize(arg1):
+def test_function(arg1):
     pass
                 "#,
-                framework,
-                get_parametrize_decorator(framework)
+                    framework,
+                    get_parametrize_decorator(framework)
+                ),
             );
-
-            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
-
-            let test_function = locals.get_item("test_parametrize").unwrap().unwrap();
-            let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None);
 
             let parametrize_args = tags.parametrize_args();
             assert_eq!(parametrize_args.len(), 4);
@@ -545,21 +517,17 @@ def test_parametrize(arg1):
     #[rstest]
     fn test_no_decorators(#[values("karva", "pytest")] framework: &str) {
         attach(|py| {
-            let locals = PyDict::new(py);
-            let code = format!(
-                r"
+            let tags = get_tags(
+                py,
+                &format!(
+                    r"
 import {framework}
 
 def test_function():
     pass
                 ",
+                ),
             );
-
-            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
-
-            let test_function = locals.get_item("test_function").unwrap().unwrap();
-            let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None);
 
             assert!(tags.inner.is_empty());
         });
@@ -568,24 +536,20 @@ def test_function():
     #[rstest]
     fn test_single_arg_tuple_parametrize(#[values("karva", "pytest")] framework: &str) {
         attach(|py| {
-            let locals = PyDict::new(py);
-            let code = format!(
-                r#"
+            let tags = get_tags(
+                py,
+                &format!(
+                    r#"
 import {}
 
 {}(("arg1",), [(1,), (2,), (3,)])
-def test_parametrize(arg1):
+def test_function(arg1):
     pass
                 "#,
-                framework,
-                get_parametrize_decorator(framework)
+                    framework,
+                    get_parametrize_decorator(framework)
+                ),
             );
-
-            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
-
-            let test_function = locals.get_item("test_parametrize").unwrap().unwrap();
-            let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None);
 
             let parametrize_args = tags.parametrize_args();
             assert_eq!(parametrize_args.len(), 3);
@@ -604,24 +568,20 @@ def test_parametrize(arg1):
     #[rstest]
     fn test_skip_mark_with_reason_kwarg(#[values("pytest")] framework: &str) {
         attach(|py| {
-            let locals = PyDict::new(py);
-            let code = format!(
-                r#"
+            let tags = get_tags(
+                py,
+                &format!(
+                    r#"
 import {}
 
 {}(reason="Not implemented yet")
-def test_skipped():
+def test_function():
     pass
                 "#,
-                framework,
-                get_skip_decorator(framework)
+                    framework,
+                    get_skip_decorator(framework)
+                ),
             );
-
-            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
-
-            let test_function = locals.get_item("test_skipped").unwrap().unwrap();
-            let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None);
 
             assert_eq!(tags.inner.len(), 1);
             if let Tag::Skip(skip_tag) = &tags.inner[0] {
@@ -635,24 +595,20 @@ def test_skipped():
     #[rstest]
     fn test_skip_mark_with_positional_reason(#[values("pytest")] framework: &str) {
         attach(|py| {
-            let locals = PyDict::new(py);
-            let code = format!(
-                r#"
+            let tags = get_tags(
+                py,
+                &format!(
+                    r#"
 import {}
 
 {}("some reason")
-def test_skipped():
+def test_function():
     pass
                 "#,
-                framework,
-                get_skip_decorator(framework)
+                    framework,
+                    get_skip_decorator(framework)
+                ),
             );
-
-            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
-
-            let test_function = locals.get_item("test_skipped").unwrap().unwrap();
-            let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None);
 
             assert_eq!(tags.inner.len(), 1);
             if let Tag::Skip(skip_tag) = &tags.inner[0] {
@@ -666,24 +622,20 @@ def test_skipped():
     #[rstest]
     fn test_skip_mark_without_reason(#[values("pytest")] framework: &str) {
         attach(|py| {
-            let locals = PyDict::new(py);
-            let code = format!(
-                r"
+            let tags = get_tags(
+                py,
+                &format!(
+                    r"
 import {}
 
 {}
-def test_skipped():
+def test_function():
     pass
                 ",
-                framework,
-                get_skip_decorator(framework)
+                    framework,
+                    get_skip_decorator(framework)
+                ),
             );
-
-            Python::run(py, &CString::new(code).unwrap(), None, Some(&locals)).unwrap();
-
-            let test_function = locals.get_item("test_skipped").unwrap().unwrap();
-            let test_function = test_function.as_unbound();
-            let tags = Tags::from_py_any(py, test_function, None);
 
             assert_eq!(tags.inner.len(), 1);
             if let Tag::Skip(skip_tag) = &tags.inner[0] {

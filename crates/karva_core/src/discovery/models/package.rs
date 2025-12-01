@@ -260,18 +260,20 @@ impl std::fmt::Display for DisplayDiscoveredPackage<'_> {
             modules.sort_by_key(|m| m.name());
 
             for module in modules {
-                entries.push(("module", module.display().to_string()));
+                let module_string = module.display().to_string();
+                entries.push(("module", module_string));
             }
 
             let mut packages: Vec<_> = package.packages().iter().collect();
             packages.sort_by_key(|(name, _)| name.to_string());
 
             for (name, _) in &packages {
-                entries.push(("package", name.to_string()));
+                let package_string = name.to_string();
+                entries.push(("package", package_string));
             }
 
             let total = entries.len();
-            for (i, (kind, name)) in entries.into_iter().enumerate() {
+            for (i, (kind, display)) in entries.into_iter().enumerate() {
                 let is_last_entry = i == total - 1;
                 let branch = if is_last_entry {
                     "└── "
@@ -282,7 +284,7 @@ impl std::fmt::Display for DisplayDiscoveredPackage<'_> {
 
                 match kind {
                     "module" => {
-                        let mut lines = name.lines();
+                        let mut lines = display.lines();
                         if let Some(first_line) = lines.next() {
                             writeln!(f, "{prefix}{branch}{first_line}")?;
                         }
@@ -291,8 +293,8 @@ impl std::fmt::Display for DisplayDiscoveredPackage<'_> {
                         }
                     }
                     "package" => {
-                        writeln!(f, "{prefix}{branch}{name}/")?;
-                        let subpackage = &package.packages()[&Utf8PathBuf::from(name)];
+                        writeln!(f, "{prefix}{branch}{display}/")?;
+                        let subpackage = &package.packages()[&Utf8PathBuf::from(display)];
                         write_tree(f, subpackage, &format!("{prefix}{child_prefix}"))?;
                     }
                     _ => {}

@@ -30,7 +30,7 @@ impl SkipTag {
         }
     }
 
-    fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
+    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let kwargs = py_mark.getattr("kwargs").ok()?;
         let args = py_mark.getattr("args").ok()?;
 
@@ -72,10 +72,39 @@ impl SkipTag {
     }
 }
 
-impl TryFrom<&Bound<'_, PyAny>> for SkipTag {
-    type Error = ();
-
-    fn try_from(py_mark: &Bound<'_, PyAny>) -> Result<Self, Self::Error> {
-        Self::try_from_pytest_mark(py_mark).ok_or(())
+/// Check if the given `PyErr` is a skip exception.
+pub fn is_skip_exception(py: Python<'_>, err: &PyErr) -> bool {
+    // Check for karva.SkipError
+    if err.is_instance_of::<super::python::SkipError>(py) {
+        return true;
     }
+
+    // Check for pytest skip exception
+    if let Ok(pytest_module) = py.import("_pytest.outcomes")
+        && let Ok(skipped) = pytest_module.getattr("Skipped")
+        && err.matches(py, skipped).unwrap_or(false)
+    {
+        return true;
+    }
+
+    false
+}
+
+/// Extract the skip reason from a skip exception.
+pub fn extract_skip_reason(py: Python<'_>, err: &PyErr) -> Option<String> {
+    let value = err.value(py);
+
+    // Try to get the first argument (the message)
+    if let Ok(args) = value.getattr("args")
+        && let Ok(tuple) = args.cast::<pyo3::types::PyTuple>()
+        && let Ok(first_arg) = tuple.get_item(0)
+        && let Ok(message) = first_arg.extract::<String>()
+    {
+        if message.is_empty() {
+            return None;
+        }
+        return Some(message);
+    }
+
+    None
 }

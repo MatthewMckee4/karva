@@ -8,9 +8,7 @@ use crate::utils::attach_with_project;
 use crate::{
     Context,
     diagnostic::report_invalid_path,
-    discovery::{
-        DiscoveredModule, DiscoveredPackage, ModuleType, discover, visitor::DiscoveredFunctions,
-    },
+    discovery::{DiscoveredModule, DiscoveredPackage, ModuleType, visitor::DiscoveredFunctions},
     name::ModulePath,
     utils::add_to_sys_path,
 };
@@ -103,7 +101,7 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
         let DiscoveredFunctions {
             functions,
             fixtures,
-        } = discover(self.context, py, &module);
+        } = super::visitor::discover(self.context, py, &module);
 
         if !discovery_mode.is_configuration_only() {
             module.extend_test_functions(functions);
@@ -289,8 +287,7 @@ mod tests {
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             └── <test>.test
-                ├── test_cases [test_function]
-                └── fixtures []
+                └── test_cases [test_function]
         ");
         assert_eq!(session.total_test_functions(), 1);
     }
@@ -312,8 +309,7 @@ mod tests {
         └── <temp_dir>/<test>/
             └── <temp_dir>/<test>/test_dir/
                 └── <test>.test_dir.test_file1
-                    ├── test_cases [test_function1]
-                    └── fixtures []
+                    └── test_cases [test_function1]
         ");
         assert_eq!(session.total_test_functions(), 1);
     }
@@ -332,8 +328,7 @@ mod tests {
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             └── <test>.test_file1
-                ├── test_cases [test_function1]
-                └── fixtures []
+                └── test_cases [test_function1]
         ");
         assert_eq!(session.total_test_functions(), 1);
     }
@@ -355,16 +350,13 @@ mod tests {
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             ├── <test>.test_file1
-            │   ├── test_cases [test_function1]
-            │   └── fixtures []
+            │   └── test_cases [test_function1]
             └── <temp_dir>/<test>/nested/
                 ├── <test>.nested.test_file2
-                │   ├── test_cases [test_function2]
-                │   └── fixtures []
+                │   └── test_cases [test_function2]
                 └── <temp_dir>/<test>/nested/deeper/
                     └── <test>.nested.deeper.test_file3
-                        ├── test_cases [test_function3]
-                        └── fixtures []
+                        └── test_cases [test_function3]
         ");
         assert_eq!(session.total_test_functions(), 3);
     }
@@ -387,8 +379,7 @@ def not_a_test(): pass
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             └── <test>.test_file
-                ├── test_cases [test_function1 test_function2 test_function3]
-                └── fixtures []
+                └── test_cases [test_function1 test_function2 test_function3]
         ");
         assert_eq!(session.total_test_functions(), 3);
     }
@@ -434,8 +425,7 @@ def test_function(): pass
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             └── <test>.test_file
-                ├── test_cases [check_function1 check_function2]
-                └── fixtures []
+                └── test_cases [check_function1 check_function2]
         ");
         assert_eq!(session.total_test_functions(), 2);
     }
@@ -459,15 +449,12 @@ def test_function(): pass
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             ├── <test>.test1
-            │   ├── test_cases [test_function1]
-            │   └── fixtures []
+            │   └── test_cases [test_function1]
             ├── <test>.test2
-            │   ├── test_cases [test_function2]
-            │   └── fixtures []
+            │   └── test_cases [test_function2]
             └── <temp_dir>/<test>/tests/
                 └── <test>.tests.test3
-                    ├── test_cases [test_function3]
-                    └── fixtures []
+                    └── test_cases [test_function3]
         ");
         assert_eq!(session.total_test_functions(), 3);
     }
@@ -487,8 +474,7 @@ def test_function(): pass
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             └── <test>.test_file
-                ├── test_cases [test_function test_function2]
-                └── fixtures []
+                └── test_cases [test_function test_function2]
         ");
         assert_eq!(session.total_test_functions(), 2);
     }
@@ -509,11 +495,9 @@ def test_function(): pass
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             ├── <test>.test_file
-            │   ├── test_cases [test_function]
-            │   └── fixtures []
+            │   └── test_cases [test_function]
             └── <test>.test_file2
-                ├── test_cases [test_function]
-                └── fixtures []
+                └── test_cases [test_function]
         ");
         assert_eq!(session.total_test_functions(), 2);
     }
@@ -534,8 +518,7 @@ def test_function(): pass
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             └── <test>.conftest
-                ├── test_cases [test_function]
-                └── fixtures []
+                └── test_cases [test_function]
         ");
         assert_eq!(session.total_test_functions(), 1);
     }
@@ -556,8 +539,7 @@ def test_function(): pass
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             └── <test>.conftest
-                ├── test_cases [test_function]
-                └── fixtures []
+                └── test_cases [test_function]
         ");
         assert_eq!(session.total_test_functions(), 1);
     }
@@ -575,8 +557,7 @@ def test_function(): pass
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             └── <test>.test_file
-                ├── test_cases [test_function]
-                └── fixtures []
+                └── test_cases [test_function]
         ");
         assert_eq!(session.total_test_functions(), 1);
     }
@@ -617,12 +598,14 @@ def test_1(x): pass",
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
             let session = session(&project);
 
-            allow_duplicates!(assert_snapshot!(session.display(), @r"
-            └── <temp_dir>/<test>/
-                └── <test>.test_1
-                    ├── test_cases [test_1]
-                    └── fixtures [x]
-            "));
+            allow_duplicates! {
+                assert_snapshot!(session.display(), @r"
+                └── <temp_dir>/<test>/
+                    └── <test>.test_1
+                        ├── test_cases [test_1]
+                        └── fixtures [x]
+                ");
+            }
         }
     }
 
@@ -644,13 +627,15 @@ def test_1(x): pass",
         for path in [env.cwd(), test_dir, test_path] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
             let session = session(&project);
-            allow_duplicates!(assert_snapshot!(session.display(), @r"
-            └── <temp_dir>/<test>/
-                └── <temp_dir>/<test>/tests/
-                    └── <test>.tests.test_1
-                        ├── test_cases [test_1]
-                        └── fixtures [x]
-            "));
+            allow_duplicates! {
+                assert_snapshot!(session.display(), @r"
+                └── <temp_dir>/<test>/
+                    └── <temp_dir>/<test>/tests/
+                        └── <test>.tests.test_1
+                            ├── test_cases [test_1]
+                            └── fixtures [x]
+            ")
+            };
         }
     }
 
@@ -677,16 +662,17 @@ def x():
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
             let session = session(&project);
 
-            allow_duplicates!(assert_snapshot!(session.display(), @r"
-            └── <temp_dir>/<test>/
-                ├── <test>.conftest
-                │   ├── test_cases []
-                │   └── fixtures [x]
-                └── <temp_dir>/<test>/tests/
-                    └── <test>.tests.test_1
-                        ├── test_cases [test_1]
-                        └── fixtures []
-            "));
+            allow_duplicates! {
+                assert_snapshot!(session.display(), @r"
+                └── <temp_dir>/<test>/
+                    ├── <test>.conftest
+                    │   └── fixtures [x]
+                    └── <temp_dir>/<test>/tests/
+                        └── <test>.tests.test_1
+                            └── test_cases [test_1]
+                "
+                );
+            }
         }
     }
 
@@ -750,27 +736,24 @@ def w(x, y, z):
         ] {
             let project = Project::new(env.cwd().clone(), vec![path.clone()]);
             let session = session(&project);
-            allow_duplicates!(assert_snapshot!(session.display(), @r"
-            └── <temp_dir>/<test>/
-                ├── <test>.conftest
-                │   ├── test_cases []
-                │   └── fixtures [x]
-                └── <temp_dir>/<test>/nested_dir/
-                    ├── <test>.nested_dir.conftest
-                    │   ├── test_cases []
-                    │   └── fixtures [y]
-                    └── <temp_dir>/<test>/nested_dir/more_nested_dir/
-                        ├── <test>.nested_dir.more_nested_dir.conftest
-                        │   ├── test_cases []
-                        │   └── fixtures [z]
-                        └── <temp_dir>/<test>/nested_dir/more_nested_dir/even_more_nested_dir/
-                            ├── <test>.nested_dir.more_nested_dir.even_more_nested_dir.conftest
-                            │   ├── test_cases []
-                            │   └── fixtures [w]
-                            └── <test>.nested_dir.more_nested_dir.even_more_nested_dir.test_1
-                                ├── test_cases [test_1]
-                                └── fixtures []
-            "));
+            allow_duplicates! {
+                assert_snapshot!(session.display(), @r"
+                └── <temp_dir>/<test>/
+                    ├── <test>.conftest
+                    │   └── fixtures [x]
+                    └── <temp_dir>/<test>/nested_dir/
+                        ├── <test>.nested_dir.conftest
+                        │   └── fixtures [y]
+                        └── <temp_dir>/<test>/nested_dir/more_nested_dir/
+                            ├── <test>.nested_dir.more_nested_dir.conftest
+                            │   └── fixtures [z]
+                            └── <temp_dir>/<test>/nested_dir/more_nested_dir/even_more_nested_dir/
+                                ├── <test>.nested_dir.more_nested_dir.even_more_nested_dir.conftest
+                                │   └── fixtures [w]
+                                └── <test>.nested_dir.more_nested_dir.even_more_nested_dir.test_1
+                                    └── test_cases [test_1]
+                ")
+            };
         }
     }
 
@@ -794,16 +777,13 @@ def w(x, y, z):
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             ├── <test>.test_3
-            │   ├── test_cases [test_3]
-            │   └── fixtures []
+            │   └── test_cases [test_3]
             ├── <temp_dir>/<test>/tests/
             │   └── <test>.tests.test_1
-            │       ├── test_cases [test_1]
-            │       └── fixtures []
+            │       └── test_cases [test_1]
             └── <temp_dir>/<test>/tests2/
                 └── <test>.tests2.test_2
-                    ├── test_cases [test_2]
-                    └── fixtures []
+                    └── test_cases [test_2]
         ");
     }
 
@@ -836,13 +816,11 @@ def root_fixture():
         └── <temp_dir>/<test>/
             └── <temp_dir>/<test>/tests/
                 ├── <test>.tests.conftest
-                │   ├── test_cases []
                 │   └── fixtures [root_fixture]
                 └── <temp_dir>/<test>/tests/middle_dir/
                     └── <temp_dir>/<test>/tests/middle_dir/deep_dir/
                         └── <test>.tests.middle_dir.deep_dir.test_nested
-                            ├── test_cases [test_with_fixture test_without_fixture]
-                            └── fixtures []
+                            └── test_cases [test_with_fixture test_without_fixture]
         ");
         assert_eq!(session.total_test_functions(), 2);
     }
@@ -873,11 +851,9 @@ def x():
         └── <temp_dir>/<test>/
             └── <temp_dir>/<test>/tests/
                 ├── <test>.tests.conftest
-                │   ├── test_cases []
                 │   └── fixtures [x]
                 └── <test>.tests.test_1
-                    ├── test_cases [test_1]
-                    └── fixtures []
+                    └── test_cases [test_1]
         ");
     }
 
@@ -907,11 +883,9 @@ def x():
 
         assert_snapshot!(mapped_package.display(), @r"
         ├── <test>.conftest
-        │   ├── test_cases []
         │   └── fixtures [x]
         └── <test>.test_1
-            ├── test_cases [test_1]
-            └── fixtures []
+            └── test_cases [test_1]
         ");
 
         let test_1_module = session
@@ -942,5 +916,27 @@ def x():
         let session = session(&project);
 
         assert_eq!(session.total_test_functions(), 1);
+    }
+
+    #[test]
+    fn test_nested_function_not_discovered() {
+        let env = TestContext::with_files([(
+            "<test>/test_file.py",
+            "
+            def test_1():
+                def test_2(): pass
+
+                ",
+        )]);
+
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
+
+        let session = session(&project);
+
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            └── <test>.test_file
+                └── test_cases [test_1]
+        ");
     }
 }

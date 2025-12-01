@@ -31,7 +31,7 @@ impl ExpectFailTag {
         }
     }
 
-    fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
+    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let kwargs = py_mark.getattr("kwargs").ok()?;
         let args = py_mark.getattr("args").ok()?;
 
@@ -70,13 +70,5 @@ impl ExpectFailTag {
         );
 
         Some(Self { conditions, reason })
-    }
-}
-
-impl TryFrom<&Bound<'_, PyAny>> for ExpectFailTag {
-    type Error = ();
-
-    fn try_from(py_mark: &Bound<'_, PyAny>) -> Result<Self, Self::Error> {
-        Self::try_from_pytest_mark(py_mark).ok_or(())
     }
 }
