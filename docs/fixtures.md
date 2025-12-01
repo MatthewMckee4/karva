@@ -202,10 +202,12 @@ def test_username(username: str) -> None:
 
 You can parametrize fixtures allowing us to run a test multiple times for each param of the fixture.
 
+Here you can also use `karva.param` here to add additional information to the param.
+
 ```py
 import karva
 
-@karva.fixture(params=['username', 'email'])
+@karva.fixture(params=['username', 'email', karva.param("admin", tags=[karva.tags.skip])])
 def some_fixture(request) -> str:
     return request.param
 

@@ -35,7 +35,7 @@ use crate::{
             Fixture, FixtureScope, HasFixtures, NormalizedFixture, NormalizedFixtureValue,
             RequiresFixtures, UserDefinedFixture, get_auto_use_fixtures,
         },
-        tags::parametrize::ParametrizationArgs,
+        tags::{Parametrization, parametrize::ParametrizationArgs},
     },
     normalize::utils::cartesian_product,
     utils::iter_with_ancestors,
@@ -137,10 +137,10 @@ impl DiscoveredPackageNormalizer {
         let mut result = Vec::new();
 
         // If there are no parameters, use a single None value
-        let param_list: Vec<Option<&Py<PyAny>>> = if params.is_empty() {
+        let param_list: Vec<Option<Parametrization>> = if params.is_empty() {
             vec![None]
         } else {
-            params.iter().map(Some).collect()
+            params.into_iter().map(Some).collect()
         };
 
         let dep_combinations = if normalized_deps.is_empty() {
@@ -153,7 +153,7 @@ impl DiscoveredPackageNormalizer {
             for param in &param_list {
                 let normalized = NormalizedFixture::UserDefined(UserDefinedFixture {
                     name: fixture.name().clone(),
-                    param: param.cloned(),
+                    param: param.clone(),
                     dependencies: dep_combination.clone(),
                     scope: fixture.scope(),
                     is_generator: fixture.is_generator(),

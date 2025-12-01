@@ -152,9 +152,6 @@ impl ParametrizeTag {
         let mut param_args = Vec::with_capacity(total_combinations);
 
         for parametrization in &self.parametrizations {
-            if parametrization.tags().should_skip().0 {
-                continue;
-            }
             let mut current_parameratisation = HashMap::with_capacity(self.names.len());
             for (arg_name, arg_value) in self.names.iter().zip(parametrization.values.iter()) {
                 current_parameratisation.insert(arg_name.clone(), arg_value.clone());

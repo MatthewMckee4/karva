@@ -12,6 +12,7 @@ pub mod skip;
 mod use_fixtures;
 
 use expect_fail::ExpectFailTag;
+pub use parametrize::Parametrization;
 use parametrize::{ParametrizationArgs, ParametrizeTag};
 use skip::SkipTag;
 use use_fixtures::UseFixturesTag;

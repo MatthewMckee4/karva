@@ -22,7 +22,10 @@ pub use utils::missing_arguments_from_error;
 use crate::{
     ModulePath, QualifiedFunctionName,
     discovery::DiscoveredPackage,
-    extensions::fixtures::{scope::fixture_scope, utils::handle_custom_fixture_params},
+    extensions::{
+        fixtures::{scope::fixture_scope, utils::handle_custom_fixture_params},
+        tags::Parametrization,
+    },
 };
 
 #[derive(Clone)]
@@ -33,7 +36,7 @@ pub struct Fixture {
     auto_use: bool,
     function: Py<PyAny>,
     is_generator: bool,
-    params: Option<Vec<Py<PyAny>>>,
+    params: Option<Vec<Parametrization>>,
 }
 
 impl Fixture {
@@ -79,7 +82,7 @@ impl Fixture {
         self.auto_use
     }
 
-    pub(crate) const fn params(&self) -> Option<&Vec<Py<PyAny>>> {
+    pub(crate) const fn params(&self) -> Option<&Vec<Parametrization>> {
         self.params.as_ref()
     }
 

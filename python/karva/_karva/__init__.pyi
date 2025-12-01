@@ -52,7 +52,9 @@ class Param:
     def values(self) -> list[object]:
         """The values to parameterize the test case with."""
 
-def param(*values: object, tags: Sequence[str] | None = None) -> None:
+def param(
+    *values: object, tags: Sequence[Tags | Callable[[], Tags]] | None = None
+) -> None:
     """Define a parameterized test case.
 
     Args:
@@ -67,7 +69,7 @@ def param(*values: object, tags: Sequence[str] | None = None) -> None:
         karva.param(2, 4),
         karva.param(4, 17, tags=(karva.tags.skip,)),
         karva.param(5, 26, tags=(karva.tags.expect_fail,)),
-        karva.param(6, 36, tags=(karva.tags.skip(True,))),
+        karva.param(6, 36, tags=(karva.tags.skip(True),)),
         karva.param(7, 50, tags=(karva.tags.expect_fail(True),)),
     ])
     def test_square(input, expected):
