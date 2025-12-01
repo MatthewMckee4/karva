@@ -3,6 +3,7 @@ use pyo3::prelude::*;
 use ruff_source_file::{OneIndexed, SourceFile, SourceFileBuilder};
 use ruff_text_size::{TextRange, TextSize};
 
+/// Parsed representation of a Python traceback from a `PyErr` object.
 #[derive(Debug, Clone)]
 pub struct Traceback {
     #[expect(unused)]
@@ -257,7 +258,6 @@ Exception: Test error"#;
     bar()
 ValueError: Invalid value"#;
             let location = get_traceback_location(traceback);
-            // Should get the last File line (helper.py)
             let expected_location = Some(TracebackLocation {
                 file_path: "helper.py".into(),
                 line_number: OneIndexed::new(15).unwrap(),

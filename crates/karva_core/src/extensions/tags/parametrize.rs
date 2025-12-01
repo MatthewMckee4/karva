@@ -131,7 +131,7 @@ impl ParametrizeTag {
         )
     }
 
-    fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
+    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let args = py_mark.getattr("args").ok()?;
         // Extract first two elements from args tuple
         let arg_names = args.get_item(0).ok()?;
@@ -164,14 +164,6 @@ impl ParametrizeTag {
             param_args.push(current_param_args);
         }
         param_args
-    }
-}
-
-impl TryFrom<&Bound<'_, PyAny>> for ParametrizeTag {
-    type Error = ();
-
-    fn try_from(py_mark: &Bound<'_, PyAny>) -> Result<Self, Self::Error> {
-        Self::try_from_pytest_mark(py_mark).ok_or(())
     }
 }
 

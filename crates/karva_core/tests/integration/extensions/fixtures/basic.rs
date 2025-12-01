@@ -264,9 +264,9 @@ def test_2(x_session):
 
     let result = context.test();
 
-    allow_duplicates!(
+    allow_duplicates! {
         assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]")
-    );
+    };
 }
 
 #[rstest]

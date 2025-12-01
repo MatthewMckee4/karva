@@ -54,6 +54,7 @@ impl<'ctx, 'proj, 'rep> DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
         }
     }
 
+    /// Build a diagnostic guard with the given message.
     pub(crate) fn into_diagnostic(
         self,
         message: impl std::fmt::Display,
@@ -66,7 +67,7 @@ impl<'ctx, 'proj, 'rep> DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
     }
 }
 
-/// An abstraction for mutating a diagnostic through the lense of a lint.
+/// An abstraction for mutating a diagnostic.
 pub struct DiagnosticGuard<'ctx, 'proj, 'rep> {
     context: &'ctx Context<'proj, 'rep>,
 
@@ -75,6 +76,7 @@ pub struct DiagnosticGuard<'ctx, 'proj, 'rep> {
     is_discovery: bool,
 }
 
+/// Return a immutable borrow of the diagnostic in this guard.
 impl std::ops::Deref for DiagnosticGuard<'_, '_, '_> {
     type Target = Diagnostic;
 

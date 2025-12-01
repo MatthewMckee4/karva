@@ -6,9 +6,9 @@ use pyo3::{
 };
 
 use crate::{
-    Context, IndividualTestResultKind,
+    Context, FunctionKind, IndividualTestResultKind,
     diagnostic::{
-        FunctionKind, report_fixture_failure, report_missing_fixtures, report_test_failure,
+        report_fixture_failure, report_missing_fixtures, report_test_failure,
         report_test_pass_on_expect_failure,
     },
     extensions::{
@@ -16,7 +16,7 @@ use crate::{
             Finalizer, FixtureRequest, FixtureScope, NormalizedFixture, NormalizedFixtureValue,
             RequiresFixtures, missing_arguments_from_error,
         },
-        tags::{ExpectFailTag, python::SkipError},
+        tags::skip::{extract_skip_reason, is_skip_exception},
     },
     normalize::{NormalizedModule, NormalizedPackage, NormalizedTestFunction},
     runner::{FinalizerCache, FixtureCache},
@@ -131,7 +131,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         let expect_fail_tag = test_fn.tags.expect_fail_tag();
         let expect_fail = expect_fail_tag
             .as_ref()
-            .is_some_and(ExpectFailTag::should_expect_fail);
+            .is_some_and(crate::extensions::tags::expect_fail::ExpectFailTag::should_expect_fail);
 
         let mut test_finalizers = Vec::new();
 
@@ -457,41 +457,4 @@ _builtin_finalizer
 
         Some((final_result, return_finalizer))
     }
-}
-
-/// Check if the given `PyErr` is a skip exception.
-fn is_skip_exception(py: Python<'_>, err: &PyErr) -> bool {
-    // Check for karva.SkipError
-    if err.is_instance_of::<SkipError>(py) {
-        return true;
-    }
-
-    // Check for pytest skip exception
-    if let Ok(pytest_module) = py.import("_pytest.outcomes")
-        && let Ok(skipped) = pytest_module.getattr("Skipped")
-        && err.matches(py, skipped).unwrap_or(false)
-    {
-        return true;
-    }
-
-    false
-}
-
-/// Extract the skip reason from a skip exception.
-fn extract_skip_reason(py: Python<'_>, err: &PyErr) -> Option<String> {
-    let value = err.value(py);
-
-    // Try to get the first argument (the message)
-    if let Ok(args) = value.getattr("args")
-        && let Ok(tuple) = args.cast::<pyo3::types::PyTuple>()
-        && let Ok(first_arg) = tuple.get_item(0)
-        && let Ok(message) = first_arg.extract::<String>()
-    {
-        if message.is_empty() {
-            return None;
-        }
-        return Some(message);
-    }
-
-    None
 }
