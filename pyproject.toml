@@ -3,13 +3,24 @@ build-backend = "maturin"
 requires = ["maturin>=1.7,<2.0"]
 
 [project]
-dependencies = []
-description = "A Python test framework, written in Rust."
-license = { file = "LICENSE" }
 name = "karva"
+version = "0.1.10"
+description = "A Python test framework, written in Rust."
+authors = [{ name = "Matthew McKee", email = "matthewmckee4@yahoo.co.uk" }]
+license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.10,<3.15"
-version = "0.1.10"
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Rust",
+]
 
 [project.scripts]
 karva = "karva._karva:karva_run"
