@@ -32,6 +32,8 @@ pub struct RealWorldProject<'a> {
     pub dependencies: &'a [&'a str],
     /// Python version to use
     pub python_version: PythonVersion,
+    /// Whether to pip install the project root
+    pub install_root: bool,
 }
 
 impl<'a> RealWorldProject<'a> {
@@ -262,6 +264,7 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
     let output = Command::new("uv")
         .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
         .args(checkout.project().dependencies)
+        .arg("--no-build")
         .output()
         .context("Failed to execute uv pip install command")?;
 
@@ -271,17 +274,21 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let output = Command::new("uv")
-        .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
-        .arg(checkout.project_root())
-        .output()
-        .context("Failed to execute uv pip install command")?;
+    if checkout.project().install_root {
+        let output = Command::new("uv")
+            .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
+            .arg(checkout.project_root())
+            .output()
+            .context("Failed to execute uv pip install command")?;
 
-    anyhow::ensure!(
-        output.status.success(),
-        "Package installation failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+        anyhow::ensure!(
+            output.status.success(),
+            "Package installation failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    eprintln!("Installed dependencies successfully");
 
     Ok(())
 }
@@ -326,6 +333,7 @@ pub static AFFECT_PROJECT: RealWorldProject<'static> = RealWorldProject {
     paths: &["tests"],
     dependencies: &["pydantic", "pydantic-settings", "pytest"],
     python_version: PythonVersion::PY313,
+    install_root: true,
 };
 
 pub static SQLMODEL_PROJECT: RealWorldProject<'static> = RealWorldProject {
@@ -345,6 +353,7 @@ pub static SQLMODEL_PROJECT: RealWorldProject<'static> = RealWorldProject {
         "jinja2",
     ],
     python_version: PythonVersion::PY313,
+    install_root: false,
 };
 
 pub static TYPER_PROJECT: RealWorldProject<'static> = RealWorldProject {
@@ -352,8 +361,16 @@ pub static TYPER_PROJECT: RealWorldProject<'static> = RealWorldProject {
     repository: "https://github.com/fastapi/typer",
     commit: "a9a6595ad74ed59805c085f9d5369e666b955818",
     paths: &["tests"],
-    dependencies: &["click", "typing-extensions", "pytest", "coverage"],
+    dependencies: &[
+        "click",
+        "typing-extensions",
+        "pytest",
+        "coverage",
+        "shellingham",
+        "rich",
+    ],
     python_version: PythonVersion::PY313,
+    install_root: false,
 };
 
 pub static PYDANTIC_SETTINGS_PROJECT: RealWorldProject<'static> = RealWorldProject {
@@ -361,15 +378,46 @@ pub static PYDANTIC_SETTINGS_PROJECT: RealWorldProject<'static> = RealWorldProje
     repository: "https://github.com/pydantic/pydantic-settings",
     commit: "ffb3ac673633e4f26a512b0fbf986d9bf8821a50",
     paths: &["tests"],
-    dependencies: &["pydantic", "pytest", "python-dotenv", "typing-extensions"],
+    dependencies: &[
+        "pydantic",
+        "pytest",
+        "python-dotenv",
+        "typing-extensions",
+        "pytest-examples",
+        "pytest-mock",
+        "pyyaml",
+    ],
     python_version: PythonVersion::PY313,
+    install_root: false,
+};
+
+pub static PYDANTIC_PROJECT: RealWorldProject<'static> = RealWorldProject {
+    name: "pydantic",
+    repository: "https://github.com/pydantic/pydantic",
+    commit: "ed67e3ebf7c9a55de75de0e8995dbce36551eaca",
+    paths: &["tests"],
+    dependencies: &[
+        "pytest",
+        "typing-extensions",
+        "annotated-types",
+        "pydantic-core",
+        "typing-inspection",
+        "pytest-examples",
+        "pytest-mock",
+        "dirty-equals",
+        "jsonschema",
+        "pytz",
+    ],
+    python_version: PythonVersion::PY313,
+    install_root: false,
 };
 
 pub fn all_projects() -> Vec<&'static RealWorldProject<'static>> {
     vec![
         &AFFECT_PROJECT,
+        &PYDANTIC_SETTINGS_PROJECT,
+        &PYDANTIC_PROJECT,
         &SQLMODEL_PROJECT,
         &TYPER_PROJECT,
-        &PYDANTIC_SETTINGS_PROJECT,
     ]
 }

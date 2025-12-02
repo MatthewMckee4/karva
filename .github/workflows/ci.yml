@@ -150,6 +150,8 @@ jobs:
       matrix:
         project:
           - affect_walltime
+          - pydantic_settings_walltime
+          - pydantic_walltime
           - sqlmodel_walltime
           - typer_walltime
 

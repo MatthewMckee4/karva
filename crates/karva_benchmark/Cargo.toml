@@ -20,6 +20,14 @@ name = "affect_walltime"
 harness = false
 
 [[bench]]
+name = "pydantic_settings_walltime"
+harness = false
+
+[[bench]]
+name = "pydantic_walltime"
+harness = false
+
+[[bench]]
 name = "sqlmodel_walltime"
 harness = false
 
