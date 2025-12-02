@@ -374,7 +374,7 @@ pub static PYDANTIC_PROJECT: RealWorldProject<'static> = RealWorldProject {
         "pytest",
         "typing-extensions",
         "annotated-types",
-        "pydantic-core",
+        "pydantic-core --only-binary :all:",
         "typing-inspection",
     ],
     python_version: PythonVersion::PY313,
