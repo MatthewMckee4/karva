@@ -76,7 +76,6 @@ impl TestPath {
                 Err(TestPathError::InvalidUtf8Path(path))
             }
         } else {
-            // Original file/directory logic
             let value = Utf8PathBuf::from(value);
             let path = try_convert_to_py_path(&value)?;
 

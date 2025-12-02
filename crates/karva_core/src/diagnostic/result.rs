@@ -12,6 +12,9 @@ pub struct TestRunResultDisplayOptions {
     pub(crate) diagnostic_format: DiagnosticFormat,
 }
 
+/// Represents the result of a test run.
+///
+/// This is held in the test context and updated throughout the test run.
 #[derive(Debug, Clone)]
 pub struct TestRunResult {
     /// Diagnostics generated during test discovery.
@@ -28,7 +31,7 @@ pub struct TestRunResult {
 
     /// Current working directory.
     ///
-    /// This is used
+    /// This is used to resolve file paths in diagnostics.
     cwd: std::path::PathBuf,
 
     /// Display options
