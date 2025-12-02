@@ -320,6 +320,16 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
         String::from_utf8_lossy(&output.stderr)
     );
 
+    let output = Command::new("uv")
+        .args(["pip", "list", "--python", venv_path.to_str().unwrap()])
+        .output()
+        .context("Failed to execute uv pip list command")?;
+
+    eprintln!(
+        "Installed packages: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+
     Ok(())
 }
 
