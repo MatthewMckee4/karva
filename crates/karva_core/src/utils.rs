@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Write};
 
 use camino::Utf8Path;
 use karva_project::project::{Project, ProjectOptions};
@@ -150,7 +150,7 @@ pub(crate) fn full_test_name(
             if let Ok(value) = value.cast_bound::<PyAny>(py) {
                 let trimmed_value_str = truncate_string(&value.to_string());
                 let truncated_key = truncate_string(key);
-                args_str.push_str(&format!("{truncated_key}={trimmed_value_str}"));
+                let _ = write!(args_str, "{truncated_key}={trimmed_value_str}");
             }
         }
         format!("{function}({args_str})")
