@@ -98,6 +98,7 @@ fn run(
 
     let old_output = Command::new("uv")
         .arg("run")
+        .arg("--no-project")
         .arg("--no-sync")
         .arg(&args.old_karva_binary)
         .arg("test")
@@ -126,6 +127,7 @@ fn run(
 
     let new_output = Command::new("uv")
         .arg("run")
+        .arg("--no-project")
         .arg("--no-sync")
         .arg(&args.new_karva_binary)
         .arg("test")
