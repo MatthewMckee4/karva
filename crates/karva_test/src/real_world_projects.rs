@@ -262,6 +262,7 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
     let output = Command::new("uv")
         .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
         .args(checkout.project().dependencies)
+        .arg("--no-build")
         .output()
         .context("Failed to execute uv pip install command")?;
 
@@ -375,8 +376,6 @@ pub static PYDANTIC_PROJECT: RealWorldProject<'static> = RealWorldProject {
         "typing-extensions",
         "annotated-types",
         "pydantic-core",
-        "--only-binary",
-        ":all:",
         "typing-inspection",
     ],
     python_version: PythonVersion::PY313,
