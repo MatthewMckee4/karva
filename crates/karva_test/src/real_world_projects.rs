@@ -17,6 +17,8 @@ use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use ruff_python_ast::PythonVersion;
 
+use crate::find_karva_wheel;
+
 /// Configuration for a real-world project to benchmark
 #[derive(Debug, Clone)]
 pub struct RealWorldProject<'a> {
@@ -259,9 +261,17 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
         return Ok(());
     }
 
+    let dependencies_no_karva: Vec<String> = checkout
+        .project()
+        .dependencies
+        .iter()
+        .filter(|dep| **dep != "karva")
+        .map(|dep| (*dep).to_string())
+        .collect();
+
     let output = Command::new("uv")
         .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
-        .args(checkout.project().dependencies)
+        .args(&dependencies_no_karva)
         .output()
         .context("Failed to execute uv pip install command")?;
 
@@ -270,6 +280,16 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
         "Dependency installation failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
+
+    if checkout.project().dependencies.contains(&"karva") {
+        if let Ok(karva_wheel) = find_karva_wheel() {
+            Command::new("uv")
+                .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
+                .arg(karva_wheel)
+                .output()
+                .context("Failed to execute uv pip install command")?;
+        }
+    }
 
     let output = Command::new("uv")
         .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
@@ -324,7 +344,7 @@ pub static AFFECT_PROJECT: RealWorldProject<'static> = RealWorldProject {
     repository: "https://github.com/MatthewMckee4/affect",
     commit: "1672a118dae6194a27af5fc06f1baf5825577054",
     paths: &["tests"],
-    dependencies: &["pydantic", "pydantic-settings", "pytest"],
+    dependencies: &["pydantic", "pydantic-settings", "pytest", "karva"],
     python_version: PythonVersion::PY313,
 };
 
