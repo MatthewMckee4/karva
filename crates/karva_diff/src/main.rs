@@ -135,7 +135,6 @@ fn run(
         .arg("--no-progress")
         .arg("--color")
         .arg("never")
-        .arg("-vvv")
         .current_dir(&installed_project.path)
         .output()
         .context("Failed to run new karva binary")?;
