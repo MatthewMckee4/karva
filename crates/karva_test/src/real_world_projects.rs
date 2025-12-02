@@ -322,7 +322,7 @@ fn cargo_target_directory() -> Option<&'static PathBuf> {
 pub static AFFECT_PROJECT: RealWorldProject<'static> = RealWorldProject {
     name: "affect",
     repository: "https://github.com/MatthewMckee4/affect",
-    commit: "803cc916b492378a8ad8966e747cac3325e11b5f",
+    commit: "9a5198e46a5895ae3b3d56be80beb3bbb92c629e",
     paths: &["tests"],
     dependencies: &["pydantic", "pydantic-settings", "pytest"],
     python_version: PythonVersion::PY313,
