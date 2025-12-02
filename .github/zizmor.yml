@@ -1,7 +1,7 @@
 rules:
   template-injection:
     ignore:
-      - "diff-pr.yml"
+      - "diff.yml"
   unpinned-uses:
     config:
       policies:
