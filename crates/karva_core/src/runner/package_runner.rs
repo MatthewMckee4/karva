@@ -291,7 +291,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                 let kwargs_dict = PyDict::new(py);
 
                 for (key, value) in &fixture_arguments {
-                    kwargs_dict.set_item(key.to_string(), value).ok();
+                    let _ = kwargs_dict.set_item(key.clone(), value);
                 }
 
                 if let Some(function_def) = fixture.stmt_function_def() {
