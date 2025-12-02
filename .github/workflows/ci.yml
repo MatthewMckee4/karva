@@ -151,7 +151,7 @@ jobs:
         project:
           - affect_walltime
           - pydantic_settings_walltime
-          - pydantic_settings
+          - pydantic_walltime
           - sqlmodel_walltime
           - typer_walltime
 
