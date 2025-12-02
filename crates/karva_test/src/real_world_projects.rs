@@ -283,11 +283,28 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
 
     if checkout.project().dependencies.contains(&"karva") {
         if let Ok(karva_wheel) = find_karva_wheel() {
-            Command::new("uv")
+            let output = Command::new("uv")
                 .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
                 .arg(karva_wheel)
                 .output()
                 .context("Failed to execute uv pip install command")?;
+
+            eprintln!(
+                "Karva installation output: {}",
+                String::from_utf8_lossy(&output.stdout)
+            );
+            eprintln!(
+                "Karva installation error: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+
+            anyhow::ensure!(
+                output.status.success(),
+                "Karva installation failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        } else {
+            anyhow::bail!("Failed to find Karva wheel");
         }
     }
 
