@@ -90,10 +90,6 @@ impl<'a> Checkout<'a> {
     const fn project(&self) -> &RealWorldProject<'a> {
         &self.project
     }
-
-    const fn project_root(&self) -> &Utf8PathBuf {
-        &self.path
-    }
 }
 
 pub struct InstalledProject<'a> {
@@ -272,17 +268,7 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let output = Command::new("uv")
-        .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
-        .arg(checkout.project_root())
-        .output()
-        .context("Failed to execute uv pip install command")?;
-
-    anyhow::ensure!(
-        output.status.success(),
-        "Package installation failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    eprintln!("Installed dependencies successfully");
 
     Ok(())
 }

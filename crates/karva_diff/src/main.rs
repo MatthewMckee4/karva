@@ -87,6 +87,7 @@ fn run(
     new_temp: &mut NamedTempFile,
     accumulation_temp: &mut NamedTempFile,
 ) -> Result<()> {
+    println!("testing {:?}", project.name);
     let installed_project = project.setup(true)?;
 
     let paths: Vec<String> = installed_project
@@ -99,7 +100,6 @@ fn run(
     let old_output = Command::new("uv")
         .arg("run")
         .arg("--no-project")
-        .arg("--no-sync")
         .arg(&args.old_karva_binary)
         .arg("test")
         .args(&paths)
@@ -128,7 +128,6 @@ fn run(
     let new_output = Command::new("uv")
         .arg("run")
         .arg("--no-project")
-        .arg("--no-sync")
         .arg(&args.new_karva_binary)
         .arg("test")
         .args(&paths)
