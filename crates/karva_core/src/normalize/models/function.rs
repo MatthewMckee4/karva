@@ -9,10 +9,15 @@ use crate::{
     extensions::{fixtures::NormalizedFixture, tags::Tags},
 };
 
-/// A normalized test function represents a concrete variant of a test after parametrization.
-/// For parametrized tests, each parameter combination gets its own `NormalizedTestFunction`.
+/// A normalized test represents a concrete test function with resolved dependencies.
+///
+/// Resolved dependencies include:
+/// - params from `tags.parametrize`.
+/// - fixtures from function arguments.
+/// - use fixtures from `use_fixtures` tag.
+/// - auto use fixtures from externally defined autouse fixtures.
 #[derive(Debug)]
-pub struct NormalizedTestFunction {
+pub struct NormalizedTest {
     /// Original test function name: "`test_foo`"
     pub(crate) name: QualifiedFunctionName,
 
@@ -29,6 +34,7 @@ pub struct NormalizedTestFunction {
     /// These should NOT be passed as arguments to the test function
     pub(crate) use_fixture_dependencies: Arc<Vec<NormalizedFixture>>,
 
+    /// Fixtures that will be automatically run before the test is executed
     pub(crate) auto_use_fixtures: Arc<Vec<NormalizedFixture>>,
 
     /// Imported Python function
@@ -41,7 +47,7 @@ pub struct NormalizedTestFunction {
     pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
 }
 
-impl NormalizedTestFunction {
+impl NormalizedTest {
     pub(crate) const fn module_path(&self) -> &Utf8PathBuf {
         self.name.module_path().path()
     }

@@ -1,22 +1,29 @@
-mod metadata;
-mod reporter;
-mod result;
-mod traceback;
+//! Karva Diagnostics
+//!
+//! We use ruff diagnostics for all test diagnostics.
+//!
+//! Ruff diagnostics look great and have a great API.
 
 use std::collections::HashMap;
 
 use karva_project::path::TestPathError;
-pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
 use pyo3::{Py, PyAny, PyErr, Python};
-pub use reporter::{DummyReporter, Reporter, TestCaseReporter};
-pub use result::{
-    IndividualTestResultKind, TestResultStats, TestRunResult, TestRunResultDisplayOptions,
-};
 use ruff_db::diagnostic::{
     Annotation, Diagnostic, Severity, Span, SubDiagnostic, SubDiagnosticSeverity,
 };
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
+
+mod metadata;
+mod reporter;
+mod result;
+mod traceback;
+
+pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
+pub use reporter::{DummyReporter, Reporter, TestCaseReporter};
+pub use result::{
+    IndividualTestResultKind, TestResultStats, TestRunResult, TestRunResultDisplayOptions,
+};
 
 use crate::{
     Context, FunctionKind, declare_diagnostic_type, diagnostic::traceback::Traceback,
@@ -182,7 +189,7 @@ pub fn report_fixture_failure(
     py: Python,
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
-    arguments: &HashMap<&str, Py<PyAny>>,
+    arguments: &HashMap<String, Py<PyAny>>,
     error: &PyErr,
 ) {
     let builder = context.report_diagnostic(&FIXTURE_FAILURE);
@@ -227,7 +234,7 @@ pub fn report_test_failure(
     py: Python,
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
-    arguments: &HashMap<&str, Py<PyAny>>,
+    arguments: &HashMap<String, Py<PyAny>>,
     error: &PyErr,
 ) {
     let builder = context.report_diagnostic(&TEST_FAILURE);
@@ -250,7 +257,7 @@ fn handle_failed_function_call(
     py: Python,
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
-    arguments: &HashMap<&str, Py<PyAny>>,
+    arguments: &HashMap<String, Py<PyAny>>,
     error: &PyErr,
 ) {
     let primary_span = Span::from(source_file).with_range(stmt_function_def.name.range);
@@ -262,7 +269,7 @@ fn handle_failed_function_call(
     }
 
     let mut sorted_arguments = arguments.iter().collect::<Vec<_>>();
-    sorted_arguments.sort_by_key(|&(name, _)| *name);
+    sorted_arguments.sort_by_key(|&(name, _)| name);
 
     for (name, value) in sorted_arguments {
         let value_str = value.bind(py).to_string();
