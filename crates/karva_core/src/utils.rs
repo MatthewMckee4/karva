@@ -100,6 +100,7 @@ where
     })
 }
 
+/// A simple wrapper around `Python::attach` that initializes the Python interpreter first.
 pub(crate) fn attach<F, R>(f: F) -> R
 where
     F: for<'py> FnOnce(Python<'py>) -> R,
@@ -133,14 +134,14 @@ pub(crate) fn iter_with_ancestors<'a, T: ?Sized>(
 pub(crate) fn full_test_name(
     py: Python,
     function: String,
-    kwargs: &HashMap<&str, Py<PyAny>>,
+    kwargs: &HashMap<String, Py<PyAny>>,
 ) -> String {
     if kwargs.is_empty() {
         function
     } else {
         let mut args_str = String::new();
         let mut sorted_kwargs: Vec<_> = kwargs.iter().collect();
-        sorted_kwargs.sort_by_key(|(key, _)| *key);
+        sorted_kwargs.sort_by_key(|(key, _)| &**key);
 
         for (i, (key, value)) in sorted_kwargs.iter().enumerate() {
             if i > 0 {

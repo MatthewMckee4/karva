@@ -35,10 +35,6 @@ impl<'proj, 'rep> Context<'proj, 'rep> {
         self.result.lock().unwrap()
     }
 
-    pub fn reporter(&self) -> &'rep dyn Reporter {
-        self.reporter
-    }
-
     pub(crate) fn into_result(self) -> TestRunResult {
         self.result.lock().unwrap().clone().into_sorted()
     }

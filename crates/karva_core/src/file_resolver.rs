@@ -4,6 +4,7 @@ use ruff_db::{
 };
 use ruff_notebook::NotebookIndex;
 
+/// Used to resolve file paths and inputs for rendering diagnostics.
 pub struct DefaultFileResolver {
     cwd: std::path::PathBuf,
 }

@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 
+/// A scope for a fixture.
 #[derive(Copy, Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub enum FixtureScope {
     #[default]
@@ -10,6 +11,7 @@ pub enum FixtureScope {
 }
 
 impl FixtureScope {
+    /// Returns a list of scopes above the current scope.
     pub(crate) fn scopes_above(self) -> Vec<Self> {
         use FixtureScope::{Function, Module, Package, Session};
 

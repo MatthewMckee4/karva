@@ -62,6 +62,8 @@ impl UserDefinedFixture {
 
 /// A normalized fixture represents a concrete variant of a fixture after parametrization.
 /// For parametrized fixtures, each parameter value gets its own `NormalizedFixture`.
+///
+/// We choose to make all variables `pub(crate)` so we can destructure and consume when needed.
 #[derive(Debug, Clone)]
 pub enum NormalizedFixture {
     BuiltIn(BuiltInFixture),
