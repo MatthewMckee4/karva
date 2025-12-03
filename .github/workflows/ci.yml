@@ -233,7 +233,7 @@ jobs:
 
     strategy:
       matrix:
-        project: ${{ fromJson(needs.prepare-walltime-benchmarks.outputs.projects) }}
+        project: ${{ fromJson(needs.generate-walltime-benchmarks-matrix.outputs.projects) }}
 
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
