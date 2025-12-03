@@ -130,9 +130,10 @@ pub fn report_failed_to_import_module(context: &Context, module_name: &str, erro
 
 pub fn report_invalid_fixture(
     context: &Context,
+    py: Python,
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
-    reason: &str,
+    error: &PyErr,
 ) {
     let builder = context.report_diagnostic(&INVALID_FIXTURE);
 
@@ -145,7 +146,11 @@ pub fn report_invalid_fixture(
 
     diagnostic.annotate(Annotation::primary(primary_span));
 
-    diagnostic.info(reason);
+    let error_string = error.value(py).to_string();
+
+    if !error_string.is_empty() {
+        diagnostic.info(format!("Error message: {error_string}"));
+    }
 }
 
 pub fn report_invalid_fixture_finalizer(

@@ -130,3 +130,6 @@ pub fn fixture_decorator(
         Ok(Py::new(py, marker)?.into_any())
     }
 }
+
+// InvalidFixtureError exception that can be raised when a fixture is invalid
+pyo3::create_exception!(karva, InvalidFixtureError, pyo3::exceptions::PyException);

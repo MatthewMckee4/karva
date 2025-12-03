@@ -223,6 +223,7 @@ impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_, '_, '_> {
                     Err(e) => {
                         report_invalid_fixture(
                             self.context,
+                            self.py,
                             self.module.source_file(),
                             stmt_function_def,
                             &e,
