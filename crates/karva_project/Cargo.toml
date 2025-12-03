@@ -15,18 +15,9 @@ camino = { workspace = true }
 ruff_python_ast = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
 ruff_db = { workspace = true }
-tracing = { workspace = true }
-filetime = { workspace = true }
-glob = { workspace = true }
-rustc-hash = { workspace = true }
-dunce = { workspace = true }
-etcetera = { workspace = true }
-ignore = { workspace = true }
-thiserror = { workspace = true }
 
 [dev-dependencies]
 karva_test = { workspace = true }
-tempfile = { workspace = true }
 
 [lints]
 workspace = true
