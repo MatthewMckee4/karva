@@ -15,7 +15,7 @@ pub fn is_mock_env_fixture_name(fixture_name: &str) -> bool {
     }
 }
 
-pub fn create_mock_fixture(py: Python<'_>) -> Option<(Py<PyAny>, Py<PyAny>)> {
+pub fn create_mock_env_fixture(py: Python<'_>) -> Option<(Py<PyAny>, Py<PyAny>)> {
     let mock = Py::new(py, MockEnv::new()).ok()?;
     let undo_method = mock.getattr(py, "undo").ok()?;
 
@@ -63,14 +63,16 @@ impl MockEnv {
     /// Return a string representation of the Mock object.
     #[allow(clippy::unused_self)]
     pub fn __repr__(&self) -> String {
-        "<Mock object>".to_string()
+        "<MockEnv object>".to_string()
     }
 
     /// Context manager that returns a new Mock object which undoes any patching
     /// done inside the with block upon exit.
     #[classmethod]
     fn context(_cls: &Bound<'_, PyType>) -> MockEnvContext {
-        MockEnvContext { mock: Self::new() }
+        MockEnvContext {
+            mock_env: Self::new(),
+        }
     }
 
     /// Set attribute value on target, memorising the old value.
@@ -469,10 +471,10 @@ impl MockEnv {
     }
 }
 
-/// Context manager wrapper for Mock
+/// Context manager wrapper for `MockEnv`
 #[pyclass]
 struct MockEnvContext {
-    mock: MockEnv,
+    mock_env: MockEnv,
 }
 
 #[pymethods]
@@ -490,7 +492,7 @@ impl MockEnvContext {
         _exc_val: Py<PyAny>,
         _exc_tb: Py<PyAny>,
     ) -> PyResult<bool> {
-        self.mock.undo(py)?;
+        self.mock_env.undo(py)?;
         Ok(false)
     }
 }

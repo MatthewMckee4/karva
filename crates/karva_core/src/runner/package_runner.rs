@@ -13,8 +13,8 @@ use crate::{
     },
     extensions::{
         fixtures::{
-            Finalizer, FixtureRequest, FixtureScope, NormalizedFixture, NormalizedFixtureValue,
-            RequiresFixtures, missing_arguments_from_error,
+            Finalizer, FixtureScope, NormalizedFixture, create_fixture_with_finalizer,
+            missing_arguments_from_error,
         },
         tags::{
             expect_fail::ExpectFailTag,
@@ -282,157 +282,25 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
             fixture_arguments.insert(fixture.function_name().to_string(), value);
         }
 
-        // For builtin fixtures, the value is stored directly in the function field
-        // and function_definition is None. Return the value directly without calling.
-        let result = match fixture.value() {
-            NormalizedFixtureValue::Computed(value) => Ok(value.clone()),
-
-            NormalizedFixtureValue::Function(function) => {
-                let kwargs_dict = PyDict::new(py);
-
-                for (key, value) in &fixture_arguments {
-                    let _ = kwargs_dict.set_item(key.clone(), value);
-                }
-
-                if let Some(function_def) = fixture.stmt_function_def() {
-                    let required = function_def.required_fixtures(py);
-
-                    if required.contains(&"request".to_string()) {
-                        let param_value = fixture
-                            .param()
-                            .and_then(|param| param.values.first())
-                            .cloned();
-
-                        if let Ok(request_obj) = Py::new(py, FixtureRequest::new(param_value)) {
-                            kwargs_dict.set_item("request", request_obj).ok();
-                        }
-                    }
-                }
-
-                if kwargs_dict.is_empty() {
-                    function.call0(py)
-                } else {
-                    function.call(py, (), Some(&kwargs_dict))
-                }
-            }
-        };
-
-        let handle_fixture_error = |err: PyErr| {
-            let Some(fixture) = fixture.as_user_defined() else {
-                // Assume that builtin fixtures don't fail
-                return;
-            };
-
-            let missing_args =
-                missing_arguments_from_error(fixture.name.function_name(), &err.to_string());
-
-            if missing_args.is_empty() {
-                report_fixture_failure(
-                    self.context,
-                    py,
-                    source_file(fixture.module_path()),
-                    &fixture.stmt_function_def,
-                    &fixture_arguments,
-                    &err,
-                );
-            } else {
-                report_missing_fixtures(
-                    self.context,
-                    source_file(fixture.module_path()),
-                    &fixture.stmt_function_def,
-                    &missing_args,
-                    FunctionKind::Fixture,
-                );
-            }
-        };
-
-        let result = match result {
-            Ok(result) => result,
+        let fixture_call_result = match fixture.call(py, &fixture_arguments) {
+            Ok(fixture_call_result) => fixture_call_result,
             Err(err) => {
-                handle_fixture_error(err);
+                handle_fixture_error(py, self.context, fixture, &fixture_arguments, &err);
                 return None;
             }
         };
 
-        // If this is a generator fixture, we need to call next() to get the actual value
-        // and create a finalizer for cleanup
-        let (final_result, finalizer) = if let Some(user_defined_fixture) =
-            fixture.as_user_defined()
-            && fixture.is_generator()
-        {
-            let bound_result = result.bind(py);
-            if let Ok(py_iter_bound) = bound_result.cast::<PyIterator>() {
-                let py_iter: Py<PyIterator> = py_iter_bound.clone().unbind();
-                let mut iterator = py_iter.bind(py).clone();
-                match iterator.next() {
-                    Some(Ok(value)) => {
-                        let finalizer = {
-                            Finalizer {
-                                fixture_return: py_iter,
-                                scope: fixture.scope(),
-                                fixture_name: Some(user_defined_fixture.name.clone()),
-                                stmt_function_def: Some(
-                                    user_defined_fixture.stmt_function_def.clone(),
-                                ),
-                            }
-                        };
-
-                        (value.unbind(), Some(finalizer))
-                    }
-                    Some(Err(err)) => {
-                        handle_fixture_error(err);
-                        return None;
-                    }
-                    None => (result, None),
+        let (final_result, finalizer) =
+            match get_value_and_finalizer(py, fixture, fixture_call_result) {
+                Ok((final_result, finalizer)) => (final_result, finalizer),
+                Err(Some(err)) => {
+                    handle_fixture_error(py, self.context, fixture, &fixture_arguments, &err);
+                    return None;
                 }
-            } else {
-                (result, None)
-            }
-        } else if let Some(builtin_fixture) = fixture.as_builtin()
-            && let Some(finalizer_fn) = &builtin_fixture.finalizer
-        {
-            // This code is quite hacky and should be revisited.
-            //
-            // We synthesize a finalizer by creating a new function that calls our generated finalizer function.
-
-            let finalizer_fn_clone = finalizer_fn.clone();
-            let result_clone = result.clone();
-
-            let code = r"
-def _builtin_finalizer(value, finalizer):
-    yield value
-    finalizer()
-            ";
-
-            let locals = PyDict::new(py);
-            if py
-                .run(&std::ffi::CString::new(code).unwrap(), None, Some(&locals))
-                .is_ok()
-                && let Ok(Some(gen_fn)) = locals.get_item("_builtin_finalizer")
-                && let Ok(generator) = gen_fn.call1((result_clone, finalizer_fn_clone))
-                && let Ok(py_iter) = generator.cast::<PyIterator>()
-            {
-                let py_iter_unbound = py_iter.clone().unbind();
-                let mut iterator = py_iter.clone();
-
-                if let Some(Ok(value)) = iterator.next() {
-                    let finalizer = Finalizer {
-                        fixture_return: py_iter_unbound,
-                        scope: builtin_fixture.scope,
-                        fixture_name: None,
-                        stmt_function_def: None,
-                    };
-
-                    (value.unbind(), Some(finalizer))
-                } else {
-                    (result, None)
+                Err(None) => {
+                    return None;
                 }
-            } else {
-                (result, None)
-            }
-        } else {
-            (result, None)
-        };
+            };
 
         // Cache the result
         self.fixture_cache.insert(
@@ -478,5 +346,90 @@ def _builtin_finalizer(value, finalizer):
                 self.finalizer_cache.add_finalizer(finalizer);
             }
         }
+    }
+}
+
+fn handle_fixture_error(
+    py: Python,
+    context: &Context,
+    fixture: &NormalizedFixture,
+    fixture_arguments: &HashMap<String, Py<PyAny>>,
+    err: &PyErr,
+) {
+    let Some(fixture) = fixture.as_user_defined() else {
+        // Assume that builtin fixtures don't fail
+        return;
+    };
+
+    let missing_args = missing_arguments_from_error(fixture.name.function_name(), &err.to_string());
+
+    if missing_args.is_empty() {
+        report_fixture_failure(
+            context,
+            py,
+            source_file(fixture.module_path()),
+            &fixture.stmt_function_def,
+            fixture_arguments,
+            err,
+        );
+    } else {
+        report_missing_fixtures(
+            context,
+            source_file(fixture.module_path()),
+            &fixture.stmt_function_def,
+            &missing_args,
+            FunctionKind::Fixture,
+        );
+    }
+}
+
+fn get_value_and_finalizer(
+    py: Python<'_>,
+    fixture: &NormalizedFixture,
+    fixture_call_result: Py<PyAny>,
+) -> Result<(Py<PyAny>, Option<Finalizer>), Option<PyErr>> {
+    // If this is a generator fixture, we need to call next() to get the actual value
+    // and create a finalizer for cleanup
+    if let Some(user_defined_fixture) = fixture.as_user_defined()
+        && user_defined_fixture.is_generator
+        && let Ok(mut bound_iterator) = fixture_call_result
+            .clone()
+            .into_bound(py)
+            .cast_into::<PyIterator>()
+    {
+        match bound_iterator.next() {
+            Some(Ok(value)) => {
+                let py_iter = bound_iterator.clone().unbind();
+                let finalizer = {
+                    Finalizer {
+                        fixture_return: py_iter,
+                        scope: fixture.scope(),
+                        fixture_name: Some(user_defined_fixture.name.clone()),
+                        stmt_function_def: Some(user_defined_fixture.stmt_function_def.clone()),
+                    }
+                };
+
+                Ok((value.unbind(), Some(finalizer)))
+            }
+            Some(Err(err)) => Err(Some(err)),
+            None => Err(None),
+        }
+    } else if let Some(builtin_fixture) = fixture.as_builtin()
+        && let Some(finalizer_fn) = &builtin_fixture.finalizer
+        && let Ok(mut bound_iterator) =
+            create_fixture_with_finalizer(py, &fixture_call_result, finalizer_fn)
+        && let Some(Ok(value)) = bound_iterator.next()
+    {
+        let py_iter_unbound = bound_iterator.clone().unbind();
+        let finalizer = Finalizer {
+            fixture_return: py_iter_unbound,
+            scope: builtin_fixture.scope,
+            fixture_name: None,
+            stmt_function_def: None,
+        };
+
+        Ok((value.unbind(), Some(finalizer)))
+    } else {
+        Ok((fixture_call_result, None))
     }
 }
