@@ -131,6 +131,14 @@ jobs:
         run: |
           cargo test -- --include-ignored
 
+  build-binaries:
+    name: "build binaries"
+
+    needs: determine_changes
+    if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
+
+    uses: ./.github/workflows/build.yml
+
   build-docs:
     name: "Build docs"
 
