@@ -46,7 +46,7 @@ def test_with_fail_with_keyword_reason():
     6 |
     7 | def test_with_fail_with_no_reason():
       |
-    info: Error message: This is a custom failure message
+    info: This is a custom failure message
 
     error[test-failure]: Test `test_with_fail_with_no_reason` failed
      --> <test>/test.py:7:5
@@ -83,7 +83,7 @@ def test_with_fail_with_keyword_reason():
     11 |     karva.fail(reason='This is a custom failure message')
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
        |
-    info: Error message: This is a custom failure message
+    info: This is a custom failure message
 
     test result: FAILED. 0 passed; 3 failed; 0 skipped; finished in [TIME]
     ");
@@ -128,7 +128,7 @@ def test_conditional_fail():
       |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
     8 |     assert True
       |
-    info: Error message: failing test
+    info: failing test
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");
@@ -167,7 +167,7 @@ def test_raise_fail_error():
     5 |     raise karva.FailError('Manually raised FailError')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
-    info: Error message: Manually raised FailError
+    info: Manually raised FailError
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");

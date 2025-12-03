@@ -4,7 +4,8 @@ use crate::extensions::{
     fixtures::{
         Mock,
         python::{
-            FixtureFunctionDefinition, FixtureFunctionMarker, FixtureRequest, fixture_decorator,
+            FixtureFunctionDefinition, FixtureFunctionMarker, FixtureRequest, InvalidFixtureError,
+            fixture_decorator,
         },
     },
     functions::{FailError, SkipError, fail, param, skip},
@@ -28,5 +29,6 @@ pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add("SkipError", py.get_type::<SkipError>())?;
     m.add("FailError", py.get_type::<FailError>())?;
+    m.add("InvalidFixtureError", py.get_type::<InvalidFixtureError>())?;
     Ok(())
 }

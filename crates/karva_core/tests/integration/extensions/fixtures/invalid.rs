@@ -34,7 +34,7 @@ fn test_invalid_pytest_fixture_scope() {
       |     ^^^^^^^^^^^^
     6 |     return 1
       |
-    info: Failed to parse fixture
+    info: 'FixtureFunctionDefinition' object cannot be cast as 'FixtureFunctionDefinition'
 
     error[missing-fixtures]: Test `test_all_scopes` has missing fixtures
       --> <test>/test.py:8:5
@@ -126,7 +126,7 @@ fn test_fixture_fails_to_run() {
     7 |
     8 | def test_failing_fixture(failing_fixture):
       |
-    info: Error message: Fixture failed
+    info: Fixture failed
 
     error[missing-fixtures]: Test `test_failing_fixture` has missing fixtures
      --> <test>/test.py:8:5
@@ -223,7 +223,7 @@ fn missing_arguments_in_nested_function() {
     6 |     inner()
       |     ^^^^^^^
       |
-    info: Error message: test_failing_fixture.<locals>.inner() missing 1 required positional argument: 'missing_fixture'
+    info: test_failing_fixture.<locals>.inner() missing 1 required positional argument: 'missing_fixture'
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
     ");
@@ -270,7 +270,7 @@ fn test_failing_yield_fixture() {
       |         ^^^^^^^^^^^^^^^^^^^^^^^
     8 |     yield foo()
       |
-    info: Error message: foo
+    info: foo
 
     error[missing-fixtures]: Test `test_failing_fixture` has missing fixtures
       --> <test>/test.py:10:5

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pyo3::prelude::*;
+use pyo3::{exceptions::PyAttributeError, prelude::*};
 use ruff_python_ast::{Expr, StmtFunctionDef};
 
 mod builtins;
@@ -23,7 +23,9 @@ use crate::{
     ModulePath, QualifiedFunctionName,
     discovery::DiscoveredPackage,
     extensions::{
-        fixtures::{scope::fixture_scope, utils::handle_custom_fixture_params},
+        fixtures::{
+            python::InvalidFixtureError, scope::fixture_scope, utils::handle_custom_fixture_params,
+        },
         tags::Parametrization,
     },
 };
@@ -100,10 +102,10 @@ impl Fixture {
         py_module: &Bound<'_, PyModule>,
         module_path: &ModulePath,
         is_generator_function: bool,
-    ) -> Result<Self, String> {
-        let function = py_module
-            .getattr(stmt_function_def.name.to_string())
-            .map_err(|e| e.to_string())?;
+    ) -> PyResult<Self> {
+        tracing::debug!("Trying to parse `{}` as a fixture", stmt_function_def.name);
+
+        let function = py_module.getattr(stmt_function_def.name.to_string())?;
 
         let try_karva = Self::try_from_karva_function(
             py,
@@ -115,7 +117,10 @@ impl Fixture {
 
         let try_karva_err = match try_karva {
             Ok(fixture) => return Ok(fixture),
-            Err(e) => Some(e),
+            Err(e) => {
+                tracing::debug!("Failed to create fixture from Karva function: {}", e);
+                Some(e)
+            }
         };
 
         let try_pytest = Self::try_from_pytest_function(
@@ -128,7 +133,10 @@ impl Fixture {
 
         match try_pytest {
             Ok(fixture) => Ok(fixture),
-            Err(e) => Err(try_karva_err.unwrap_or(e)),
+            Err(e) => {
+                tracing::debug!("Failed to create fixture from Pytest function: {}", e);
+                Err(try_karva_err.unwrap_or(e))
+            }
         }
     }
 
@@ -138,14 +146,17 @@ impl Fixture {
         function: &Bound<'_, PyAny>,
         module_name: ModulePath,
         is_generator_function: bool,
-    ) -> Result<Self, String> {
-        let found_name = get_attribute(function.clone(), &["_fixture_function_marker", "name"])?;
+    ) -> PyResult<Self> {
+        let fixture_function_marker = get_fixture_function_marker(function)?;
 
-        let scope = get_attribute(function.clone(), &["_fixture_function_marker", "scope"])?;
+        let found_name = fixture_function_marker.getattr("name")?;
 
-        let auto_use = get_attribute(function.clone(), &["_fixture_function_marker", "autouse"])?;
+        let scope = fixture_function_marker.getattr("scope")?;
 
-        let params = get_attribute(function.clone(), &["_fixture_function_marker", "params"])
+        let auto_use = fixture_function_marker.getattr("autouse")?;
+
+        let params = fixture_function_marker
+            .getattr("params")
             .ok()
             .and_then(|p| {
                 if p.is_none() {
@@ -155,7 +166,7 @@ impl Fixture {
                 }
             });
 
-        let function = get_attribute(function.clone(), &["_fixture_function"])?;
+        let fixture_function = get_fixture_function(function)?;
 
         let name = if found_name.is_none() {
             stmt_function_def.name.to_string()
@@ -163,7 +174,8 @@ impl Fixture {
             found_name.to_string()
         };
 
-        let fixture_scope = fixture_scope(py, &scope, &name)?;
+        let fixture_scope =
+            fixture_scope(py, &scope, &name).map_err(InvalidFixtureError::new_err)?;
 
         Ok(Self::new(
             py,
@@ -171,7 +183,7 @@ impl Fixture {
             stmt_function_def.clone(),
             fixture_scope,
             auto_use.extract::<bool>().unwrap_or(false),
-            function.into(),
+            fixture_function.into(),
             is_generator_function,
             params,
         ))
@@ -183,22 +195,20 @@ impl Fixture {
         function: &Bound<'_, PyAny>,
         module_path: ModulePath,
         is_generator_function: bool,
-    ) -> Result<Self, String> {
+    ) -> PyResult<Self> {
         let py_function = function
             .clone()
-            .cast_into::<python::FixtureFunctionDefinition>()
-            .map_err(|_| "Failed to parse fixture")?;
+            .cast_into::<python::FixtureFunctionDefinition>()?;
 
-        let py_function_borrow = py_function
-            .try_borrow_mut()
-            .map_err(|err| err.to_string())?;
+        let py_function_borrow = py_function.try_borrow_mut()?;
 
         let scope_obj = py_function_borrow.scope.clone();
         let name = py_function_borrow.name.clone();
         let auto_use = py_function_borrow.auto_use;
         let params = py_function_borrow.params.clone();
 
-        let fixture_scope = fixture_scope(py, scope_obj.bind(py), &name)?;
+        let fixture_scope =
+            fixture_scope(py, scope_obj.bind(py), &name).map_err(InvalidFixtureError::new_err)?;
 
         Ok(Self::new(
             py,
@@ -213,16 +223,38 @@ impl Fixture {
     }
 }
 
-fn get_attribute<'a>(
-    function: Bound<'a, PyAny>,
-    attributes: &[&str],
-) -> Result<Bound<'a, PyAny>, String> {
-    let mut current = function;
-    for attribute in attributes {
-        let current_attr = current.getattr(attribute).map_err(|err| err.to_string())?;
-        current = current_attr;
+/// Get the fixture function marker from a function.
+fn get_fixture_function_marker<'py>(function: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let attribute_names = ["_fixture_function_marker", "_pytestfixturefunction"];
+
+    // Older versions of pytest
+    for name in attribute_names {
+        if let Ok(attr) = function.getattr(name) {
+            return Ok(attr);
+        }
     }
-    Ok(current.clone())
+
+    Err(PyAttributeError::new_err(
+        "Could not find fixture information",
+    ))
+}
+
+/// Get the fixture function from a function.
+fn get_fixture_function<'py>(function: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    if let Ok(attr) = function.getattr("_fixture_function") {
+        return Ok(attr);
+    }
+
+    // Older versions of pytest
+    if let Ok(attr) = function.getattr("__pytest_wrapped__") {
+        if let Ok(attr) = attr.getattr("obj") {
+            return Ok(attr);
+        }
+    }
+
+    Err(PyAttributeError::new_err(
+        "Could not find fixture information",
+    ))
 }
 
 impl std::fmt::Debug for Fixture {

@@ -64,7 +64,6 @@ impl RequiresFixtures for TestFunction {
 
 #[cfg(test)]
 mod tests {
-
     use karva_project::project::Project;
     use karva_test::TestContext;
 

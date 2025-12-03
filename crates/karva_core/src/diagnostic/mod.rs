@@ -33,7 +33,7 @@ use crate::{
 declare_diagnostic_type! {
     /// ## Invalid path
     ///
-    /// User gave an invalid path
+    /// User has provided an invalid path that we cannot resolve.
     pub static INVALID_PATH = {
         summary: "User provided an invalid path",
         severity: Severity::Error,
@@ -42,6 +42,9 @@ declare_diagnostic_type! {
 
 declare_diagnostic_type! {
     /// ## Failed to import module
+    ///
+    /// This comes from when we try to import tests or fixtures.
+    /// If we try to import a module and it fails, we will raise this error.
     pub static FAILED_TO_IMPORT_MODULE = {
         summary: "Failed to import python module",
         severity: Severity::Error,
@@ -50,6 +53,9 @@ declare_diagnostic_type! {
 
 declare_diagnostic_type! {
     /// ## Invalid fixture
+    ///
+    /// There are several reasons a fixture may be invalid,
+    /// we raise this error when we detect one.
     pub static INVALID_FIXTURE = {
         summary: "Discovered an invalid fixture",
         severity: Severity::Error,
@@ -58,6 +64,9 @@ declare_diagnostic_type! {
 
 declare_diagnostic_type! {
     /// ## Invalid fixture finalizer
+    ///
+    /// If a finalizer raises an exception, we will raise this error.
+    /// If a finalizer tries to yield another value, we will raise this error.
     pub static INVALID_FIXTURE_FINALIZER = {
         summary: "Tried to run an invalid fixture finalizer",
         severity: Severity::Warning,
@@ -66,6 +75,9 @@ declare_diagnostic_type! {
 
 declare_diagnostic_type! {
     /// ## Missing fixtures
+    ///
+    /// If we try to run a test or function without all the required fixtures,
+    /// we will raise this error.
     pub static MISSING_FIXTURES = {
         summary: "Missing fixtures",
         severity: Severity::Error,
@@ -74,6 +86,8 @@ declare_diagnostic_type! {
 
 declare_diagnostic_type! {
     /// ## Failed Fixture
+    ///
+    /// If we call a fixture and it raises an exception, we will raise this error.
     pub static FIXTURE_FAILURE = {
         summary: "Fixture raises exception when run",
         severity: Severity::Error,
@@ -82,6 +96,8 @@ declare_diagnostic_type! {
 
 declare_diagnostic_type! {
     /// ## Test Passes when expected to fail
+    ///
+    /// If a test marked as `expect_failure` passes, we will raise this error.
     pub static TEST_PASS_ON_EXPECT_FAILURE = {
         summary: "Test passes when expected to fail",
         severity: Severity::Error,
@@ -90,6 +106,8 @@ declare_diagnostic_type! {
 
 declare_diagnostic_type! {
     /// ## Failed Test
+    ///
+    /// If a test raises an exception, we will raise this error.
     pub static TEST_FAILURE = {
         summary: "Test raises exception when run",
         severity: Severity::Error,
@@ -112,9 +130,10 @@ pub fn report_failed_to_import_module(context: &Context, module_name: &str, erro
 
 pub fn report_invalid_fixture(
     context: &Context,
+    py: Python,
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
-    reason: &str,
+    error: &PyErr,
 ) {
     let builder = context.report_diagnostic(&INVALID_FIXTURE);
 
@@ -127,7 +146,11 @@ pub fn report_invalid_fixture(
 
     diagnostic.annotate(Annotation::primary(primary_span));
 
-    diagnostic.info(reason);
+    let error_string = error.value(py).to_string();
+
+    if !error_string.is_empty() {
+        diagnostic.info(error_string);
+    }
 }
 
 pub fn report_invalid_fixture_finalizer(
@@ -296,6 +319,6 @@ fn handle_failed_function_call(
     let error_string = error.value(py).to_string();
 
     if !error_string.is_empty() {
-        diagnostic.info(format!("Error message: {error_string}"));
+        diagnostic.info(error_string);
     }
 }
