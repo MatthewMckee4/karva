@@ -47,7 +47,10 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
                 TestPath::Directory(dir_path) => {
                     all_directory_paths.insert(dir_path);
                 }
-                TestPath::Function { path, function_name } => {
+                TestPath::Function {
+                    path,
+                    function_name,
+                } => {
                     function_filters.insert(path, function_name);
                 }
             }
@@ -75,7 +78,8 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
         tracing::info!("Discovering test functions and fixtures...");
 
         // Phase 2: Discovery (single-threaded) - convert collected AST to test functions and fixtures
-        let mut session_package = self.convert_collected_to_discovered(py, &collected_package, &function_filters);
+        let mut session_package =
+            self.convert_collected_to_discovered(py, &collected_package, &function_filters);
 
         session_package.shrink();
 
@@ -99,8 +103,10 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
                 collected_module.file_path().into(),
             );
 
-            let DiscoveredFunctions { functions, fixtures } =
-                super::visitor::discover(self.context, py, &module);
+            let DiscoveredFunctions {
+                functions,
+                fixtures,
+            } = super::visitor::discover(self.context, py, &module);
 
             module.extend_test_functions(functions);
             module.extend_fixtures(fixtures);
