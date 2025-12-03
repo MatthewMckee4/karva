@@ -39,3 +39,106 @@ def test_setenv(monkeypatch):
     import os
     assert os.environ['MY_VAR'] == 'test_value'
 ```
+
+The fixture provides all of these helper methods:
+
+```py
+monkeypatch.setattr(obj, name, value, raising=True)
+monkeypatch.delattr(obj, name, raising=True)
+monkeypatch.setitem(mapping, name, value)
+monkeypatch.delitem(obj, name, raising=True)
+monkeypatch.setenv(name, value, prepend=False)
+monkeypatch.delenv(name, raising=True)
+monkeypatch.syspath_prepend(path)
+monkeypatch.chdir(path)
+```
+
+The raising parameter determines whether or not a `KeyError` or `AttributeError` is raised when the attribute or item does not exist when trying to set / delete it.
+
+### Simple Example
+
+Consider a scenario where you are working with user configuration and you need to mock their cache directory.
+
+```py
+
+from pathlib import Path
+
+
+def get_cache_dir():
+    """Returns the user's cache directory."""
+    return Path.home() / ".cache"
+
+
+def test_get_cache_dir(monkeypatch):
+    monkeypatch.setattr(Path, "home", lambda: Path("/fake/home"))
+    
+    assert get_cache_dir() == Path("/fake/home/.cache")
+```
+
+### Reusing Mocks
+
+we can share mocks across multiple functions without having to rerun the mocking functions by using fixture.
+
+See this example where instead of requesting the `monkeypatch` fixture, we can reuse the `mock_response` fixture.
+
+This lets us move the patching logic to another function and reuse the `mock_response` fixture across multiple tests.
+
+```py
+import karva
+import requests
+
+
+class MockResponse:
+    def json(self):
+        return {"mock_key": "mock_response"}
+
+
+def get_json(url):
+    """Takes a URL, and returns the JSON."""
+    r = requests.get(url)
+    return r.json()
+
+
+@karva.fixture
+def mock_response(monkeypatch):
+    def mock_get(*args, **kwargs):
+        return MockResponse()
+
+    monkeypatch.setattr(requests, "get", mock_get)
+
+
+def test_get_json(mock_response):
+    result = get_json("https://fakeurl")
+    assert result["mock_key"] == "mock_response"
+```
+
+### Mocking Environment Variables
+
+If you are working with environment variables, you often need to modify them when testing.
+
+See the example on how this could be useful.
+
+```py
+import os
+
+
+def get_num_threads() -> int:
+    username = os.getenv("NUM_THREADS")
+
+    if username is None:
+        return -1
+
+    return int(username)
+
+
+def test_get_num_threads(monkeypatch):
+    monkeypatch.setenv("NUM_THREADS", "42")
+    assert get_num_threads() == 42
+
+
+def test_get_num_threads_default(monkeypatch):
+    monkeypatch.delenv("NUM_THREADS", raising=False)
+    assert get_num_threads() == -1
+```
+
+See the [pytest documentation](https://docs.pytest.org/en/6.2.x/monkeypatch.html) for more information.
