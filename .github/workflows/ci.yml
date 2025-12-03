@@ -45,16 +45,18 @@ jobs:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':!docs/**' \
+            . \
+            ':!docs/' \
             ':!CODE_OF_CONDUCT.md' \
             ':!CONTRIBUTING.md' \
             ':!LICENSE' \
             ':!pyproject.toml' \
             ':!README.md' \
+            ':!zensical.toml' \
           ; then
-              echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-              echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
   pre-commit:
