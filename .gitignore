@@ -11,3 +11,6 @@ uv.lock
 
 # Compiled Python files
 *.so
+
+# prek prettier cache
+node_modules
