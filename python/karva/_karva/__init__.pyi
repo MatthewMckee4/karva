@@ -82,6 +82,9 @@ class SkipError(Exception):
 class FailError(Exception):
     """Raised when `karva.fail` is called."""
 
+class InvalidFixtureError(Exception):
+    """Raised when an invalid fixture is encountered."""
+
 class Mock:
     """Helper to conveniently monkeypatch attributes/items/environment variables/syspath.
 
