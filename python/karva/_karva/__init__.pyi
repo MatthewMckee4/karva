@@ -85,15 +85,15 @@ class FailError(Exception):
 class InvalidFixtureError(Exception):
     """Raised when an invalid fixture is encountered."""
 
-class Mock:
-    """Helper to conveniently monkeypatch attributes/items/environment variables/syspath.
+class MockEnv:
+    """Helper to conveniently patch attributes/items/environment variables/syspath.
 
     This class is compatible with pytest's monkeypatch fixture.
     """
 
     def __init__(self) -> None: ...
     @classmethod
-    def context(cls) -> Mock:
+    def context(cls) -> MockEnv:
         """Context manager that returns a new Mock object which undoes any patching
         done inside the with block upon exit.
         """

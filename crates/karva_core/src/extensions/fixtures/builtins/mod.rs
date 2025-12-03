@@ -1,9 +1,9 @@
-pub use mock::Mock;
+pub use mock_env::MockEnv;
 use pyo3::Python;
 
 use crate::extensions::fixtures::NormalizedFixture;
 
-mod mock;
+mod mock_env;
 mod temp_path;
 
 pub fn get_builtin_fixture(py: Python<'_>, fixture_name: &str) -> Option<NormalizedFixture> {
@@ -16,8 +16,8 @@ pub fn get_builtin_fixture(py: Python<'_>, fixture_name: &str) -> Option<Normali
                 ));
             }
         }
-        _ if mock::is_mock_fixture_name(fixture_name) => {
-            if let Some((mock_instance, finalizer)) = mock::create_mock_fixture(py) {
+        _ if mock_env::is_mock_env_fixture_name(fixture_name) => {
+            if let Some((mock_instance, finalizer)) = mock_env::create_mock_fixture(py) {
                 return Some(NormalizedFixture::built_in_with_finalizer(
                     fixture_name.to_string(),
                     mock_instance,

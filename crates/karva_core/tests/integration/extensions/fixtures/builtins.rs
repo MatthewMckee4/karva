@@ -35,7 +35,7 @@ fn test_monkeypatch_setattr() {
     let context = TestContext::with_file(
         "<test>/test.py",
         r"
-from karva import Mock
+from karva import MockEnv
 
 def test_setattr_simple(monkeypatch):
     class A:
@@ -192,13 +192,13 @@ fn test_monkeypatch_context_manager() {
     let context = TestContext::with_file(
         "<test>/test.py",
         r"
-from karva import Mock
+from karva import MockEnv
 
 def test_context_manager():
     class A:
         x = 1
 
-    with Mock() as m:
+    with MockEnv() as m:
         m.setattr(A, 'x', 2)
         assert A.x == 2
 
@@ -207,7 +207,7 @@ def test_context_manager():
 def test_context_manager_auto_undo():
     d = {'x': 1}
 
-    with Mock() as m:
+    with MockEnv() as m:
         m.setitem(d, 'x', 2)
         assert d['x'] == 2
 
@@ -243,7 +243,7 @@ def test_1():
 
 /// Taken from <https://github.com/pytest-dev/pytest/blob/main/testing/test_monkeypatch.py>
 #[test]
-fn test_mock() {
+fn test_mock_env() {
     let context = TestContext::with_file(
         "<test>/test.py",
         r#"
@@ -255,15 +255,15 @@ fn test_mock() {
 
             import karva
             import pytest
-            from karva import Mock
+            from karva import MockEnv
 
             skip_macos = karva.tags.skip(sys.platform == "darwin")
 
             @karva.fixture
-            def mp() -> Generator[Mock]:
+            def mp() -> Generator[MockEnv]:
                 cwd = os.getcwd()
                 sys_path = list(sys.path)
-                yield Mock()
+                yield MockEnv()
                 sys.path[:] = sys_path
                 os.chdir(cwd)
 
@@ -272,14 +272,14 @@ fn test_mock() {
                 class A:
                     x = 1
 
-                monkeypatch = Mock()
+                monkeypatch = MockEnv()
                 pytest.raises(AttributeError, monkeypatch.setattr, A, "notexists", 2)
                 monkeypatch.setattr(A, "y", 2, raising=False)
                 assert A.y == 2  # ty: ignore
                 monkeypatch.undo()
                 assert not hasattr(A, "y")
 
-                monkeypatch = Mock()
+                monkeypatch = MockEnv()
                 monkeypatch.setattr(A, "x", 2)
                 assert A.x == 2
                 monkeypatch.setattr(A, "x", 3)
@@ -299,13 +299,13 @@ fn test_mock() {
                 class A:
                     x = 1
 
-                monkeypatch = Mock()
+                monkeypatch = MockEnv()
                 monkeypatch.delattr(A, "x")
                 assert not hasattr(A, "x")
                 monkeypatch.undo()
                 assert A.x == 1
 
-                monkeypatch = Mock()
+                monkeypatch = MockEnv()
                 monkeypatch.delattr(A, "x")
                 pytest.raises(AttributeError, monkeypatch.delattr, A, "y")
                 monkeypatch.delattr(A, "y", raising=False)
@@ -317,7 +317,7 @@ fn test_mock() {
 
             def test_setitem() -> None:
                 d = {"x": 1}
-                monkeypatch = Mock()
+                monkeypatch = MockEnv()
                 monkeypatch.setitem(d, "x", 2)
                 monkeypatch.setitem(d, "y", 1700)
                 monkeypatch.setitem(d, "y", 1700)
@@ -335,7 +335,7 @@ fn test_mock() {
 
             def test_setitem_deleted_meanwhile() -> None:
                 d: dict[str, object] = {}
-                monkeypatch = Mock()
+                monkeypatch = MockEnv()
                 monkeypatch.setitem(d, "x", 2)
                 del d["x"]
                 monkeypatch.undo()
@@ -347,7 +347,7 @@ fn test_mock() {
                 key = "qwpeoip123"
                 if before:
                     os.environ[key] = "world"
-                monkeypatch = Mock()
+                monkeypatch = MockEnv()
                 monkeypatch.setenv(key, "hello")
                 del os.environ[key]
                 monkeypatch.undo()
@@ -360,7 +360,7 @@ fn test_mock() {
 
             def test_delitem() -> None:
                 d: dict[str, object] = {"x": 1}
-                monkeypatch = Mock()
+                monkeypatch = MockEnv()
                 monkeypatch.delitem(d, "x")
                 assert "x" not in d
                 monkeypatch.delitem(d, "y", raising=False)
@@ -376,7 +376,7 @@ fn test_mock() {
 
 
             def test_setenv() -> None:
-                monkeypatch = Mock()
+                monkeypatch = MockEnv()
                 monkeypatch.setenv("XYZ123", 2)  # type: ignore[arg-type]
                 import os
 
@@ -388,13 +388,13 @@ fn test_mock() {
             def test_delenv() -> None:
                 name = "xyz1234"
                 assert name not in os.environ
-                monkeypatch = Mock()
+                monkeypatch = MockEnv()
                 pytest.raises(KeyError, monkeypatch.delenv, name, raising=True)
                 monkeypatch.delenv(name, raising=False)
                 monkeypatch.undo()
                 os.environ[name] = "1"
                 try:
-                    monkeypatch = Mock()
+                    monkeypatch = MockEnv()
                     monkeypatch.delenv(name)
                     assert name not in os.environ
                     monkeypatch.setenv(name, "3")
@@ -408,7 +408,7 @@ fn test_mock() {
             def test_setenv_prepend() -> None:
                 import os
 
-                monkeypatch = Mock()
+                monkeypatch = MockEnv()
                 monkeypatch.setenv("XYZ123", "2", prepend="-")
                 monkeypatch.setenv("XYZ123", "3", prepend="-")
                 assert os.environ["XYZ123"] == "3-2"
@@ -416,7 +416,7 @@ fn test_mock() {
                 assert "XYZ123" not in os.environ
 
 
-            def test_syspath_prepend(mp: Mock) -> None:
+            def test_syspath_prepend(mp: MockEnv) -> None:
                 old = list(sys.path)
                 mp.syspath_prepend("world")
                 mp.syspath_prepend("hello")
@@ -428,7 +428,7 @@ fn test_mock() {
                 assert sys.path == old
 
 
-            def test_syspath_prepend_double_undo(mp: Mock) -> None:
+            def test_syspath_prepend_double_undo(mp: MockEnv) -> None:
                 old_syspath = sys.path[:]
                 try:
                     mp.syspath_prepend("hello world")
@@ -441,17 +441,17 @@ fn test_mock() {
 
 
             @skip_macos
-            def test_chdir_with_path_local(mp: Mock, tmp_path: Path) -> None:
+            def test_chdir_with_path_local(mp: MockEnv, tmp_path: Path) -> None:
                 mp.chdir(tmp_path)
                 assert os.getcwd() == str(tmp_path), f"Expected {str(tmp_path)}, got {os.getcwd()}"
 
             @skip_macos
-            def test_chdir_with_str(mp: Mock, tmp_path: Path) -> None:
+            def test_chdir_with_str(mp: MockEnv, tmp_path: Path) -> None:
                 mp.chdir(str(tmp_path))
                 assert os.getcwd() == str(tmp_path), f"Expected {str(tmp_path)}, got {os.getcwd()}"
 
 
-            def test_chdir_undo(mp: Mock, tmp_path: Path) -> None:
+            def test_chdir_undo(mp: MockEnv, tmp_path: Path) -> None:
                 cwd = os.getcwd()
                 mp.chdir(tmp_path)
                 mp.undo()
@@ -459,7 +459,7 @@ fn test_mock() {
 
 
             @skip_macos
-            def test_chdir_double_undo(mp: Mock, tmp_path: Path) -> None:
+            def test_chdir_double_undo(mp: MockEnv, tmp_path: Path) -> None:
                 mp.chdir(str(tmp_path))
                 mp.undo()
                 os.chdir(tmp_path)
