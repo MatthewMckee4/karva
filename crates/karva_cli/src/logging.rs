@@ -1,7 +1,7 @@
 use std::{fmt, fs::File, io::BufWriter};
 
 use colored::Colorize;
-use karva_project::verbosity::VerbosityLevel;
+use karva_project::VerbosityLevel;
 use tracing::{Event, Subscriber};
 use tracing_subscriber::{
     EnvFilter,

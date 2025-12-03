@@ -1,4 +1,4 @@
-pub(crate) mod test_path;
+pub mod test_path;
 mod utils;
 
 pub use test_path::{TestPath, TestPathError};

@@ -1,6 +1,6 @@
 use insta::{allow_duplicates, assert_snapshot};
 use karva_core::{StandardTestRunner, TestRunner};
-use karva_project::{Project, project::ProjectOptions};
+use karva_project::{Project, ProjectOptions};
 use karva_test::TestContext;
 use rstest::rstest;
 

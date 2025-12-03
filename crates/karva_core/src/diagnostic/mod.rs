@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use karva_project::path::TestPathError;
+use karva_project::TestPathError;
 use pyo3::{Py, PyAny, PyErr, Python};
 use ruff_db::diagnostic::{
     Annotation, Diagnostic, Severity, Span, SubDiagnostic, SubDiagnosticSeverity,

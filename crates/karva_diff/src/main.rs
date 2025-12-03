@@ -8,7 +8,7 @@ use std::{
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
-use karva_project::path::absolute;
+use karva_project::absolute;
 use karva_test::{RealWorldProject, all_projects};
 use tempfile::NamedTempFile;
 

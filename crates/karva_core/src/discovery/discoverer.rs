@@ -1,6 +1,6 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use ignore::WalkBuilder;
-use karva_project::path::TestPath;
+use karva_project::TestPath;
 use pyo3::prelude::*;
 
 #[cfg(test)]
@@ -264,7 +264,7 @@ impl DiscoveryMode {
 mod tests {
 
     use insta::{allow_duplicates, assert_snapshot};
-    use karva_project::{Project, project::ProjectOptions};
+    use karva_project::{Project, ProjectOptions};
     use karva_test::TestContext;
 
     use super::*;

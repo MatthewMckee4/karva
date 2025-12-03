@@ -8,7 +8,7 @@ use karva_benchmark::{
     criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main},
 };
 use karva_core::{DummyReporter, TestRunner, testing::setup_module};
-use karva_project::{path::absolute, project::Project};
+use karva_project::{Project, absolute};
 
 fn create_test_cases() -> Vec<TestCase> {
     vec![

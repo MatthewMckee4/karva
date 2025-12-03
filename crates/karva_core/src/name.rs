@@ -1,5 +1,5 @@
 use camino::Utf8PathBuf;
-use karva_project::utils::module_name;
+use karva_project::module_name;
 
 /// Represents a fully qualified function name including its module path.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
