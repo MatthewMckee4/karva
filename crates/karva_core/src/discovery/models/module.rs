@@ -9,19 +9,15 @@ pub struct DiscoveredModule {
     path: ModulePath,
     test_functions: Vec<TestFunction>,
     fixtures: Vec<Fixture>,
-    type_: ModuleType,
     source_text: String,
 }
 
 impl DiscoveredModule {
-    pub(crate) fn new(path: ModulePath, module_type: ModuleType) -> Self {
-        let source_text = std::fs::read_to_string(path.path()).expect("Failed to read source file");
-
+    pub(crate) const fn new_with_source(path: ModulePath, source_text: String) -> Self {
         Self {
             path,
             test_functions: Vec::new(),
             fixtures: Vec::new(),
-            type_: module_type,
             source_text,
         }
     }
@@ -38,28 +34,20 @@ impl DiscoveredModule {
         self.path.module_name()
     }
 
-    pub(crate) const fn module_type(&self) -> ModuleType {
-        self.type_
-    }
-
     pub(crate) fn test_functions(&self) -> Vec<&TestFunction> {
         self.test_functions.iter().collect()
     }
 
-    pub(crate) fn extend_test_functions(&mut self, test_functions: Vec<TestFunction>) {
-        self.test_functions.extend(test_functions);
-    }
-
-    pub(crate) fn filter_test_functions(&mut self, name: &str) {
-        self.test_functions.retain(|tc| tc.function_name() == name);
+    pub(crate) fn add_test_function(&mut self, test_function: TestFunction) {
+        self.test_functions.push(test_function);
     }
 
     pub(crate) const fn fixtures(&self) -> &Vec<Fixture> {
         &self.fixtures
     }
 
-    pub(crate) fn extend_fixtures(&mut self, fixtures: Vec<Fixture>) {
-        self.fixtures.extend(fixtures);
+    pub(crate) fn add_fixture(&mut self, fixture: Fixture) {
+        self.fixtures.push(fixture);
     }
 
     #[cfg(test)]
@@ -75,30 +63,6 @@ impl DiscoveredModule {
         SourceFileBuilder::new(self.path().as_str(), self.source_text()).finish()
     }
 
-    pub(crate) fn update(&mut self, module: Self) {
-        if self.path == module.path {
-            for test_case in module.test_functions {
-                if !self
-                    .test_functions
-                    .iter()
-                    .any(|existing| existing.name == test_case.name)
-                {
-                    self.test_functions.push(test_case);
-                }
-            }
-
-            for fixture in module.fixtures {
-                if !self
-                    .fixtures
-                    .iter()
-                    .any(|existing| existing.name() == fixture.name())
-                {
-                    self.fixtures.push(fixture);
-                }
-            }
-        }
-    }
-
     pub(crate) fn is_empty(&self) -> bool {
         self.test_functions.is_empty() && self.fixtures.is_empty()
     }
@@ -106,27 +70,6 @@ impl DiscoveredModule {
     #[cfg(test)]
     pub(crate) const fn display(&self) -> DisplayDiscoveredModule<'_> {
         DisplayDiscoveredModule::new(self)
-    }
-}
-
-/// The type of module.
-/// This is used to differentiation between files that contain only test functions and files that contain only configuration functions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ModuleType {
-    Test,
-    Configuration,
-}
-
-impl From<&Utf8PathBuf> for ModuleType {
-    fn from(path: &Utf8PathBuf) -> Self {
-        if path
-            .file_name()
-            .is_some_and(|file_name| file_name == "conftest.py")
-        {
-            Self::Configuration
-        } else {
-            Self::Test
-        }
     }
 }
 

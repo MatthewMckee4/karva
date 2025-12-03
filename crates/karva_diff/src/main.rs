@@ -8,7 +8,7 @@ use std::{
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
-use karva_project::path::absolute;
+use karva_project::absolute;
 use karva_test::{RealWorldProject, all_projects};
 use tempfile::NamedTempFile;
 
@@ -177,5 +177,8 @@ fn run(
 fn extract_test_result(output: &[u8]) -> String {
     let output_str = String::from_utf8_lossy(output);
 
-    output_str.to_string()
+    // Strip `; finished in` and all text after it.
+    let strip_index = output_str.find("; finished in").unwrap_or(output_str.len());
+
+    output_str[..strip_index].to_string()
 }

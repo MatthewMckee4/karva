@@ -1,7 +1,7 @@
 use camino::Utf8PathBuf;
 use insta::assert_snapshot;
 use karva_core::{StandardTestRunner, TestRunner, testing::setup_module};
-use karva_project::{Project, project::ProjectOptions};
+use karva_project::{Project, ProjectOptions};
 use karva_test::TestContext;
 
 use crate::common::TestRunnerExt;

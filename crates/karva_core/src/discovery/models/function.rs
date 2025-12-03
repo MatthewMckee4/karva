@@ -29,7 +29,7 @@ impl TestFunction {
     pub(crate) fn new(
         py: Python<'_>,
         module: &DiscoveredModule,
-        stmt_function_def: StmtFunctionDef,
+        stmt_function_def: Arc<StmtFunctionDef>,
         py_function: Py<PyAny>,
     ) -> Self {
         let name = QualifiedFunctionName::new(
@@ -41,14 +41,10 @@ impl TestFunction {
 
         Self {
             name,
-            stmt_function_def: Arc::new(stmt_function_def),
+            stmt_function_def,
             py_function,
             tags,
         }
-    }
-
-    pub(crate) fn function_name(&self) -> &str {
-        &self.stmt_function_def.name
     }
 }
 
@@ -64,7 +60,7 @@ impl RequiresFixtures for TestFunction {
 
 #[cfg(test)]
 mod tests {
-    use karva_project::project::Project;
+    use karva_project::Project;
     use karva_test::TestContext;
 
     use crate::{

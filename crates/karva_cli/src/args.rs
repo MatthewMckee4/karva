@@ -6,7 +6,7 @@ use clap::{
         styling::{AnsiColor, Effects},
     },
 };
-use karva_project::project::{ProjectOptions, TestPrefix};
+use karva_project::{ProjectOptions, TestPrefix};
 use ruff_db::diagnostic::DiagnosticFormat;
 
 use crate::logging::Verbosity;

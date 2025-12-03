@@ -11,10 +11,7 @@ use colored::Colorize;
 use karva_core::{
     DummyReporter, Reporter, TestCaseReporter, TestRunner, utils::current_python_version,
 };
-use karva_project::{
-    path::absolute,
-    project::{Project, ProjectMetadata},
-};
+use karva_project::{Project, ProjectMetadata, absolute};
 
 use crate::{
     args::{Command, TerminalColor, TestCommand},

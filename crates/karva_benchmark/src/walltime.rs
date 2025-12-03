@@ -2,10 +2,7 @@ use std::sync::Once;
 
 use divan::Bencher;
 use karva_core::{TestRunner, testing::setup_module};
-use karva_project::{
-    path::absolute,
-    project::{Project, ProjectOptions},
-};
+use karva_project::{Project, ProjectOptions, absolute};
 use karva_test::{InstalledProject, RealWorldProject};
 
 pub struct ProjectBenchmark<'a> {
