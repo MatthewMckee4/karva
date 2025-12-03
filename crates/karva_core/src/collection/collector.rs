@@ -7,7 +7,10 @@ use ruff_python_ast::Stmt;
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 
 use super::models::{CollectedModule, CollectedPackage};
-use crate::{Context, diagnostic::report_invalid_path, discovery::ModuleType, name::ModulePath};
+use crate::{
+    Context, diagnostic::report_invalid_path, discovery::ModuleType,
+    extensions::fixtures::is_fixture_function, name::ModulePath,
+};
 
 pub struct ParallelCollector<'ctx, 'proj, 'rep> {
     context: &'ctx Context<'proj, 'rep>,
@@ -24,16 +27,17 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
             path,
             self.context.project().cwd(),
             self.context.project().metadata().python_version(),
+            self.context.project().options().test_prefix(),
         )
     }
 
     /// Collect from a single test file path.
-    pub fn collect_test_file(&self, path: &Utf8PathBuf) -> Option<CollectedModule> {
+    pub(crate) fn collect_test_file(&self, path: &Utf8PathBuf) -> Option<CollectedModule> {
         self.collect_file(path)
     }
 
     /// Collect from a directory in parallel using `WalkParallel`.
-    pub fn collect_directory(&self, path: &Utf8PathBuf) -> CollectedPackage {
+    pub(crate) fn collect_directory(&self, path: &Utf8PathBuf) -> CollectedPackage {
         let mut package = CollectedPackage::new(path.clone());
 
         // Create channels for communication
@@ -52,10 +56,12 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
         let walker = self.create_parallel_walker(path);
         let cwd = self.context.project().cwd().clone();
         let python_version = self.context.project().metadata().python_version();
+        let test_prefix = self.context.project().options().test_prefix().to_string();
 
         walker.run(|| {
             let tx = tx.clone();
             let cwd = cwd.clone();
+            let test_prefix = test_prefix.clone();
 
             Box::new(move |entry| {
                 let Ok(entry) = entry else {
@@ -72,7 +78,9 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
                 };
 
                 // Collect the module
-                if let Some(module) = Self::collect_file_static(&file_path, &cwd, python_version) {
+                if let Some(module) =
+                    Self::collect_file_static(&file_path, &cwd, python_version, &test_prefix)
+                {
                     let _ = tx.send(module);
                 }
 
@@ -107,6 +115,7 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
         path: &Utf8PathBuf,
         cwd: &Utf8PathBuf,
         python_version: ruff_python_ast::PythonVersion,
+        test_prefix: &str,
     ) -> Option<CollectedModule> {
         let module_path = ModulePath::new(path, cwd)?;
 
@@ -116,8 +125,7 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
 
         let module_type: ModuleType = path.into();
 
-        let mut collected_module =
-            CollectedModule::new(module_path, path.clone(), module_type, source_text.clone());
+        let mut collected_module = CollectedModule::new(module_path, path.clone(), module_type);
 
         // Parse the file to collect function definitions
         let parsed = parse_unchecked(
@@ -126,10 +134,18 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
         )
         .try_into_module()?;
 
-        // Collect all top-level function definitions
+        // Collect and categorize top-level function definitions
         for stmt in &parsed.syntax().body {
             if let Stmt::FunctionDef(function_def) = stmt {
-                collected_module.add_function_def(Arc::new(function_def.clone()));
+                // Check if it's a fixture function
+                if is_fixture_function(function_def) {
+                    collected_module.add_fixture_function_def(Arc::new(function_def.clone()));
+                }
+                // Check if it's a test function (starts with test prefix)
+                else if function_def.name.to_string().starts_with(test_prefix) {
+                    collected_module.add_test_function_def(Arc::new(function_def.clone()));
+                }
+                // Otherwise, ignore the function (it's not relevant for testing)
             }
         }
 
@@ -137,7 +153,7 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
     }
 
     /// Collect from all paths and build a complete package structure.
-    pub fn collect_all(&self) -> CollectedPackage {
+    pub(crate) fn collect_all(&self) -> CollectedPackage {
         let mut session_package = CollectedPackage::new(self.context.project().cwd().clone());
 
         // Process all test paths
