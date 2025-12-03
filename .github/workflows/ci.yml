@@ -133,14 +133,6 @@ jobs:
         run: |
           cargo test -- --include-ignored
 
-  build-binaries:
-    name: "build binaries"
-
-    needs: determine_changes
-    if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
-
-    uses: ./.github/workflows/build.yml
-
   build-docs:
     name: "Build docs"
 
@@ -325,3 +317,19 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: lcov.info
           fail_ci_if_error: true
+
+  build-binaries:
+    name: "build binaries"
+
+    needs: determine_changes
+    if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
+
+    uses: ./.github/workflows/build.yml
+
+  project-diff:
+    name: "run project diff"
+
+    needs: determine_changes
+    if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
+
+    uses: ./.github/workflows/diff.yml
