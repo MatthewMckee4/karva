@@ -3,33 +3,34 @@ use std::{collections::HashMap, sync::Arc};
 use camino::Utf8PathBuf;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::{discovery::ModuleType, name::ModulePath};
+use crate::name::ModulePath;
 
 /// A collected module containing raw AST function definitions.
 /// This is populated during the parallel collection phase.
 #[derive(Debug, Clone)]
 pub struct CollectedModule {
-    path: ModulePath,
-    file_path: Utf8PathBuf,
-    module_type: ModuleType,
+    /// The path of the module.
+    pub(crate) path: ModulePath,
+    /// The type of module.
+    pub(crate) module_type: ModuleType,
     /// The source text of the file (cached to avoid re-reading)
-    source_text: String,
+    pub(crate) source_text: String,
     /// Test function definitions (functions starting with test prefix)
-    test_function_defs: Vec<Arc<StmtFunctionDef>>,
+    pub(crate) test_function_defs: Vec<Arc<StmtFunctionDef>>,
     /// Fixture function definitions (functions with fixture decorators)
-    fixture_function_defs: Vec<Arc<StmtFunctionDef>>,
+    pub(crate) fixture_function_defs: Vec<Arc<StmtFunctionDef>>,
 }
 
 impl CollectedModule {
     pub(crate) const fn new(
         path: ModulePath,
-        file_path: Utf8PathBuf,
+
         module_type: ModuleType,
         source_text: String,
     ) -> Self {
         Self {
             path,
-            file_path,
+
             module_type,
             source_text,
             test_function_defs: Vec::new(),
@@ -45,28 +46,12 @@ impl CollectedModule {
         self.fixture_function_defs.push(function_def);
     }
 
-    pub(crate) const fn path(&self) -> &ModulePath {
-        &self.path
-    }
-
     pub(crate) const fn file_path(&self) -> &Utf8PathBuf {
-        &self.file_path
+        self.path.path()
     }
 
     pub(crate) const fn module_type(&self) -> ModuleType {
         self.module_type
-    }
-
-    pub(crate) fn source_text(&self) -> &str {
-        &self.source_text
-    }
-
-    pub(crate) fn test_function_defs(&self) -> &[Arc<StmtFunctionDef>] {
-        &self.test_function_defs
-    }
-
-    pub(crate) fn fixture_function_defs(&self) -> &[Arc<StmtFunctionDef>] {
-        &self.fixture_function_defs
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -78,10 +63,10 @@ impl CollectedModule {
 /// This is populated during the parallel collection phase.
 #[derive(Debug, Clone)]
 pub struct CollectedPackage {
-    path: Utf8PathBuf,
-    modules: HashMap<Utf8PathBuf, CollectedModule>,
-    packages: HashMap<Utf8PathBuf, CollectedPackage>,
-    configuration_module_path: Option<Utf8PathBuf>,
+    pub(crate) path: Utf8PathBuf,
+    pub(crate) modules: HashMap<Utf8PathBuf, CollectedModule>,
+    pub(crate) packages: HashMap<Utf8PathBuf, CollectedPackage>,
+    pub(crate) configuration_module_path: Option<Utf8PathBuf>,
 }
 
 impl CollectedPackage {
@@ -96,14 +81,6 @@ impl CollectedPackage {
 
     pub(crate) const fn path(&self) -> &Utf8PathBuf {
         &self.path
-    }
-
-    pub(crate) const fn modules(&self) -> &HashMap<Utf8PathBuf, CollectedModule> {
-        &self.modules
-    }
-
-    pub(crate) const fn packages(&self) -> &HashMap<Utf8PathBuf, Self> {
-        &self.packages
     }
 
     /// Add a module to this package.
@@ -261,6 +238,27 @@ impl CollectedModule {
                     self.fixture_function_defs.push(function_def);
                 }
             }
+        }
+    }
+}
+
+/// The type of module.
+/// This is used to differentiation between files that contain only test functions and files that contain only configuration functions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModuleType {
+    Test,
+    Configuration,
+}
+
+impl From<&Utf8PathBuf> for ModuleType {
+    fn from(path: &Utf8PathBuf) -> Self {
+        if path
+            .file_name()
+            .is_some_and(|file_name| file_name == "conftest.py")
+        {
+            Self::Configuration
+        } else {
+            Self::Test
         }
     }
 }

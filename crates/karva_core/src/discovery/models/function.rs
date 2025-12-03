@@ -46,10 +46,6 @@ impl TestFunction {
             tags,
         }
     }
-
-    pub(crate) fn function_name(&self) -> &str {
-        &self.stmt_function_def.name
-    }
 }
 
 impl RequiresFixtures for TestFunction {

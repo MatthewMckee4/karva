@@ -1,13 +1,11 @@
-use camino::Utf8PathBuf;
-use karva_project::TestPath;
 use pyo3::prelude::*;
 
 #[cfg(test)]
 use crate::utils::attach_with_project;
 use crate::{
     Context,
-    collection::{CollectedPackage, ParallelCollector},
-    discovery::{DiscoveredModule, DiscoveredPackage, ModuleType, visitor::DiscoveredFunctions},
+    collection::{CollectedModule, CollectedPackage, ModuleType, ParallelCollector},
+    discovery::{DiscoveredModule, DiscoveredPackage, visitor::discover},
     utils::add_to_sys_path,
 };
 
@@ -34,52 +32,12 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
 
         tracing::info!("Collecting test files in parallel...");
 
-        // Collect function-specific paths for filtering and check for shadowing
-        let mut function_filters = std::collections::HashMap::new();
-        let mut all_file_paths = std::collections::HashSet::new();
-        let mut all_directory_paths = std::collections::HashSet::new();
-
-        for path in self.context.project().test_paths().into_iter().flatten() {
-            match path {
-                TestPath::File(file_path) => {
-                    all_file_paths.insert(file_path);
-                }
-                TestPath::Directory(dir_path) => {
-                    all_directory_paths.insert(dir_path);
-                }
-                TestPath::Function {
-                    path,
-                    function_name,
-                } => {
-                    function_filters.insert(path, function_name);
-                }
-            }
-        }
-
-        // Remove function filters if the file is explicitly listed or is in a listed directory
-        function_filters.retain(|file_path, _| {
-            // If the file itself is in the test paths, don't filter
-            if all_file_paths.contains(file_path) {
-                return false;
-            }
-            // If any parent directory is in the test paths, don't filter
-            for dir_path in &all_directory_paths {
-                if file_path.starts_with(dir_path) {
-                    return false;
-                }
-            }
-            true
-        });
-
-        // Phase 1: Collection (parallel) - collect all AST function definitions
         let collector = ParallelCollector::new(self.context);
         let collected_package = collector.collect_all();
 
         tracing::info!("Discovering test functions and fixtures...");
 
-        // Phase 2: Discovery (single-threaded) - convert collected AST to test functions and fixtures
-        let mut session_package =
-            self.convert_collected_to_discovered(py, &collected_package, &function_filters);
+        let mut session_package = self.convert_collected_to_discovered(py, collected_package);
 
         session_package.shrink();
 
@@ -91,50 +49,49 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
     fn convert_collected_to_discovered(
         &self,
         py: Python<'_>,
-        collected_package: &CollectedPackage,
-        function_filters: &std::collections::HashMap<Utf8PathBuf, String>,
+        collected_package: CollectedPackage,
     ) -> DiscoveredPackage {
-        let mut discovered_package = DiscoveredPackage::new(collected_package.path().clone());
+        let CollectedPackage {
+            path,
+            modules,
+            packages,
+            configuration_module_path: _,
+        } = collected_package;
+
+        let mut discovered_package = DiscoveredPackage::new(path);
 
         // Convert all modules
-        for collected_module in collected_package.modules().values() {
-            let mut module = DiscoveredModule::new_with_source(
-                collected_module.path().clone(),
-                collected_module.module_type(),
-                collected_module.source_text().to_string(),
-            );
+        for collected_module in modules.into_values() {
+            let CollectedModule {
+                path,
+                module_type,
+                source_text,
+                test_function_defs,
+                fixture_function_defs,
+            } = collected_module;
 
-            let DiscoveredFunctions {
-                functions,
-                fixtures,
-            } = super::visitor::discover(
+            let mut module = DiscoveredModule::new_with_source(path.clone(), source_text);
+
+            discover(
                 self.context,
                 py,
-                &module,
-                collected_module.test_function_defs(),
-                collected_module.fixture_function_defs(),
+                &mut module,
+                test_function_defs,
+                fixture_function_defs,
             );
 
-            module.extend_test_functions(functions);
-            module.extend_fixtures(fixtures);
-
-            // Apply function filtering if this module has a function filter
-            if let Some(function_name) = function_filters.get(collected_module.file_path()) {
-                module.filter_test_functions(function_name);
-            }
-
-            if collected_module.module_type() == ModuleType::Configuration {
+            if module_type == ModuleType::Configuration {
                 discovered_package.add_configuration_module(module);
             } else {
-                discovered_package.add_module(module);
+                discovered_package.add_direct_module(module);
             }
         }
 
         // Convert all subpackages recursively
-        for collected_subpackage in collected_package.packages().values() {
+        for collected_subpackage in packages.into_values() {
             let discovered_subpackage =
-                self.convert_collected_to_discovered(py, collected_subpackage, function_filters);
-            discovered_package.add_package(discovered_subpackage);
+                self.convert_collected_to_discovered(py, collected_subpackage);
+            discovered_package.add_direct_subpackage(discovered_subpackage);
         }
 
         discovered_package
@@ -144,6 +101,7 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
 #[cfg(test)]
 mod tests {
 
+    use camino::Utf8PathBuf;
     use insta::{allow_duplicates, assert_snapshot};
     use karva_project::{Project, ProjectOptions};
     use karva_test::TestContext;
@@ -447,16 +405,19 @@ def test_function(): pass
     fn test_discover_function_inside_function() {
         let env = TestContext::with_files([(
             "<test>/test_file.py",
-            "def test_function(): def test_function2(): pass",
+            "
+def test_function():
+    def test_function2(): pass",
         )]);
 
-        let mapped_dir = env.mapped_path("<test>").unwrap();
-        let path = mapped_dir.join("test_file.py");
-
-        let project = Project::new(env.cwd(), vec![path]);
+        let project = Project::new(env.cwd(), vec![env.cwd()]);
         let session = session(&project);
 
-        assert_snapshot!(session.display(), @"");
+        assert_snapshot!(session.display(), @r"
+        └── <temp_dir>/<test>/
+            └── <test>.test_file
+                └── test_cases [test_function]
+        ");
     }
 
     #[test]

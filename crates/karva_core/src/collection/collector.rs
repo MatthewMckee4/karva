@@ -3,12 +3,13 @@ use std::{sync::Arc, thread};
 use camino::{Utf8Path, Utf8PathBuf};
 use crossbeam_channel::unbounded;
 use ignore::{WalkBuilder, WalkState};
+use karva_project::TestPath;
 use ruff_python_ast::Stmt;
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 
 use super::models::{CollectedModule, CollectedPackage};
 use crate::{
-    Context, diagnostic::report_invalid_path, discovery::ModuleType,
+    Context, collection::ModuleType, diagnostic::report_invalid_path,
     extensions::fixtures::is_fixture_function, name::ModulePath,
 };
 
@@ -23,21 +24,30 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
 
     /// Collect from a directory in parallel using `WalkParallel`.
     pub(crate) fn collect_directory(&self, path: &Utf8PathBuf) -> CollectedPackage {
-        let mut package = CollectedPackage::new(path.clone());
-
         // Create channels for communication
-        let (tx, rx) = unbounded();
+        let (tx, rx) = unbounded::<CollectedModule>();
+
+        let cloned_path = path.clone();
 
         // Spawn receiver thread to collect results
         let receiver_handle = thread::spawn(move || {
-            let mut modules = Vec::new();
-            for module in rx {
-                modules.push(module);
+            let mut package = CollectedPackage::new(cloned_path);
+
+            for collected_module in rx {
+                match collected_module.module_type() {
+                    ModuleType::Test => {
+                        package.add_module(collected_module);
+                    }
+                    ModuleType::Configuration => {
+                        package.add_configuration_module(collected_module);
+                    }
+                }
             }
-            modules
+
+            package
         });
 
-        let walker = self.create_parallel_walker(path);
+        let walker = self.create_parallel_walker(&path.clone());
 
         walker.run(|| {
             let tx = tx.clone();
@@ -55,7 +65,7 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
                     return WalkState::Continue;
                 };
 
-                if let Some(module) = collect_file(&file_path, self.context) {
+                if let Some(module) = collect_file(&file_path, self.context, None) {
                     let _ = tx.send(module);
                 }
 
@@ -63,32 +73,16 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
             })
         });
 
-        // Drop the sender so receiver knows we're done
+        // Drop the original sender to close the channel
         drop(tx);
 
-        // Wait for receiver to finish
-        let modules = receiver_handle.join().unwrap();
-
-        // Add all collected modules to the package
-        for collected_module in modules {
-            match collected_module.module_type() {
-                ModuleType::Test => {
-                    package.add_module(collected_module);
-                }
-                ModuleType::Configuration => {
-                    package.add_configuration_module(collected_module);
-                }
-            }
-        }
-
-        package
+        receiver_handle.join().unwrap()
     }
 
     /// Collect from all paths and build a complete package structure.
     pub(crate) fn collect_all(&self) -> CollectedPackage {
         let mut session_package = CollectedPackage::new(self.context.project().cwd().clone());
 
-        // Process all test paths
         for path_result in self.context.project().test_paths() {
             let path = match path_result {
                 Ok(path) => path,
@@ -101,21 +95,27 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
             let path_for_config = path.path().to_owned();
 
             match path {
-                karva_project::TestPath::Directory(dir_path) => {
+                TestPath::Directory(dir_path) => {
                     let package = self.collect_directory(&dir_path);
                     session_package.add_package(package);
                 }
-                karva_project::TestPath::File(file_path)
-                | karva_project::TestPath::Function {
-                    path: file_path, ..
+                TestPath::Function {
+                    path: file_path,
+                    function_name,
                 } => {
-                    if let Some(module) = { collect_file(&file_path, self.context) } {
+                    if let Some(module) =
+                        collect_file(&file_path, self.context, Some(&function_name))
+                    {
+                        session_package.add_module(module);
+                    }
+                }
+                TestPath::File(file_path) => {
+                    if let Some(module) = collect_file(&file_path, self.context, None) {
                         session_package.add_module(module);
                     }
                 }
             }
 
-            // Collect parent configuration files
             self.collect_parent_configuration(&path_for_config, &mut session_package);
         }
 
@@ -143,7 +143,7 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
             if conftest_path.exists() {
                 let mut package = CollectedPackage::new(current_path.to_path_buf());
 
-                if let Some(module) = { collect_file(&conftest_path, self.context) } {
+                if let Some(module) = collect_file(&conftest_path, self.context, None) {
                     package.add_configuration_module(module);
                     session_package.add_package(package);
                 }
@@ -162,7 +162,6 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
 
     /// Creates a configured parallel directory walker for Python file discovery.
     fn create_parallel_walker(&self, path: &Utf8PathBuf) -> ignore::WalkParallel {
-        // Configure thread pool size for optimal parallelism
         let num_threads = karva_project::max_parallelism().get();
 
         WalkBuilder::new(path)
@@ -182,14 +181,17 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
     }
 }
 
-fn collect_file(path: &Utf8PathBuf, context: &Context) -> Option<CollectedModule> {
+fn collect_file(
+    path: &Utf8PathBuf,
+    context: &Context,
+    only_function_name: Option<&str>,
+) -> Option<CollectedModule> {
     let module_path = ModulePath::new(path, context.project().cwd())?;
 
     let source_text = std::fs::read_to_string(path).ok()?;
 
     let module_type: ModuleType = path.into();
 
-    // Parse the file to collect function definitions
     let parsed = parse_unchecked(
         &source_text,
         ParseOptions::from(Mode::Module)
@@ -197,12 +199,15 @@ fn collect_file(path: &Utf8PathBuf, context: &Context) -> Option<CollectedModule
     )
     .try_into_module()?;
 
-    // Collect and categorize top-level function definitions from the parsed AST
-    let mut collected_module =
-        CollectedModule::new(module_path, path.clone(), module_type, source_text);
+    let mut collected_module = CollectedModule::new(module_path, module_type, source_text);
 
     for stmt in parsed.into_syntax().body {
         if let Stmt::FunctionDef(function_def) = stmt {
+            if let Some(only_function_name) = only_function_name {
+                if function_def.name.as_str() != only_function_name {
+                    continue;
+                }
+            }
             if is_fixture_function(&function_def) {
                 collected_module.add_fixture_function_def(Arc::new(function_def));
             } else if function_def

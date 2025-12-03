@@ -98,7 +98,7 @@ impl Fixture {
 
     pub(crate) fn try_from_function(
         py: Python<'_>,
-        stmt_function_def: &Arc<StmtFunctionDef>,
+        stmt_function_def: Arc<StmtFunctionDef>,
         py_module: &Bound<'_, PyModule>,
         module_path: &ModulePath,
         is_generator_function: bool,
@@ -109,7 +109,7 @@ impl Fixture {
 
         let try_karva = Self::try_from_karva_function(
             py,
-            stmt_function_def,
+            stmt_function_def.clone(),
             &function,
             module_path.clone(),
             is_generator_function,
@@ -142,7 +142,7 @@ impl Fixture {
 
     pub(crate) fn try_from_pytest_function(
         py: Python<'_>,
-        stmt_function_def: &Arc<StmtFunctionDef>,
+        stmt_function_def: Arc<StmtFunctionDef>,
         function: &Bound<'_, PyAny>,
         module_name: ModulePath,
         is_generator_function: bool,
@@ -180,7 +180,7 @@ impl Fixture {
         Ok(Self::new(
             py,
             QualifiedFunctionName::new(name, module_name),
-            stmt_function_def.clone(),
+            stmt_function_def,
             fixture_scope,
             auto_use.extract::<bool>().unwrap_or(false),
             fixture_function.into(),
@@ -191,7 +191,7 @@ impl Fixture {
 
     pub(crate) fn try_from_karva_function(
         py: Python<'_>,
-        stmt_function_def: &Arc<StmtFunctionDef>,
+        stmt_function_def: Arc<StmtFunctionDef>,
         function: &Bound<'_, PyAny>,
         module_path: ModulePath,
         is_generator_function: bool,
@@ -213,7 +213,7 @@ impl Fixture {
         Ok(Self::new(
             py,
             QualifiedFunctionName::new(name, module_path),
-            stmt_function_def.clone(),
+            stmt_function_def,
             fixture_scope,
             auto_use,
             py_function.into(),

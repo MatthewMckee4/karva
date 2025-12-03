@@ -4,10 +4,7 @@ use camino::Utf8PathBuf;
 
 #[cfg(test)]
 use crate::discovery::TestFunction;
-use crate::{
-    discovery::{DiscoveredModule, ModuleType},
-    name::ModulePath,
-};
+use crate::{discovery::DiscoveredModule, name::ModulePath};
 
 /// A package represents a single python directory.
 #[derive(Debug)]
@@ -68,98 +65,19 @@ impl DiscoveredPackage {
         }
     }
 
-    /// Add a module to this package.
-    ///
-    /// If the module path does not start with our path, do nothing.
-    ///
-    /// If the module path equals our path, use update method.
-    ///
-    /// Otherwise, strip the current path from the start and add the module to the appropriate sub-package.
-    pub(crate) fn add_module(&mut self, module: DiscoveredModule) {
-        if !module.path().starts_with(self.path()) {
-            return;
-        }
-
-        if module.is_empty() {
-            return;
-        }
-
-        if module.path().parent().is_some_and(|p| p == self.path()) {
-            if let Some(existing_module) = self.modules.get_mut(module.path()) {
-                existing_module.update(module);
-            } else {
-                if module.module_type() == ModuleType::Configuration {
-                    self.configuration_module_path = Some(module.module_path().clone());
-                }
-                self.modules.insert(module.path().clone(), module);
-            }
-            return;
-        }
-
-        let Ok(relative_path) = module.path().strip_prefix(self.path()) else {
-            return;
-        };
-
-        let components: Vec<_> = relative_path.components().collect();
-
-        if components.is_empty() {
-            return;
-        }
-
-        let first_component = components[0];
-        let intermediate_path = self.path().join(first_component);
-
-        if let Some(existing_package) = self.packages.get_mut(&intermediate_path) {
-            existing_package.add_module(module);
-        } else {
-            let mut new_package = Self::new(intermediate_path);
-            new_package.add_module(module);
-            self.packages
-                .insert(new_package.path().clone(), new_package);
-        }
+    /// Add a module directly to this package.
+    pub(crate) fn add_direct_module(&mut self, module: DiscoveredModule) {
+        self.modules.insert(module.path().clone(), module);
     }
 
     pub(crate) fn add_configuration_module(&mut self, module: DiscoveredModule) {
         self.configuration_module_path = Some(module.module_path().clone());
-        self.add_module(module);
+        self.add_direct_module(module);
     }
 
-    /// Add a package to this package.
-    ///
-    /// If the package path equals our path, use update method.
-    ///
-    /// Otherwise, strip the current path from the start and add the package to the appropriate sub-package.
-    pub(crate) fn add_package(&mut self, package: Self) {
-        if !package.path().starts_with(self.path()) {
-            return;
-        }
-
-        if package.path() == self.path() {
-            self.update(package);
-            return;
-        }
-
-        let Ok(relative_path) = package.path().strip_prefix(self.path()) else {
-            return;
-        };
-
-        let components: Vec<_> = relative_path.components().collect();
-
-        if components.is_empty() {
-            return;
-        }
-
-        let first_component = components[0];
-        let intermediate_path = self.path().join(first_component);
-
-        if let Some(existing_package) = self.packages.get_mut(&intermediate_path) {
-            existing_package.add_package(package);
-        } else {
-            let mut new_package = Self::new(intermediate_path);
-            new_package.add_package(package);
-            self.packages
-                .insert(new_package.path().clone(), new_package);
-        }
+    /// Adds a package directly as a subpackage.
+    pub(crate) fn add_direct_subpackage(&mut self, other: Self) {
+        self.packages.insert(other.path().clone(), other);
     }
 
     #[cfg(test)]
@@ -172,19 +90,6 @@ impl DiscoveredPackage {
             total += package.total_test_functions();
         }
         total
-    }
-
-    pub(crate) fn update(&mut self, package: Self) {
-        for (_, module) in package.modules {
-            self.add_module(module);
-        }
-        for (_, package) in package.packages {
-            self.add_package(package);
-        }
-
-        if let Some(module) = package.configuration_module_path {
-            self.configuration_module_path = Some(module);
-        }
     }
 
     #[cfg(test)]
