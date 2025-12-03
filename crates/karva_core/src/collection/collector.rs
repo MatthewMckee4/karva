@@ -232,10 +232,6 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
                 types.select("python");
                 types.build().unwrap()
             })
-            .filter_entry(|entry| {
-                let file_name = entry.file_name();
-                file_name != "__pycache__"
-            })
             .build_parallel()
     }
 }
