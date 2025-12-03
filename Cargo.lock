@@ -552,9 +552,9 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "ctor"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ffc71fcdcdb40d6f087edddf7f8f1f8f79e6cf922f555a9ee8779752d4819bd"
+checksum = "eb230974aaf0aca4d71665bed0aca156cf43b764fcb9583b69c6c3e686f35e72"
 dependencies = [
  "ctor-proc-macro",
  "dtor",
@@ -1243,9 +1243,9 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libc"
-version = "0.2.177"
+version = "0.2.178"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2874a2af47a2325c2001a6e6fad9b16a53b802102b528163885171cf92b15976"
+checksum = "37c93d8daa9d8a012fd8ab92f088405fb202ea0b6ab73ee2482ae66af4f42091"
 
 [[package]]
 name = "libredox"
@@ -1275,9 +1275,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.28"
+version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
+checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
 name = "manyhow"
@@ -1800,7 +1800,7 @@ dependencies = [
 [[package]]
 name = "ruff_annotate_snippets"
 version = "0.1.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#a561e6659d52f3a56566f1b71b613dbd5a871809"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
 dependencies = [
  "anstyle",
  "memchr",
@@ -1810,7 +1810,7 @@ dependencies = [
 [[package]]
 name = "ruff_db"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#a561e6659d52f3a56566f1b71b613dbd5a871809"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
 dependencies = [
  "anstyle",
  "arc-swap",
@@ -1846,7 +1846,7 @@ dependencies = [
 [[package]]
 name = "ruff_diagnostics"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#a561e6659d52f3a56566f1b71b613dbd5a871809"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
 dependencies = [
  "get-size2",
  "is-macro",
@@ -1856,7 +1856,7 @@ dependencies = [
 [[package]]
 name = "ruff_macros"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#a561e6659d52f3a56566f1b71b613dbd5a871809"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
 dependencies = [
  "heck",
  "itertools 0.14.0",
@@ -1869,7 +1869,7 @@ dependencies = [
 [[package]]
 name = "ruff_memory_usage"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#a561e6659d52f3a56566f1b71b613dbd5a871809"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
 dependencies = [
  "get-size2",
  "ordermap",
@@ -1878,7 +1878,7 @@ dependencies = [
 [[package]]
 name = "ruff_notebook"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#a561e6659d52f3a56566f1b71b613dbd5a871809"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
 dependencies = [
  "anyhow",
  "itertools 0.14.0",
@@ -1896,7 +1896,7 @@ dependencies = [
 [[package]]
 name = "ruff_python_ast"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#a561e6659d52f3a56566f1b71b613dbd5a871809"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
 dependencies = [
  "aho-corasick",
  "bitflags",
@@ -1915,7 +1915,7 @@ dependencies = [
 [[package]]
 name = "ruff_python_parser"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#a561e6659d52f3a56566f1b71b613dbd5a871809"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
 dependencies = [
  "bitflags",
  "bstr",
@@ -1935,7 +1935,7 @@ dependencies = [
 [[package]]
 name = "ruff_python_trivia"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#a561e6659d52f3a56566f1b71b613dbd5a871809"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
 dependencies = [
  "itertools 0.14.0",
  "ruff_source_file",
@@ -1946,7 +1946,7 @@ dependencies = [
 [[package]]
 name = "ruff_source_file"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#a561e6659d52f3a56566f1b71b613dbd5a871809"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
 dependencies = [
  "get-size2",
  "memchr",
@@ -1957,7 +1957,7 @@ dependencies = [
 [[package]]
 name = "ruff_text_size"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#a561e6659d52f3a56566f1b71b613dbd5a871809"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
 dependencies = [
  "get-size2",
  "serde",
@@ -2422,7 +2422,7 @@ dependencies = [
 [[package]]
 name = "ty_static"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#a561e6659d52f3a56566f1b71b613dbd5a871809"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
 dependencies = [
  "ruff_macros",
 ]
@@ -2490,9 +2490,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "1.18.1"
+version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f87b8aa10b915a06587d0dec516c282ff295b475d94abf425d62b57710070a2"
+checksum = "e2e054861b4bd027cd373e18e8d8d8e6548085000e41290d95ce0c373a654b4a"
 dependencies = [
  "getrandom 0.3.4",
  "js-sys",
@@ -2503,9 +2503,9 @@ dependencies = [
 
 [[package]]
 name = "uuid-macro-internal"
-version = "1.18.1"
+version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9384a660318abfbd7f8932c34d67e4d1ec511095f95972ddc01e19d7ba8413f"
+checksum = "39d11901c36b3650df7acb0f9ebe624f35b5ac4e1922ecd3c57f444648429594"
 dependencies = [
  "proc-macro2",
  "quote",

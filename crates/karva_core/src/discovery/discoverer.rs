@@ -476,7 +476,7 @@ def test_1(x): pass",
                         └── <test>.tests.test_1
                             ├── test_cases [test_1]
                             └── fixtures [x]
-            ")
+                ")
             };
         }
     }

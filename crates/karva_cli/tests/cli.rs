@@ -490,7 +490,6 @@ fn test_quiet_output() {
     success: true
     exit_code: 0
     ----- stdout -----
-
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----

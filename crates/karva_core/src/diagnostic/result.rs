@@ -9,6 +9,7 @@ use crate::{DefaultFileResolver, Reporter};
 
 #[derive(Debug, Clone)]
 pub struct TestRunResultDisplayOptions {
+    pub(crate) display_diagnostics: bool,
     pub(crate) diagnostic_format: DiagnosticFormat,
 }
 
@@ -172,6 +173,8 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let discovery_diagnostics = self.result.discovery_diagnostics();
 
+        let diagnostics = self.result.diagnostics();
+
         let config = DisplayDiagnosticConfig::default()
             .format(self.result.display_options.diagnostic_format)
             .color(colored::control::SHOULD_COLORIZE.should_colorize());
@@ -181,7 +184,14 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
             DiagnosticFormat::Concise
         );
 
-        if !discovery_diagnostics.is_empty() {
+        if (!diagnostics.is_empty() || !discovery_diagnostics.is_empty())
+            && self.result.stats().total() > 0
+            && self.result.display_options.display_diagnostics
+        {
+            writeln!(f)?;
+        }
+
+        if !discovery_diagnostics.is_empty() && self.result.display_options.display_diagnostics {
             writeln!(f, "discovery diagnostics:")?;
             writeln!(f)?;
             write!(
@@ -193,14 +203,13 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
                     discovery_diagnostics,
                 )
             )?;
+
             if is_concise {
                 writeln!(f)?;
             }
         }
 
-        let diagnostics = self.result.diagnostics();
-
-        if !diagnostics.is_empty() {
+        if !diagnostics.is_empty() && self.result.display_options.display_diagnostics {
             writeln!(f, "diagnostics:")?;
             writeln!(f)?;
             write!(
@@ -216,6 +225,13 @@ impl std::fmt::Display for DisplayTestRunResult<'_> {
             if is_concise {
                 writeln!(f)?;
             }
+        }
+
+        if (diagnostics.is_empty() && discovery_diagnostics.is_empty())
+            && self.result.stats().total() > 0
+            && self.result.display_options.display_diagnostics
+        {
+            writeln!(f)?;
         }
 
         write!(f, "{}", self.result.stats().display(self.result.start_time))

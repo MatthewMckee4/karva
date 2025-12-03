@@ -20,6 +20,7 @@ impl<'proj, 'rep> Context<'proj, 'rep> {
             result: Arc::new(Mutex::new(TestRunResult::new(
                 project.cwd().as_std_path().to_path_buf(),
                 TestRunResultDisplayOptions {
+                    display_diagnostics: !project.options().verbosity().is_quiet(),
                     diagnostic_format: project.options().diagnostic_format(),
                 },
             ))),
