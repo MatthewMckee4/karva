@@ -51,6 +51,7 @@ jobs:
             ':!LICENSE' \
             ':!pyproject.toml' \
             ':!README.md' \
+            ':!zensical.toml' \
           ; then
               echo "changed=false" >> "$GITHUB_OUTPUT"
           else
