@@ -29,7 +29,7 @@ impl TestFunction {
     pub(crate) fn new(
         py: Python<'_>,
         module: &DiscoveredModule,
-        stmt_function_def: StmtFunctionDef,
+        stmt_function_def: Arc<StmtFunctionDef>,
         py_function: Py<PyAny>,
     ) -> Self {
         let name = QualifiedFunctionName::new(
@@ -41,7 +41,7 @@ impl TestFunction {
 
         Self {
             name,
-            stmt_function_def: Arc::new(stmt_function_def),
+            stmt_function_def,
             py_function,
             tags,
         }

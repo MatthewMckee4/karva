@@ -119,9 +119,7 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
     ) -> Option<CollectedModule> {
         let module_path = ModulePath::new(path, cwd)?;
 
-        let Ok(source_text) = std::fs::read_to_string(path) else {
-            return None;
-        };
+        let source_text = std::fs::read_to_string(path).ok()?;
 
         let module_type: ModuleType = path.into();
 
@@ -136,22 +134,22 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
         let mut test_defs = Vec::new();
         let mut fixture_defs = Vec::new();
 
-        for stmt in &parsed.syntax().body {
+        for stmt in parsed.into_syntax().body {
             if let Stmt::FunctionDef(function_def) = stmt {
                 // Check if it's a fixture function
-                if is_fixture_function(function_def) {
-                    fixture_defs.push(Arc::new(function_def.clone()));
+                if is_fixture_function(&function_def) {
+                    fixture_defs.push(Arc::new(function_def));
                 }
                 // Check if it's a test function (starts with test prefix)
                 else if function_def.name.to_string().starts_with(test_prefix) {
-                    test_defs.push(Arc::new(function_def.clone()));
+                    test_defs.push(Arc::new(function_def));
                 }
                 // Otherwise, ignore the function (it's not relevant for testing)
             }
         }
 
         let mut collected_module =
-            CollectedModule::new(module_path, path.clone(), module_type, source_text, parsed);
+            CollectedModule::new(module_path, path.clone(), module_type, source_text);
 
         // Add collected functions
         for test_def in test_defs {

@@ -12,7 +12,7 @@ use crate::{
     Context,
     diagnostic::{report_failed_to_import_module, report_invalid_fixture},
     discovery::{DiscoveredModule, TestFunction},
-    extensions::fixtures::{Fixture, is_fixture_function},
+    extensions::fixtures::Fixture,
 };
 
 /// Visitor for discovering test functions and fixture definitions in a given module.
@@ -196,64 +196,54 @@ impl<'ctx, 'proj, 'rep, 'py, 'a> FunctionDefinitionVisitor<'ctx, 'proj, 'rep, 'p
     }
 }
 
-impl SourceOrderVisitor<'_> for FunctionDefinitionVisitor<'_, '_, '_, '_, '_> {
-    fn visit_stmt(&mut self, stmt: &'_ Stmt) {
-        if let Stmt::FunctionDef(stmt_function_def) = stmt {
-            if is_fixture_function(stmt_function_def) {
-                self.try_import_module();
+impl FunctionDefinitionVisitor<'_, '_, '_, '_, '_> {
+    fn process_fixture_function(&mut self, stmt_function_def: &Arc<StmtFunctionDef>) {
+        self.try_import_module();
 
-                let Some(py_module) = self.py_module.as_ref() else {
-                    return;
-                };
+        let Some(py_module) = self.py_module.as_ref() else {
+            return;
+        };
 
-                let mut generator_function_visitor = GeneratorFunctionVisitor::default();
+        let mut generator_function_visitor = GeneratorFunctionVisitor::default();
 
-                source_order::walk_body(&mut generator_function_visitor, &stmt_function_def.body);
+        source_order::walk_body(&mut generator_function_visitor, &stmt_function_def.body);
 
-                let is_generator_function = generator_function_visitor.is_generator;
+        let is_generator_function = generator_function_visitor.is_generator;
 
-                match Fixture::try_from_function(
+        match Fixture::try_from_function(
+            self.py,
+            stmt_function_def,
+            py_module,
+            self.module.module_path(),
+            is_generator_function,
+        ) {
+            Ok(fixture_def) => self.fixtures.push(fixture_def),
+            Err(e) => {
+                report_invalid_fixture(
+                    self.context,
                     self.py,
-                    &Arc::new(stmt_function_def.clone()),
-                    py_module,
-                    self.module.module_path(),
-                    is_generator_function,
-                ) {
-                    Ok(fixture_def) => self.fixtures.push(fixture_def),
-                    Err(e) => {
-                        report_invalid_fixture(
-                            self.context,
-                            self.py,
-                            self.module.source_file(),
-                            stmt_function_def,
-                            &e,
-                        );
-                    }
-                }
-            } else if stmt_function_def
-                .name
-                .to_string()
-                .starts_with(self.context.project().options().test_prefix())
-            {
-                self.try_import_module();
-
-                let Some(py_module) = self.py_module.as_ref() else {
-                    return;
-                };
-
-                if let Ok(py_function) = py_module.getattr(stmt_function_def.name.to_string()) {
-                    self.test_functions.push(TestFunction::new(
-                        self.py,
-                        self.module,
-                        stmt_function_def.clone(),
-                        py_function.unbind(),
-                    ));
-                }
+                    self.module.source_file(),
+                    stmt_function_def,
+                    &e,
+                );
             }
-        } else {
-            // Only walk statement if its not a function statement
-            // since we don't want to find nested functions
-            source_order::walk_stmt(self, stmt);
+        }
+    }
+
+    fn process_test_function(&mut self, stmt_function_def: &Arc<StmtFunctionDef>) {
+        self.try_import_module();
+
+        let Some(py_module) = self.py_module.as_ref() else {
+            return;
+        };
+
+        if let Ok(py_function) = py_module.getattr(stmt_function_def.name.to_string()) {
+            self.test_functions.push(TestFunction::new(
+                self.py,
+                self.module,
+                Arc::clone(stmt_function_def),
+                py_function.unbind(),
+            ));
         }
     }
 }
@@ -268,7 +258,8 @@ pub fn discover(
     context: &Context,
     py: Python,
     module: &DiscoveredModule,
-    parsed: &Parsed<ModModule>,
+    test_function_defs: &[Arc<StmtFunctionDef>],
+    fixture_function_defs: &[Arc<StmtFunctionDef>],
 ) -> DiscoveredFunctions {
     tracing::info!(
         "Discovering test functions and fixtures in module {}",
@@ -277,7 +268,15 @@ pub fn discover(
 
     let mut visitor = FunctionDefinitionVisitor::new(py, context, module);
 
-    visitor.visit_body(&parsed.syntax().body);
+    // Process collected test functions
+    for test_function_def in test_function_defs {
+        visitor.process_test_function(test_function_def);
+    }
+
+    // Process collected fixture functions
+    for fixture_function_def in fixture_function_defs {
+        visitor.process_fixture_function(fixture_function_def);
+    }
 
     if context.project().options().try_import_fixtures() {
         visitor.find_extra_fixtures();

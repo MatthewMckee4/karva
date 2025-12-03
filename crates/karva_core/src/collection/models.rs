@@ -1,8 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use camino::Utf8PathBuf;
-use ruff_python_ast::{ModModule, StmtFunctionDef};
-use ruff_python_parser::Parsed;
+use ruff_python_ast::StmtFunctionDef;
 
 use crate::{discovery::ModuleType, name::ModulePath};
 
@@ -15,9 +14,6 @@ pub struct CollectedModule {
     module_type: ModuleType,
     /// The source text of the file (cached to avoid re-reading)
     source_text: String,
-    /// Parsed AST (cached to avoid re-parsing) - stored for potential future optimization
-    #[allow(dead_code)]
-    parsed_ast: Arc<Parsed<ModModule>>,
     /// Test function definitions (functions starting with test prefix)
     test_function_defs: Vec<Arc<StmtFunctionDef>>,
     /// Fixture function definitions (functions with fixture decorators)
@@ -25,19 +21,17 @@ pub struct CollectedModule {
 }
 
 impl CollectedModule {
-    pub(crate) fn new(
+    pub(crate) const fn new(
         path: ModulePath,
         file_path: Utf8PathBuf,
         module_type: ModuleType,
         source_text: String,
-        parsed_ast: Parsed<ModModule>,
     ) -> Self {
         Self {
             path,
             file_path,
             module_type,
             source_text,
-            parsed_ast: Arc::new(parsed_ast),
             test_function_defs: Vec::new(),
             fixture_function_defs: Vec::new(),
         }
@@ -67,8 +61,12 @@ impl CollectedModule {
         &self.source_text
     }
 
-    pub(crate) fn parsed_ast(&self) -> &Parsed<ModModule> {
-        &self.parsed_ast
+    pub(crate) fn test_function_defs(&self) -> &[Arc<StmtFunctionDef>] {
+        &self.test_function_defs
+    }
+
+    pub(crate) fn fixture_function_defs(&self) -> &[Arc<StmtFunctionDef>] {
+        &self.fixture_function_defs
     }
 
     pub(crate) fn is_empty(&self) -> bool {

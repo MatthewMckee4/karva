@@ -107,7 +107,13 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
             let DiscoveredFunctions {
                 functions,
                 fixtures,
-            } = super::visitor::discover(self.context, py, &module, collected_module.parsed_ast());
+            } = super::visitor::discover(
+                self.context,
+                py,
+                &module,
+                collected_module.test_function_defs(),
+                collected_module.fixture_function_defs(),
+            );
 
             module.extend_test_functions(functions);
             module.extend_fixtures(fixtures);

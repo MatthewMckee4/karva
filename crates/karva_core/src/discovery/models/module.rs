@@ -9,7 +9,7 @@ pub struct DiscoveredModule {
     path: ModulePath,
     test_functions: Vec<TestFunction>,
     fixtures: Vec<Fixture>,
-    type_: ModuleType,
+    module_type: ModuleType,
     source_text: String,
 }
 
@@ -23,7 +23,7 @@ impl DiscoveredModule {
             path,
             test_functions: Vec::new(),
             fixtures: Vec::new(),
-            type_: module_type,
+            module_type,
             source_text,
         }
     }
@@ -41,7 +41,7 @@ impl DiscoveredModule {
     }
 
     pub(crate) const fn module_type(&self) -> ModuleType {
-        self.type_
+        self.module_type
     }
 
     pub(crate) fn test_functions(&self) -> Vec<&TestFunction> {
