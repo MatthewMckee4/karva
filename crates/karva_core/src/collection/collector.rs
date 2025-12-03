@@ -170,6 +170,7 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
             .require_git(false)
             .git_global(false)
             .parents(true)
+            .follow_links(true)
             .git_ignore(!self.context.project().options().no_ignore())
             .types({
                 let mut types = ignore::types::TypesBuilder::new();

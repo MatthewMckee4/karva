@@ -407,8 +407,9 @@ pub static PYDANTIC_SETTINGS_PROJECT: RealWorldProject<'static> = RealWorldProje
 
 pub static PYDANTIC_PROJECT: RealWorldProject<'static> = RealWorldProject {
     name: "pydantic",
-    repository: "https://github.com/pydantic/pydantic",
-    commit: "ed67e3ebf7c9a55de75de0e8995dbce36551eaca",
+    // Skip recursive test that fails crashes karva and pytest.
+    repository: "https://github.com/MatthewMckee4/pydantic",
+    commit: "17fc29cd471dd728866a729f08e0b6557cb9340b",
     paths: &["tests"],
     dependencies: &[
         "pytest",
@@ -421,6 +422,8 @@ pub static PYDANTIC_PROJECT: RealWorldProject<'static> = RealWorldProject {
         "dirty-equals",
         "jsonschema",
         "pytz",
+        "hypothesis",
+        "inline_snapshot",
     ],
     max_dep_date: "2025-12-01",
     python_version: PythonVersion::PY313,
