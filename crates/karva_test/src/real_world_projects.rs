@@ -30,6 +30,9 @@ pub struct RealWorldProject<'a> {
     pub paths: &'a [&'a str],
     /// Dependencies to install via uv
     pub dependencies: &'a [&'a str],
+    /// Limit candidate packages to those that were uploaded prior to a given point in time (ISO 8601 format).
+    /// Maps to uv's `exclude-newer`.
+    pub max_dep_date: &'a str,
     /// Python version to use
     pub python_version: PythonVersion,
     /// Whether to pip install the project root
@@ -262,9 +265,16 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
     }
 
     let output = Command::new("uv")
-        .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
+        .args([
+            "pip",
+            "install",
+            "--python",
+            venv_path.to_str().unwrap(),
+            "--exclude-newer",
+            checkout.project().max_dep_date,
+            "--no-build",
+        ])
         .args(checkout.project().dependencies)
-        .arg("--no-build")
         .output()
         .context("Failed to execute uv pip install command")?;
 
@@ -332,6 +342,7 @@ pub static AFFECT_PROJECT: RealWorldProject<'static> = RealWorldProject {
     commit: "9a5198e46a5895ae3b3d56be80beb3bbb92c629e",
     paths: &["tests"],
     dependencies: &["pydantic", "pydantic-settings", "pytest"],
+    max_dep_date: "2025-12-01",
     python_version: PythonVersion::PY313,
     install_root: true,
 };
@@ -352,6 +363,7 @@ pub static SQLMODEL_PROJECT: RealWorldProject<'static> = RealWorldProject {
         "black",
         "jinja2",
     ],
+    max_dep_date: "2025-12-01",
     python_version: PythonVersion::PY313,
     install_root: false,
 };
@@ -369,6 +381,7 @@ pub static TYPER_PROJECT: RealWorldProject<'static> = RealWorldProject {
         "shellingham",
         "rich",
     ],
+    max_dep_date: "2025-12-01",
     python_version: PythonVersion::PY313,
     install_root: false,
 };
@@ -387,6 +400,7 @@ pub static PYDANTIC_SETTINGS_PROJECT: RealWorldProject<'static> = RealWorldProje
         "pytest-mock",
         "pyyaml",
     ],
+    max_dep_date: "2025-12-01",
     python_version: PythonVersion::PY313,
     install_root: false,
 };
@@ -408,6 +422,7 @@ pub static PYDANTIC_PROJECT: RealWorldProject<'static> = RealWorldProject {
         "jsonschema",
         "pytz",
     ],
+    max_dep_date: "2025-12-01",
     python_version: PythonVersion::PY313,
     install_root: false,
 };
