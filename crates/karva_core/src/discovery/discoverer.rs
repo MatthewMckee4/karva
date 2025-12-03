@@ -1,5 +1,4 @@
-use camino::{Utf8Path, Utf8PathBuf};
-use ignore::WalkBuilder;
+use camino::Utf8PathBuf;
 use karva_project::TestPath;
 use pyo3::prelude::*;
 
@@ -7,9 +6,8 @@ use pyo3::prelude::*;
 use crate::utils::attach_with_project;
 use crate::{
     Context,
-    diagnostic::report_invalid_path,
+    collection::{CollectedPackage, ParallelCollector},
     discovery::{DiscoveredModule, DiscoveredPackage, ModuleType, visitor::DiscoveredFunctions},
-    name::ModulePath,
     utils::add_to_sys_path,
 };
 
@@ -28,235 +26,105 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
     }
 
     pub(crate) fn discover_with_py(self, py: Python<'_>) -> DiscoveredPackage {
-        let mut session_package = DiscoveredPackage::new(self.context.project().cwd().clone());
-
         let cwd = self.context.project().cwd();
 
         if add_to_sys_path(py, cwd, 0).is_err() {
-            return session_package;
+            return DiscoveredPackage::new(cwd.clone());
         }
 
-        tracing::info!("Discovering tests...");
+        tracing::info!("Collecting test files in parallel...");
 
-        for path in self.context.project().test_paths() {
+        // Collect function-specific paths for filtering and check for shadowing
+        let mut function_filters = std::collections::HashMap::new();
+        let mut all_file_paths = std::collections::HashSet::new();
+        let mut all_directory_paths = std::collections::HashSet::new();
+
+        for path in self.context.project().test_paths().into_iter().flatten() {
             match path {
-                Ok(path) => {
-                    match &path {
-                        TestPath::File(path) => {
-                            let Some(module) =
-                                self.discover_test_file(py, path, DiscoveryMode::All)
-                            else {
-                                continue;
-                            };
-
-                            session_package.add_module(module);
-                        }
-                        TestPath::Directory(path) => {
-                            let package = self.discover_directory(py, path, DiscoveryMode::All);
-
-                            session_package.add_package(package);
-                        }
-                        TestPath::Function {
-                            path,
-                            function_name,
-                        } => {
-                            let Some(mut module) =
-                                self.discover_test_file(py, path, DiscoveryMode::All)
-                            else {
-                                continue;
-                            };
-
-                            module.filter_test_functions(function_name);
-
-                            if !module.test_functions().is_empty() {
-                                session_package.add_module(module);
-                            }
-                        }
-                    }
-
-                    self.add_parent_configuration_packages(py, path.path(), &mut session_package);
+                TestPath::File(file_path) => {
+                    all_file_paths.insert(file_path);
                 }
-                Err(error) => {
-                    report_invalid_path(self.context, &error);
+                TestPath::Directory(dir_path) => {
+                    all_directory_paths.insert(dir_path);
+                }
+                TestPath::Function { path, function_name } => {
+                    function_filters.insert(path, function_name);
                 }
             }
         }
+
+        // Remove function filters if the file is explicitly listed or is in a listed directory
+        function_filters.retain(|file_path, _| {
+            // If the file itself is in the test paths, don't filter
+            if all_file_paths.contains(file_path) {
+                return false;
+            }
+            // If any parent directory is in the test paths, don't filter
+            for dir_path in &all_directory_paths {
+                if file_path.starts_with(dir_path) {
+                    return false;
+                }
+            }
+            true
+        });
+
+        // Phase 1: Collection (parallel) - collect all AST function definitions
+        let collector = ParallelCollector::new(self.context);
+        let collected_package = collector.collect_all();
+
+        tracing::info!("Discovering test functions and fixtures...");
+
+        // Phase 2: Discovery (single-threaded) - convert collected AST to test functions and fixtures
+        let mut session_package = self.convert_collected_to_discovered(py, &collected_package, &function_filters);
 
         session_package.shrink();
 
         session_package
     }
 
-    // Parse and run discovery on a single file
-    fn discover_test_file(
+    /// Convert a collected package to a discovered package by importing Python modules
+    /// and resolving test functions and fixtures.
+    fn convert_collected_to_discovered(
         &self,
-        py: Python,
-        path: &Utf8PathBuf,
-        discovery_mode: DiscoveryMode,
-    ) -> Option<DiscoveredModule> {
-        let module_path = ModulePath::new(path, self.context.project().cwd())?;
-
-        let mut module = DiscoveredModule::new(module_path, path.into());
-
-        let DiscoveredFunctions {
-            functions,
-            fixtures,
-        } = super::visitor::discover(self.context, py, &module);
-
-        if !discovery_mode.is_configuration_only() {
-            module.extend_test_functions(functions);
-        }
-
-        module.extend_fixtures(fixtures);
-
-        Some(module)
-    }
-
-    // This should look from the parent of path to the cwd for configuration files
-    fn add_parent_configuration_packages(
-        &self,
-        py: Python,
-        path: &Utf8Path,
-        session_package: &mut DiscoveredPackage,
-    ) {
-        let mut current_path = if path.is_dir() {
-            path
-        } else {
-            match path.parent() {
-                Some(parent) => parent,
-                None => return,
-            }
-        };
-
-        loop {
-            let conftest_path = current_path.join("conftest.py");
-            if conftest_path.exists() {
-                let mut package = DiscoveredPackage::new(current_path.to_path_buf());
-
-                let Some(module) =
-                    self.discover_test_file(py, &conftest_path, DiscoveryMode::ConfigurationOnly)
-                else {
-                    break;
-                };
-
-                package.add_configuration_module(module);
-
-                session_package.add_package(package);
-            }
-
-            if current_path == *self.context.project().cwd() {
-                break;
-            }
-
-            current_path = match current_path.parent() {
-                Some(parent) => parent,
-                None => break,
-            };
-        }
-    }
-
-    /// Discovers test files and packages within a directory.
-    ///
-    /// This method recursively walks through a directory structure to find Python
-    /// test files and subdirectories. It respects .gitignore files and filters
-    /// out common non-test directories like __pycache__.
-    fn discover_directory(
-        &self,
-        py: Python,
-        path: &Utf8PathBuf,
-        discovery_mode: DiscoveryMode,
+        py: Python<'_>,
+        collected_package: &CollectedPackage,
+        function_filters: &std::collections::HashMap<Utf8PathBuf, String>,
     ) -> DiscoveredPackage {
-        let walker = self.create_directory_walker(path);
+        let mut discovered_package = DiscoveredPackage::new(collected_package.path().clone());
 
-        let mut package = DiscoveredPackage::new(path.clone());
+        // Convert all modules
+        for collected_module in collected_package.modules().values() {
+            let mut module = DiscoveredModule::new(
+                collected_module.path().clone(),
+                collected_module.file_path().into(),
+            );
 
-        for entry in walker {
-            let Ok(entry) = entry else {
-                continue;
-            };
-            let current_path = Utf8PathBuf::from_path_buf(entry.path().to_path_buf())
-                .expect("Path is not valid UTF-8");
+            let DiscoveredFunctions { functions, fixtures } =
+                super::visitor::discover(self.context, py, &module);
 
-            // Skip the package directory itself
-            if package.path() == &current_path {
-                continue;
+            module.extend_test_functions(functions);
+            module.extend_fixtures(fixtures);
+
+            // Apply function filtering if this module has a function filter
+            if let Some(function_name) = function_filters.get(collected_module.file_path()) {
+                module.filter_test_functions(function_name);
             }
 
-            match entry.file_type() {
-                Some(file_type) if file_type.is_dir() => {
-                    if discovery_mode.is_configuration_only() {
-                        continue;
-                    }
-
-                    let subpackage = self.discover_directory(py, &current_path, discovery_mode);
-
-                    package.add_package(subpackage);
-                }
-                Some(file_type) if file_type.is_file() => match (&current_path).into() {
-                    ModuleType::Test => {
-                        if discovery_mode.is_configuration_only() {
-                            continue;
-                        }
-
-                        let Some(module) =
-                            self.discover_test_file(py, &current_path, DiscoveryMode::All)
-                        else {
-                            continue;
-                        };
-
-                        package.add_module(module);
-                    }
-                    ModuleType::Configuration => {
-                        let Some(module) = self.discover_test_file(
-                            py,
-                            &current_path,
-                            DiscoveryMode::ConfigurationOnly,
-                        ) else {
-                            continue;
-                        };
-
-                        package.add_configuration_module(module);
-                    }
-                },
-                _ => {}
+            if collected_module.module_type() == ModuleType::Configuration {
+                discovered_package.add_configuration_module(module);
+            } else {
+                discovered_package.add_module(module);
             }
         }
 
-        package
-    }
+        // Convert all subpackages recursively
+        for collected_subpackage in collected_package.packages().values() {
+            let discovered_subpackage =
+                self.convert_collected_to_discovered(py, collected_subpackage, function_filters);
+            discovered_package.add_package(discovered_subpackage);
+        }
 
-    /// Creates a configured directory walker for Python file discovery.
-    fn create_directory_walker(&self, path: &Utf8PathBuf) -> ignore::Walk {
-        WalkBuilder::new(path)
-            .max_depth(Some(1))
-            .standard_filters(true)
-            .require_git(false)
-            .git_global(false)
-            .parents(true)
-            .git_ignore(!self.context.project().options().no_ignore())
-            .types({
-                let mut types = ignore::types::TypesBuilder::new();
-                types.add("python", "*.py").unwrap();
-                types.select("python");
-                types.build().unwrap()
-            })
-            .filter_entry(|entry| {
-                let file_name = entry.file_name();
-                file_name != "__pycache__"
-            })
-            .build()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum DiscoveryMode {
-    All,
-    ConfigurationOnly,
-}
-
-impl DiscoveryMode {
-    pub const fn is_configuration_only(self) -> bool {
-        matches!(self, Self::ConfigurationOnly)
+        discovered_package
     }
 }
 

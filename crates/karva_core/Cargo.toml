@@ -27,6 +27,8 @@ tracing = { workspace = true }
 ignore = { workspace = true }
 regex = { workspace = true }
 indexmap = { workspace = true }
+rayon = "1.11.0"
+crossbeam-channel = "0.5.15"
 
 [dev-dependencies]
 regex = { workspace = true }
