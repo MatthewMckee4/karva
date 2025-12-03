@@ -18,7 +18,7 @@ def test_tmp_path(tmp_path):
     assert tmp_path.is_dir()
 ```
 
-## Mock Environment 
+## Mock Environment
 
 This fixture allows you to safely modify environment variables, and the system path during tests. All changes are automatically undone after the test completes.
 

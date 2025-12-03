@@ -1,4 +1,4 @@
-## Fixture Scopes 
+## Fixture Scopes
 
 Karva supports different types of fixtures based on their scope:
 
