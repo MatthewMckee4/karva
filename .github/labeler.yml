@@ -1,9 +1,0 @@
-ci:
-  - changed-files:
-      - any-glob-to-any-file: [".github/**/*"]
-
-documentation:
-  - all:
-      - changed-files:
-          - any-glob-to-any-file: ["docs/**/*", "zensical.toml"]
-          - all-globs-to-all-files: "!docs/cli.md"
