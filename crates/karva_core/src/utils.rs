@@ -160,8 +160,9 @@ pub(crate) fn full_test_name(
 const TRUNCATE_LENGTH: usize = 30;
 
 pub(crate) fn truncate_string(value: &str) -> String {
-    if value.len() > TRUNCATE_LENGTH {
-        format!("{}...", &value[..TRUNCATE_LENGTH - 3])
+    if value.chars().count() > TRUNCATE_LENGTH {
+        let truncated: String = value.chars().take(TRUNCATE_LENGTH - 3).collect();
+        format!("{truncated}...")
     } else {
         value.to_string()
     }
