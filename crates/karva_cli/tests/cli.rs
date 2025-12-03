@@ -209,7 +209,7 @@ fn test_two_test_fails() {
     6 |     assert False, 'Test failed'
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
-    info: Error message: Test failed
+    info: Test failed
 
     test result: FAILED. 0 passed; 2 failed; 0 skipped; finished in [TIME]
 
@@ -267,7 +267,7 @@ fn test_file_importing_another_file() {
       |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     5 |     return True
       |
-    info: Error message: Data validation failed
+    info: Data validation failed
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -933,7 +933,7 @@ fn test_failfast() {
     4 |
     5 | def test_second():
       |
-    info: Error message: First test fails
+    info: First test fails
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -1271,7 +1271,7 @@ def test_normal():
     6 |
     7 | def test_normal():
       |
-    info: Error message: This is a custom failure message
+    info: This is a custom failure message
 
     test result: FAILED. 1 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -1348,7 +1348,7 @@ def test_1():
     6 |
     7 | def test_1():
       |
-    info: Error message: bar
+    info: bar
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 

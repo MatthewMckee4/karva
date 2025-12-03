@@ -149,7 +149,7 @@ pub fn report_invalid_fixture(
     let error_string = error.value(py).to_string();
 
     if !error_string.is_empty() {
-        diagnostic.info(format!("Error message: {error_string}"));
+        diagnostic.info(error_string);
     }
 }
 
@@ -319,6 +319,6 @@ fn handle_failed_function_call(
     let error_string = error.value(py).to_string();
 
     if !error_string.is_empty() {
-        diagnostic.info(format!("Error message: {error_string}"));
+        diagnostic.info(error_string);
     }
 }
