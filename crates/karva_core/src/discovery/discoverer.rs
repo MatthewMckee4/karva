@@ -98,15 +98,16 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
 
         // Convert all modules
         for collected_module in collected_package.modules().values() {
-            let mut module = DiscoveredModule::new(
+            let mut module = DiscoveredModule::new_with_source(
                 collected_module.path().clone(),
-                collected_module.file_path().into(),
+                collected_module.module_type(),
+                collected_module.source_text().to_string(),
             );
 
             let DiscoveredFunctions {
                 functions,
                 fixtures,
-            } = super::visitor::discover(self.context, py, &module);
+            } = super::visitor::discover(self.context, py, &module, collected_module.parsed_ast());
 
             module.extend_test_functions(functions);
             module.extend_fixtures(fixtures);

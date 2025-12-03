@@ -14,9 +14,11 @@ pub struct DiscoveredModule {
 }
 
 impl DiscoveredModule {
-    pub(crate) fn new(path: ModulePath, module_type: ModuleType) -> Self {
-        let source_text = std::fs::read_to_string(path.path()).expect("Failed to read source file");
-
+    pub(crate) const fn new_with_source(
+        path: ModulePath,
+        module_type: ModuleType,
+        source_text: String,
+    ) -> Self {
         Self {
             path,
             test_functions: Vec::new(),

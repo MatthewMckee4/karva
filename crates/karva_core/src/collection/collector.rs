@@ -125,8 +125,6 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
 
         let module_type: ModuleType = path.into();
 
-        let mut collected_module = CollectedModule::new(module_path, path.clone(), module_type);
-
         // Parse the file to collect function definitions
         let parsed = parse_unchecked(
             &source_text,
@@ -134,19 +132,33 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
         )
         .try_into_module()?;
 
-        // Collect and categorize top-level function definitions
+        // Collect and categorize top-level function definitions from the parsed AST
+        let mut test_defs = Vec::new();
+        let mut fixture_defs = Vec::new();
+
         for stmt in &parsed.syntax().body {
             if let Stmt::FunctionDef(function_def) = stmt {
                 // Check if it's a fixture function
                 if is_fixture_function(function_def) {
-                    collected_module.add_fixture_function_def(Arc::new(function_def.clone()));
+                    fixture_defs.push(Arc::new(function_def.clone()));
                 }
                 // Check if it's a test function (starts with test prefix)
                 else if function_def.name.to_string().starts_with(test_prefix) {
-                    collected_module.add_test_function_def(Arc::new(function_def.clone()));
+                    test_defs.push(Arc::new(function_def.clone()));
                 }
                 // Otherwise, ignore the function (it's not relevant for testing)
             }
+        }
+
+        let mut collected_module =
+            CollectedModule::new(module_path, path.clone(), module_type, source_text, parsed);
+
+        // Add collected functions
+        for test_def in test_defs {
+            collected_module.add_test_function_def(test_def);
+        }
+        for fixture_def in fixture_defs {
+            collected_module.add_fixture_function_def(fixture_def);
         }
 
         Some(collected_module)
@@ -236,7 +248,11 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
 
     /// Creates a configured parallel directory walker for Python file discovery.
     fn create_parallel_walker(&self, path: &Utf8PathBuf) -> ignore::WalkParallel {
+        // Configure thread pool size for optimal parallelism
+        let num_threads = karva_project::max_parallelism().get();
+
         WalkBuilder::new(path)
+            .threads(num_threads)
             .standard_filters(true)
             .require_git(false)
             .git_global(false)

@@ -264,15 +264,15 @@ pub struct DiscoveredFunctions {
     pub(crate) fixtures: Vec<Fixture>,
 }
 
-pub fn discover(context: &Context, py: Python, module: &DiscoveredModule) -> DiscoveredFunctions {
+pub fn discover(
+    context: &Context,
+    py: Python,
+    module: &DiscoveredModule,
+    parsed: &Parsed<ModModule>,
+) -> DiscoveredFunctions {
     tracing::info!(
         "Discovering test functions and fixtures in module {}",
         module.name()
-    );
-
-    let parsed = parsed_module(
-        module.source_text(),
-        context.project().metadata().python_version(),
     );
 
     let mut visitor = FunctionDefinitionVisitor::new(py, context, module);
