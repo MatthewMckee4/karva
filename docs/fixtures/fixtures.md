@@ -1,8 +1,4 @@
-## Constraints
-
-We only discover package level fixtures from a `conftest.py` file in the root of that package.
-
-## Fixture Types
+## Fixture Scopes 
 
 Karva supports different types of fixtures based on their scope:
 
@@ -225,38 +221,3 @@ In future you will be able to access other parameters.
 
 It is important to note that this request object is not the same as the pytest `FixtureRequest` object. It is a custom object provided by Karva.
 And so it may not have all of the information that the pytest `FixtureRequest` object has.
-
-## Built-in fixtures
-
-Karva provides a few built-in fixtures that can be used in your tests.
-
-We will try to add more built-in fixtures from pytest in the future.
-
-### Temporary Directory
-
-This fixture provides the user with a `pathlib.Path` object that points to a temporary directory.
-
-You can use any of the following fixture names to use this fixture:
-
-- `tmp_path` (from pytest)
-- `tmpdir` (from pytest)
-- `temp_path` (from karva)
-- `temp_dir` (from karva)
-
-### Monkeypatch
-
-The `monkeypatch` fixture allows you to safely modify objects, dictionaries, environment variables, and the system path during tests. All changes are automatically undone after the test completes.
-
-This fixture is compatible with pytest's `monkeypatch` fixture.
-
-```py
-def test_setattr(monkeypatch):
-    import os
-    monkeypatch.setattr(os, 'getcwd', lambda: '/fake/path')
-    assert os.getcwd() == '/fake/path'
-
-def test_setenv(monkeypatch):
-    monkeypatch.setenv('MY_VAR', 'test_value')
-    import os
-    assert os.environ['MY_VAR'] == 'test_value'
-```
