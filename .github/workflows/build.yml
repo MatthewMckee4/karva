@@ -2,19 +2,16 @@ name: Build / Release PyPI
 
 on:
   push:
-    branches:
-      - main
-
     tags:
       - v[0-9]*.[0-9]*.[0-9]*
 
-  pull_request:
+  workflow_call:
 
 permissions: {}
 
 jobs:
   linux:
-    name: Build wheels (Linux, ${{ matrix.platform.target }})
+    name: build wheels (Linux, ${{ matrix.platform.target }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -49,7 +46,7 @@ jobs:
           path: dist
 
   musllinux:
-    name: Build wheels (Linux Musl, ${{ matrix.platform.target }})
+    name: build wheels (Linux Musl, ${{ matrix.platform.target }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -83,7 +80,7 @@ jobs:
           path: dist
 
   windows:
-    name: Build wheels (Windows, ${{ matrix.platform.target }})
+    name: build wheels (Windows, ${{ matrix.platform.target }})
     runs-on: windows-latest
     strategy:
       matrix:
@@ -115,7 +112,7 @@ jobs:
           path: dist
 
   macos:
-    name: Build wheels (macOS, ${{ matrix.platform.target }})
+    name: build wheels (macOS, ${{ matrix.platform.target }})
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -148,7 +145,7 @@ jobs:
           path: dist
 
   sdist:
-    name: Build source distribution
+    name: build source distribution
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -173,7 +170,7 @@ jobs:
           path: dist
 
   release:
-    name: Release
+    name: "release"
 
     runs-on: ubuntu-latest
 
