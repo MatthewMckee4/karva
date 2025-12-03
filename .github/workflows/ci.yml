@@ -138,7 +138,7 @@ jobs:
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
           run: cargo codspeed run --bench karva
-          mode: instrumentation
+          mode: simulation
 
   benchmarks-walltime:
     name: Run walltime benchmarks

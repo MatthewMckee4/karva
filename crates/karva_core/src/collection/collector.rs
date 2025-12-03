@@ -21,16 +21,6 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
         Self { context }
     }
 
-    /// Collect all function definitions from a single file.
-    fn collect_file(&self, path: &Utf8PathBuf) -> Option<CollectedModule> {
-        collect_file(path, self.context)
-    }
-
-    /// Collect from a single test file path.
-    pub(crate) fn collect_test_file(&self, path: &Utf8PathBuf) -> Option<CollectedModule> {
-        self.collect_file(path)
-    }
-
     /// Collect from a directory in parallel using `WalkParallel`.
     pub(crate) fn collect_directory(&self, path: &Utf8PathBuf) -> CollectedPackage {
         let mut package = CollectedPackage::new(path.clone());
@@ -119,7 +109,7 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
                 | karva_project::TestPath::Function {
                     path: file_path, ..
                 } => {
-                    if let Some(module) = self.collect_test_file(&file_path) {
+                    if let Some(module) = { collect_file(&file_path, self.context) } {
                         session_package.add_module(module);
                     }
                 }
@@ -153,7 +143,7 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
             if conftest_path.exists() {
                 let mut package = CollectedPackage::new(current_path.to_path_buf());
 
-                if let Some(module) = self.collect_test_file(&conftest_path) {
+                if let Some(module) = { collect_file(&conftest_path, self.context) } {
                     package.add_configuration_module(module);
                     session_package.add_package(package);
                 }
