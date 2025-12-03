@@ -16,7 +16,10 @@ nav = [
     { "Home" = "index.md"},
     { "Installation" = "installation.md"},
     { "Tutorial" = "tutorial.md"},
-    { "Fixtures" = "fixtures.md"},
+    { "Fixtures" = [
+        { "Fixtures" = "fixtures/fixtures.md"},
+        { "Built In" = "fixtures/builtin.md"},
+    ]},
     { "Tags" = [
         { "Parametrize" = "tags/parametrize.md"},
         { "Skip" = "tags/skip.md"},
