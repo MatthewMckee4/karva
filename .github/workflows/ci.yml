@@ -134,12 +134,11 @@ jobs:
         run: cargo codspeed build -p karva_benchmark
 
       - name: Run benchmarks
-        uses: CodSpeedHQ/action@76578c2a7ddd928664caa737f0e962e3085d4e7c # v3.8.1
-        env:
-          CODSPEED_PERF_ENABLED: false
+        uses: CodSpeedHQ/action@346a2d8a8d9d38909abd0bc3d23f773110f076ad # v4.4.1
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
           run: cargo codspeed run --bench karva
+          mode: simulation
 
   benchmarks-walltime:
     name: Run walltime benchmarks
@@ -183,7 +182,7 @@ jobs:
         run: cargo codspeed build -m walltime
 
       - name: Run benchmarks
-        uses: CodSpeedHQ/action@76578c2a7ddd928664caa737f0e962e3085d4e7c # v3.8.1
+        uses: CodSpeedHQ/action@346a2d8a8d9d38909abd0bc3d23f773110f076ad # v4.4.1
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
           run: cargo codspeed run --bench ${{ matrix.project }}
