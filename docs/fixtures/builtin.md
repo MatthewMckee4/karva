@@ -71,7 +71,7 @@ def get_cache_dir():
 
 def test_get_cache_dir(monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: Path("/fake/home"))
-    
+
     assert get_cache_dir() == Path("/fake/home/.cache")
 ```
 
