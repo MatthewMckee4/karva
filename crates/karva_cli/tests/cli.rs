@@ -477,7 +477,7 @@ fn test_text_file() {
 
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
-fn test_quiet_output() {
+fn test_quiet_output_passing() {
     let context = IntegrationTestContext::with_file(
         "test.py",
         "
@@ -491,6 +491,27 @@ fn test_quiet_output() {
     exit_code: 0
     ----- stdout -----
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_quiet_output_failing() {
+    let context = IntegrationTestContext::with_file(
+        "test.py",
+        "
+        def test_quiet_output():
+            assert False
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command().args(["-q"]), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
     ");
