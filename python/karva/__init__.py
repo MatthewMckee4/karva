@@ -3,6 +3,7 @@
 from karva._karva import (
     FailError,
     FixtureRequest,
+    MockEnv,
     SkipError,
     fail,
     fixture,
@@ -17,6 +18,7 @@ __version__ = "0.1.10"
 __all__: list[str] = [
     "FailError",
     "FixtureRequest",
+    "MockEnv",
     "SkipError",
     "fail",
     "fixture",

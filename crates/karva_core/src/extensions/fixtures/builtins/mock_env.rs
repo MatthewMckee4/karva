@@ -7,7 +7,7 @@ use pyo3::{
     types::{PyString, PyType},
 };
 
-pub fn is_mock_fixture_name(fixture_name: &str) -> bool {
+pub fn is_mock_env_fixture_name(fixture_name: &str) -> bool {
     match fixture_name {
         // pytest names
         "monkeypatch" => true,
@@ -15,8 +15,8 @@ pub fn is_mock_fixture_name(fixture_name: &str) -> bool {
     }
 }
 
-pub fn create_mock_fixture(py: Python<'_>) -> Option<(Py<PyAny>, Py<PyAny>)> {
-    let mock = Py::new(py, Mock::new()).ok()?;
+pub fn create_mock_env_fixture(py: Python<'_>) -> Option<(Py<PyAny>, Py<PyAny>)> {
+    let mock = Py::new(py, MockEnv::new()).ok()?;
     let undo_method = mock.getattr(py, "undo").ok()?;
 
     // Return both the mock instance and its undo method as the finalizer
@@ -41,7 +41,7 @@ type SetItem = Arc<Mutex<Vec<(Py<PyAny>, Py<PyAny>, Py<PyAny>)>>>;
 
 /// Helper to conveniently monkeypatch attributes/items/environment variables/syspath.
 #[pyclass]
-pub struct Mock {
+pub struct MockEnv {
     setattr: SetAttr,
     setitem: SetItem,
     cwd: Arc<Mutex<Option<String>>>,
@@ -49,7 +49,7 @@ pub struct Mock {
 }
 
 #[pymethods]
-impl Mock {
+impl MockEnv {
     #[new]
     fn new() -> Self {
         Self {
@@ -63,14 +63,16 @@ impl Mock {
     /// Return a string representation of the Mock object.
     #[allow(clippy::unused_self)]
     pub fn __repr__(&self) -> String {
-        "<Mock object>".to_string()
+        "<MockEnv object>".to_string()
     }
 
     /// Context manager that returns a new Mock object which undoes any patching
     /// done inside the with block upon exit.
     #[classmethod]
-    fn context(_cls: &Bound<'_, PyType>) -> MockContext {
-        MockContext { mock: Self::new() }
+    fn context(_cls: &Bound<'_, PyType>) -> MockEnvContext {
+        MockEnvContext {
+            mock_env: Self::new(),
+        }
     }
 
     /// Set attribute value on target, memorising the old value.
@@ -271,16 +273,13 @@ impl Mock {
             return Ok(());
         }
 
-        // Get old value
         let oldval = bound_dic.get_item(&name)?.into();
 
-        // Store for undo
         self.setitem
             .lock()
             .unwrap()
             .push((dic.clone(), name.clone(), oldval));
 
-        // Delete item
         bound_dic.del_item(&name)?;
 
         Ok(())
@@ -315,18 +314,15 @@ impl Mock {
         let name_key = name.into_pyobject(py)?.into_any().unbind();
         let value_obj = final_value.into_pyobject(py)?.into_any().unbind();
 
-        // Get old value if it exists
         let oldval = environ
             .get_item(&name_key)
             .map_or_else(|_| py.None(), Into::into);
 
-        // Store for undo
         self.setitem
             .lock()
             .unwrap()
             .push((environ.clone().unbind(), name_key.clone(), oldval));
 
-        // Set new value
         environ.set_item(&name_key, value_obj)?;
 
         Ok(())
@@ -348,16 +344,13 @@ impl Mock {
             return Ok(());
         }
 
-        // Get old value
         let oldval = environ.get_item(&name_key)?.into();
 
-        // Store for undo
         self.setitem
             .lock()
             .unwrap()
             .push((environ.clone().unbind(), name_key.clone(), oldval));
 
-        // Delete item
         environ.del_item(&name_key)?;
 
         Ok(())
@@ -375,10 +368,8 @@ impl Mock {
             *save = Some(saved);
         }
 
-        // Insert at beginning
         sys_path.call_method1("insert", (0, path))?;
 
-        // Invalidate import caches
         let importlib = py.import("importlib")?;
         importlib.call_method0("invalidate_caches")?;
 
@@ -480,19 +471,18 @@ impl Mock {
     }
 }
 
-/// Context manager wrapper for Mock
+/// Context manager wrapper for `MockEnv`
 #[pyclass]
-struct MockContext {
-    mock: Mock,
+struct MockEnvContext {
+    mock_env: MockEnv,
 }
 
 #[pymethods]
-impl MockContext {
+impl MockEnvContext {
     #[allow(clippy::needless_pass_by_value)]
-    fn __enter__(slf: PyRef<'_, Self>) -> PyResult<Py<Mock>> {
+    fn __enter__(slf: PyRef<'_, Self>) -> PyResult<Py<MockEnv>> {
         let py = slf.py();
-        // We need to return the Mock instance
-        Py::new(py, Mock::new())
+        Py::new(py, MockEnv::new())
     }
 
     fn __exit__(
@@ -502,7 +492,7 @@ impl MockContext {
         _exc_val: Py<PyAny>,
         _exc_tb: Py<PyAny>,
     ) -> PyResult<bool> {
-        self.mock.undo(py)?;
+        self.mock_env.undo(py)?;
         Ok(false)
     }
 }

@@ -1518,7 +1518,7 @@ def test_1():
     success: true
     exit_code: 0
     ----- stdout -----
-    test <test>.test::test_setenv(monkeypatch=<Mock object>) ... ok
+    test <test>.test::test_setenv(monkeypatch=<MockEnv object>) ... ok
     test <test>.test::test_1 ... ok
 
     test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]

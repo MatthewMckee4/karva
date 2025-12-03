@@ -1,24 +1,16 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use camino::Utf8PathBuf;
-use pyo3::prelude::*;
+use pyo3::{prelude::*, types::PyDict};
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::{
     QualifiedFunctionName,
     extensions::{
-        fixtures::FixtureScope,
+        fixtures::{FixtureRequest, FixtureScope, RequiresFixtures},
         tags::{Parametrization, Tags},
     },
 };
-
-#[derive(Debug, Clone)]
-pub enum NormalizedFixtureValue {
-    /// For now, just used for builtin fixtures where we compute the value early
-    Computed(Py<PyAny>),
-    /// Normal fixtures just have a function that needs to be called to compute the value
-    Function(Py<PyAny>),
-}
 
 /// Built-in fixture data
 #[derive(Debug, Clone)]
@@ -26,7 +18,7 @@ pub struct BuiltInFixture {
     /// Built-in fixture name
     pub(crate) name: String,
     /// Pre-computed value for the built-in fixture
-    pub(crate) value: NormalizedFixtureValue,
+    pub(crate) py_value: Py<PyAny>,
     /// Normalized dependencies (already expanded for their params)
     pub(crate) dependencies: Arc<Vec<NormalizedFixture>>,
     /// Fixture scope
@@ -49,7 +41,7 @@ pub struct UserDefinedFixture {
     /// If this fixture is a generator
     pub(crate) is_generator: bool,
     /// The computed value or imported python function to compute the value
-    pub(crate) value: NormalizedFixtureValue,
+    pub(crate) py_function: Py<PyAny>,
     /// The function definition for this fixture
     pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
 }
@@ -75,7 +67,7 @@ impl NormalizedFixture {
     pub(crate) fn built_in(name: String, value: Py<PyAny>) -> Self {
         Self::BuiltIn(BuiltInFixture {
             name,
-            value: NormalizedFixtureValue::Computed(value),
+            py_value: value,
             dependencies: Arc::new(vec![]),
             scope: FixtureScope::Function,
             finalizer: None,
@@ -90,7 +82,7 @@ impl NormalizedFixture {
     ) -> Self {
         Self::BuiltIn(BuiltInFixture {
             name,
-            value: NormalizedFixtureValue::Computed(value),
+            py_value: value,
             dependencies: Arc::new(vec![]),
             scope: FixtureScope::Function,
             finalizer: Some(finalizer),
@@ -129,30 +121,6 @@ impl NormalizedFixture {
         }
     }
 
-    /// Returns whether this fixture is a generator (always false for built-in)
-    pub(crate) const fn is_generator(&self) -> bool {
-        match self {
-            Self::BuiltIn(_) => false,
-            Self::UserDefined(fixture) => fixture.is_generator,
-        }
-    }
-
-    /// Returns the fixture value
-    pub(crate) const fn value(&self) -> &NormalizedFixtureValue {
-        match self {
-            Self::BuiltIn(fixture) => &fixture.value,
-            Self::UserDefined(fixture) => &fixture.value,
-        }
-    }
-
-    /// Returns the function definition (None for built-in fixtures)
-    pub(crate) const fn stmt_function_def(&self) -> Option<&Arc<StmtFunctionDef>> {
-        match self {
-            Self::BuiltIn(_) => None,
-            Self::UserDefined(fixture) => Some(&fixture.stmt_function_def),
-        }
-    }
-
     pub(crate) const fn as_user_defined(&self) -> Option<&UserDefinedFixture> {
         if let Self::UserDefined(v) = self {
             Some(v)
@@ -180,5 +148,47 @@ impl NormalizedFixture {
         }
 
         tags
+    }
+
+    /// Call this fixture with the already resolved arguments and return the result.
+    pub(crate) fn call(
+        &self,
+        py: Python,
+        fixture_arguments: &HashMap<String, Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        // For builtin fixtures, the value is stored directly in the function field
+        // and function_definition is None. Return the value directly without calling.
+        match self {
+            Self::BuiltIn(built_in_fixture) => Ok(built_in_fixture.py_value.clone()),
+            Self::UserDefined(user_defined_fixture) => {
+                let kwargs_dict = PyDict::new(py);
+
+                for (key, value) in fixture_arguments {
+                    let _ = kwargs_dict.set_item(key.clone(), value);
+                }
+
+                let required = user_defined_fixture.stmt_function_def.required_fixtures(py);
+
+                if required.contains(&"request".to_string()) {
+                    let param_value = user_defined_fixture
+                        .param
+                        .as_ref()
+                        .and_then(|param| param.values.first())
+                        .cloned();
+
+                    if let Ok(request_obj) = Py::new(py, FixtureRequest::new(param_value)) {
+                        kwargs_dict.set_item("request", request_obj).ok();
+                    }
+                }
+
+                if kwargs_dict.is_empty() {
+                    user_defined_fixture.py_function.call0(py)
+                } else {
+                    user_defined_fixture
+                        .py_function
+                        .call(py, (), Some(&kwargs_dict))
+                }
+            }
+        }
     }
 }

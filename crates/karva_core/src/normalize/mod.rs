@@ -39,8 +39,8 @@ use crate::{
     discovery::{DiscoveredModule, DiscoveredPackage, TestFunction},
     extensions::{
         fixtures::{
-            Fixture, FixtureScope, HasFixtures, NormalizedFixture, NormalizedFixtureValue,
-            RequiresFixtures, UserDefinedFixture, get_auto_use_fixtures, get_builtin_fixture,
+            Fixture, FixtureScope, HasFixtures, NormalizedFixture, RequiresFixtures,
+            UserDefinedFixture, get_auto_use_fixtures, get_builtin_fixture,
         },
         tags::{Parametrization, parametrize::ParametrizationArgs},
     },
@@ -128,7 +128,7 @@ impl Normalizer {
                     dependencies: dependent_fixtures.clone(),
                     scope: fixture.scope(),
                     is_generator: fixture.is_generator(),
-                    value: NormalizedFixtureValue::Function(fixture.function().clone()),
+                    py_function: fixture.function().clone(),
                     stmt_function_def: fixture.stmt_function_def().clone(),
                 });
 
