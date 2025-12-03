@@ -422,6 +422,8 @@ pub static PYDANTIC_PROJECT: RealWorldProject<'static> = RealWorldProject {
         "dirty-equals",
         "jsonschema",
         "pytz",
+        "hypothesis",
+        "inline_snapshot",
     ],
     max_dep_date: "2025-12-01",
     python_version: PythonVersion::PY313,
