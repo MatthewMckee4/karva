@@ -20,13 +20,13 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 toml = { workspace = true }
 ruff_options_metadata = { workspace = true }
-ruff_macros = { workspace = true }
 ruff_text_size = { workspace = true }
 filetime = { workspace = true }
 etcetera = { workspace = true }
-ty_combine = { workspace = true }
 ruff_notebook = { workspace = true }
 anyhow = { workspace = true }
+karva_macros = { workspace = true }
+karva_combine = { workspace = true }
 
 [dev-dependencies]
 karva_test = { workspace = true }

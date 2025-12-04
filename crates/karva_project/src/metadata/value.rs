@@ -8,10 +8,10 @@ use std::{
 };
 
 use camino::{Utf8Path, Utf8PathBuf};
+use karva_combine::Combine;
 use ruff_text_size::{TextRange, TextSize};
 use serde::{Deserialize, Deserializer};
 use toml::Spanned;
-use ty_combine::Combine;
 
 #[derive(Clone, Debug)]
 pub enum ValueSource {
