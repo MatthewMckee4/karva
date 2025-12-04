@@ -8,7 +8,6 @@ pub use metadata::{
         Options, OutputFormat, ProjectOptionsOverrides, SrcOptions, TerminalOptions, TestOptions,
     },
     settings::ProjectSettings,
-    value::RangedValue,
 };
 pub use path::{TestPath, TestPathError, absolute};
 pub use project::Project;
@@ -63,9 +62,7 @@ impl ProjectDatabase {
     pub fn test_db(cwd: Utf8PathBuf, paths: &[Utf8PathBuf]) -> Self {
         let options = Options {
             src: Some(SrcOptions {
-                include: Some(RangedValue::cli(
-                    paths.iter().map(ToString::to_string).collect(),
-                )),
+                include: Some(paths.iter().map(ToString::to_string).collect()),
                 ..Default::default()
             }),
             ..Default::default()

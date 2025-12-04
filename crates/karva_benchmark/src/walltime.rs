@@ -3,7 +3,7 @@ use std::sync::Once;
 use divan::Bencher;
 use karva_core::{TestRunner, testing::setup_module};
 use karva_project::{
-    Options, OsSystem, ProjectDatabase, ProjectMetadata, RangedValue, SrcOptions, VerbosityLevel,
+    Options, OsSystem, ProjectDatabase, ProjectMetadata, SrcOptions, VerbosityLevel,
 };
 use karva_test::{InstalledProject, RealWorldProject};
 
@@ -42,7 +42,7 @@ impl<'a> ProjectBenchmark<'a> {
 
         metadata.apply_options(Options {
             src: Some(SrcOptions {
-                include: Some(RangedValue::cli(test_paths)),
+                include: Some(test_paths),
                 respect_ignore_files: Some(false),
             }),
             ..Options::default()

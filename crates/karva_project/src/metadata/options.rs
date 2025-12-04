@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use camino::Utf8PathBuf;
 use karva_combine::Combine;
 use karva_macros::{Combine, OptionsMetadata};
@@ -9,10 +7,7 @@ use thiserror::Error;
 
 use crate::{
     ProjectSettings, System,
-    metadata::{
-        settings::{SrcSettings, TerminalSettings, TestSettings},
-        value::{RangedValue, ValueSource, ValueSourceGuard},
-    },
+    metadata::settings::{SrcSettings, TerminalSettings, TestSettings},
 };
 
 #[derive(
@@ -32,8 +27,7 @@ pub struct Options {
 }
 
 impl Options {
-    pub fn from_toml_str(content: &str, source: ValueSource) -> Result<Self, KarvaTomlError> {
-        let _guard = ValueSourceGuard::new(source, true);
+    pub fn from_toml_str(content: &str) -> Result<Self, KarvaTomlError> {
         let options = toml::from_str(content)?;
         Ok(options)
     }
@@ -59,18 +53,18 @@ impl Options {
     }
 
     pub(crate) fn from_karva_configuration_file(
-        path: Utf8PathBuf,
+        path: &Utf8PathBuf,
         system: &dyn System,
     ) -> Result<Self, KarvaTomlError> {
         let karva_toml_str =
             system
-                .read_to_string(&path)
+                .read_to_string(path)
                 .map_err(|source| KarvaTomlError::FileReadError {
                     source,
                     path: path.clone(),
                 })?;
 
-        Self::from_toml_str(&karva_toml_str, ValueSource::File(Arc::new(path)))
+        Self::from_toml_str(&karva_toml_str)
     }
 }
 
@@ -111,18 +105,14 @@ pub struct SrcOptions {
             ]
         "#
     )]
-    pub include: Option<RangedValue<Vec<String>>>,
+    pub include: Option<Vec<String>>,
 }
 
 impl SrcOptions {
     pub(crate) fn to_settings(&self) -> SrcSettings {
         SrcSettings {
             respect_ignore_files: self.respect_ignore_files.unwrap_or(true),
-            include_paths: self
-                .include
-                .clone()
-                .map(RangedValue::into_inner)
-                .unwrap_or_default(),
+            include_paths: self.include.clone().unwrap_or_default(),
         }
     }
 }

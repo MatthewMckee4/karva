@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_combine::Combine;
 use ruff_python_ast::PythonVersion;
@@ -10,12 +8,10 @@ use crate::{System, VerbosityLevel};
 pub mod options;
 pub mod pyproject;
 pub mod settings;
-pub mod value;
 
 use self::{
     options::{KarvaTomlError, Options, ProjectOptionsOverrides},
     pyproject::{PyProject, PyProjectError, ResolveRequiresPythonError},
-    value::ValueSource,
 };
 
 #[derive(Default, Debug, Clone)]
@@ -53,13 +49,12 @@ impl ProjectMetadata {
     ) -> Result<Self, ProjectMetadataError> {
         tracing::debug!("Using overridden configuration file at '{path}'");
 
-        let options =
-            Options::from_karva_configuration_file(path.clone(), system).map_err(|error| {
-                ProjectMetadataError::InvalidKarvaToml {
-                    source: Box::new(error),
-                    path,
-                }
-            })?;
+        let options = Options::from_karva_configuration_file(&path, system).map_err(|error| {
+            ProjectMetadataError::InvalidKarvaToml {
+                source: Box::new(error),
+                path,
+            }
+        })?;
 
         Ok(Self {
             root: system.current_directory().to_path_buf(),
@@ -128,10 +123,7 @@ impl ProjectMetadata {
             let pyproject_path = project_root.join("pyproject.toml");
 
             let pyproject = if let Ok(pyproject_str) = system.read_to_string(&pyproject_path) {
-                match PyProject::from_toml_str(
-                    &pyproject_str,
-                    ValueSource::File(Arc::new(pyproject_path.clone())),
-                ) {
+                match PyProject::from_toml_str(&pyproject_str) {
                     Ok(pyproject) => Some(pyproject),
                     Err(error) => {
                         return Err(ProjectMetadataError::InvalidPyProject {
@@ -147,10 +139,7 @@ impl ProjectMetadata {
             // A `karva.toml` takes precedence over a `pyproject.toml`.
             let karva_toml_path = project_root.join("karva.toml");
             if let Ok(karva_str) = system.read_to_string(&karva_toml_path) {
-                let options = match Options::from_toml_str(
-                    &karva_str,
-                    ValueSource::File(Arc::new(karva_toml_path.clone())),
-                ) {
+                let options = match Options::from_toml_str(&karva_str) {
                     Ok(options) => options,
                     Err(error) => {
                         return Err(ProjectMetadataError::InvalidKarvaToml {

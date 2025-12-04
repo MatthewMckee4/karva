@@ -3,10 +3,7 @@ use std::ops::Deref;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
-use crate::metadata::{
-    options::Options,
-    value::{RangedValue, ValueSource, ValueSourceGuard},
-};
+use crate::metadata::options::Options;
 
 /// A `pyproject.toml` as specified in PEP 517.
 #[derive(Deserialize, Serialize, Debug, Default, Clone)]
@@ -31,11 +28,7 @@ pub enum PyProjectError {
 }
 
 impl PyProject {
-    pub(crate) fn from_toml_str(
-        content: &str,
-        source: ValueSource,
-    ) -> Result<Self, PyProjectError> {
-        let _guard = ValueSourceGuard::new(source, true);
+    pub(crate) fn from_toml_str(content: &str) -> Result<Self, PyProjectError> {
         toml::from_str(content).map_err(PyProjectError::TomlSyntax)
     }
 }
@@ -50,7 +43,7 @@ pub struct Project {
     ///
     /// Note: Intentionally option to be more permissive during deserialization.
     /// `PackageMetadata::from_pyproject` reports missing names.
-    pub(crate) name: Option<RangedValue<PackageName>>,
+    pub(crate) name: Option<PackageName>,
 }
 
 #[derive(Debug, Error)]

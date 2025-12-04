@@ -6,7 +6,7 @@ use clap::{
         styling::{AnsiColor, Effects},
     },
 };
-use karva_project::{Options, RangedValue, SrcOptions, TerminalOptions, TestOptions};
+use karva_project::{Options, SrcOptions, TerminalOptions, TestOptions};
 use ruff_db::diagnostic::DiagnosticFormat;
 
 use crate::logging::Verbosity;
@@ -133,7 +133,7 @@ impl TestCommand {
         Options {
             src: Some(SrcOptions {
                 respect_ignore_files: self.no_ignore.map(|no_ignore| !no_ignore),
-                include: Some(RangedValue::cli(self.paths)),
+                include: Some(self.paths),
             }),
             terminal: Some(TerminalOptions {
                 output_format: self.output_format.map(Into::into),
