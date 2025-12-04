@@ -1,5 +1,5 @@
 use karva_core::{StandardTestRunner, TestRunResult, TestRunner};
-use karva_project::Project;
+use karva_project::ProjectDatabase;
 use karva_test::TestContext;
 
 pub trait TestRunnerExt {
@@ -8,8 +8,8 @@ pub trait TestRunnerExt {
 
 impl TestRunnerExt for TestContext {
     fn test(&self) -> TestRunResult {
-        let project = Project::new(self.cwd(), vec![self.cwd()]);
-        let test_runner = StandardTestRunner::new(&project);
+        let db = ProjectDatabase::test_db(self.cwd(), &[self.cwd()]);
+        let test_runner = StandardTestRunner::new(&db);
         test_runner.test()
     }
 }

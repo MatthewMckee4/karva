@@ -20,7 +20,7 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
 
     #[cfg(test)]
     pub(crate) fn discover(self) -> DiscoveredPackage {
-        attach_with_project(self.context.project(), |py| self.discover_with_py(py))
+        attach_with_project(self.context.db(), |py| self.discover_with_py(py))
     }
 
     pub(crate) fn discover_with_py(self, py: Python<'_>) -> DiscoveredPackage {
@@ -103,15 +103,20 @@ mod tests {
 
     use camino::Utf8PathBuf;
     use insta::{allow_duplicates, assert_snapshot};
-    use karva_project::{Project, ProjectOptions};
+    use karva_project::ProjectDatabase;
     use karva_test::TestContext;
 
     use super::*;
     use crate::DummyReporter;
 
-    fn session(project: &Project) -> DiscoveredPackage {
+    #[allow(clippy::needless_pass_by_value)]
+    fn context_to_discovered_package(
+        context: &TestContext,
+        paths: Vec<Utf8PathBuf>,
+    ) -> DiscoveredPackage {
+        let db = ProjectDatabase::test_db(context.cwd(), &paths);
         let binding = DummyReporter;
-        let context = Context::new(project, &binding);
+        let context = Context::new(&db, &binding);
         let discoverer = StandardDiscoverer::new(&context);
         discoverer.discover()
     }
@@ -120,8 +125,7 @@ mod tests {
     fn test_discover_files() {
         let env = TestContext::with_files([("<test>/test.py", "def test_function(): pass")]);
 
-        let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![env.cwd()]);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -141,8 +145,7 @@ mod tests {
             ("<test>/test_dir/test_file2.py", "def function2(): pass"),
         ]);
 
-        let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![env.cwd()]);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -161,8 +164,7 @@ mod tests {
             ("<test>/.gitignore", "test_file2.py"),
         ]);
 
-        let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![env.cwd()]);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -183,8 +185,7 @@ mod tests {
             ),
         ]);
 
-        let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![env.cwd()]);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -212,8 +213,7 @@ def not_a_test(): pass
 ",
         )]);
 
-        let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![env.cwd()]);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -227,8 +227,8 @@ def not_a_test(): pass
     fn test_discover_files_with_non_existent_function() {
         let env = TestContext::with_files([("<test>/test_file.py", "def test_function1(): pass")]);
 
-        let project = Project::new(env.cwd(), vec![Utf8PathBuf::from("non_existent_path")]);
-        let session = session(&project);
+        let session =
+            context_to_discovered_package(&env, vec![Utf8PathBuf::from("non_existent_path")]);
 
         assert_snapshot!(session.display(), @"");
         assert_eq!(session.total_test_functions(), 0);
@@ -238,35 +238,10 @@ def not_a_test(): pass
     fn test_discover_files_with_invalid_python() {
         let env = TestContext::with_files([("<test>/test_file.py", "test_function1 = None")]);
 
-        let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![env.cwd()]);
 
         assert_snapshot!(session.display(), @"");
         assert_eq!(session.total_test_functions(), 0);
-    }
-
-    #[test]
-    fn test_discover_files_with_custom_test_prefix() {
-        let env = TestContext::with_files([(
-            "<test>/test_file.py",
-            r"
-def check_function1(): pass
-def check_function2(): pass
-def test_function(): pass
-",
-        )]);
-
-        let project = Project::new(env.cwd(), vec![env.cwd()])
-            .with_options(ProjectOptions::default().with_test_prefix("check"));
-
-        let session = session(&project);
-
-        assert_snapshot!(session.display(), @r"
-        └── <temp_dir>/<test>/
-            └── <test>.test_file
-                └── test_cases [check_function1 check_function2]
-        ");
-        assert_eq!(session.total_test_functions(), 2);
     }
 
     #[test]
@@ -282,8 +257,7 @@ def test_function(): pass
         let path_2 = mapped_dir.join("test2.py");
         let path_3 = mapped_dir.join("tests/test3.py");
 
-        let project = Project::new(env.cwd(), vec![path_1, path_2, path_3]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![path_1, path_2, path_3]);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -308,8 +282,7 @@ def test_function(): pass
         let mapped_dir = env.mapped_path("<test>").unwrap();
         let path_1 = mapped_dir.join("test_file.py");
 
-        let project = Project::new(env.cwd(), vec![mapped_dir.clone(), path_1]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![mapped_dir.clone(), path_1]);
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             └── <test>.test_file
@@ -329,8 +302,7 @@ def test_function(): pass
         let path_1 = mapped_dir.join("test_file.py");
         let path_2 = mapped_dir.join("test_file2.py");
 
-        let project = Project::new(env.cwd(), vec![path_1, path_2]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![path_1, path_2]);
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
             ├── <test>.test_file
@@ -351,8 +323,7 @@ def test_function(): pass
         let mapped_dir = env.mapped_path("<test>").unwrap();
         let conftest_path = mapped_dir.join("conftest.py");
 
-        let project = Project::new(env.cwd(), vec![conftest_path]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![conftest_path]);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -372,8 +343,7 @@ def test_function(): pass
         let mapped_dir = env.mapped_path("<test>").unwrap();
         let conftest_path = mapped_dir.join("conftest.py");
 
-        let project = Project::new(env.cwd(), vec![conftest_path]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![conftest_path]);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -390,8 +360,7 @@ def test_function(): pass
         let mapped_dir = env.mapped_path("<test>").unwrap();
         let path = mapped_dir.join("test_file.py");
 
-        let project = Project::new(env.cwd(), vec![path]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![path]);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -410,8 +379,7 @@ def test_function():
     def test_function2(): pass",
         )]);
 
-        let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![env.cwd()]);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -437,8 +405,7 @@ def test_1(x): pass",
         let test_path = mapped_dir.join("test_1.py");
 
         for path in [env.cwd(), test_path] {
-            let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let session = session(&project);
+            let session = context_to_discovered_package(&env, vec![path.clone()]);
 
             allow_duplicates! {
                 assert_snapshot!(session.display(), @r"
@@ -467,8 +434,7 @@ def test_1(x): pass",
         let test_path = test_dir.join("test_1.py");
 
         for path in [env.cwd(), test_dir, test_path] {
-            let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let session = session(&project);
+            let session = context_to_discovered_package(&env, vec![path.clone()]);
             allow_duplicates! {
                 assert_snapshot!(session.display(), @r"
                 └── <temp_dir>/<test>/
@@ -501,8 +467,7 @@ def x():
         let test_path = test_dir.join("test_1.py");
 
         for path in [env.cwd(), test_dir, test_path] {
-            let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let session = session(&project);
+            let session = context_to_discovered_package(&env, vec![path.clone()]);
 
             allow_duplicates! {
                 assert_snapshot!(session.display(), @r"
@@ -576,8 +541,7 @@ def w(x, y, z):
             even_more_nested_dir,
             test_path,
         ] {
-            let project = Project::new(env.cwd().clone(), vec![path.clone()]);
-            let session = session(&project);
+            let session = context_to_discovered_package(&env, vec![path.clone()]);
             allow_duplicates! {
                 assert_snapshot!(session.display(), @r"
                 └── <temp_dir>/<test>/
@@ -612,9 +576,8 @@ def w(x, y, z):
         let test_dir_2 = mapped_dir.join("tests2");
         let test_file_3 = mapped_dir.join("test_3.py");
 
-        let project = Project::new(env.cwd(), vec![test_dir_1, test_dir_2, test_file_3]);
-
-        let session = session(&project);
+        let session =
+            context_to_discovered_package(&env, vec![test_dir_1, test_dir_2, test_file_3]);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -651,8 +614,7 @@ def root_fixture():
         let test_dir = mapped_dir.join("tests");
         let middle_dir = test_dir.join("middle_dir");
 
-        let project = Project::new(env.cwd(), vec![middle_dir]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![middle_dir]);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -686,8 +648,7 @@ def x():
         let mapped_dir = env.mapped_path("<test>").unwrap();
         let test_dir = mapped_dir.join("tests");
 
-        let project = Project::new(env.cwd(), vec![test_dir]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![test_dir]);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/
@@ -718,8 +679,7 @@ def x():
         let mapped_dir = env.mapped_path("<test>").unwrap();
         let conftest_path = mapped_dir.join("conftest.py");
 
-        let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![env.cwd()]);
 
         let mapped_package = session.get_package(mapped_dir).unwrap();
 
@@ -753,9 +713,7 @@ def x():
         let test_dir = mapped_dir.join("tests");
         let path = test_dir.join("test_1.py");
 
-        let project = Project::new(env.cwd(), vec![path.clone(), path]);
-
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![path.clone(), path]);
 
         assert_eq!(session.total_test_functions(), 1);
     }
@@ -771,9 +729,7 @@ def x():
                 ",
         )]);
 
-        let project = Project::new(env.cwd(), vec![env.cwd()]);
-
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![env.cwd()]);
 
         assert_snapshot!(session.display(), @r"
         └── <temp_dir>/<test>/

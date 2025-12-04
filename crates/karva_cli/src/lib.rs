@@ -11,7 +11,10 @@ use colored::Colorize;
 use karva_core::{
     DummyReporter, Reporter, TestCaseReporter, TestRunner, utils::current_python_version,
 };
-use karva_project::{Project, ProjectMetadata, absolute};
+use karva_project::{
+    Db, OsSystem, ProjectDatabase, ProjectMetadata, ProjectOptionsOverrides, System,
+    VerbosityLevel, absolute,
+};
 
 use crate::{
     args::{Command, TerminalColor, TestCommand},
@@ -20,6 +23,7 @@ use crate::{
 
 mod args;
 mod logging;
+mod printer;
 mod version;
 
 pub use args::Args;
@@ -90,32 +94,47 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
                 })?
     };
 
-    let mut paths: Vec<_> = args.paths.iter().map(|path| absolute(path, &cwd)).collect();
+    let python_version = current_python_version();
 
-    if args.paths.is_empty() {
-        tracing::debug!(
-            "Could not resolve provided paths, trying to resolve current working directory"
-        );
-        paths.push(cwd.clone());
-    }
+    let system = OsSystem::new(&cwd);
 
-    let options = args.into_options();
+    let config_file = args.config_file.as_ref().map(|path| absolute(path, &cwd));
 
-    let project = Project::new(cwd, paths)
-        .with_metadata(ProjectMetadata::new(current_python_version()))
-        .with_options(options);
+    let mut project_metadata = match &config_file {
+        Some(config_file) => ProjectMetadata::from_config_file(
+            config_file.clone(),
+            &system,
+            python_version,
+            verbosity,
+        )?,
+        None => ProjectMetadata::discover(
+            system.current_directory(),
+            &system,
+            python_version,
+            verbosity,
+        )?,
+    };
 
+    let project_options_overrides = ProjectOptionsOverrides::new(config_file, args.into_options());
+    project_metadata.apply_overrides(&project_options_overrides);
+
+    let mut db = ProjectDatabase::new(project_metadata, system)?;
+
+    db.project_mut()
+        .set_verbose(verbosity >= VerbosityLevel::Verbose);
+
+    // Listen to Ctrl+C and abort
     ctrlc::set_handler(move || {
         std::process::exit(0);
     })?;
 
-    let reporter: Box<dyn Reporter> = if verbosity.is_quiet() || project.options().no_progress() {
+    let reporter: Box<dyn Reporter> = if verbosity.is_quiet() {
         Box::new(DummyReporter)
     } else {
         Box::new(TestCaseReporter::default())
     };
 
-    let result = project.test_with_reporter(&*reporter);
+    let result = db.test_with_reporter(&*reporter);
 
     let mut stdout = io::stdout().lock();
 

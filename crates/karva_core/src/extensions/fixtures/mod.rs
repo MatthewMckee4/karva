@@ -64,10 +64,6 @@ impl Fixture {
         }
     }
 
-    pub(crate) fn original_function_name(&self) -> &str {
-        self.stmt_function_def.name.as_str()
-    }
-
     pub(crate) const fn name(&self) -> &QualifiedFunctionName {
         &self.name
     }

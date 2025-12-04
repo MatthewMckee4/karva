@@ -1,38 +1,42 @@
 use std::sync::{Arc, Mutex};
 
-use karva_project::Project;
+use karva_project::{Db, Project};
 
 use crate::{
     IndividualTestResultKind, Reporter, TestRunResult,
     diagnostic::{DiagnosticGuardBuilder, DiagnosticType, TestRunResultDisplayOptions},
 };
 
-pub struct Context<'proj, 'rep> {
-    project: &'proj Project,
+pub struct Context<'db, 'rep> {
+    db: &'db dyn Db,
     result: Arc<Mutex<TestRunResult>>,
     reporter: &'rep dyn Reporter,
 }
 
-impl<'proj, 'rep> Context<'proj, 'rep> {
-    pub fn new(project: &'proj Project, reporter: &'rep dyn Reporter) -> Self {
+impl<'db, 'rep> Context<'db, 'rep> {
+    pub(crate) fn new(db: &'db dyn Db, reporter: &'rep dyn Reporter) -> Self {
         Self {
-            project,
+            db,
             result: Arc::new(Mutex::new(TestRunResult::new(
-                project.cwd().as_std_path().to_path_buf(),
+                db.project().cwd().as_std_path().to_path_buf(),
                 TestRunResultDisplayOptions {
-                    display_diagnostics: !project.options().verbosity().is_quiet(),
-                    diagnostic_format: project.options().diagnostic_format(),
+                    display_diagnostics: !db.project().metadata().verbosity().is_quiet(),
+                    diagnostic_format: db.project().settings().terminal().output_format.into(),
                 },
             ))),
             reporter,
         }
     }
 
-    pub const fn project(&self) -> &'proj Project {
-        self.project
+    pub(crate) fn db<'a>(&'a self) -> &'db (dyn Db + 'a) {
+        self.db
     }
 
-    pub fn result(&self) -> std::sync::MutexGuard<'_, TestRunResult> {
+    pub(crate) fn project(&self) -> &Project {
+        self.db.project()
+    }
+
+    pub(crate) fn result(&self) -> std::sync::MutexGuard<'_, TestRunResult> {
         self.result.lock().unwrap()
     }
 
@@ -59,14 +63,14 @@ impl<'proj, 'rep> Context<'proj, 'rep> {
     pub(crate) const fn report_diagnostic<'ctx>(
         &'ctx self,
         rule: &'static DiagnosticType,
-    ) -> DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
+    ) -> DiagnosticGuardBuilder<'ctx, 'db, 'rep> {
         DiagnosticGuardBuilder::new(self, rule, false)
     }
 
     pub(crate) const fn report_discovery_diagnostic<'ctx>(
         &'ctx self,
         rule: &'static DiagnosticType,
-    ) -> DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
+    ) -> DiagnosticGuardBuilder<'ctx, 'db, 'rep> {
         DiagnosticGuardBuilder::new(self, rule, true)
     }
 }

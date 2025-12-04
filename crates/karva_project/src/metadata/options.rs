@@ -1,0 +1,375 @@
+use std::fmt::{self, Display};
+
+use camino::Utf8PathBuf;
+use ruff_db::diagnostic::{
+    Annotation, Diagnostic, DiagnosticFormat, DiagnosticId, DisplayDiagnosticConfig, Severity,
+    SubDiagnostic,
+};
+use ruff_macros::{Combine, OptionsMetadata};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use ty_combine::Combine;
+
+use crate::{
+    Db, ProjectSettings,
+    metadata::{
+        settings::{SrcSettings, TerminalSettings, TestSettings},
+        value::{RangedValue, ValueSource, ValueSourceGuard},
+    },
+};
+
+#[derive(
+    Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata, Combine,
+)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct Options {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option_group]
+    pub src: Option<SrcOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option_group]
+    pub terminal: Option<TerminalOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option_group]
+    pub test: Option<TestOptions>,
+}
+
+impl Options {
+    pub fn from_toml_str(content: &str, source: ValueSource) -> Result<Self, KarvaTomlError> {
+        let _guard = ValueSourceGuard::new(source, true);
+        let options = toml::from_str(content)?;
+        Ok(options)
+    }
+
+    pub(crate) fn to_settings(&self) -> ProjectSettings {
+        let terminal_options = self.terminal.clone().unwrap_or_default();
+
+        let terminal = terminal_options.to_settings();
+
+        let src_options = self.src.clone().unwrap_or_default();
+
+        let src = src_options.to_settings();
+
+        let test_options = self.test.clone().unwrap_or_default();
+
+        let test = test_options.to_settings();
+
+        ProjectSettings {
+            terminal,
+            src,
+            test,
+        }
+    }
+}
+
+#[derive(
+    Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize, OptionsMetadata, Combine,
+)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct SrcOptions {
+    /// Whether to automatically exclude files that are ignored by `.ignore`,
+    /// `.gitignore`, `.git/info/exclude`, and global `gitignore` files.
+    /// Enabled by default.
+    #[option(
+        default = r#"true"#,
+        value_type = r#"bool"#,
+        example = r#"
+            respect-ignore-files = false
+        "#
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub respect_ignore_files: Option<RangedValue<bool>>,
+
+    /// A list of files and directories to check. The `include` option
+    /// follows a similar syntax to `.gitignore` but reversed:
+    /// Including a file or directory will make it so that it (and its contents)
+    /// are type checked.
+    ///
+    /// - `./src/` matches only a directory
+    /// - `./src` matches both files and directories
+    /// - `src` matches a file or directory named `src`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"null"#,
+        value_type = r#"list[str]"#,
+        example = r#"
+            include = [
+                "src",
+                "tests",
+            ]
+        "#
+    )]
+    pub include: Option<RangedValue<Vec<String>>>,
+}
+
+impl SrcOptions {
+    pub(crate) fn to_settings(&self) -> SrcSettings {
+        SrcSettings {
+            respect_ignore_files: self
+                .respect_ignore_files
+                .clone()
+                .is_none_or(RangedValue::into_inner),
+            include_paths: self
+                .include
+                .clone()
+                .map(RangedValue::into_inner)
+                .unwrap_or_default(),
+        }
+    }
+}
+
+#[derive(
+    Debug, Default, Clone, Eq, PartialEq, Combine, Serialize, Deserialize, OptionsMetadata,
+)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct TerminalOptions {
+    /// The format to use for printing diagnostic messages.
+    ///
+    /// Defaults to `full`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"full"#,
+        value_type = "full | concise",
+        example = r#"
+            output-format = "concise"
+        "#
+    )]
+    pub output_format: Option<RangedValue<OutputFormat>>,
+
+    /// Whether to show the python output.
+    ///
+    /// This is the output the `print` goes to etc.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"true"#,
+        value_type = "true | false",
+        example = r#"
+            show-python-output = false
+        "#
+    )]
+    pub show_python_output: Option<RangedValue<bool>>,
+}
+
+impl TerminalOptions {
+    pub fn to_settings(&self) -> TerminalSettings {
+        TerminalSettings {
+            output_format: self.output_format.as_deref().copied().unwrap_or_default(),
+            show_python_output: self
+                .show_python_output
+                .clone()
+                .is_some_and(RangedValue::into_inner),
+        }
+    }
+}
+
+#[derive(
+    Debug, Default, Clone, Eq, PartialEq, Combine, Serialize, Deserialize, OptionsMetadata,
+)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct TestOptions {
+    /// The prefix to use for test functions.
+    ///
+    /// Defaults to `test`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"test"#,
+        value_type = "string",
+        example = r#"
+            test-function-prefix = "test"
+        "#
+    )]
+    pub test_function_prefix: Option<RangedValue<String>>,
+
+    /// Whether to fail fast when a test fails.
+    ///
+    /// Defaults to `false`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"false"#,
+        value_type = "true | false",
+        example = r#"
+            fail-fast = true
+        "#
+    )]
+    pub fail_fast: Option<RangedValue<bool>>,
+}
+
+impl TestOptions {
+    pub fn to_settings(&self) -> TestSettings {
+        TestSettings {
+            test_function_prefix: self
+                .test_function_prefix
+                .as_deref()
+                .cloned()
+                .unwrap_or_else(|| "test".to_string()),
+            fail_fast: self.fail_fast.clone().is_some_and(RangedValue::into_inner),
+        }
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum KarvaTomlError {
+    #[error(transparent)]
+    TomlSyntax(#[from] toml::de::Error),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct OptionDiagnostic {
+    id: DiagnosticId,
+    message: String,
+    severity: Severity,
+    annotation: Option<Annotation>,
+    sub: Vec<SubDiagnostic>,
+}
+
+impl OptionDiagnostic {
+    pub const fn new(id: DiagnosticId, message: String, severity: Severity) -> Self {
+        Self {
+            id,
+            message,
+            severity,
+            annotation: None,
+            sub: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    fn with_message(self, message: impl Display) -> Self {
+        Self {
+            message: message.to_string(),
+            ..self
+        }
+    }
+
+    #[must_use]
+    fn with_annotation(self, annotation: Option<Annotation>) -> Self {
+        Self { annotation, ..self }
+    }
+
+    #[must_use]
+    fn sub(mut self, sub: SubDiagnostic) -> Self {
+        self.sub.push(sub);
+        self
+    }
+
+    pub(crate) fn to_diagnostic(&self) -> Diagnostic {
+        let mut diag = Diagnostic::new(self.id, self.severity, &self.message);
+        if let Some(annotation) = self.annotation.clone() {
+            diag.annotate(annotation);
+        }
+
+        for sub in &self.sub {
+            diag.sub(sub.clone());
+        }
+
+        diag
+    }
+}
+
+/// Error returned when the settings can't be resolved because of a hard error.
+#[derive(Debug)]
+pub struct ToSettingsError {
+    diagnostic: Box<OptionDiagnostic>,
+    output_format: OutputFormat,
+    color: bool,
+}
+
+impl ToSettingsError {
+    pub fn pretty<'a>(&'a self, db: &'a dyn Db) -> impl fmt::Display + use<'a> {
+        struct DisplayPretty<'a> {
+            error: &'a ToSettingsError,
+            db: &'a dyn Db,
+        }
+
+        impl fmt::Display for DisplayPretty<'_> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                let display_config = DisplayDiagnosticConfig::default()
+                    .format(self.error.output_format.into())
+                    .color(self.error.color);
+
+                write!(
+                    f,
+                    "{}",
+                    self.error
+                        .diagnostic
+                        .to_diagnostic()
+                        .display(self.db, &display_config)
+                )
+            }
+        }
+
+        DisplayPretty { error: self, db }
+    }
+
+    pub fn into_diagnostic(self) -> OptionDiagnostic {
+        *self.diagnostic
+    }
+}
+
+impl Display for ToSettingsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.diagnostic.message)
+    }
+}
+
+impl std::error::Error for ToSettingsError {}
+
+/// The diagnostic output format.
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub enum OutputFormat {
+    #[default]
+    Full,
+
+    Concise,
+}
+
+impl OutputFormat {
+    /// Returns `true` if this format is intended for users to read directly, in contrast to
+    /// machine-readable or structured formats.
+    ///
+    /// This can be used to check whether information beyond the diagnostics, such as a header or
+    /// `Found N diagnostics` footer, should be included.
+    pub const fn is_human_readable(&self) -> bool {
+        matches!(self, Self::Full | Self::Concise)
+    }
+}
+
+impl From<OutputFormat> for DiagnosticFormat {
+    fn from(value: OutputFormat) -> Self {
+        match value {
+            OutputFormat::Full => Self::Full,
+            OutputFormat::Concise => Self::Concise,
+        }
+    }
+}
+
+impl Combine for OutputFormat {
+    #[inline(always)]
+    fn combine_with(&mut self, _other: Self) {}
+
+    #[inline]
+    fn combine(self, _other: Self) -> Self {
+        self
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
+pub struct ProjectOptionsOverrides {
+    pub config_file_override: Option<Utf8PathBuf>,
+    pub options: Options,
+}
+
+impl ProjectOptionsOverrides {
+    pub fn new(config_file_override: Option<Utf8PathBuf>, options: Options) -> Self {
+        Self {
+            config_file_override,
+            options,
+            ..Self::default()
+        }
+    }
+
+    pub fn apply_to(&self, options: Options) -> Options {
+        self.options.clone().combine(options)
+    }
+}

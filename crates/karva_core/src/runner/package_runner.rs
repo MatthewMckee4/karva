@@ -68,7 +68,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         for test_function in module.test_functions {
             passed &= self.execute_test(py, test_function);
 
-            if self.context.project().options().fail_fast() && !passed {
+            if self.context.project().settings().test().fail_fast && !passed {
                 break;
             }
         }
@@ -97,16 +97,16 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         for module in modules.into_values() {
             passed &= self.execute_module(py, module);
 
-            if self.context.project().options().fail_fast() && !passed {
+            if self.context.project().settings().test().fail_fast && !passed {
                 break;
             }
         }
 
-        if !self.context.project().options().fail_fast() || passed {
+        if !self.context.project().settings().test().fail_fast || passed {
             for sub_package in packages.into_values() {
                 passed &= self.execute_package(py, sub_package);
 
-                if self.context.project().options().fail_fast() && !passed {
+                if self.context.project().settings().test().fail_fast && !passed {
                     break;
                 }
             }

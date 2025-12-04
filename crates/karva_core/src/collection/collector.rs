@@ -83,7 +83,11 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
     pub(crate) fn collect_all(&self) -> CollectedPackage {
         let mut session_package = CollectedPackage::new(self.context.project().cwd().clone());
 
-        for path_result in self.context.project().test_paths() {
+        let test_paths = self.context.project().test_paths();
+
+        tracing::info!("Collecting test paths: {:?}", test_paths);
+
+        for path_result in test_paths {
             let path = match path_result {
                 Ok(path) => path,
                 Err(error) => {
@@ -171,7 +175,7 @@ impl<'ctx, 'proj, 'rep> ParallelCollector<'ctx, 'proj, 'rep> {
             .git_global(false)
             .parents(true)
             .follow_links(true)
-            .git_ignore(!self.context.project().options().no_ignore())
+            .git_ignore(self.context.project().settings().src().respect_ignore_files)
             .types({
                 let mut types = ignore::types::TypesBuilder::new();
                 types.add("python", "*.py").unwrap();
@@ -214,7 +218,7 @@ fn collect_file(
             } else if function_def
                 .name
                 .to_string()
-                .starts_with(context.project().options().test_prefix())
+                .starts_with(&context.project().settings().test().test_function_prefix)
             {
                 collected_module.add_test_function_def(Arc::new(function_def));
             }

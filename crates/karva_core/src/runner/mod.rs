@@ -1,4 +1,4 @@
-use karva_project::Project;
+use karva_project::{Db, ProjectDatabase};
 
 use crate::{
     Context, DummyReporter, Reporter, TestRunResult, discovery::StandardDiscoverer,
@@ -20,18 +20,18 @@ pub trait TestRunner {
     fn test_with_reporter(&self, reporter: &dyn Reporter) -> TestRunResult;
 }
 
-pub struct StandardTestRunner<'proj> {
-    project: &'proj Project,
+pub struct StandardTestRunner<'db> {
+    db: &'db dyn Db,
 }
 
-impl<'proj> StandardTestRunner<'proj> {
-    pub const fn new(project: &'proj Project) -> Self {
-        Self { project }
+impl<'db> StandardTestRunner<'db> {
+    pub const fn new(db: &'db dyn Db) -> Self {
+        Self { db }
     }
 
     fn test_impl(&self, reporter: &dyn Reporter) -> TestRunResult {
-        attach_with_project(self.project, |py| {
-            let context = Context::new(self.project, reporter);
+        attach_with_project(self.db, |py| {
+            let context = Context::new(self.db, reporter);
 
             let session = StandardDiscoverer::new(&context).discover_with_py(py);
 
@@ -50,7 +50,7 @@ impl TestRunner for StandardTestRunner<'_> {
     }
 }
 
-impl TestRunner for Project {
+impl TestRunner for ProjectDatabase {
     fn test_with_reporter(&self, reporter: &dyn Reporter) -> TestRunResult {
         let test_runner = StandardTestRunner::new(self);
         test_runner.test_with_reporter(reporter)
@@ -63,7 +63,9 @@ use karva_test::TestContext;
 #[cfg(test)]
 impl TestRunner for TestContext {
     fn test_with_reporter(&self, reporter: &dyn Reporter) -> TestRunResult {
-        let project = Project::new(self.cwd(), vec![self.cwd()]);
+        use karva_project::ProjectDatabase;
+
+        let project = ProjectDatabase::test_db(self.cwd(), &[self.cwd()]);
         let test_runner = StandardTestRunner::new(&project);
         test_runner.test_with_reporter(reporter)
     }

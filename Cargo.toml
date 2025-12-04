@@ -12,13 +12,17 @@ authors = ["Matthew McKee <matthewmckee4@yahoo.co.uk>"]
 license = "MIT"
 
 [workspace.dependencies]
+toml = { version = "0.9.0" }
+pep440_rs = { version = "0.7.1" }
 anyhow = { version = "1.0.100" }
 argfile = { version = "0.2.1" }
-camino = { version = "1.2" }
+filetime = { version = "0.2.23" }
+camino = { version = "1.2", features = ["serde1"] }
 chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
 clap = { version = "4.5.53", features = ["derive", "wrap_help"] }
 codspeed-criterion-compat = { version = "4.1.0", default-features = false }
 colored = { version = "3.0.0" }
+etcetera = { version = "0.11.0" }
 ctor = "0.6.1"
 ctrlc = { version = "3.5.1" }
 divan = { package = "codspeed-divan-compat", version = "4.1.0" }
@@ -37,6 +41,8 @@ pyo3 = { version = "0.27.2", features = ["abi3-py310", "py-clone"] }
 rand = { version = "0.9.2" }
 regex = { version = "1.12.2" }
 rstest = { version = "0.26" }
+ty_combine = { git = "https://github.com/astral-sh/ruff", branch = "main" }
+ruff_options_metadata = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_db = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_macros = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_notebook = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
@@ -45,7 +51,7 @@ ruff_python_parser = { git = "https://github.com/astral-sh/ruff/", branch = "mai
 ruff_python_trivia = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_source_file = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_text_size = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
-serde = { version = "1.0.228" }
+serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.145" }
 tempfile = "3.23"
 tracing = { version = "0.1.41", features = ["release_max_level_debug"] }
@@ -56,6 +62,7 @@ tracing-subscriber = { version = "0.3.20", default-features = false, features = 
 ] }
 tracing-tree = { version = "0.4.1" }
 wild = { version = "2" }
+thiserror = { version = "2.0.0" }
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(codspeed)"] }
@@ -76,3 +83,4 @@ missing_panics_doc = "allow"
 too_many_lines = "allow"
 significant_drop_tightening = "allow"
 must_use_candidate = "allow"
+option_if_let_else = "allow"

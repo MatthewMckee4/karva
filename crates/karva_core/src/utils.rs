@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Write};
 
 use camino::Utf8Path;
-use karva_project::{Project, ProjectOptions};
+use karva_project::{Db, ProjectSettings};
 use pyo3::{PyResult, Python, prelude::*, types::PyAnyMethods};
 use ruff_python_ast::PythonVersion;
 use ruff_source_file::{SourceFile, SourceFileBuilder};
@@ -42,9 +42,9 @@ pub(crate) fn add_to_sys_path(py: Python<'_>, path: &Utf8Path, index: isize) -> 
 /// null file for later restoration.
 fn redirect_python_output<'py>(
     py: Python<'py>,
-    options: &ProjectOptions,
+    settings: &ProjectSettings,
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
-    if options.show_output() {
+    if settings.terminal().show_python_output {
         Ok(None)
     } else {
         let sys = py.import("sys")?;
@@ -86,12 +86,12 @@ fn restore_python_output<'py>(py: Python<'py>, null_file: &Bound<'py, PyAny>) ->
 }
 
 /// A wrapper around `Python::attach` so we can manage the stdout and stderr redirection.
-pub(crate) fn attach_with_project<F, R>(project: &Project, f: F) -> R
+pub(crate) fn attach_with_project<F, R>(db: &dyn Db, f: F) -> R
 where
     F: for<'py> FnOnce(Python<'py>) -> R,
 {
     attach(|py| {
-        let null_file = redirect_python_output(py, project.options());
+        let null_file = redirect_python_output(py, db.project().settings());
         let result = f(py);
         if let Ok(Some(null_file)) = null_file {
             let _ = restore_python_output(py, &null_file);
