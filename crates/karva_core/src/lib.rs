@@ -7,6 +7,7 @@ mod file_resolver;
 mod function_kind;
 mod name;
 mod normalize;
+mod printer;
 mod python;
 mod runner;
 pub mod testing;
@@ -20,5 +21,6 @@ pub use diagnostic::{
 pub(crate) use file_resolver::DefaultFileResolver;
 pub use function_kind::FunctionKind;
 pub(crate) use name::{ModulePath, QualifiedFunctionName};
+pub use printer::Printer;
 pub use python::init_module;
 pub use runner::{StandardTestRunner, TestRunner};

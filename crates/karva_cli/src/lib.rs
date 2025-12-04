@@ -1,6 +1,7 @@
 use std::{
     ffi::OsString,
-    io::{self, BufWriter, Write},
+    fmt::Write,
+    io::{self},
     process::{ExitCode, Termination},
 };
 
@@ -9,7 +10,7 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
 use karva_core::{
-    DummyReporter, Reporter, TestCaseReporter, TestRunner, utils::current_python_version,
+    DummyReporter, Printer, Reporter, TestCaseReporter, TestRunner, utils::current_python_version,
 };
 use karva_project::{
     Db, OsSystem, ProjectDatabase, ProjectMetadata, ProjectOptionsOverrides, System,
@@ -23,7 +24,6 @@ use crate::{
 
 mod args;
 mod logging;
-mod printer;
 mod version;
 
 pub use args::Args;
@@ -66,7 +66,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 }
 
 pub(crate) fn version() -> Result<()> {
-    let mut stdout = BufWriter::new(io::stdout().lock());
+    let mut stdout = Printer::default().stream_for_requested_summary().lock();
     if let Some(version_info) = crate::version::version() {
         writeln!(stdout, "karva {}", &version_info)?;
     } else {
@@ -80,6 +80,8 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let verbosity = args.verbosity.level();
 
     set_colored_override(args.color);
+
+    let printer = Printer::new(verbosity, args.no_progress);
 
     let _guard = setup_tracing(verbosity);
 
@@ -131,12 +133,12 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let reporter: Box<dyn Reporter> = if verbosity.is_quiet() {
         Box::new(DummyReporter)
     } else {
-        Box::new(TestCaseReporter::default())
+        Box::new(TestCaseReporter::new(printer))
     };
 
     let result = db.test_with_reporter(&*reporter);
 
-    let mut stdout = io::stdout().lock();
+    let mut stdout = printer.stream_for_failure_summary();
 
     write!(stdout, "{}", result.display())?;
 

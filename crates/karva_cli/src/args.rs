@@ -84,6 +84,10 @@ pub struct TestCommand {
     #[clap(long)]
     pub(crate) show_traceback: bool,
 
+    /// When set, we will not show individual test case results during execution.
+    #[clap(long)]
+    pub(crate) no_progress: bool,
+
     /// Control when colored output is used.
     #[arg(long)]
     pub(crate) color: Option<TerminalColor>,

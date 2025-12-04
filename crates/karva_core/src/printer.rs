@@ -9,7 +9,7 @@ pub struct Printer {
 }
 
 impl Printer {
-    pub(crate) const fn new(verbosity: VerbosityLevel, no_progress: bool) -> Self {
+    pub const fn new(verbosity: VerbosityLevel, no_progress: bool) -> Self {
         Self {
             verbosity,
             no_progress,
@@ -23,11 +23,11 @@ impl Printer {
     const fn stdout_important(self) -> Stdout {
         match self.verbosity {
             VerbosityLevel::Silent => Stdout::disabled(),
-            VerbosityLevel::Quiet => Stdout::enabled(),
-            VerbosityLevel::Default => Stdout::enabled(),
-            VerbosityLevel::Verbose => Stdout::enabled(),
-            VerbosityLevel::ExtraVerbose => Stdout::enabled(),
-            VerbosityLevel::Trace => Stdout::enabled(),
+            VerbosityLevel::Quiet
+            | VerbosityLevel::Default
+            | VerbosityLevel::Verbose
+            | VerbosityLevel::ExtraVerbose
+            | VerbosityLevel::Trace => Stdout::enabled(),
         }
     }
 
@@ -36,12 +36,11 @@ impl Printer {
     /// The returned stream will be disabled when [`VerbosityLevel::Quiet`] is used.
     const fn stdout_general(self) -> Stdout {
         match self.verbosity {
-            VerbosityLevel::Silent => Stdout::disabled(),
-            VerbosityLevel::Quiet => Stdout::disabled(),
-            VerbosityLevel::Default => Stdout::enabled(),
-            VerbosityLevel::Verbose => Stdout::enabled(),
-            VerbosityLevel::ExtraVerbose => Stdout::enabled(),
-            VerbosityLevel::Trace => Stdout::enabled(),
+            VerbosityLevel::Silent | VerbosityLevel::Quiet => Stdout::disabled(),
+            VerbosityLevel::Default
+            | VerbosityLevel::Verbose
+            | VerbosityLevel::ExtraVerbose
+            | VerbosityLevel::Trace => Stdout::enabled(),
         }
     }
 
@@ -52,7 +51,7 @@ impl Printer {
     /// display it even if [`VerbosityLevel::Quiet`] is used. Or, in `ty check`, if the
     /// `TY_MEMORY_REPORT` variable has been set, we should display the memory report because the
     /// user has opted-in to display.
-    pub(crate) fn stream_for_requested_summary(self) -> Stdout {
+    pub const fn stream_for_requested_summary(self) -> Stdout {
         self.stdout_important()
     }
 
@@ -61,7 +60,7 @@ impl Printer {
     /// For example, in `ty check`, this would be used for the message indicating the number of
     /// diagnostics found. The failure summary should capture information that is not reflected in
     /// the exit code.
-    pub(crate) fn stream_for_failure_summary(self) -> Stdout {
+    pub const fn stream_for_failure_summary(self) -> Stdout {
         self.stdout_important()
     }
 
@@ -70,15 +69,23 @@ impl Printer {
     /// For example, in `ty check`, this would be used for the message indicating that no diagnostic
     /// were found. The success summary does not capture important information for users that have
     /// opted-in to [`VerbosityLevel::Quiet`].
-    pub(crate) fn stream_for_success_summary(self) -> Stdout {
+    pub const fn stream_for_success_summary(self) -> Stdout {
         self.stdout_general()
     }
 
     /// Return the [`Stdout`] stream for detailed messages.
     ///
     /// For example, in `ty check`, this would be used for the diagnostic output.
-    pub(crate) fn stream_for_details(self) -> Stdout {
+    pub const fn stream_for_details(self) -> Stdout {
         self.stdout_general()
+    }
+
+    pub(crate) const fn stream_for_test_result(self) -> Stdout {
+        if self.no_progress {
+            Stdout::disabled()
+        } else {
+            self.stdout_general()
+        }
     }
 }
 
@@ -109,7 +116,7 @@ impl Stdout {
         }
     }
 
-    pub(crate) fn lock(mut self) -> Self {
+    pub fn lock(mut self) -> Self {
         match self.status {
             StreamStatus::Enabled => {
                 // Drop the previous lock first, to avoid deadlocking
@@ -128,7 +135,7 @@ impl Stdout {
         }
     }
 
-    pub(crate) const fn is_enabled(&self) -> bool {
+    pub const fn is_enabled(&self) -> bool {
         matches!(self.status, StreamStatus::Enabled)
     }
 }
