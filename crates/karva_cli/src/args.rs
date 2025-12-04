@@ -63,30 +63,20 @@ pub struct TestCommand {
     pub(crate) output_format: Option<OutputFormat>,
 
     /// Show Python stdout during test execution.
-    #[clap(short = 's', long)]
-    pub(crate) show_output: bool,
+    #[clap(short = 's', default_missing_value = "true", num_args=0..1)]
+    pub(crate) show_output: Option<bool>,
 
     /// When set, .gitignore files will not be respected.
-    #[clap(long)]
-    pub(crate) no_ignore: bool,
+    #[clap(long, default_missing_value = "true", num_args=0..1)]
+    pub(crate) no_ignore: Option<bool>,
 
     /// When set, the test will fail immediately if any test fails.
-    #[clap(long)]
-    pub(crate) fail_fast: bool,
-
-    /// When set, we will try to import functions in each test file as well as parsing the ast to find them.
-    ///
-    /// This is often slower, so it is not recommended for large projects.
-    #[clap(long)]
-    pub(crate) try_import_fixtures: bool,
-
-    /// When set, we will show the traceback of each test failure.
-    #[clap(long)]
-    pub(crate) show_traceback: bool,
+    #[clap(long, default_missing_value = "true", num_args=0..1)]
+    pub(crate) fail_fast: Option<bool>,
 
     /// When set, we will not show individual test case results during execution.
-    #[clap(long)]
-    pub(crate) no_progress: bool,
+    #[clap(long, default_missing_value = "true", num_args=0..1)]
+    pub(crate) no_progress: Option<bool>,
 
     /// Control when colored output is used.
     #[arg(long)]
@@ -142,18 +132,16 @@ impl TestCommand {
     pub(crate) fn into_options(self) -> Options {
         Options {
             src: Some(SrcOptions {
-                respect_ignore_files: Some(RangedValue::cli(!self.no_ignore)),
+                respect_ignore_files: self.no_ignore.map(|no_ignore| !no_ignore),
                 include: Some(RangedValue::cli(self.paths)),
             }),
             terminal: Some(TerminalOptions {
-                output_format: self
-                    .output_format
-                    .map(|output_format| RangedValue::cli(output_format.into())),
-                show_python_output: Some(RangedValue::cli(self.show_output)),
+                output_format: self.output_format.map(Into::into),
+                show_python_output: self.show_output,
             }),
             test: Some(TestOptions {
-                test_function_prefix: self.test_prefix.map(RangedValue::cli),
-                fail_fast: Some(RangedValue::cli(self.fail_fast)),
+                test_function_prefix: self.test_prefix,
+                fail_fast: self.fail_fast,
             }),
         }
     }

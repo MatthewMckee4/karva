@@ -1,19 +1,17 @@
 use std::sync::Once;
 
-use camino::Utf8PathBuf;
 use divan::Bencher;
 use karva_core::{TestRunner, testing::setup_module};
 use karva_project::{
     Options, OsSystem, ProjectDatabase, ProjectMetadata, RangedValue, SrcOptions, VerbosityLevel,
-    absolute,
 };
 use karva_test::{InstalledProject, RealWorldProject};
+
+static SETUP_MODULE_ONCE: Once = Once::new();
 
 pub struct ProjectBenchmark<'a> {
     installed_project: InstalledProject<'a>,
 }
-
-static SETUP_MODULE_ONCE: Once = Once::new();
 
 impl<'a> ProjectBenchmark<'a> {
     pub fn new(project: RealWorldProject<'a>) -> Self {
@@ -22,11 +20,12 @@ impl<'a> ProjectBenchmark<'a> {
     }
 
     fn project(&self) -> ProjectDatabase {
-        let test_paths = self.installed_project.config().paths;
-
-        let absolute_test_paths: Vec<Utf8PathBuf> = test_paths
+        let test_paths = self
+            .installed_project
+            .config()
+            .paths
             .iter()
-            .map(|path| absolute(path, self.installed_project.path()))
+            .map(ToString::to_string)
             .collect();
 
         let root = self.installed_project.path();
@@ -43,13 +42,8 @@ impl<'a> ProjectBenchmark<'a> {
 
         metadata.apply_options(Options {
             src: Some(SrcOptions {
-                include: Some(RangedValue::cli(
-                    absolute_test_paths
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect(),
-                )),
-                respect_ignore_files: Some(RangedValue::cli(false)),
+                include: Some(RangedValue::cli(test_paths)),
+                respect_ignore_files: Some(false),
             }),
             ..Options::default()
         });

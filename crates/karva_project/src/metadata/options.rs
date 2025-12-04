@@ -90,7 +90,7 @@ pub struct SrcOptions {
         "#
     )]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub respect_ignore_files: Option<RangedValue<bool>>,
+    pub respect_ignore_files: Option<bool>,
 
     /// A list of files and directories to check. The `include` option
     /// follows a similar syntax to `.gitignore` but reversed:
@@ -117,10 +117,7 @@ pub struct SrcOptions {
 impl SrcOptions {
     pub(crate) fn to_settings(&self) -> SrcSettings {
         SrcSettings {
-            respect_ignore_files: self
-                .respect_ignore_files
-                .clone()
-                .is_none_or(RangedValue::into_inner),
+            respect_ignore_files: self.respect_ignore_files.unwrap_or(true),
             include_paths: self
                 .include
                 .clone()
@@ -146,7 +143,7 @@ pub struct TerminalOptions {
             output-format = "concise"
         "#
     )]
-    pub output_format: Option<RangedValue<OutputFormat>>,
+    pub output_format: Option<OutputFormat>,
 
     /// Whether to show the python output.
     ///
@@ -159,17 +156,14 @@ pub struct TerminalOptions {
             show-python-output = false
         "#
     )]
-    pub show_python_output: Option<RangedValue<bool>>,
+    pub show_python_output: Option<bool>,
 }
 
 impl TerminalOptions {
     pub fn to_settings(&self) -> TerminalSettings {
         TerminalSettings {
-            output_format: self.output_format.as_deref().copied().unwrap_or_default(),
-            show_python_output: self
-                .show_python_output
-                .clone()
-                .is_some_and(RangedValue::into_inner),
+            output_format: self.output_format.unwrap_or_default(),
+            show_python_output: self.show_python_output.unwrap_or_default(),
         }
     }
 }
@@ -190,7 +184,7 @@ pub struct TestOptions {
             test-function-prefix = "test"
         "#
     )]
-    pub test_function_prefix: Option<RangedValue<String>>,
+    pub test_function_prefix: Option<String>,
 
     /// Whether to fail fast when a test fails.
     ///
@@ -203,7 +197,7 @@ pub struct TestOptions {
             fail-fast = true
         "#
     )]
-    pub fail_fast: Option<RangedValue<bool>>,
+    pub fail_fast: Option<bool>,
 }
 
 impl TestOptions {
@@ -211,10 +205,9 @@ impl TestOptions {
         TestSettings {
             test_function_prefix: self
                 .test_function_prefix
-                .as_deref()
-                .cloned()
+                .clone()
                 .unwrap_or_else(|| "test".to_string()),
-            fail_fast: self.fail_fast.clone().is_some_and(RangedValue::into_inner),
+            fail_fast: self.fail_fast.unwrap_or_default(),
         }
     }
 }

@@ -81,7 +81,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     set_colored_override(args.color);
 
-    let printer = Printer::new(verbosity, args.no_progress);
+    let printer = Printer::new(verbosity, args.no_progress.unwrap_or(false));
 
     let _guard = setup_tracing(verbosity);
 
