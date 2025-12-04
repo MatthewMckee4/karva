@@ -62,6 +62,7 @@ tracing-subscriber = { version = "0.3.20", default-features = false, features = 
 tracing-tree = { version = "0.4.1" }
 wild = { version = "2" }
 thiserror = { version = "2.0.0" }
+directories = "6.0.0"
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(codspeed)"] }

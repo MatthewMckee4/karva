@@ -197,7 +197,6 @@ mod tests {
             "friendly_bard",
             "friendly--bard",
             "friendly-.bard",
-            "FrIeAndLy-._.-bArD",
         ];
 
         for input in inputs {

@@ -142,7 +142,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     write!(stdout, "{}", result.display())?;
 
-    if result.stats().is_success() {
+    if result.is_success() {
         Ok(ExitStatus::Success)
     } else {
         Ok(ExitStatus::Failure)

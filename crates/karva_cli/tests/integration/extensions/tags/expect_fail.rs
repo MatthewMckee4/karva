@@ -1,8 +1,7 @@
-use insta::{allow_duplicates, assert_snapshot};
-use karva_test::TestContext;
+use insta::allow_duplicates;
+use insta_cmd::assert_cmd_snapshot;
+use karva_test::IntegrationTestContext;
 use rstest::rstest;
-
-use crate::common::TestRunnerExt;
 
 fn get_expect_fail_decorator(framework: &str) -> &str {
     match framework {
@@ -13,9 +12,10 @@ fn get_expect_fail_decorator(framework: &str) -> &str {
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_that_fails(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
 import {framework}
@@ -28,17 +28,25 @@ def test_1():
         ),
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_1 ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_that_passes_karva() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import karva
 
@@ -48,14 +56,17 @@ def test_1():
         ",
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @r"
+        assert_cmd_snapshot!(context.command(), @r"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+        test test::test_1 ... FAILED
+
         diagnostics:
 
         error[test-pass-on-expect-failure]: Test `test_1` passes when expected to fail
-         --> <test>/test.py:5:5
+         --> test.py:5:5
           |
         4 | @karva.tags.expect_fail(reason='Expected to fail but passes')
         5 | def test_1():
@@ -65,14 +76,17 @@ def test_1():
         info: Reason: Expected to fail but passes
 
         test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
         ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_that_passes_pytest() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import pytest
 
@@ -82,14 +96,17 @@ def test_1():
         ",
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @r"
+        assert_cmd_snapshot!(context.command(), @r"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+        test test::test_1 ... FAILED
+
         diagnostics:
 
         error[test-pass-on-expect-failure]: Test `test_1` passes when expected to fail
-         --> <test>/test.py:5:5
+         --> test.py:5:5
           |
         4 | @pytest.mark.xfail(reason='Expected to fail but passes')
         5 | def test_1():
@@ -99,14 +116,17 @@ def test_1():
         info: Reason: Expected to fail but passes
 
         test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
         ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_no_reason(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
 import {framework}
@@ -119,17 +139,25 @@ def test_1():
         ),
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_1 ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_call(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
 import {framework}
@@ -142,17 +170,25 @@ def test_1():
         ),
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_1 ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_true_condition(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
 import {framework}
@@ -165,17 +201,25 @@ def test_1():
         ),
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_1 ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_false_condition(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
 import {framework}
@@ -188,17 +232,25 @@ def test_1():
         ),
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_1 ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_expression(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
 import {framework}
@@ -212,17 +264,25 @@ def test_1():
         ),
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_1 ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_multiple_conditions(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
 import {framework}
@@ -235,17 +295,25 @@ def test_1():
         ),
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_1 ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_all_false_conditions(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
 import {framework}
@@ -258,17 +326,25 @@ def test_1():
         ),
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_1 ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_single_string_as_reason_karva() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import karva
 
@@ -278,15 +354,23 @@ def test_1():
         ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_1 ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_empty_conditions_karva() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import karva
 
@@ -296,15 +380,23 @@ def test_1():
         ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_1 ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_mixed_tests_karva() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import karva
 
@@ -321,14 +413,19 @@ def test_expected_fail_passes():
         ",
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @r"
+        assert_cmd_snapshot!(context.command(), @r"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+        test test::test_expected_to_fail ... ok
+        test test::test_normal_pass ... ok
+        test test::test_expected_fail_passes ... FAILED
+
         diagnostics:
 
         error[test-pass-on-expect-failure]: Test `test_expected_fail_passes` passes when expected to fail
-          --> <test>/test.py:12:5
+          --> test.py:12:5
            |
         11 | @karva.tags.expect_fail()
         12 | def test_expected_fail_passes():
@@ -337,14 +434,17 @@ def test_expected_fail_passes():
            |
 
         test result: FAILED. 2 passed; 1 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
         ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_mixed_tests_pytest() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import pytest
 
@@ -361,14 +461,19 @@ def test_expected_fail_passes():
         ",
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @r"
+        assert_cmd_snapshot!(context.command(), @r"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+        test test::test_expected_to_fail ... ok
+        test test::test_normal_pass ... ok
+        test test::test_expected_fail_passes ... FAILED
+
         diagnostics:
 
         error[test-pass-on-expect-failure]: Test `test_expected_fail_passes` passes when expected to fail
-          --> <test>/test.py:12:5
+          --> test.py:12:5
            |
         11 | @pytest.mark.xfail
         12 | def test_expected_fail_passes():
@@ -377,14 +482,17 @@ def test_expected_fail_passes():
            |
 
         test result: FAILED. 2 passed; 1 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
         ");
     }
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_runtime_error() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import karva
 
@@ -394,15 +502,23 @@ def test_1():
         ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_1 ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_assertion_error() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import karva
 
@@ -412,15 +528,23 @@ def test_1():
         ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_1 ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_skip() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import karva
 
@@ -431,16 +555,24 @@ def test_1():
         ",
     );
 
-    let result = context.test();
-
     // Skip takes precedence - test should be skipped, not treated as expected fail
-    assert_snapshot!(result.display(), @"test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]");
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_1 ... skipped: Skipping this test
+
+    test result: ok. 0 passed; 0 failed; 1 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_then_unexpected_pass() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import karva
 
@@ -450,13 +582,16 @@ def test_should_fail():
         ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_should_fail ... FAILED
 
-    assert_snapshot!(result.display(), @r"
     diagnostics:
 
     error[test-pass-on-expect-failure]: Test `test_should_fail` passes when expected to fail
-     --> <test>/test.py:5:5
+     --> test.py:5:5
       |
     4 | @karva.tags.expect_fail(reason='This should fail but passes')
     5 | def test_should_fail():
@@ -466,5 +601,7 @@ def test_should_fail():
     info: Reason: This should fail but passes
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
     ");
 }

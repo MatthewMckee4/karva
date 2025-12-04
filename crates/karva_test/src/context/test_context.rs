@@ -2,6 +2,7 @@ use std::{collections::HashMap, fs, process::Command};
 
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
+use directories::ProjectDirs;
 use insta::{Settings, internals::SettingsBindDropGuard};
 use tempfile::TempDir;
 
@@ -14,9 +15,22 @@ pub struct TestContext {
     _settings_scope: SettingsBindDropGuard,
 }
 
+// Use user cache directory so we can use `uv` caching.
+fn get_test_venv_cache() -> Utf8PathBuf {
+    let proj_dirs = ProjectDirs::from("", "", "karva").expect("Failed to get project directories");
+    let cache_dir = proj_dirs.cache_dir();
+    let venv_path = cache_dir.join("test-venv");
+    Utf8PathBuf::from_path_buf(venv_path).expect("Path is not valid UTF-8")
+}
+
 impl TestContext {
     pub fn new() -> Self {
-        let temp_dir = TempDir::with_prefix("karva-test-env").unwrap();
+        let cache_dir = get_test_venv_cache();
+
+        std::fs::create_dir_all(&cache_dir).expect("Failed to create cache directory");
+
+        let temp_dir =
+            TempDir::new_in(&cache_dir).expect("Failed to create temp directory in cache");
 
         let project_path = Utf8PathBuf::from_path_buf(
             dunce::simplified(
@@ -31,8 +45,12 @@ impl TestContext {
         .expect("Path is not valid UTF-8");
 
         let karva_wheel = find_karva_wheel()
-            .map(|wheel| wheel.to_string())
-            .unwrap_or_default();
+            .expect(
+                "Could not find karva wheel.
+
+                Run `maturin build` before running tests.",
+            )
+            .to_string();
 
         let venv_path = project_path.join(".venv");
 
@@ -48,7 +66,7 @@ impl TestContext {
         }
 
         let command_arguments = [
-            vec!["init", "--bare", "--directory", project_path.as_str()],
+            // vec!["init", "--bare", "--directory", project_path.as_str()],
             venv_args,
             vec![
                 "pip",

@@ -1,12 +1,11 @@
-use insta::assert_snapshot;
-use karva_test::TestContext;
-
-use crate::common::TestRunnerExt;
+use insta_cmd::assert_cmd_snapshot;
+use karva_test::IntegrationTestContext;
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixtures_given_by_decorator() {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let test_context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import functools
 
@@ -24,15 +23,23 @@ def test_fixtures_given_by_decorator(a):
 ",
     );
 
-    let result = test_context.test();
+    assert_cmd_snapshot!(test_context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_fixtures_given_by_decorator ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixtures_given_by_decorator_and_fixture() {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let test_context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import karva
 
@@ -56,15 +63,23 @@ def test_func(a, b):
 ",
     );
 
-    let result = test_context.test();
+    assert_cmd_snapshot!(test_context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_func(b=1) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixtures_given_by_decorator_and_parametrize() {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let test_context = IntegrationTestContext::with_file(
+        "test.py",
         r#"
 import karva
 import functools
@@ -85,15 +100,24 @@ def test_func(a, b):
 "#,
     );
 
-    let result = test_context.test();
+    assert_cmd_snapshot!(test_context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_func(b=1) ... ok
+    test test::test_func(b=2) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixtures_given_by_decorator_and_parametrize_and_fixture() {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let test_context = IntegrationTestContext::with_file(
+        "test.py",
         r#"
 import karva
 import functools
@@ -119,15 +143,24 @@ def test_func(a, b, c):
 "#,
     );
 
-    let result = test_context.test();
+    assert_cmd_snapshot!(test_context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_func(b=1, c=1) ... ok
+    test test::test_func(b=2, c=1) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixtures_given_by_decorator_one_missing() {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let test_context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import functools
 
@@ -146,13 +179,16 @@ def test_fixtures_given_by_decorator(a, b):
 ",
     );
 
-    let result = test_context.test();
+    assert_cmd_snapshot!(test_context.command(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_fixtures_given_by_decorator ... FAILED
 
-    assert_snapshot!(result.display(), @r"
     diagnostics:
 
     error[missing-fixtures]: Test `test_fixtures_given_by_decorator` has missing fixtures
-      --> <test>/test.py:13:5
+      --> test.py:13:5
        |
     12 | @given(a=1)
     13 | def test_fixtures_given_by_decorator(a, b):
@@ -163,5 +199,7 @@ def test_fixtures_given_by_decorator(a, b):
     info: Missing fixtures: `b`
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
     ");
 }

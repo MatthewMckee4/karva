@@ -57,7 +57,7 @@ fn benchmark_karva(criterion: &mut Criterion) {
                     let project =
                         ProjectDatabase::test_db(cwd.clone(), &[absolute(case.name(), &cwd)]);
                     let runner_result = project.test_with_reporter(&DummyReporter);
-                    assert!(runner_result.passed());
+                    assert!(runner_result.is_success());
                 });
             },
         );

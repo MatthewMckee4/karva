@@ -1,3 +1,5 @@
+mod integration;
+
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
 use karva_test::IntegrationTestContext;
@@ -440,8 +442,8 @@ fn test_text_file() {
     assert_cmd_snapshot!(
         context.command().args(["random.txt"]),
         @r"
-    success: true
-    exit_code: 0
+    success: false
+    exit_code: 1
     ----- stdout -----
     discovery diagnostics:
 
@@ -501,8 +503,8 @@ fn test_invalid_path() {
     let context = IntegrationTestContext::new();
 
     assert_cmd_snapshot!(context.command().arg("non_existing_path.py"), @r"
-    success: true
-    exit_code: 0
+    success: false
+    exit_code: 1
     ----- stdout -----
     discovery diagnostics:
 

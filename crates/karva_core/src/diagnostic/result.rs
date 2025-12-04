@@ -71,8 +71,8 @@ impl TestRunResult {
         self.diagnostics.push(diagnostic);
     }
 
-    pub fn passed(&self) -> bool {
-        self.stats().is_success()
+    pub fn is_success(&self) -> bool {
+        self.stats().is_success() && self.discovery_diagnostics.is_empty()
     }
 
     pub const fn stats(&self) -> &TestResultStats {
