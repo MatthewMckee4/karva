@@ -1,7 +1,5 @@
-use std::{collections::Bound, ops::Deref};
+use std::ops::Deref;
 
-use pep440_rs::{Version, VersionSpecifiers, release_specifiers_to_ranges};
-use ruff_python_ast::PythonVersion;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
@@ -21,7 +19,7 @@ pub struct PyProject {
 }
 
 impl PyProject {
-    pub(crate) fn ty(&self) -> Option<&Options> {
+    pub(crate) fn karva(&self) -> Option<&Options> {
         self.tool.as_ref().and_then(|tool| tool.karva.as_ref())
     }
 }
@@ -52,68 +50,7 @@ pub struct Project {
     ///
     /// Note: Intentionally option to be more permissive during deserialization.
     /// `PackageMetadata::from_pyproject` reports missing names.
-    pub name: Option<RangedValue<PackageName>>,
-    /// The version of the project
-    pub version: Option<RangedValue<Version>>,
-    /// The Python versions this project is compatible with.
-    pub requires_python: Option<RangedValue<VersionSpecifiers>>,
-}
-
-impl Project {
-    pub(super) fn resolve_requires_python_lower_bound(
-        &self,
-    ) -> Result<Option<RangedValue<PythonVersion>>, ResolveRequiresPythonError> {
-        let Some(requires_python) = self.requires_python.as_ref() else {
-            return Ok(None);
-        };
-
-        tracing::debug!("Resolving requires-python constraint: `{requires_python}`");
-
-        let ranges = release_specifiers_to_ranges((**requires_python).clone());
-        let Some((lower, _)) = ranges.bounding_range() else {
-            return Ok(None);
-        };
-
-        let version = match lower {
-            // Ex) `>=3.10.1` -> `>=3.10`
-            Bound::Included(version) => version,
-
-            // Ex) `>3.10.1` -> `>=3.10` or `>3.10` -> `>=3.10`
-            // The second example looks obscure at first but it is required because
-            // `3.10.1 > 3.10` is true but we only have two digits here. So including 3.10 is the
-            // right move. Overall, using `>` without a patch release is most likely bogus.
-            Bound::Excluded(version) => version,
-
-            // Ex) `<3.10` or ``
-            Bound::Unbounded => {
-                return Err(ResolveRequiresPythonError::NoLowerBound(
-                    requires_python.to_string(),
-                ));
-            }
-        };
-
-        // Take the major and minor version
-        let mut versions = version.release().iter().take(2);
-
-        let Some(major) = versions.next().copied() else {
-            return Ok(None);
-        };
-
-        let minor = versions.next().copied().unwrap_or_default();
-
-        tracing::debug!("Resolved requires-python constraint to: {major}.{minor}");
-
-        let major =
-            u8::try_from(major).map_err(|_| ResolveRequiresPythonError::TooLargeMajor(major))?;
-        let minor =
-            u8::try_from(minor).map_err(|_| ResolveRequiresPythonError::TooLargeMinor(minor))?;
-
-        Ok(Some(
-            requires_python
-                .clone()
-                .map_value(|_| PythonVersion::from((major, minor))),
-        ))
-    }
+    pub(crate) name: Option<RangedValue<PackageName>>,
 }
 
 #[derive(Debug, Error)]

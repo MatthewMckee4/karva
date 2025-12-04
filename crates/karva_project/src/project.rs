@@ -1,8 +1,6 @@
 use camino::Utf8PathBuf;
 
-use crate::{
-    ProjectMetadata, ProjectSettings, TestPath, TestPathError, absolute, metadata::ToSettingsError,
-};
+use crate::{ProjectMetadata, ProjectSettings, TestPath, TestPathError, absolute};
 
 #[derive(Debug, Clone)]
 pub struct Project {
@@ -14,13 +12,13 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn from_metadata(metadata: ProjectMetadata) -> Result<Self, ToSettingsError> {
+    pub fn from_metadata(metadata: ProjectMetadata) -> Self {
         let settings = metadata.options.to_settings();
-        Ok(Self {
+        Self {
             settings,
             metadata,
             is_verbose: false,
-        })
+        }
     }
 
     #[must_use]

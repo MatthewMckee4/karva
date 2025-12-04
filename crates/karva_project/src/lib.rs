@@ -3,8 +3,12 @@ use std::{panic::RefUnwindSafe, sync::Arc};
 use camino::Utf8PathBuf;
 pub use envs::{EnvVars, max_parallelism};
 pub use metadata::{
-    Options, OutputFormat, ProjectMetadata, ProjectOptionsOverrides, ProjectSettings, RangedValue,
-    SrcOptions, TerminalOptions, TestOptions, TestPrefix, ValueSource,
+    ProjectMetadata,
+    options::{
+        Options, OutputFormat, ProjectOptionsOverrides, SrcOptions, TerminalOptions, TestOptions,
+    },
+    settings::ProjectSettings,
+    value::RangedValue,
 };
 pub use path::{TestPath, TestPathError, absolute};
 pub use project::Project;
@@ -51,10 +55,7 @@ impl ProjectDatabase {
             system: Arc::new(system),
         };
 
-        db.project = Some(
-            Project::from_metadata(project_metadata)
-                .map_err(|error| anyhow::anyhow!("{}", error.pretty(&db)))?,
-        );
+        db.project = Some(Project::from_metadata(project_metadata));
 
         Ok(db)
     }

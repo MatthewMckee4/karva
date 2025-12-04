@@ -1,17 +1,14 @@
-use std::fmt::{self, Display};
+use std::sync::Arc;
 
 use camino::Utf8PathBuf;
-use ruff_db::diagnostic::{
-    Annotation, Diagnostic, DiagnosticFormat, DiagnosticId, DisplayDiagnosticConfig, Severity,
-    SubDiagnostic,
-};
+use ruff_db::diagnostic::DiagnosticFormat;
 use ruff_macros::{Combine, OptionsMetadata};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ty_combine::Combine;
 
 use crate::{
-    Db, ProjectSettings,
+    ProjectSettings, System,
     metadata::{
         settings::{SrcSettings, TerminalSettings, TestSettings},
         value::{RangedValue, ValueSource, ValueSourceGuard},
@@ -59,6 +56,21 @@ impl Options {
             src,
             test,
         }
+    }
+
+    pub(crate) fn from_karva_configuration_file(
+        path: Utf8PathBuf,
+        system: &dyn System,
+    ) -> Result<Self, KarvaTomlError> {
+        let karva_toml_str =
+            system
+                .read_to_string(&path)
+                .map_err(|source| KarvaTomlError::FileReadError {
+                    source,
+                    path: path.clone(),
+                })?;
+
+        Self::from_toml_str(&karva_toml_str, ValueSource::File(Arc::new(path)))
     }
 }
 
@@ -211,108 +223,13 @@ impl TestOptions {
 pub enum KarvaTomlError {
     #[error(transparent)]
     TomlSyntax(#[from] toml::de::Error),
+    #[error("Failed to read `{path}`: {source}")]
+    FileReadError {
+        #[source]
+        source: std::io::Error,
+        path: Utf8PathBuf,
+    },
 }
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct OptionDiagnostic {
-    id: DiagnosticId,
-    message: String,
-    severity: Severity,
-    annotation: Option<Annotation>,
-    sub: Vec<SubDiagnostic>,
-}
-
-impl OptionDiagnostic {
-    pub const fn new(id: DiagnosticId, message: String, severity: Severity) -> Self {
-        Self {
-            id,
-            message,
-            severity,
-            annotation: None,
-            sub: Vec::new(),
-        }
-    }
-
-    #[must_use]
-    fn with_message(self, message: impl Display) -> Self {
-        Self {
-            message: message.to_string(),
-            ..self
-        }
-    }
-
-    #[must_use]
-    fn with_annotation(self, annotation: Option<Annotation>) -> Self {
-        Self { annotation, ..self }
-    }
-
-    #[must_use]
-    fn sub(mut self, sub: SubDiagnostic) -> Self {
-        self.sub.push(sub);
-        self
-    }
-
-    pub(crate) fn to_diagnostic(&self) -> Diagnostic {
-        let mut diag = Diagnostic::new(self.id, self.severity, &self.message);
-        if let Some(annotation) = self.annotation.clone() {
-            diag.annotate(annotation);
-        }
-
-        for sub in &self.sub {
-            diag.sub(sub.clone());
-        }
-
-        diag
-    }
-}
-
-/// Error returned when the settings can't be resolved because of a hard error.
-#[derive(Debug)]
-pub struct ToSettingsError {
-    diagnostic: Box<OptionDiagnostic>,
-    output_format: OutputFormat,
-    color: bool,
-}
-
-impl ToSettingsError {
-    pub fn pretty<'a>(&'a self, db: &'a dyn Db) -> impl fmt::Display + use<'a> {
-        struct DisplayPretty<'a> {
-            error: &'a ToSettingsError,
-            db: &'a dyn Db,
-        }
-
-        impl fmt::Display for DisplayPretty<'_> {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                let display_config = DisplayDiagnosticConfig::default()
-                    .format(self.error.output_format.into())
-                    .color(self.error.color);
-
-                write!(
-                    f,
-                    "{}",
-                    self.error
-                        .diagnostic
-                        .to_diagnostic()
-                        .display(self.db, &display_config)
-                )
-            }
-        }
-
-        DisplayPretty { error: self, db }
-    }
-
-    pub fn into_diagnostic(self) -> OptionDiagnostic {
-        *self.diagnostic
-    }
-}
-
-impl Display for ToSettingsError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.diagnostic.message)
-    }
-}
-
-impl std::error::Error for ToSettingsError {}
 
 /// The diagnostic output format.
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
@@ -361,11 +278,10 @@ pub struct ProjectOptionsOverrides {
 }
 
 impl ProjectOptionsOverrides {
-    pub fn new(config_file_override: Option<Utf8PathBuf>, options: Options) -> Self {
+    pub const fn new(config_file_override: Option<Utf8PathBuf>, options: Options) -> Self {
         Self {
             config_file_override,
             options,
-            ..Self::default()
         }
     }
 

@@ -7,23 +7,15 @@ use ty_combine::Combine;
 
 use crate::{System, VerbosityLevel};
 
-mod configuration_file;
-mod options;
-mod pyproject;
-mod settings;
-mod value;
+pub mod options;
+pub mod pyproject;
+pub mod settings;
+pub mod value;
 
-pub use configuration_file::ConfigurationFile;
-
-pub use self::{
-    configuration_file::ConfigurationFileError,
-    options::{
-        KarvaTomlError, Options, OutputFormat, ProjectOptionsOverrides, SrcOptions,
-        TerminalOptions, TestOptions, ToSettingsError,
-    },
+use self::{
+    options::{KarvaTomlError, Options, ProjectOptionsOverrides},
     pyproject::{PyProject, PyProjectError, ResolveRequiresPythonError},
-    settings::{ProjectSettings, TestPrefix},
-    value::{RangedValue, ValueSource},
+    value::ValueSource,
 };
 
 #[derive(Default, Debug, Clone)]
@@ -61,14 +53,13 @@ impl ProjectMetadata {
     ) -> Result<Self, ProjectMetadataError> {
         tracing::debug!("Using overridden configuration file at '{path}'");
 
-        let config_file = ConfigurationFile::from_path(path.clone(), system).map_err(|error| {
-            ProjectMetadataError::ConfigurationFileError {
-                source: Box::new(error),
-                path,
-            }
-        })?;
-
-        let options = config_file.into_options();
+        let options =
+            Options::from_karva_configuration_file(path.clone(), system).map_err(|error| {
+                ProjectMetadataError::InvalidKarvaToml {
+                    source: Box::new(error),
+                    path,
+                }
+            })?;
 
         Ok(Self {
             root: system.current_directory().to_path_buf(),
@@ -153,17 +144,17 @@ impl ProjectMetadata {
                 None
             };
 
-            // A `ty.toml` takes precedence over a `pyproject.toml`.
-            let ty_toml_path = project_root.join("ty.toml");
-            if let Ok(ty_str) = system.read_to_string(&ty_toml_path) {
+            // A `karva.toml` takes precedence over a `pyproject.toml`.
+            let karva_toml_path = project_root.join("karva.toml");
+            if let Ok(karva_str) = system.read_to_string(&karva_toml_path) {
                 let options = match Options::from_toml_str(
-                    &ty_str,
-                    ValueSource::File(Arc::new(ty_toml_path.clone())),
+                    &karva_str,
+                    ValueSource::File(Arc::new(karva_toml_path.clone())),
                 ) {
                     Ok(options) => options,
                     Err(error) => {
-                        return Err(ProjectMetadataError::InvalidTyToml {
-                            path: ty_toml_path,
+                        return Err(ProjectMetadataError::InvalidKarvaToml {
+                            path: karva_toml_path,
                             source: Box::new(error),
                         });
                     }
@@ -171,11 +162,11 @@ impl ProjectMetadata {
 
                 if pyproject
                     .as_ref()
-                    .is_some_and(|project| project.ty().is_some())
+                    .is_some_and(|project| project.karva().is_some())
                 {
                     // TODO: Consider using a diagnostic here
                     tracing::warn!(
-                        "Ignoring the `tool.ty` section in `{pyproject_path}` because `{ty_toml_path}` takes precedence."
+                        "Ignoring the `tool.ty` section in `{pyproject_path}` because `{karva_toml_path}` takes precedence."
                     );
                 }
 
@@ -192,7 +183,7 @@ impl ProjectMetadata {
             }
 
             if let Some(pyproject) = pyproject {
-                let has_ty_section = pyproject.ty().is_some();
+                let has_karva_section = pyproject.karva().is_some();
                 let metadata = Self::from_pyproject(
                     pyproject,
                     project_root.to_path_buf(),
@@ -200,7 +191,7 @@ impl ProjectMetadata {
                     verbosity,
                 );
 
-                if has_ty_section {
+                if has_karva_section {
                     tracing::debug!("Found project at '{}'", project_root);
 
                     return Ok(metadata);
@@ -277,8 +268,8 @@ pub enum ProjectMetadataError {
         path: Utf8PathBuf,
     },
 
-    #[error("{path} is not a valid `ty.toml`: {source}")]
-    InvalidTyToml {
+    #[error("{path} is not a valid `karva.toml`: {source}")]
+    InvalidKarvaToml {
         source: Box<KarvaTomlError>,
         path: Utf8PathBuf,
     },
@@ -286,12 +277,6 @@ pub enum ProjectMetadataError {
     #[error("Invalid `requires-python` version specifier (`{path}`): {source}")]
     InvalidRequiresPythonConstraint {
         source: ResolveRequiresPythonError,
-        path: Utf8PathBuf,
-    },
-
-    #[error("Error loading configuration file at {path}: {source}")]
-    ConfigurationFileError {
-        source: Box<ConfigurationFileError>,
         path: Utf8PathBuf,
     },
 }

@@ -1,21 +1,5 @@
 use crate::metadata::options::OutputFormat;
 
-#[derive(Debug, Clone)]
-#[repr(transparent)]
-pub struct TestPrefix(String);
-
-impl TestPrefix {
-    pub const fn new(prefix: String) -> Self {
-        Self(prefix)
-    }
-}
-
-impl Default for TestPrefix {
-    fn default() -> Self {
-        Self("test".to_string())
-    }
-}
-
 #[derive(Default, Debug, Clone)]
 pub struct ProjectSettings {
     pub(crate) terminal: TerminalSettings,
