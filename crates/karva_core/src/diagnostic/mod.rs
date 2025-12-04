@@ -221,6 +221,7 @@ pub fn report_fixture_failure(
         builder.into_diagnostic(format!("Fixture `{}` failed", stmt_function_def.name));
 
     handle_failed_function_call(
+        context,
         &mut diagnostic,
         py,
         source_file,
@@ -266,6 +267,7 @@ pub fn report_test_failure(
         builder.into_diagnostic(format!("Test `{}` failed", stmt_function_def.name));
 
     handle_failed_function_call(
+        context,
         &mut diagnostic,
         py,
         source_file,
@@ -276,6 +278,7 @@ pub fn report_test_failure(
 }
 
 fn handle_failed_function_call(
+    context: &Context,
     diagnostic: &mut Diagnostic,
     py: Python,
     source_file: SourceFile,
@@ -305,7 +308,7 @@ fn handle_failed_function_call(
         lines: _,
         error_source_file,
         location,
-    }) = Traceback::from_error(py, error)
+    }) = Traceback::from_error(py, context.db().system(), error)
     {
         let mut sub = SubDiagnostic::new(SubDiagnosticSeverity::Info, "Test failed here");
 

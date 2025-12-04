@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Write};
 
 use camino::Utf8Path;
-use karva_project::{Db, ProjectSettings};
+use karva_project::{Db, ProjectSettings, System};
 use pyo3::{PyResult, Python, prelude::*, types::PyAnyMethods};
 use ruff_python_ast::PythonVersion;
 use ruff_source_file::{SourceFile, SourceFileBuilder};
@@ -19,10 +19,12 @@ pub fn current_python_version() -> PythonVersion {
 }
 
 /// Get the source file for the given utf8 path.
-pub(crate) fn source_file(path: &Utf8Path) -> SourceFile {
+pub(crate) fn source_file(system: &dyn System, path: &Utf8Path) -> SourceFile {
     SourceFileBuilder::new(
         path.as_str(),
-        std::fs::read_to_string(path).expect("Failed to read source file"),
+        system
+            .read_to_string(path)
+            .expect("Failed to read source file"),
     )
     .finish()
 }

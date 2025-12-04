@@ -187,7 +187,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
                     report_test_pass_on_expect_failure(
                         self.context,
-                        source_file(&test_module_path),
+                        source_file(self.context.db().system(), &test_module_path),
                         &stmt_function_def,
                         reason,
                     );
@@ -223,7 +223,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                         report_test_failure(
                             self.context,
                             py,
-                            source_file(&test_module_path),
+                            source_file(self.context.db().system(), &test_module_path),
                             &stmt_function_def,
                             &test_arguments,
                             &err,
@@ -231,7 +231,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     } else {
                         report_missing_fixtures(
                             self.context,
-                            source_file(&test_module_path),
+                            source_file(self.context.db().system(), &test_module_path),
                             &stmt_function_def,
                             &missing_args,
                             FunctionKind::Test,
@@ -367,7 +367,7 @@ fn handle_fixture_error(
         report_fixture_failure(
             context,
             py,
-            source_file(fixture.module_path()),
+            source_file(context.db().system(), fixture.module_path()),
             &fixture.stmt_function_def,
             fixture_arguments,
             err,
@@ -375,7 +375,7 @@ fn handle_fixture_error(
     } else {
         report_missing_fixtures(
             context,
-            source_file(fixture.module_path()),
+            source_file(context.db().system(), fixture.module_path()),
             &fixture.stmt_function_def,
             &missing_args,
             FunctionKind::Fixture,

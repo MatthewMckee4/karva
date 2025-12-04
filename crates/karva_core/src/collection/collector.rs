@@ -193,7 +193,7 @@ fn collect_file(
 ) -> Option<CollectedModule> {
     let module_path = ModulePath::new(path, context.project().cwd())?;
 
-    let source_text = std::fs::read_to_string(path).ok()?;
+    let source_text = context.db().system().read_to_string(path).ok()?;
 
     let module_type: ModuleType = path.into();
 
