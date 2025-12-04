@@ -1231,8 +1231,10 @@ dependencies = [
  "clap",
  "itertools 0.14.0",
  "karva_cli",
+ "karva_project",
  "markdown",
  "pretty_assertions",
+ "ruff_options_metadata",
 ]
 
 [[package]]

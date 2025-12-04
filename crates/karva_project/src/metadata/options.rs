@@ -86,23 +86,18 @@ pub struct SrcOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub respect_ignore_files: Option<bool>,
 
-    /// A list of files and directories to check. The `include` option
-    /// follows a similar syntax to `.gitignore` but reversed:
+    /// A list of files and directories to check.
     /// Including a file or directory will make it so that it (and its contents)
-    /// are type checked.
+    /// are tested.
     ///
-    /// - `./src/` matches only a directory
-    /// - `./src` matches both files and directories
-    /// - `src` matches a file or directory named `src`
+    /// - `tests` matches a directory named `tests`
+    /// - `tests/test.py` matches a file named `test.py` in the `tests` directory
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
         default = r#"null"#,
         value_type = r#"list[str]"#,
         example = r#"
-            include = [
-                "src",
-                "tests",
-            ]
+            include = ["tests"]
         "#
     )]
     pub include: Option<Vec<String>>,

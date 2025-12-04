@@ -26,6 +26,7 @@ nav = [
         { "Expect Fail" = "tags/expect_fail.md"}
     ]},
     { "Functions" = "functions.md"},
+    { "Configuration" = "configuration.md"},
     { "CLI" = "cli.md"},
 ]
 
