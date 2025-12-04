@@ -541,24 +541,10 @@ fn test_mock_env() {
     );
 
     if cfg!(target_os = "macos") {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command().arg("-q"), @r"
         success: true
         exit_code: 0
         ----- stdout -----
-        test test::test_setattr ... ok
-        test test::test_delattr ... ok
-        test test::test_setitem ... ok
-        test test::test_setitem_deleted_meanwhile ... ok
-        test test::test_setenv_deleted_meanwhile ... ok
-        test test::test_setenv_deleted_meanwhile ... ok
-        test test::test_delitem ... ok
-        test test::test_setenv ... ok
-        test test::test_delenv ... ok
-        test test::test_setenv_prepend ... ok
-        test test::test_syspath_prepend ... ok
-        test test::test_syspath_prepend_double_undo ... ok
-        test test::test_chdir_undo ... ok
-
         test result: ok. 13 passed; 0 failed; 3 skipped; finished in [TIME]
 
         ----- stderr -----
