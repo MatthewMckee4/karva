@@ -854,3 +854,389 @@ def custom_test(): pass
     ----- stderr -----
     ");
 }
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_cli_test_prefix_overrides_config() {
+    let context = IntegrationTestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[test]
+test-function-prefix = "config"
+"#,
+        ),
+        (
+            "test.py",
+            r"
+def config_should_not_run(): pass
+def cli_should_run(): pass
+",
+        ),
+    ]);
+
+    // CLI argument --test-prefix should override config file
+    assert_cmd_snapshot!(context.command().arg("--test-prefix").arg("cli"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::cli_should_run ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_cli_output_format_overrides_config() {
+    let context = IntegrationTestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[terminal]
+output-format = "full"
+"#,
+        ),
+        (
+            "test.py",
+            r"
+def test_example(): pass
+",
+        ),
+    ]);
+
+    // CLI argument --output-format should override config file
+    assert_cmd_snapshot!(context.command().arg("--output-format").arg("concise"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_example ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_cli_show_output_overrides_config() {
+    let context = IntegrationTestContext::with_files([
+        (
+            "karva.toml",
+            r"
+[terminal]
+show-python-output = false
+",
+        ),
+        (
+            "test.py",
+            r#"
+def test_with_print():
+    print("This should be visible with -s flag")
+    pass
+"#,
+        ),
+    ]);
+
+    // CLI argument -s should override config file and show output
+    assert_cmd_snapshot!(context.command().arg("-s"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_with_print ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+    This should be visible with -s flag
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_cli_no_ignore_overrides_config() {
+    let context = IntegrationTestContext::with_files([
+        (
+            "karva.toml",
+            r"
+[src]
+respect-ignore-files = true
+",
+        ),
+        (".gitignore", "ignored_test.py"),
+        (
+            "ignored_test.py",
+            r"
+def test_ignored(): pass
+",
+        ),
+        (
+            "test_main.py",
+            r"
+def test_main(): pass
+",
+        ),
+    ]);
+
+    // CLI argument --no-ignore should override config and include ignored files
+    assert_cmd_snapshot!(context.command().arg("--no-ignore").arg("-q"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_cli_fail_fast_overrides_config() {
+    let context = IntegrationTestContext::with_files([
+        (
+            "karva.toml",
+            r"
+[test]
+fail-fast = false
+",
+        ),
+        (
+            "test.py",
+            r"
+def test_first():
+    assert False
+
+def test_second():
+    pass
+",
+        ),
+    ]);
+
+    // CLI argument --fail-fast should override config and stop after first failure
+    assert_cmd_snapshot!(context.command().arg("--fail-fast"), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_first ... FAILED
+
+    diagnostics:
+
+    error[test-failure]: Test `test_first` failed
+     --> test.py:2:5
+      |
+    2 | def test_first():
+      |     ^^^^^^^^^^
+    3 |     assert False
+      |
+    info: Test failed here
+     --> test.py:3:5
+      |
+    2 | def test_first():
+    3 |     assert False
+      |     ^^^^^^^^^^^^
+    4 |
+    5 | def test_second():
+      |
+
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_cli_paths_override_config_include() {
+    let context = IntegrationTestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[src]
+include = ["config_dir"]
+"#,
+        ),
+        (
+            "config_dir/test_config.py",
+            r"
+def test_from_config(): pass
+",
+        ),
+        (
+            "cli_dir/test_cli.py",
+            r"
+def test_from_cli(): pass
+",
+        ),
+    ]);
+
+    // CLI path argument should add to config include
+    assert_cmd_snapshot!(context.command().arg("cli_dir").arg("-q"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_cli_multiple_arguments_override_config() {
+    let context = IntegrationTestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[src]
+respect-ignore-files = true
+include = ["config_dir"]
+
+[terminal]
+output-format = "full"
+show-python-output = false
+
+[test]
+test-function-prefix = "config"
+fail-fast = false
+"#,
+        ),
+        (".gitignore", "custom_dir/ignored.py"),
+        (
+            "custom_dir/ignored.py",
+            r#"
+def custom_test():
+    print("CLI output visible")
+    pass
+"#,
+        ),
+        (
+            "config_dir/test.py",
+            r"
+def config_should_not_run(): pass
+",
+        ),
+    ]);
+
+    // Multiple CLI arguments should all override their respective config values
+    assert_cmd_snapshot!(
+        context
+            .command()
+            .arg("--test-prefix")
+            .arg("custom")
+            .arg("--output-format")
+            .arg("concise")
+            .arg("-s")
+            .arg("--no-ignore")
+            .arg("custom_dir"),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test custom_dir.ignored::custom_test ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+    CLI output visible
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_cli_overrides_pyproject_toml() {
+    let context = IntegrationTestContext::with_files([
+        (
+            "pyproject.toml",
+            r#"
+[project]
+name = "test-project"
+
+[tool.karva.test]
+test-function-prefix = "pyproject"
+fail-fast = true
+
+[tool.karva.terminal]
+show-python-output = false
+"#,
+        ),
+        (
+            "test.py",
+            r#"
+def pyproject_should_not_run(): pass
+def cli_should_run():
+    print("Output from CLI override")
+    pass
+"#,
+        ),
+    ]);
+
+    // CLI arguments should override pyproject.toml configuration
+    assert_cmd_snapshot!(
+        context
+            .command()
+            .arg("--test-prefix")
+            .arg("cli")
+            .arg("-s")
+            .arg("--fail-fast"),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::cli_should_run ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+    Output from CLI override
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_cli_overrides_both_config_files() {
+    let context = IntegrationTestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[test]
+test-function-prefix = "karva"
+"#,
+        ),
+        (
+            "pyproject.toml",
+            r#"
+[project]
+name = "test-project"
+
+[tool.karva.test]
+test-function-prefix = "pyproject"
+"#,
+        ),
+        (
+            "test.py",
+            r"
+def karva_should_not_run(): pass
+def pyproject_should_not_run(): pass
+def cli_should_run(): pass
+",
+        ),
+    ]);
+
+    // CLI argument should override both karva.toml and pyproject.toml
+    assert_cmd_snapshot!(context.command().arg("--test-prefix").arg("cli"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::cli_should_run ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    WARN Ignoring the `tool.ty` section in `<temp_dir>/pyproject.toml` because `<temp_dir>/karva.toml` takes precedence.
+    ");
+}
