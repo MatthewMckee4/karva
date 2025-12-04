@@ -26,7 +26,7 @@ nav = [
             { "Skip" = "usage/tags/skip.md"},
             { "Expect Fail" = "usage/tags/expect_fail.md"}
         ]},
-        { "Functions" = "usage/functions.md"},
+        { "Other Functions" = "usage/functions.md"},
     ]},
     { "Configuration" = "configuration.md"},
     { "CLI" = "cli.md"},
@@ -35,7 +35,6 @@ nav = [
 [project.theme]
 language = "en"
 features = [
-    "navigation.expand",
     "navigation.instant",
     "search.highlight"
 ]
