@@ -1,7 +1,6 @@
 <!-- WARNING: This file is auto-generated (cargo dev generate-all). Update the doc comments on the 'Options' struct in 'crates/karva_project/src/metadata/options.rs' if you want to change anything here. -->
 
 # Configuration
-
 ## `src`
 
 ### `include`
@@ -24,7 +23,7 @@ are tested.
 include = ["tests"]
 ```
 
-______________________________________________________________________
+---
 
 ### `respect-ignore-files`
 
@@ -43,7 +42,7 @@ Enabled by default.
 respect-ignore-files = false
 ```
 
-______________________________________________________________________
+---
 
 ## `terminal`
 
@@ -64,7 +63,7 @@ Defaults to `full`.
 output-format = "concise"
 ```
 
-______________________________________________________________________
+---
 
 ### `show-python-output`
 
@@ -83,7 +82,7 @@ This is the output the `print` goes to etc.
 show-python-output = false
 ```
 
-______________________________________________________________________
+---
 
 ## `test`
 
@@ -104,7 +103,7 @@ Defaults to `false`.
 fail-fast = true
 ```
 
-______________________________________________________________________
+---
 
 ### `test-function-prefix`
 
@@ -123,4 +122,5 @@ Defaults to `test`.
 test-function-prefix = "test"
 ```
 
-______________________________________________________________________
+---
+

@@ -255,6 +255,7 @@ mod tests {
     use crate::Mode;
 
     #[test]
+    #[cfg(unix)]
     fn configuration_markdown_up_to_date() -> Result<()> {
         main(&Args { mode: Mode::Check })?;
         Ok(())
