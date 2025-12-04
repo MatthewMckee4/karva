@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use camino::Utf8PathBuf;
+use karva_combine::Combine;
+use karva_macros::{Combine, OptionsMetadata};
 use ruff_db::diagnostic::DiagnosticFormat;
-use ruff_macros::{Combine, OptionsMetadata};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use ty_combine::Combine;
 
 use crate::{
     ProjectSettings, System,

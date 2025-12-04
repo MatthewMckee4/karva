@@ -1,13 +1,21 @@
-use insta::{allow_duplicates, assert_snapshot};
-use karva_test::TestContext;
+use insta::allow_duplicates;
+use insta_cmd::assert_cmd_snapshot;
+use karva_test::IntegrationTestContext;
 use rstest::rstest;
 
-use crate::common::{TestRunnerExt, get_auto_use_kw};
+fn get_auto_use_kw(framework: &str) -> &str {
+    match framework {
+        "pytest" => "autouse",
+        "karva" => "auto_use",
+        _ => panic!("Invalid framework"),
+    }
+}
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_function_scope_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         format!(
             r#"
 import {framework}
@@ -31,20 +39,29 @@ def test_something_else():
         .as_str(),
     );
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_something ... ok
+        test test::test_something_else ... ok
+
+        test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_scope_auto_use_fixture(
     #[values("pytest", "karva")] framework: &str,
     #[values("module", "package", "session")] scope: &str,
 ) {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r#"
 import {framework}
@@ -67,17 +84,26 @@ def test_something_else():
         ),
     );
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_something ... ok
+        test test::test_something_else ... ok
+
+        test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r#"
                 from {framework} import fixture
@@ -105,17 +131,26 @@ fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
         ),
     );
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_string_only(first_entry=a, order=['a']) ... ok
+        test test::test_string_and_int(first_entry=a, order=['a']) ... ok
+
+        test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_auto_use_fixture_in_parent_module() {
-    let test_context = TestContext::with_files([
+    let context = IntegrationTestContext::with_files([
         (
-            "<test>/conftest.py",
+            "foo/conftest.py",
             "
             import karva
 
@@ -129,7 +164,7 @@ fn test_auto_use_fixture_in_parent_module() {
             ",
         ),
         (
-            "<test>/foo/test_file2.py",
+            "foo/inner/test_file2.py",
             "
             from ..conftest import arr
 
@@ -142,7 +177,15 @@ fn test_auto_use_fixture_in_parent_module() {
         ),
     ]);
 
-    let result = test_context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test foo.inner.test_file2::test_function1 ... ok
+    test foo.inner.test_file2::test_function2 ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }

@@ -1,15 +1,15 @@
-use insta::{allow_duplicates, assert_snapshot};
-use karva_test::TestContext;
+use insta::allow_duplicates;
+use insta_cmd::assert_cmd_snapshot;
+use karva_test::IntegrationTestContext;
 use rstest::rstest;
 
-use crate::common::TestRunnerExt;
-
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_temp_directory_fixture(
     #[values("tmp_path", "temp_path", "temp_dir", "tmpdir")] fixture_name: &str,
 ) {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let test_context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
                 import pathlib
@@ -23,17 +23,23 @@ fn test_temp_directory_fixture(
         ),
     );
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(test_context.command().arg("-q"), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_setattr() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 from karva import MockEnv
 
@@ -62,15 +68,25 @@ def test_setattr_undo(monkeypatch):
         ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_setattr_simple(monkeypatch=<MockEnv object>) ... ok
+    test test::test_setattr_new_attribute(monkeypatch=<MockEnv object>) ... ok
+    test test::test_setattr_undo(monkeypatch=<MockEnv object>) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_setitem() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 def test_setitem_dict(monkeypatch):
     d = {'x': 1}
@@ -92,15 +108,25 @@ def test_setitem_undo(monkeypatch):
         ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_setitem_dict(monkeypatch=<MockEnv object>) ... ok
+    test test::test_setitem_new_key(monkeypatch=<MockEnv object>) ... ok
+    test test::test_setitem_undo(monkeypatch=<MockEnv object>) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_env() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import os
 
@@ -124,15 +150,25 @@ def test_delenv(monkeypatch):
         ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_setenv(monkeypatch=<MockEnv object>) ... ok
+    test test::test_setenv_undo(monkeypatch=<MockEnv object>) ... ok
+    test test::test_delenv(monkeypatch=<MockEnv object>) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_syspath() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import sys
 
@@ -154,15 +190,24 @@ def test_syspath_prepend_multiple(monkeypatch):
         ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_syspath_prepend(monkeypatch=<MockEnv object>) ... ok
+    test test::test_syspath_prepend_multiple(monkeypatch=<MockEnv object>) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_delattr() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 def test_delattr(monkeypatch):
     class A:
@@ -182,15 +227,24 @@ def test_delattr_undo(monkeypatch):
         ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_delattr(monkeypatch=<MockEnv object>) ... ok
+    test test::test_delattr_undo(monkeypatch=<MockEnv object>) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_context_manager() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 from karva import MockEnv
 
@@ -215,15 +269,24 @@ def test_context_manager_auto_undo():
         ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_context_manager ... ok
+    test test::test_context_manager_auto_undo ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_finalizer() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
 import os
 
@@ -236,16 +299,25 @@ def test_1():
         ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_setenv(monkeypatch=<MockEnv object>) ... ok
+    test test::test_1 ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 /// Taken from <https://github.com/pytest-dev/pytest/blob/main/testing/test_monkeypatch.py>
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_mock_env() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r#"
             import os
             import re
@@ -468,11 +540,23 @@ fn test_mock_env() {
                 "#,
     );
 
-    let result = context.test();
-
     if cfg!(target_os = "macos") {
-        assert_snapshot!(result.display(), @"test result: ok. 13 passed; 0 failed; 3 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command().arg("-q"), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test result: ok. 13 passed; 0 failed; 3 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     } else {
-        assert_snapshot!(result.display(), @"test result: ok. 16 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command().arg("-q"), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test result: ok. 16 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }

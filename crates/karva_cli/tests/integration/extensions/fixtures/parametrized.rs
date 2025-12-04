@@ -1,13 +1,21 @@
-use insta::{allow_duplicates, assert_snapshot};
-use karva_test::TestContext;
+use insta::allow_duplicates;
+use insta_cmd::assert_cmd_snapshot;
+use karva_test::IntegrationTestContext;
 use rstest::rstest;
 
-use crate::common::{TestRunnerExt, get_parametrize_function};
+fn get_parametrize_function(framework: &str) -> &str {
+    match framework {
+        "pytest" => "pytest.mark.parametrize",
+        "karva" => "karva.tags.parametrize",
+        _ => panic!("Invalid framework"),
+    }
+}
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
                 import {framework}
@@ -24,18 +32,28 @@ fn test_parametrized_fixture(#[values("pytest", "karva")] framework: &str) {
         ),
     );
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_with_parametrized_fixture(my_fixture=a) ... ok
+        test test::test_with_parametrized_fixture(my_fixture=b) ... ok
+        test test::test_with_parametrized_fixture(my_fixture=c) ... ok
+
+        test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_in_conftest(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_files([
+    let context = IntegrationTestContext::with_files([
         (
-            "<test>/conftest.py",
+            "conftest.py",
             format!(
                 r"
                     import {framework}
@@ -48,7 +66,7 @@ fn test_parametrized_fixture_in_conftest(#[values("pytest", "karva")] framework:
             .as_str(),
         ),
         (
-            "<test>/test.py",
+            "test.py",
             r"
                     def test_with_number(number_fixture):
                         assert number_fixture in [10, 20, 30]
@@ -56,18 +74,28 @@ fn test_parametrized_fixture_in_conftest(#[values("pytest", "karva")] framework:
         ),
     ]);
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_with_number(number_fixture=10) ... ok
+        test test::test_with_number(number_fixture=20) ... ok
+        test test::test_with_number(number_fixture=30) ... ok
+
+        test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_module_scope(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_files([
+    let context = IntegrationTestContext::with_files([
         (
-            "<test>/conftest.py",
+            "conftest.py",
             format!(
                 r"
                     import {framework}
@@ -80,7 +108,7 @@ fn test_parametrized_fixture_module_scope(#[values("pytest", "karva")] framework
             .as_str(),
         ),
         (
-            "<test>/test.py",
+            "test.py",
             r"
                     def test_first(module_fixture):
                         assert module_fixture in ['X', 'Y']
@@ -91,17 +119,28 @@ fn test_parametrized_fixture_module_scope(#[values("pytest", "karva")] framework
         ),
     ]);
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_first(module_fixture=X) ... ok
+        test test::test_first(module_fixture=X) ... ok
+        test test::test_second(module_fixture=X) ... ok
+        test test::test_second(module_fixture=X) ... ok
+
+        test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_with_generator(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
                 import {framework}
@@ -130,18 +169,28 @@ fn test_parametrized_fixture_with_generator(#[values("pytest", "karva")] framewo
         ),
     );
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_with_setup(setup_fixture=setup_a) ... ok
+        test test::test_with_setup(setup_fixture=setup_b) ... ok
+        test test::test_verify_finalizers_ran ... ok
+
+        test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_session_scope(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_files([
+    let context = IntegrationTestContext::with_files([
         (
-            "<test>/conftest.py",
+            "conftest.py",
             format!(
                 r"
                     import {framework}
@@ -157,7 +206,7 @@ fn test_parametrized_fixture_session_scope(#[values("pytest", "karva")] framewor
             .as_str(),
         ),
         (
-            "<test>/test_1.py",
+            "test_1.py",
             r"
                     def test_a1(session_fixture):
                         assert session_fixture in ['session_1', 'session_2']
@@ -167,7 +216,7 @@ fn test_parametrized_fixture_session_scope(#[values("pytest", "karva")] framewor
                 ",
         ),
         (
-            "<test>/test_2.py",
+            "test_2.py",
             r"
                     def test_b1(session_fixture):
                         assert session_fixture in ['session_1', 'session_2']
@@ -175,17 +224,23 @@ fn test_parametrized_fixture_session_scope(#[values("pytest", "karva")] framewor
         ),
     ]);
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 6 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command().arg("-q"), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test result: ok. 6 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_with_multiple_params(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
                 import {framework}
@@ -205,19 +260,30 @@ fn test_parametrized_fixture_with_multiple_params(#[values("pytest", "karva")] f
         ),
     );
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_combination(letter=a, number=10) ... ok
+        test test::test_combination(letter=b, number=10) ... ok
+        test test::test_combination(letter=a, number=20) ... ok
+        test test::test_combination(letter=b, number=20) ... ok
+
+        test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_with_regular_parametrize(
     #[values("pytest", "karva")] framework: &str,
 ) {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
                 import {framework}
@@ -235,19 +301,30 @@ fn test_parametrized_fixture_with_regular_parametrize(
         ),
     );
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_both(fixture_param=1, test_param=10) ... ok
+        test test::test_both(fixture_param=1, test_param=20) ... ok
+        test test::test_both(fixture_param=2, test_param=10) ... ok
+        test test::test_both(fixture_param=2, test_param=20) ... ok
+
+        test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_generator_fixture_finalizer_order(
     #[values("pytest", "karva")] framework: &str,
 ) {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
                 import {framework}
@@ -277,18 +354,28 @@ fn test_parametrized_generator_fixture_finalizer_order(
         ),
     );
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_one(ordered_fixture=first) ... ok
+        test test::test_one(ordered_fixture=second) ... ok
+        test test::test_check_order ... ok
+
+        test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_package_scope(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_files([
+    let context = IntegrationTestContext::with_files([
         (
-            "<test>/package/conftest.py",
+            "package/conftest.py",
             format!(
                 r"
                     import {framework}
@@ -301,14 +388,14 @@ fn test_parametrized_fixture_package_scope(#[values("pytest", "karva")] framewor
             .as_str(),
         ),
         (
-            "<test>/package/test_one.py",
+            "package/test_one.py",
             r"
                     def test_in_one(package_fixture):
                         assert package_fixture in ['pkg_a', 'pkg_b']
                 ",
         ),
         (
-            "<test>/package/test_two.py",
+            "package/test_two.py",
             r"
                     def test_in_two(package_fixture):
                         assert package_fixture in ['pkg_a', 'pkg_b']
@@ -316,17 +403,23 @@ fn test_parametrized_fixture_package_scope(#[values("pytest", "karva")] framewor
         ),
     ]);
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command().arg("-q"), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_with_dependency(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
                 import {framework}
@@ -345,17 +438,26 @@ fn test_parametrized_fixture_with_dependency(#[values("pytest", "karva")] framew
         ),
     );
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_dependent(dependent_fixture=100) ... ok
+        test test::test_dependent(dependent_fixture=200) ... ok
+
+        test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_finalizer_with_state(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
                 import {framework}
@@ -377,17 +479,28 @@ fn test_parametrized_fixture_finalizer_with_state(#[values("pytest", "karva")] f
         ),
     );
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_uses_resource(resource=resource_1) ... ok
+        test test::test_uses_resource(resource=resource_2) ... ok
+        test test::test_uses_resource(resource=resource_3) ... ok
+        test test::test_all_cleaned_up ... ok
+
+        test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_pytest_param() {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
             import pytest
 
@@ -406,15 +519,27 @@ fn test_pytest_param() {
    ",
     );
 
-    let result = test_context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_resource(resource=resource_1) ... ok
+    test test::test_resource(resource=resource_2) ... ok
+    test test::test_resource(resource=resource_3) ... ok
+    test test::test_resource ... skipped
+    test test::test_resource(resource=resource_5) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 4 passed; 0 failed; 1 skipped; finished in [TIME]");
+    test result: ok. 4 passed; 0 failed; 1 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_karva_param() {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
             import karva
 
@@ -433,17 +558,29 @@ fn test_karva_param() {
    ",
     );
 
-    let result = test_context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_resource(resource=resource_1) ... ok
+    test test::test_resource(resource=resource_2) ... ok
+    test test::test_resource(resource=resource_3) ... ok
+    test test::test_resource ... skipped
+    test test::test_resource(resource=resource_5) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 4 passed; 0 failed; 1 skipped; finished in [TIME]");
+    test result: ok. 4 passed; 0 failed; 1 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_complex_parametrized_generator_fixture_finalizer_order(
     #[values("pytest", "karva")] framework: &str,
 ) {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r#"
 
@@ -498,9 +635,20 @@ fn test_complex_parametrized_generator_fixture_finalizer_order(
         ),
     );
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 5 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_one(ordered_fixture=1_1, ordered_fixture2=2_1) ... ok
+        test test::test_one(ordered_fixture=1_1, ordered_fixture2=2_2) ... ok
+        test test::test_one(ordered_fixture=1_2, ordered_fixture2=2_1) ... ok
+        test test::test_one(ordered_fixture=1_2, ordered_fixture2=2_2) ... ok
+        test test::test_check_order ... ok
+
+        test result: ok. 5 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }

@@ -1,12 +1,11 @@
-use insta::assert_snapshot;
-use karva_test::TestContext;
-
-use crate::common::TestRunnerExt;
+use insta_cmd::assert_cmd_snapshot;
+use karva_test::IntegrationTestContext;
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_invalid_pytest_fixture_scope() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r#"
                 import pytest
 
@@ -21,13 +20,16 @@ fn test_invalid_pytest_fixture_scope() {
                 "#,
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_all_scopes ... FAILED
 
-    assert_snapshot!(result.display(), @r#"
     diagnostics:
 
     error[invalid-fixture]: Discovered an invalid fixture `some_fixture`
-     --> <test>/test.py:5:5
+     --> test.py:5:5
       |
     4 | @pytest.fixture(scope="sessionss")
     5 | def some_fixture() -> int:
@@ -37,7 +39,7 @@ fn test_invalid_pytest_fixture_scope() {
     info: 'FixtureFunctionDefinition' object cannot be cast as 'FixtureFunctionDefinition'
 
     error[missing-fixtures]: Test `test_all_scopes` has missing fixtures
-      --> <test>/test.py:8:5
+      --> test.py:8:5
        |
      6 |     return 1
      7 |
@@ -49,15 +51,16 @@ fn test_invalid_pytest_fixture_scope() {
     info: Missing fixtures: `some_fixture`
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
-    "#);
 
-    assert!(result.total_diagnostics() == 2);
+    ----- stderr -----
+    "#);
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_missing_fixture() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
                 def test_all_scopes(
                     missing_fixture: int,
@@ -66,13 +69,16 @@ fn test_missing_fixture() {
                 ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_all_scopes ... FAILED
 
-    assert_snapshot!(result.display(), @r"
     diagnostics:
 
     error[missing-fixtures]: Test `test_all_scopes` has missing fixtures
-     --> <test>/test.py:2:5
+     --> test.py:2:5
       |
     2 | def test_all_scopes(
       |     ^^^^^^^^^^^^^^^
@@ -82,15 +88,16 @@ fn test_missing_fixture() {
     info: Missing fixtures: `missing_fixture`
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
-    ");
 
-    assert!(result.diagnostics().len() == 1);
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_fails_to_run() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
                 from karva import fixture
 
@@ -103,13 +110,16 @@ fn test_fixture_fails_to_run() {
                 ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_failing_fixture ... FAILED
 
-    assert_snapshot!(result.display(), @r"
     diagnostics:
 
     error[fixture-failure]: Fixture `failing_fixture` failed
-     --> <test>/test.py:5:5
+     --> test.py:5:5
       |
     4 | @fixture
     5 | def failing_fixture():
@@ -117,7 +127,7 @@ fn test_fixture_fails_to_run() {
     6 |     raise Exception('Fixture failed')
       |
     info: Test failed here
-     --> <test>/test.py:6:5
+     --> test.py:6:5
       |
     4 | @fixture
     5 | def failing_fixture():
@@ -129,7 +139,7 @@ fn test_fixture_fails_to_run() {
     info: Fixture failed
 
     error[missing-fixtures]: Test `test_failing_fixture` has missing fixtures
-     --> <test>/test.py:8:5
+     --> test.py:8:5
       |
     6 |     raise Exception('Fixture failed')
     7 |
@@ -140,13 +150,16 @@ fn test_fixture_fails_to_run() {
     info: Missing fixtures: `failing_fixture`
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
     ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_missing_fixtures() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
                 from karva import fixture
 
@@ -159,13 +172,16 @@ fn test_fixture_missing_fixtures() {
                 ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_failing_fixture ... FAILED
 
-    assert_snapshot!(result.display(), @r"
     diagnostics:
 
     error[missing-fixtures]: Fixture `failing_fixture` has missing fixtures
-     --> <test>/test.py:5:5
+     --> test.py:5:5
       |
     4 | @fixture
     5 | def failing_fixture(missing_fixture):
@@ -175,7 +191,7 @@ fn test_fixture_missing_fixtures() {
     info: Missing fixtures: `missing_fixture`
 
     error[missing-fixtures]: Test `test_failing_fixture` has missing fixtures
-     --> <test>/test.py:8:5
+     --> test.py:8:5
       |
     6 |     return 1
     7 |
@@ -186,13 +202,16 @@ fn test_fixture_missing_fixtures() {
     info: Missing fixtures: `failing_fixture`
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
     ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn missing_arguments_in_nested_function() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
                 def test_failing_fixture():
 
@@ -202,13 +221,16 @@ fn missing_arguments_in_nested_function() {
                    ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_failing_fixture ... FAILED
 
-    assert_snapshot!(result.display(), @r"
     diagnostics:
 
     error[test-failure]: Test `test_failing_fixture` failed
-     --> <test>/test.py:2:5
+     --> test.py:2:5
       |
     2 | def test_failing_fixture():
       |     ^^^^^^^^^^^^^^^^^^^^
@@ -216,7 +238,7 @@ fn missing_arguments_in_nested_function() {
     4 |     def inner(missing_fixture): ...
       |
     info: Test failed here
-     --> <test>/test.py:6:5
+     --> test.py:6:5
       |
     4 |     def inner(missing_fixture): ...
     5 |
@@ -226,13 +248,16 @@ fn missing_arguments_in_nested_function() {
     info: test_failing_fixture.<locals>.inner() missing 1 required positional argument: 'missing_fixture'
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
     ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_failing_yield_fixture() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"
             import karva
 
@@ -247,13 +272,16 @@ fn test_failing_yield_fixture() {
                    ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_failing_fixture ... FAILED
 
-    assert_snapshot!(result.display(), @r"
     diagnostics:
 
     error[fixture-failure]: Fixture `fixture` failed
-     --> <test>/test.py:5:5
+     --> test.py:5:5
       |
     4 | @karva.fixture
     5 | def fixture():
@@ -262,7 +290,7 @@ fn test_failing_yield_fixture() {
     7 |         raise ValueError('foo')
       |
     info: Test failed here
-     --> <test>/test.py:7:9
+     --> test.py:7:9
       |
     5 | def fixture():
     6 |     def foo():
@@ -273,7 +301,7 @@ fn test_failing_yield_fixture() {
     info: foo
 
     error[missing-fixtures]: Test `test_failing_fixture` has missing fixtures
-      --> <test>/test.py:10:5
+      --> test.py:10:5
        |
      8 |     yield foo()
      9 |
@@ -284,5 +312,7 @@ fn test_failing_yield_fixture() {
     info: Missing fixtures: `fixture`
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
     ");
 }

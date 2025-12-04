@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use camino::{Utf8Path, Utf8PathBuf};
+use karva_combine::Combine;
 use ruff_python_ast::PythonVersion;
 use thiserror::Error;
-use ty_combine::Combine;
 
 use crate::{System, VerbosityLevel};
 

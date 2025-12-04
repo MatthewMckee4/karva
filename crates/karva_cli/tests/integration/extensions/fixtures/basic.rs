@@ -1,15 +1,23 @@
-use insta::{allow_duplicates, assert_snapshot};
-use karva_test::TestContext;
+use insta::allow_duplicates;
+use insta_cmd::assert_cmd_snapshot;
+use karva_test::IntegrationTestContext;
 use rstest::rstest;
 
-use crate::common::{TestRunnerExt, get_auto_use_kw};
+fn get_auto_use_kw(framework: &str) -> &str {
+    match framework {
+        "pytest" => "autouse",
+        "karva" => "auto_use",
+        _ => panic!("Invalid framework"),
+    }
+}
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
  {
-    let context = TestContext::with_files([
+    let context = IntegrationTestContext::with_files([
         (
-            "<test>/conftest.py",
+            "conftest.py",
             r"
 import karva
 @karva.fixture(scope='function')
@@ -25,19 +33,27 @@ def z(x, y):
     return 1
             ",
         ),
-        ("<test>/test.py", "def test_1(z): pass"),
+        ("test.py", "def test_1(z): pass"),
     ]);
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_1(z=1) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_runner_given_nested_path() {
-    let context = TestContext::with_files([
+    let context = IntegrationTestContext::with_files([
         (
-            "<test>/conftest.py",
+            "conftest.py",
             r"
 import karva
 @karva.fixture(scope='module')
@@ -45,18 +61,26 @@ def x():
     return 1
             ",
         ),
-        ("<test>/test.py", "def test_1(x): pass"),
+        ("test.py", "def test_1(x): pass"),
     ]);
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_1(x=1) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_with_name_parameter() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r#"import karva
 
 @karva.fixture(name="fixture_name")
@@ -68,15 +92,23 @@ def test_fixture_with_name_parameter(fixture_name):
 "#,
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_fixture_with_name_parameter(fixture_name=1) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    "#);
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_is_different_in_different_functions() {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         r"import karva
 
 class Testcontext:
@@ -97,16 +129,25 @@ def test_fixture_2(fixture):
 ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_fixture(fixture=<test.Testcontext object at...) ... ok
+    test test::test_fixture_2(fixture=<test.Testcontext object at...) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_from_current_package_session_scope() {
-    let context = TestContext::with_files([
+    let context = IntegrationTestContext::with_files([
         (
-            "<test>/tests/conftest.py",
+            "tests/conftest.py",
             r"
 import karva
 
@@ -115,19 +156,27 @@ def x():
     return 1
             ",
         ),
-        ("<test>/tests/test.py", "def test_1(x): pass"),
+        ("tests/test.py", "def test_1(x): pass"),
     ]);
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test tests.test::test_1(x=1) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_from_current_package_function_scope() {
-    let context = TestContext::with_files([
+    let context = IntegrationTestContext::with_files([
         (
-            "<test>/tests/conftest.py",
+            "tests/conftest.py",
             r"
 import karva
 @karva.fixture
@@ -135,19 +184,27 @@ def x():
     return 1
             ",
         ),
-        ("<test>/tests/test.py", "def test_1(x): pass"),
+        ("tests/test.py", "def test_1(x): pass"),
     ]);
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test tests.test::test_1(x=1) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_finalizer_from_current_package_session_scope() {
-    let context = TestContext::with_files([
+    let context = IntegrationTestContext::with_files([
         (
-            "<test>/tests/conftest.py",
+            "tests/conftest.py",
             r"
 import karva
 
@@ -160,7 +217,7 @@ def x():
             ",
         ),
         (
-            "<test>/tests/test.py",
+            "tests/test.py",
             r"
 from .conftest import arr
 
@@ -173,16 +230,25 @@ def test_2(x):
         ),
     ]);
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test tests.test::test_1(x=1) ... ok
+    test tests.test::test_2(x=1) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_finalizer_from_current_package_function_scope() {
-    let context = TestContext::with_files([
+    let context = IntegrationTestContext::with_files([
         (
-            "<test>/tests/conftest.py",
+            "tests/conftest.py",
             r"
 import karva
 
@@ -195,7 +261,7 @@ def x():
             ",
         ),
         (
-            "<test>/tests/test.py",
+            "tests/test.py",
             r"
 from .conftest import arr
 
@@ -208,16 +274,25 @@ def test_2(x):
         ),
     ]);
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test tests.test::test_1(x=1) ... ok
+    test tests.test::test_2(x=1) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_discover_pytest_fixture() {
-    let context = TestContext::with_files([
+    let context = IntegrationTestContext::with_files([
         (
-            "<test>/tests/conftest.py",
+            "tests/conftest.py",
             r"
 import pytest
 
@@ -226,18 +301,26 @@ def x():
     return 1
 ",
         ),
-        ("<test>/tests/test.py", "def test_1(x): pass"),
+        ("tests/test.py", "def test_1(x): pass"),
     ]);
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test tests.test::test_1(x=1) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_dynamic_fixture_scope_session_scope(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r#"
 from {framework} import fixture
@@ -262,17 +345,26 @@ def test_2(x_session):
         ),
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]")
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_1(x_session=[]) ... ok
+        test test::test_2(x_session=[1]) ... ok
+
+        test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ")
     };
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_dynamic_fixture_scope_function_scope(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r#"
 from {framework} import fixture
@@ -297,18 +389,27 @@ def test_2(x_function):
         ),
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_1(x_function=[]) ... ok
+        test test::test_2(x_function=[]) ... ok
+
+        test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_override_in_test_modules() {
-    let context = TestContext::with_files([
+    let context = IntegrationTestContext::with_files([
         (
-            "<test>/tests/conftest.py",
+            "tests/conftest.py",
             r"
 import karva
 
@@ -318,7 +419,7 @@ def username():
 ",
         ),
         (
-            "<test>/tests/test_1.py",
+            "tests/test_1.py",
             r"
 import karva
 
@@ -331,7 +432,7 @@ def test_username(username):
 ",
         ),
         (
-            "<test>/tests/test_2.py",
+            "tests/test_2.py",
             r"
 import karva
 
@@ -345,15 +446,21 @@ def test_username(username):
         ),
     ]);
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command().arg("-q"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
 
-    assert_snapshot!(result.display(), @"test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]");
+    ----- stderr -----
+    ");
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r#"
                     from {framework} import fixture
@@ -397,17 +504,26 @@ fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &st
                     "#,
         ),
     );
-    let result = context.test();
 
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_all_scopes(function_fixture=4, module_fixture=2, package_fixture=3, session_fixture=1) ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
                 from {framework} import fixture
@@ -429,17 +545,25 @@ fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
         ),
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_calculator(calculator=<test.Calculator object at ...) ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "<test>/test.py",
+    let context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
                 from {framework} import fixture
@@ -461,17 +585,25 @@ fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &st
         ),
     );
 
-    let result = context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_value(clean_data=None) ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_depends_on_fixture_with_finalizer() {
-    let context = TestContext::with_file(
-        "<test>/test_file.py",
+    let context = IntegrationTestContext::with_file(
+        "test_file.py",
         r"
 import karva
 
@@ -491,7 +623,14 @@ def test_z(y):
             ",
     );
 
-    let result = context.test();
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test_file::test_z(y=0) ... ok
 
-    assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
 }

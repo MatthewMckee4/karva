@@ -1,13 +1,13 @@
-use insta::{allow_duplicates, assert_snapshot};
-use karva_test::TestContext;
+use insta::allow_duplicates;
+use insta_cmd::assert_cmd_snapshot;
+use karva_test::IntegrationTestContext;
 use rstest::rstest;
 
-use crate::common::TestRunnerExt;
-
 #[rstest]
+#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request(#[values("pytest", "karva")] framework: &str) {
-    let test_context = TestContext::with_file(
-        "<test>/test.py",
+    let test_context = IntegrationTestContext::with_file(
+        "test.py",
         &format!(
             r"
                 import {framework}
@@ -26,9 +26,16 @@ fn test_fixture_request(#[values("pytest", "karva")] framework: &str) {
         ),
     );
 
-    let result = test_context.test();
-
     allow_duplicates! {
-        assert_snapshot!(result.display(), @"test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]");
+        assert_cmd_snapshot!(test_context.command(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_with_request_fixture(my_fixture=fixture_value) ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
     }
 }
