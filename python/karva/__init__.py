@@ -13,7 +13,7 @@ from karva._karva import (
     tags,
 )
 
-__version__ = "0.1.10"
+__version__ = "0.1.11"
 
 __all__: list[str] = [
     "FailError",
