@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use camino::Utf8PathBuf;
 use pyo3::{
     prelude::*,
     types::{PyDict, PyIterator},
@@ -13,7 +14,8 @@ use crate::{
     },
     extensions::{
         fixtures::{
-            Finalizer, FixtureScope, NormalizedFixture, create_fixture_with_finalizer,
+            Finalizer, FixtureRequest, FixtureScope, FunctionNode, ModuleNode,
+            NormalizedFixture, RequiresFixtures, create_fixture_with_finalizer,
             missing_arguments_from_error,
         },
         tags::{
@@ -152,7 +154,12 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         let mut test_arguments = HashMap::new();
 
         for fixture in fixture_dependencies.iter() {
-            if let Some((value, finalizer)) = self.execute_fixture(py, fixture) {
+            if let Some((value, finalizer)) = self.execute_fixture_with_context(
+                py,
+                fixture,
+                Some(&function),
+                Some(&test_module_path),
+            ) {
                 test_arguments.insert(fixture.function_name().to_string(), value);
                 if let Some(finalizer) = finalizer {
                     test_finalizers.push(finalizer);
@@ -165,6 +172,9 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         for (key, value) in params {
             test_arguments.insert(key, value);
         }
+
+        // Note: Test functions can't directly request the 'request' fixture
+        // Only fixtures can request 'request'
 
         let full_test_name = full_test_name(py, name.to_string(), &test_arguments);
 
@@ -261,6 +271,17 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         py: Python<'_>,
         fixture: &NormalizedFixture,
     ) -> Option<(Py<PyAny>, Option<Finalizer>)> {
+        self.execute_fixture_with_context(py, fixture, None, None)
+    }
+
+    /// Execute a fixture with optional test context
+    fn execute_fixture_with_context(
+        &self,
+        py: Python<'_>,
+        fixture: &NormalizedFixture,
+        test_function: Option<&Py<PyAny>>,
+        module_path: Option<&Utf8PathBuf>,
+    ) -> Option<(Py<PyAny>, Option<Finalizer>)> {
         if let Some(cached) = self
             .fixture_cache
             .get(fixture.function_name(), fixture.scope())
@@ -270,8 +291,9 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
         let mut fixture_arguments = HashMap::new();
 
-        for fixture in fixture.dependencies() {
-            let (value, finalizer) = self.execute_fixture(py, fixture)?;
+        for dep_fixture in fixture.dependencies() {
+            let (value, finalizer) =
+                self.execute_fixture_with_context(py, dep_fixture, test_function, module_path)?;
 
             // Dependency finalizers are always added to the cache
             // They need to outlive the current fixture execution
@@ -279,7 +301,19 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                 self.finalizer_cache.add_finalizer(finalizer);
             }
 
-            fixture_arguments.insert(fixture.function_name().to_string(), value);
+            fixture_arguments.insert(dep_fixture.function_name().to_string(), value);
+        }
+
+        // Check if this fixture requires the 'request' fixture
+        if let Some(user_defined) = fixture.as_user_defined() {
+            let required = user_defined.stmt_function_def.required_fixtures(py);
+            if required.contains(&"request".to_string()) {
+                if let Ok(request_obj) =
+                    create_fixture_request(py, fixture, test_function, module_path)
+                {
+                    fixture_arguments.insert("request".to_string(), request_obj.into_any());
+                }
+            }
         }
 
         let fixture_call_result = match fixture.call(py, &fixture_arguments) {
@@ -347,6 +381,140 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
             }
         }
     }
+}
+
+/// Creates a `FixtureRequest` object with the appropriate node based on scope
+fn create_fixture_request(
+    py: Python<'_>,
+    fixture: &NormalizedFixture,
+    test_function: Option<&Py<PyAny>>,
+    module_path: Option<&Utf8PathBuf>,
+) -> PyResult<Py<FixtureRequest>> {
+    let param_value = fixture
+        .param()
+        .and_then(|param| param.values.first())
+        .cloned();
+
+    // Determine the node based on the fixture scope
+    let node = match fixture.scope() {
+        FixtureScope::Function => {
+            // For function scope, node is the test function
+            if let Some(test_fn) = test_function {
+                // Wrap the test function in FunctionNode to provide .name attribute
+                if let Ok(fn_node) = Py::new(py, FunctionNode::new(test_fn.clone())) {
+                    fn_node.into_any()
+                } else {
+                    test_fn.clone()
+                }
+            } else {
+                get_fixture_function_node(py, fixture)
+            }
+        }
+        FixtureScope::Module => {
+            // For module scope, node should be the module
+            // For now, use the fixture function as a placeholder
+            get_module_node(py, module_path, fixture)
+        }
+        FixtureScope::Package => {
+            // For package scope, node should be the package
+            // For now, use the fixture function as a placeholder
+            get_package_node(py, module_path, fixture)
+        }
+        FixtureScope::Session => {
+            // For session scope, node should be the session
+            // For now, use the fixture function as a placeholder
+            get_fixture_function_node(py, fixture)
+        }
+    };
+
+    Py::new(py, FixtureRequest::new(param_value, node))
+}
+
+/// Gets the fixture function as the node (fallback behavior)
+fn get_fixture_function_node(py: Python<'_>, fixture: &NormalizedFixture) -> Py<PyAny> {
+    let function = match fixture {
+        NormalizedFixture::UserDefined(user_defined) => user_defined.py_function.clone(),
+        NormalizedFixture::BuiltIn(builtin) => builtin.py_value.clone(),
+    };
+
+    // Wrap the function in a FunctionNode to provide .name attribute
+    if let Ok(node) = Py::new(py, FunctionNode::new(function.clone())) {
+        return node.into_any();
+    }
+
+    // Fallback to raw function if wrapper creation fails
+    function
+}
+
+/// Gets the module node for module-scoped fixtures
+fn get_module_node(
+    py: Python<'_>,
+    module_path: Option<&Utf8PathBuf>,
+    fixture: &NormalizedFixture,
+) -> Py<PyAny> {
+    // For module-scoped fixtures, return the module object where the test is running
+    // First try to use the test's module path (if provided)
+    let path_to_use = module_path.or_else(|| {
+        // Fall back to the fixture's module path if no test context
+        fixture.as_user_defined().map(|f| f.module_path())
+    });
+
+    if let Some(path) = path_to_use {
+        // Convert file path to module name by removing .py extension and converting slashes
+        if let Some(file_stem) = path.file_stem() {
+            // Try to find the module in sys.modules
+            if let Ok(sys) = py.import("sys") {
+                if let Ok(modules) = sys.getattr("modules") {
+                    // First try just the file stem (common case for test files in the same directory)
+                    if let Ok(module) = modules.get_item(file_stem) {
+                        let module_py: Py<PyAny> = module.into();
+                        // Wrap the module in a ModuleNode to provide .name attribute
+                        if let Ok(node) = Py::new(py, ModuleNode::new(module_py.clone())) {
+                            return node.into_any();
+                        }
+                        return module_py;
+                    }
+
+                    // If that didn't work, try to find a module that ends with this file stem
+                    // This handles cases where the module has a package prefix
+                    if let Ok(dict) = modules.cast_into::<pyo3::types::PyDict>() {
+                        for (key, value) in dict.iter() {
+                            if let Ok(key_str) = key.extract::<String>() {
+                                // Check if the key ends with the file stem
+                                // e.g., "tests.test_foo" ends with "test_foo"
+                                if key_str.ends_with(file_stem)
+                                    && (key_str == file_stem
+                                        || key_str.ends_with(&format!(".{}", file_stem)))
+                                {
+                                    let value_py: Py<PyAny> = value.into();
+                                    // Wrap the module in a ModuleNode to provide .name attribute
+                                    if let Ok(node) = Py::new(py, ModuleNode::new(value_py.clone()))
+                                    {
+                                        return node.into_any();
+                                    }
+                                    return value_py;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback to fixture function if we couldn't find the module
+    get_fixture_function_node(py, fixture)
+}
+
+/// Gets the package node for package-scoped fixtures
+fn get_package_node(
+    py: Python<'_>,
+    _module_path: Option<&Utf8PathBuf>,
+    fixture: &NormalizedFixture,
+) -> Py<PyAny> {
+    // TODO: Return the actual package object
+    // For now, return the fixture function
+    get_fixture_function_node(py, fixture)
 }
 
 fn handle_fixture_error(

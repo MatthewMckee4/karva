@@ -14,7 +14,7 @@ mod utils;
 pub use builtins::{MockEnv, create_fixture_with_finalizer, get_builtin_fixture};
 pub use finalizer::Finalizer;
 pub use normalized_fixture::{NormalizedFixture, UserDefinedFixture};
-pub use python::FixtureRequest;
+pub use python::{FixtureRequest, FunctionNode, ModuleNode};
 pub use scope::FixtureScope;
 pub use traits::{HasFixtures, RequiresFixtures};
 pub use utils::missing_arguments_from_error;

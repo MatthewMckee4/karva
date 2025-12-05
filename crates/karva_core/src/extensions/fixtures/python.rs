@@ -12,11 +12,14 @@ use pyo3::{
 pub struct FixtureRequest {
     #[pyo3(get)]
     pub param: Option<Py<PyAny>>,
+
+    #[pyo3(get)]
+    pub node: Py<PyAny>,
 }
 
 impl FixtureRequest {
-    pub(crate) const fn new(param: Option<Py<PyAny>>) -> Self {
-        Self { param }
+    pub(crate) const fn new(param: Option<Py<PyAny>>, node: Py<PyAny>) -> Self {
+        Self { param, node }
     }
 }
 
@@ -128,6 +131,85 @@ pub fn fixture_decorator(
         Ok(Py::new(py, fixture_def)?.into_any())
     } else {
         Ok(Py::new(py, marker)?.into_any())
+    }
+}
+
+/// Wrapper for function objects to provide pytest-compatible node interface
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct FunctionNode {
+    /// The underlying function object
+    #[pyo3(get)]
+    pub function: Py<PyAny>,
+}
+
+#[pymethods]
+impl FunctionNode {
+    #[getter]
+    fn name(&self, py: Python<'_>) -> PyResult<String> {
+        // Get the __name__ attribute from the function
+        self.function.getattr(py, "__name__")?.extract(py)
+    }
+
+    fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
+        // Delegate all other attribute access to the underlying function
+        self.function.getattr(py, name)
+    }
+
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        let function_name = self.name(py)?;
+        Ok(format!("<FunctionNode {}>", function_name))
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn __call__(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        // Allow the function node to be called like the underlying function
+        self.function.call(py, args, kwargs)
+    }
+}
+
+impl FunctionNode {
+    pub fn new(function: Py<PyAny>) -> Self {
+        Self { function }
+    }
+}
+
+/// Wrapper for module objects to provide pytest-compatible node interface
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct ModuleNode {
+    /// The underlying module object
+    #[pyo3(get)]
+    pub module: Py<PyAny>,
+}
+
+#[pymethods]
+impl ModuleNode {
+    #[getter]
+    fn name(&self, py: Python<'_>) -> PyResult<String> {
+        // Get the __name__ attribute from the module
+        self.module.getattr(py, "__name__")?.extract(py)
+    }
+
+    fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
+        // Delegate all other attribute access to the underlying module
+        self.module.getattr(py, name)
+    }
+
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        let module_name = self.name(py)?;
+        Ok(format!("<ModuleNode {}>", module_name))
+    }
+}
+
+impl ModuleNode {
+    pub fn new(module: Py<PyAny>) -> Self {
+        Self { module }
     }
 }
 

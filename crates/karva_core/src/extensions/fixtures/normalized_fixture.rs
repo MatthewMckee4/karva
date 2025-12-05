@@ -7,7 +7,7 @@ use ruff_python_ast::StmtFunctionDef;
 use crate::{
     QualifiedFunctionName,
     extensions::{
-        fixtures::{FixtureRequest, FixtureScope, RequiresFixtures},
+        fixtures::FixtureScope,
         tags::{Parametrization, Tags},
     },
 };
@@ -167,19 +167,8 @@ impl NormalizedFixture {
                     let _ = kwargs_dict.set_item(key.clone(), value);
                 }
 
-                let required = user_defined_fixture.stmt_function_def.required_fixtures(py);
-
-                if required.contains(&"request".to_string()) {
-                    let param_value = user_defined_fixture
-                        .param
-                        .as_ref()
-                        .and_then(|param| param.values.first())
-                        .cloned();
-
-                    if let Ok(request_obj) = Py::new(py, FixtureRequest::new(param_value)) {
-                        kwargs_dict.set_item("request", request_obj).ok();
-                    }
-                }
+                // Note: The 'request' fixture is now provided by the caller (execute_fixture_with_context)
+                // This allows the request to have the correct node based on scope and context
 
                 if kwargs_dict.is_empty() {
                     user_defined_fixture.py_function.call0(py)
