@@ -1,12 +1,10 @@
-use std::{
-    io::Write,
-    sync::{Arc, Mutex},
-};
+use std::fmt::Write;
 
 use colored::Colorize;
+use karva_project::VerbosityLevel;
 use pyo3::marker::Ungil;
 
-use crate::IndividualTestResultKind;
+use crate::{IndividualTestResultKind, Printer};
 
 /// A reporter for test execution time logging to the user.
 pub trait Reporter: Send + Sync + Ungil {
@@ -24,24 +22,24 @@ impl Reporter for DummyReporter {
 
 /// A reporter that outputs test results to stdout as they complete.
 pub struct TestCaseReporter {
-    output: Arc<Mutex<Box<dyn Write + Send>>>,
+    printer: Printer,
 }
 
 impl Default for TestCaseReporter {
     fn default() -> Self {
-        Self::new(Arc::new(Mutex::new(Box::new(std::io::stdout()))))
+        Self::new(Printer::new(VerbosityLevel::default(), false))
     }
 }
 
 impl TestCaseReporter {
-    pub fn new(output: Arc<Mutex<Box<dyn Write + Send>>>) -> Self {
-        Self { output }
+    pub const fn new(printer: Printer) -> Self {
+        Self { printer }
     }
 }
 
 impl Reporter for TestCaseReporter {
     fn report_test_case_result(&self, test_name: &str, result_kind: IndividualTestResultKind) {
-        let mut stdout = self.output.lock().unwrap();
+        let mut stdout = self.printer.stream_for_test_result().lock();
 
         let log_start = format!("test {test_name} ...");
 

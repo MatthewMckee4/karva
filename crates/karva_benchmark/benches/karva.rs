@@ -8,7 +8,7 @@ use karva_benchmark::{
     criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main},
 };
 use karva_core::{DummyReporter, TestRunner, testing::setup_module};
-use karva_project::{Project, absolute};
+use karva_project::{ProjectDatabase, absolute};
 
 fn create_test_cases() -> Vec<TestCase> {
     vec![
@@ -54,9 +54,10 @@ fn benchmark_karva(criterion: &mut Criterion) {
             |b, case| {
                 b.iter(|| {
                     let cwd = absolute(case.path().parent().unwrap(), root);
-                    let project = Project::new(cwd.clone(), [absolute(case.name(), &cwd)].to_vec());
+                    let project =
+                        ProjectDatabase::test_db(cwd.clone(), &[absolute(case.name(), &cwd)]);
                     let runner_result = project.test_with_reporter(&DummyReporter);
-                    assert!(runner_result.passed());
+                    assert!(runner_result.is_success());
                 });
             },
         );

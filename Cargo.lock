@@ -198,6 +198,9 @@ name = "camino"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "276a59bf2b2c967788139340c9f0c5b12d7fd6630315c15c217e559de85d2609"
+dependencies = [
+ "serde_core",
+]
 
 [[package]]
 name = "cast"
@@ -644,6 +647,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
 
 [[package]]
+name = "directories"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16f5094c54661b38d03bd7e50df373292118db60b585c08a411c6d840017fe7d"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e01a3366d27ee9890022452ee61b2b63a67e6f13f58900b651ff5665f0bb1fab"
+dependencies = [
+ "libc",
+ "option-ext",
+ "redox_users",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "dispatch2"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -712,6 +736,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "etcetera"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de48cc4d1c1d97a20fd819def54b890cadde72ed3ad0c614822a0a433361be96"
+dependencies = [
+ "cfg-if",
  "windows-sys 0.61.2",
 ]
 
@@ -1156,6 +1190,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "karva_combine"
+version = "0.0.0"
+dependencies = [
+ "ruff_python_ast",
+]
+
+[[package]]
 name = "karva_core"
 version = "0.0.0"
 dependencies = [
@@ -1190,8 +1231,10 @@ dependencies = [
  "clap",
  "itertools 0.14.0",
  "karva_cli",
+ "karva_project",
  "markdown",
  "pretty_assertions",
+ "ruff_options_metadata",
 ]
 
 [[package]]
@@ -1207,13 +1250,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "karva_macros"
+version = "0.0.0"
+dependencies = [
+ "karva_combine",
+ "proc-macro2",
+ "quote",
+ "ruff_python_trivia",
+ "syn",
+]
+
+[[package]]
 name = "karva_project"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "camino",
+ "etcetera",
+ "filetime",
+ "karva_combine",
+ "karva_macros",
  "karva_test",
  "ruff_db",
+ "ruff_notebook",
+ "ruff_options_metadata",
  "ruff_python_ast",
+ "ruff_text_size",
+ "serde",
+ "thiserror",
+ "toml",
+ "tracing",
  "tracing-subscriber",
 ]
 
@@ -1223,6 +1289,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "camino",
+ "directories",
  "dunce",
  "insta",
  "rand 0.9.2",
@@ -1403,6 +1470,12 @@ name = "oorandom"
 version = "11.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
+
+[[package]]
+name = "option-ext"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "ordermap"
@@ -1728,6 +1801,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "redox_users"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4e608c6638b9c18977b00b475ac1f28d14e84b27d8d42f70e0bf1e3dec127ac"
+dependencies = [
+ "getrandom 0.2.16",
+ "libredox",
+ "thiserror",
+]
+
+[[package]]
 name = "regex"
 version = "1.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1800,7 +1884,7 @@ dependencies = [
 [[package]]
 name = "ruff_annotate_snippets"
 version = "0.1.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#cccb0bbaa41e95a1efbe997ebe8119454f9b93f9"
 dependencies = [
  "anstyle",
  "memchr",
@@ -1810,7 +1894,7 @@ dependencies = [
 [[package]]
 name = "ruff_db"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#cccb0bbaa41e95a1efbe997ebe8119454f9b93f9"
 dependencies = [
  "anstyle",
  "arc-swap",
@@ -1846,7 +1930,7 @@ dependencies = [
 [[package]]
 name = "ruff_diagnostics"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#cccb0bbaa41e95a1efbe997ebe8119454f9b93f9"
 dependencies = [
  "get-size2",
  "is-macro",
@@ -1856,7 +1940,7 @@ dependencies = [
 [[package]]
 name = "ruff_macros"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#cccb0bbaa41e95a1efbe997ebe8119454f9b93f9"
 dependencies = [
  "heck",
  "itertools 0.14.0",
@@ -1869,7 +1953,7 @@ dependencies = [
 [[package]]
 name = "ruff_memory_usage"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#cccb0bbaa41e95a1efbe997ebe8119454f9b93f9"
 dependencies = [
  "get-size2",
  "ordermap",
@@ -1878,7 +1962,7 @@ dependencies = [
 [[package]]
 name = "ruff_notebook"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#cccb0bbaa41e95a1efbe997ebe8119454f9b93f9"
 dependencies = [
  "anyhow",
  "itertools 0.14.0",
@@ -1894,9 +1978,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruff_options_metadata"
+version = "0.0.0"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#cccb0bbaa41e95a1efbe997ebe8119454f9b93f9"
+
+[[package]]
 name = "ruff_python_ast"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#cccb0bbaa41e95a1efbe997ebe8119454f9b93f9"
 dependencies = [
  "aho-corasick",
  "bitflags",
@@ -1915,7 +2004,7 @@ dependencies = [
 [[package]]
 name = "ruff_python_parser"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#cccb0bbaa41e95a1efbe997ebe8119454f9b93f9"
 dependencies = [
  "bitflags",
  "bstr",
@@ -1935,7 +2024,7 @@ dependencies = [
 [[package]]
 name = "ruff_python_trivia"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#cccb0bbaa41e95a1efbe997ebe8119454f9b93f9"
 dependencies = [
  "itertools 0.14.0",
  "ruff_source_file",
@@ -1946,7 +2035,7 @@ dependencies = [
 [[package]]
 name = "ruff_source_file"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#cccb0bbaa41e95a1efbe997ebe8119454f9b93f9"
 dependencies = [
  "get-size2",
  "memchr",
@@ -1957,7 +2046,7 @@ dependencies = [
 [[package]]
 name = "ruff_text_size"
 version = "0.0.0"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#cccb0bbaa41e95a1efbe997ebe8119454f9b93f9"
 dependencies = [
  "get-size2",
  "serde",
@@ -2104,6 +2193,15 @@ dependencies = [
  "memchr",
  "ryu",
  "serde",
+ "serde_core",
+]
+
+[[package]]
+name = "serde_spanned"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e24345aa0fe688594e73770a5f6d1b216508b4f93484c0026d521acd30134392"
+dependencies = [
  "serde_core",
 ]
 
@@ -2308,6 +2406,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
+name = "toml"
+version = "0.9.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0dc8b1fb61449e27716ec0e1bdf0f6b8f3e8f6b05391e8497b8b6d7804ea6d8"
+dependencies = [
+ "indexmap",
+ "serde_core",
+ "serde_spanned",
+ "toml_datetime",
+ "toml_parser",
+ "toml_writer",
+ "winnow",
+]
+
+[[package]]
 name = "toml_datetime"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2336,6 +2449,12 @@ checksum = "c0cbe268d35bdb4bb5a56a2de88d0ad0eb70af5384a99d648cd4b3d04039800e"
 dependencies = [
  "winnow",
 ]
+
+[[package]]
+name = "toml_writer"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df8b2b54733674ad286d16267dcfc7a71ed5c776e4ac7aa3c3e2561f7c637bf2"
 
 [[package]]
 name = "tracing"
@@ -2422,7 +2541,7 @@ dependencies = [
 [[package]]
 name = "ty_static"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/ruff/?branch=main#14fce0d44003ea30c30eb555344bd319da511380"
+source = "git+https://github.com/astral-sh/ruff/?branch=main#cccb0bbaa41e95a1efbe997ebe8119454f9b93f9"
 dependencies = [
  "ruff_macros",
 ]

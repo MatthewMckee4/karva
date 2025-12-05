@@ -60,7 +60,8 @@ impl RequiresFixtures for TestFunction {
 
 #[cfg(test)]
 mod tests {
-    use karva_project::Project;
+    use camino::Utf8PathBuf;
+    use karva_project::ProjectDatabase;
     use karva_test::TestContext;
 
     use crate::{
@@ -70,9 +71,14 @@ mod tests {
         utils::attach,
     };
 
-    fn session(project: &Project) -> DiscoveredPackage {
+    #[allow(clippy::needless_pass_by_value)]
+    fn context_to_discovered_package(
+        context: &TestContext,
+        paths: Vec<Utf8PathBuf>,
+    ) -> DiscoveredPackage {
+        let db = ProjectDatabase::test_db(context.cwd(), &paths);
         let binding = DummyReporter;
-        let context = Context::new(project, &binding);
+        let context = Context::new(&db, &binding);
         let discoverer = StandardDiscoverer::new(&context);
         discoverer.discover()
     }
@@ -80,10 +86,8 @@ mod tests {
     #[test]
     fn test_case_construction_and_getters() {
         let env = TestContext::with_files([("<test>/test.py", "def test_function(): pass")]);
-        let path = env.create_file("test.py", "def test_function(): pass");
 
-        let project = Project::new(env.cwd(), vec![path]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![env.cwd()]);
 
         let test_case = session.test_functions()[0];
 
@@ -98,8 +102,7 @@ mod tests {
                 "def test_with_fixtures(fixture1, fixture2): pass",
             )]);
 
-            let project = Project::new(env.cwd(), vec![env.cwd()]);
-            let session = session(&project);
+            let session = context_to_discovered_package(&env, vec![env.cwd()]);
 
             let test_case = session.test_functions()[0];
 
@@ -120,8 +123,7 @@ mod tests {
 
         let mapped_dir = env.mapped_path("<test>").unwrap();
 
-        let project = Project::new(env.cwd(), vec![env.cwd()]);
-        let session = session(&project);
+        let session = context_to_discovered_package(&env, vec![env.cwd()]);
 
         let tests_package = session.get_package(mapped_dir).unwrap();
 

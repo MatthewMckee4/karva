@@ -21,8 +21,9 @@ rand = { workspace = true }
 dunce = { workspace = true }
 ruff_python_ast = { workspace = true }
 tracing = { workspace = true }
-serde = { workspace = true, features = ["serde_derive"] }
+serde = { workspace = true }
 serde_json = { workspace = true }
+directories = { workspace = true }
 
 [lints]
 workspace = true

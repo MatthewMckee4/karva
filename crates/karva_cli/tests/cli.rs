@@ -1,3 +1,5 @@
+mod integration;
+
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
 use karva_test::IntegrationTestContext;
@@ -34,28 +36,6 @@ fn test_one_test_passes() {
     exit_code: 0
     ----- stdout -----
     test test_pass::test_pass ... ok
-
-    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
-
-    ----- stderr -----
-    ");
-}
-
-#[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
-fn test_one_test_passes_no_progress() {
-    let context = IntegrationTestContext::with_file(
-        "test_pass.py",
-        r"
-        def test_pass():
-            assert True
-        ",
-    );
-
-    assert_cmd_snapshot!(context.command().args(["--no-progress"]), @r"
-    success: true
-    exit_code: 0
-    ----- stdout -----
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
 
@@ -462,8 +442,8 @@ fn test_text_file() {
     assert_cmd_snapshot!(
         context.command().args(["random.txt"]),
         @r"
-    success: true
-    exit_code: 0
+    success: false
+    exit_code: 1
     ----- stdout -----
     discovery diagnostics:
 
@@ -523,8 +503,8 @@ fn test_invalid_path() {
     let context = IntegrationTestContext::new();
 
     assert_cmd_snapshot!(context.command().arg("non_existing_path.py"), @r"
-    success: true
-    exit_code: 0
+    success: false
+    exit_code: 1
     ----- stdout -----
     discovery diagnostics:
 
@@ -1327,57 +1307,6 @@ def tests_1(): ...
 
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
-fn test_show_traceback() {
-    let context = IntegrationTestContext::with_file(
-        "test_fail.py",
-        r"
-import karva
-
-def foo():
-    raise ValueError('bar')
-
-def test_1():
-    foo()
-
-        ",
-    );
-
-    assert_cmd_snapshot!(context.command().arg("--show-traceback"), @r"
-    success: false
-    exit_code: 1
-    ----- stdout -----
-    test test_fail::test_1 ... FAILED
-
-    diagnostics:
-
-    error[test-failure]: Test `test_1` failed
-     --> test_fail.py:7:5
-      |
-    5 |     raise ValueError('bar')
-    6 |
-    7 | def test_1():
-      |     ^^^^^^
-    8 |     foo()
-      |
-    info: Test failed here
-     --> test_fail.py:5:5
-      |
-    4 | def foo():
-    5 |     raise ValueError('bar')
-      |     ^^^^^^^^^^^^^^^^^^^^^^^
-    6 |
-    7 | def test_1():
-      |
-    info: bar
-
-    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
-
-    ----- stderr -----
-    ");
-}
-
-#[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_unused_files_are_imported() {
     let mut context = IntegrationTestContext::with_file(
         "test_fail.py",
@@ -1426,40 +1355,6 @@ def test_1():
     exit_code: 0
     ----- stdout -----
     test test_fail::test_1 ... ok
-
-    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
-
-    ----- stderr -----
-    ");
-}
-
-#[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
-fn test_no_ignore() {
-    let mut context = IntegrationTestContext::with_file(
-        "test_file.py",
-        r"
-import karva
-
-def test_1():
-    assert True
-        ",
-    );
-
-    context.write_file(
-        "foo/test_pass.py",
-        "
-        def test_1():
-            assert True",
-    );
-
-    context.write_file(".gitignore", "foo/");
-
-    assert_cmd_snapshot!(context.command().arg("--show-traceback"), @r"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-    test test_file::test_1 ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
 

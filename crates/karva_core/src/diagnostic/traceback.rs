@@ -1,4 +1,5 @@
 use camino::Utf8PathBuf;
+use karva_project::System;
 use pyo3::prelude::*;
 use ruff_source_file::{OneIndexed, SourceFile, SourceFileBuilder};
 use ruff_text_size::{TextRange, TextSize};
@@ -21,7 +22,7 @@ struct TracebackLocation {
 }
 
 impl Traceback {
-    pub(crate) fn from_error(py: Python, error: &PyErr) -> Option<Self> {
+    pub(crate) fn from_error(py: Python, system: &dyn System, error: &PyErr) -> Option<Self> {
         if let Some(traceback) = error.traceback(py) {
             let traceback_str = traceback.format().unwrap_or_default();
             if traceback_str.is_empty() {
@@ -32,7 +33,7 @@ impl Traceback {
                 .map(|line| format!(" | {line}"))
                 .collect::<Vec<_>>();
 
-            let (error_source_file, location) = get_source_file_and_range(&traceback_str)?;
+            let (error_source_file, location) = get_source_file_and_range(system, &traceback_str)?;
 
             Some(Self {
                 lines,
@@ -45,10 +46,15 @@ impl Traceback {
     }
 }
 
-fn get_source_file_and_range(traceback: &str) -> Option<(SourceFile, TextRange)> {
+fn get_source_file_and_range(
+    system: &dyn System,
+    traceback: &str,
+) -> Option<(SourceFile, TextRange)> {
     let traceback_location = get_traceback_location(traceback)?;
 
-    let source_text = std::fs::read_to_string(traceback_location.file_path.as_path()).ok()?;
+    let source_text = system
+        .read_to_string(traceback_location.file_path.as_path())
+        .ok()?;
 
     let source_file =
         SourceFileBuilder::new(traceback_location.file_path.as_str(), source_text.as_str())

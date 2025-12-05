@@ -68,7 +68,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         for test_function in module.test_functions {
             passed &= self.execute_test(py, test_function);
 
-            if self.context.project().options().fail_fast() && !passed {
+            if self.context.project().settings().test().fail_fast && !passed {
                 break;
             }
         }
@@ -97,16 +97,16 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         for module in modules.into_values() {
             passed &= self.execute_module(py, module);
 
-            if self.context.project().options().fail_fast() && !passed {
+            if self.context.project().settings().test().fail_fast && !passed {
                 break;
             }
         }
 
-        if !self.context.project().options().fail_fast() || passed {
+        if !self.context.project().settings().test().fail_fast || passed {
             for sub_package in packages.into_values() {
                 passed &= self.execute_package(py, sub_package);
 
-                if self.context.project().options().fail_fast() && !passed {
+                if self.context.project().settings().test().fail_fast && !passed {
                     break;
                 }
             }
@@ -187,7 +187,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
                     report_test_pass_on_expect_failure(
                         self.context,
-                        source_file(&test_module_path),
+                        source_file(self.context.db().system(), &test_module_path),
                         &stmt_function_def,
                         reason,
                     );
@@ -223,7 +223,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                         report_test_failure(
                             self.context,
                             py,
-                            source_file(&test_module_path),
+                            source_file(self.context.db().system(), &test_module_path),
                             &stmt_function_def,
                             &test_arguments,
                             &err,
@@ -231,7 +231,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     } else {
                         report_missing_fixtures(
                             self.context,
-                            source_file(&test_module_path),
+                            source_file(self.context.db().system(), &test_module_path),
                             &stmt_function_def,
                             &missing_args,
                             FunctionKind::Test,
@@ -367,7 +367,7 @@ fn handle_fixture_error(
         report_fixture_failure(
             context,
             py,
-            source_file(fixture.module_path()),
+            source_file(context.db().system(), fixture.module_path()),
             &fixture.stmt_function_def,
             fixture_arguments,
             err,
@@ -375,7 +375,7 @@ fn handle_fixture_error(
     } else {
         report_missing_fixtures(
             context,
-            source_file(fixture.module_path()),
+            source_file(context.db().system(), fixture.module_path()),
             &fixture.stmt_function_def,
             &missing_args,
             FunctionKind::Fixture,

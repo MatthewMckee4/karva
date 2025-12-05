@@ -8,22 +8,7 @@ use itertools::Itertools;
 use karva_cli::Args as Cli;
 use pretty_assertions::StrComparison;
 
-use crate::ROOT_DIR;
-
-pub(crate) const REGENERATE_ALL_COMMAND: &str = "cargo run -p karva_dev generate-all";
-
-#[derive(Copy, Clone, PartialEq, Eq, clap::ValueEnum, Default)]
-pub(crate) enum Mode {
-    /// Update the content in the `configuration.md`.
-    #[default]
-    Write,
-
-    /// Don't write to the file, check if the file is up-to-date and error if not.
-    Check,
-
-    /// Write the generated help to stdout.
-    DryRun,
-}
+use crate::{Mode, REGENERATE_ALL_COMMAND, ROOT_DIR};
 
 const SHOW_HIDDEN_COMMANDS: &[&str] = &["generate-shell-completion"];
 
@@ -343,7 +328,7 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn karva_cli_reference_is_up_to_date() -> Result<()> {
+    fn cli_reference_is_up_to_date() -> Result<()> {
         main(&Args { mode: Mode::Check })
     }
 }

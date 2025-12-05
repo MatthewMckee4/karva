@@ -1,7 +1,8 @@
 exclude: |
   (?x)^(
     .*.svg|
-    docs/cli.md
+    docs/cli.md|
+    docs/configuration.md
   )$
 
 repos:

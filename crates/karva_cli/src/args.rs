@@ -6,7 +6,7 @@ use clap::{
         styling::{AnsiColor, Effects},
     },
 };
-use karva_project::{ProjectOptions, TestPrefix};
+use karva_project::{Options, SrcOptions, TerminalOptions, TestOptions};
 use ruff_db::diagnostic::DiagnosticFormat;
 
 use crate::logging::Verbosity;
@@ -43,44 +43,40 @@ pub struct TestCommand {
         help = "List of files, directories, or test functions to test [default: the project root]",
         value_name = "PATH"
     )]
-    pub(crate) paths: Vec<Utf8PathBuf>,
+    pub(crate) paths: Vec<String>,
 
     #[clap(flatten)]
     pub(crate) verbosity: Verbosity,
 
+    /// The path to a `karva.toml` file to use for configuration.
+    ///
+    /// While ty configuration can be included in a `pyproject.toml` file, it is not allowed in this context.
+    #[arg(long, env = "KARVA_CONFIG_FILE", value_name = "PATH")]
+    pub(crate) config_file: Option<Utf8PathBuf>,
+
     /// The prefix of the test functions.
-    #[clap(long, default_value = "test")]
-    pub(crate) test_prefix: String,
+    #[clap(long)]
+    pub(crate) test_prefix: Option<String>,
 
     /// The format to use for printing diagnostic messages.
-    #[arg(long, default_value = "full")]
-    pub(crate) output_format: OutputFormat,
+    #[arg(long)]
+    pub(crate) output_format: Option<OutputFormat>,
 
     /// Show Python stdout during test execution.
-    #[clap(short = 's', long)]
-    pub(crate) show_output: bool,
+    #[clap(short = 's', default_missing_value = "true", num_args=0..1)]
+    pub(crate) show_output: Option<bool>,
 
     /// When set, .gitignore files will not be respected.
-    #[clap(long)]
-    pub(crate) no_ignore: bool,
+    #[clap(long, default_missing_value = "true", num_args=0..1)]
+    pub(crate) no_ignore: Option<bool>,
 
     /// When set, the test will fail immediately if any test fails.
-    #[clap(long)]
-    pub(crate) fail_fast: bool,
-
-    /// When set, we will try to import functions in each test file as well as parsing the ast to find them.
-    ///
-    /// This is often slower, so it is not recommended for large projects.
-    #[clap(long)]
-    pub(crate) try_import_fixtures: bool,
-
-    /// When set, we will show the traceback of each test failure.
-    #[clap(long)]
-    pub(crate) show_traceback: bool,
+    #[clap(long, default_missing_value = "true", num_args=0..1)]
+    pub(crate) fail_fast: Option<bool>,
 
     /// When set, we will not show individual test case results during execution.
-    #[clap(long)]
-    pub(crate) no_progress: bool,
+    #[clap(long, default_missing_value = "true", num_args=0..1)]
+    pub(crate) no_progress: Option<bool>,
 
     /// Control when colored output is used.
     #[arg(long)]
@@ -109,6 +105,15 @@ impl From<OutputFormat> for DiagnosticFormat {
     }
 }
 
+impl From<OutputFormat> for karva_project::OutputFormat {
+    fn from(format: OutputFormat) -> Self {
+        match format {
+            OutputFormat::Full => Self::Full,
+            OutputFormat::Concise => Self::Concise,
+        }
+    }
+}
+
 /// Control when colored output is used.
 #[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Default, clap::ValueEnum)]
 pub enum TerminalColor {
@@ -124,17 +129,20 @@ pub enum TerminalColor {
 }
 
 impl TestCommand {
-    pub(crate) fn into_options(self) -> ProjectOptions {
-        ProjectOptions::new(
-            TestPrefix::new(self.test_prefix),
-            self.verbosity.level(),
-            self.show_output,
-            self.no_ignore,
-            self.fail_fast,
-            self.try_import_fixtures,
-            self.show_traceback,
-            self.output_format,
-            self.no_progress,
-        )
+    pub(crate) fn into_options(self) -> Options {
+        Options {
+            src: Some(SrcOptions {
+                respect_ignore_files: self.no_ignore.map(|no_ignore| !no_ignore),
+                include: Some(self.paths),
+            }),
+            terminal: Some(TerminalOptions {
+                output_format: self.output_format.map(Into::into),
+                show_python_output: self.show_output,
+            }),
+            test: Some(TestOptions {
+                test_function_prefix: self.test_prefix,
+                fail_fast: self.fail_fast,
+            }),
+        }
     }
 }

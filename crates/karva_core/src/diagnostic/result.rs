@@ -1,22 +1,14 @@
 use std::{collections::HashMap, fmt::Debug, time::Instant};
 
 use colored::Colorize;
-use ruff_db::diagnostic::{
-    Diagnostic, DiagnosticFormat, DisplayDiagnosticConfig, DisplayDiagnostics,
-};
+use ruff_db::diagnostic::Diagnostic;
 
-use crate::{DefaultFileResolver, Reporter};
-
-#[derive(Debug, Clone)]
-pub struct TestRunResultDisplayOptions {
-    pub(crate) display_diagnostics: bool,
-    pub(crate) diagnostic_format: DiagnosticFormat,
-}
+use crate::Reporter;
 
 /// Represents the result of a test run.
 ///
 /// This is held in the test context and updated throughout the test run.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TestRunResult {
     /// Diagnostics generated during test discovery.
     discovery_diagnostics: Vec<Diagnostic>,
@@ -26,31 +18,9 @@ pub struct TestRunResult {
 
     /// Stats generated during test execution.
     stats: TestResultStats,
-
-    /// Start time of the test run.
-    start_time: Instant,
-
-    /// Current working directory.
-    ///
-    /// This is used to resolve file paths in diagnostics.
-    cwd: std::path::PathBuf,
-
-    /// Display options
-    display_options: TestRunResultDisplayOptions,
 }
 
 impl TestRunResult {
-    pub fn new(cwd: std::path::PathBuf, display_options: TestRunResultDisplayOptions) -> Self {
-        Self {
-            discovery_diagnostics: Vec::new(),
-            diagnostics: Vec::new(),
-            stats: TestResultStats::default(),
-            start_time: Instant::now(),
-            cwd,
-            display_options,
-        }
-    }
-
     pub fn total_diagnostics(&self) -> usize {
         self.discovery_diagnostics.len() + self.diagnostics.len()
     }
@@ -71,8 +41,8 @@ impl TestRunResult {
         self.diagnostics.push(diagnostic);
     }
 
-    pub fn passed(&self) -> bool {
-        self.stats().is_success()
+    pub fn is_success(&self) -> bool {
+        self.stats().is_success() && self.discovery_diagnostics.is_empty()
     }
 
     pub const fn stats(&self) -> &TestResultStats {
@@ -95,10 +65,6 @@ impl TestRunResult {
     pub(crate) fn into_sorted(mut self) -> Self {
         self.diagnostics.sort_by(Diagnostic::ruff_start_ordering);
         self
-    }
-
-    pub const fn display(&self) -> DisplayTestRunResult<'_> {
-        DisplayTestRunResult { result: self }
     }
 }
 
@@ -162,79 +128,6 @@ impl TestResultStats {
 
     pub const fn display(&self, start_time: Instant) -> DisplayTestResultStats<'_> {
         DisplayTestResultStats::new(self, start_time)
-    }
-}
-
-pub struct DisplayTestRunResult<'a> {
-    result: &'a TestRunResult,
-}
-
-impl std::fmt::Display for DisplayTestRunResult<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let discovery_diagnostics = self.result.discovery_diagnostics();
-
-        let diagnostics = self.result.diagnostics();
-
-        let config = DisplayDiagnosticConfig::default()
-            .format(self.result.display_options.diagnostic_format)
-            .color(colored::control::SHOULD_COLORIZE.should_colorize());
-
-        let is_concise = matches!(
-            self.result.display_options.diagnostic_format,
-            DiagnosticFormat::Concise
-        );
-
-        if (!diagnostics.is_empty() || !discovery_diagnostics.is_empty())
-            && self.result.stats().total() > 0
-            && self.result.display_options.display_diagnostics
-        {
-            writeln!(f)?;
-        }
-
-        if !discovery_diagnostics.is_empty() && self.result.display_options.display_diagnostics {
-            writeln!(f, "discovery diagnostics:")?;
-            writeln!(f)?;
-            write!(
-                f,
-                "{}",
-                DisplayDiagnostics::new(
-                    &DefaultFileResolver::new(self.result.cwd.clone()),
-                    &config,
-                    discovery_diagnostics,
-                )
-            )?;
-
-            if is_concise {
-                writeln!(f)?;
-            }
-        }
-
-        if !diagnostics.is_empty() && self.result.display_options.display_diagnostics {
-            writeln!(f, "diagnostics:")?;
-            writeln!(f)?;
-            write!(
-                f,
-                "{}",
-                DisplayDiagnostics::new(
-                    &DefaultFileResolver::new(self.result.cwd.clone()),
-                    &config,
-                    diagnostics,
-                )
-            )?;
-
-            if is_concise {
-                writeln!(f)?;
-            }
-        }
-
-        if (diagnostics.is_empty() && discovery_diagnostics.is_empty())
-            && self.result.stats().total() > 0
-            && self.result.display_options.display_diagnostics
-        {
-            writeln!(f)?;
-        }
-
-        write!(f, "{}", self.result.stats().display(self.result.start_time))
     }
 }
 

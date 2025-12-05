@@ -16,23 +16,25 @@ nav = [
     { "Home" = "index.md"},
     { "Installation" = "installation.md"},
     { "Tutorial" = "tutorial.md"},
-    { "Fixtures" = [
-        { "Fixtures" = "fixtures/fixtures.md"},
-        { "Built In" = "fixtures/builtin.md"},
+    { "Using Karva" = [
+        { "Fixtures" = [
+            { "Fixtures" = "usage/fixtures/fixtures.md"},
+            { "Built In" = "usage/fixtures/builtin.md"},
+        ]},
+        { "Tags" = [
+            { "Parametrize" = "usage/tags/parametrize.md"},
+            { "Skip" = "usage/tags/skip.md"},
+            { "Expect Fail" = "usage/tags/expect_fail.md"}
+        ]},
+        { "Other Functions" = "usage/functions.md"},
     ]},
-    { "Tags" = [
-        { "Parametrize" = "tags/parametrize.md"},
-        { "Skip" = "tags/skip.md"},
-        { "Expect Fail" = "tags/expect_fail.md"}
-    ]},
-    { "Functions" = "functions.md"},
+    { "Configuration" = "configuration.md"},
     { "CLI" = "cli.md"},
 ]
 
 [project.theme]
 language = "en"
 features = [
-    "navigation.expand",
     "navigation.instant",
     "search.highlight"
 ]
