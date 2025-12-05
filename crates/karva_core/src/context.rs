@@ -4,7 +4,7 @@ use karva_project::{Db, Project};
 
 use crate::{
     IndividualTestResultKind, Reporter, TestRunResult,
-    diagnostic::{DiagnosticGuardBuilder, DiagnosticType, TestRunResultDisplayOptions},
+    diagnostic::{DiagnosticGuardBuilder, DiagnosticType},
 };
 
 pub struct Context<'db, 'rep> {
@@ -17,13 +17,7 @@ impl<'db, 'rep> Context<'db, 'rep> {
     pub(crate) fn new(db: &'db dyn Db, reporter: &'rep dyn Reporter) -> Self {
         Self {
             db,
-            result: Arc::new(Mutex::new(TestRunResult::new(
-                db.project().cwd().as_std_path().to_path_buf(),
-                TestRunResultDisplayOptions {
-                    display_diagnostics: !db.project().metadata().verbosity().is_quiet(),
-                    diagnostic_format: db.project().settings().terminal().output_format.into(),
-                },
-            ))),
+            result: Arc::new(Mutex::new(TestRunResult::default())),
             reporter,
         }
     }

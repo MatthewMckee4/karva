@@ -316,3 +316,89 @@ fn test_failing_yield_fixture() {
     ----- stderr -----
     ");
 }
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_fixture_generator_two_yields() {
+    let context = IntegrationTestContext::with_file(
+        "test.py",
+        r"
+                import karva
+
+                @karva.fixture
+                def fixture_generator():
+                    yield 1
+                    yield 2
+
+                def test_fixture_generator(fixture_generator):
+                    assert fixture_generator == 1
+                ",
+    );
+
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_fixture_generator(fixture_generator=1) ... ok
+
+    diagnostics:
+
+    warning[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
+     --> test.py:5:5
+      |
+    4 | @karva.fixture
+    5 | def fixture_generator():
+      |     ^^^^^^^^^^^^^^^^^
+    6 |     yield 1
+    7 |     yield 2
+      |
+    info: Fixture had more than one yield statement
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_fixture_generator_fail_in_teardown() {
+    let context = IntegrationTestContext::with_file(
+        "test.py",
+        r#"
+                import karva
+
+                @karva.fixture
+                def fixture_generator():
+                    yield 1
+                    raise ValueError("fixture-error")
+
+                def test_fixture_generator(fixture_generator):
+                    assert fixture_generator == 1
+                "#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_fixture_generator(fixture_generator=1) ... ok
+
+    diagnostics:
+
+    warning[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
+     --> test.py:5:5
+      |
+    4 | @karva.fixture
+    5 | def fixture_generator():
+      |     ^^^^^^^^^^^^^^^^^
+    6 |     yield 1
+    7 |     raise ValueError("fixture-error")
+      |
+    info: Failed to reset fixture: fixture-error
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    "#);
+}

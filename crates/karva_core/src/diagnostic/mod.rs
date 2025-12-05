@@ -21,9 +21,7 @@ mod traceback;
 
 pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
 pub use reporter::{DummyReporter, Reporter, TestCaseReporter};
-pub use result::{
-    IndividualTestResultKind, TestResultStats, TestRunResult, TestRunResultDisplayOptions,
-};
+pub use result::{IndividualTestResultKind, TestResultStats, TestRunResult};
 
 use crate::{
     Context, FunctionKind, declare_diagnostic_type, diagnostic::traceback::Traceback,

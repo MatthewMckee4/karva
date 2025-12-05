@@ -3,7 +3,7 @@ use karva_combine::Combine;
 use ruff_python_ast::PythonVersion;
 use thiserror::Error;
 
-use crate::{System, VerbosityLevel};
+use crate::System;
 
 pub mod options;
 pub mod pyproject;
@@ -20,24 +20,16 @@ pub struct ProjectMetadata {
 
     pub(crate) python_version: PythonVersion,
 
-    /// Raw options
     pub(crate) options: Options,
-
-    pub(crate) verbosity: VerbosityLevel,
 }
 
 impl ProjectMetadata {
     /// Creates a project with the given name and root that uses the default options.
-    pub fn new(
-        root: Utf8PathBuf,
-        python_version: PythonVersion,
-        verbosity: VerbosityLevel,
-    ) -> Self {
+    pub fn new(root: Utf8PathBuf, python_version: PythonVersion) -> Self {
         Self {
             root,
             python_version,
             options: Options::default(),
-            verbosity,
         }
     }
 
@@ -45,7 +37,6 @@ impl ProjectMetadata {
         path: Utf8PathBuf,
         system: &dyn System,
         python_version: PythonVersion,
-        verbosity: VerbosityLevel,
     ) -> Result<Self, ProjectMetadataError> {
         tracing::debug!("Using overridden configuration file at '{path}'");
 
@@ -60,7 +51,6 @@ impl ProjectMetadata {
             root: system.current_directory().to_path_buf(),
             python_version,
             options,
-            verbosity,
         })
     }
 
@@ -69,7 +59,6 @@ impl ProjectMetadata {
         pyproject: PyProject,
         root: Utf8PathBuf,
         python_version: PythonVersion,
-        verbosity: VerbosityLevel,
     ) -> Self {
         Self::from_options(
             pyproject
@@ -78,7 +67,6 @@ impl ProjectMetadata {
                 .unwrap_or_default(),
             root,
             python_version,
-            verbosity,
         )
     }
 
@@ -87,13 +75,11 @@ impl ProjectMetadata {
         options: Options,
         root: Utf8PathBuf,
         python_version: PythonVersion,
-        verbosity: VerbosityLevel,
     ) -> Self {
         Self {
             root,
             python_version,
             options,
-            verbosity,
         }
     }
 
@@ -109,7 +95,6 @@ impl ProjectMetadata {
         path: &Utf8Path,
         system: &dyn System,
         python_version: PythonVersion,
-        verbosity: VerbosityLevel,
     ) -> Result<Self, ProjectMetadataError> {
         tracing::debug!("Searching for a project in '{path}'");
 
@@ -161,24 +146,16 @@ impl ProjectMetadata {
 
                 tracing::debug!("Found project at '{}'", project_root);
 
-                let metadata = Self::from_options(
-                    options,
-                    project_root.to_path_buf(),
-                    python_version,
-                    verbosity,
-                );
+                let metadata =
+                    Self::from_options(options, project_root.to_path_buf(), python_version);
 
                 return Ok(metadata);
             }
 
             if let Some(pyproject) = pyproject {
                 let has_karva_section = pyproject.karva().is_some();
-                let metadata = Self::from_pyproject(
-                    pyproject,
-                    project_root.to_path_buf(),
-                    python_version,
-                    verbosity,
-                );
+                let metadata =
+                    Self::from_pyproject(pyproject, project_root.to_path_buf(), python_version);
 
                 if has_karva_section {
                     tracing::debug!("Found project at '{}'", project_root);
@@ -207,7 +184,7 @@ impl ProjectMetadata {
             );
 
             // Create a project with a default configuration
-            Self::new(path.to_path_buf(), python_version, verbosity)
+            Self::new(path.to_path_buf(), python_version)
         };
 
         Ok(metadata)
@@ -240,9 +217,6 @@ impl ProjectMetadata {
     /// Combine the project options with the CLI options where the CLI options take precedence.
     pub fn apply_options(&mut self, options: Options) {
         self.options = options.combine(std::mem::take(&mut self.options));
-    }
-    pub const fn verbosity(&self) -> VerbosityLevel {
-        self.verbosity
     }
 }
 

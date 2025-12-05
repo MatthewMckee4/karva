@@ -46,36 +46,21 @@ impl Printer {
 
     /// Return the [`Stdout`] stream for a summary message that was explicitly requested by the
     /// user.
-    ///
-    /// For example, in `ty version` the user has requested the version information and we should
-    /// display it even if [`VerbosityLevel::Quiet`] is used. Or, in `ty check`, if the
-    /// `TY_MEMORY_REPORT` variable has been set, we should display the memory report because the
-    /// user has opted-in to display.
     pub const fn stream_for_requested_summary(self) -> Stdout {
         self.stdout_important()
     }
 
     /// Return the [`Stdout`] stream for a summary message on failure.
-    ///
-    /// For example, in `ty check`, this would be used for the message indicating the number of
-    /// diagnostics found. The failure summary should capture information that is not reflected in
-    /// the exit code.
     pub const fn stream_for_failure_summary(self) -> Stdout {
         self.stdout_important()
     }
 
     /// Return the [`Stdout`] stream for a summary message on success.
-    ///
-    /// For example, in `ty check`, this would be used for the message indicating that no diagnostic
-    /// were found. The success summary does not capture important information for users that have
-    /// opted-in to [`VerbosityLevel::Quiet`].
     pub const fn stream_for_success_summary(self) -> Stdout {
         self.stdout_general()
     }
 
     /// Return the [`Stdout`] stream for detailed messages.
-    ///
-    /// For example, in `ty check`, this would be used for the diagnostic output.
     pub const fn stream_for_details(self) -> Stdout {
         self.stdout_general()
     }
@@ -119,7 +104,6 @@ impl Stdout {
     pub fn lock(mut self) -> Self {
         match self.status {
             StreamStatus::Enabled => {
-                // Drop the previous lock first, to avoid deadlocking
                 self.lock.take();
                 self.lock = Some(std::io::stdout().lock());
             }
