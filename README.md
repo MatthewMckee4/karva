@@ -1,4 +1,4 @@
-# Karva (0.1.10)
+# Karva (0.1.11)
 
 [![codecov](https://codecov.io/gh/MatthewMckee4/karva/graph/badge.svg?token=VELHBTE1L9)](https://codecov.io/gh/MatthewMckee4/karva)
 ![PyPI - Version](https://img.shields.io/pypi/v/karva)
