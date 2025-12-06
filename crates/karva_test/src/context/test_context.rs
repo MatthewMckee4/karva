@@ -148,7 +148,6 @@ impl TestContext {
     }
 
     pub fn write_file(&mut self, path: impl AsRef<Utf8Path>, content: &str) {
-        // If the path starts with "<test>/", we want to map "<test>" to a temp dir.
         let path = path.as_ref();
 
         let path = self.project_dir_path.join(path);
