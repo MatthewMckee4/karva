@@ -56,17 +56,3 @@ impl TestRunner for ProjectDatabase {
         test_runner.test_with_reporter(reporter)
     }
 }
-
-#[cfg(test)]
-use karva_test::TestContext;
-
-#[cfg(test)]
-impl TestRunner for TestContext {
-    fn test_with_reporter(&self, reporter: &dyn Reporter) -> TestRunResult {
-        use karva_project::ProjectDatabase;
-
-        let project = ProjectDatabase::test_db(self.cwd(), &[self.cwd()]);
-        let test_runner = StandardTestRunner::new(&project);
-        test_runner.test_with_reporter(reporter)
-    }
-}

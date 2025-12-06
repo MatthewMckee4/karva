@@ -1,14 +1,15 @@
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
-use karva_test::IntegrationTestContext;
 use rstest::rstest;
+
+use crate::common::TestContext;
 
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_temp_directory_fixture(
     #[values("tmp_path", "temp_path", "temp_dir", "tmpdir")] fixture_name: &str,
 ) {
-    let test_context = IntegrationTestContext::with_file(
+    let test_context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -38,7 +39,7 @@ fn test_temp_directory_fixture(
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_setattr() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 from karva import MockEnv
@@ -85,7 +86,7 @@ def test_setattr_undo(monkeypatch):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_setitem() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 def test_setitem_dict(monkeypatch):
@@ -125,7 +126,7 @@ def test_setitem_undo(monkeypatch):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_env() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 import os
@@ -167,7 +168,7 @@ def test_delenv(monkeypatch):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_syspath() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 import sys
@@ -206,7 +207,7 @@ def test_syspath_prepend_multiple(monkeypatch):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_delattr() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 def test_delattr(monkeypatch):
@@ -243,7 +244,7 @@ def test_delattr_undo(monkeypatch):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_context_manager() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 from karva import MockEnv
@@ -285,7 +286,7 @@ def test_context_manager_auto_undo():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_finalizer() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 import os
@@ -316,7 +317,7 @@ def test_1():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_mock_env() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r#"
             import os

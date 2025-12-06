@@ -3,7 +3,7 @@ use std::sync::Once;
 use divan::Bencher;
 use karva_core::{TestRunner, testing::setup_module};
 use karva_project::{Options, OsSystem, ProjectDatabase, ProjectMetadata, SrcOptions};
-use karva_test::{InstalledProject, RealWorldProject};
+use karva_projects::{InstalledProject, RealWorldProject};
 
 static SETUP_MODULE_ONCE: Once = Once::new();
 

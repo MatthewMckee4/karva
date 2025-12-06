@@ -1,7 +1,8 @@
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
-use karva_test::IntegrationTestContext;
 use rstest::rstest;
+
+use crate::common::TestContext;
 
 fn get_parametrize_function(framework: &str) -> &str {
     match framework {
@@ -14,7 +15,7 @@ fn get_parametrize_function(framework: &str) -> &str {
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -51,7 +52,7 @@ fn test_parametrized_fixture(#[values("pytest", "karva")] framework: &str) {
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_in_conftest(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "conftest.py",
             format!(
@@ -93,7 +94,7 @@ fn test_parametrized_fixture_in_conftest(#[values("pytest", "karva")] framework:
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_module_scope(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "conftest.py",
             format!(
@@ -139,7 +140,7 @@ fn test_parametrized_fixture_module_scope(#[values("pytest", "karva")] framework
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_with_generator(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -188,7 +189,7 @@ fn test_parametrized_fixture_with_generator(#[values("pytest", "karva")] framewo
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_session_scope(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "conftest.py",
             format!(
@@ -239,7 +240,7 @@ fn test_parametrized_fixture_session_scope(#[values("pytest", "karva")] framewor
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_with_multiple_params(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -282,7 +283,7 @@ fn test_parametrized_fixture_with_multiple_params(#[values("pytest", "karva")] f
 fn test_parametrized_fixture_with_regular_parametrize(
     #[values("pytest", "karva")] framework: &str,
 ) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -323,7 +324,7 @@ fn test_parametrized_fixture_with_regular_parametrize(
 fn test_parametrized_generator_fixture_finalizer_order(
     #[values("pytest", "karva")] framework: &str,
 ) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -373,7 +374,7 @@ fn test_parametrized_generator_fixture_finalizer_order(
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_package_scope(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "package/conftest.py",
             format!(
@@ -418,7 +419,7 @@ fn test_parametrized_fixture_package_scope(#[values("pytest", "karva")] framewor
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_with_dependency(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -456,7 +457,7 @@ fn test_parametrized_fixture_with_dependency(#[values("pytest", "karva")] framew
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_finalizer_with_state(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -499,7 +500,7 @@ fn test_parametrized_fixture_finalizer_with_state(#[values("pytest", "karva")] f
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_pytest_param() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
             import pytest
@@ -538,7 +539,7 @@ fn test_pytest_param() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_karva_param() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
             import karva
@@ -579,7 +580,7 @@ fn test_karva_param() {
 fn test_complex_parametrized_generator_fixture_finalizer_order(
     #[values("pytest", "karva")] framework: &str,
 ) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r#"

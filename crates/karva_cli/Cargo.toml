@@ -37,7 +37,11 @@ ruff_db = { workspace = true }
 insta = { workspace = true, features = ["filters"] }
 insta-cmd = { workspace = true }
 rstest = { workspace = true }
-karva_test = { workspace = true }
+directories = { workspace = true }
+tempfile = { workspace = true }
+dunce = { workspace = true }
+ruff_python_trivia = { workspace = true }
+regex = { workspace = true }
 
 [lints]
 workspace = true

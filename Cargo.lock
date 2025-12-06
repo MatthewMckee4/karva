@@ -1161,7 +1161,7 @@ dependencies = [
  "codspeed-divan-compat",
  "karva_core",
  "karva_project",
- "karva_test",
+ "karva_projects",
 ]
 
 [[package]]
@@ -1175,13 +1175,17 @@ dependencies = [
  "clap",
  "colored 3.0.0",
  "ctrlc",
+ "directories",
+ "dunce",
  "insta",
  "insta-cmd",
  "karva_core",
  "karva_project",
- "karva_test",
+ "regex",
  "rstest",
  "ruff_db",
+ "ruff_python_trivia",
+ "tempfile",
  "tracing",
  "tracing-flame",
  "tracing-subscriber",
@@ -1205,15 +1209,12 @@ dependencies = [
  "crossbeam-channel",
  "ctor",
  "ignore",
- "insta",
  "karva_project",
- "karva_test",
  "pyo3",
  "regex",
  "rstest",
  "ruff_db",
  "ruff_macros",
- "ruff_notebook",
  "ruff_python_ast",
  "ruff_python_parser",
  "ruff_source_file",
@@ -1245,7 +1246,7 @@ dependencies = [
  "camino",
  "clap",
  "karva_project",
- "karva_test",
+ "karva_projects",
  "tempfile",
 ]
 
@@ -1270,13 +1271,12 @@ dependencies = [
  "filetime",
  "karva_combine",
  "karva_macros",
- "karva_test",
  "ruff_db",
  "ruff_notebook",
  "ruff_options_metadata",
  "ruff_python_ast",
- "ruff_text_size",
  "serde",
+ "tempfile",
  "thiserror",
  "toml",
  "tracing",
@@ -1284,21 +1284,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "karva_test"
+name = "karva_projects"
 version = "0.0.0"
 dependencies = [
  "anyhow",
  "camino",
- "directories",
- "dunce",
- "insta",
- "rand 0.9.2",
- "regex",
  "ruff_python_ast",
- "ruff_python_trivia",
  "serde",
  "serde_json",
- "tempfile",
  "tracing",
 ]
 

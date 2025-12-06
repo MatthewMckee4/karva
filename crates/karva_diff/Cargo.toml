@@ -15,7 +15,7 @@ license = { workspace = true }
 clap = { workspace = true }
 camino = { workspace = true }
 anyhow = { workspace = true }
-karva_test = { workspace = true }
+karva_projects = { workspace = true }
 tempfile = { workspace = true }
 karva_project = { workspace = true }
 

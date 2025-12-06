@@ -1,12 +1,13 @@
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
-use karva_test::IntegrationTestContext;
 use rstest::rstest;
+
+use crate::common::TestContext;
 
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request(#[values("pytest", "karva")] framework: &str) {
-    let test_context = IntegrationTestContext::with_file(
+    let test_context = TestContext::with_file(
         "test.py",
         &format!(
             r"

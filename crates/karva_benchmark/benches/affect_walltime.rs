@@ -1,6 +1,6 @@
 use divan::{Bencher, bench};
 use karva_benchmark::walltime::{ProjectBenchmark, bench_project, warmup_project};
-use karva_test::real_world_projects::AFFECT_PROJECT;
+use karva_projects::real_world_projects::AFFECT_PROJECT;
 
 #[bench(sample_size = 4, sample_count = 5)]
 fn affect(bencher: Bencher) {

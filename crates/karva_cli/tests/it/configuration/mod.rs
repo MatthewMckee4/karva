@@ -1,10 +1,11 @@
 use insta_cmd::assert_cmd_snapshot;
-use karva_test::IntegrationTestContext;
+
+use crate::common::TestContext;
 
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_src_respect_ignore_files_false() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r"
@@ -41,7 +42,7 @@ def test_main(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_src_respect_ignore_files_true() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r"
@@ -80,7 +81,7 @@ def test_main(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_src_include_paths() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r#"
@@ -122,7 +123,7 @@ def test_in_other(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_src_include_single_file() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r#"
@@ -160,7 +161,7 @@ def test_other(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_terminal_output_format_concise() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r#"
@@ -191,7 +192,7 @@ def test_example(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_terminal_output_format_full() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r#"
@@ -222,7 +223,7 @@ def test_example(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_terminal_show_python_output_false() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r"
@@ -256,7 +257,7 @@ def test_with_print():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_terminal_show_python_output_true() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r"
@@ -291,7 +292,7 @@ def test_with_print():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_test_function_prefix_custom() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r#"
@@ -324,7 +325,7 @@ def test_should_not_run(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_test_function_prefix_default() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r#"
@@ -357,7 +358,7 @@ def check_should_not_run(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fail_fast_true() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r"
@@ -412,7 +413,7 @@ def test_second():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fail_fast_false() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r"
@@ -489,7 +490,7 @@ def test_third():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_combined_all_options() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r#"
@@ -538,7 +539,7 @@ def check_other(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_combined_src_and_test_options() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r#"
@@ -580,7 +581,7 @@ def verify_in_tests(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_pyproject_src_options() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "pyproject.toml",
             r#"
@@ -627,7 +628,7 @@ def test_other(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_pyproject_terminal_options() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "pyproject.toml",
             r#"
@@ -664,7 +665,7 @@ def test_example():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_pyproject_test_options() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "pyproject.toml",
             r#"
@@ -700,7 +701,7 @@ def test_should_not_run(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_pyproject_all_options() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "pyproject.toml",
             r#"
@@ -756,7 +757,7 @@ def it_should_not_run(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_karva_toml_takes_precedence_over_pyproject() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r#"
@@ -800,7 +801,7 @@ def pyproject_test(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_empty_config() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         ("karva.toml", ""),
         (
             "test.py",
@@ -826,7 +827,7 @@ def test_default(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_partial_config() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r#"
@@ -858,7 +859,7 @@ def custom_test(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_test_prefix_overrides_config() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r#"
@@ -891,7 +892,7 @@ def cli_should_run(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_output_format_overrides_config() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r#"
@@ -923,7 +924,7 @@ def test_example(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_show_output_overrides_config() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r"
@@ -958,7 +959,7 @@ def test_with_print():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_no_ignore_overrides_config() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r"
@@ -995,7 +996,7 @@ def test_main(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_fail_fast_overrides_config() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r"
@@ -1050,7 +1051,7 @@ def test_second():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_paths_override_config_include() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r#"
@@ -1086,7 +1087,7 @@ def test_from_cli(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_multiple_arguments_override_config() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r#"
@@ -1148,7 +1149,7 @@ def config_should_not_run(): pass
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_overrides_pyproject_toml() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "pyproject.toml",
             r#"
@@ -1199,7 +1200,7 @@ def cli_should_run():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_overrides_both_config_files() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "karva.toml",
             r#"

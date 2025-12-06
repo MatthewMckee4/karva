@@ -1,6 +1,6 @@
 use divan::{Bencher, bench};
 use karva_benchmark::walltime::{ProjectBenchmark, bench_project};
-use karva_test::real_world_projects::TYPER_PROJECT;
+use karva_projects::real_world_projects::TYPER_PROJECT;
 
 #[bench(sample_size = 1, sample_count = 3)]
 fn typer(bencher: Bencher) {
