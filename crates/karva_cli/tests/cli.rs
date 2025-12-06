@@ -720,7 +720,7 @@ fn test_invalid_fixture() {
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_runtime_skip_pytest(#[values("pytest", "karva")] framework: &str) {
     let context = IntegrationTestContext::with_file(
-        "<test>/test_pytest_skip.py",
+        "test_pytest_skip.py",
         &format!(
             r"
 import {framework}
@@ -747,9 +747,9 @@ def test_conditional_skip():
         success: true
         exit_code: 0
         ----- stdout -----
-        test <test>.test_pytest_skip::test_skip_with_reason ... skipped: This test is skipped at runtime
-        test <test>.test_pytest_skip::test_skip_without_reason ... skipped
-        test <test>.test_pytest_skip::test_conditional_skip ... skipped: Condition was true
+        test test_pytest_skip::test_skip_with_reason ... skipped: This test is skipped at runtime
+        test test_pytest_skip::test_skip_without_reason ... skipped
+        test test_pytest_skip::test_conditional_skip ... skipped: Condition was true
 
         test result: ok. 0 passed; 0 failed; 3 skipped; finished in [TIME]
 
@@ -1416,7 +1416,7 @@ def test_1(fixture_very_very_very_very_very_long_name):
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_finalizer() {
     let context = IntegrationTestContext::with_file(
-        "<test>/test.py",
+        "test.py",
         r"
 import os
 
@@ -1433,8 +1433,8 @@ def test_1():
     success: true
     exit_code: 0
     ----- stdout -----
-    test <test>.test::test_setenv(monkeypatch=<MockEnv object>) ... ok
-    test <test>.test::test_1 ... ok
+    test test::test_setenv(monkeypatch=<MockEnv object>) ... ok
+    test test::test_1 ... ok
 
     test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
 

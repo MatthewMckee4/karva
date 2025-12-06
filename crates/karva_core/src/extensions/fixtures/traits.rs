@@ -81,12 +81,6 @@ impl<'a> HasFixtures<'a> for &'a DiscoveredPackage {
 
 /// This trait is used to represent an object that may require fixtures to be called before it is run.
 pub trait RequiresFixtures {
-    #[cfg(test)]
-    fn uses_fixture(&self, py: Python<'_>, fixture_name: &str) -> bool {
-        self.required_fixtures(py)
-            .contains(&fixture_name.to_string())
-    }
-
     fn required_fixtures(&self, py: Python<'_>) -> Vec<String>;
 }
 

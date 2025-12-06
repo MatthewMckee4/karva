@@ -50,11 +50,6 @@ impl DiscoveredModule {
         self.fixtures.push(fixture);
     }
 
-    #[cfg(test)]
-    pub(crate) fn total_test_functions(&self) -> usize {
-        self.test_functions.len()
-    }
-
     pub(crate) fn source_text(&self) -> &str {
         &self.source_text
     }
@@ -65,67 +60,5 @@ impl DiscoveredModule {
 
     pub(crate) fn is_empty(&self) -> bool {
         self.test_functions.is_empty() && self.fixtures.is_empty()
-    }
-
-    #[cfg(test)]
-    pub(crate) const fn display(&self) -> DisplayDiscoveredModule<'_> {
-        DisplayDiscoveredModule::new(self)
-    }
-}
-
-#[cfg(test)]
-pub struct DisplayDiscoveredModule<'proj> {
-    module: &'proj DiscoveredModule,
-}
-
-#[cfg(test)]
-impl<'proj> DisplayDiscoveredModule<'proj> {
-    pub(crate) const fn new(module: &'proj DiscoveredModule) -> Self {
-        Self { module }
-    }
-}
-
-#[cfg(test)]
-impl std::fmt::Display for DisplayDiscoveredModule<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = self.module.name();
-        let test_functions = self.module.test_functions();
-        let fixtures = self.module.fixtures();
-
-        let indent_string = "├── ";
-        let last_indent_string = "└── ";
-
-        if !test_functions.is_empty() {
-            if fixtures.is_empty() {
-                write!(f, "{name}\n{last_indent_string}test_cases [")?;
-            } else {
-                write!(f, "{name}\n{indent_string}test_cases [")?;
-            }
-            for (i, test) in test_functions.iter().enumerate() {
-                if i > 0 {
-                    write!(f, " ")?;
-                }
-                write!(f, "{}", test.name.function_name())?;
-            }
-            write!(f, "]")?;
-            if !fixtures.is_empty() {
-                writeln!(f)?;
-            }
-        }
-        if !fixtures.is_empty() {
-            if test_functions.is_empty() {
-                write!(f, "{name}\n{last_indent_string}fixtures [")?;
-            } else {
-                write!(f, "{last_indent_string}fixtures [")?;
-            }
-            for (i, fixture) in fixtures.iter().enumerate() {
-                if i > 0 {
-                    write!(f, " ")?;
-                }
-                write!(f, "{}", fixture.name().function_name())?;
-            }
-            write!(f, "]")?;
-        }
-        Ok(())
     }
 }
