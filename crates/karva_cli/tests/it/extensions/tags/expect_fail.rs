@@ -1,7 +1,8 @@
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
-use karva_test::IntegrationTestContext;
 use rstest::rstest;
+
+use crate::common::TestContext;
 
 fn get_expect_fail_decorator(framework: &str) -> &str {
     match framework {
@@ -14,7 +15,7 @@ fn get_expect_fail_decorator(framework: &str) -> &str {
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_that_fails(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -45,7 +46,7 @@ def test_1():
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_that_passes_karva() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 import karva
@@ -85,7 +86,7 @@ def test_1():
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_that_passes_pytest() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 import pytest
@@ -125,7 +126,7 @@ def test_1():
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_no_reason(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -156,7 +157,7 @@ def test_1():
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_call(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -187,7 +188,7 @@ def test_1():
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_true_condition(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -218,7 +219,7 @@ def test_1():
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_false_condition(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -249,7 +250,7 @@ def test_1():
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_expression(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -281,7 +282,7 @@ def test_1():
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_multiple_conditions(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -312,7 +313,7 @@ def test_1():
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_all_false_conditions(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -343,7 +344,7 @@ def test_1():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_single_string_as_reason_karva() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 import karva
@@ -369,7 +370,7 @@ def test_1():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_empty_conditions_karva() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 import karva
@@ -395,7 +396,7 @@ def test_1():
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_mixed_tests_karva() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 import karva
@@ -443,7 +444,7 @@ def test_expected_fail_passes():
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_mixed_tests_pytest() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 import pytest
@@ -491,7 +492,7 @@ def test_expected_fail_passes():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_runtime_error() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 import karva
@@ -517,7 +518,7 @@ def test_1():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_assertion_error() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 import karva
@@ -543,7 +544,7 @@ def test_1():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_with_skip() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 import karva
@@ -571,7 +572,7 @@ def test_1():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_expect_fail_then_unexpected_pass() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 import karva

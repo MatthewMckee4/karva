@@ -1,10 +1,11 @@
 use insta_cmd::assert_cmd_snapshot;
-use karva_test::IntegrationTestContext;
+
+use crate::common::TestContext;
 
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixtures_given_by_decorator() {
-    let test_context = IntegrationTestContext::with_file(
+    let test_context = TestContext::with_file(
         "test.py",
         r"
 import functools
@@ -38,7 +39,7 @@ def test_fixtures_given_by_decorator(a):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixtures_given_by_decorator_and_fixture() {
-    let test_context = IntegrationTestContext::with_file(
+    let test_context = TestContext::with_file(
         "test.py",
         r"
 import karva
@@ -78,7 +79,7 @@ def test_func(a, b):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixtures_given_by_decorator_and_parametrize() {
-    let test_context = IntegrationTestContext::with_file(
+    let test_context = TestContext::with_file(
         "test.py",
         r#"
 import karva
@@ -116,7 +117,7 @@ def test_func(a, b):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixtures_given_by_decorator_and_parametrize_and_fixture() {
-    let test_context = IntegrationTestContext::with_file(
+    let test_context = TestContext::with_file(
         "test.py",
         r#"
 import karva
@@ -159,7 +160,7 @@ def test_func(a, b, c):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixtures_given_by_decorator_one_missing() {
-    let test_context = IntegrationTestContext::with_file(
+    let test_context = TestContext::with_file(
         "test.py",
         r"
 import functools

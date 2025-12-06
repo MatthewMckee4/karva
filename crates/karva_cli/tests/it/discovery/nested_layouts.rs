@@ -1,10 +1,11 @@
 use insta_cmd::assert_cmd_snapshot;
-use karva_test::IntegrationTestContext;
+
+use crate::common::TestContext;
 
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_deeply_nested_structure() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "level1/level2/level3/level4/test_deep.py",
             r"
@@ -35,7 +36,7 @@ def test_root(): pass",
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_mixed_nesting_siblings() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "tests/unit/test_a.py",
             r"
@@ -71,7 +72,7 @@ def test_direct(): pass",
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_folder_with_underscores_and_numbers() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "test_package_v2/sub_module_123/test_feature.py",
             r"
@@ -102,7 +103,7 @@ def test_versioned(): pass",
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parallel_directory_trees() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "src/a/b/c/test_path1.py",
             r"

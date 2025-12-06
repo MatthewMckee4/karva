@@ -35,13 +35,12 @@ karva_combine = { path = "crates/karva_combine" }
 karva_core = { path = "crates/karva_core" }
 karva_macros = { path = "crates/karva_macros" }
 karva_project = { path = "crates/karva_project" }
-karva_test = { path = "crates/karva_test" }
+karva_projects = { path = "crates/karva_projects" }
 markdown = { version = "1.0.0" }
 pretty_assertions = { version = "1.4.1" }
 proc-macro2 = { version = "1.0.79" }
 pyo3 = { version = "0.27.2", features = ["abi3-py310", "py-clone"] }
 quote = { version = "1.0.23" }
-rand = { version = "0.9.2" }
 regex = { version = "1.12.2" }
 rstest = { version = "0.26" }
 ruff_db = { git = "https://github.com/astral-sh/ruff/", branch = "main" }

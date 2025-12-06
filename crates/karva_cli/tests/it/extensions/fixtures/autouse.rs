@@ -1,7 +1,8 @@
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
-use karva_test::IntegrationTestContext;
 use rstest::rstest;
+
+use crate::common::TestContext;
 
 fn get_auto_use_kw(framework: &str) -> &str {
     match framework {
@@ -14,7 +15,7 @@ fn get_auto_use_kw(framework: &str) -> &str {
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_function_scope_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         format!(
             r#"
@@ -60,7 +61,7 @@ fn test_scope_auto_use_fixture(
     #[values("pytest", "karva")] framework: &str,
     #[values("module", "package", "session")] scope: &str,
 ) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r#"
@@ -102,7 +103,7 @@ def test_something_else():
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r#"
@@ -148,7 +149,7 @@ fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_auto_use_fixture_in_parent_module() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "foo/conftest.py",
             "

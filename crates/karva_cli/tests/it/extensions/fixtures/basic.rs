@@ -1,7 +1,8 @@
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
-use karva_test::IntegrationTestContext;
 use rstest::rstest;
+
+use crate::common::TestContext;
 
 fn get_auto_use_kw(framework: &str) -> &str {
     match framework {
@@ -15,7 +16,7 @@ fn get_auto_use_kw(framework: &str) -> &str {
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
  {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "conftest.py",
             r"
@@ -51,7 +52,7 @@ def z(x, y):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_runner_given_nested_path() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "conftest.py",
             r"
@@ -79,7 +80,7 @@ def x():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_with_name_parameter() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r#"import karva
 
@@ -107,7 +108,7 @@ def test_fixture_with_name_parameter(fixture_name):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_is_different_in_different_functions() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"import karva
 
@@ -145,7 +146,7 @@ def test_fixture_2(fixture):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_from_current_package_session_scope() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "tests/conftest.py",
             r"
@@ -174,7 +175,7 @@ def x():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_from_current_package_function_scope() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "tests/conftest.py",
             r"
@@ -202,7 +203,7 @@ def x():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_finalizer_from_current_package_session_scope() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "tests/conftest.py",
             r"
@@ -246,7 +247,7 @@ def test_2(x):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_finalizer_from_current_package_function_scope() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "tests/conftest.py",
             r"
@@ -290,7 +291,7 @@ def test_2(x):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_discover_pytest_fixture() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "tests/conftest.py",
             r"
@@ -319,7 +320,7 @@ def x():
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_dynamic_fixture_scope_session_scope(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r#"
@@ -363,7 +364,7 @@ def test_2(x_session):
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_dynamic_fixture_scope_function_scope(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r#"
@@ -407,7 +408,7 @@ def test_2(x_function):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_override_in_test_modules() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "tests/conftest.py",
             r"
@@ -459,7 +460,7 @@ def test_username(username):
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r#"
@@ -522,7 +523,7 @@ fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &st
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -562,7 +563,7 @@ fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
@@ -602,7 +603,7 @@ fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &st
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_depends_on_fixture_with_finalizer() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_file.py",
         r"
 import karva

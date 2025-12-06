@@ -1,12 +1,10 @@
-use std::{fs, process::Command};
+use std::process::Command;
 
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use directories::ProjectDirs;
 use insta::{Settings, internals::SettingsBindDropGuard};
 use tempfile::TempDir;
-
-use crate::{find_karva_wheel, utils::tempdir_filter};
 
 pub struct TestContext {
     _temp_dir: TempDir,
@@ -102,52 +100,29 @@ impl TestContext {
         }
     }
 
-    pub fn create_file(&self, path: impl AsRef<Utf8Path>, content: &str) -> Utf8PathBuf {
-        let path = path.as_ref();
-        let path = self.project_dir_path.join(path);
-
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).unwrap();
-        }
-        std::fs::write(&path, &*ruff_python_trivia::textwrap::dedent(content)).unwrap();
-
-        path
-    }
-
-    #[allow(clippy::must_use_candidate)]
-    pub fn create_dir(&self, path: impl AsRef<Utf8Path>) -> Utf8PathBuf {
-        let path = self.project_dir_path.join(path);
-        fs::create_dir_all(&path).unwrap();
-        path
-    }
-
-    pub fn temp_path(&self, path: impl AsRef<Utf8Path>) -> Utf8PathBuf {
-        self.project_dir_path.join(path)
-    }
-
-    pub fn cwd(&self) -> Utf8PathBuf {
+    pub fn root(&self) -> Utf8PathBuf {
         self.project_dir_path.clone()
     }
 
     pub fn with_files<'a>(files: impl IntoIterator<Item = (&'a str, &'a str)>) -> Self {
-        let mut case = Self::default();
+        let case = Self::default();
         case.write_files(files);
         case
     }
 
     pub fn with_file(path: impl AsRef<Utf8Path>, content: &str) -> Self {
-        let mut case = Self::default();
+        let case = Self::default();
         case.write_file(path, content);
         case
     }
 
-    pub fn write_files<'a>(&mut self, files: impl IntoIterator<Item = (&'a str, &'a str)>) {
+    pub fn write_files<'a>(&self, files: impl IntoIterator<Item = (&'a str, &'a str)>) {
         for (path, content) in files {
             self.write_file(path, content);
         }
     }
 
-    pub fn write_file(&mut self, path: impl AsRef<Utf8Path>, content: &str) {
+    pub fn write_file(&self, path: impl AsRef<Utf8Path>, content: &str) {
         let path = path.as_ref();
 
         let path = self.project_dir_path.join(path);
@@ -162,10 +137,60 @@ impl TestContext {
             .with_context(|| format!("Failed to write file `{path}`"))
             .unwrap();
     }
+
+    pub fn karva_bin(&self) -> Utf8PathBuf {
+        let venv_bin =
+            self.root()
+                .join(".venv")
+                .join(if cfg!(windows) { "Scripts" } else { "bin" });
+        venv_bin.join(if cfg!(windows) { "karva.exe" } else { "karva" })
+    }
+    pub fn command(&self) -> Command {
+        let mut command = Command::new(self.karva_bin());
+        command.current_dir(self.root()).arg("test");
+        command
+    }
 }
 
 impl Default for TestContext {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Find the karva wheel in the target/wheels directory.
+/// Returns the path to the wheel file.
+pub fn find_karva_wheel() -> anyhow::Result<Utf8PathBuf> {
+    let karva_root = Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .ok_or_else(|| anyhow::anyhow!("Could not determine KARVA_ROOT"))?
+        .to_path_buf();
+
+    let wheels_dir = karva_root.join("target").join("wheels");
+
+    let entries = std::fs::read_dir(&wheels_dir)
+        .with_context(|| format!("Could not read wheels directory: {wheels_dir}"))?;
+
+    for entry in entries {
+        let entry = entry?;
+        let file_name = entry.file_name();
+        if let Some(name) = file_name.to_str() {
+            if name.starts_with("karva-")
+                && Utf8Path::new(name)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("whl"))
+            {
+                return Ok(
+                    Utf8PathBuf::from_path_buf(entry.path()).expect("Path is not valid UTF-8")
+                );
+            }
+        }
+    }
+
+    anyhow::bail!("Could not find karva wheel in target/wheels directory");
+}
+
+pub fn tempdir_filter(path: &Utf8Path) -> String {
+    format!(r"{}\\?/?", regex::escape(path.as_str()))
 }

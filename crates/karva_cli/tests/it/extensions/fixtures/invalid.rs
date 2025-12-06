@@ -1,10 +1,11 @@
 use insta_cmd::assert_cmd_snapshot;
-use karva_test::IntegrationTestContext;
+
+use crate::common::TestContext;
 
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_invalid_pytest_fixture_scope() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r#"
                 import pytest
@@ -59,7 +60,7 @@ fn test_invalid_pytest_fixture_scope() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_missing_fixture() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
                 def test_all_scopes(
@@ -96,7 +97,7 @@ fn test_missing_fixture() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_fails_to_run() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
                 from karva import fixture
@@ -158,7 +159,7 @@ fn test_fixture_fails_to_run() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_missing_fixtures() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
                 from karva import fixture
@@ -210,7 +211,7 @@ fn test_fixture_missing_fixtures() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn missing_arguments_in_nested_function() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
                 def test_failing_fixture():
@@ -256,7 +257,7 @@ fn missing_arguments_in_nested_function() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_failing_yield_fixture() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
             import karva
@@ -320,7 +321,7 @@ fn test_failing_yield_fixture() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_generator_two_yields() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
                 import karva
@@ -363,7 +364,7 @@ fn test_fixture_generator_two_yields() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_generator_fail_in_teardown() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r#"
                 import karva

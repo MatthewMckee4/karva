@@ -1,14 +1,142 @@
-mod integration;
-
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
-use karva_test::IntegrationTestContext;
 use rstest::rstest;
+
+use crate::common::TestContext;
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_single_file() {
+    let context = TestContext::with_files([
+        (
+            "test_file1.py",
+            r"
+def test_1(): pass
+def test_2(): pass",
+        ),
+        (
+            "test_file2.py",
+            r"
+def test_3(): pass
+def test_4(): pass",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command().arg("test_file1.py"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test_file1::test_1 ... ok
+    test test_file1::test_2 ... ok
+
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_empty_file() {
+    let context = TestContext::with_file("test.py", "");
+
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_empty_directory() {
+    let context = TestContext::new();
+
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_single_function() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+            def test_1(): pass
+            def test_2(): pass",
+    );
+
+    assert_cmd_snapshot!(context.command().arg("test.py::test_1"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_1 ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_single_function_shadowed_by_file() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+def test_1(): pass
+def test_2(): pass",
+    );
+
+    assert_cmd_snapshot!(context.command().args(["test.py::test_1", "test.py"]), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_1 ... ok
+    test test::test_2 ... ok
+
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_single_function_shadowed_by_directory() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+def test_1(): pass
+def test_2(): pass",
+    );
+
+    assert_cmd_snapshot!(context.command().args(["test.py::test_1", "."]), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_1 ... ok
+    test test::test_2 ... ok
+
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
 
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_no_tests_found() {
-    let context = IntegrationTestContext::with_file("test_no_tests.py", r"");
+    let context = TestContext::with_file("test_no_tests.py", r"");
 
     assert_cmd_snapshot!(context.command(), @r"
     success: true
@@ -23,7 +151,7 @@ fn test_no_tests_found() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_one_test_passes() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_pass.py",
         r"
         def test_pass():
@@ -46,7 +174,7 @@ fn test_one_test_passes() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_one_test_fail() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_fail.py",
         r"
         def test_fail():
@@ -86,7 +214,7 @@ fn test_one_test_fail() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fail_concise_output() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_fail.py",
         r"
         import karva
@@ -136,7 +264,7 @@ fn test_fail_concise_output() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_two_test_fails() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "tests/test_fail.py",
         r"
         def test_fail():
@@ -200,7 +328,7 @@ fn test_two_test_fails() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_file_importing_another_file() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         (
             "helper.py",
             r"
@@ -282,7 +410,7 @@ fn get_skipif_decorator(framework: &str) -> &str {
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize(#[values("pytest", "karva")] package: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_parametrize.py",
         &format!(
             r"
@@ -319,7 +447,7 @@ fn test_parametrize(#[values("pytest", "karva")] package: &str) {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_stdout() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_std_out_redirected.py",
         r"
         def test_std_out_redirected():
@@ -354,7 +482,7 @@ fn test_stdout() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_multiple_fixtures_not_found() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_multiple_fixtures_not_found.py",
         "def test_multiple_fixtures_not_found(a, b, c): ...",
     );
@@ -386,7 +514,7 @@ fn test_multiple_fixtures_not_found() {
 fn test_skip_functionality(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_skip_decorator(framework);
 
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_skip.py",
         &format!(
             r"
@@ -417,7 +545,7 @@ fn test_skip_functionality(#[values("pytest", "karva")] framework: &str) {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_text_file_in_directory() {
-    let context = IntegrationTestContext::with_files([
+    let context = TestContext::with_files([
         ("test_sample.py", "def test_sample(): assert True"),
         ("random.txt", "pass"),
     ]);
@@ -437,7 +565,7 @@ fn test_text_file_in_directory() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_text_file() {
-    let context = IntegrationTestContext::with_file("random.txt", "pass");
+    let context = TestContext::with_file("random.txt", "pass");
 
     assert_cmd_snapshot!(
         context.command().args(["random.txt"]),
@@ -458,7 +586,7 @@ fn test_text_file() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_quiet_output_passing() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         "
         def test_quiet_output():
@@ -479,7 +607,7 @@ fn test_quiet_output_passing() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_quiet_output_failing() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         "
         def test_quiet_output():
@@ -500,7 +628,7 @@ fn test_quiet_output_failing() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_invalid_path() {
-    let context = IntegrationTestContext::new();
+    let context = TestContext::new();
 
     assert_cmd_snapshot!(context.command().arg("non_existing_path.py"), @r"
     success: false
@@ -519,7 +647,7 @@ fn test_invalid_path() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_generator_two_yields_passing_test() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
             import karva
@@ -562,7 +690,7 @@ fn test_fixture_generator_two_yields_passing_test() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_generator_two_yields_failing_test() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
             import karva
@@ -624,7 +752,7 @@ fn test_fixture_generator_two_yields_failing_test() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_generator_fail_in_teardown() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r#"
         import karva
@@ -667,7 +795,7 @@ fn test_fixture_generator_fail_in_teardown() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_invalid_fixture() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r#"
         import karva
@@ -719,7 +847,7 @@ fn test_invalid_fixture() {
 #[rstest]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_runtime_skip_pytest(#[values("pytest", "karva")] framework: &str) {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_pytest_skip.py",
         &format!(
             r"
@@ -763,7 +891,7 @@ def test_conditional_skip():
 fn test_skipif_true_condition(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_skipif_decorator(framework);
 
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_skipif.py",
         &format!(
             r"
@@ -795,7 +923,7 @@ def test_1():
 fn test_skipif_false_condition(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_skipif_decorator(framework);
 
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_skipif.py",
         &format!(
             r"
@@ -827,7 +955,7 @@ def test_1():
 fn test_skipif_multiple_conditions(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_skipif_decorator(framework);
 
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_skipif.py",
         &format!(
             r"
@@ -859,7 +987,7 @@ def test_1():
 fn test_skipif_mixed_tests(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_skipif_decorator(framework);
 
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_skipif.py",
         &format!(
             r"
@@ -898,7 +1026,7 @@ def test_normal():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_failfast() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_failfast.py",
         r"
         def test_first_fail():
@@ -954,7 +1082,7 @@ fn get_expect_fail_decorator(framework: &str) -> &str {
 fn test_expect_fail_that_fails(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_expect_fail_decorator(framework);
 
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_expect_fail.py",
         &format!(
             r"
@@ -986,7 +1114,7 @@ def test_1():
 fn test_expect_fail_that_passes_karva() {
     let decorator = get_expect_fail_decorator("karva");
 
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_expect_fail.py",
         &format!(
             r"
@@ -1028,7 +1156,7 @@ def test_1():
 fn test_expect_fail_that_passes_pytest() {
     let decorator = get_expect_fail_decorator("pytest");
 
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_expect_fail.py",
         &format!(
             r"
@@ -1069,7 +1197,7 @@ def test_1():
 fn test_expect_fail_with_true_condition(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_expect_fail_decorator(framework);
 
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_expect_fail.py",
         &format!(
             r"
@@ -1101,7 +1229,7 @@ def test_1():
 fn test_expect_fail_with_false_condition(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_expect_fail_decorator(framework);
 
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_expect_fail.py",
         &format!(
             r"
@@ -1133,7 +1261,7 @@ def test_1():
 fn test_expect_fail_mixed_tests_karva() {
     let decorator = get_expect_fail_decorator("karva");
 
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_expect_fail.py",
         &format!(
             r"
@@ -1183,7 +1311,7 @@ def test_expected_fail_passes():
 fn test_expect_fail_mixed_tests_pytest() {
     let decorator = get_expect_fail_decorator("pytest");
 
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_expect_fail.py",
         &format!(
             r"
@@ -1231,7 +1359,7 @@ def test_expected_fail_passes():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fail_function() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_fail.py",
         r"
 import karva
@@ -1282,7 +1410,7 @@ def test_normal():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_test_prefix() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_fail.py",
         r"
 import karva
@@ -1308,7 +1436,7 @@ def tests_1(): ...
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_unused_files_are_imported() {
-    let mut context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_fail.py",
         r"
 def test_1():
@@ -1334,7 +1462,7 @@ def test_1():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_unused_files_that_fail_are_not_imported() {
-    let mut context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_fail.py",
         r"
 def test_1():
@@ -1365,7 +1493,7 @@ def test_1():
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_argument_truncated() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test_file.py",
         r"
 import karva
@@ -1415,7 +1543,7 @@ def test_1(fixture_very_very_very_very_very_long_name):
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_finalizer() {
-    let context = IntegrationTestContext::with_file(
+    let context = TestContext::with_file(
         "test.py",
         r"
 import os
