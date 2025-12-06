@@ -1,5 +1,5 @@
-use divan::{bench, Bencher};
-use karva_benchmark::walltime::{bench_project, ProjectBenchmark};
+use divan::{Bencher, bench};
+use karva_benchmark::walltime::{ProjectBenchmark, bench_project};
 use karva_projects::real_world_projects::TYPER_PROJECT;
 
 #[bench(sample_size = 1, sample_count = 3)]
