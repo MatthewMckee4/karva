@@ -22,3 +22,6 @@ pyo3 = { workspace = true }
 
 [lints]
 workspace = true
+
+[package.metadata.dist]
+dist = true

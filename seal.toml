@@ -1,0 +1,30 @@
+[release]
+current-version = "0.0.1-alpha.3"
+
+version-files = [
+    "crates/seal_version/Cargo.toml",
+    "crates/seal/Cargo.toml",
+    "README.md",
+    { path = "dist-workspace.toml", field = "workspace.version", format = "toml" }
+]
+
+commit-message = "Release v{version}"
+branch-name = "release/v{version}"
+push = true
+create-pr = true
+confirm = true
+
+[changelog.section-labels]
+"Bug Fixes" = ["bug"]
+"Changelog " = ["changelog"]
+"Bumping" = ["bumping"]
+"Configuration" = ["configuration"]
+"New Features" = ["enhancement"]
+"CLI" = ["cli"]
+"Documentation" = ["documentation"]
+
+[changelog]
+ignore-contributors = ["dependabot[bot]"]
+ignore-labels = ["internal", "ci", "duplicate", "rust", "wontfix", "needs-decision"]
+include-contributors = true
+changelog-heading = "{version}"
