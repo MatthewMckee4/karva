@@ -94,7 +94,7 @@ jobs:
         shell: bash
         run: |
           ARCHIVE_FILE=karva-${{ matrix.platform.target }}.zip
-          7z a $ARCHIVE_FILE ./target/${{ matrix.platform.target }}/release/karva.exe
+          7z a $ARCHIVE_FILE ./target/wheels/${{ matrix.platform.target }}/release/karva.exe
           sha256sum $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
       - name: "Upload binary"
@@ -143,7 +143,7 @@ jobs:
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
+          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
@@ -221,7 +221,7 @@ jobs:
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
+          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
@@ -282,7 +282,7 @@ jobs:
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
+          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
@@ -337,7 +337,7 @@ jobs:
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
+          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
@@ -403,7 +403,7 @@ jobs:
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
+          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
@@ -455,7 +455,7 @@ jobs:
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
+          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
@@ -506,7 +506,7 @@ jobs:
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
+          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
@@ -525,7 +525,6 @@ jobs:
         platform:
           - target: aarch64-unknown-linux-musl
             arch: aarch64
-            maturin_docker_options: -e JEMALLOC_SYS_WITH_LG_PAGE=16
           - target: armv7-unknown-linux-musleabihf
             arch: armv7
       fail-fast: false
@@ -544,7 +543,6 @@ jobs:
           target: ${{ matrix.platform.target }}
           manylinux: musllinux_1_1
           args: --release --locked --out dist ${{ matrix.platform.arch == 'aarch64' && '--compatibility 2_17' || ''}}
-          docker-options: ${{ matrix.platform.maturin_docker_options }}
           rust-toolchain: ${{ matrix.platform.toolchain || null }}
 
       - name: "Upload wheels"
@@ -563,7 +561,7 @@ jobs:
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
+          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
