@@ -69,7 +69,7 @@ jobs:
         uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --locked --out dist --features
+          args: --release --locked --out dist
           sccache: "true"
       - name: "Upload wheels"
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
@@ -107,7 +107,7 @@ jobs:
         uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --locked --out dist --features
+          args: --release --locked --out dist
           sccache: "true"
       - name: "Upload wheels"
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
@@ -151,7 +151,7 @@ jobs:
           # 32-bit compiler runs out of memory (4GB memory limit for 32-bit), so we cross compile
           # from 64-bit version of the container, breaking the pattern from other builds.
           container: quay.io/pypa/manylinux2014
-          args: --release --locked --out dist --features
+          args: --release --locked --out dist
           # See: https://github.com/sfackler/rust-openssl/issues/2036#issuecomment-1724324145
           before-script-linux: |
             # Install the 32-bit cross target on 64-bit (noop if we're already on 64-bit)
@@ -228,7 +228,7 @@ jobs:
           # On `aarch64`, use `manylinux: 2_28`; otherwise, use `manylinux: auto`.
           manylinux: ${{ matrix.platform.arch == 'aarch64' && '2_28' || 'auto' }}
           docker-options: ${{ matrix.platform.maturin_docker_options }}
-          args: --release --locked --out dist --features
+          args: --release --locked --out dist
       - name: "Upload wheels"
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
@@ -272,7 +272,7 @@ jobs:
         with:
           target: ${{ matrix.platform.target }}
           manylinux: auto
-          args: --release --locked --out dist --features
+          args: --release --locked --out dist
           rust-toolchain: ${{ matrix.platform.toolchain || null }}
         env:
           CFLAGS_s390x_unknown_linux_gnu: -march=z10
@@ -326,7 +326,7 @@ jobs:
           target: ${{ matrix.platform.target }}
           manylinux: auto
           docker-options: ${{ matrix.platform.maturin_docker_options }}
-          args: --release --locked --out dist --features
+          args: --release --locked --out dist
           before-script-linux: |
             if command -v yum &> /dev/null; then
                 yum update -y
@@ -377,7 +377,7 @@ jobs:
         with:
           target: ${{ matrix.platform.target }}
           manylinux: auto
-          args: --release --locked --out dist --features
+          args: --release --locked --out dist
       - name: "Upload wheels"
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
@@ -420,7 +420,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           manylinux: musllinux_1_1
-          args: --release --locked --out dist --features
+          args: --release --locked --out dist
       - name: "Upload wheels"
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
@@ -467,7 +467,7 @@ jobs:
         with:
           target: ${{ matrix.platform.target }}
           manylinux: musllinux_1_1
-          args: --release --locked --out dist --features ${{ matrix.platform.arch == 'aarch64' && '--compatibility 2_17' || ''}}
+          args: --release --locked --out dist ${{ matrix.platform.arch == 'aarch64' && '--compatibility 2_17' || ''}}
           docker-options: ${{ matrix.platform.maturin_docker_options }}
           rust-toolchain: ${{ matrix.platform.toolchain || null }}
       - name: "Upload wheels"
