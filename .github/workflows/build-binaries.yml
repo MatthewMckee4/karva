@@ -93,8 +93,8 @@ jobs:
       - name: "Archive binary"
         shell: bash
         run: |
-          ARCHIVE_FILE=prek-${{ matrix.platform.target }}.zip
-          7z a $ARCHIVE_FILE ./target/${{ matrix.platform.target }}/release/prek.exe
+          ARCHIVE_FILE=karva-${{ matrix.platform.target }}.zip
+          7z a $ARCHIVE_FILE ./target/${{ matrix.platform.target }}/release/karva.exe
           sha256sum $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
       - name: "Upload binary"
@@ -139,11 +139,11 @@ jobs:
       - name: "Archive binary"
         run: |
           TARGET=${{ matrix.platform.target }}
-          ARCHIVE_NAME=prek-$TARGET
+          ARCHIVE_NAME=karva-$TARGET
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/prek $ARCHIVE_NAME/prek
+          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
@@ -217,11 +217,11 @@ jobs:
           set -euo pipefail
 
           TARGET=${{ matrix.target }}
-          ARCHIVE_NAME=prek-$TARGET
+          ARCHIVE_NAME=karva-$TARGET
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/prek $ARCHIVE_NAME/prek
+          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
@@ -278,11 +278,11 @@ jobs:
           set -euo pipefail
 
           TARGET=${{ matrix.platform.target }}
-          ARCHIVE_NAME=prek-$TARGET
+          ARCHIVE_NAME=karva-$TARGET
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/prek $ARCHIVE_NAME/prek
+          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
@@ -333,11 +333,11 @@ jobs:
           set -euo pipefail
 
           TARGET=${{ matrix.platform.target }}
-          ARCHIVE_NAME=prek-$TARGET
+          ARCHIVE_NAME=karva-$TARGET
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/prek $ARCHIVE_NAME/prek
+          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
@@ -399,11 +399,11 @@ jobs:
           set -euo pipefail
 
           TARGET=${{ matrix.platform.target }}
-          ARCHIVE_NAME=prek-$TARGET
+          ARCHIVE_NAME=karva-$TARGET
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/prek $ARCHIVE_NAME/prek
+          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
@@ -451,11 +451,11 @@ jobs:
           set -euo pipefail
 
           TARGET=${{ matrix.platform.target }}
-          ARCHIVE_NAME=prek-$TARGET
+          ARCHIVE_NAME=karva-$TARGET
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/prek $ARCHIVE_NAME/prek
+          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
@@ -502,11 +502,11 @@ jobs:
           set -euo pipefail
 
           TARGET=${{ matrix.target }}
-          ARCHIVE_NAME=prek-$TARGET
+          ARCHIVE_NAME=karva-$TARGET
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/prek $ARCHIVE_NAME/prek
+          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
@@ -559,11 +559,11 @@ jobs:
           set -euo pipefail
 
           TARGET=${{ matrix.platform.target }}
-          ARCHIVE_NAME=prek-$TARGET
+          ARCHIVE_NAME=karva-$TARGET
           ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
 
           mkdir -p $ARCHIVE_NAME
-          cp target/$TARGET/release/prek $ARCHIVE_NAME/prek
+          cp target/$TARGET/release/karva $ARCHIVE_NAME/karva
           tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
           shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
 
