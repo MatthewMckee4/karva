@@ -1,10 +1,10 @@
-# Build karva on all platforms.
+# Build karva wheels on all platforms.
 #
-# Generates both wheels (for PyPI) and archived binaries (for GitHub releases).
+# Generates wheels (for PyPI).
 #
 # Assumed to run as a subworkflow of .github/workflows/release.yml; specifically, as a local
 # artifacts job within `cargo-dist`.
-name: "Build binaries"
+name: "Build wheels"
 
 on:
   workflow_call:
@@ -90,21 +90,6 @@ jobs:
           name: wheels-windows-${{ matrix.platform.target }}
           path: dist
 
-      - name: "Archive binary"
-        shell: bash
-        run: |
-          ARCHIVE_FILE=karva-${{ matrix.platform.target }}.zip
-          7z a $ARCHIVE_FILE ./target/wheels/${{ matrix.platform.target }}/release/karva.exe
-          sha256sum $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
-
-      - name: "Upload binary"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: artifacts-${{ matrix.platform.target }}
-          path: |
-            *.zip
-            *.sha256
-
   macos:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
@@ -135,25 +120,6 @@ jobs:
         with:
           name: wheels-macos-${{ matrix.platform.target }}
           path: dist
-
-      - name: "Archive binary"
-        run: |
-          TARGET=${{ matrix.platform.target }}
-          ARCHIVE_NAME=karva-$TARGET
-          ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
-
-          mkdir -p $ARCHIVE_NAME
-          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
-          tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
-          shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
-
-      - name: "Upload binary"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: artifacts-${{ matrix.platform.target }}
-          path: |
-            *.tar.gz
-            *.sha256
 
   linux:
     runs-on: ubuntu-latest
@@ -211,28 +177,6 @@ jobs:
           name: wheels-linux-${{ matrix.target }}
           path: dist
 
-      - name: "Archive binary"
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          TARGET=${{ matrix.target }}
-          ARCHIVE_NAME=karva-$TARGET
-          ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
-
-          mkdir -p $ARCHIVE_NAME
-          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
-          tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
-          shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
-
-      - name: "Upload binary"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: artifacts-${{ matrix.target }}
-          path: |
-            *.tar.gz
-            *.sha256
-
   linux-arm:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -272,28 +216,6 @@ jobs:
           name: wheels-linux-${{ matrix.platform.target }}
           path: dist
 
-      - name: "Archive binary"
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          TARGET=${{ matrix.platform.target }}
-          ARCHIVE_NAME=karva-$TARGET
-          ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
-
-          mkdir -p $ARCHIVE_NAME
-          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
-          tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
-          shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
-
-      - name: "Upload binary"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: artifacts-${{ matrix.platform.target }}
-          path: |
-            *.tar.gz
-            *.sha256
-
   linux-s390x:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -326,28 +248,6 @@ jobs:
         with:
           name: wheels-linux-${{ matrix.platform.target }}
           path: dist
-
-      - name: "Archive binary"
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          TARGET=${{ matrix.platform.target }}
-          ARCHIVE_NAME=karva-$TARGET
-          ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
-
-          mkdir -p $ARCHIVE_NAME
-          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
-          tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
-          shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
-
-      - name: "Upload binary"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: artifacts-${{ matrix.platform.target }}
-          path: |
-            *.tar.gz
-            *.sha256
 
   linux-powerpc:
     runs-on: ubuntu-latest
@@ -393,28 +293,6 @@ jobs:
           name: wheels-linux-${{ matrix.platform.target }}
           path: dist
 
-      - name: "Archive binary"
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          TARGET=${{ matrix.platform.target }}
-          ARCHIVE_NAME=karva-$TARGET
-          ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
-
-          mkdir -p $ARCHIVE_NAME
-          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
-          tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
-          shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
-
-      - name: "Upload binary"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: artifacts-${{ matrix.platform.target }}
-          path: |
-            *.tar.gz
-            *.sha256
-
   linux-riscv64:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -445,28 +323,6 @@ jobs:
           name: wheels-linux-${{ matrix.platform.target }}
           path: dist
 
-      - name: "Archive binary"
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          TARGET=${{ matrix.platform.target }}
-          ARCHIVE_NAME=karva-$TARGET
-          ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
-
-          mkdir -p $ARCHIVE_NAME
-          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
-          tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
-          shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
-
-      - name: "Upload binary"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: artifacts-${{ matrix.platform.target }}
-          path: |
-            *.tar.gz
-            *.sha256
-
   musllinux:
     runs-on: ubuntu-latest
     strategy:
@@ -495,28 +351,6 @@ jobs:
         with:
           name: wheels-linux-${{ matrix.target }}
           path: dist
-
-      - name: "Archive binary"
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          TARGET=${{ matrix.target }}
-          ARCHIVE_NAME=karva-$TARGET
-          ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
-
-          mkdir -p $ARCHIVE_NAME
-          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
-          tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
-          shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
-
-      - name: "Upload binary"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: artifacts-${{ matrix.target }}
-          path: |
-            *.tar.gz
-            *.sha256
 
   musllinux-cross:
     runs-on: ubuntu-latest
@@ -550,25 +384,3 @@ jobs:
         with:
           name: wheels-linux-${{ matrix.platform.target }}
           path: dist
-
-      - name: "Archive binary"
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          TARGET=${{ matrix.platform.target }}
-          ARCHIVE_NAME=karva-$TARGET
-          ARCHIVE_FILE=$ARCHIVE_NAME.tar.gz
-
-          mkdir -p $ARCHIVE_NAME
-          cp target/wheels/$TARGET/release/karva $ARCHIVE_NAME/karva
-          tar czvf $ARCHIVE_FILE $ARCHIVE_NAME
-          shasum -a 256 $ARCHIVE_FILE > $ARCHIVE_FILE.sha256
-
-      - name: "Upload binary"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: artifacts-${{ matrix.platform.target }}
-          path: |
-            *.tar.gz
-            *.sha256

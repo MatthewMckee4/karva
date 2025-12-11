@@ -91,11 +91,11 @@ jobs:
           name: artifacts-plan-dist-manifest
           path: plan-dist-manifest.json
 
-  custom-build-binaries:
+  custom-build-wheels:
     needs:
       - plan
     if: ${{ needs.plan.outputs.publishing == 'true' || fromJson(needs.plan.outputs.val).ci.github.pr_run_mode == 'upload' || inputs.tag == 'dry-run' }}
-    uses: ./.github/workflows/build-binaries.yml
+    uses: ./.github/workflows/build-wheels.yml
     with:
       plan: ${{ needs.plan.outputs.val }}
     secrets: inherit
@@ -104,7 +104,7 @@ jobs:
   build-global-artifacts:
     needs:
       - plan
-      - custom-build-binaries
+      - custom-build-wheels
     runs-on: "ubuntu-22.04"
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -150,10 +150,10 @@ jobs:
   host:
     needs:
       - plan
-      - custom-build-binaries
+      - custom-build-wheels
       - build-global-artifacts
     # Only run if we're "publishing", and only if plan, local and global didn't fail (skipped is fine)
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.custom-build-binaries.result == 'skipped' || needs.custom-build-binaries.result == 'success') }}
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.custom-build-wheels.result == 'skipped' || needs.custom-build-wheels.result == 'success') }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     runs-on: "ubuntu-22.04"

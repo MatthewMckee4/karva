@@ -1,11 +1,13 @@
 [release]
-current-version = "0.0.1-alpha.3"
+current-version = "0.1.11"
 
 version-files = [
-    "crates/seal_version/Cargo.toml",
-    "crates/seal/Cargo.toml",
     "README.md",
-    { path = "dist-workspace.toml", field = "workspace.version", format = "toml" }
+    "crates/karva/Cargo.toml",
+    "crates/karva_cli/Cargo.toml",
+    "pyproject.toml",
+    "python/karva/__init__.py"
+    # { path = "dist-workspace.toml", field = "workspace.version", format = "toml" }
 ]
 
 commit-message = "Release v{version}"
@@ -16,10 +18,10 @@ confirm = true
 
 [changelog.section-labels]
 "Bug Fixes" = ["bug"]
-"Changelog " = ["changelog"]
-"Bumping" = ["bumping"]
+"Reporting" = ["reporting"]
+"Extensions" = ["extensions/fixtures", "extensions/tags"]
 "Configuration" = ["configuration"]
-"New Features" = ["enhancement"]
+"Discovery" = ["discovery"]
 "CLI" = ["cli"]
 "Documentation" = ["documentation"]
 
