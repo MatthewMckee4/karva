@@ -34,14 +34,150 @@ env:
   PYTHON_VERSION: "3.10"
 
 jobs:
-  sdist:
+  linux:
+    name: build wheels (Linux, ${{ matrix.platform.target }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform:
+          - target: x86_64
+          - target: x86
+          - target: aarch64
+          - target: armv7
+
     steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+      - name: Checkout repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist
+          manylinux: auto
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wheels-linux-${{ matrix.platform.target }}
+          path: dist
+
+  musllinux:
+    name: build wheels (Linux Musl, ${{ matrix.platform.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform:
+          - target: x86_64
+          - target: x86
+          - target: aarch64
+          - target: armv7
+
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist
+          manylinux: musllinux_1_2
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wheels-musllinux-${{ matrix.platform.target }}
+          path: dist
+
+  windows:
+    name: build wheels (Windows, ${{ matrix.platform.target }})
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        platform:
+          - target: x64
+          - target: x86
+
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: ${{ matrix.platform.target }}
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wheels-windows-${{ matrix.platform.target }}
+          path: dist
+
+  macos:
+    name: build wheels (macOS, ${{ matrix.platform.target }})
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      matrix:
+        platform:
+          - runner: macos-15-intel
+            target: x86_64
+          - runner: macos-15
+            target: aarch64
+
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wheels-macos-${{ matrix.platform.target }}
+          path: dist
+
+  sdist:
+    name: build source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -51,336 +187,8 @@ jobs:
           command: sdist
           args: --out dist
 
-      - name: "Upload sdist"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      - name: Upload sdist
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wheels-sdist
-          path: dist
-
-  windows:
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        platform:
-          - target: x86_64-pc-windows-msvc
-            arch: x64
-          - target: i686-pc-windows-msvc
-            arch: x86
-          - target: aarch64-pc-windows-msvc
-            arch: x64 # not relevant here
-    steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: "Build wheels"
-        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --locked --out dist
-          sccache: "true"
-
-      - name: "Upload wheels"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: wheels-windows-${{ matrix.platform.target }}
-          path: dist
-
-  macos:
-    runs-on: ${{ matrix.platform.runner }}
-    strategy:
-      matrix:
-        platform:
-          - runner: macos-15
-            target: x86_64-apple-darwin
-          - runner: macos-15
-            target: aarch64-apple-darwin
-    steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: "Build wheels"
-        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --locked --out dist
-          sccache: "true"
-
-      - name: "Upload wheels"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: wheels-macos-${{ matrix.platform.target }}
-          path: dist
-
-  linux:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - { target: "i686-unknown-linux-gnu", cc: "gcc -m32" }
-          - { target: "x86_64-unknown-linux-gnu", cc: "gcc" }
-    steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: "Build wheels"
-        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        with:
-          target: ${{ matrix.target }}
-          # Generally, we try to build in a target docker container. In this case however, a
-          # 32-bit compiler runs out of memory (4GB memory limit for 32-bit), so we cross compile
-          # from 64-bit version of the container, breaking the pattern from other builds.
-          container: quay.io/pypa/manylinux2014
-          args: --release --locked --out dist
-          # See: https://github.com/sfackler/rust-openssl/issues/2036#issuecomment-1724324145
-          before-script-linux: |
-            # Install the 32-bit cross target on 64-bit (noop if we're already on 64-bit)
-            rustup target add ${{ matrix.target }}
-            # If we're running on rhel centos, install needed packages.
-            if command -v yum &> /dev/null; then
-                yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
-
-                # If we're running on i686 we need to symlink libatomic
-                # in order to build openssl with -latomic flag.
-                if [[ ! -d "/usr/lib64" ]]; then
-                    ln -s /usr/lib/libatomic.so.1 /usr/lib/libatomic.so
-                else
-                    # Support cross-compiling from 64-bit to 32-bit
-                    yum install -y glibc-devel.i686 libstdc++-devel.i686
-                fi
-            else
-                # If we're running on debian-based system.
-                apt update -y && apt-get install -y libssl-dev openssl pkg-config
-            fi
-          sccache: "true"
-          manylinux: auto
-        env:
-          CC: ${{ matrix.cc }}
-
-      - name: "Upload wheels"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: wheels-linux-${{ matrix.target }}
-          path: dist
-
-  linux-arm:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      matrix:
-        platform:
-          - target: aarch64-unknown-linux-gnu
-            arch: aarch64
-            # see https://github.com/astral-sh/ruff/issues/3791
-            # and https://github.com/gnzlbg/jemallocator/issues/170#issuecomment-1503228963
-            maturin_docker_options: -e JEMALLOC_SYS_WITH_LG_PAGE=16
-          - target: armv7-unknown-linux-gnueabihf
-            arch: armv7
-          - target: arm-unknown-linux-musleabihf
-            arch: arm
-    steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: "Build wheels"
-        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        with:
-          target: ${{ matrix.platform.target }}
-          # On `aarch64`, use `manylinux: 2_28`; otherwise, use `manylinux: auto`.
-          manylinux: ${{ matrix.platform.arch == 'aarch64' && '2_28' || 'auto' }}
-          docker-options: ${{ matrix.platform.maturin_docker_options }}
-          args: --release --locked --out dist
-
-      - name: "Upload wheels"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: wheels-linux-${{ matrix.platform.target }}
-          path: dist
-
-  linux-s390x:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      matrix:
-        platform:
-          - target: s390x-unknown-linux-gnu
-            arch: s390x
-    steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: "Build wheels"
-        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        with:
-          target: ${{ matrix.platform.target }}
-          manylinux: auto
-          args: --release --locked --out dist
-          rust-toolchain: ${{ matrix.platform.toolchain || null }}
-        env:
-          CFLAGS_s390x_unknown_linux_gnu: -march=z10
-
-      - name: "Upload wheels"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: wheels-linux-${{ matrix.platform.target }}
-          path: dist
-
-  linux-powerpc:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      matrix:
-        platform:
-          - target: powerpc64le-unknown-linux-gnu
-            arch: ppc64le
-            # see https://github.com/astral-sh/uv/issues/6528
-            maturin_docker_options: -e JEMALLOC_SYS_WITH_LG_PAGE=16
-          - target: powerpc64-unknown-linux-gnu
-            arch: ppc64
-            # see https://github.com/astral-sh/uv/issues/6528
-            maturin_docker_options: -e JEMALLOC_SYS_WITH_LG_PAGE=16
-    steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: "Build wheels"
-        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        with:
-          target: ${{ matrix.platform.target }}
-          manylinux: auto
-          docker-options: ${{ matrix.platform.maturin_docker_options }}
-          args: --release --locked --out dist
-          before-script-linux: |
-            if command -v yum &> /dev/null; then
-                yum update -y
-                yum -y install epel-release
-                yum repolist
-                yum install -y gcc-powerpc64-linux-gnu
-            fi
-
-      - name: "Upload wheels"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: wheels-linux-${{ matrix.platform.target }}
-          path: dist
-
-  linux-riscv64:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      matrix:
-        platform:
-          - target: riscv64gc-unknown-linux-gnu
-            arch: riscv64
-    steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: "Build wheels"
-        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        with:
-          target: ${{ matrix.platform.target }}
-          manylinux: auto
-          args: --release --locked --out dist
-
-      - name: "Upload wheels"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: wheels-linux-${{ matrix.platform.target }}
-          path: dist
-
-  musllinux:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        target:
-          - x86_64-unknown-linux-musl
-          - i686-unknown-linux-musl
-    steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: "Build wheels"
-        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        with:
-          target: ${{ matrix.target }}
-          manylinux: musllinux_1_1
-          args: --release --locked --out dist
-
-      - name: "Upload wheels"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: wheels-linux-${{ matrix.target }}
-          path: dist
-
-  musllinux-cross:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        platform:
-          - target: aarch64-unknown-linux-musl
-            arch: aarch64
-          - target: armv7-unknown-linux-musleabihf
-            arch: armv7
-      fail-fast: false
-    steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: "Build wheels"
-        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        with:
-          target: ${{ matrix.platform.target }}
-          manylinux: musllinux_1_1
-          args: --release --locked --out dist ${{ matrix.platform.arch == 'aarch64' && '--compatibility 2_17' || ''}}
-          rust-toolchain: ${{ matrix.platform.toolchain || null }}
-
-      - name: "Upload wheels"
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: wheels-linux-${{ matrix.platform.target }}
           path: dist
