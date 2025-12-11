@@ -1,7 +1,19 @@
 rules:
   template-injection:
     ignore:
+      # like with `secrets-inherit`, `cargo dist` introduces some
+      # template injections. We've manually audited these usages for safety.
+      - release.yml
       - "diff.yml"
+  secrets-inherit:
+    # `cargo dist` makes extensive use of `secrets: inherit`,
+    # and we can't easily fix that until an upstream release changes that.
+    disable: true
+  excessive-permissions:
+    # it's hard to test what the impact of removing these ignores would be
+    # without actually running the release workflow...
+    ignore:
+      - release.yml
   unpinned-uses:
     config:
       policies:
