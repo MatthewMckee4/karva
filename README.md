@@ -10,7 +10,7 @@
 > current architecture and basically start again, and try to make a better `pytest-xdist`, the
 > performance of this will not be much better than `pytest`, let alone `pytest-xdist`.
 >
-> Thanks for the interest!
+> Thanks for taking an interest! Perhaps I will have a proper go at this in the future. 
 
 A Python test framework, written in Rust.
 
