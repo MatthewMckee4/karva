@@ -11,7 +11,7 @@ authors = { workspace = true }
 license = { workspace = true }
 
 [lib]
-name = "karva"
+name = "karva_python"
 crate-type = ["rlib", "cdylib"]
 
 [dependencies]
