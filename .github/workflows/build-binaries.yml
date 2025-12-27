@@ -28,7 +28,7 @@ permissions: {}
 env:
   PACKAGE_NAME: karva
   MODULE_NAME: karva
-  PYTHON_VERSION: "3.13"
+  PYTHON_VERSION: "3.10"
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -162,8 +162,6 @@ jobs:
             arch: x64
           - target: i686-pc-windows-msvc
             arch: x86
-          - target: aarch64-pc-windows-msvc
-            arch: x64
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -178,9 +176,6 @@ jobs:
         with:
           target: ${{ matrix.platform.target }}
           args: --release --locked --out dist
-        env:
-          # aarch64 build fails, see https://github.com/PyO3/maturin/issues/2110
-          XWIN_VERSION: 16
       - name: "Upload wheels"
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -188,9 +183,7 @@ jobs:
           path: dist
       - name: "Build binary"
         run: cargo build -p karva --release --locked --target ${{ matrix.platform.target }}
-        env:
-          # aarch64 build fails, see https://github.com/PyO3/maturin/issues/2110
-          XWIN_VERSION: 16
+
       - name: "Archive binary"
         shell: bash
         run: |
