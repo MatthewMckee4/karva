@@ -12,7 +12,7 @@ See the documentation for more information.
 - Follow symlinks in directory walker ([#307](https://github.com/MatthewMckee4/karva/pull/307))
 - Dont import all files in discovery ([#269](https://github.com/MatthewMckee4/karva/pull/269))
 - Support dependent fixtures ([#70](https://github.com/MatthewMckee4/karva/pull/70))
-- Add inital pytest fixture parsing ([#69](https://github.com/MatthewMckee4/karva/pull/69))
+- Add initial pytest fixture parsing ([#69](https://github.com/MatthewMckee4/karva/pull/69))
 - Fix karva fail when no path provided ([#23](https://github.com/MatthewMckee4/karva/pull/23))
 
 ### Configuration
@@ -25,7 +25,7 @@ See the documentation for more information.
 - Support `karva.param` in parametrized tests ([#288](https://github.com/MatthewMckee4/karva/pull/288))
 - Support `pytest.param` in `tags.parametrize` ([#279](https://github.com/MatthewMckee4/karva/pull/279))
 - Support mocked environment fixture ([#277](https://github.com/MatthewMckee4/karva/pull/277))
-- Support dynamicly imported fixtures ([#256](https://github.com/MatthewMckee4/karva/pull/256))
+- Support dynamically imported fixtures ([#256](https://github.com/MatthewMckee4/karva/pull/256))
 - Support pytest param in fixtures ([#250](https://github.com/MatthewMckee4/karva/pull/250))
 - Support expect fail ([#243](https://github.com/MatthewMckee4/karva/pull/243))
 - Add diagnostics for fixtures having missing fixtures ([#232](https://github.com/MatthewMckee4/karva/pull/232))
