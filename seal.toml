@@ -4,7 +4,7 @@ current-version = "0.0.0"
 version-files = [
     "README.md",
     "crates/karva/Cargo.toml",
-    "crates/karva_cli/Cargo.toml",
+    "crates/karva_python/Cargo.toml",
     "pyproject.toml",
     "python/karva/__init__.py",
     { path = "dist-workspace.toml", field = "workspace.version", format = "toml" }

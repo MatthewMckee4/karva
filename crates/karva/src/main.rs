@@ -1,4 +1,4 @@
-use karva_cli::{ExitStatus, karva_main};
+use karva::{karva_main, ExitStatus};
 
 fn main() -> ExitStatus {
     karva_main(|args| args)
