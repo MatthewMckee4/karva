@@ -1144,7 +1144,7 @@ dependencies = [
 
 [[package]]
 name = "karva"
-version = "0.1.11"
+version = "0.0.0"
 dependencies = [
  "karva_cli",
  "karva_core",
@@ -1166,7 +1166,7 @@ dependencies = [
 
 [[package]]
 name = "karva_cli"
-version = "0.1.11"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "argfile",
@@ -2721,7 +2721,7 @@ dependencies = [
 
 [[package]]
 name = "winapi-util"
-version = "0.1.11"
+version = "0.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [

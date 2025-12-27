@@ -271,7 +271,7 @@ jobs:
     needs: determine_changes
     if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
 
-    uses: ./.github/workflows/build.yml
+    uses: ./.github/workflows/build-binaries.yml
 
   project-diff:
     name: "run project diff"
