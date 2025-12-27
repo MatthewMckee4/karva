@@ -9,6 +9,7 @@ on:
       - pyproject.toml
       # And when we change this workflow itself...
       - .github/workflows/build-wheels.yml
+
 permissions: {}
 
 jobs:
