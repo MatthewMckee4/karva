@@ -9,8 +9,6 @@ on:
         default: dry-run
         type: string
 
-  pull_request:
-
 env:
   PYTHON_VERSION: "3.14"
 
@@ -29,13 +27,6 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
-
-      - name: Check changelog is not empty
-        run: |
-          if [ ! -s CHANGELOG.md ]; then
-            echo "::error::CHANGELOG.md is empty. Please add changes before creating a release."
-            exit 0
-          fi
 
       - name: Install seal
         run: |
