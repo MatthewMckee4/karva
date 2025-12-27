@@ -30,6 +30,13 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Check changelog is not empty
+        run: |
+          if [ ! -s CHANGELOG.md ]; then
+            echo "::error::CHANGELOG.md is empty. Please add changes before creating a release."
+            exit 0
+          fi
+
       - name: Install seal
         run: |
           curl --proto '=https' --tlsv1.2 -LsSf https://github.com/MatthewMckee4/seal/releases/download/0.0.1-alpha.5/seal-installer.sh | sh
