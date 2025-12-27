@@ -91,7 +91,7 @@ jobs:
           name: wheels-macos-x86_64
           path: dist
       - name: "Build binary"
-        run: cargo build --release --locked --target x86_64-apple-darwin
+        run: cargo build -p karva --release --locked --target x86_64-apple-darwin
       - name: "Archive binary"
         run: |
           TARGET=x86_64-apple-darwin
@@ -133,7 +133,7 @@ jobs:
           name: wheels-aarch64-apple-darwin
           path: dist
       - name: "Build binary"
-        run: cargo build --release --locked --target aarch64-apple-darwin
+        run: cargo build -p karva --release --locked --target aarch64-apple-darwin
       - name: "Archive binary"
         run: |
           TARGET=aarch64-apple-darwin
@@ -187,7 +187,10 @@ jobs:
           name: wheels-${{ matrix.platform.target }}
           path: dist
       - name: "Build binary"
-        run: cargo build --release --locked --target ${{ matrix.platform.target }}
+        run: cargo build -p karva --release --locked --target ${{ matrix.platform.target }}
+        env:
+          # aarch64 build fails, see https://github.com/PyO3/maturin/issues/2110
+          XWIN_VERSION: 16
       - name: "Archive binary"
         shell: bash
         run: |
@@ -233,7 +236,7 @@ jobs:
       - name: "Build binary"
         run: |
           rustup target add ${{ matrix.target }}
-          cargo build --release --locked --target ${{ matrix.target }}
+          cargo build -p karva --release --locked --target ${{ matrix.target }}
       - name: "Archive binary"
         shell: bash
         run: |
@@ -308,7 +311,7 @@ jobs:
       - name: "Build binary"
         run: |
           rustup target add ${{ matrix.platform.target }}
-          cargo build --release --locked --target ${{ matrix.platform.target }}
+          cargo build -p karva --release --locked --target ${{ matrix.platform.target }}
       - name: "Archive binary"
         shell: bash
         run: |
@@ -363,7 +366,7 @@ jobs:
       - name: "Build binary"
         run: |
           rustup target add ${{ matrix.target }}
-          cargo build --release --locked --target ${{ matrix.target }}
+          cargo build -p karva --release --locked --target ${{ matrix.target }}
       - name: "Archive binary"
         shell: bash
         run: |
@@ -421,7 +424,7 @@ jobs:
       - name: "Build binary"
         run: |
           rustup target add ${{ matrix.platform.target }}
-          cargo build --release --locked --target ${{ matrix.platform.target }}
+          cargo build -p karva --release --locked --target ${{ matrix.platform.target }}
       - name: "Archive binary"
         shell: bash
         run: |
