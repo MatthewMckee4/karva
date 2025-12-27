@@ -84,11 +84,6 @@ jobs:
         with:
           name: wheels-macos-x86_64
           path: dist
-      - name: "Setup Python for binary build"
-        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          architecture: x64
       - name: "Build binary"
         run: cargo build --release --locked --target x86_64-apple-darwin
       - name: "Archive binary"
@@ -131,11 +126,6 @@ jobs:
         with:
           name: wheels-aarch64-apple-darwin
           path: dist
-      - name: "Setup Python for binary build"
-        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          architecture: arm64
       - name: "Build binary"
         run: cargo build --release --locked --target aarch64-apple-darwin
       - name: "Archive binary"
@@ -159,6 +149,7 @@ jobs:
   windows:
     runs-on: windows-latest
     strategy:
+      fail-fast: false
       matrix:
         platform:
           - target: x86_64-pc-windows-msvc
@@ -189,11 +180,6 @@ jobs:
         with:
           name: wheels-${{ matrix.platform.target }}
           path: dist
-      - name: "Setup Python for binary build"
-        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          architecture: ${{ matrix.platform.arch }}
       - name: "Build binary"
         run: cargo build --release --locked --target ${{ matrix.platform.target }}
       - name: "Archive binary"
@@ -213,6 +199,7 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         target:
           - x86_64-unknown-linux-gnu
@@ -237,11 +224,6 @@ jobs:
         with:
           name: wheels-${{ matrix.target }}
           path: dist
-      - name: "Setup Python for binary build"
-        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          architecture: x64
       - name: "Build binary"
         run: |
           rustup target add ${{ matrix.target }}
@@ -270,6 +252,7 @@ jobs:
   linux-cross:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         platform:
           - target: aarch64-unknown-linux-gnu
@@ -316,10 +299,6 @@ jobs:
         with:
           name: wheels-${{ matrix.platform.target }}
           path: dist
-      - name: "Setup Python for binary build"
-        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
       - name: "Build binary"
         run: |
           rustup target add ${{ matrix.platform.target }}
@@ -348,6 +327,7 @@ jobs:
   musllinux:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         target:
           - x86_64-unknown-linux-musl
@@ -374,11 +354,6 @@ jobs:
         with:
           name: wheels-${{ matrix.target }}
           path: dist
-      - name: "Setup Python for binary build"
-        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          architecture: x64
       - name: "Build binary"
         run: |
           rustup target add ${{ matrix.target }}
@@ -407,6 +382,7 @@ jobs:
   musllinux-cross:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         platform:
           - target: aarch64-unknown-linux-musl
@@ -436,10 +412,6 @@ jobs:
         with:
           name: wheels-${{ matrix.platform.target }}
           path: dist
-      - name: "Setup Python for binary build"
-        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
       - name: "Build binary"
         run: |
           rustup target add ${{ matrix.platform.target }}
