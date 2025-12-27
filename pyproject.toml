@@ -4,7 +4,7 @@ requires = ["maturin>=1.7,<2.0"]
 
 [project]
 name = "karva"
-version = "0.0.0"
+version = "0.0.1-alpha.1"
 description = "A Python test framework, written in Rust."
 authors = [{ name = "Matthew McKee", email = "matthewmckee4@yahoo.co.uk" }]
 license = { file = "LICENSE" }
@@ -127,7 +127,7 @@ message_template = "Bump to v{new_version}"
 tag_template = "v{new_version}"
 
 [tool.tbump.version]
-current = "0.0.0"
+current = "0.0.1-alpha.1"
 regex = '''
   (?P<major>\d+)
   \.
