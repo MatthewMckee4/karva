@@ -6,11 +6,11 @@
 > [!NOTE]
 >
 > Sadly, this will not be very well maintained and should not be used for anything important.
-> I wanted to see if I could make a better `pytest`. But unless I completely diverge from the 
+> I wanted to see if I could make a better `pytest`. But unless I completely diverge from the
 > current architecture and basically start again, and try to make a better `pytest-xdist`, the
 > performance of this will not be much better than `pytest`, let alone `pytest-xdist`.
 >
-> Thanks for taking an interest! Perhaps I will have a proper go at this in the future. 
+> Thanks for taking an interest! Perhaps I will have a proper go at this in the future.
 
 A Python test framework, written in Rust.
 

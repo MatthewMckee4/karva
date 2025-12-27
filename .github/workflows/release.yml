@@ -14,9 +14,7 @@ on:
 env:
   PYTHON_VERSION: "3.14"
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
 
 jobs:
   generate-release:
@@ -74,8 +72,9 @@ jobs:
 
       - name: Parse release metadata
         id: parse-metadata
+        env:
+          METADATA: ${{ needs.generate-release.outputs.release-metadata }}
         run: |
-          METADATA='${{ needs.generate-release.outputs.release-metadata }}'
           TITLE=$(echo "$METADATA" | jq -r '.title')
           BODY=$(echo "$METADATA" | jq -r '.body')
           PRERELEASE=$(echo "$METADATA" | jq -r '.prerelease')
@@ -87,21 +86,27 @@ jobs:
           echo "$BODY" > $RUNNER_TEMP/release-notes.txt
 
       - name: Create git tag
+        env:
+          TAG: ${{ needs.generate-release.outputs.tag }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag ${{ needs.generate-release.outputs.tag }}
-          git push origin ${{ needs.generate-release.outputs.tag }}
+          git tag "$TAG"
+          git push origin "$TAG"
 
       - name: Create GitHub release
+        env:
+          TAG: ${{ needs.generate-release.outputs.tag }}
+          TITLE: ${{ steps.parse-metadata.outputs.title }}
+          PRERELEASE: ${{ steps.parse-metadata.outputs.prerelease }}
         run: |
           PRERELEASE_FLAG=""
-          if [ "${{ steps.parse-metadata.outputs.prerelease }}" = "true" ]; then
+          if [ "$PRERELEASE" = "true" ]; then
             PRERELEASE_FLAG="--prerelease"
           fi
 
-          gh release create "${{ needs.generate-release.outputs.tag }}" \
-            --title "${{ steps.parse-metadata.outputs.title }}" \
+          gh release create "$TAG" \
+            --title "$TITLE" \
             --notes-file "$RUNNER_TEMP/release-notes.txt" \
             $PRERELEASE_FLAG \
             wheels-*/*
