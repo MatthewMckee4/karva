@@ -87,15 +87,6 @@ jobs:
           # Save body to file to handle multiline content
           echo "$BODY" > "$RUNNER_TEMP/release-notes.txt"
 
-      - name: Create git tag
-        env:
-          TAG: ${{ needs.generate-release.outputs.tag }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "$TAG"
-          git push origin "$TAG"
-
       - name: Create GitHub release
         env:
           TAG: ${{ needs.generate-release.outputs.tag }}
