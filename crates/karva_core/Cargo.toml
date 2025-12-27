@@ -11,25 +11,26 @@ authors = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
-camino = { workspace = true }
 karva_project = { workspace = true }
+
+camino = { workspace = true }
 colored = { workspace = true }
+crossbeam-channel = "0.5.15"
+ignore = { workspace = true }
 pyo3 = { workspace = true }
+regex = { workspace = true }
 ruff_db = { workspace = true }
-ruff_python_ast = { workspace = true }
-ruff_text_size = { workspace = true }
-ruff_python_parser = { workspace = true }
 ruff_macros = { workspace = true }
+ruff_python_ast = { workspace = true }
+ruff_python_parser = { workspace = true }
 ruff_source_file = { workspace = true }
+ruff_text_size = { workspace = true }
 tempfile = { workspace = true }
 tracing = { workspace = true }
-ignore = { workspace = true }
-regex = { workspace = true }
-crossbeam-channel = "0.5.15"
 
 [dev-dependencies]
-regex = { workspace = true }
 ctor = { workspace = true }
+regex = { workspace = true }
 rstest = { workspace = true }
 
 [lints]

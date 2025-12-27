@@ -1,6 +1,8 @@
-use pyo3::{exceptions::PyTypeError, prelude::*};
+use pyo3::exceptions::PyTypeError;
+use pyo3::prelude::*;
 
-use crate::extensions::tags::{Tag, Tags, parametrize::Parametrization};
+use crate::extensions::tags::parametrize::Parametrization;
+use crate::extensions::tags::{Tag, Tags};
 
 #[derive(Debug, Clone)]
 #[pyclass]

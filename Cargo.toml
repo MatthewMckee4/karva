@@ -12,6 +12,13 @@ authors = ["Matthew McKee <matthewmckee4@yahoo.co.uk>"]
 license = "MIT"
 
 [workspace.dependencies]
+karva = { path = "crates/karva" }
+karva_combine = { path = "crates/karva_combine" }
+karva_core = { path = "crates/karva_core" }
+karva_macros = { path = "crates/karva_macros" }
+karva_project = { path = "crates/karva_project" }
+karva_projects = { path = "crates/karva_projects" }
+
 anyhow = { version = "1.0.100" }
 argfile = { version = "0.2.1" }
 camino = { version = "1.2", features = ["serde1"] }
@@ -30,12 +37,6 @@ ignore = { version = "0.4.25" }
 insta = { version = "1.44.3" }
 insta-cmd = { version = "0.6.0" }
 itertools = { version = "0.14.0" }
-karva_cli = { path = "crates/karva_cli" }
-karva_combine = { path = "crates/karva_combine" }
-karva_core = { path = "crates/karva_core" }
-karva_macros = { path = "crates/karva_macros" }
-karva_project = { path = "crates/karva_project" }
-karva_projects = { path = "crates/karva_projects" }
 markdown = { version = "1.0.0" }
 pretty_assertions = { version = "1.4.1" }
 proc-macro2 = { version = "1.0.79" }

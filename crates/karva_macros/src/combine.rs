@@ -1,5 +1,6 @@
 use quote::{quote, quote_spanned};
-use syn::{Data, DataStruct, DeriveInput, spanned::Spanned};
+use syn::spanned::Spanned;
+use syn::{Data, DataStruct, DeriveInput};
 
 pub fn derive_impl(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let DeriveInput { ident, data, .. } = input;

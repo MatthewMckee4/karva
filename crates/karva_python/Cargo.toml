@@ -1,7 +1,6 @@
-
 [package]
-name = "karva_diff"
-version = "0.0.0"
+name = "karva_python"
+version = "0.0.1-alpha.1"
 
 edition = { workspace = true }
 rust-version = { workspace = true }
@@ -11,14 +10,15 @@ repository = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
 
-[dependencies]
-karva_project = { workspace = true }
-karva_projects = { workspace = true }
+[lib]
+name = "karva_python"
+crate-type = ["rlib", "cdylib"]
 
-anyhow = { workspace = true }
-camino = { workspace = true }
-clap = { workspace = true }
-tempfile = { workspace = true }
+[dependencies]
+karva = { workspace = true }
+karva_core = { workspace = true }
+
+pyo3 = { workspace = true }
 
 [lints]
 workspace = true

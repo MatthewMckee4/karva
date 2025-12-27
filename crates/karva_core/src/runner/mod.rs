@@ -1,9 +1,9 @@
 use karva_project::{Db, ProjectDatabase};
 
-use crate::{
-    Context, DummyReporter, Reporter, TestRunResult, discovery::StandardDiscoverer,
-    normalize::Normalizer, utils::attach_with_project,
-};
+use crate::discovery::StandardDiscoverer;
+use crate::normalize::Normalizer;
+use crate::utils::attach_with_project;
+use crate::{Context, DummyReporter, Reporter, TestRunResult};
 
 mod finalizer_cache;
 mod fixture_cache;

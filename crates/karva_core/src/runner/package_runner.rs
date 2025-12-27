@@ -1,30 +1,22 @@
 use std::collections::HashMap;
 
-use pyo3::{
-    prelude::*,
-    types::{PyDict, PyIterator},
-};
+use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyIterator};
 
-use crate::{
-    Context, FunctionKind, IndividualTestResultKind,
-    diagnostic::{
-        report_fixture_failure, report_missing_fixtures, report_test_failure,
-        report_test_pass_on_expect_failure,
-    },
-    extensions::{
-        fixtures::{
-            Finalizer, FixtureScope, NormalizedFixture, create_fixture_with_finalizer,
-            missing_arguments_from_error,
-        },
-        tags::{
-            expect_fail::ExpectFailTag,
-            skip::{extract_skip_reason, is_skip_exception},
-        },
-    },
-    normalize::{NormalizedModule, NormalizedPackage, NormalizedTest},
-    runner::{FinalizerCache, FixtureCache},
-    utils::{full_test_name, source_file},
+use crate::diagnostic::{
+    report_fixture_failure, report_missing_fixtures, report_test_failure,
+    report_test_pass_on_expect_failure,
 };
+use crate::extensions::fixtures::{
+    Finalizer, FixtureScope, NormalizedFixture, create_fixture_with_finalizer,
+    missing_arguments_from_error,
+};
+use crate::extensions::tags::expect_fail::ExpectFailTag;
+use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
+use crate::normalize::{NormalizedModule, NormalizedPackage, NormalizedTest};
+use crate::runner::{FinalizerCache, FixtureCache};
+use crate::utils::{full_test_name, source_file};
+use crate::{Context, FunctionKind, IndividualTestResultKind};
 
 /// A struct that is used to execute tests within a package.
 ///

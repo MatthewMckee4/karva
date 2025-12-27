@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
-use pyo3::{IntoPyObjectExt, prelude::*};
+use pyo3::IntoPyObjectExt;
+use pyo3::prelude::*;
 
-use crate::extensions::{functions::Param, tags::Tags};
+use crate::extensions::functions::Param;
+use crate::extensions::tags::Tags;
 
 /// A single parametrization of a function
 #[derive(Debug, Clone)]

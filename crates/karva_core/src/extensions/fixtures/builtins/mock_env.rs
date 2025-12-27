@@ -1,11 +1,9 @@
 use std::sync::{Arc, Mutex};
 
-use pyo3::{
-    PyResult,
-    exceptions::{PyAttributeError, PyTypeError},
-    prelude::*,
-    types::{PyString, PyType},
-};
+use pyo3::PyResult;
+use pyo3::exceptions::{PyAttributeError, PyTypeError};
+use pyo3::prelude::*;
+use pyo3::types::{PyString, PyType};
 
 pub fn is_mock_env_fixture_name(fixture_name: &str) -> bool {
     match fixture_name {

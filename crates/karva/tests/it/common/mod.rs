@@ -3,7 +3,8 @@ use std::process::Command;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use directories::ProjectDirs;
-use insta::{Settings, internals::SettingsBindDropGuard};
+use insta::Settings;
+use insta::internals::SettingsBindDropGuard;
 use tempfile::TempDir;
 
 pub struct TestContext {

@@ -1,16 +1,12 @@
 use std::sync::LazyLock;
 
-use pyo3::{
-    IntoPyObjectExt,
-    prelude::*,
-    types::{PyAnyMethods, PyTypeMethods},
-};
+use pyo3::IntoPyObjectExt;
+use pyo3::prelude::*;
+use pyo3::types::{PyAnyMethods, PyTypeMethods};
 use regex::Regex;
 
-use crate::extensions::{
-    functions::Param,
-    tags::{Parametrization, Tags},
-};
+use crate::extensions::functions::Param;
+use crate::extensions::tags::{Parametrization, Tags};
 
 static RE_MULTI: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"missing \d+ required positional arguments?: (.+)").unwrap());

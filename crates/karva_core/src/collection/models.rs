@@ -1,4 +1,5 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use camino::Utf8PathBuf;
 use ruff_python_ast::StmtFunctionDef;

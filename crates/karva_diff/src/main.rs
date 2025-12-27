@@ -1,9 +1,7 @@
 #![allow(clippy::print_stdout)]
-use std::{
-    fs,
-    io::Write,
-    process::{Command, ExitCode},
-};
+use std::fs;
+use std::io::Write;
+use std::process::{Command, ExitCode};
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;

@@ -2,10 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use karva_project::{Db, Project};
 
-use crate::{
-    IndividualTestResultKind, Reporter, TestRunResult,
-    diagnostic::{DiagnosticGuardBuilder, DiagnosticType},
-};
+use crate::diagnostic::{DiagnosticGuardBuilder, DiagnosticType};
+use crate::{IndividualTestResultKind, Reporter, TestRunResult};
 
 pub struct Context<'db, 'rep> {
     db: &'db dyn Db,

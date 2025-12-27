@@ -1,9 +1,7 @@
-use pyo3::{
-    IntoPyObjectExt,
-    exceptions::PyTypeError,
-    prelude::*,
-    types::{PyDict, PyTuple},
-};
+use pyo3::IntoPyObjectExt;
+use pyo3::exceptions::PyTypeError;
+use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyTuple};
 
 use crate::extensions::functions::python::Param;
 
@@ -79,13 +77,15 @@ impl PyTags {
 
 #[pymodule]
 pub mod tags {
-    use pyo3::{IntoPyObjectExt, exceptions::PyTypeError, prelude::*, types::PyTuple};
+    use pyo3::IntoPyObjectExt;
+    use pyo3::exceptions::PyTypeError;
+    use pyo3::prelude::*;
+    use pyo3::types::PyTuple;
 
     use super::{PyTag, PyTags};
-    use crate::extensions::{
-        functions::python::Param,
-        tags::{parametrize::parse_parametrize_args, python::PyTestFunction},
-    };
+    use crate::extensions::functions::python::Param;
+    use crate::extensions::tags::parametrize::parse_parametrize_args;
+    use crate::extensions::tags::python::PyTestFunction;
 
     #[pyfunction]
     pub fn parametrize(
@@ -267,16 +267,12 @@ impl PyTestFunction {
 
 #[cfg(test)]
 mod tests {
-    use pyo3::{
-        ffi::c_str,
-        prelude::*,
-        types::{PyDict, PyTuple},
-    };
+    use pyo3::ffi::c_str;
+    use pyo3::prelude::*;
+    use pyo3::types::{PyDict, PyTuple};
 
-    use crate::{
-        extensions::tags::python::{PyTag, PyTestFunction, tags},
-        utils::attach,
-    };
+    use crate::extensions::tags::python::{PyTag, PyTestFunction, tags};
+    use crate::utils::attach;
 
     #[test]
     fn test_parametrize_single_arg() {

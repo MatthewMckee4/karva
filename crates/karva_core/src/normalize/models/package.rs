@@ -1,8 +1,10 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use camino::Utf8PathBuf;
 
-use crate::{extensions::fixtures::NormalizedFixture, normalize::models::NormalizedModule};
+use crate::extensions::fixtures::NormalizedFixture;
+use crate::normalize::models::NormalizedModule;
 
 #[derive(Debug)]
 pub struct NormalizedPackage {

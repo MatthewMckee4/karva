@@ -9,10 +9,8 @@ pub mod options;
 pub mod pyproject;
 pub mod settings;
 
-use self::{
-    options::{KarvaTomlError, Options, ProjectOptionsOverrides},
-    pyproject::{PyProject, PyProjectError, ResolveRequiresPythonError},
-};
+use self::options::{KarvaTomlError, Options, ProjectOptionsOverrides};
+use self::pyproject::{PyProject, PyProjectError, ResolveRequiresPythonError};
 
 #[derive(Default, Debug, Clone)]
 pub struct ProjectMetadata {

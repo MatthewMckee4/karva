@@ -1,4 +1,5 @@
-use std::{sync::Arc, thread};
+use std::sync::Arc;
+use std::thread;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use crossbeam_channel::unbounded;
@@ -8,10 +9,11 @@ use ruff_python_ast::Stmt;
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 
 use super::models::{CollectedModule, CollectedPackage};
-use crate::{
-    Context, collection::ModuleType, diagnostic::report_invalid_path,
-    extensions::fixtures::is_fixture_function, name::ModulePath,
-};
+use crate::Context;
+use crate::collection::ModuleType;
+use crate::diagnostic::report_invalid_path;
+use crate::extensions::fixtures::is_fixture_function;
+use crate::name::ModulePath;
 
 pub struct ParallelCollector<'ctx, 'proj, 'rep> {
     context: &'ctx Context<'proj, 'rep>,

@@ -2,10 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use pyo3::prelude::*;
 
-use crate::{
-    Context,
-    extensions::fixtures::{Finalizer, FixtureScope},
-};
+use crate::Context;
+use crate::extensions::fixtures::{Finalizer, FixtureScope};
 
 /// Manages finalizers for fixtures at different scope levels.
 #[derive(Debug, Default)]

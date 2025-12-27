@@ -1,8 +1,6 @@
 pub use mock_env::MockEnv;
-use pyo3::{
-    prelude::*,
-    types::{PyDict, PyIterator},
-};
+use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyIterator};
 
 use crate::extensions::fixtures::NormalizedFixture;
 

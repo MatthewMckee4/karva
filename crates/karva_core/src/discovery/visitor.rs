@@ -1,17 +1,14 @@
 use std::sync::Arc;
 
-use pyo3::{prelude::*, types::PyModule};
-use ruff_python_ast::{
-    Expr, StmtFunctionDef,
-    visitor::source_order::{self, SourceOrderVisitor},
-};
+use pyo3::prelude::*;
+use pyo3::types::PyModule;
+use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
+use ruff_python_ast::{Expr, StmtFunctionDef};
 
-use crate::{
-    Context,
-    diagnostic::{report_failed_to_import_module, report_invalid_fixture},
-    discovery::{DiscoveredModule, TestFunction},
-    extensions::fixtures::Fixture,
-};
+use crate::Context;
+use crate::diagnostic::{report_failed_to_import_module, report_invalid_fixture};
+use crate::discovery::{DiscoveredModule, TestFunction};
+use crate::extensions::fixtures::Fixture;
 
 /// Visitor for discovering test functions and fixture definitions in a given module.
 struct FunctionDefinitionVisitor<'ctx, 'proj, 'rep, 'py, 'a> {

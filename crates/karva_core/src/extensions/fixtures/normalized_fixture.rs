@@ -1,16 +1,14 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use camino::Utf8PathBuf;
-use pyo3::{prelude::*, types::PyDict};
+use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::{
-    QualifiedFunctionName,
-    extensions::{
-        fixtures::{FixtureRequest, FixtureScope, RequiresFixtures},
-        tags::{Parametrization, Tags},
-    },
-};
+use crate::QualifiedFunctionName;
+use crate::extensions::fixtures::{FixtureRequest, FixtureScope, RequiresFixtures};
+use crate::extensions::tags::{Parametrization, Tags};
 
 /// Built-in fixture data
 #[derive(Debug, Clone)]
