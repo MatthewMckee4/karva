@@ -84,6 +84,11 @@ jobs:
         with:
           name: wheels-macos-x86_64
           path: dist
+      - name: "Setup Python for binary build"
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: x64
       - name: "Build binary"
         run: cargo build --release --locked --target x86_64-apple-darwin
       - name: "Archive binary"
@@ -126,6 +131,11 @@ jobs:
         with:
           name: wheels-aarch64-apple-darwin
           path: dist
+      - name: "Setup Python for binary build"
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: arm64
       - name: "Build binary"
         run: cargo build --release --locked --target aarch64-apple-darwin
       - name: "Archive binary"
@@ -179,6 +189,11 @@ jobs:
         with:
           name: wheels-${{ matrix.platform.target }}
           path: dist
+      - name: "Setup Python for binary build"
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: ${{ matrix.platform.arch }}
       - name: "Build binary"
         run: cargo build --release --locked --target ${{ matrix.platform.target }}
       - name: "Archive binary"
@@ -222,6 +237,11 @@ jobs:
         with:
           name: wheels-${{ matrix.target }}
           path: dist
+      - name: "Setup Python for binary build"
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: x64
       - name: "Build binary"
         run: |
           rustup target add ${{ matrix.target }}
@@ -296,6 +316,10 @@ jobs:
         with:
           name: wheels-${{ matrix.platform.target }}
           path: dist
+      - name: "Setup Python for binary build"
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
       - name: "Build binary"
         run: |
           rustup target add ${{ matrix.platform.target }}
@@ -350,6 +374,11 @@ jobs:
         with:
           name: wheels-${{ matrix.target }}
           path: dist
+      - name: "Setup Python for binary build"
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: x64
       - name: "Build binary"
         run: |
           rustup target add ${{ matrix.target }}
@@ -402,13 +431,15 @@ jobs:
           manylinux: musllinux_1_2
           args: --release --locked --out dist
           docker-options: ${{ matrix.platform.maturin_docker_options }}
-      - uses: uraimo/run-on-arch-action@d94c13912ea685de38fccc1109385b83fd79427d # v3.0.1
-
       - name: "Upload wheels"
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wheels-${{ matrix.platform.target }}
           path: dist
+      - name: "Setup Python for binary build"
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
       - name: "Build binary"
         run: |
           rustup target add ${{ matrix.platform.target }}
