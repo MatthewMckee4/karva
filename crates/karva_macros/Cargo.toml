@@ -15,6 +15,7 @@ doctest = false
 
 [dependencies]
 karva_combine = { workspace = true }
+
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
 ruff_python_trivia = { workspace = true }

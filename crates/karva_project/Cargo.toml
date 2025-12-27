@@ -11,12 +11,13 @@ authors = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
+karva_combine = { workspace = true }
+karva_macros = { workspace = true }
+
 anyhow = { workspace = true }
 camino = { workspace = true }
 etcetera = { workspace = true }
 filetime = { workspace = true }
-karva_combine = { workspace = true }
-karva_macros = { workspace = true }
 ruff_db = { workspace = true }
 ruff_notebook = { workspace = true }
 ruff_options_metadata = { workspace = true }

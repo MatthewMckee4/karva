@@ -11,11 +11,12 @@ authors = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
+karva_project = { workspace = true }
+
 camino = { workspace = true }
 colored = { workspace = true }
 crossbeam-channel = "0.5.15"
 ignore = { workspace = true }
-karva_project = { workspace = true }
 pyo3 = { workspace = true }
 regex = { workspace = true }
 ruff_db = { workspace = true }

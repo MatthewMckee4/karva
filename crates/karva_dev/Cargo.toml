@@ -11,13 +11,13 @@ repository = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
-karva= { workspace = true }
+karva = { workspace = true }
+karva_project = { workspace = true }
 
 anyhow = { workspace = true }
 camino = { workspace = true }
 clap = { workspace = true, features = ["wrap_help", "env"] }
 itertools = { workspace = true }
-karva_project = { workspace = true }
 markdown = { workspace = true }
 pretty_assertions = { workspace = true }
 ruff_options_metadata = { workspace = true }
