@@ -13,6 +13,7 @@ license = "MIT"
 
 [workspace.dependencies]
 karva = { path = "crates/karva" }
+karva_cli = { path = "crates/karva_cli" }
 karva_combine = { path = "crates/karva_combine" }
 karva_core = { path = "crates/karva_core" }
 karva_macros = { path = "crates/karva_macros" }

@@ -16,14 +16,11 @@ use karva_project::{
 };
 use ruff_db::diagnostic::{DiagnosticFormat, DisplayDiagnosticConfig, DisplayDiagnostics};
 
-use crate::args::{Command, TerminalColor, TestCommand};
 use crate::logging::setup_tracing;
+use karva_cli::{Args, Command, TerminalColor, TestCommand};
 
-mod args;
 mod logging;
 mod version;
-
-pub use args::Args;
 
 pub fn karva_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> ExitStatus {
     run(f).unwrap_or_else(|error| {

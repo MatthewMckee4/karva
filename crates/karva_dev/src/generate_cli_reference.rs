@@ -5,7 +5,7 @@ use anyhow::{Result, bail};
 use camino::Utf8PathBuf;
 use clap::{Command, CommandFactory};
 use itertools::Itertools;
-use karva::Args as Cli;
+use karva_cli::Args as Cli;
 use pretty_assertions::StrComparison;
 
 use crate::{Mode, REGENERATE_ALL_COMMAND, ROOT_DIR};

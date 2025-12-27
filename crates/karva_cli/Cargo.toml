@@ -1,0 +1,20 @@
+[package]
+name = "karva_cli"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+karva_project = { workspace = true }
+
+camino = { workspace = true }
+clap = { workspace = true, features = ["wrap_help", "string", "env"] }
+ruff_db = { workspace = true }
+
+[lints]
+workspace = true

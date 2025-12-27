@@ -1157,6 +1157,7 @@ dependencies = [
  "dunce",
  "insta",
  "insta-cmd",
+ "karva_cli",
  "karva_core",
  "karva_project",
  "regex",
@@ -1182,6 +1183,16 @@ dependencies = [
  "karva_core",
  "karva_project",
  "karva_projects",
+]
+
+[[package]]
+name = "karva_cli"
+version = "0.1.0"
+dependencies = [
+ "camino",
+ "clap",
+ "karva_project",
+ "ruff_db",
 ]
 
 [[package]]
@@ -1222,7 +1233,7 @@ dependencies = [
  "camino",
  "clap",
  "itertools 0.14.0",
- "karva",
+ "karva_cli",
  "karva_project",
  "markdown",
  "pretty_assertions",
