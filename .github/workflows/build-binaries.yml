@@ -36,7 +36,6 @@ env:
 
 jobs:
   sdist:
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-build') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -64,7 +63,6 @@ jobs:
           path: dist
 
   macos-x86_64:
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-build') }}
     runs-on: macos-14
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -86,6 +84,8 @@ jobs:
         with:
           name: wheels-macos-x86_64
           path: dist
+      - name: "Build binary"
+        run: cargo build --release --locked --target x86_64-apple-darwin
       - name: "Archive binary"
         run: |
           TARGET=x86_64-apple-darwin
@@ -105,7 +105,6 @@ jobs:
             *.sha256
 
   macos-aarch64:
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-build') }}
     runs-on: macos-14
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -127,6 +126,8 @@ jobs:
         with:
           name: wheels-aarch64-apple-darwin
           path: dist
+      - name: "Build binary"
+        run: cargo build --release --locked --target aarch64-apple-darwin
       - name: "Archive binary"
         run: |
           TARGET=aarch64-apple-darwin
@@ -146,7 +147,6 @@ jobs:
             *.sha256
 
   windows:
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-build') }}
     runs-on: windows-latest
     strategy:
       matrix:
@@ -179,6 +179,8 @@ jobs:
         with:
           name: wheels-${{ matrix.platform.target }}
           path: dist
+      - name: "Build binary"
+        run: cargo build --release --locked --target ${{ matrix.platform.target }}
       - name: "Archive binary"
         shell: bash
         run: |
@@ -194,7 +196,6 @@ jobs:
             *.sha256
 
   linux:
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-build') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -221,6 +222,10 @@ jobs:
         with:
           name: wheels-${{ matrix.target }}
           path: dist
+      - name: "Build binary"
+        run: |
+          rustup target add ${{ matrix.target }}
+          cargo build --release --locked --target ${{ matrix.target }}
       - name: "Archive binary"
         shell: bash
         run: |
@@ -243,7 +248,6 @@ jobs:
             *.sha256
 
   linux-cross:
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-build') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -292,6 +296,10 @@ jobs:
         with:
           name: wheels-${{ matrix.platform.target }}
           path: dist
+      - name: "Build binary"
+        run: |
+          rustup target add ${{ matrix.platform.target }}
+          cargo build --release --locked --target ${{ matrix.platform.target }}
       - name: "Archive binary"
         shell: bash
         run: |
@@ -314,7 +322,6 @@ jobs:
             *.sha256
 
   musllinux:
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-build') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -343,6 +350,10 @@ jobs:
         with:
           name: wheels-${{ matrix.target }}
           path: dist
+      - name: "Build binary"
+        run: |
+          rustup target add ${{ matrix.target }}
+          cargo build --release --locked --target ${{ matrix.target }}
       - name: "Archive binary"
         shell: bash
         run: |
@@ -365,7 +376,6 @@ jobs:
             *.sha256
 
   musllinux-cross:
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-build') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -399,6 +409,10 @@ jobs:
         with:
           name: wheels-${{ matrix.platform.target }}
           path: dist
+      - name: "Build binary"
+        run: |
+          rustup target add ${{ matrix.platform.target }}
+          cargo build --release --locked --target ${{ matrix.platform.target }}
       - name: "Archive binary"
         shell: bash
         run: |
