@@ -65,7 +65,7 @@ impl CollectedModule {
 pub struct CollectedPackage {
     pub(crate) path: Utf8PathBuf,
     pub(crate) modules: HashMap<Utf8PathBuf, CollectedModule>,
-    pub(crate) packages: HashMap<Utf8PathBuf, CollectedPackage>,
+    pub(crate) packages: HashMap<Utf8PathBuf, Self>,
     pub(crate) configuration_module_path: Option<Utf8PathBuf>,
 }
 

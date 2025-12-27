@@ -8,7 +8,7 @@ use crate::{extensions::fixtures::NormalizedFixture, normalize::models::Normaliz
 pub struct NormalizedPackage {
     pub(crate) modules: HashMap<Utf8PathBuf, NormalizedModule>,
 
-    pub(crate) packages: HashMap<Utf8PathBuf, NormalizedPackage>,
+    pub(crate) packages: HashMap<Utf8PathBuf, Self>,
 
     pub(crate) auto_use_fixtures: Arc<Vec<NormalizedFixture>>,
 }
