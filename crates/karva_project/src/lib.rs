@@ -1,14 +1,13 @@
-use std::{panic::RefUnwindSafe, sync::Arc};
+use std::panic::RefUnwindSafe;
+use std::sync::Arc;
 
 use camino::Utf8PathBuf;
 pub use envs::{EnvVars, max_parallelism};
-pub use metadata::{
-    ProjectMetadata,
-    options::{
-        Options, OutputFormat, ProjectOptionsOverrides, SrcOptions, TerminalOptions, TestOptions,
-    },
-    settings::ProjectSettings,
+pub use metadata::ProjectMetadata;
+pub use metadata::options::{
+    Options, OutputFormat, ProjectOptionsOverrides, SrcOptions, TerminalOptions, TestOptions,
 };
+pub use metadata::settings::ProjectSettings;
 pub use path::{TestPath, TestPathError, absolute};
 pub use project::Project;
 pub use system::{OsSystem, System};
@@ -23,10 +22,8 @@ mod system;
 mod utils;
 mod verbosity;
 
-use ruff_db::{
-    diagnostic::{FileResolver, Input, UnifiedFile},
-    files::File,
-};
+use ruff_db::diagnostic::{FileResolver, Input, UnifiedFile};
+use ruff_db::files::File;
 use ruff_notebook::NotebookIndex;
 
 pub const KARVA_CONFIG_FILE_NAME: &str = "karva.toml";

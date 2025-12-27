@@ -5,10 +5,8 @@ use ruff_db::diagnostic::DiagnosticFormat;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{
-    ProjectSettings, System,
-    metadata::settings::{SrcSettings, TerminalSettings, TestSettings},
-};
+use crate::metadata::settings::{SrcSettings, TerminalSettings, TestSettings};
+use crate::{ProjectSettings, System};
 
 #[derive(
     Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata, Combine,

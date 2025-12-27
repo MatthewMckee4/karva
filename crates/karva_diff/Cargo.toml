@@ -12,12 +12,12 @@ authors = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
-clap = { workspace = true }
-camino = { workspace = true }
 anyhow = { workspace = true }
+camino = { workspace = true }
+clap = { workspace = true }
+karva_project = { workspace = true }
 karva_projects = { workspace = true }
 tempfile = { workspace = true }
-karva_project = { workspace = true }
 
 [lints]
 workspace = true

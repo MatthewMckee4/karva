@@ -1,11 +1,10 @@
 use pyo3::prelude::*;
 
-use crate::{
-    Context,
-    collection::{CollectedModule, CollectedPackage, ModuleType, ParallelCollector},
-    discovery::{DiscoveredModule, DiscoveredPackage, visitor::discover},
-    utils::add_to_sys_path,
-};
+use crate::Context;
+use crate::collection::{CollectedModule, CollectedPackage, ModuleType, ParallelCollector};
+use crate::discovery::visitor::discover;
+use crate::discovery::{DiscoveredModule, DiscoveredPackage};
+use crate::utils::add_to_sys_path;
 
 pub struct StandardDiscoverer<'ctx, 'proj, 'rep> {
     context: &'ctx Context<'proj, 'rep>,

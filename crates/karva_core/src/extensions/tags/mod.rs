@@ -1,4 +1,5 @@
-use std::{ops::Deref, sync::Arc};
+use std::ops::Deref;
+use std::sync::Arc;
 
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
@@ -232,12 +233,11 @@ impl Default for Tags {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::{HashMap, HashSet},
-        ffi::CString,
-    };
+    use std::collections::{HashMap, HashSet};
+    use std::ffi::CString;
 
-    use pyo3::{prelude::*, types::PyDict};
+    use pyo3::prelude::*;
+    use pyo3::types::PyDict;
     use rstest::rstest;
 
     use super::*;

@@ -1,16 +1,13 @@
-use pyo3::{prelude::*, wrap_pymodule};
+use pyo3::prelude::*;
+use pyo3::wrap_pymodule;
 
-use crate::extensions::{
-    fixtures::{
-        MockEnv,
-        python::{
-            FixtureFunctionDefinition, FixtureFunctionMarker, FixtureRequest, InvalidFixtureError,
-            fixture_decorator,
-        },
-    },
-    functions::{FailError, SkipError, fail, param, skip},
-    tags::python::{PyTags, PyTestFunction, tags},
+use crate::extensions::fixtures::MockEnv;
+use crate::extensions::fixtures::python::{
+    FixtureFunctionDefinition, FixtureFunctionMarker, FixtureRequest, InvalidFixtureError,
+    fixture_decorator,
 };
+use crate::extensions::functions::{FailError, SkipError, fail, param, skip};
+use crate::extensions::tags::python::{PyTags, PyTestFunction, tags};
 
 pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fixture_decorator, m)?)?;

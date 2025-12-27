@@ -11,7 +11,8 @@
 //! 3. (optionally) Copy the entire project structure into a memory file system to reduce the IO noise in benchmarks.
 //! 4. (not in this module) Create a `ProjectDatabase` and run the benchmark.
 
-use std::{path::PathBuf, process::Command};
+use std::path::PathBuf;
+use std::process::Command;
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;

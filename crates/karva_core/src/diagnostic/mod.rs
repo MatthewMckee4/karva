@@ -23,10 +23,9 @@ pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
 pub use reporter::{DummyReporter, Reporter, TestCaseReporter};
 pub use result::{IndividualTestResultKind, TestResultStats, TestRunResult};
 
-use crate::{
-    Context, FunctionKind, declare_diagnostic_type, diagnostic::traceback::Traceback,
-    utils::truncate_string,
-};
+use crate::diagnostic::traceback::Traceback;
+use crate::utils::truncate_string;
+use crate::{Context, FunctionKind, declare_diagnostic_type};
 
 declare_diagnostic_type! {
     /// ## Invalid path

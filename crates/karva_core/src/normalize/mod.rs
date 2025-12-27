@@ -23,10 +23,8 @@
 //!
 //! If we got all of the fixture values at the start, we would not be able to run auto use fixtures
 //! and finalizers in a predictable way.
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use pyo3::prelude::*;
 
@@ -35,18 +33,15 @@ mod utils;
 
 pub use models::{NormalizedModule, NormalizedPackage, NormalizedTest};
 
-use crate::{
-    discovery::{DiscoveredModule, DiscoveredPackage, TestFunction},
-    extensions::{
-        fixtures::{
-            Fixture, FixtureScope, HasFixtures, NormalizedFixture, RequiresFixtures,
-            UserDefinedFixture, get_auto_use_fixtures, get_builtin_fixture,
-        },
-        tags::{Parametrization, parametrize::ParametrizationArgs},
-    },
-    normalize::utils::cartesian_product,
-    utils::iter_with_ancestors,
+use crate::discovery::{DiscoveredModule, DiscoveredPackage, TestFunction};
+use crate::extensions::fixtures::{
+    Fixture, FixtureScope, HasFixtures, NormalizedFixture, RequiresFixtures, UserDefinedFixture,
+    get_auto_use_fixtures, get_builtin_fixture,
 };
+use crate::extensions::tags::Parametrization;
+use crate::extensions::tags::parametrize::ParametrizationArgs;
+use crate::normalize::utils::cartesian_product;
+use crate::utils::iter_with_ancestors;
 
 /// Use the `Normalizer` to turn discovered test functions into a more normalized form.
 ///

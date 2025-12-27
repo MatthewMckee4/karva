@@ -2,12 +2,15 @@ use std::sync::Once;
 
 use anyhow::Context;
 use camino::Utf8Path;
+use karva_benchmark::criterion::{
+    BenchmarkId, Criterion, Throughput, criterion_group, criterion_main,
+};
 use karva_benchmark::{
     FIXTURES, LARGE_LIST_COMPREHENSION, LARGE_SUMMATION, MATH, PARAMETRIZE, STRING_CONCATENATION,
     TRUE_ASSERTIONS, TestCase,
-    criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main},
 };
-use karva_core::{DummyReporter, TestRunner, testing::setup_module};
+use karva_core::testing::setup_module;
+use karva_core::{DummyReporter, TestRunner};
 use karva_project::{ProjectDatabase, absolute};
 
 fn create_test_cases() -> Vec<TestCase> {

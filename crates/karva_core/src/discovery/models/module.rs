@@ -1,7 +1,9 @@
 use camino::Utf8PathBuf;
 use ruff_source_file::{SourceFile, SourceFileBuilder};
 
-use crate::{discovery::TestFunction, extensions::fixtures::Fixture, name::ModulePath};
+use crate::discovery::TestFunction;
+use crate::extensions::fixtures::Fixture;
+use crate::name::ModulePath;
 
 /// A module represents a single python file.
 #[derive(Debug)]

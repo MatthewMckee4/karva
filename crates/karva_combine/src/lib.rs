@@ -3,7 +3,8 @@
     reason = "Prefer System trait methods over std methods in ty crates"
 )]
 
-use std::{collections::HashMap, hash::BuildHasher};
+use std::collections::HashMap;
+use std::hash::BuildHasher;
 
 use ruff_python_ast::PythonVersion;
 

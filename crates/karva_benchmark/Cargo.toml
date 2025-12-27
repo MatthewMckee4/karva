@@ -11,6 +11,15 @@ documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
 
+[dependencies]
+anyhow = { workspace = true }
+camino = { workspace = true }
+codspeed-criterion-compat = { workspace = true }
+divan = { workspace = true }
+karva_core = { workspace = true }
+karva_project = { workspace = true }
+karva_projects = { workspace = true }
+
 [[bench]]
 name = "karva"
 harness = false
@@ -34,15 +43,6 @@ harness = false
 [[bench]]
 name = "typer_walltime"
 harness = false
-
-[dependencies]
-camino = { workspace = true }
-karva_core = { workspace = true }
-karva_project = { workspace = true }
-karva_projects = { workspace = true }
-divan = { workspace = true }
-anyhow = { workspace = true }
-codspeed-criterion-compat = { workspace = true }
 
 [lints]
 workspace = true

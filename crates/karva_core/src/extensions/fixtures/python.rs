@@ -1,7 +1,5 @@
-use pyo3::{
-    prelude::*,
-    types::{PyDict, PyTuple},
-};
+use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyTuple};
 
 /// Request context object that fixtures can access via the 'request' parameter.
 ///

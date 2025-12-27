@@ -1,6 +1,7 @@
 //! Generate a Markdown-compatible listing of configuration options for `pyproject.toml`.
 
-use std::{fmt::Write, path::PathBuf};
+use std::fmt::Write;
+use std::path::PathBuf;
 
 use anyhow::bail;
 use itertools::Itertools;

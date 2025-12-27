@@ -1,4 +1,4 @@
-<!-- WARNING: This file is auto-generated (cargo run -p karva_dev generate-all). Edit the doc comments in 'crates/karva_cli/src/args.rs' if you want to change anything here. -->
+<!-- WARNING: This file is auto-generated (cargo run -p karva_dev generate-all). Edit the doc comments in 'crates/karva/src/args.rs' if you want to change anything here. -->
 
 # CLI Reference
 
@@ -82,4 +82,3 @@ Print this message or the help of the given subcommand(s)
 ```
 karva help [COMMAND]
 ```
-

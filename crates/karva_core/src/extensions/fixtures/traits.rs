@@ -3,10 +3,8 @@ use std::fmt::Debug;
 use pyo3::Python;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::{
-    discovery::{DiscoveredModule, DiscoveredPackage},
-    extensions::fixtures::{Fixture, FixtureScope},
-};
+use crate::discovery::{DiscoveredModule, DiscoveredPackage};
+use crate::extensions::fixtures::{Fixture, FixtureScope};
 
 /// This trait is used to get all fixtures (from a module or package) that have a given scope.
 ///

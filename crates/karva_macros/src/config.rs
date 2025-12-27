@@ -1,10 +1,11 @@
 use proc_macro2::{TokenStream, TokenTree};
 use quote::{quote, quote_spanned};
 use ruff_python_trivia::textwrap::dedent;
+use syn::meta::ParseNestedMeta;
+use syn::spanned::Spanned;
 use syn::{
     AngleBracketedGenericArguments, Attribute, Data, DataStruct, DeriveInput, ExprLit, Field,
     Fields, Lit, LitStr, Meta, Path, PathArguments, PathSegment, Type, TypePath,
-    meta::ParseNestedMeta, spanned::Spanned,
 };
 
 pub fn derive_impl(input: DeriveInput) -> syn::Result<TokenStream> {

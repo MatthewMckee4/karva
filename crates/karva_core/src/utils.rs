@@ -1,8 +1,11 @@
-use std::{collections::HashMap, fmt::Write};
+use std::collections::HashMap;
+use std::fmt::Write;
 
 use camino::Utf8Path;
 use karva_project::{Db, ProjectSettings, System};
-use pyo3::{PyResult, Python, prelude::*, types::PyAnyMethods};
+use pyo3::prelude::*;
+use pyo3::types::PyAnyMethods;
+use pyo3::{PyResult, Python};
 use ruff_python_ast::PythonVersion;
 use ruff_source_file::{SourceFile, SourceFileBuilder};
 

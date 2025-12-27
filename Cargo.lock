@@ -1144,28 +1144,6 @@ dependencies = [
 
 [[package]]
 name = "karva"
-version = "0.0.1-alpha.1"
-dependencies = [
- "karva_cli",
- "karva_core",
- "pyo3",
-]
-
-[[package]]
-name = "karva_benchmark"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "camino",
- "codspeed-criterion-compat",
- "codspeed-divan-compat",
- "karva_core",
- "karva_project",
- "karva_projects",
-]
-
-[[package]]
-name = "karva_cli"
 version = "0.0.0"
 dependencies = [
  "anyhow",
@@ -1191,6 +1169,19 @@ dependencies = [
  "tracing-subscriber",
  "tracing-tree",
  "wild",
+]
+
+[[package]]
+name = "karva_benchmark"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "camino",
+ "codspeed-criterion-compat",
+ "codspeed-divan-compat",
+ "karva_core",
+ "karva_project",
+ "karva_projects",
 ]
 
 [[package]]
@@ -1231,7 +1222,7 @@ dependencies = [
  "camino",
  "clap",
  "itertools 0.14.0",
- "karva_cli",
+ "karva",
  "karva_project",
  "markdown",
  "pretty_assertions",
@@ -1293,6 +1284,15 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+]
+
+[[package]]
+name = "karva_python"
+version = "0.0.1-alpha.1"
+dependencies = [
+ "karva",
+ "karva_core",
+ "pyo3",
 ]
 
 [[package]]

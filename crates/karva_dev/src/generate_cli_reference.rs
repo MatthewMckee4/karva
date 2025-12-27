@@ -5,7 +5,7 @@ use anyhow::{Result, bail};
 use camino::Utf8PathBuf;
 use clap::{Command, CommandFactory};
 use itertools::Itertools;
-use karva_cli::Args as Cli;
+use karva::Args as Cli;
 use pretty_assertions::StrComparison;
 
 use crate::{Mode, REGENERATE_ALL_COMMAND, ROOT_DIR};
@@ -80,7 +80,7 @@ fn generate() -> String {
 
     let mut parents = Vec::new();
 
-    output.push_str("<!-- WARNING: This file is auto-generated (cargo run -p karva_dev generate-all). Edit the doc comments in 'crates/karva_cli/src/args.rs' if you want to change anything here. -->\n\n");
+    output.push_str("<!-- WARNING: This file is auto-generated (cargo run -p karva_dev generate-all). Edit the doc comments in 'crates/karva/src/args.rs' if you want to change anything here. -->\n\n");
     output.push_str("# CLI Reference\n\n");
     generate_command(&mut output, &karva, &mut parents);
 

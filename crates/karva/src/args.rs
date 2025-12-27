@@ -1,11 +1,7 @@
 use camino::Utf8PathBuf;
-use clap::{
-    Parser,
-    builder::{
-        Styles,
-        styling::{AnsiColor, Effects},
-    },
-};
+use clap::Parser;
+use clap::builder::Styles;
+use clap::builder::styling::{AnsiColor, Effects};
 use karva_project::{Options, SrcOptions, TerminalOptions, TestOptions};
 use ruff_db::diagnostic::DiagnosticFormat;
 

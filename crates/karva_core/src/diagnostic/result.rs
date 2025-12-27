@@ -1,4 +1,6 @@
-use std::{collections::HashMap, fmt::Debug, time::Instant};
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::time::Instant;
 
 use colored::Colorize;
 use ruff_db::diagnostic::Diagnostic;

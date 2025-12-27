@@ -69,18 +69,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@3542bca2639a428e1796aaa6a2ffef0c0f575566 # v3.1.4
-
-      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
-        with:
-          toolchain: stable
-          override: true
-
-      - name: Install Rustfmt nightly
-        run: |
-          rustup component add rustfmt --toolchain nightly
-
-      - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+      - uses: j178/prek-action@91fd7d7cf70ae1dee9f4f44e7dfa5d1073fe6623 # v1.0.11
 
   cargo-test:
     name: "cargo test (${{ matrix.os }} ${{ matrix.python-version }})"

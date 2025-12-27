@@ -3,11 +3,10 @@ use std::sync::Arc;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::{
-    QualifiedFunctionName,
-    discovery::DiscoveredModule,
-    extensions::{fixtures::RequiresFixtures, tags::Tags},
-};
+use crate::QualifiedFunctionName;
+use crate::discovery::DiscoveredModule;
+use crate::extensions::fixtures::RequiresFixtures;
+use crate::extensions::tags::Tags;
 
 /// Represents a single test function discovered from Python source code.
 #[derive(Debug)]

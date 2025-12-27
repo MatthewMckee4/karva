@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use pyo3::{exceptions::PyAttributeError, prelude::*};
+use pyo3::exceptions::PyAttributeError;
+use pyo3::prelude::*;
 use ruff_python_ast::{Expr, StmtFunctionDef};
 
 mod builtins;
@@ -19,16 +20,12 @@ pub use scope::FixtureScope;
 pub use traits::{HasFixtures, RequiresFixtures};
 pub use utils::missing_arguments_from_error;
 
-use crate::{
-    ModulePath, QualifiedFunctionName,
-    discovery::DiscoveredPackage,
-    extensions::{
-        fixtures::{
-            python::InvalidFixtureError, scope::fixture_scope, utils::handle_custom_fixture_params,
-        },
-        tags::Parametrization,
-    },
-};
+use crate::discovery::DiscoveredPackage;
+use crate::extensions::fixtures::python::InvalidFixtureError;
+use crate::extensions::fixtures::scope::fixture_scope;
+use crate::extensions::fixtures::utils::handle_custom_fixture_params;
+use crate::extensions::tags::Parametrization;
+use crate::{ModulePath, QualifiedFunctionName};
 
 #[derive(Clone)]
 pub struct Fixture {
@@ -325,7 +322,8 @@ pub fn get_auto_use_fixtures<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{extensions::fixtures::scope::resolve_dynamic_scope, utils::attach};
+    use crate::extensions::fixtures::scope::resolve_dynamic_scope;
+    use crate::utils::attach;
 
     #[test]
     fn test_invalid_fixture_scope() {

@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use camino::Utf8PathBuf;
 
-use crate::{discovery::DiscoveredModule, name::ModulePath};
+use crate::discovery::DiscoveredModule;
+use crate::name::ModulePath;
 
 /// A package represents a single python directory.
 #[derive(Debug)]
