@@ -9,7 +9,7 @@ use crate::{discovery::DiscoveredModule, name::ModulePath};
 pub struct DiscoveredPackage {
     path: Utf8PathBuf,
     modules: HashMap<Utf8PathBuf, DiscoveredModule>,
-    packages: HashMap<Utf8PathBuf, DiscoveredPackage>,
+    packages: HashMap<Utf8PathBuf, Self>,
     configuration_module_path: Option<ModulePath>,
 }
 

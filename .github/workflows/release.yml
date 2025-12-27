@@ -31,15 +31,17 @@ jobs:
       - name: Install seal
         run: |
           curl --proto '=https' --tlsv1.2 -LsSf https://github.com/MatthewMckee4/seal/releases/download/0.0.1-alpha.5/seal-installer.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Generate release metadata
         id: seal-generate
         run: |
           METADATA=$(seal generate release)
-          echo "metadata<<EOF" >> $GITHUB_OUTPUT
-          echo "$METADATA" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "metadata<<EOF"
+            echo "$METADATA"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
           echo "Release metadata:"
           echo "$METADATA"
 
@@ -77,11 +79,13 @@ jobs:
           BODY=$(echo "$METADATA" | jq -r '.body')
           PRERELEASE=$(echo "$METADATA" | jq -r '.prerelease')
 
-          echo "title=$TITLE" >> $GITHUB_OUTPUT
-          echo "prerelease=$PRERELEASE" >> $GITHUB_OUTPUT
+          {
+            echo "title=$TITLE"
+            echo "prerelease=$PRERELEASE"
+          } >> "$GITHUB_OUTPUT"
 
           # Save body to file to handle multiline content
-          echo "$BODY" > $RUNNER_TEMP/release-notes.txt
+          echo "$BODY" > "$RUNNER_TEMP/release-notes.txt"
 
       - name: Create git tag
         env:
@@ -98,16 +102,19 @@ jobs:
           TITLE: ${{ steps.parse-metadata.outputs.title }}
           PRERELEASE: ${{ steps.parse-metadata.outputs.prerelease }}
         run: |
-          PRERELEASE_FLAG=""
+          ARGS=(
+            "$TAG"
+            --title "$TITLE"
+            --notes-file "$RUNNER_TEMP/release-notes.txt"
+          )
+
           if [ "$PRERELEASE" = "true" ]; then
-            PRERELEASE_FLAG="--prerelease"
+            ARGS+=(--prerelease)
           fi
 
-          gh release create "$TAG" \
-            --title "$TITLE" \
-            --notes-file "$RUNNER_TEMP/release-notes.txt" \
-            $PRERELEASE_FLAG \
-            wheels-*/*
+          ARGS+=(wheels-*/*)
+
+          gh release create "${ARGS[@]}"
 
   publish-pypi:
     name: Publish to PyPI

@@ -409,7 +409,7 @@ pub static PYDANTIC_PROJECT: RealWorldProject<'static> = RealWorldProject {
     name: "pydantic",
     // Skip recursive test that fails crashes karva and pytest.
     repository: "https://github.com/MatthewMckee4/pydantic",
-    commit: "17fc29cd471dd728866a729f08e0b6557cb9340b",
+    commit: "95068e360c8921db3b342e368154fab925fa299e",
     paths: &["tests"],
     dependencies: &[
         "pytest",
