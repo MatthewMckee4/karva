@@ -1,5 +1,5 @@
 [release]
-current-version = "0.0.0"
+current-version = "0.0.1-alpha.1"
 
 version-files = [
     "README.md",
