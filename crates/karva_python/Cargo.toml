@@ -15,7 +15,6 @@ name = "karva_python"
 crate-type = ["rlib", "cdylib"]
 
 [dependencies]
-karva= { workspace = true }
 karva_core = { workspace = true }
 
 pyo3 = { workspace = true }

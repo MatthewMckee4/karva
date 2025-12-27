@@ -8,8 +8,6 @@ _ScopeName: TypeAlias = Literal["session", "package", "module", "function"]
 _T = TypeVar("_T")
 _P = ParamSpec("_P")
 
-def karva_run() -> int: ...
-
 class FixtureFunctionMarker(Generic[_P, _T]):
     def __call__(
         self,

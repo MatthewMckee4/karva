@@ -1290,7 +1290,6 @@ dependencies = [
 name = "karva_python"
 version = "0.0.0"
 dependencies = [
- "karva",
  "karva_core",
  "pyo3",
 ]
