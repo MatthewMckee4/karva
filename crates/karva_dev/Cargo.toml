@@ -11,7 +11,7 @@ repository = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
-karva = { workspace = true }
+karva_cli = { workspace = true }
 karva_project = { workspace = true }
 
 anyhow = { workspace = true }

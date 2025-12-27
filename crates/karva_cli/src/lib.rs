@@ -2,10 +2,8 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
-use karva_project::{Options, SrcOptions, TerminalOptions, TestOptions};
+use karva_project::{Options, SrcOptions, TerminalOptions, TestOptions, VerbosityLevel};
 use ruff_db::diagnostic::DiagnosticFormat;
-
-use crate::logging::Verbosity;
 
 const STYLES: Styles = Styles::styled()
     .header(AnsiColor::Green.on_default().effects(Effects::BOLD))
@@ -13,13 +11,69 @@ const STYLES: Styles = Styles::styled()
     .literal(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
     .placeholder(AnsiColor::Cyan.on_default());
 
+#[derive(clap::Args, Debug, Clone, Default)]
+#[command(about = None, long_about = None)]
+pub struct Verbosity {
+    #[arg(
+        long,
+        short = 'v',
+        help = "Use verbose output (or `-vv` and `-vvv` for more verbose output)",
+        action = clap::ArgAction::Count,
+        global = true,
+        overrides_with = "quiet",
+    )]
+    verbose: u8,
+
+    #[arg(
+        long,
+        short,
+        help = "Use quiet output (or `-qq` for silent output)",
+        action = clap::ArgAction::Count,
+        global = true,
+        overrides_with = "verbose",
+    )]
+    quiet: u8,
+}
+
+impl Verbosity {
+    /// Returns the verbosity level based on the number of `-v` and `-q` flags.
+    ///
+    /// Returns `None` if the user did not specify any verbosity flags.
+    pub const fn level(&self) -> VerbosityLevel {
+        // `--quiet` and `--verbose` are mutually exclusive in Clap, so we can just check one first.
+        match self.quiet {
+            0 => {}
+            _ => return VerbosityLevel::Quiet,
+        }
+
+        match self.verbose {
+            0 => VerbosityLevel::Default,
+            1 => VerbosityLevel::Verbose,
+            2 => VerbosityLevel::ExtraVerbose,
+            _ => VerbosityLevel::Trace,
+        }
+    }
+}
+
+impl PartialEq<u8> for Verbosity {
+    fn eq(&self, other: &u8) -> bool {
+        self.verbose == *other
+    }
+}
+
+impl PartialOrd<u8> for Verbosity {
+    fn partial_cmp(&self, other: &u8) -> Option<std::cmp::Ordering> {
+        Some(self.verbose.cmp(other))
+    }
+}
+
 #[derive(Debug, Parser)]
 #[command(author, name = "karva", about = "A Python test runner.")]
 #[command(version)]
 #[command(styles = STYLES)]
 pub struct Args {
     #[command(subcommand)]
-    pub(crate) command: Command,
+    pub command: Command,
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -39,44 +93,44 @@ pub struct TestCommand {
         help = "List of files, directories, or test functions to test [default: the project root]",
         value_name = "PATH"
     )]
-    pub(crate) paths: Vec<String>,
+    pub paths: Vec<String>,
 
     #[clap(flatten)]
-    pub(crate) verbosity: Verbosity,
+    pub verbosity: Verbosity,
 
     /// The path to a `karva.toml` file to use for configuration.
     ///
     /// While ty configuration can be included in a `pyproject.toml` file, it is not allowed in this context.
     #[arg(long, env = "KARVA_CONFIG_FILE", value_name = "PATH")]
-    pub(crate) config_file: Option<Utf8PathBuf>,
+    pub config_file: Option<Utf8PathBuf>,
 
     /// The prefix of the test functions.
     #[clap(long)]
-    pub(crate) test_prefix: Option<String>,
+    pub test_prefix: Option<String>,
 
     /// The format to use for printing diagnostic messages.
     #[arg(long)]
-    pub(crate) output_format: Option<OutputFormat>,
+    pub output_format: Option<OutputFormat>,
 
     /// Show Python stdout during test execution.
     #[clap(short = 's', default_missing_value = "true", num_args=0..1)]
-    pub(crate) show_output: Option<bool>,
+    pub show_output: Option<bool>,
 
     /// When set, .gitignore files will not be respected.
     #[clap(long, default_missing_value = "true", num_args=0..1)]
-    pub(crate) no_ignore: Option<bool>,
+    pub no_ignore: Option<bool>,
 
     /// When set, the test will fail immediately if any test fails.
     #[clap(long, default_missing_value = "true", num_args=0..1)]
-    pub(crate) fail_fast: Option<bool>,
+    pub fail_fast: Option<bool>,
 
     /// When set, we will not show individual test case results during execution.
     #[clap(long, default_missing_value = "true", num_args=0..1)]
-    pub(crate) no_progress: Option<bool>,
+    pub no_progress: Option<bool>,
 
     /// Control when colored output is used.
     #[arg(long)]
-    pub(crate) color: Option<TerminalColor>,
+    pub color: Option<TerminalColor>,
 }
 
 /// The diagnostic output format.
@@ -125,7 +179,7 @@ pub enum TerminalColor {
 }
 
 impl TestCommand {
-    pub(crate) fn into_options(self) -> Options {
+    pub fn into_options(self) -> Options {
         Options {
             src: Some(SrcOptions {
                 respect_ignore_files: self.no_ignore.map(|no_ignore| !no_ignore),
