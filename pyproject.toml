@@ -22,6 +22,9 @@ classifiers = [
     "Programming Language :: Rust",
 ]
 
+[project.scripts]
+karva = "karva._karva:karva_run"
+
 [dependency-groups]
 dev = ["pre-commit", "ruff"]
 docs = ["zensical==0.0.10"]
