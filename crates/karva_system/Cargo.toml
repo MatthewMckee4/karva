@@ -13,6 +13,7 @@ license.workspace = true
 karva_python_semantic = { workspace = true }
 karva_static = { workspace = true }
 
+anyhow = { workspace = true }
 camino = { workspace = true }
 etcetera = { workspace = true }
 filetime = { workspace = true }

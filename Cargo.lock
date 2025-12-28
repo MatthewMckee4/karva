@@ -1410,6 +1410,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "camino",
+ "karva_system",
  "ruff_python_ast",
  "serde",
  "serde_json",
@@ -1452,7 +1453,6 @@ dependencies = [
  "karva_python_semantic",
  "karva_system",
  "karva_time",
- "karva_venv",
  "pyo3",
  "regex",
  "rstest",
@@ -1475,6 +1475,7 @@ version = "0.1.0"
 name = "karva_system"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "camino",
  "etcetera",
  "filetime",
@@ -1489,13 +1490,6 @@ dependencies = [
 [[package]]
 name = "karva_time"
 version = "0.1.0"
-
-[[package]]
-name = "karva_venv"
-version = "0.1.0"
-dependencies = [
- "camino",
-]
 
 [[package]]
 name = "lazy_static"

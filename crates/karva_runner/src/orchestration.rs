@@ -9,8 +9,8 @@ use karva_cli::{OutputFormat, SubTestCommand};
 use karva_collector::ParallelCollector;
 use karva_logging::Printer;
 use karva_project::{Db, ProjectDatabase};
+use karva_system::venv_binary;
 use karva_time::format_duration;
-use karva_venv::venv_binary;
 
 use crate::partition::{Partition, partition_collected_tests};
 

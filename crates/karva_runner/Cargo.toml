@@ -20,7 +20,6 @@ karva_project = { workspace = true }
 karva_python_semantic = { workspace = true }
 karva_system = { workspace = true }
 karva_time = { workspace = true }
-karva_venv = { workspace = true }
 
 anyhow = { workspace = true }
 camino = { workspace = true }
