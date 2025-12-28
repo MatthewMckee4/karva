@@ -4,7 +4,9 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
-use karva_cache::{AggregatedResults, CACHE_DIR, CacheReader, RunHash, reader::read_recent_durations};
+use karva_cache::{
+    AggregatedResults, CACHE_DIR, CacheReader, RunHash, reader::read_recent_durations,
+};
 use karva_cli::{OutputFormat, SubTestCommand};
 use karva_collector::ParallelCollector;
 use karva_logging::Printer;

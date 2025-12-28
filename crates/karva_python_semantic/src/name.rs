@@ -116,26 +116,6 @@ impl std::fmt::Display for QualifiedTestName {
     }
 }
 
-impl Serialize for QualifiedTestName {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&self.function_name.to_string())
-    }
-}
-
-impl<'de> Deserialize<'de> for QualifiedTestName {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let function_name = s.parse().map_err(serde::de::Error::custom)?;
-        Ok(Self::new(function_name, None))
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ModulePath {
     path: Utf8PathBuf,
