@@ -1158,7 +1158,6 @@ dependencies = [
  "anyhow",
  "argfile",
  "camino",
- "chrono",
  "clap",
  "colored 3.0.0",
  "ctrlc",
@@ -1172,19 +1171,12 @@ dependencies = [
  "karva_metadata",
  "karva_project",
  "karva_runner",
- "karva_static",
  "karva_system",
  "regex",
  "rstest",
- "ruff_db",
  "ruff_python_trivia",
- "serde",
- "serde_json",
  "tempfile",
  "tracing",
- "tracing-flame",
- "tracing-subscriber",
- "tracing-tree",
  "wild",
 ]
 
@@ -1192,8 +1184,6 @@ dependencies = [
 name = "karva_benchmark"
 version = "0.0.0"
 dependencies = [
- "anyhow",
- "camino",
  "codspeed-criterion-compat",
  "codspeed-divan-compat",
  "karva_cli",
@@ -1213,15 +1203,9 @@ dependencies = [
  "anyhow",
  "camino",
  "karva_diagnostic",
- "karva_project",
- "karva_python_semantic",
- "rand 0.8.5",
  "ruff_db",
- "ruff_text_size",
  "serde",
  "serde_json",
- "tempfile",
- "tracing",
 ]
 
 [[package]]
@@ -1232,7 +1216,6 @@ dependencies = [
  "clap",
  "karva_logging",
  "karva_metadata",
- "karva_project",
  "ruff_db",
 ]
 
@@ -1248,7 +1231,6 @@ dependencies = [
  "karva_system",
  "ruff_python_ast",
  "ruff_python_parser",
- "tracing",
 ]
 
 [[package]]
@@ -1268,7 +1250,6 @@ dependencies = [
  "clap",
  "colored 3.0.0",
  "ctor",
- "ignore",
  "karva_cache",
  "karva_cli",
  "karva_collector",
@@ -1284,12 +1265,9 @@ dependencies = [
  "ruff_db",
  "ruff_macros",
  "ruff_python_ast",
- "ruff_python_parser",
  "ruff_source_file",
- "ruff_text_size",
  "tempfile",
  "tracing",
- "tracing-subscriber",
  "wild",
 ]
 
@@ -1319,11 +1297,9 @@ dependencies = [
  "karva_system",
  "pyo3",
  "ruff_db",
- "ruff_python_ast",
  "ruff_source_file",
  "ruff_text_size",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1333,7 +1309,6 @@ dependencies = [
  "anyhow",
  "camino",
  "clap",
- "karva_project",
  "karva_projects",
  "karva_system",
  "tempfile",
@@ -1386,22 +1361,10 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "camino",
- "etcetera",
- "filetime",
- "karva_combine",
- "karva_macros",
  "karva_metadata",
  "karva_system",
  "ruff_db",
  "ruff_notebook",
- "ruff_options_metadata",
- "ruff_python_ast",
- "serde",
- "tempfile",
- "thiserror",
- "toml",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -1433,7 +1396,6 @@ dependencies = [
  "camino",
  "ruff_python_ast",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1442,28 +1404,12 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "camino",
- "colored 3.0.0",
- "crossbeam-channel",
- "ctor",
- "ignore",
  "karva_cache",
  "karva_cli",
  "karva_collector",
- "karva_diagnostic",
  "karva_logging",
  "karva_project",
- "karva_python_semantic",
  "karva_system",
- "pyo3",
- "regex",
- "rstest",
- "ruff_db",
- "ruff_macros",
- "ruff_python_ast",
- "ruff_python_parser",
- "ruff_source_file",
- "ruff_text_size",
- "tempfile",
  "tracing",
  "which",
 ]

@@ -229,11 +229,13 @@ fn collect_file(
 
     let module_type: ModuleType = path.into();
 
-    let parsed = parse_unchecked(
-        &source_text,
-        ParseOptions::from(Mode::Module).with_target_version(metadata.python_version()),
-    )
-    .try_into_module()?;
+    let mut parse_options = ParseOptions::from(Mode::Module);
+
+    if let Some(python_version) = metadata.python_version() {
+        parse_options = parse_options.with_target_version(python_version);
+    }
+
+    let parsed = parse_unchecked(&source_text, parse_options).try_into_module()?;
 
     let mut collected_module = CollectedModule::new(module_path, module_type, source_text);
 

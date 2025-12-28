@@ -7,7 +7,6 @@ use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
-use karva_core::utils::current_python_version;
 use karva_logging::{Printer, VerbosityLevel, set_colored_override, setup_tracing};
 use karva_metadata::{ProjectMetadata, ProjectOptionsOverrides};
 use karva_project::{Db, ProjectDatabase};
@@ -87,10 +86,6 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     tracing::debug!(cwd = %cwd, "Working directory");
 
-    let python_version = current_python_version();
-
-    tracing::debug!(version = %python_version, "Detected Python version");
-
     let system = OsSystem::new(&cwd);
 
     let config_file = args
@@ -100,9 +95,9 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         .map(|path| absolute(path, &cwd));
 
     let mut project_metadata = if let Some(config_file) = &config_file {
-        ProjectMetadata::from_config_file(config_file.clone(), &system, python_version)?
+        ProjectMetadata::from_config_file(config_file.clone(), &system)?
     } else {
-        ProjectMetadata::discover(system.current_directory(), &system, python_version)?
+        ProjectMetadata::discover(system.current_directory(), &system)?
     };
 
     let sub_command = args.sub_command.clone();

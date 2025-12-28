@@ -12,7 +12,7 @@ use karva_collector::ParallelCollector;
 use karva_logging::Printer;
 use karva_project::{Db, ProjectDatabase};
 use karva_system::time::format_duration;
-use karva_system::venv_binary;
+use karva_system::{find_cargo_binary, venv_binary};
 
 use crate::partition::{Partition, partition_collected_tests};
 

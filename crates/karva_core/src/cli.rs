@@ -132,9 +132,11 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         .map(|path| absolute(path, &cwd));
 
     let mut project_metadata = if let Some(config_file) = &config_file {
-        ProjectMetadata::from_config_file(config_file.clone(), &system, python_version)?
+        ProjectMetadata::from_config_file(config_file.clone(), &system)?
+            .with_python_version(Some(python_version))
     } else {
-        ProjectMetadata::discover(system.current_directory(), &system, python_version)?
+        ProjectMetadata::discover(system.current_directory(), &system)?
+            .with_python_version(Some(python_version))
     };
 
     // We have already checked the include paths in the main worker.

@@ -19,7 +19,6 @@ crossbeam-channel = { workspace = true }
 ignore = { workspace = true }
 ruff_python_ast = { workspace = true }
 ruff_python_parser = { workspace = true }
-tracing = { workspace = true }
 
 [lints]
 workspace = true

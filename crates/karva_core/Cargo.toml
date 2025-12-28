@@ -18,7 +18,7 @@ path = "src/bin/main.rs"
 karva_cache = { workspace = true }
 karva_cli = { workspace = true }
 karva_collector = { workspace = true }
-karva_diagnostic = { workspace = true }
+karva_diagnostic = { workspace = true, features = ["traceback"] }
 karva_logging = { workspace = true }
 karva_metadata = { workspace = true }
 karva_project = { workspace = true }
@@ -30,18 +30,14 @@ argfile = { workspace = true }
 camino = { workspace = true }
 clap = { workspace = true, features = ["wrap_help", "string", "env"] }
 colored = { workspace = true }
-ignore = { workspace = true }
 pyo3 = { workspace = true }
 regex = { workspace = true }
 ruff_db = { workspace = true }
 ruff_macros = { workspace = true }
 ruff_python_ast = { workspace = true }
-ruff_python_parser = { workspace = true }
 ruff_source_file = { workspace = true }
-ruff_text_size = { workspace = true }
 tempfile = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 wild = { workspace = true }
 
 [dev-dependencies]
