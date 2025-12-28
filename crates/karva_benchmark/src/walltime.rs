@@ -4,7 +4,7 @@ use divan::Bencher;
 use karva_cli::SubTestCommand;
 use karva_core::testing::setup_module;
 use karva_logging::{Printer, VerbosityLevel};
-use karva_metadata::{Options, ProjectMetadata, SrcOptions};
+use karva_metadata::{Options, OutputFormat, ProjectMetadata, SrcOptions, TerminalOptions};
 use karva_project::ProjectDatabase;
 use karva_projects::{InstalledProject, RealWorldProject};
 use karva_system::OsSystem;
@@ -46,6 +46,10 @@ impl<'a> ProjectBenchmark<'a> {
                 include: Some(test_paths),
                 respect_ignore_files: Some(false),
             }),
+            terminal: Some(TerminalOptions {
+                output_format: Some(OutputFormat::Concise),
+                ..TerminalOptions::default()
+            }),
             ..Options::default()
         });
 
@@ -54,7 +58,7 @@ impl<'a> ProjectBenchmark<'a> {
 }
 
 fn test_project(project: &ProjectDatabase) {
-    let printer = Printer::new(VerbosityLevel::Default, false);
+    let printer = Printer::new(VerbosityLevel::Default, true);
 
     let num_workers = karva_system::max_parallelism().get();
 

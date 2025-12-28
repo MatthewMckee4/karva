@@ -1208,7 +1208,7 @@ dependencies = [
 
 [[package]]
 name = "karva_cache"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "camino",
@@ -1225,7 +1225,7 @@ dependencies = [
 
 [[package]]
 name = "karva_cli"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "camino",
  "clap",
@@ -1237,7 +1237,7 @@ dependencies = [
 
 [[package]]
 name = "karva_collector"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "camino",
  "crossbeam-channel",
@@ -1309,7 +1309,7 @@ dependencies = [
 
 [[package]]
 name = "karva_diagnostic"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "camino",
  "colored 3.0.0",
@@ -1340,7 +1340,7 @@ dependencies = [
 
 [[package]]
 name = "karva_logging"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "chrono",
  "clap",
@@ -1364,7 +1364,7 @@ dependencies = [
 
 [[package]]
 name = "karva_metadata"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "camino",
  "karva_combine",
@@ -1427,7 +1427,7 @@ dependencies = [
 
 [[package]]
 name = "karva_python_semantic"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "camino",
  "ruff_python_ast",
@@ -1467,11 +1467,11 @@ dependencies = [
 
 [[package]]
 name = "karva_static"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "karva_system"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "camino",
