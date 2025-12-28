@@ -15,7 +15,7 @@ use karva_project::{Db, ProjectDatabase};
 use karva_system::{OsSystem, System, path::absolute};
 use ruff_db::diagnostic::DisplayDiagnosticConfig;
 
-use crate::TestRunner;
+use crate::runner::StandardTestRunner;
 use crate::utils::current_python_version;
 
 #[derive(Parser)]
@@ -168,7 +168,8 @@ pub fn execute_test_paths(
     cache_writer: &CacheWriter,
     reporter: &dyn Reporter,
 ) -> anyhow::Result<i32> {
-    let result = db.test_with_reporter(reporter);
+    let test_runner = StandardTestRunner::new(db);
+    let result = test_runner.test_with_reporter(reporter);
 
     let diagnostic_format = db.project().settings().terminal().output_format.into();
     let config = DisplayDiagnosticConfig::default()

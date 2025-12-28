@@ -231,7 +231,7 @@ fn find_karva_core_binary(current_dir: &Utf8PathBuf) -> Result<Utf8PathBuf> {
         }
     }
 
-    anyhow::bail!("Could not find karva_core binary TODO")
+    anyhow::bail!("Could not find karva_core binary")
 }
 
 /// Print test output

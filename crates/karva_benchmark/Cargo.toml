@@ -27,10 +27,6 @@ codspeed-criterion-compat = { workspace = true }
 divan = { workspace = true }
 
 [[bench]]
-name = "karva"
-harness = false
-
-[[bench]]
 name = "affect_walltime"
 harness = false
 

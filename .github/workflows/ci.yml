@@ -149,56 +149,6 @@ jobs:
       - name: Build docs
         run: uv run --isolated --only-group docs zensical build
 
-  benchmarks:
-    name: Run benchmarks
-
-    runs-on: ubuntu-latest
-
-    needs: determine_changes
-    if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
-
-    steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-        with:
-          persist-credentials: false
-
-      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-
-      - name: "Install cargo codspeed"
-        uses: taiki-e/install-action@a416ddeedbd372e614cc1386e8b642692f66865e # v2.57.1
-        with:
-          tool: cargo-codspeed
-
-      - name: Setup Python
-        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
-        with:
-          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
-
-      - name: Build wheels
-        run: |
-          pip install pytest
-
-      - name: Build wheels
-        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        with:
-          command: build
-
-      - name: Generate resources
-        run: python crates/karva_benchmark/resources/generate.py
-
-      - name: Build benchmarks
-        run: cargo codspeed build -p karva_benchmark
-
-      - name: Run benchmarks
-        uses: CodSpeedHQ/action@346a2d8a8d9d38909abd0bc3d23f773110f076ad # v4.4.1
-        with:
-          token: ${{ secrets.CODSPEED_TOKEN }}
-          run: cargo codspeed run --bench karva
-          mode: simulation
-
   generate-walltime-benchmarks-matrix:
     name: "prepare walltime benchmarks"
 

@@ -1,5 +1,5 @@
-use karva_diagnostic::{DummyReporter, Reporter, TestRunResult};
-use karva_project::{Db, ProjectDatabase};
+use karva_diagnostic::{Reporter, TestRunResult};
+use karva_project::Db;
 
 use crate::Context;
 use crate::discovery::StandardDiscoverer;
@@ -14,13 +14,6 @@ use finalizer_cache::FinalizerCache;
 use fixture_cache::FixtureCache;
 use package_runner::NormalizedPackageRunner;
 
-pub trait TestRunner {
-    fn test(&self) -> TestRunResult {
-        self.test_with_reporter(&DummyReporter)
-    }
-    fn test_with_reporter(&self, reporter: &dyn Reporter) -> TestRunResult;
-}
-
 pub struct StandardTestRunner<'db> {
     db: &'db dyn Db,
 }
@@ -30,7 +23,7 @@ impl<'db> StandardTestRunner<'db> {
         Self { db }
     }
 
-    fn test_impl(&self, reporter: &dyn Reporter) -> TestRunResult {
+    pub(crate) fn test_with_reporter(&self, reporter: &dyn Reporter) -> TestRunResult {
         attach_with_project(self.db.project().settings(), |py| {
             let context = Context::new(self.db, reporter);
 
@@ -42,18 +35,5 @@ impl<'db> StandardTestRunner<'db> {
 
             context.into_result()
         })
-    }
-}
-
-impl TestRunner for StandardTestRunner<'_> {
-    fn test_with_reporter(&self, reporter: &dyn Reporter) -> TestRunResult {
-        self.test_impl(reporter)
-    }
-}
-
-impl TestRunner for ProjectDatabase {
-    fn test_with_reporter(&self, reporter: &dyn Reporter) -> TestRunResult {
-        let test_runner = StandardTestRunner::new(self);
-        test_runner.test_with_reporter(reporter)
     }
 }
