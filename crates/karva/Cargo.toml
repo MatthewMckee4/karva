@@ -33,8 +33,6 @@ tracing = { workspace = true, features = ["release_max_level_debug"] }
 wild = { workspace = true }
 
 [dev-dependencies]
-karva_core = { workspace = true }
-
 directories = { workspace = true }
 dunce = { workspace = true }
 insta = { workspace = true, features = ["filters"] }
