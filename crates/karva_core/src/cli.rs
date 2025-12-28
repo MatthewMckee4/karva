@@ -11,10 +11,11 @@ use karva_cli::{SubTestCommand, Verbosity};
 use karva_diagnostic::{DummyReporter, Reporter, TestCaseReporter};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::{ProjectMetadata, ProjectOptionsOverrides};
-use karva_project::ProjectDatabase;
-use karva_system::{OsSystem, System, absolute};
+use karva_project::{Db, ProjectDatabase};
+use karva_system::{OsSystem, System, path::absolute};
+use ruff_db::diagnostic::DisplayDiagnosticConfig;
 
-use crate::executor::execute_test_paths;
+use crate::runner::StandardTestRunner;
 use crate::utils::current_python_version;
 
 #[derive(Parser)]
@@ -160,4 +161,22 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     let exit_code = execute_test_paths(&db, &cache_writer, reporter.as_ref())?;
 
     std::process::exit(exit_code);
+}
+
+pub fn execute_test_paths(
+    db: &ProjectDatabase,
+    cache_writer: &CacheWriter,
+    reporter: &dyn Reporter,
+) -> anyhow::Result<i32> {
+    let test_runner = StandardTestRunner::new(db);
+    let result = test_runner.test_with_reporter(reporter);
+
+    let diagnostic_format = db.project().settings().terminal().output_format.into();
+    let config = DisplayDiagnosticConfig::default()
+        .format(diagnostic_format)
+        .color(false);
+
+    cache_writer.write_result(&result, db, &config)?;
+
+    Ok(0)
 }

@@ -1,6 +1,6 @@
 use camino::Utf8PathBuf;
 use karva_metadata::ProjectSettings;
-use karva_system::{TestPath, TestPathError, absolute};
+use karva_system::path::{TestPath, TestPathError, absolute};
 
 use crate::ProjectMetadata;
 
