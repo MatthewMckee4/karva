@@ -204,3 +204,13 @@ pub enum TerminalColor {
     /// Never display colors.
     Never,
 }
+
+impl TerminalColor {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Always => "always",
+            Self::Never => "never",
+        }
+    }
+}

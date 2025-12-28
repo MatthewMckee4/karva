@@ -4,6 +4,7 @@ use std::{collections::HashMap, fmt};
 
 use colored::Colorize;
 use karva_python_semantic::QualifiedTestName;
+use karva_time::format_duration;
 use ruff_db::diagnostic::Diagnostic;
 use serde::de::{self, MapAccess};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};
@@ -243,11 +244,6 @@ impl std::fmt::Display for DisplayTestResultStats<'_> {
         }
 
         let elapsed = self.start_time.elapsed();
-        let time_display = if elapsed.as_secs() < 2 {
-            format!("{}ms", elapsed.as_millis())
-        } else {
-            format!("{}s", elapsed.as_millis() / 1000)
-        };
 
         writeln!(
             f,
@@ -255,7 +251,7 @@ impl std::fmt::Display for DisplayTestResultStats<'_> {
             self.stats.passed(),
             self.stats.failed(),
             self.stats.skipped(),
-            time_display
+            format_duration(elapsed)
         )
     }
 }

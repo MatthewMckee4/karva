@@ -99,8 +99,6 @@ impl<'a> ParallelCollector<'a> {
         let mut session_package =
             CollectedPackage::new(self.system.current_directory().to_path_buf());
 
-        tracing::info!("Collecting test paths: {:?}", test_paths);
-
         for path in test_paths {
             let path_for_config = path.path().to_owned();
 

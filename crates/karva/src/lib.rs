@@ -2,20 +2,16 @@ use std::ffi::OsString;
 use std::fmt::Write;
 use std::io::{self};
 use std::process::{ExitCode, Termination};
-use std::time::Instant;
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
-use karva_cache::CACHE_DIR;
 use karva_core::utils::current_python_version;
-use karva_core::{DummyReporter, Reporter, TestCaseReporter, TestRunResult, TestRunner};
 use karva_logging::{Printer, VerbosityLevel, set_colored_override, setup_tracing};
 use karva_metadata::{ProjectMetadata, ProjectOptionsOverrides};
 use karva_project::{Db, ProjectDatabase};
 use karva_system::{OsSystem, System, absolute};
-use ruff_db::diagnostic::{DiagnosticFormat, DisplayDiagnosticConfig, DisplayDiagnostics};
 
 use karva_cli::{Args, Command, TestCommand};
 
@@ -127,41 +123,21 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         std::process::exit(0);
     })?;
 
-    let start_time = Instant::now();
-    let worker_count = if no_parallel {
+    let num_workers = if no_parallel {
         1
     } else {
         num_workers.unwrap_or_else(|| karva_system::max_parallelism().get())
     };
 
-    let result = if worker_count > 1 {
-        tracing::info!(workers = worker_count, "Starting parallel test execution");
-        let cache_dir = db.project().cwd().join(CACHE_DIR);
+    let config = karva_runner::ParallelTestConfig { num_workers };
 
-        let config = karva_runner::ParallelTestConfig {
-            num_workers: worker_count,
-            cache_dir,
-        };
+    let result = karva_runner::run_parallel_tests(&db, &config, &sub_command, printer)?;
 
-        let result = karva_runner::run_parallel_tests(&db, &config, &sub_command, &printer)?;
-
-        return if result {
-            Ok(ExitStatus::Success)
-        } else {
-            Ok(ExitStatus::Failure)
-        };
+    if result {
+        Ok(ExitStatus::Success)
     } else {
-        // Sequential execution
-        tracing::info!("Starting sequential test execution");
-        let reporter: Box<dyn Reporter> = if verbosity.is_quiet() {
-            Box::new(DummyReporter)
-        } else {
-            Box::new(TestCaseReporter::new(printer))
-        };
-        db.test_with_reporter(&*reporter)
-    };
-
-    display_test_output(&db, &result, printer, start_time)
+        Ok(ExitStatus::Failure)
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -185,78 +161,5 @@ impl Termination for ExitStatus {
 impl ExitStatus {
     pub const fn to_i32(self) -> i32 {
         self as i32
-    }
-}
-
-fn display_test_output(
-    db: &dyn Db,
-    result: &TestRunResult,
-    printer: Printer,
-    start_time: Instant,
-) -> Result<ExitStatus> {
-    let discovery_diagnostics = result.discovery_diagnostics();
-
-    let diagnostics = result.diagnostics();
-
-    let mut stdout = printer.stream_for_details().lock();
-
-    let diagnostic_format = db.project().settings().terminal().output_format.into();
-
-    let config = DisplayDiagnosticConfig::default()
-        .format(diagnostic_format)
-        .color(colored::control::SHOULD_COLORIZE.should_colorize());
-
-    let is_concise = matches!(diagnostic_format, DiagnosticFormat::Concise);
-
-    if (!diagnostics.is_empty() || !discovery_diagnostics.is_empty())
-        && result.stats().total() > 0
-        && stdout.is_enabled()
-    {
-        writeln!(stdout)?;
-    }
-
-    if !discovery_diagnostics.is_empty() && stdout.is_enabled() {
-        writeln!(stdout, "discovery diagnostics:")?;
-        writeln!(stdout)?;
-        write!(
-            stdout,
-            "{}",
-            DisplayDiagnostics::new(db, &config, discovery_diagnostics)
-        )?;
-
-        if is_concise {
-            writeln!(stdout)?;
-        }
-    }
-
-    if !diagnostics.is_empty() && stdout.is_enabled() {
-        writeln!(stdout, "diagnostics:")?;
-        writeln!(stdout)?;
-        write!(
-            stdout,
-            "{}",
-            DisplayDiagnostics::new(db, &config, diagnostics)
-        )?;
-
-        if is_concise {
-            writeln!(stdout)?;
-        }
-    }
-
-    if (diagnostics.is_empty() && discovery_diagnostics.is_empty())
-        && result.stats().total() > 0
-        && stdout.is_enabled()
-    {
-        writeln!(stdout)?;
-    }
-
-    let mut result_stdout = printer.stream_for_failure_summary().lock();
-
-    write!(result_stdout, "{}", result.stats().display(start_time))?;
-
-    if result.is_success() {
-        Ok(ExitStatus::Success)
-    } else {
-        Ok(ExitStatus::Failure)
     }
 }

@@ -1,25 +1,150 @@
 use std::fmt::Write;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
-use karva_cache::{CacheReader, generate_run_hash};
+use karva_cache::{AggregatedResults, CACHE_DIR, CacheReader, RunHash};
 use karva_cli::{OutputFormat, SubTestCommand};
 use karva_collector::ParallelCollector;
 use karva_logging::Printer;
 use karva_project::{Db, ProjectDatabase};
+use karva_time::format_duration;
+use karva_venv::venv_binary;
+
+use crate::partition::{Partition, partition_collected_tests};
+
+struct Worker {
+    id: usize,
+    child: Child,
+    start_time: Instant,
+}
+
+impl Worker {
+    fn new(id: usize, child: Child) -> Self {
+        Self {
+            id,
+            child,
+            start_time: Instant::now(),
+        }
+    }
+
+    fn duration(&self) -> Duration {
+        self.start_time.elapsed()
+    }
+}
+
+#[derive(Default)]
+struct WorkerManager {
+    workers: Vec<Worker>,
+}
+
+impl WorkerManager {
+    fn spawn(&mut self, worker_id: usize, child: Child) {
+        self.workers.push(Worker::new(worker_id, child));
+    }
+
+    fn wait_all(&mut self) -> usize {
+        let num_workers = self.workers.len();
+
+        tracing::info!(
+            workers = num_workers,
+            "All workers spawned, waiting for completion"
+        );
+
+        while !self.workers.is_empty() {
+            self.workers
+                .retain_mut(|worker| match worker.child.try_wait() {
+                    Ok(Some(status)) => {
+                        if status.success() {
+                            tracing::debug!(
+                                "Worker {} completed successfully in {}",
+                                worker.id,
+                                format_duration(worker.duration()),
+                            );
+                        } else {
+                            tracing::error!(
+                                "Worker {} exited with non-zero status {} in {}",
+                                worker.id,
+                                status.code().unwrap_or(-1),
+                                format_duration(worker.duration()),
+                            );
+                        }
+                        false
+                    }
+                    Ok(None) => true,
+                    Err(_) => false,
+                });
+        }
+
+        num_workers
+    }
+}
 
 pub struct ParallelTestConfig {
     pub num_workers: usize,
-    pub cache_dir: Utf8PathBuf,
 }
 
-/// Run tests in parallel using multiple karva core worker processes
+/// Spawn worker processes for each partition
+///
+/// Creates a worker process for each non-empty partition, passing the appropriate
+/// subset of tests and command-line arguments to each worker.
+fn spawn_workers(
+    db: &ProjectDatabase,
+    partitions: &[Partition],
+    cache_dir: &Utf8PathBuf,
+    run_hash: &RunHash,
+    args: &SubTestCommand,
+    printer: Printer,
+) -> Result<WorkerManager> {
+    let core_binary = find_karva_core_binary(&db.system().current_directory().to_path_buf())?;
+    let mut worker_manager = WorkerManager::default();
+
+    for (worker_id, partition) in partitions.iter().enumerate() {
+        if partition.tests().is_empty() {
+            tracing::debug!(worker_id = worker_id, "Skipping worker with no tests");
+            continue;
+        }
+
+        let mut cmd = Command::new(&core_binary);
+        cmd.arg("--cache-dir")
+            .arg(cache_dir)
+            .arg("--run-hash")
+            .arg(run_hash.inner())
+            .arg("--worker-id")
+            .arg(worker_id.to_string())
+            // Ensure python does not buffer output
+            .env("PYTHONUNBUFFERED", "1");
+
+        for path in partition.tests() {
+            cmd.arg(path);
+        }
+
+        cmd.args(args.into_cli_args());
+
+        let child = cmd
+            .stdout(printer.stream_for_details())
+            .stderr(printer.stream_for_details())
+            .spawn()
+            .context("Failed to spawn karva_core worker process")?;
+
+        tracing::debug!(
+            "Worker {} spawned with {} tests",
+            worker_id,
+            partition.tests().len()
+        );
+
+        worker_manager.spawn(worker_id, child);
+    }
+
+    Ok(worker_manager)
+}
+
 pub fn run_parallel_tests(
     db: &ProjectDatabase,
     config: &ParallelTestConfig,
     args: &SubTestCommand,
-    printer: &Printer,
+    printer: Printer,
 ) -> Result<bool> {
     let start_time = std::time::Instant::now();
 
@@ -36,118 +161,77 @@ pub fn run_parallel_tests(
 
     tracing::debug!(path_count = test_paths.len(), "Found test paths");
 
-    tracing::debug!("Collecting tests from discovered paths");
     let collector = ParallelCollector::new(
         db.system(),
         db.project().metadata(),
         db.project().settings(),
     );
+
     let collected = collector.collect_all(test_paths);
 
-    let test_paths = collected_to_test_paths(&collected);
+    tracing::debug!("Attempting to create {} workers", config.num_workers);
 
-    tracing::info!(test_count = test_paths.len(), "Collected tests");
+    let partitions = partition_collected_tests(&collected, config.num_workers);
 
-    let partitions = partition_tests(test_paths, config.num_workers);
+    let run_hash = RunHash::random();
 
-    let run_hash = generate_run_hash();
-
-    let core_binary = find_karva_core_binary()?;
+    let cache_dir = db.project().cwd().join(CACHE_DIR);
 
     tracing::info!(worker_count = partitions.len(), "Spawning worker processes");
-    let mut workers = Vec::new();
-    for (worker_id, paths) in partitions.iter().enumerate() {
-        if paths.is_empty() {
-            tracing::debug!(worker_id = worker_id, "Skipping worker with no tests");
-            continue;
-        }
 
-        let mut cmd = Command::new(&core_binary);
-        cmd.arg("--project-root")
-            .arg(db.project().cwd())
-            .arg("--cache-dir")
-            .arg(&config.cache_dir)
-            .arg("--run-hash")
-            .arg(&run_hash.0)
-            .arg("--worker-id")
-            .arg(worker_id.to_string());
+    let mut worker_manager = spawn_workers(db, &partitions, &cache_dir, &run_hash, args, printer)?;
 
-        if let Some(arg) = args.verbosity.level().cli_arg() {
-            cmd.arg(arg);
-        }
+    let num_workers = worker_manager.wait_all();
 
-        if args.fail_fast.is_some_and(|fail_fast| fail_fast) {
-            cmd.arg("--fail-fast");
-        }
+    let result = print_test_output(
+        printer,
+        start_time,
+        &cache_dir,
+        &run_hash,
+        num_workers,
+        args.output_format.as_ref(),
+    )?;
 
-        if args.show_output.is_some_and(|show_output| show_output) {
-            cmd.arg("-s");
-        }
+    Ok(result.stats.is_success() && result.discovery_diagnostics.is_empty())
+}
 
-        if let Some(output) = args.output_format {
-            cmd.arg("--output-format").arg(output.as_str());
-        }
+const KARVA_CORE_BINARY_NAME: &str = "karva-core";
 
-        if let Some(test_prefix) = args.test_prefix.as_ref() {
-            cmd.arg("--test-prefix").arg(test_prefix);
-        }
-
-        if let Some(config_file) = args.config_file.as_ref() {
-            cmd.arg("--config-file").arg(config_file);
-        }
-
-        if args.no_ignore.is_some_and(|no_ignore| no_ignore) {
-            cmd.arg("--no-ignore");
-        }
-
-        if args.no_progress.is_some_and(|no_progress| no_progress) {
-            cmd.arg("--no-progress");
-        }
-
-        for path in paths {
-            cmd.arg(path);
-        }
-
-        let child = cmd
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .context("Failed to spawn karva_core worker process")?;
-
-        tracing::debug!(worker_id = worker_id, pid = child.id(), "Worker spawned");
-        workers.push(child);
-    }
-
-    tracing::info!(
-        workers = workers.len(),
-        "All workers spawned, waiting for completion"
-    );
-
-    for (idx, worker) in workers.into_iter().enumerate() {
-        tracing::debug!(worker_id = idx, "Waiting for worker to complete");
-        let output = worker
-            .wait_with_output()
-            .expect("Failed to wait for worker process");
-
-        if output.status.success() {
-            tracing::debug!(worker_id = idx, "Worker completed successfully");
-        } else {
-            tracing::error!(
-                worker_id = idx,
-                exit_code = ?output.status.code(),
-                "Worker exited with non-zero status"
-            );
+/// Find the `karva-core` binary
+fn find_karva_core_binary(current_dir: &Utf8PathBuf) -> Result<Utf8PathBuf> {
+    if let Ok(path) = which::which(KARVA_CORE_BINARY_NAME) {
+        if let Ok(utf8_path) = Utf8PathBuf::try_from(path) {
+            tracing::debug!(path = %utf8_path, "Found binary in PATH");
+            return Ok(utf8_path);
         }
     }
 
-    tracing::debug!("All workers completed");
+    let venv_binary = venv_binary(KARVA_CORE_BINARY_NAME, current_dir);
 
-    let reader = CacheReader::new(&config.cache_dir, &run_hash)?;
-    let result = reader.aggregate_results(config.num_workers)?;
+    if let Some(venv_binary) = venv_binary {
+        if venv_binary.exists() {
+            return Ok(venv_binary);
+        }
+    }
+
+    anyhow::bail!("Could not find karva_core binary TODO")
+}
+
+/// Print test output
+fn print_test_output(
+    printer: Printer,
+    start_time: Instant,
+    cache_dir: &Utf8PathBuf,
+    run_hash: &RunHash,
+    num_workers: usize,
+    output_format: Option<&OutputFormat>,
+) -> Result<AggregatedResults> {
+    let reader = CacheReader::new(cache_dir, run_hash, num_workers)?;
+    let result = reader.aggregate_results()?;
 
     let mut stdout = printer.stream_for_details().lock();
 
-    let is_concise = matches!(args.output_format, Some(OutputFormat::Concise));
+    let is_concise = matches!(output_format, Some(OutputFormat::Concise));
 
     if (!result.diagnostics.is_empty() || !result.discovery_diagnostics.is_empty())
         && result.stats.total() > 0
@@ -187,119 +271,5 @@ pub fn run_parallel_tests(
 
     write!(result_stdout, "{}", result.stats.display(start_time))?;
 
-    Ok(result.stats.is_success())
-}
-
-/// Convert collected package to test path strings
-fn collected_to_test_paths(package: &karva_collector::CollectedPackage) -> Vec<String> {
-    let mut test_paths = Vec::new();
-
-    // Recursively collect test paths from the package
-    collect_test_paths_recursive(package, &mut test_paths);
-
-    test_paths
-}
-
-fn collect_test_paths_recursive(
-    package: &karva_collector::CollectedPackage,
-    test_paths: &mut Vec<String>,
-) {
-    // For each module in package
-    for module in package.modules.values() {
-        for test_fn_def in &module.test_function_defs {
-            test_paths.push(format!("{}::{}", module.path.path(), test_fn_def.name));
-        }
-    }
-
-    // Recurse into subpackages
-    for subpackage in package.packages.values() {
-        collect_test_paths_recursive(subpackage, test_paths);
-    }
-}
-
-/// Partition test paths into N groups using round-robin distribution
-fn partition_tests(test_paths: Vec<String>, num_workers: usize) -> Vec<Vec<String>> {
-    let mut partitions = vec![Vec::new(); num_workers];
-
-    for (i, path) in test_paths.into_iter().enumerate() {
-        partitions[i % num_workers].push(path);
-    }
-
-    partitions
-}
-
-const KARVA_CORE_BINARY_NAME: &str = "karva-core";
-
-/// Find the `karva_core` binary
-fn find_karva_core_binary() -> Result<Utf8PathBuf> {
-    tracing::debug!("Searching for karva-core binary");
-
-    // Option 1: Look in same directory as current executable (works for installed binaries and deps tests)
-    if let Ok(current_exe) = std::env::current_exe() {
-        tracing::trace!(current_exe = ?current_exe, "Current executable path");
-
-        if let Some(current_dir) = current_exe.parent() {
-            let core_path = current_dir.join(KARVA_CORE_BINARY_NAME);
-            tracing::trace!(path = ?core_path, "Checking same directory as executable");
-
-            if core_path.exists() {
-                if let Ok(path) = Utf8PathBuf::try_from(core_path) {
-                    tracing::debug!(path = %path, "Found binary in same directory as executable");
-                    return Ok(path);
-                }
-            }
-
-            // Also check if current exe is a test binary in target/debug/deps
-            // In that case, look in ../karva-core (one level up from deps)
-            if current_dir.ends_with("deps") {
-                tracing::trace!("Current exe is in deps directory, checking parent");
-                if let Some(target_dir) = current_dir.parent() {
-                    let core_path = target_dir.join(KARVA_CORE_BINARY_NAME);
-                    tracing::trace!(path = ?core_path, "Checking target directory");
-
-                    if core_path.exists() {
-                        if let Ok(path) = Utf8PathBuf::try_from(core_path) {
-                            tracing::debug!(path = %path, "Found binary in target directory");
-                            return Ok(path);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Option 2: Look in PATH
-    tracing::trace!("Searching PATH for karva-core");
-    if let Ok(path) = which::which(KARVA_CORE_BINARY_NAME) {
-        if let Ok(utf8_path) = Utf8PathBuf::try_from(path) {
-            tracing::debug!(path = %utf8_path, "Found binary in PATH");
-            return Ok(utf8_path);
-        }
-    }
-
-    // Option 3: Look in `.venv/bin/karva-core`
-    if let Ok(current_dir) = std::env::current_dir() {
-        let venv_path = current_dir
-            .join(".venv")
-            .join(if cfg!(windows) { "Scripts" } else { "bin" })
-            .join(if cfg!(windows) {
-                format!("{KARVA_CORE_BINARY_NAME}.exe")
-            } else {
-                KARVA_CORE_BINARY_NAME.to_string()
-            });
-
-        tracing::trace!(path = ?venv_path, "Checking venv directory");
-
-        if venv_path.exists() {
-            if let Ok(path) = Utf8PathBuf::try_from(venv_path) {
-                tracing::debug!(path = %path, "Found binary in venv");
-                return Ok(path);
-            }
-        }
-    }
-
-    tracing::error!("Could not find karva-core binary in any location");
-    anyhow::bail!(
-        "Could not find karva_core binary. Make sure it's in the same directory as karva or in your PATH."
-    )
+    Ok(result)
 }

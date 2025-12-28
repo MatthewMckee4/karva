@@ -459,10 +459,10 @@ fn test_stdout() {
     success: true
     exit_code: 0
     ----- stdout -----
+    Hello, world!
     test test_std_out_redirected::test_std_out_redirected ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
-    Hello, world!
 
     ----- stderr -----
     ");
@@ -471,10 +471,10 @@ fn test_stdout() {
     success: true
     exit_code: 0
     ----- stdout -----
+    Hello, world!
     test test_std_out_redirected::test_std_out_redirected ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
-    Hello, world!
 
     ----- stderr -----
     ");

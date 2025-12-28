@@ -63,4 +63,9 @@ impl DiscoveredModule {
     pub(crate) fn is_empty(&self) -> bool {
         self.test_functions.is_empty() && self.fixtures.is_empty()
     }
+
+    pub(crate) fn shrink(&mut self) {
+        self.test_functions
+            .sort_by_key(|function| function.stmt_function_def.range.start());
+    }
 }

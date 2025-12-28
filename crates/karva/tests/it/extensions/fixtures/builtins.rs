@@ -69,7 +69,7 @@ def test_setattr_undo(monkeypatch):
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -109,7 +109,7 @@ def test_setitem_undo(monkeypatch):
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -151,7 +151,7 @@ def test_delenv(monkeypatch):
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -191,7 +191,7 @@ def test_syspath_prepend_multiple(monkeypatch):
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -228,7 +228,7 @@ def test_delattr_undo(monkeypatch):
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -270,7 +270,7 @@ def test_context_manager_auto_undo():
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -300,7 +300,7 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----

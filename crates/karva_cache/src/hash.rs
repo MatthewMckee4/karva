@@ -1,21 +1,37 @@
+use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::models::RunHash;
+use serde::{Deserialize, Serialize};
 
-/// Generate a unique run hash for this test execution
-///
-/// Format: "run-{unix_timestamp}-{random_u32}"
-/// Example: "run-1703001234-a3f9c8d2"
-pub fn generate_run_hash() -> RunHash {
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("System time is before UNIX epoch")
-        .as_secs();
+/// A unique identifier for a test run
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct RunHash(String);
 
-    // Use thread-local random number for uniqueness
-    let random: u32 = rand::random();
+impl RunHash {
+    pub fn random() -> Self {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time is before UNIX epoch")
+            .as_secs();
 
-    RunHash(format!("run-{timestamp:x}-{random:x}"))
+        let random: u32 = rand::random();
+
+        Self(format!("run-{timestamp:x}-{random:x}"))
+    }
+
+    pub fn from_existing(hash: &str) -> Self {
+        Self(hash.to_string())
+    }
+
+    pub fn inner(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for RunHash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 #[cfg(test)]
@@ -24,17 +40,14 @@ mod tests {
 
     #[test]
     fn test_generate_run_hash() {
-        let hash1 = generate_run_hash();
-        let hash2 = generate_run_hash();
+        let hash1 = RunHash::random();
+        let hash2 = RunHash::random();
 
-        // Hashes should be different (very likely due to random component)
         assert_ne!(hash1, hash2);
 
-        // Should start with "run-"
         assert!(hash1.0.starts_with("run-"));
         assert!(hash2.0.starts_with("run-"));
 
-        // Should have the expected format
         let parts: Vec<&str> = hash1.0.split('-').collect();
         assert_eq!(parts.len(), 3);
         assert_eq!(parts[0], "run");

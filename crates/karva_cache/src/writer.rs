@@ -1,11 +1,11 @@
 use std::fs;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use camino::Utf8PathBuf;
 use karva_diagnostic::TestRunResult;
 use ruff_db::diagnostic::{DisplayDiagnosticConfig, DisplayDiagnostics, FileResolver};
 
-use crate::{DIAGNOSTICS_FILE, DISCOVER_DIAGNOSTICS_FILE, STATS_FILE, models::RunHash};
+use crate::{DIAGNOSTICS_FILE, DISCOVER_DIAGNOSTICS_FILE, RunHash, STATS_FILE, worker_folder};
 
 /// Writes test results to the cache directory
 ///
@@ -18,7 +18,7 @@ impl CacheWriter {
     pub fn new(cache_dir: &Utf8PathBuf, run_hash: &RunHash, worker_id: usize) -> Result<Self> {
         let worker_dir = cache_dir
             .join(run_hash.to_string())
-            .join(format!("worker-{worker_id}"));
+            .join(worker_folder(worker_id));
 
         fs::create_dir_all(&worker_dir)?;
 
@@ -44,11 +44,9 @@ impl CacheWriter {
         }
 
         let stats_path = self.worker_dir.join(STATS_FILE);
-        let json =
-            serde_json::to_string_pretty(result.stats()).context("Failed to serialize stats")?;
+        let json = serde_json::to_string_pretty(result.stats())?;
 
-        fs::write(&stats_path, json)
-            .context(format!("Failed to write stats file: {stats_path}"))?;
+        fs::write(&stats_path, json)?;
 
         Ok(())
     }

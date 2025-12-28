@@ -63,6 +63,10 @@ impl DiscoveredPackage {
     pub(crate) fn shrink(&mut self) {
         self.modules.retain(|_, module| !module.is_empty());
 
+        for module in self.modules.values_mut() {
+            module.shrink();
+        }
+
         if let Some(configuration_module) = self.configuration_module_path.as_ref() {
             if !self.modules.contains_key(configuration_module.path()) {
                 self.configuration_module_path = None;

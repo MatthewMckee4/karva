@@ -41,7 +41,7 @@ def test_something_else():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -86,7 +86,7 @@ def test_something_else():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -133,7 +133,7 @@ fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -178,7 +178,7 @@ fn test_auto_use_fixture_in_parent_module() {
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----

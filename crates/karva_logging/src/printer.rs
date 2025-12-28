@@ -135,3 +135,12 @@ impl std::fmt::Write for Stdout {
         }
     }
 }
+
+impl From<Stdout> for std::process::Stdio {
+    fn from(val: Stdout) -> Self {
+        match val.status {
+            StreamStatus::Enabled => Self::inherit(),
+            StreamStatus::Disabled => Self::null(),
+        }
+    }
+}

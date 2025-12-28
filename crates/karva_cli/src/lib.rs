@@ -137,6 +137,54 @@ pub struct SubTestCommand {
     pub verbosity: Verbosity,
 }
 
+impl SubTestCommand {
+    pub fn into_cli_args(&self) -> Vec<String> {
+        let mut args = Vec::new();
+
+        if let Some(arg) = self.verbosity.level().cli_arg() {
+            args.push(arg);
+        }
+
+        if self.fail_fast.is_some_and(|fail_fast| fail_fast) {
+            args.push("--fail-fast");
+        }
+
+        if self.show_output.is_some_and(|show_output| show_output) {
+            args.push("-s");
+        }
+
+        if let Some(output) = self.output_format {
+            args.push("--output-format");
+            args.push(output.as_str());
+        }
+
+        if let Some(test_prefix) = self.test_prefix.as_ref() {
+            args.push("--test-prefix");
+            args.push(test_prefix);
+        }
+
+        if let Some(config_file) = self.config_file.as_ref() {
+            args.push("--config-file");
+            args.push(config_file.as_str());
+        }
+
+        if self.no_ignore.is_some_and(|no_ignore| no_ignore) {
+            args.push("--no-ignore");
+        }
+
+        if self.no_progress.is_some_and(|no_progress| no_progress) {
+            args.push("--no-progress");
+        }
+
+        if let Some(color) = self.color {
+            args.push("--color");
+            args.push(color.as_str());
+        }
+
+        args.iter().map(ToString::to_string).collect()
+    }
+}
+
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Parser)]
 pub struct TestCommand {

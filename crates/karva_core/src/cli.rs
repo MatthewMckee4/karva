@@ -20,10 +20,6 @@ use crate::utils::current_python_version;
 #[derive(Parser)]
 #[command(name = "karva_core", about = "Karva test worker")]
 struct Args {
-    /// Project root directory
-    #[arg(long)]
-    project_root: Utf8PathBuf,
-
     /// Cache directory
     #[arg(long)]
     cache_dir: Utf8PathBuf,
@@ -109,7 +105,16 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     let _guard = setup_tracing(verbosity);
 
-    let cwd = args.project_root.clone();
+    let cwd = {
+        let cwd = std::env::current_dir().context("Failed to get the current working directory")?;
+        Utf8PathBuf::from_path_buf(cwd)
+                   .map_err(|path| {
+                       anyhow::anyhow!(
+                           "The current working directory `{}` contains non-Unicode characters. ty only supports Unicode paths.",
+                           path.display()
+                       )
+                   })?
+    };
 
     tracing::debug!(cwd = %cwd, "Working directory");
 
@@ -131,13 +136,18 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         ProjectMetadata::discover(system.current_directory(), &system, python_version)?
     };
 
+    // We have already checked the include paths in the main worker.
+    if let Some(src) = project_metadata.options.src.as_mut() {
+        src.include = None;
+    }
+
     let project_options_overrides =
         ProjectOptionsOverrides::new(config_file, args.sub_command.into_options());
     project_metadata.apply_overrides(&project_options_overrides);
 
     let db = ProjectDatabase::new(project_metadata, system)?;
 
-    let run_hash = RunHash(args.run_hash.clone());
+    let run_hash = RunHash::from_existing(&args.run_hash);
 
     let cache_writer = CacheWriter::new(&args.cache_dir, &run_hash, args.worker_id)?;
 

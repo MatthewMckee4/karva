@@ -238,8 +238,6 @@ impl Normalizer {
         module: &DiscoveredModule,
         parents: &[&DiscoveredPackage],
     ) -> NormalizedModule {
-        tracing::debug!("Normalizing file: {}", module.path());
-
         let module_auto_use_fixtures =
             self.get_normalized_auto_use_fixtures(py, FixtureScope::Module, parents, module);
 

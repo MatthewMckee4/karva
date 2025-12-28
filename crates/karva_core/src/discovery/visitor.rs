@@ -128,11 +128,6 @@ pub fn discover(
     test_function_defs: Vec<Arc<StmtFunctionDef>>,
     fixture_function_defs: Vec<Arc<StmtFunctionDef>>,
 ) {
-    tracing::info!(
-        "Discovering test functions and fixtures in module {}",
-        module.name()
-    );
-
     let mut visitor = FunctionDefinitionVisitor::new(py, context, module);
 
     for test_function_def in test_function_defs {

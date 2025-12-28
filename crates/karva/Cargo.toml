@@ -16,7 +16,6 @@ name = "karva"
 path = "src/main.rs"
 
 [dependencies]
-karva_cache = { workspace = true }
 karva_cli = { workspace = true }
 karva_core = { workspace = true }
 karva_logging = { workspace = true }

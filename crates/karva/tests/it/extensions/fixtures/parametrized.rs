@@ -121,7 +121,7 @@ fn test_parametrized_fixture_module_scope(#[values("pytest", "karva")] framework
     ]);
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -171,7 +171,7 @@ fn test_parametrized_fixture_with_generator(#[values("pytest", "karva")] framewo
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -356,7 +356,7 @@ fn test_parametrized_generator_fixture_finalizer_order(
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -481,7 +481,7 @@ fn test_parametrized_fixture_finalizer_with_state(#[values("pytest", "karva")] f
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -637,7 +637,7 @@ fn test_complex_parametrized_generator_fixture_finalizer_order(
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: true
         exit_code: 0
         ----- stdout -----

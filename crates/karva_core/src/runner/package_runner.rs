@@ -164,7 +164,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
         let full_test_name = QualifiedTestName::new(name.clone(), Some(full_test_name));
 
-        tracing::info!("Running test `{}`", full_test_name);
+        tracing::debug!("Running test `{}`", full_test_name);
 
         let test_result = if test_arguments.is_empty() {
             function.call0(py)

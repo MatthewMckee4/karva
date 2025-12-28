@@ -1166,7 +1166,6 @@ dependencies = [
  "dunce",
  "insta",
  "insta-cmd",
- "karva_cache",
  "karva_cli",
  "karva_core",
  "karva_logging",
@@ -1314,6 +1313,7 @@ dependencies = [
  "karva_logging",
  "karva_python_semantic",
  "karva_system",
+ "karva_time",
  "pyo3",
  "ruff_db",
  "ruff_python_ast",
@@ -1448,6 +1448,8 @@ dependencies = [
  "karva_project",
  "karva_python_semantic",
  "karva_system",
+ "karva_time",
+ "karva_venv",
  "pyo3",
  "regex",
  "rstest",
@@ -1479,6 +1481,17 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
+]
+
+[[package]]
+name = "karva_time"
+version = "0.1.0"
+
+[[package]]
+name = "karva_venv"
+version = "0.1.0"
+dependencies = [
+ "camino",
 ]
 
 [[package]]

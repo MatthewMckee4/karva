@@ -327,7 +327,7 @@ def test_normal():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
