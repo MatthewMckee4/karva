@@ -1196,10 +1196,13 @@ dependencies = [
  "camino",
  "codspeed-criterion-compat",
  "codspeed-divan-compat",
+ "karva_cli",
  "karva_core",
+ "karva_logging",
  "karva_metadata",
  "karva_project",
  "karva_projects",
+ "karva_runner",
  "karva_system",
 ]
 

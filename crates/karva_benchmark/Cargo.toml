@@ -17,6 +17,9 @@ karva_metadata = { workspace = true }
 karva_project = { workspace = true }
 karva_projects = { workspace = true }
 karva_system = { workspace = true }
+karva_runner = { workspace = true }
+karva_logging = { workspace = true }
+karva_cli = { workspace = true }
 
 anyhow = { workspace = true }
 camino = { workspace = true }
