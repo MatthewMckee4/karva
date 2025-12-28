@@ -5,7 +5,8 @@
 #     "numpy",
 # ]
 # ///
-
+#
+# We hardcode these values from running the commands ourselves.
 
 from pathlib import Path
 
