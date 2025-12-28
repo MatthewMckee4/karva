@@ -1,9 +1,10 @@
 use std::sync::{Arc, Mutex};
 
+use karva_diagnostic::{IndividualTestResultKind, Reporter, TestRunResult};
 use karva_project::{Db, Project};
+use karva_python_semantic::QualifiedTestName;
 
 use crate::diagnostic::{DiagnosticGuardBuilder, DiagnosticType};
-use crate::{IndividualTestResultKind, Reporter, TestRunResult};
 
 pub struct Context<'db, 'rep> {
     db: &'db dyn Db,
@@ -38,7 +39,7 @@ impl<'db, 'rep> Context<'db, 'rep> {
 
     pub fn register_test_case_result(
         &self,
-        test_case_name: &str,
+        test_case_name: &QualifiedTestName,
         test_result: IndividualTestResultKind,
     ) -> bool {
         let result = match &test_result {

@@ -1,9 +1,9 @@
 use camino::Utf8PathBuf;
+use karva_python_semantic::ModulePath;
 use ruff_source_file::{SourceFile, SourceFileBuilder};
 
 use crate::discovery::TestFunction;
 use crate::extensions::fixtures::Fixture;
-use crate::name::ModulePath;
 
 /// A module represents a single python file.
 #[derive(Debug)]

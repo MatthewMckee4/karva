@@ -1,0 +1,26 @@
+[package]
+name = "karva_diagnostic"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+karva_system = { workspace = true }
+karva_python_semantic = { workspace = true }
+karva_verbosity = { workspace = true }
+
+camino = { workspace = true }
+pyo3 = { workspace = true }
+ruff_db = { workspace = true }
+ruff_python_ast = { workspace = true }
+ruff_source_file = { workspace = true }
+colored = { workspace = true }
+ruff_text_size = { workspace = true }
+
+[lints]
+workspace = true

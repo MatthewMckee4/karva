@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use camino::Utf8Path;
-use karva_project::{Db, ProjectSettings, System};
+use karva_metadata::ProjectSettings;
+use karva_system::System;
 use pyo3::prelude::*;
 use pyo3::types::PyAnyMethods;
 use pyo3::{PyResult, Python};
@@ -91,12 +92,12 @@ fn restore_python_output<'py>(py: Python<'py>, null_file: &Bound<'py, PyAny>) ->
 }
 
 /// A wrapper around `Python::attach` so we can manage the stdout and stderr redirection.
-pub(crate) fn attach_with_project<F, R>(db: &dyn Db, f: F) -> R
+pub(crate) fn attach_with_project<F, R>(settings: &ProjectSettings, f: F) -> R
 where
     F: for<'py> FnOnce(Python<'py>) -> R,
 {
     attach(|py| {
-        let null_file = redirect_python_output(py, db.project().settings());
+        let null_file = redirect_python_output(py, settings);
         let result = f(py);
         if let Ok(Some(null_file)) = null_file {
             let _ = restore_python_output(py, &null_file);

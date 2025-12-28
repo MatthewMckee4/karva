@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
+use karva_python_semantic::{ModulePath, QualifiedFunctionName};
 use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
-use ruff_python_ast::{Expr, StmtFunctionDef};
+use ruff_python_ast::StmtFunctionDef;
 
 mod builtins;
 mod finalizer;
@@ -25,7 +26,6 @@ use crate::extensions::fixtures::python::InvalidFixtureError;
 use crate::extensions::fixtures::scope::fixture_scope;
 use crate::extensions::fixtures::utils::handle_custom_fixture_params;
 use crate::extensions::tags::Parametrization;
-use crate::{ModulePath, QualifiedFunctionName};
 
 #[derive(Clone)]
 pub struct Fixture {
@@ -259,21 +259,6 @@ impl std::fmt::Debug for Fixture {
             self.scope(),
             self.auto_use()
         )
-    }
-}
-
-pub fn is_fixture_function(val: &StmtFunctionDef) -> bool {
-    val.decorator_list
-        .iter()
-        .any(|decorator| is_fixture(&decorator.expression))
-}
-
-fn is_fixture(expr: &Expr) -> bool {
-    match expr {
-        Expr::Name(name) => name.id == "fixture",
-        Expr::Attribute(attr) => attr.attr.id == "fixture",
-        Expr::Call(call) => is_fixture(call.func.as_ref()),
-        _ => false,
     }
 }
 

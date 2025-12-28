@@ -9,11 +9,11 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
 use karva_core::utils::current_python_version;
-use karva_core::{DummyReporter, Printer, Reporter, TestCaseReporter, TestRunResult, TestRunner};
-use karva_project::{
-    Db, OsSystem, ProjectDatabase, ProjectMetadata, ProjectOptionsOverrides, System,
-    VerbosityLevel, absolute,
-};
+use karva_core::{DummyReporter, Reporter, TestCaseReporter, TestRunResult, TestRunner};
+use karva_metadata::{ProjectMetadata, ProjectOptionsOverrides};
+use karva_project::{Db, ProjectDatabase};
+use karva_system::{OsSystem, System, absolute};
+use karva_verbosity::{Printer, VerbosityLevel};
 use ruff_db::diagnostic::{DiagnosticFormat, DisplayDiagnosticConfig, DisplayDiagnostics};
 
 use crate::logging::setup_tracing;
@@ -73,11 +73,13 @@ pub(crate) fn version() -> Result<()> {
 pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let verbosity = args.verbosity.level();
 
-    set_colored_override(args.color);
+    set_colored_override(args.sub_command.color);
 
-    let printer = Printer::new(verbosity, args.no_progress.unwrap_or(false));
+    let printer = Printer::new(verbosity, args.sub_command.no_progress.unwrap_or(false));
 
     let _guard = setup_tracing(verbosity);
+
+    tracing::info!("Starting test execution");
 
     let cwd = {
         let cwd = std::env::current_dir().context("Failed to get the current working directory")?;
@@ -90,22 +92,44 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
                 })?
     };
 
+    tracing::debug!(cwd = %cwd, "Working directory set");
+
     let python_version = current_python_version();
+    tracing::debug!(version = %python_version, "Detected Python version");
 
     let system = OsSystem::new(&cwd);
 
-    let config_file = args.config_file.as_ref().map(|path| absolute(path, &cwd));
+    let config_file = args.sub_command.config_file.as_ref().map(|path| absolute(path, &cwd));
 
     let mut project_metadata = match &config_file {
         Some(config_file) => {
+            tracing::info!(config_file = %config_file, "Loading project metadata from config file");
             ProjectMetadata::from_config_file(config_file.clone(), &system, python_version)?
         }
-        None => ProjectMetadata::discover(system.current_directory(), &system, python_version)?,
+        None => {
+            tracing::info!("Discovering project metadata");
+            ProjectMetadata::discover(system.current_directory(), &system, python_version)?
+        }
     };
+
+    // Extract values before consuming args
+    let no_parallel = args.no_parallel.unwrap_or(false);
+    let num_workers = args.num_workers;
+    let fail_fast = args.sub_command.fail_fast.unwrap_or(false);
+    let show_output = args.sub_command.show_output.unwrap_or(false);
+
+    tracing::debug!(
+        no_parallel = no_parallel,
+        num_workers = ?num_workers,
+        fail_fast = fail_fast,
+        show_output = show_output,
+        "Test execution configuration"
+    );
 
     let project_options_overrides = ProjectOptionsOverrides::new(config_file, args.into_options());
     project_metadata.apply_overrides(&project_options_overrides);
 
+    tracing::debug!("Initializing project database");
     let mut db = ProjectDatabase::new(project_metadata, system)?;
 
     db.project_mut()
@@ -116,15 +140,49 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         std::process::exit(0);
     })?;
 
-    let reporter: Box<dyn Reporter> = if verbosity.is_quiet() {
-        Box::new(DummyReporter)
+    let start_time = Instant::now();
+    let worker_count = if no_parallel {
+        1
     } else {
-        Box::new(TestCaseReporter::new(printer))
+        num_workers.unwrap_or_else(|| ruff_db::max_parallelism().get())
     };
 
-    let start_time = Instant::now();
+    tracing::info!(
+        worker_count = worker_count,
+        parallel = worker_count > 1,
+        "Determined worker count"
+    );
 
-    let result = db.test_with_reporter(&*reporter);
+    let result = if worker_count > 1 {
+        // Parallel execution
+        tracing::info!(workers = worker_count, "Starting parallel test execution");
+        let cache_dir = db.project().cwd().join(".karva-cache");
+        tracing::debug!(cache_dir = %cache_dir, "Cache directory");
+
+        let config = karva_runner::ParallelTestConfig {
+            num_workers: worker_count,
+            cache_dir,
+            fail_fast,
+            show_output,
+        };
+        karva_runner::run_parallel_tests(&db, config)?
+    } else {
+        // Sequential execution
+        tracing::info!("Starting sequential test execution");
+        let reporter: Box<dyn Reporter> = if verbosity.is_quiet() {
+            Box::new(DummyReporter)
+        } else {
+            Box::new(TestCaseReporter::new(printer))
+        };
+        db.test_with_reporter(&*reporter)
+    };
+
+    tracing::info!(
+        passed = result.stats().passed(),
+        failed = result.stats().failed(),
+        skipped = result.stats().skipped(),
+        "Test execution completed"
+    );
 
     display_test_output(&db, &result, printer, start_time)
 }

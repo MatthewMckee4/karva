@@ -14,6 +14,7 @@ license = { workspace = true }
 [dependencies]
 karva_project = { workspace = true }
 karva_projects = { workspace = true }
+karva_system = { workspace = true }
 
 anyhow = { workspace = true }
 camino = { workspace = true }

@@ -12,7 +12,7 @@ license = { workspace = true }
 
 [dependencies]
 karva_cli = { workspace = true }
-karva_project = { workspace = true }
+karva_metadata = { workspace = true }
 
 anyhow = { workspace = true }
 camino = { workspace = true }

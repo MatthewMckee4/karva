@@ -1,0 +1,26 @@
+[package]
+name = "karva_collector"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+karva_python_semantic = { workspace = true }
+karva_system = { workspace = true }
+karva_static = { workspace = true }
+karva_metadata = { workspace = true }
+
+ruff_python_ast = { workspace = true }
+ruff_python_parser = { workspace = true }
+camino = { workspace = true }
+crossbeam-channel = { workspace = true }
+ignore = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true

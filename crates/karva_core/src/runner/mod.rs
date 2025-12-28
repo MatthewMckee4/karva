@@ -1,9 +1,10 @@
+use karva_diagnostic::{DummyReporter, Reporter, TestRunResult};
 use karva_project::{Db, ProjectDatabase};
 
+use crate::Context;
 use crate::discovery::StandardDiscoverer;
 use crate::normalize::Normalizer;
 use crate::utils::attach_with_project;
-use crate::{Context, DummyReporter, Reporter, TestRunResult};
 
 mod finalizer_cache;
 mod fixture_cache;
@@ -30,7 +31,7 @@ impl<'db> StandardTestRunner<'db> {
     }
 
     fn test_impl(&self, reporter: &dyn Reporter) -> TestRunResult {
-        attach_with_project(self.db, |py| {
+        attach_with_project(self.db.project().settings(), |py| {
             let context = Context::new(self.db, reporter);
 
             let session = StandardDiscoverer::new(&context).discover_with_py(py);

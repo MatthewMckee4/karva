@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::BufWriter;
 
 use colored::Colorize;
-use karva_project::VerbosityLevel;
+use karva_verbosity::VerbosityLevel;
 use tracing::{Event, Subscriber};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;

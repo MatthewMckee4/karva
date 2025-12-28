@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
+use karva_diagnostic::IndividualTestResultKind;
+use karva_python_semantic::{FunctionKind, QualifiedTestName};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyIterator};
 
+use crate::Context;
 use crate::diagnostic::{
     report_fixture_failure, report_missing_fixtures, report_test_failure,
     report_test_pass_on_expect_failure,
@@ -16,7 +19,6 @@ use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
 use crate::normalize::{NormalizedModule, NormalizedPackage, NormalizedTest};
 use crate::runner::{FinalizerCache, FixtureCache};
 use crate::utils::{full_test_name, source_file};
-use crate::{Context, FunctionKind, IndividualTestResultKind};
 
 /// A struct that is used to execute tests within a package.
 ///
@@ -127,7 +129,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
         if let (true, reason) = tags.should_skip() {
             return self.context.register_test_case_result(
-                &name.to_string(),
+                &QualifiedTestName::new(name, None),
                 IndividualTestResultKind::Skipped { reason },
             );
         }
@@ -159,6 +161,8 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         }
 
         let full_test_name = full_test_name(py, name.to_string(), &test_arguments);
+
+        let full_test_name = QualifiedTestName::new(name.clone(), Some(full_test_name));
 
         tracing::info!("Running test `{}`", full_test_name);
 
