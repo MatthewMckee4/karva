@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use camino::Utf8PathBuf;
 use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -18,7 +17,7 @@ pub struct BuiltInFixture {
     /// Pre-computed value for the built-in fixture
     pub(crate) py_value: Py<PyAny>,
     /// Normalized dependencies (already expanded for their params)
-    pub(crate) dependencies: Arc<Vec<NormalizedFixture>>,
+    pub(crate) dependencies: Vec<Arc<NormalizedFixture>>,
     /// Fixture scope
     pub(crate) scope: FixtureScope,
     /// Optional finalizer to call after the fixture is used
@@ -33,7 +32,7 @@ pub struct UserDefinedFixture {
     /// The specific parameter value for this variant (if parametrized)
     pub(crate) param: Option<Parametrization>,
     /// Normalized dependencies (already expanded for their params)
-    pub(crate) dependencies: Arc<Vec<NormalizedFixture>>,
+    pub(crate) dependencies: Vec<Arc<NormalizedFixture>>,
     /// Fixture scope
     pub(crate) scope: FixtureScope,
     /// If this fixture is a generator
@@ -42,12 +41,6 @@ pub struct UserDefinedFixture {
     pub(crate) py_function: Py<PyAny>,
     /// The function definition for this fixture
     pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
-}
-
-impl UserDefinedFixture {
-    pub(crate) const fn module_path(&self) -> &Utf8PathBuf {
-        self.name.module_path().path()
-    }
 }
 
 /// A normalized fixture represents a concrete variant of a fixture after parametrization.
@@ -66,7 +59,7 @@ impl NormalizedFixture {
         Self::BuiltIn(BuiltInFixture {
             name,
             py_value: value,
-            dependencies: Arc::new(vec![]),
+            dependencies: vec![],
             scope: FixtureScope::Function,
             finalizer: None,
         })
@@ -81,7 +74,7 @@ impl NormalizedFixture {
         Self::BuiltIn(BuiltInFixture {
             name,
             py_value: value,
-            dependencies: Arc::new(vec![]),
+            dependencies: vec![],
             scope: FixtureScope::Function,
             finalizer: Some(finalizer),
         })
@@ -104,7 +97,7 @@ impl NormalizedFixture {
     }
 
     /// Returns the fixture dependencies
-    pub(crate) fn dependencies(&self) -> &[Self] {
+    pub(crate) fn dependencies(&self) -> &Vec<Arc<Self>> {
         match self {
             Self::BuiltIn(fixture) => &fixture.dependencies,
             Self::UserDefined(fixture) => &fixture.dependencies,

@@ -51,7 +51,7 @@ pub struct Normalizer {
     /// Cache for fixtures.
     ///
     /// Normalizing fixtures can sometimes be expensive, so we cache the results.
-    fixture_cache: HashMap<String, Arc<Vec<NormalizedFixture>>>,
+    fixture_cache: HashMap<String, Vec<Arc<NormalizedFixture>>>,
 }
 
 impl Normalizer {
@@ -79,11 +79,11 @@ impl Normalizer {
         fixture: &Fixture,
         parents: &[&DiscoveredPackage],
         module: &DiscoveredModule,
-    ) -> Vec<NormalizedFixture> {
+    ) -> Vec<Arc<NormalizedFixture>> {
         let cache_key = fixture.name().to_string();
 
         if let Some(cached) = self.fixture_cache.get(&cache_key) {
-            return (**cached).clone();
+            return cached.clone();
         }
 
         // Get all required fixtures (dependencies)
@@ -115,7 +115,6 @@ impl Normalizer {
         };
 
         for dependent_fixtures in normalized_dependent_fixtures {
-            let dependent_fixtures = Arc::new(dependent_fixtures);
             for param in &param_list {
                 let normalized = NormalizedFixture::UserDefined(UserDefinedFixture {
                     name: fixture.name().clone(),
@@ -127,16 +126,13 @@ impl Normalizer {
                     stmt_function_def: fixture.stmt_function_def().clone(),
                 });
 
-                result.push(normalized);
+                result.push(Arc::new(normalized));
             }
         }
 
-        let result_arc = Arc::new(result);
+        self.fixture_cache.insert(cache_key, result.clone());
 
-        self.fixture_cache
-            .insert(cache_key, Arc::clone(&result_arc));
-
-        Arc::try_unwrap(result_arc).unwrap_or_else(|arc| (*arc).clone())
+        result
     }
 
     /// Normalizes a test function, handling parametrization and fixture dependencies.
@@ -170,14 +166,14 @@ impl Normalizer {
             self.get_dependent_fixtures(py, None, &regular_fixture_names, parents, module);
 
         // Normalize use_fixtures
-        let mut normalized_use_fixtures: Vec<Vec<NormalizedFixture>> = Vec::new();
+        let mut normalized_use_fixtures = Vec::new();
 
         for dep_name in &use_fixture_names {
             // Check for builtin fixtures first
             if let Some(builtin_fixture) =
                 crate::extensions::fixtures::get_builtin_fixture(py, dep_name)
             {
-                normalized_use_fixtures.push(vec![builtin_fixture]);
+                normalized_use_fixtures.push(vec![Arc::new(builtin_fixture)]);
             } else if let Some(fixture) = find_fixture(None, dep_name, parents, module) {
                 let normalized = self.normalize_fixture(py, fixture, parents, module);
                 if !normalized.is_empty() {
@@ -195,16 +191,16 @@ impl Normalizer {
 
         let mut result = Vec::new();
 
-        let dep_combinations = cartesian_product(dependent_fixtures);
+        let dep_combinations: Vec<Vec<Arc<NormalizedFixture>>> =
+            cartesian_product(dependent_fixtures);
 
-        let use_fixture_combinations = cartesian_product(normalized_use_fixtures);
+        let use_fixture_combinations: Vec<Vec<Arc<NormalizedFixture>>> =
+            cartesian_product(normalized_use_fixtures);
 
-        let auto_use_fixtures_arc = Arc::new(function_auto_use_fixtures);
+        let auto_use_fixtures_arc: Vec<Arc<NormalizedFixture>> = function_auto_use_fixtures;
 
         for dep_combination in dep_combinations {
-            let dep_combination_arc = Arc::new(dep_combination);
             for use_fixture_combination in &use_fixture_combinations {
-                let use_fixture_combination_arc = Arc::new(use_fixture_combination.clone());
                 for ParametrizationArgs {
                     values: parametrize_values,
                     tags,
@@ -216,9 +212,9 @@ impl Normalizer {
                     let normalized = NormalizedTest {
                         name: test_function.name.clone(),
                         params: parametrize_values,
-                        fixture_dependencies: Arc::clone(&dep_combination_arc),
-                        use_fixture_dependencies: Arc::clone(&use_fixture_combination_arc),
-                        auto_use_fixtures: Arc::clone(&auto_use_fixtures_arc),
+                        fixture_dependencies: dep_combination.clone(),
+                        use_fixture_dependencies: use_fixture_combination.clone(),
+                        auto_use_fixtures: auto_use_fixtures_arc.clone(),
                         function: test_function.py_function.clone(),
                         tags: new_tags,
                         stmt_function_def: test_function.stmt_function_def.clone(),
@@ -251,7 +247,7 @@ impl Normalizer {
 
         NormalizedModule {
             test_functions: normalized_test_functions,
-            auto_use_fixtures: Arc::new(module_auto_use_fixtures),
+            auto_use_fixtures: module_auto_use_fixtures,
         }
     }
 
@@ -285,7 +281,7 @@ impl Normalizer {
         NormalizedPackage {
             modules,
             packages,
-            auto_use_fixtures: Arc::new(package_auto_use_fixtures),
+            auto_use_fixtures: package_auto_use_fixtures,
         }
     }
 
@@ -295,7 +291,7 @@ impl Normalizer {
         scope: FixtureScope,
         parents: &'a [&'a DiscoveredPackage],
         current: &'a dyn HasFixtures<'a>,
-    ) -> Vec<NormalizedFixture> {
+    ) -> Vec<Arc<NormalizedFixture>> {
         let auto_use_fixtures = get_auto_use_fixtures(parents, current, scope);
 
         let mut normalized_auto_use_fixtures = Vec::new();
@@ -307,6 +303,7 @@ impl Normalizer {
         for fixture in auto_use_fixtures {
             let normalized_fixture =
                 self.normalize_fixture(py, fixture, parents, configuration_module);
+
             normalized_auto_use_fixtures.extend(normalized_fixture);
         }
 
@@ -320,12 +317,12 @@ impl Normalizer {
         fixture_names: &[String],
         parents: &'a [&'a DiscoveredPackage],
         current: &'a DiscoveredModule,
-    ) -> Vec<Vec<NormalizedFixture>> {
+    ) -> Vec<Vec<Arc<NormalizedFixture>>> {
         let mut normalized_fixtures = Vec::new();
 
         for dep_name in fixture_names {
             if let Some(builtin_fixture) = get_builtin_fixture(py, dep_name) {
-                normalized_fixtures.push(vec![builtin_fixture]);
+                normalized_fixtures.push(vec![Arc::new(builtin_fixture)]);
             } else if let Some(fixture) = find_fixture(current_fixture, dep_name, parents, current)
             {
                 let normalized = self.normalize_fixture(py, fixture, parents, current);

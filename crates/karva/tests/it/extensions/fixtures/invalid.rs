@@ -119,26 +119,6 @@ fn test_fixture_fails_to_run() {
 
     diagnostics:
 
-    error[fixture-failure]: Fixture `failing_fixture` failed
-     --> test.py:5:5
-      |
-    4 | @fixture
-    5 | def failing_fixture():
-      |     ^^^^^^^^^^^^^^^
-    6 |     raise Exception('Fixture failed')
-      |
-    info: Test failed here
-     --> test.py:6:5
-      |
-    4 | @fixture
-    5 | def failing_fixture():
-    6 |     raise Exception('Fixture failed')
-      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    7 |
-    8 | def test_failing_fixture(failing_fixture):
-      |
-    info: Fixture failed
-
     error[missing-fixtures]: Test `test_failing_fixture` has missing fixtures
      --> test.py:8:5
       |
@@ -149,6 +129,17 @@ fn test_fixture_fails_to_run() {
     9 |     pass
       |
     info: Missing fixtures: `failing_fixture`
+    info: Fixture `failing_fixture` failed here
+     --> test.py:6:5
+      |
+    4 | @fixture
+    5 | def failing_fixture():
+    6 |     raise Exception('Fixture failed')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    7 |
+    8 | def test_failing_fixture(failing_fixture):
+      |
+    info: Fixture failed
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -181,16 +172,6 @@ fn test_fixture_missing_fixtures() {
 
     diagnostics:
 
-    error[missing-fixtures]: Fixture `failing_fixture` has missing fixtures
-     --> test.py:5:5
-      |
-    4 | @fixture
-    5 | def failing_fixture(missing_fixture):
-      |     ^^^^^^^^^^^^^^^
-    6 |     return 1
-      |
-    info: Missing fixtures: `missing_fixture`
-
     error[missing-fixtures]: Test `test_failing_fixture` has missing fixtures
      --> test.py:8:5
       |
@@ -201,6 +182,7 @@ fn test_fixture_missing_fixtures() {
     9 |     pass
       |
     info: Missing fixtures: `failing_fixture`
+    info: failing_fixture() missing 1 required positional argument: 'missing_fixture'
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -281,26 +263,6 @@ fn test_failing_yield_fixture() {
 
     diagnostics:
 
-    error[fixture-failure]: Fixture `fixture` failed
-     --> test.py:5:5
-      |
-    4 | @karva.fixture
-    5 | def fixture():
-      |     ^^^^^^^
-    6 |     def foo():
-    7 |         raise ValueError('foo')
-      |
-    info: Test failed here
-     --> test.py:7:9
-      |
-    5 | def fixture():
-    6 |     def foo():
-    7 |         raise ValueError('foo')
-      |         ^^^^^^^^^^^^^^^^^^^^^^^
-    8 |     yield foo()
-      |
-    info: foo
-
     error[missing-fixtures]: Test `test_failing_fixture` has missing fixtures
       --> test.py:10:5
        |
@@ -311,6 +273,16 @@ fn test_failing_yield_fixture() {
     11 |     assert True
        |
     info: Missing fixtures: `fixture`
+    info: Fixture `fixture` failed here
+     --> test.py:7:9
+      |
+    5 | def fixture():
+    6 |     def foo():
+    7 |         raise ValueError('foo')
+      |         ^^^^^^^^^^^^^^^^^^^^^^^
+    8 |     yield foo()
+      |
+    info: foo
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 

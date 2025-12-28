@@ -12,13 +12,11 @@ pub struct NormalizedPackage {
 
     pub(crate) packages: HashMap<Utf8PathBuf, Self>,
 
-    pub(crate) auto_use_fixtures: Arc<Vec<NormalizedFixture>>,
+    pub(crate) auto_use_fixtures: Vec<Arc<NormalizedFixture>>,
 }
 
 impl NormalizedPackage {
-    pub(crate) fn extend_auto_use_fixtures(&mut self, fixtures: Vec<NormalizedFixture>) {
-        let mut combined = (*self.auto_use_fixtures).clone();
-        combined.extend(fixtures);
-        self.auto_use_fixtures = Arc::new(combined);
+    pub(crate) fn extend_auto_use_fixtures(&mut self, fixtures: Vec<Arc<NormalizedFixture>>) {
+        self.auto_use_fixtures.extend(fixtures);
     }
 }

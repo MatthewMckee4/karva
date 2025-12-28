@@ -7,5 +7,5 @@ use crate::normalize::models::NormalizedTest;
 pub struct NormalizedModule {
     pub(crate) test_functions: Vec<NormalizedTest>,
 
-    pub(crate) auto_use_fixtures: Arc<Vec<NormalizedFixture>>,
+    pub(crate) auto_use_fixtures: Vec<Arc<NormalizedFixture>>,
 }

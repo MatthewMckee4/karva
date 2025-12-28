@@ -20,6 +20,7 @@ mod metadata;
 
 pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
 
+use crate::runner::FixtureCallError;
 use crate::utils::truncate_string;
 use crate::{Context, declare_diagnostic_type};
 
@@ -166,12 +167,39 @@ pub fn report_invalid_fixture_finalizer(
     diagnostic.info(reason);
 }
 
+pub fn report_fixture_failure(context: &Context, py: Python, error: FixtureCallError) {
+    let FixtureCallError {
+        fixture_name,
+        error,
+        stmt_function_def,
+        source_file,
+        arguments,
+    } = error;
+
+    let builder = context.report_diagnostic(&FIXTURE_FAILURE);
+
+    let mut diagnostic = builder.into_diagnostic(format!("Fixture `{fixture_name}` failed"));
+
+    handle_failed_function_call(
+        context,
+        &mut diagnostic,
+        py,
+        source_file,
+        &stmt_function_def,
+        &arguments,
+        FunctionKind::Fixture,
+        &error,
+    );
+}
+
 pub fn report_missing_fixtures(
     context: &Context,
+    py: Python,
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
     missing_fixtures: &[String],
     function_kind: FunctionKind,
+    fixture_call_errors: Vec<FixtureCallError>,
 ) {
     let builder = context.report_diagnostic(&MISSING_FIXTURES);
 
@@ -198,30 +226,37 @@ pub fn report_missing_fixtures(
         function_kind.capitalised(),
         stmt_function_def.name,
     ));
-}
 
-pub fn report_fixture_failure(
-    context: &Context,
-    py: Python,
-    source_file: SourceFile,
-    stmt_function_def: &StmtFunctionDef,
-    arguments: &HashMap<String, Py<PyAny>>,
-    error: &PyErr,
-) {
-    let builder = context.report_diagnostic(&FIXTURE_FAILURE);
-
-    let mut diagnostic =
-        builder.into_diagnostic(format!("Fixture `{}` failed", stmt_function_def.name));
-
-    handle_failed_function_call(
-        context,
-        &mut diagnostic,
-        py,
-        source_file,
-        stmt_function_def,
-        arguments,
+    for FixtureCallError {
         error,
-    );
+        fixture_name,
+        ..
+    } in fixture_call_errors
+    {
+        if let Some(Traceback {
+            lines: _,
+            error_source_file,
+            location,
+        }) = Traceback::from_error(py, context.db().system(), &error)
+        {
+            let mut sub = SubDiagnostic::new(
+                SubDiagnosticSeverity::Info,
+                format!("Fixture `{fixture_name}` failed here"),
+            );
+
+            let secondary_span = Span::from(error_source_file).with_range(location);
+
+            sub.annotate(Annotation::primary(secondary_span));
+
+            diagnostic.sub(sub);
+        }
+
+        let error_string = error.value(py).to_string();
+
+        if !error_string.is_empty() {
+            diagnostic.info(error_string);
+        }
+    }
 }
 
 pub fn report_test_pass_on_expect_failure(
@@ -266,10 +301,12 @@ pub fn report_test_failure(
         source_file,
         stmt_function_def,
         arguments,
+        FunctionKind::Test,
         error,
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_failed_function_call(
     context: &Context,
     diagnostic: &mut Diagnostic,
@@ -277,6 +314,7 @@ fn handle_failed_function_call(
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
     arguments: &HashMap<String, Py<PyAny>>,
+    function_kind: FunctionKind,
     error: &PyErr,
 ) {
     let primary_span = Span::from(source_file).with_range(stmt_function_def.name.range);
@@ -284,7 +322,10 @@ fn handle_failed_function_call(
     diagnostic.annotate(Annotation::primary(primary_span));
 
     if !arguments.is_empty() {
-        diagnostic.info("Test ran with arguments:");
+        diagnostic.info(format!(
+            "{} ran with arguments:",
+            function_kind.capitalised()
+        ));
     }
 
     let mut sorted_arguments = arguments.iter().collect::<Vec<_>>();
@@ -303,7 +344,10 @@ fn handle_failed_function_call(
         location,
     }) = Traceback::from_error(py, context.db().system(), error)
     {
-        let mut sub = SubDiagnostic::new(SubDiagnosticSeverity::Info, "Test failed here");
+        let mut sub = SubDiagnostic::new(
+            SubDiagnosticSeverity::Info,
+            format!("{} failed here", function_kind.capitalised()),
+        );
 
         let secondary_span = Span::from(error_source_file).with_range(location);
 
