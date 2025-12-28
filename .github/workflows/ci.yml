@@ -261,9 +261,8 @@ jobs:
           python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
 
       - name: Build wheels
-        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
-        with:
-          command: build
+        run: |
+          uv run --no-project --with maturin maturin build
 
       - name: Build benchmarks
         run: cargo codspeed build -m walltime
