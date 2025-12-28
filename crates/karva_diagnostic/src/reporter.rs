@@ -1,8 +1,8 @@
 use std::fmt::Write;
 
 use colored::Colorize;
+use karva_logging::{Printer, VerbosityLevel};
 use karva_python_semantic::QualifiedTestName;
-use karva_verbosity::{Printer, VerbosityLevel};
 use pyo3::marker::Ungil;
 
 use crate::result::IndividualTestResultKind;

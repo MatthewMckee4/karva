@@ -137,6 +137,7 @@ impl<'a> ParallelCollector<'a> {
         }
 
         session_package.shrink();
+
         session_package
     }
 
@@ -228,13 +229,15 @@ fn collect_file(
 
     for stmt in parsed.into_syntax().body {
         if let Stmt::FunctionDef(function_def) = stmt {
-            if let Some(only_function_name) = only_function_name {
-                if function_def.name.as_str() != only_function_name {
-                    continue;
-                }
-            }
             if is_fixture_function(&function_def) {
                 collected_module.add_fixture_function_def(Arc::new(function_def));
+                continue;
+            }
+
+            if let Some(only_function_name) = only_function_name {
+                if function_def.name.as_str() == only_function_name {
+                    collected_module.add_test_function_def(Arc::new(function_def));
+                }
             } else if function_def
                 .name
                 .to_string()

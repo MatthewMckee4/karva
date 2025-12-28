@@ -244,8 +244,8 @@ fn test_fail_concise_output() {
     exit_code: 1
     ----- stdout -----
     test test_fail::test_1(fixture_1=1) ... FAILED
-    test test_fail::test_2 ... FAILED
     test test_fail::test_3 ... FAILED
+    test test_fail::test_2 ... FAILED
 
     diagnostics:
 
@@ -1285,9 +1285,9 @@ def test_expected_fail_passes():
     success: false
     exit_code: 1
     ----- stdout -----
-    test test_expect_fail::test_expected_to_fail ... ok
-    test test_expect_fail::test_normal_pass ... ok
     test test_expect_fail::test_expected_fail_passes ... FAILED
+    test test_expect_fail::test_normal_pass ... ok
+    test test_expect_fail::test_expected_to_fail ... ok
 
     diagnostics:
 
@@ -1335,9 +1335,9 @@ def test_expected_fail_passes():
     success: false
     exit_code: 1
     ----- stdout -----
-    test test_expect_fail::test_expected_to_fail ... ok
     test test_expect_fail::test_normal_pass ... ok
     test test_expect_fail::test_expected_fail_passes ... FAILED
+    test test_expect_fail::test_expected_to_fail ... ok
 
     diagnostics:
 
@@ -1376,8 +1376,8 @@ def test_normal():
     success: false
     exit_code: 1
     ----- stdout -----
-    test test_fail::test_with_fail ... FAILED
     test test_fail::test_normal ... ok
+    test test_fail::test_with_fail ... FAILED
 
     diagnostics:
 
@@ -1561,8 +1561,8 @@ def test_1():
     success: true
     exit_code: 0
     ----- stdout -----
-    test test::test_setenv(monkeypatch=<MockEnv object>) ... ok
     test test::test_1 ... ok
+    test test::test_setenv(monkeypatch=<MockEnv object>) ... ok
 
     test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
 

@@ -15,7 +15,7 @@ pub fn generate_run_hash() -> RunHash {
     // Use thread-local random number for uniqueness
     let random: u32 = rand::random();
 
-    RunHash(format!("run-{}-{:x}", timestamp, random))
+    RunHash(format!("run-{timestamp:x}-{random:x}"))
 }
 
 #[cfg(test)]

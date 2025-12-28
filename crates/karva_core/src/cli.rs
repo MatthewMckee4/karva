@@ -7,7 +7,9 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
 use karva_cache::{CacheWriter, RunHash};
-use karva_cli::SubTestCommand;
+use karva_cli::{SubTestCommand, Verbosity};
+use karva_diagnostic::{DummyReporter, Reporter, TestCaseReporter};
+use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::{ProjectMetadata, ProjectOptionsOverrides};
 use karva_project::ProjectDatabase;
 use karva_system::{OsSystem, System, absolute};
@@ -18,10 +20,6 @@ use crate::utils::current_python_version;
 #[derive(Parser)]
 #[command(name = "karva_core", about = "Karva test worker")]
 struct Args {
-    /// Test paths to execute (e.g., "tests.test_foo::test_example")
-    #[arg(long)]
-    test_paths: Vec<String>,
-
     /// Project root directory
     #[arg(long)]
     project_root: Utf8PathBuf,
@@ -41,6 +39,12 @@ struct Args {
     /// Shared test command options
     #[clap(flatten)]
     sub_command: SubTestCommand,
+}
+
+impl Args {
+    pub const fn verbosity(&self) -> &Verbosity {
+        &self.sub_command.verbosity
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -88,16 +92,6 @@ pub fn karva_core_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> ExitSt
 }
 
 fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitStatus> {
-    // Set up tracing subscriber for worker process
-    use tracing_subscriber::EnvFilter;
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("karva_core=debug,karva_cache=debug"))
-        )
-        .with_writer(std::io::stderr)
-        .init();
-
     let args = wild::args_os();
 
     let args = f(
@@ -107,12 +101,13 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     let args = Args::parse_from(args);
 
-    tracing::info!(
-        worker_id = args.worker_id,
-        test_count = args.test_paths.len(),
-        run_hash = %args.run_hash,
-        "Worker process started"
-    );
+    let verbosity = args.verbosity().level();
+
+    set_colored_override(args.sub_command.color);
+
+    let printer = Printer::new(verbosity, args.sub_command.no_progress.unwrap_or(false));
+
+    let _guard = setup_tracing(verbosity);
 
     // Initialize project database (similar to karva crate setup)
     let cwd = args.project_root.clone();
@@ -129,45 +124,32 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         .as_ref()
         .map(|path| absolute(path, &cwd));
 
-    let mut project_metadata = match &config_file {
-        Some(config_file) => {
-            tracing::debug!(config_file = %config_file, "Loading project metadata from config file");
-            ProjectMetadata::from_config_file(config_file.clone(), &system, python_version)?
-        }
-        None => {
-            tracing::debug!("Discovering project metadata");
-            ProjectMetadata::discover(system.current_directory(), &system, python_version)?
-        }
+    let mut project_metadata = if let Some(config_file) = &config_file {
+        tracing::debug!(config_file = %config_file, "Loading project metadata from config file");
+        ProjectMetadata::from_config_file(config_file.clone(), &system, python_version)?
+    } else {
+        tracing::debug!("Discovering project metadata");
+        ProjectMetadata::discover(system.current_directory(), &system, python_version)?
     };
 
-    // Apply any project option overrides
-    let project_options_overrides = ProjectOptionsOverrides::default();
+    let project_options_overrides =
+        ProjectOptionsOverrides::new(config_file, args.sub_command.into_options());
     project_metadata.apply_overrides(&project_options_overrides);
 
-    tracing::debug!("Initializing project database");
     let db = ProjectDatabase::new(project_metadata, system)
         .context("Failed to initialize project database")?;
 
-    // Initialize cache writer
     let run_hash = RunHash(args.run_hash.clone());
-    tracing::debug!(
-        cache_dir = %args.cache_dir,
-        worker_id = args.worker_id,
-        run_hash = %args.run_hash,
-        "Initializing cache writer"
-    );
-    let cache_writer = CacheWriter::new(args.cache_dir, run_hash, args.worker_id)?;
 
-    // Execute tests
-    tracing::debug!("Starting test execution");
-    let exit_code = execute_test_paths(
-        &db,
-        &args.test_paths,
-        &cache_writer,
-        args.sub_command.fail_fast.unwrap_or(false),
-        args.sub_command.show_output.unwrap_or(false),
-    )?;
+    let cache_writer = CacheWriter::new(&args.cache_dir, &run_hash, args.worker_id)?;
 
-    tracing::info!(exit_code = exit_code, "Worker process exiting");
+    let reporter: Box<dyn Reporter> = if verbosity.is_quiet() {
+        Box::new(DummyReporter)
+    } else {
+        Box::new(TestCaseReporter::new(printer))
+    };
+
+    let exit_code = execute_test_paths(&db, &cache_writer, reporter.as_ref())?;
+
     std::process::exit(exit_code);
 }

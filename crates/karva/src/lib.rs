@@ -8,18 +8,17 @@ use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
+use karva_cache::CACHE_DIR;
 use karva_core::utils::current_python_version;
 use karva_core::{DummyReporter, Reporter, TestCaseReporter, TestRunResult, TestRunner};
+use karva_logging::{Printer, VerbosityLevel, set_colored_override, setup_tracing};
 use karva_metadata::{ProjectMetadata, ProjectOptionsOverrides};
 use karva_project::{Db, ProjectDatabase};
 use karva_system::{OsSystem, System, absolute};
-use karva_verbosity::{Printer, VerbosityLevel};
 use ruff_db::diagnostic::{DiagnosticFormat, DisplayDiagnosticConfig, DisplayDiagnostics};
 
-use crate::logging::setup_tracing;
-use karva_cli::{Args, Command, TerminalColor, TestCommand};
+use karva_cli::{Args, Command, TestCommand};
 
-mod logging;
 mod version;
 
 pub fn karva_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> ExitStatus {
@@ -71,7 +70,7 @@ pub(crate) fn version() -> Result<()> {
 }
 
 pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
-    let verbosity = args.verbosity.level();
+    let verbosity = args.verbosity().level();
 
     set_colored_override(args.sub_command.color);
 
@@ -99,37 +98,27 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     let system = OsSystem::new(&cwd);
 
-    let config_file = args.sub_command.config_file.as_ref().map(|path| absolute(path, &cwd));
+    let config_file = args
+        .sub_command
+        .config_file
+        .as_ref()
+        .map(|path| absolute(path, &cwd));
 
-    let mut project_metadata = match &config_file {
-        Some(config_file) => {
-            tracing::info!(config_file = %config_file, "Loading project metadata from config file");
-            ProjectMetadata::from_config_file(config_file.clone(), &system, python_version)?
-        }
-        None => {
-            tracing::info!("Discovering project metadata");
-            ProjectMetadata::discover(system.current_directory(), &system, python_version)?
-        }
+    let mut project_metadata = if let Some(config_file) = &config_file {
+        ProjectMetadata::from_config_file(config_file.clone(), &system, python_version)?
+    } else {
+        ProjectMetadata::discover(system.current_directory(), &system, python_version)?
     };
+
+    let sub_command = args.sub_command.clone();
 
     // Extract values before consuming args
     let no_parallel = args.no_parallel.unwrap_or(false);
     let num_workers = args.num_workers;
-    let fail_fast = args.sub_command.fail_fast.unwrap_or(false);
-    let show_output = args.sub_command.show_output.unwrap_or(false);
-
-    tracing::debug!(
-        no_parallel = no_parallel,
-        num_workers = ?num_workers,
-        fail_fast = fail_fast,
-        show_output = show_output,
-        "Test execution configuration"
-    );
 
     let project_options_overrides = ProjectOptionsOverrides::new(config_file, args.into_options());
     project_metadata.apply_overrides(&project_options_overrides);
 
-    tracing::debug!("Initializing project database");
     let mut db = ProjectDatabase::new(project_metadata, system)?;
 
     db.project_mut()
@@ -147,25 +136,22 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         num_workers.unwrap_or_else(|| ruff_db::max_parallelism().get())
     };
 
-    tracing::info!(
-        worker_count = worker_count,
-        parallel = worker_count > 1,
-        "Determined worker count"
-    );
-
     let result = if worker_count > 1 {
-        // Parallel execution
         tracing::info!(workers = worker_count, "Starting parallel test execution");
-        let cache_dir = db.project().cwd().join(".karva-cache");
-        tracing::debug!(cache_dir = %cache_dir, "Cache directory");
+        let cache_dir = db.project().cwd().join(CACHE_DIR);
 
         let config = karva_runner::ParallelTestConfig {
             num_workers: worker_count,
             cache_dir,
-            fail_fast,
-            show_output,
         };
-        karva_runner::run_parallel_tests(&db, config)?
+
+        let result = karva_runner::run_parallel_tests(&db, &config, &sub_command, &printer)?;
+
+        return if result {
+            Ok(ExitStatus::Success)
+        } else {
+            Ok(ExitStatus::Failure)
+        };
     } else {
         // Sequential execution
         tracing::info!("Starting sequential test execution");
@@ -176,13 +162,6 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         };
         db.test_with_reporter(&*reporter)
     };
-
-    tracing::info!(
-        passed = result.stats().passed(),
-        failed = result.stats().failed(),
-        skipped = result.stats().skipped(),
-        "Test execution completed"
-    );
 
     display_test_output(&db, &result, printer, start_time)
 }
@@ -208,24 +187,6 @@ impl Termination for ExitStatus {
 impl ExitStatus {
     pub const fn to_i32(self) -> i32 {
         self as i32
-    }
-}
-
-fn set_colored_override(color: Option<TerminalColor>) {
-    let Some(color) = color else {
-        return;
-    };
-
-    match color {
-        TerminalColor::Auto => {
-            colored::control::unset_override();
-        }
-        TerminalColor::Always => {
-            colored::control::set_override(true);
-        }
-        TerminalColor::Never => {
-            colored::control::set_override(false);
-        }
     }
 }
 

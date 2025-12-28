@@ -2,8 +2,8 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
+use karva_logging::{TerminalColor, VerbosityLevel};
 use karva_metadata::{Options, SrcOptions, TerminalOptions, TestOptions};
-use karva_verbosity::VerbosityLevel;
 use ruff_db::diagnostic::DiagnosticFormat;
 
 const STYLES: Styles = Styles::styled()
@@ -90,6 +90,13 @@ pub enum Command {
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Parser, Clone)]
 pub struct SubTestCommand {
+    /// List of files or directories to test.
+    #[clap(
+        help = "List of files, directories, or test functions to test [default: the project root]",
+        value_name = "PATH"
+    )]
+    pub paths: Vec<String>,
+
     /// The path to a `karva.toml` file to use for configuration.
     ///
     /// While ty configuration can be included in a `pyproject.toml` file, it is not allowed in this context.
@@ -123,21 +130,14 @@ pub struct SubTestCommand {
     /// Control when colored output is used.
     #[arg(long)]
     pub color: Option<TerminalColor>,
+
+    #[clap(flatten)]
+    pub verbosity: Verbosity,
 }
 
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Parser)]
 pub struct TestCommand {
-    /// List of files or directories to test.
-    #[clap(
-        help = "List of files, directories, or test functions to test [default: the project root]",
-        value_name = "PATH"
-    )]
-    pub paths: Vec<String>,
-
-    #[clap(flatten)]
-    pub verbosity: Verbosity,
-
     #[clap(flatten)]
     pub sub_command: SubTestCommand,
 
@@ -148,6 +148,12 @@ pub struct TestCommand {
     /// Disable parallel execution
     #[clap(long, default_missing_value = "true", num_args=0..1)]
     pub no_parallel: Option<bool>,
+}
+
+impl TestCommand {
+    pub const fn verbosity(&self) -> &Verbosity {
+        &self.sub_command.verbosity
+    }
 }
 
 /// The diagnostic output format.
@@ -161,6 +167,15 @@ pub enum OutputFormat {
     /// Print diagnostics concisely, one per line.
     #[value(name = "concise")]
     Concise,
+}
+
+impl OutputFormat {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Concise => "concise",
+        }
+    }
 }
 
 impl From<OutputFormat> for DiagnosticFormat {
@@ -181,35 +196,27 @@ impl From<OutputFormat> for karva_metadata::OutputFormat {
     }
 }
 
-/// Control when colored output is used.
-#[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Default, clap::ValueEnum)]
-pub enum TerminalColor {
-    /// Display colors if the output goes to an interactive terminal.
-    #[default]
-    Auto,
-
-    /// Always display colors.
-    Always,
-
-    /// Never display colors.
-    Never,
+impl SubTestCommand {
+    pub fn into_options(self) -> Options {
+        Options {
+            src: Some(SrcOptions {
+                respect_ignore_files: self.no_ignore.map(|no_ignore| !no_ignore),
+                include: Some(self.paths),
+            }),
+            terminal: Some(TerminalOptions {
+                output_format: self.output_format.map(Into::into),
+                show_python_output: self.show_output,
+            }),
+            test: Some(TestOptions {
+                test_function_prefix: self.test_prefix,
+                fail_fast: self.fail_fast,
+            }),
+        }
+    }
 }
 
 impl TestCommand {
     pub fn into_options(self) -> Options {
-        Options {
-            src: Some(SrcOptions {
-                respect_ignore_files: self.sub_command.no_ignore.map(|no_ignore| !no_ignore),
-                include: Some(self.paths),
-            }),
-            terminal: Some(TerminalOptions {
-                output_format: self.sub_command.output_format.map(Into::into),
-                show_python_output: self.sub_command.show_output,
-            }),
-            test: Some(TestOptions {
-                test_function_prefix: self.sub_command.test_prefix,
-                fail_fast: self.sub_command.fail_fast,
-            }),
-        }
+        self.sub_command.into_options()
     }
 }

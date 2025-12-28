@@ -23,6 +23,7 @@ karva_python_semantic = { workspace = true }
 karva_collector = { workspace = true }
 karva_cache = { workspace = true }
 karva_cli = { workspace = true }
+karva_logging = { workspace = true }
 
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["wrap_help", "string", "env"] }

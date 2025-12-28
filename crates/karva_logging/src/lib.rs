@@ -3,13 +3,18 @@ use std::fs::File;
 use std::io::BufWriter;
 
 use colored::Colorize;
-use karva_verbosity::VerbosityLevel;
 use tracing::{Event, Subscriber};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields};
 use tracing_subscriber::registry::LookupSpan;
+
+mod printer;
+mod verbosity;
+
+pub use printer::Printer;
+pub use verbosity::VerbosityLevel;
 
 pub fn setup_tracing(level: VerbosityLevel) -> TracingGuard {
     use tracing_subscriber::prelude::*;
@@ -166,4 +171,36 @@ where
 
         writeln!(writer)
     }
+}
+
+pub fn set_colored_override(color: Option<TerminalColor>) {
+    let Some(color) = color else {
+        return;
+    };
+
+    match color {
+        TerminalColor::Auto => {
+            colored::control::unset_override();
+        }
+        TerminalColor::Always => {
+            colored::control::set_override(true);
+        }
+        TerminalColor::Never => {
+            colored::control::set_override(false);
+        }
+    }
+}
+
+/// Control when colored output is used.
+#[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Default, clap::ValueEnum)]
+pub enum TerminalColor {
+    /// Display colors if the output goes to an interactive terminal.
+    #[default]
+    Auto,
+
+    /// Always display colors.
+    Always,
+
+    /// Never display colors.
+    Never,
 }

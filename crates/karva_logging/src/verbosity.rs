@@ -1,9 +1,5 @@
 use tracing_subscriber::filter::LevelFilter;
 
-mod printer;
-
-pub use printer::Printer;
-
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Default)]
 pub enum VerbosityLevel {
     /// Silent output
@@ -54,6 +50,17 @@ impl VerbosityLevel {
 
     pub const fn is_extra_verbose(self) -> bool {
         matches!(self, Self::ExtraVerbose)
+    }
+
+    pub const fn cli_arg(self) -> Option<&'static str> {
+        match self {
+            Self::Silent => Some("-s"),
+            Self::Quiet => Some("-q"),
+            Self::Default => None,
+            Self::Verbose => Some("-v"),
+            Self::ExtraVerbose => Some("-vv"),
+            Self::Trace => Some("-vvv"),
+        }
     }
 }
 

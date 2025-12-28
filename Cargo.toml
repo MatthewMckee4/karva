@@ -26,7 +26,7 @@ karva_project = { path = "crates/karva_project" }
 karva_projects = { path = "crates/karva_projects" }
 karva_system = { path = "crates/karva_system" }
 karva_python_semantic = { path = "crates/karva_python_semantic" }
-karva_verbosity = { path = "crates/karva_verbosity" }
+karva_logging = { path = "crates/karva_logging" }
 karva_static = { path = "crates/karva_static" }
 
 anyhow = { version = "1.0.100" }

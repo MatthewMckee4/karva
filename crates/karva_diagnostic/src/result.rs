@@ -1,10 +1,12 @@
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::time::Instant;
+use std::{collections::HashMap, fmt};
 
 use colored::Colorize;
 use karva_python_semantic::QualifiedTestName;
 use ruff_db::diagnostic::Diagnostic;
+use serde::de::{self, MapAccess};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};
 
 use crate::reporter::Reporter;
 
@@ -101,6 +103,25 @@ pub enum TestResultKind {
     Skipped,
 }
 
+impl TestResultKind {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Passed => "passed",
+            Self::Failed => "failed",
+            Self::Skipped => "skipped",
+        }
+    }
+
+    fn from_str(s: &str) -> Result<Self, &'static str> {
+        match s {
+            "passed" => Ok(Self::Passed),
+            "failed" => Ok(Self::Failed),
+            "skipped" => Ok(Self::Skipped),
+            _ => Err("invalid TestResultKind"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TestResultStats {
     inner: HashMap<TestResultKind, usize>,
@@ -117,6 +138,15 @@ impl TestResultStats {
 
     fn get(&self, kind: TestResultKind) -> usize {
         self.inner.get(&kind).copied().unwrap_or(0)
+    }
+
+    pub fn merge(&mut self, other: &Self) {
+        for (kind, count) in &other.inner {
+            self.inner
+                .entry(*kind)
+                .and_modify(|v| *v += count)
+                .or_insert(*count);
+        }
     }
 
     pub fn passed(&self) -> usize {
@@ -140,6 +170,55 @@ impl TestResultStats {
     }
 }
 
+impl Serialize for TestResultStats {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeMap;
+
+        let mut map = serializer.serialize_map(Some(self.inner.len()))?;
+        for (kind, count) in &self.inner {
+            map.serialize_entry(kind.as_str(), count)?;
+        }
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for TestResultStats {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct StatsVisitor;
+
+        impl<'de> Visitor<'de> for StatsVisitor {
+            type Value = TestResultStats;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a map of test result kinds to counts")
+            }
+
+            fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                let mut inner = HashMap::new();
+
+                while let Some((key, value)) = access.next_entry::<String, usize>()? {
+                    let kind = TestResultKind::from_str(&key).map_err(|_| {
+                        de::Error::unknown_field(&key, &["passed", "failed", "skipped"])
+                    })?;
+                    inner.insert(kind, value);
+                }
+
+                Ok(TestResultStats { inner })
+            }
+        }
+
+        deserializer.deserialize_map(StatsVisitor)
+    }
+}
 pub struct DisplayTestResultStats<'a> {
     stats: &'a TestResultStats,
     start_time: Instant,

@@ -47,8 +47,6 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
 
         let collected_package = collector.collect_all(test_paths);
 
-        tracing::info!("Discovering test functions and fixtures...");
-
         let mut session_package = self.convert_collected_to_discovered(py, collected_package);
 
         session_package.shrink();

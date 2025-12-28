@@ -1169,11 +1169,11 @@ dependencies = [
  "karva_cache",
  "karva_cli",
  "karva_core",
+ "karva_logging",
  "karva_metadata",
  "karva_project",
  "karva_runner",
  "karva_system",
- "karva_verbosity",
  "regex",
  "rstest",
  "ruff_db",
@@ -1226,9 +1226,9 @@ version = "0.1.0"
 dependencies = [
  "camino",
  "clap",
+ "karva_logging",
  "karva_metadata",
  "karva_project",
- "karva_verbosity",
  "ruff_db",
 ]
 
@@ -1270,6 +1270,7 @@ dependencies = [
  "karva_cli",
  "karva_collector",
  "karva_diagnostic",
+ "karva_logging",
  "karva_metadata",
  "karva_project",
  "karva_python_semantic",
@@ -1310,14 +1311,16 @@ version = "0.1.0"
 dependencies = [
  "camino",
  "colored 3.0.0",
+ "karva_logging",
  "karva_python_semantic",
  "karva_system",
- "karva_verbosity",
  "pyo3",
  "ruff_db",
  "ruff_python_ast",
  "ruff_source_file",
  "ruff_text_size",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1331,6 +1334,19 @@ dependencies = [
  "karva_projects",
  "karva_system",
  "tempfile",
+]
+
+[[package]]
+name = "karva_logging"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "colored 3.0.0",
+ "tracing",
+ "tracing-flame",
+ "tracing-subscriber",
+ "tracing-tree",
 ]
 
 [[package]]
@@ -1425,8 +1441,10 @@ dependencies = [
  "ctor",
  "ignore",
  "karva_cache",
+ "karva_cli",
  "karva_collector",
  "karva_diagnostic",
+ "karva_logging",
  "karva_project",
  "karva_python_semantic",
  "karva_system",
@@ -1459,13 +1477,6 @@ dependencies = [
  "ruff_db",
  "tempfile",
  "tracing",
-]
-
-[[package]]
-name = "karva_verbosity"
-version = "0.1.0"
-dependencies = [
- "tracing-subscriber",
 ]
 
 [[package]]
