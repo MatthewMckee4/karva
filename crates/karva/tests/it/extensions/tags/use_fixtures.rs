@@ -261,7 +261,7 @@ def test_session_2():
 "#,
     )]);
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -445,7 +445,7 @@ def test_pytest_session_2():
 "#,
     )]);
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----

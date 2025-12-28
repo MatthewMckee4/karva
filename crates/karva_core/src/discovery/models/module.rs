@@ -1,9 +1,9 @@
 use camino::Utf8PathBuf;
+use karva_python_semantic::ModulePath;
 use ruff_source_file::{SourceFile, SourceFileBuilder};
 
 use crate::discovery::TestFunction;
 use crate::extensions::fixtures::Fixture;
-use crate::name::ModulePath;
 
 /// A module represents a single python file.
 #[derive(Debug)]
@@ -62,5 +62,10 @@ impl DiscoveredModule {
 
     pub(crate) fn is_empty(&self) -> bool {
         self.test_functions.is_empty() && self.fixtures.is_empty()
+    }
+
+    pub(crate) fn shrink(&mut self) {
+        self.test_functions
+            .sort_by_key(|function| function.stmt_function_def.range.start());
     }
 }

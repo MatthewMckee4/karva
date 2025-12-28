@@ -2,7 +2,8 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
-use karva_project::{Options, SrcOptions, TerminalOptions, TestOptions, VerbosityLevel};
+use karva_logging::{TerminalColor, VerbosityLevel};
+use karva_metadata::{Options, SrcOptions, TerminalOptions, TestOptions};
 use ruff_db::diagnostic::DiagnosticFormat;
 
 const STYLES: Styles = Styles::styled()
@@ -85,18 +86,16 @@ pub enum Command {
     Version,
 }
 
+/// Shared test execution options that can be used by both main CLI and worker processes
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Debug, Parser)]
-pub struct TestCommand {
+#[derive(Debug, Parser, Clone, Default)]
+pub struct SubTestCommand {
     /// List of files or directories to test.
     #[clap(
         help = "List of files, directories, or test functions to test [default: the project root]",
         value_name = "PATH"
     )]
     pub paths: Vec<String>,
-
-    #[clap(flatten)]
-    pub verbosity: Verbosity,
 
     /// The path to a `karva.toml` file to use for configuration.
     ///
@@ -121,6 +120,8 @@ pub struct TestCommand {
     pub no_ignore: Option<bool>,
 
     /// When set, the test will fail immediately if any test fails.
+    ///
+    /// This only works when running tests in parallel.
     #[clap(long, default_missing_value = "true", num_args=0..1)]
     pub fail_fast: Option<bool>,
 
@@ -131,6 +132,78 @@ pub struct TestCommand {
     /// Control when colored output is used.
     #[arg(long)]
     pub color: Option<TerminalColor>,
+
+    #[clap(flatten)]
+    pub verbosity: Verbosity,
+}
+
+impl SubTestCommand {
+    pub fn into_cli_args(&self) -> Vec<String> {
+        let mut args = Vec::new();
+
+        if let Some(arg) = self.verbosity.level().cli_arg() {
+            args.push(arg);
+        }
+
+        if self.fail_fast.is_some_and(|fail_fast| fail_fast) {
+            args.push("--fail-fast");
+        }
+
+        if self.show_output.is_some_and(|show_output| show_output) {
+            args.push("-s");
+        }
+
+        if let Some(output) = self.output_format {
+            args.push("--output-format");
+            args.push(output.as_str());
+        }
+
+        if let Some(test_prefix) = self.test_prefix.as_ref() {
+            args.push("--test-prefix");
+            args.push(test_prefix);
+        }
+
+        if let Some(config_file) = self.config_file.as_ref() {
+            args.push("--config-file");
+            args.push(config_file.as_str());
+        }
+
+        if self.no_ignore.is_some_and(|no_ignore| no_ignore) {
+            args.push("--no-ignore");
+        }
+
+        if self.no_progress.is_some_and(|no_progress| no_progress) {
+            args.push("--no-progress");
+        }
+
+        if let Some(color) = self.color {
+            args.push("--color");
+            args.push(color.as_str());
+        }
+
+        args.iter().map(ToString::to_string).collect()
+    }
+}
+
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Parser)]
+pub struct TestCommand {
+    #[clap(flatten)]
+    pub sub_command: SubTestCommand,
+
+    /// Number of parallel workers (default: number of CPU cores)
+    #[clap(short = 'n', long)]
+    pub num_workers: Option<usize>,
+
+    /// Disable parallel execution
+    #[clap(long, default_missing_value = "true", num_args=0..1)]
+    pub no_parallel: Option<bool>,
+}
+
+impl TestCommand {
+    pub const fn verbosity(&self) -> &Verbosity {
+        &self.sub_command.verbosity
+    }
 }
 
 /// The diagnostic output format.
@@ -146,6 +219,15 @@ pub enum OutputFormat {
     Concise,
 }
 
+impl OutputFormat {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Concise => "concise",
+        }
+    }
+}
+
 impl From<OutputFormat> for DiagnosticFormat {
     fn from(value: OutputFormat) -> Self {
         match value {
@@ -155,7 +237,7 @@ impl From<OutputFormat> for DiagnosticFormat {
     }
 }
 
-impl From<OutputFormat> for karva_project::OutputFormat {
+impl From<OutputFormat> for karva_metadata::OutputFormat {
     fn from(format: OutputFormat) -> Self {
         match format {
             OutputFormat::Full => Self::Full,
@@ -164,21 +246,7 @@ impl From<OutputFormat> for karva_project::OutputFormat {
     }
 }
 
-/// Control when colored output is used.
-#[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Default, clap::ValueEnum)]
-pub enum TerminalColor {
-    /// Display colors if the output goes to an interactive terminal.
-    #[default]
-    Auto,
-
-    /// Always display colors.
-    Always,
-
-    /// Never display colors.
-    Never,
-}
-
-impl TestCommand {
+impl SubTestCommand {
     pub fn into_options(self) -> Options {
         Options {
             src: Some(SrcOptions {
@@ -194,5 +262,11 @@ impl TestCommand {
                 fail_fast: self.fail_fast,
             }),
         }
+    }
+}
+
+impl TestCommand {
+    pub fn into_options(self) -> Options {
+        self.sub_command.into_options()
     }
 }

@@ -280,10 +280,10 @@ def test_with_print():
     success: true
     exit_code: 0
     ----- stdout -----
+    This should be visible
     test test::test_with_print ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
-    This should be visible
 
     ----- stderr -----
     ");
@@ -379,7 +379,7 @@ def test_second():
     ]);
 
     // Should stop after first failure
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -437,7 +437,7 @@ def test_third():
     ]);
 
     // Should run all tests even after failures
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -740,15 +740,15 @@ def it_should_not_run(): pass
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
+    Output visible
     test tests.spec::it_works ... ok
     test tests.spec::it_also_works ... ok
 
     test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
-    Output visible
 
     ----- stderr -----
     ");
@@ -794,6 +794,7 @@ def pyproject_test(): pass
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
+    WARN Ignoring the `tool.ty` section in `<temp_dir>/pyproject.toml` because `<temp_dir>/karva.toml` takes precedence.
     WARN Ignoring the `tool.ty` section in `<temp_dir>/pyproject.toml` because `<temp_dir>/karva.toml` takes precedence.
     ");
 }
@@ -947,10 +948,10 @@ def test_with_print():
     success: true
     exit_code: 0
     ----- stdout -----
+    This should be visible with -s flag
     test test::test_with_print ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
-    This should be visible with -s flag
 
     ----- stderr -----
     ");
@@ -1017,7 +1018,7 @@ def test_second():
     ]);
 
     // CLI argument --fail-fast should override config and stop after first failure
-    assert_cmd_snapshot!(context.command().arg("--fail-fast"), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--fail-fast"), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1124,7 +1125,7 @@ def config_should_not_run(): pass
     // Multiple CLI arguments should all override their respective config values
     assert_cmd_snapshot!(
         context
-            .command()
+            .command_no_parallel()
             .arg("--test-prefix")
             .arg("custom")
             .arg("--output-format")
@@ -1136,10 +1137,10 @@ def config_should_not_run(): pass
     success: true
     exit_code: 0
     ----- stdout -----
+    CLI output visible
     test custom_dir.ignored::custom_test ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
-    CLI output visible
 
     ----- stderr -----
     "
@@ -1187,10 +1188,10 @@ def cli_should_run():
     success: true
     exit_code: 0
     ----- stdout -----
+    Output from CLI override
     test test::cli_should_run ... ok
 
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
-    Output from CLI override
 
     ----- stderr -----
     "
@@ -1238,6 +1239,7 @@ def cli_should_run(): pass
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
+    WARN Ignoring the `tool.ty` section in `<temp_dir>/pyproject.toml` because `<temp_dir>/karva.toml` takes precedence.
     WARN Ignoring the `tool.ty` section in `<temp_dir>/pyproject.toml` because `<temp_dir>/karva.toml` takes precedence.
     ");
 }

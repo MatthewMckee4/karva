@@ -13,6 +13,8 @@ license = { workspace = true }
 [dependencies]
 karva_combine = { workspace = true }
 karva_macros = { workspace = true }
+karva_metadata = { workspace = true }
+karva_system = { workspace = true }
 
 anyhow = { workspace = true }
 camino = { workspace = true }

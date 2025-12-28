@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use anyhow::bail;
 use itertools::Itertools;
-use karva_project::Options;
+use karva_metadata::Options;
 use pretty_assertions::StrComparison;
 use ruff_options_metadata::{OptionField, OptionSet, OptionsMetadata, Visit};
 

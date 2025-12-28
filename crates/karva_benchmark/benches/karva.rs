@@ -11,7 +11,8 @@ use karva_benchmark::{
 };
 use karva_core::testing::setup_module;
 use karva_core::{DummyReporter, TestRunner};
-use karva_project::{ProjectDatabase, absolute};
+use karva_project::ProjectDatabase;
+use karva_system::absolute;
 
 fn create_test_cases() -> Vec<TestCase> {
     vec![

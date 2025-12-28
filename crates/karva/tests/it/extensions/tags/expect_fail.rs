@@ -415,7 +415,7 @@ def test_expected_fail_passes():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: false
         exit_code: 1
         ----- stdout -----
@@ -463,7 +463,7 @@ def test_expected_fail_passes():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: false
         exit_code: 1
         ----- stdout -----

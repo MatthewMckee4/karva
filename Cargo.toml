@@ -13,12 +13,22 @@ license = "MIT"
 
 [workspace.dependencies]
 karva = { path = "crates/karva" }
+karva_cache = { path = "crates/karva_cache" }
 karva_cli = { path = "crates/karva_cli" }
+karva_collector = { path = "crates/karva_collector" }
 karva_combine = { path = "crates/karva_combine" }
 karva_core = { path = "crates/karva_core" }
+karva_diagnostic = { path = "crates/karva_diagnostic" }
+karva_logging = { path = "crates/karva_logging" }
 karva_macros = { path = "crates/karva_macros" }
+karva_metadata = { path = "crates/karva_metadata" }
 karva_project = { path = "crates/karva_project" }
 karva_projects = { path = "crates/karva_projects" }
+karva_python_semantic = { path = "crates/karva_python_semantic" }
+karva_runner = { path = "crates/karva_runner" }
+karva_static = { path = "crates/karva_static" }
+karva_system = { path = "crates/karva_system" }
+karva_venv = { path = "crates/karva_venv" }
 
 anyhow = { version = "1.0.100" }
 argfile = { version = "0.2.1" }
@@ -27,6 +37,7 @@ chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
 clap = { version = "4.5.53", features = ["derive", "wrap_help"] }
 codspeed-criterion-compat = { version = "4.1.0", default-features = false }
 colored = { version = "3.0.0" }
+crossbeam-channel = "0.5.15"
 ctor = "0.6.1"
 ctrlc = { version = "3.5.1" }
 directories = "6.0.0"

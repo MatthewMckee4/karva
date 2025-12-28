@@ -1,0 +1,46 @@
+[package]
+name = "karva_runner"
+version = "0.0.0"
+
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+karva_cache = { workspace = true }
+karva_cli = { workspace = true }
+karva_collector = { workspace = true }
+karva_diagnostic = { workspace = true }
+karva_logging = { workspace = true }
+karva_project = { workspace = true }
+karva_python_semantic = { workspace = true }
+karva_system = { workspace = true }
+
+anyhow = { workspace = true }
+camino = { workspace = true }
+colored = { workspace = true }
+crossbeam-channel = "0.5.15"
+ignore = { workspace = true }
+pyo3 = { workspace = true }
+regex = { workspace = true }
+ruff_db = { workspace = true }
+ruff_macros = { workspace = true }
+ruff_python_ast = { workspace = true }
+ruff_python_parser = { workspace = true }
+ruff_source_file = { workspace = true }
+ruff_text_size = { workspace = true }
+tempfile = { workspace = true }
+tracing = { workspace = true }
+which = "6.0"
+
+[dev-dependencies]
+ctor = { workspace = true }
+regex = { workspace = true }
+rstest = { workspace = true }
+
+[lints]
+workspace = true

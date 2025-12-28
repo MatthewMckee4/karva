@@ -2,7 +2,7 @@ use divan::{Bencher, bench};
 use karva_benchmark::walltime::{ProjectBenchmark, bench_project, warmup_project};
 use karva_projects::real_world_projects::PYDANTIC_PROJECT;
 
-#[bench(sample_size = 4, sample_count = 5)]
+#[bench(sample_size = 1, sample_count = 3)]
 fn pydantic(bencher: Bencher) {
     let benchmark = ProjectBenchmark::new(PYDANTIC_PROJECT.clone());
 

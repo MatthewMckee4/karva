@@ -967,6 +967,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c"
 
 [[package]]
+name = "home"
+version = "0.5.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d"
+dependencies = [
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1159,11 +1168,18 @@ dependencies = [
  "insta-cmd",
  "karva_cli",
  "karva_core",
+ "karva_logging",
+ "karva_metadata",
  "karva_project",
+ "karva_runner",
+ "karva_static",
+ "karva_system",
  "regex",
  "rstest",
  "ruff_db",
  "ruff_python_trivia",
+ "serde",
+ "serde_json",
  "tempfile",
  "tracing",
  "tracing-flame",
@@ -1180,19 +1196,59 @@ dependencies = [
  "camino",
  "codspeed-criterion-compat",
  "codspeed-divan-compat",
+ "karva_cli",
  "karva_core",
+ "karva_logging",
+ "karva_metadata",
  "karva_project",
  "karva_projects",
+ "karva_runner",
+ "karva_system",
+]
+
+[[package]]
+name = "karva_cache"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "camino",
+ "karva_diagnostic",
+ "karva_project",
+ "karva_python_semantic",
+ "rand 0.8.5",
+ "ruff_db",
+ "ruff_text_size",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]
 name = "karva_cli"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "camino",
  "clap",
+ "karva_logging",
+ "karva_metadata",
  "karva_project",
  "ruff_db",
+]
+
+[[package]]
+name = "karva_collector"
+version = "0.0.0"
+dependencies = [
+ "camino",
+ "crossbeam-channel",
+ "ignore",
+ "karva_metadata",
+ "karva_python_semantic",
+ "karva_system",
+ "ruff_python_ast",
+ "ruff_python_parser",
+ "tracing",
 ]
 
 [[package]]
@@ -1206,12 +1262,22 @@ dependencies = [
 name = "karva_core"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
+ "argfile",
  "camino",
+ "clap",
  "colored 3.0.0",
- "crossbeam-channel",
  "ctor",
  "ignore",
+ "karva_cache",
+ "karva_cli",
+ "karva_collector",
+ "karva_diagnostic",
+ "karva_logging",
+ "karva_metadata",
  "karva_project",
+ "karva_python_semantic",
+ "karva_system",
  "pyo3",
  "regex",
  "rstest",
@@ -1223,6 +1289,8 @@ dependencies = [
  "ruff_text_size",
  "tempfile",
  "tracing",
+ "tracing-subscriber",
+ "wild",
 ]
 
 [[package]]
@@ -1234,10 +1302,28 @@ dependencies = [
  "clap",
  "itertools 0.14.0",
  "karva_cli",
- "karva_project",
+ "karva_metadata",
  "markdown",
  "pretty_assertions",
  "ruff_options_metadata",
+]
+
+[[package]]
+name = "karva_diagnostic"
+version = "0.0.0"
+dependencies = [
+ "camino",
+ "colored 3.0.0",
+ "karva_logging",
+ "karva_python_semantic",
+ "karva_system",
+ "pyo3",
+ "ruff_db",
+ "ruff_python_ast",
+ "ruff_source_file",
+ "ruff_text_size",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1249,7 +1335,21 @@ dependencies = [
  "clap",
  "karva_project",
  "karva_projects",
+ "karva_system",
  "tempfile",
+]
+
+[[package]]
+name = "karva_logging"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "colored 3.0.0",
+ "tracing",
+ "tracing-flame",
+ "tracing-subscriber",
+ "tracing-tree",
 ]
 
 [[package]]
@@ -1264,6 +1364,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "karva_metadata"
+version = "0.0.0"
+dependencies = [
+ "camino",
+ "karva_combine",
+ "karva_macros",
+ "karva_system",
+ "ruff_db",
+ "ruff_options_metadata",
+ "ruff_python_ast",
+ "serde",
+ "thiserror",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "karva_project"
 version = "0.0.0"
 dependencies = [
@@ -1273,6 +1390,8 @@ dependencies = [
  "filetime",
  "karva_combine",
  "karva_macros",
+ "karva_metadata",
+ "karva_system",
  "ruff_db",
  "ruff_notebook",
  "ruff_options_metadata",
@@ -1291,6 +1410,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "camino",
+ "karva_system",
  "ruff_python_ast",
  "serde",
  "serde_json",
@@ -1304,6 +1424,68 @@ dependencies = [
  "karva",
  "karva_core",
  "pyo3",
+]
+
+[[package]]
+name = "karva_python_semantic"
+version = "0.0.0"
+dependencies = [
+ "camino",
+ "ruff_python_ast",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "karva_runner"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "camino",
+ "colored 3.0.0",
+ "crossbeam-channel",
+ "ctor",
+ "ignore",
+ "karva_cache",
+ "karva_cli",
+ "karva_collector",
+ "karva_diagnostic",
+ "karva_logging",
+ "karva_project",
+ "karva_python_semantic",
+ "karva_system",
+ "pyo3",
+ "regex",
+ "rstest",
+ "ruff_db",
+ "ruff_macros",
+ "ruff_python_ast",
+ "ruff_python_parser",
+ "ruff_source_file",
+ "ruff_text_size",
+ "tempfile",
+ "tracing",
+ "which",
+]
+
+[[package]]
+name = "karva_static"
+version = "0.0.0"
+
+[[package]]
+name = "karva_system"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "camino",
+ "etcetera",
+ "filetime",
+ "karva_python_semantic",
+ "karva_static",
+ "ruff_db",
+ "tempfile",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -1328,6 +1510,12 @@ dependencies = [
  "libc",
  "redox_syscall",
 ]
+
+[[package]]
+name = "linux-raw-sys"
+version = "0.4.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d26c52dbd32dccf2d10cac7725f8eae5296885fb5703b261f7d0a0739ec807ab"
 
 [[package]]
 name = "linux-raw-sys"
@@ -2073,6 +2261,19 @@ dependencies = [
 
 [[package]]
 name = "rustix"
+version = "0.38.44"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdb5bc1ae2baa591800df16c9ca78619bf65c0488b41b96ccec5d11220d8c154"
+dependencies = [
+ "bitflags",
+ "errno",
+ "libc",
+ "linux-raw-sys 0.4.15",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "rustix"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd15f8a2c5551a84d56efdc1cd049089e409ac19a3072d5037a17fd70719ff3e"
@@ -2080,7 +2281,7 @@ dependencies = [
  "bitflags",
  "errno",
  "libc",
- "linux-raw-sys",
+ "linux-raw-sys 0.11.0",
  "windows-sys 0.61.2",
 ]
 
@@ -2335,7 +2536,7 @@ dependencies = [
  "fastrand",
  "getrandom 0.3.4",
  "once_cell",
- "rustix",
+ "rustix 1.1.2",
  "windows-sys 0.61.2",
 ]
 
@@ -2345,7 +2546,7 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60b8cb979cb11c32ce1603f8137b22262a9d131aaa5c37b5678025f22b8becd0"
 dependencies = [
- "rustix",
+ "rustix 1.1.2",
  "windows-sys 0.60.2",
 ]
 
@@ -2722,6 +2923,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "which"
+version = "6.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4ee928febd44d98f2f459a4a79bd4d928591333a494a10a868418ac1b39cf1f"
+dependencies = [
+ "either",
+ "home",
+ "rustix 0.38.44",
+ "winsafe",
+]
+
+[[package]]
 name = "wild"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2736,7 +2949,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2962,6 +3175,12 @@ checksum = "5a5364e9d77fcdeeaa6062ced926ee3381faa2ee02d3eb83a5c27a8825540829"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "winsafe"
+version = "0.0.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
 
 [[package]]
 name = "wit-bindgen"

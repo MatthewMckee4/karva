@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
+use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
 use ruff_python_ast::StmtFunctionDef;
 
+use crate::Context;
 use crate::diagnostic::report_invalid_fixture_finalizer;
 use crate::extensions::fixtures::FixtureScope;
 use crate::utils::source_file;
-use crate::{Context, QualifiedFunctionName};
 
 /// Represents a generator function that can be used to run the finalizer section of a fixture.
 ///

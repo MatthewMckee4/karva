@@ -1,7 +1,8 @@
+use karva_collector::{CollectedModule, CollectedPackage, ModuleType, ParallelCollector};
 use pyo3::prelude::*;
 
 use crate::Context;
-use crate::collection::{CollectedModule, CollectedPackage, ModuleType, ParallelCollector};
+use crate::diagnostic::report_invalid_path;
 use crate::discovery::visitor::discover;
 use crate::discovery::{DiscoveredModule, DiscoveredPackage};
 use crate::utils::add_to_sys_path;
@@ -22,12 +23,27 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
             return DiscoveredPackage::new(cwd.clone());
         }
 
-        tracing::info!("Collecting test files in parallel...");
+        let collector = ParallelCollector::new(
+            self.context.db().system(),
+            self.context.project().metadata(),
+            self.context.project().settings(),
+        );
 
-        let collector = ParallelCollector::new(self.context);
-        let collected_package = collector.collect_all();
+        let test_paths = self
+            .context
+            .project()
+            .test_paths()
+            .iter()
+            .filter_map(|path| match path {
+                Ok(path) => Some(path.clone()),
+                Err(error) => {
+                    report_invalid_path(self.context, error);
+                    None
+                }
+            })
+            .collect();
 
-        tracing::info!("Discovering test functions and fixtures...");
+        let collected_package = collector.collect_all(test_paths);
 
         let mut session_package = self.convert_collected_to_discovered(py, collected_package);
 

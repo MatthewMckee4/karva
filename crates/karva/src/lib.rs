@@ -2,24 +2,19 @@ use std::ffi::OsString;
 use std::fmt::Write;
 use std::io::{self};
 use std::process::{ExitCode, Termination};
-use std::time::Instant;
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
 use karva_core::utils::current_python_version;
-use karva_core::{DummyReporter, Printer, Reporter, TestCaseReporter, TestRunResult, TestRunner};
-use karva_project::{
-    Db, OsSystem, ProjectDatabase, ProjectMetadata, ProjectOptionsOverrides, System,
-    VerbosityLevel, absolute,
-};
-use ruff_db::diagnostic::{DiagnosticFormat, DisplayDiagnosticConfig, DisplayDiagnostics};
+use karva_logging::{Printer, VerbosityLevel, set_colored_override, setup_tracing};
+use karva_metadata::{ProjectMetadata, ProjectOptionsOverrides};
+use karva_project::{Db, ProjectDatabase};
+use karva_system::{OsSystem, System, absolute};
 
-use crate::logging::setup_tracing;
-use karva_cli::{Args, Command, TerminalColor, TestCommand};
+use karva_cli::{Args, Command, TestCommand};
 
-mod logging;
 mod version;
 
 pub fn karva_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> ExitStatus {
@@ -71,11 +66,11 @@ pub(crate) fn version() -> Result<()> {
 }
 
 pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
-    let verbosity = args.verbosity.level();
+    let verbosity = args.verbosity().level();
 
-    set_colored_override(args.color);
+    set_colored_override(args.sub_command.color);
 
-    let printer = Printer::new(verbosity, args.no_progress.unwrap_or(false));
+    let printer = Printer::new(verbosity, args.sub_command.no_progress.unwrap_or(false));
 
     let _guard = setup_tracing(verbosity);
 
@@ -90,18 +85,30 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
                 })?
     };
 
+    tracing::debug!(cwd = %cwd, "Working directory");
+
     let python_version = current_python_version();
+
+    tracing::debug!(version = %python_version, "Detected Python version");
 
     let system = OsSystem::new(&cwd);
 
-    let config_file = args.config_file.as_ref().map(|path| absolute(path, &cwd));
+    let config_file = args
+        .sub_command
+        .config_file
+        .as_ref()
+        .map(|path| absolute(path, &cwd));
 
-    let mut project_metadata = match &config_file {
-        Some(config_file) => {
-            ProjectMetadata::from_config_file(config_file.clone(), &system, python_version)?
-        }
-        None => ProjectMetadata::discover(system.current_directory(), &system, python_version)?,
+    let mut project_metadata = if let Some(config_file) = &config_file {
+        ProjectMetadata::from_config_file(config_file.clone(), &system, python_version)?
+    } else {
+        ProjectMetadata::discover(system.current_directory(), &system, python_version)?
     };
+
+    let sub_command = args.sub_command.clone();
+
+    let no_parallel = args.no_parallel.unwrap_or(false);
+    let num_workers = args.num_workers;
 
     let project_options_overrides = ProjectOptionsOverrides::new(config_file, args.into_options());
     project_metadata.apply_overrides(&project_options_overrides);
@@ -116,17 +123,21 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         std::process::exit(0);
     })?;
 
-    let reporter: Box<dyn Reporter> = if verbosity.is_quiet() {
-        Box::new(DummyReporter)
+    let num_workers = if no_parallel {
+        1
     } else {
-        Box::new(TestCaseReporter::new(printer))
+        num_workers.unwrap_or_else(|| karva_system::max_parallelism().get())
     };
 
-    let start_time = Instant::now();
+    let config = karva_runner::ParallelTestConfig { num_workers };
 
-    let result = db.test_with_reporter(&*reporter);
+    let result = karva_runner::run_parallel_tests(&db, &config, &sub_command, printer)?;
 
-    display_test_output(&db, &result, printer, start_time)
+    if result {
+        Ok(ExitStatus::Success)
+    } else {
+        Ok(ExitStatus::Failure)
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -150,96 +161,5 @@ impl Termination for ExitStatus {
 impl ExitStatus {
     pub const fn to_i32(self) -> i32 {
         self as i32
-    }
-}
-
-fn set_colored_override(color: Option<TerminalColor>) {
-    let Some(color) = color else {
-        return;
-    };
-
-    match color {
-        TerminalColor::Auto => {
-            colored::control::unset_override();
-        }
-        TerminalColor::Always => {
-            colored::control::set_override(true);
-        }
-        TerminalColor::Never => {
-            colored::control::set_override(false);
-        }
-    }
-}
-
-fn display_test_output(
-    db: &dyn Db,
-    result: &TestRunResult,
-    printer: Printer,
-    start_time: Instant,
-) -> Result<ExitStatus> {
-    let discovery_diagnostics = result.discovery_diagnostics();
-
-    let diagnostics = result.diagnostics();
-
-    let mut stdout = printer.stream_for_details().lock();
-
-    let diagnostic_format = db.project().settings().terminal().output_format.into();
-
-    let config = DisplayDiagnosticConfig::default()
-        .format(diagnostic_format)
-        .color(colored::control::SHOULD_COLORIZE.should_colorize());
-
-    let is_concise = matches!(diagnostic_format, DiagnosticFormat::Concise);
-
-    if (!diagnostics.is_empty() || !discovery_diagnostics.is_empty())
-        && result.stats().total() > 0
-        && stdout.is_enabled()
-    {
-        writeln!(stdout)?;
-    }
-
-    if !discovery_diagnostics.is_empty() && stdout.is_enabled() {
-        writeln!(stdout, "discovery diagnostics:")?;
-        writeln!(stdout)?;
-        write!(
-            stdout,
-            "{}",
-            DisplayDiagnostics::new(db, &config, discovery_diagnostics)
-        )?;
-
-        if is_concise {
-            writeln!(stdout)?;
-        }
-    }
-
-    if !diagnostics.is_empty() && stdout.is_enabled() {
-        writeln!(stdout, "diagnostics:")?;
-        writeln!(stdout)?;
-        write!(
-            stdout,
-            "{}",
-            DisplayDiagnostics::new(db, &config, diagnostics)
-        )?;
-
-        if is_concise {
-            writeln!(stdout)?;
-        }
-    }
-
-    if (diagnostics.is_empty() && discovery_diagnostics.is_empty())
-        && result.stats().total() > 0
-        && stdout.is_enabled()
-    {
-        writeln!(stdout)?;
-    }
-
-    let mut result_stdout = printer.stream_for_failure_summary().lock();
-
-    write!(result_stdout, "{}", result.stats().display(start_time))?;
-
-    if result.is_success() {
-        Ok(ExitStatus::Success)
-    } else {
-        Ok(ExitStatus::Failure)
     }
 }

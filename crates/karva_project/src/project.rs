@@ -1,6 +1,8 @@
 use camino::Utf8PathBuf;
+use karva_metadata::ProjectSettings;
+use karva_system::{TestPath, TestPathError, absolute};
 
-use crate::{ProjectMetadata, ProjectSettings, TestPath, TestPathError, absolute};
+use crate::ProjectMetadata;
 
 #[derive(Debug, Clone)]
 pub struct Project {

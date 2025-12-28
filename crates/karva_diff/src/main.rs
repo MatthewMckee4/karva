@@ -6,15 +6,15 @@ use std::process::{Command, ExitCode};
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
-use karva_project::absolute;
 use karva_projects::{RealWorldProject, all_projects};
+use karva_system::absolute;
 use tempfile::NamedTempFile;
 
 #[derive(Debug, Parser)]
 struct Args {
-    old_karva_binary: Utf8PathBuf,
+    old_karva_wheel: Utf8PathBuf,
 
-    new_karva_binary: Utf8PathBuf,
+    new_karva_wheel: Utf8PathBuf,
 
     output_diff_file: Utf8PathBuf,
 
@@ -35,12 +35,12 @@ fn main() -> Result<ExitCode> {
                 })?
     };
 
-    if args.old_karva_binary.is_relative() {
-        args.old_karva_binary = absolute(&args.old_karva_binary, &cwd);
+    if args.old_karva_wheel.is_relative() {
+        args.old_karva_wheel = absolute(&args.old_karva_wheel, &cwd);
     }
 
-    if args.new_karva_binary.is_relative() {
-        args.new_karva_binary = absolute(&args.new_karva_binary, &cwd);
+    if args.new_karva_wheel.is_relative() {
+        args.new_karva_wheel = absolute(&args.new_karva_wheel, &cwd);
     }
 
     let mut old_temp = NamedTempFile::new()?;
@@ -95,10 +95,19 @@ fn run(
         .map(|path| installed_project.path.join(path).to_string())
         .collect();
 
+    // Install old wheel
+    Command::new("uv")
+        .arg("pip")
+        .arg("install")
+        .arg(&args.old_karva_wheel)
+        .current_dir(&installed_project.path)
+        .output()
+        .context("Failed to install old karva wheel")?;
+
     let old_output = Command::new("uv")
         .arg("run")
         .arg("--no-project")
-        .arg(&args.old_karva_binary)
+        .arg("karva")
         .arg("test")
         .args(&paths)
         .arg("--output-format")
@@ -108,7 +117,17 @@ fn run(
         .arg("never")
         .current_dir(&installed_project.path)
         .output()
-        .context("Failed to run old karva binary")?;
+        .context("Failed to run old karva")?;
+
+    // Uninstall old wheel
+    Command::new("uv")
+        .arg("pip")
+        .arg("uninstall")
+        .arg("karva")
+        .arg("-y")
+        .current_dir(&installed_project.path)
+        .output()
+        .context("Failed to uninstall old karva wheel")?;
 
     if !old_output.stdout.is_empty() {
         println!(
@@ -123,10 +142,19 @@ fn run(
         );
     }
 
+    // Install new wheel
+    Command::new("uv")
+        .arg("pip")
+        .arg("install")
+        .arg(&args.new_karva_wheel)
+        .current_dir(&installed_project.path)
+        .output()
+        .context("Failed to install new karva wheel")?;
+
     let new_output = Command::new("uv")
         .arg("run")
         .arg("--no-project")
-        .arg(&args.new_karva_binary)
+        .arg("karva")
         .arg("test")
         .args(&paths)
         .arg("--output-format")
@@ -136,7 +164,7 @@ fn run(
         .arg("never")
         .current_dir(&installed_project.path)
         .output()
-        .context("Failed to run new karva binary")?;
+        .context("Failed to run new karva")?;
 
     if !new_output.stdout.is_empty() {
         println!(

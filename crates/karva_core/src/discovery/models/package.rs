@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use camino::Utf8PathBuf;
+use karva_python_semantic::ModulePath;
 
 use crate::discovery::DiscoveredModule;
-use crate::name::ModulePath;
 
 /// A package represents a single python directory.
 #[derive(Debug)]
@@ -62,6 +62,10 @@ impl DiscoveredPackage {
     /// Remove empty modules and packages.
     pub(crate) fn shrink(&mut self) {
         self.modules.retain(|_, module| !module.is_empty());
+
+        for module in self.modules.values_mut() {
+            module.shrink();
+        }
 
         if let Some(configuration_module) = self.configuration_module_path.as_ref() {
             if !self.modules.contains_key(configuration_module.path()) {

@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use camino::Utf8PathBuf;
+use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::QualifiedFunctionName;
 use crate::extensions::fixtures::NormalizedFixture;
 use crate::extensions::tags::Tags;
 

@@ -285,6 +285,20 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
         String::from_utf8_lossy(&output.stderr)
     );
 
+    if let Ok(karva_wheel) = karva_system::find_karva_wheel() {
+        let output = Command::new("uv")
+            .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
+            .arg(karva_wheel)
+            .output()
+            .context("Failed to execute uv pip install command")?;
+
+        anyhow::ensure!(
+            output.status.success(),
+            "Package installation failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
     if checkout.project().install_root {
         let output = Command::new("uv")
             .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
