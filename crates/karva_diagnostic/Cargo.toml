@@ -9,6 +9,9 @@ repository.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[features]
+traceback = ["pyo3"]
+
 [dependencies]
 karva_logging = { workspace = true }
 karva_python_semantic = { workspace = true }
@@ -21,9 +24,6 @@ ruff_db = { workspace = true }
 ruff_source_file = { workspace = true }
 ruff_text_size = { workspace = true }
 serde = { workspace = true }
-
-[features]
-traceback = ["pyo3"]
 
 [lints]
 workspace = true
