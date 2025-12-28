@@ -217,6 +217,7 @@ jobs:
     if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
 
     strategy:
+      fail-fast: false
       matrix:
         project: ${{ fromJson(needs.generate-walltime-benchmarks-matrix.outputs.projects) }}
 
