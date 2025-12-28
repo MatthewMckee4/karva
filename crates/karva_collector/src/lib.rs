@@ -1,11 +1,10 @@
 mod models;
 
 use karva_metadata::{ProjectMetadata, ProjectSettings};
-use karva_static::EnvVars;
 pub use models::{CollectedModule, CollectedPackage, ModuleType};
 
+use std::sync::Arc;
 use std::thread;
-use std::{num::NonZeroUsize, sync::Arc};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use crossbeam_channel::unbounded;
@@ -186,7 +185,7 @@ impl<'a> ParallelCollector<'a> {
 
     /// Creates a configured parallel directory walker for Python file discovery.
     fn create_parallel_walker(&self, path: &Utf8PathBuf) -> ignore::WalkParallel {
-        let num_threads = max_parallelism().get();
+        let num_threads = karva_system::max_parallelism().get();
 
         WalkBuilder::new(path)
             .threads(num_threads)
@@ -249,13 +248,4 @@ fn collect_file(
     }
 
     Some(collected_module)
-}
-
-pub fn max_parallelism() -> NonZeroUsize {
-    std::env::var(EnvVars::RAYON_NUM_THREADS)
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or_else(|| {
-            std::thread::available_parallelism().unwrap_or_else(|_| NonZeroUsize::new(1).unwrap())
-        })
 }

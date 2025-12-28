@@ -11,14 +11,14 @@ authors = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
-karva_project = { workspace = true }
-karva_system = { workspace = true }
-karva_python_semantic = { workspace = true }
-karva_collector = { workspace = true }
 karva_cache = { workspace = true }
+karva_cli = { workspace = true }
+karva_collector = { workspace = true }
 karva_diagnostic = { workspace = true }
 karva_logging = { workspace = true }
-karva_cli = { workspace = true }
+karva_project = { workspace = true }
+karva_python_semantic = { workspace = true }
+karva_system = { workspace = true }
 
 anyhow = { workspace = true }
 camino = { workspace = true }

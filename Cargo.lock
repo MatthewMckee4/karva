@@ -1173,6 +1173,7 @@ dependencies = [
  "karva_metadata",
  "karva_project",
  "karva_runner",
+ "karva_static",
  "karva_system",
  "regex",
  "rstest",
@@ -1241,7 +1242,6 @@ dependencies = [
  "ignore",
  "karva_metadata",
  "karva_python_semantic",
- "karva_static",
  "karva_system",
  "ruff_python_ast",
  "ruff_python_parser",
@@ -1474,8 +1474,10 @@ dependencies = [
  "etcetera",
  "filetime",
  "karva_python_semantic",
+ "karva_static",
  "ruff_db",
  "tempfile",
+ "thiserror",
  "tracing",
 ]
 

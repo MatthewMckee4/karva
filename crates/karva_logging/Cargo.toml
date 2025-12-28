@@ -10,13 +10,13 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+chrono = { workspace = true }
 clap = { workspace = true }
+colored = { workspace = true }
 tracing = { workspace = true, features = ["release_max_level_debug"] }
 tracing-flame = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
 tracing-tree = { workspace = true }
-colored = { workspace = true }
-chrono = { workspace = true }
 
 [lints]
 workspace = true

@@ -54,7 +54,7 @@ impl VerbosityLevel {
 
     pub const fn cli_arg(self) -> Option<&'static str> {
         match self {
-            Self::Silent => Some("-s"),
+            Self::Silent => Some("-qq"),
             Self::Quiet => Some("-q"),
             Self::Default => None,
             Self::Verbose => Some("-v"),

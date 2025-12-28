@@ -8,7 +8,6 @@ use karva_cli::{OutputFormat, SubTestCommand};
 use karva_collector::ParallelCollector;
 use karva_logging::Printer;
 use karva_project::{Db, ProjectDatabase};
-use karva_python_semantic::QualifiedFunctionName;
 
 pub struct ParallelTestConfig {
     pub num_workers: usize,
@@ -24,12 +23,16 @@ pub fn run_parallel_tests(
 ) -> Result<bool> {
     let start_time = std::time::Instant::now();
 
-    let test_paths: Vec<_> = db
-        .project()
-        .test_paths()
-        .into_iter()
-        .filter_map(Result::ok)
-        .collect();
+    let mut test_paths = Vec::new();
+
+    for path in db.project().test_paths() {
+        match path {
+            Ok(path) => test_paths.push(path),
+            Err(err) => {
+                anyhow::bail!(err);
+            }
+        }
+    }
 
     tracing::debug!(path_count = test_paths.len(), "Found test paths");
 
@@ -41,7 +44,7 @@ pub fn run_parallel_tests(
     );
     let collected = collector.collect_all(test_paths);
 
-    let test_paths = collected_to_test_paths(&collected, db.project().cwd());
+    let test_paths = collected_to_test_paths(&collected);
 
     tracing::info!(test_count = test_paths.len(), "Collected tests");
 
@@ -83,6 +86,22 @@ pub fn run_parallel_tests(
 
         if let Some(output) = args.output_format {
             cmd.arg("--output-format").arg(output.as_str());
+        }
+
+        if let Some(test_prefix) = args.test_prefix.as_ref() {
+            cmd.arg("--test-prefix").arg(test_prefix);
+        }
+
+        if let Some(config_file) = args.config_file.as_ref() {
+            cmd.arg("--config-file").arg(config_file);
+        }
+
+        if args.no_ignore.is_some_and(|no_ignore| no_ignore) {
+            cmd.arg("--no-ignore");
+        }
+
+        if args.no_progress.is_some_and(|no_progress| no_progress) {
+            cmd.arg("--no-progress");
         }
 
         for path in paths {
@@ -172,43 +191,29 @@ pub fn run_parallel_tests(
 }
 
 /// Convert collected package to test path strings
-fn collected_to_test_paths(
-    package: &karva_collector::CollectedPackage,
-    project_root: &Utf8PathBuf,
-) -> Vec<String> {
+fn collected_to_test_paths(package: &karva_collector::CollectedPackage) -> Vec<String> {
     let mut test_paths = Vec::new();
 
     // Recursively collect test paths from the package
-    collect_test_paths_recursive(package, project_root, &mut test_paths);
+    collect_test_paths_recursive(package, &mut test_paths);
 
     test_paths
 }
 
 fn collect_test_paths_recursive(
     package: &karva_collector::CollectedPackage,
-    project_root: &Utf8PathBuf,
     test_paths: &mut Vec<String>,
 ) {
     // For each module in package
     for module in package.modules.values() {
-        // Create a module path for this file
-        let Some(module_path) =
-            karva_python_semantic::ModulePath::new(module.path.path().clone(), project_root)
-        else {
-            continue;
-        };
-
-        // For each test function in the module
         for test_fn_def in &module.test_function_defs {
-            let qualified_name =
-                QualifiedFunctionName::new(test_fn_def.name.to_string(), module_path.clone());
-            test_paths.push(qualified_name.to_string());
+            test_paths.push(format!("{}::{}", module.path.path(), test_fn_def.name));
         }
     }
 
     // Recurse into subpackages
     for subpackage in package.packages.values() {
-        collect_test_paths_recursive(subpackage, project_root, test_paths);
+        collect_test_paths_recursive(subpackage, test_paths);
     }
 }
 

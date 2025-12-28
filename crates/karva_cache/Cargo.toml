@@ -10,17 +10,17 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-karva_project = { workspace = true }
 karva_diagnostic = { workspace = true }
+karva_project = { workspace = true }
 
 anyhow = { workspace = true }
 camino = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 rand = "0.8"
-tracing = { workspace = true }
 ruff_db = { workspace = true }
 ruff_text_size = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

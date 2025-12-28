@@ -120,6 +120,8 @@ pub struct SubTestCommand {
     pub no_ignore: Option<bool>,
 
     /// When set, the test will fail immediately if any test fails.
+    ///
+    /// This only works when running tests in parallel.
     #[clap(long, default_missing_value = "true", num_args=0..1)]
     pub fail_fast: Option<bool>,
 

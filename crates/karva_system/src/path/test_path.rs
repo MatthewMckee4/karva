@@ -1,7 +1,6 @@
-use std::fmt::Formatter;
-
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_python_semantic::is_python_file;
+use thiserror::Error;
 
 fn try_convert_to_py_path(path: &Utf8Path) -> Result<Utf8PathBuf, TestPathError> {
     if path.exists() {
@@ -99,11 +98,15 @@ impl TestPath {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum TestPathError {
+    #[error("path `{0}` could not be found")]
     NotFound(Utf8PathBuf),
+    #[error("path `{0}` has a wrong file extension")]
     WrongFileExtension(Utf8PathBuf),
+    #[error("path `{0}` is invalid")]
     InvalidUtf8Path(Utf8PathBuf),
+    #[error("path `{0}` is missing a function name")]
     MissingFunctionName(Utf8PathBuf),
 }
 
@@ -114,21 +117,6 @@ impl TestPathError {
             | Self::WrongFileExtension(path)
             | Self::InvalidUtf8Path(path)
             | Self::MissingFunctionName(path) => path,
-        }
-    }
-}
-
-impl std::fmt::Display for TestPathError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NotFound(path) => write!(f, "path `{path}` could not be found"),
-            Self::WrongFileExtension(path) => {
-                write!(f, "path `{path}` has a wrong file extension")
-            }
-            Self::InvalidUtf8Path(path) => write!(f, "path `{path}` is invalid"),
-            Self::MissingFunctionName(path) => {
-                write!(f, "invalid function specification: `{path}::`")
-            }
         }
     }
 }

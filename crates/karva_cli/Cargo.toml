@@ -10,9 +10,9 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-karva_project = { workspace = true }
 karva_logging = { workspace = true }
 karva_metadata = { workspace = true }
+karva_project = { workspace = true }
 
 camino = { workspace = true }
 clap = { workspace = true, features = ["wrap_help", "string", "env"] }

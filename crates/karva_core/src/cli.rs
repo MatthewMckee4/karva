@@ -109,11 +109,12 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     let _guard = setup_tracing(verbosity);
 
-    // Initialize project database (similar to karva crate setup)
     let cwd = args.project_root.clone();
-    tracing::debug!(project_root = %cwd, "Setting project root");
+
+    tracing::debug!(cwd = %cwd, "Working directory");
 
     let python_version = current_python_version();
+
     tracing::debug!(version = %python_version, "Detected Python version");
 
     let system = OsSystem::new(&cwd);
@@ -125,10 +126,8 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         .map(|path| absolute(path, &cwd));
 
     let mut project_metadata = if let Some(config_file) = &config_file {
-        tracing::debug!(config_file = %config_file, "Loading project metadata from config file");
         ProjectMetadata::from_config_file(config_file.clone(), &system, python_version)?
     } else {
-        tracing::debug!("Discovering project metadata");
         ProjectMetadata::discover(system.current_directory(), &system, python_version)?
     };
 
@@ -136,8 +135,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         ProjectOptionsOverrides::new(config_file, args.sub_command.into_options());
     project_metadata.apply_overrides(&project_options_overrides);
 
-    let db = ProjectDatabase::new(project_metadata, system)
-        .context("Failed to initialize project database")?;
+    let db = ProjectDatabase::new(project_metadata, system)?;
 
     let run_hash = RunHash(args.run_hash.clone());
 

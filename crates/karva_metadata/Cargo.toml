@@ -11,17 +11,17 @@ license.workspace = true
 
 [dependencies]
 karva_combine = { workspace = true }
-karva_system = { workspace = true }
 karva_macros = { workspace = true }
+karva_system = { workspace = true }
 
+camino = { workspace = true }
 ruff_db = { workspace = true }
+ruff_options_metadata = { workspace = true }
+ruff_python_ast = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
-ruff_python_ast = { workspace = true }
-camino = { workspace = true }
-tracing = { workspace = true }
 toml = { workspace = true }
-ruff_options_metadata = { workspace = true }
+tracing = { workspace = true }
 
 [lints]
 workspace = true

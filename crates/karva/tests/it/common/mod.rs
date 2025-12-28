@@ -151,6 +151,12 @@ impl TestContext {
         command.current_dir(self.root()).arg("test");
         command
     }
+
+    pub fn command_no_parallel(&self) -> Command {
+        let mut command = self.command();
+        command.arg("--no-parallel");
+        command
+    }
 }
 
 impl Default for TestContext {

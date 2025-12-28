@@ -11,12 +11,14 @@ license.workspace = true
 
 [dependencies]
 karva_python_semantic = { workspace = true }
+karva_static = { workspace = true }
 
-ruff_db = { workspace = true }
 camino = { workspace = true }
-filetime = { workspace = true }
-tracing = { workspace = true }
 etcetera = { workspace = true }
+filetime = { workspace = true }
+ruff_db = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

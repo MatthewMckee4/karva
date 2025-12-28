@@ -1,6 +1,6 @@
 mod orchestration;
 
-pub use orchestration::{run_parallel_tests, ParallelTestConfig};
+pub use orchestration::{ParallelTestConfig, run_parallel_tests};
 
 // Re-export from karva_collector
 pub use karva_collector::{CollectedModule, CollectedPackage, ModuleType, ParallelCollector};

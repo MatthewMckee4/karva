@@ -78,8 +78,6 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     let _guard = setup_tracing(verbosity);
 
-    tracing::info!("Starting test execution");
-
     let cwd = {
         let cwd = std::env::current_dir().context("Failed to get the current working directory")?;
         Utf8PathBuf::from_path_buf(cwd)
@@ -91,9 +89,10 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
                 })?
     };
 
-    tracing::debug!(cwd = %cwd, "Working directory set");
+    tracing::debug!(cwd = %cwd, "Working directory");
 
     let python_version = current_python_version();
+
     tracing::debug!(version = %python_version, "Detected Python version");
 
     let system = OsSystem::new(&cwd);
@@ -112,7 +111,6 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     let sub_command = args.sub_command.clone();
 
-    // Extract values before consuming args
     let no_parallel = args.no_parallel.unwrap_or(false);
     let num_workers = args.num_workers;
 
@@ -133,7 +131,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let worker_count = if no_parallel {
         1
     } else {
-        num_workers.unwrap_or_else(|| ruff_db::max_parallelism().get())
+        num_workers.unwrap_or_else(|| karva_system::max_parallelism().get())
     };
 
     let result = if worker_count > 1 {

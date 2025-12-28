@@ -383,6 +383,7 @@ def test_second():
     success: false
     exit_code: 1
     ----- stdout -----
+    test test::test_second ... ok
     test test::test_first ... FAILED
 
     diagnostics:
@@ -404,7 +405,7 @@ def test_second():
     5 | def test_second():
       |
 
-    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+    test result: FAILED. 1 passed; 1 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
     ");
@@ -795,6 +796,7 @@ def pyproject_test(): pass
 
     ----- stderr -----
     WARN Ignoring the `tool.ty` section in `<temp_dir>/pyproject.toml` because `<temp_dir>/karva.toml` takes precedence.
+    WARN Ignoring the `tool.ty` section in `<temp_dir>/pyproject.toml` because `<temp_dir>/karva.toml` takes precedence.
     ");
 }
 
@@ -1021,6 +1023,7 @@ def test_second():
     success: false
     exit_code: 1
     ----- stdout -----
+    test test::test_second ... ok
     test test::test_first ... FAILED
 
     diagnostics:
@@ -1042,7 +1045,7 @@ def test_second():
     5 | def test_second():
       |
 
-    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+    test result: FAILED. 1 passed; 1 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
     ");
@@ -1124,7 +1127,7 @@ def config_should_not_run(): pass
     // Multiple CLI arguments should all override their respective config values
     assert_cmd_snapshot!(
         context
-            .command()
+            .command_no_parallel()
             .arg("--test-prefix")
             .arg("custom")
             .arg("--output-format")
@@ -1238,6 +1241,7 @@ def cli_should_run(): pass
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
+    WARN Ignoring the `tool.ty` section in `<temp_dir>/pyproject.toml` because `<temp_dir>/karva.toml` takes precedence.
     WARN Ignoring the `tool.ty` section in `<temp_dir>/pyproject.toml` because `<temp_dir>/karva.toml` takes precedence.
     ");
 }

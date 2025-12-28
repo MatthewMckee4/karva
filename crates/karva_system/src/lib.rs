@@ -1,8 +1,9 @@
-use std::fmt::Debug;
 use std::sync::Arc;
+use std::{fmt::Debug, num::NonZeroUsize};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use filetime::FileTime;
+use karva_static::EnvVars;
 use ruff_db::system::{FileType, Metadata};
 
 mod path;
@@ -110,4 +111,14 @@ impl System for OsSystem {
     fn current_directory(&self) -> &Utf8Path {
         &self.inner.cwd
     }
+}
+
+pub fn max_parallelism() -> NonZeroUsize {
+    std::env::var(EnvVars::KARVA_MAX_PARALLELISM)
+        .or_else(|_| std::env::var(EnvVars::RAYON_NUM_THREADS))
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism().unwrap_or_else(|_| NonZeroUsize::new(1).unwrap())
+        })
 }

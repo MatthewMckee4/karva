@@ -10,16 +10,15 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+karva_metadata = { workspace = true }
 karva_python_semantic = { workspace = true }
 karva_system = { workspace = true }
-karva_static = { workspace = true }
-karva_metadata = { workspace = true }
 
-ruff_python_ast = { workspace = true }
-ruff_python_parser = { workspace = true }
 camino = { workspace = true }
 crossbeam-channel = { workspace = true }
 ignore = { workspace = true }
+ruff_python_ast = { workspace = true }
+ruff_python_parser = { workspace = true }
 tracing = { workspace = true }
 
 [lints]

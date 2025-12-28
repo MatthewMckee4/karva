@@ -22,7 +22,7 @@ def test_4(): pass",
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command().arg("test_file1.py"), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("test_file1.py"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -97,7 +97,7 @@ def test_1(): pass
 def test_2(): pass",
     );
 
-    assert_cmd_snapshot!(context.command().args(["test.py::test_1", "test.py"]), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().args(["test.py::test_1", "test.py"]), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -120,7 +120,7 @@ def test_1(): pass
 def test_2(): pass",
     );
 
-    assert_cmd_snapshot!(context.command().args(["test.py::test_1", "."]), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().args(["test.py::test_1", "."]), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -239,13 +239,13 @@ fn test_fail_concise_output() {
     ",
     );
 
-    assert_cmd_snapshot!(context.command().arg("--output-format").arg("concise"), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--output-format").arg("concise"), @r"
     success: false
     exit_code: 1
     ----- stdout -----
     test test_fail::test_1(fixture_1=1) ... FAILED
-    test test_fail::test_3 ... FAILED
     test test_fail::test_2 ... FAILED
+    test test_fail::test_3 ... FAILED
 
     diagnostics:
 
@@ -275,7 +275,7 @@ fn test_two_test_fails() {
     ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -455,7 +455,19 @@ fn test_stdout() {
         ",
     );
 
-    assert_cmd_snapshot!(context.command().args(["-s"]), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("-s"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test_std_out_redirected::test_std_out_redirected ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+    Hello, world!
+
+    ----- stderr -----
+    ");
+
+    assert_cmd_snapshot!(context.command().arg("-s"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -571,15 +583,12 @@ fn test_text_file() {
         context.command().args(["random.txt"]),
         @r"
     success: false
-    exit_code: 1
+    exit_code: 2
     ----- stdout -----
-    discovery diagnostics:
-
-    error[invalid-path]: Invalid path: path `<temp_dir>/random.txt` has a wrong file extension
-
-    test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
+    Karva failed
+      Cause: path `<temp_dir>/random.txt` has a wrong file extension
     ");
 }
 
@@ -632,15 +641,12 @@ fn test_invalid_path() {
 
     assert_cmd_snapshot!(context.command().arg("non_existing_path.py"), @r"
     success: false
-    exit_code: 1
+    exit_code: 2
     ----- stdout -----
-    discovery diagnostics:
-
-    error[invalid-path]: Invalid path: path `<temp_dir>/non_existing_path.py` could not be found
-
-    test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
+    Karva failed
+      Cause: path `<temp_dir>/non_existing_path.py` could not be found
     ");
 }
 
@@ -871,7 +877,7 @@ def test_conditional_skip():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -1008,7 +1014,7 @@ def test_normal():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -1037,7 +1043,7 @@ fn test_failfast() {
         ",
     );
 
-    assert_cmd_snapshot!(context.command().args(["--fail-fast"]), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--fail-fast"]), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1281,13 +1287,13 @@ def test_expected_fail_passes():
         ),
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
-    test test_expect_fail::test_expected_fail_passes ... FAILED
-    test test_expect_fail::test_normal_pass ... ok
     test test_expect_fail::test_expected_to_fail ... ok
+    test test_expect_fail::test_normal_pass ... ok
+    test test_expect_fail::test_expected_fail_passes ... FAILED
 
     diagnostics:
 
@@ -1331,13 +1337,13 @@ def test_expected_fail_passes():
         ),
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
+    test test_expect_fail::test_expected_to_fail ... ok
     test test_expect_fail::test_normal_pass ... ok
     test test_expect_fail::test_expected_fail_passes ... FAILED
-    test test_expect_fail::test_expected_to_fail ... ok
 
     diagnostics:
 
@@ -1372,12 +1378,12 @@ def test_normal():
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
-    test test_fail::test_normal ... ok
     test test_fail::test_with_fail ... FAILED
+    test test_fail::test_normal ... ok
 
     diagnostics:
 
@@ -1557,12 +1563,12 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.command().arg("-s"), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("-s"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
-    test test::test_1 ... ok
     test test::test_setenv(monkeypatch=<MockEnv object>) ... ok
+    test test::test_1 ... ok
 
     test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
 
