@@ -1170,7 +1170,6 @@ dependencies = [
  "insta",
  "insta-cmd",
  "karva_cli",
- "karva_core",
  "karva_logging",
  "karva_metadata",
  "karva_project",
