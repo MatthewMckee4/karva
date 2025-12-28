@@ -1214,6 +1214,7 @@ dependencies = [
  "camino",
  "karva_diagnostic",
  "karva_project",
+ "karva_python_semantic",
  "rand 0.8.5",
  "ruff_db",
  "ruff_text_size",
@@ -1431,6 +1432,8 @@ version = "0.0.0"
 dependencies = [
  "camino",
  "ruff_python_ast",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

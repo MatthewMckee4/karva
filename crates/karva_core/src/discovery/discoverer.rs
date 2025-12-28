@@ -23,8 +23,6 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
             return DiscoveredPackage::new(cwd.clone());
         }
 
-        tracing::info!("Collecting test files in parallel...");
-
         let collector = ParallelCollector::new(
             self.context.db().system(),
             self.context.project().metadata(),

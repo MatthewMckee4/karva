@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
-use karva_cache::{AggregatedResults, CACHE_DIR, CacheReader, RunHash};
+use karva_cache::{AggregatedResults, CACHE_DIR, CacheReader, RunHash, reader::read_recent_durations};
 use karva_cli::{OutputFormat, SubTestCommand};
 use karva_collector::ParallelCollector;
 use karva_logging::Printer;
@@ -47,17 +47,14 @@ impl WorkerManager {
     fn wait_all(&mut self) -> usize {
         let num_workers = self.workers.len();
 
-        tracing::info!(
-            workers = num_workers,
-            "All workers spawned, waiting for completion"
-        );
+        tracing::info!("All workers spawned, waiting for completion");
 
         while !self.workers.is_empty() {
             self.workers
                 .retain_mut(|worker| match worker.child.try_wait() {
                     Ok(Some(status)) => {
                         if status.success() {
-                            tracing::debug!(
+                            tracing::info!(
                                 "Worker {} completed successfully in {}",
                                 worker.id,
                                 format_duration(worker.duration()),
@@ -129,7 +126,7 @@ fn spawn_workers(
             .spawn()
             .context("Failed to spawn karva_core worker process")?;
 
-        tracing::debug!(
+        tracing::info!(
             "Worker {} spawned with {} tests",
             worker_id,
             partition.tests().len()
@@ -168,17 +165,34 @@ pub fn run_parallel_tests(
         db.project().settings(),
     );
 
+    let collection_start_time = std::time::Instant::now();
+
     let collected = collector.collect_all(test_paths);
+
+    tracing::info!(
+        "Collected all tests in {}",
+        format_duration(collection_start_time.elapsed())
+    );
 
     tracing::debug!("Attempting to create {} workers", config.num_workers);
 
-    let partitions = partition_collected_tests(&collected, config.num_workers);
-
-    let run_hash = RunHash::random();
-
     let cache_dir = db.project().cwd().join(CACHE_DIR);
 
-    tracing::info!(worker_count = partitions.len(), "Spawning worker processes");
+    // Read durations from the most recent run to optimize partitioning
+    let previous_durations = read_recent_durations(&cache_dir).unwrap_or_default();
+
+    if !previous_durations.is_empty() {
+        tracing::debug!(
+            "Found {} previous test durations to guide partitioning",
+            previous_durations.len()
+        );
+    }
+
+    let partitions = partition_collected_tests(&collected, config.num_workers, &previous_durations);
+
+    let run_hash = RunHash::current_time();
+
+    tracing::info!("Attempting to spawn {} workers", partitions.len());
 
     let mut worker_manager = spawn_workers(db, &partitions, &cache_dir, &run_hash, args, printer)?;
 

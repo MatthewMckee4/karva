@@ -3,7 +3,7 @@ use std::time::Instant;
 use std::{collections::HashMap, fmt};
 
 use colored::Colorize;
-use karva_python_semantic::QualifiedTestName;
+use karva_python_semantic::{QualifiedFunctionName, QualifiedTestName};
 use karva_system::time::format_duration;
 use ruff_db::diagnostic::Diagnostic;
 use serde::de::{self, MapAccess};
@@ -24,6 +24,8 @@ pub struct TestRunResult {
 
     /// Stats generated during test execution.
     stats: TestResultStats,
+
+    durations: HashMap<QualifiedFunctionName, std::time::Duration>,
 }
 
 impl TestRunResult {
@@ -65,18 +67,29 @@ impl TestRunResult {
         &mut self,
         test_case_name: &QualifiedTestName,
         result: IndividualTestResultKind,
+        duration: std::time::Duration,
         reporter: Option<&dyn Reporter>,
     ) {
         self.stats.add(result.clone().into());
+
         if let Some(reporter) = reporter {
             reporter.report_test_case_result(test_case_name, result);
         }
+
+        self.durations
+            .entry(test_case_name.function_name().clone())
+            .and_modify(|existing_duration| *existing_duration += duration)
+            .or_insert(duration);
     }
 
     #[must_use]
     pub fn into_sorted(mut self) -> Self {
         self.diagnostics.sort_by(Diagnostic::ruff_start_ordering);
         self
+    }
+
+    pub const fn durations(&self) -> &HashMap<QualifiedFunctionName, std::time::Duration> {
+        &self.durations
     }
 }
 

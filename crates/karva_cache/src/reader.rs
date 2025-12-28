@@ -1,10 +1,14 @@
+use std::collections::HashMap;
 use std::fs;
+use std::time::Duration;
 
 use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_diagnostic::TestResultStats;
 
-use crate::{DIAGNOSTICS_FILE, DISCOVER_DIAGNOSTICS_FILE, RunHash, STATS_FILE, worker_folder};
+use crate::{
+    DIAGNOSTICS_FILE, DISCOVER_DIAGNOSTICS_FILE, DURATIONS_FILE, RunHash, STATS_FILE, worker_folder,
+};
 
 pub struct AggregatedResults {
     pub stats: TestResultStats,
@@ -84,4 +88,62 @@ fn read_worker_results(
     }
 
     Ok(())
+}
+
+/// Read durations from the most recent test run
+///
+/// This function finds the most recent run directory by sorting run-{timestamp:x}
+/// directories, then aggregates all durations from all worker directories.
+pub fn read_recent_durations(cache_dir: &Utf8PathBuf) -> Result<HashMap<String, Duration>> {
+    let entries = fs::read_dir(cache_dir)?;
+
+    let mut run_dirs = Vec::new();
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
+                if dir_name.starts_with("run-") {
+                    run_dirs.push(dir_name.to_string());
+                }
+            }
+        }
+    }
+
+    run_dirs.sort();
+
+    let most_recent = run_dirs
+        .last()
+        .ok_or_else(|| anyhow::anyhow!("No run directories found"))?;
+
+    let run_dir = cache_dir.join(most_recent);
+
+    let mut aggregated_durations = HashMap::new();
+
+    let worker_entries = fs::read_dir(&run_dir)?;
+
+    for entry in worker_entries {
+        let entry = entry?;
+        let worker_path = Utf8PathBuf::try_from(entry.path())
+            .map_err(|e| anyhow::anyhow!("Invalid UTF-8 path: {e}"))?;
+
+        if !worker_path.is_dir() {
+            continue;
+        }
+
+        let durations_path = worker_path.join(DURATIONS_FILE);
+        if !durations_path.exists() {
+            continue;
+        }
+
+        let content = fs::read_to_string(&durations_path)?;
+        let durations: HashMap<String, Duration> = serde_json::from_str(&content)?;
+
+        // Convert QualifiedTestName to String for easier lookup
+        for (test_name, duration) in durations {
+            aggregated_durations.insert(test_name, duration);
+        }
+    }
+
+    Ok(aggregated_durations)
 }

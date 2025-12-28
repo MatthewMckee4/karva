@@ -131,8 +131,11 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
             return self.context.register_test_case_result(
                 &QualifiedTestName::new(name, None),
                 IndividualTestResultKind::Skipped { reason },
+                std::time::Duration::ZERO,
             );
         }
+
+        let start_time = std::time::Instant::now();
 
         let expect_fail_tag = tags.expect_fail_tag();
         let expect_fail = expect_fail_tag
@@ -191,11 +194,13 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     self.context.register_test_case_result(
                         &full_test_name,
                         IndividualTestResultKind::Failed,
+                        start_time.elapsed(),
                     )
                 } else {
                     self.context.register_test_case_result(
                         &full_test_name,
                         IndividualTestResultKind::Passed,
+                        start_time.elapsed(),
                     )
                 }
             }
@@ -205,11 +210,13 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     self.context.register_test_case_result(
                         &full_test_name,
                         IndividualTestResultKind::Skipped { reason },
+                        start_time.elapsed(),
                     )
                 } else if expect_fail {
                     self.context.register_test_case_result(
                         &full_test_name,
                         IndividualTestResultKind::Passed,
+                        start_time.elapsed(),
                     )
                 } else {
                     let missing_args =
@@ -237,6 +244,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     self.context.register_test_case_result(
                         &full_test_name,
                         IndividualTestResultKind::Failed,
+                        start_time.elapsed(),
                     )
                 }
             }

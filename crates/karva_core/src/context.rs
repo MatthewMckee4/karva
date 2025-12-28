@@ -41,14 +41,19 @@ impl<'db, 'rep> Context<'db, 'rep> {
         &self,
         test_case_name: &QualifiedTestName,
         test_result: IndividualTestResultKind,
+        duration: std::time::Duration,
     ) -> bool {
         let result = match &test_result {
             IndividualTestResultKind::Passed | IndividualTestResultKind::Skipped { .. } => true,
             IndividualTestResultKind::Failed => false,
         };
 
-        self.result()
-            .register_test_case_result(test_case_name, test_result, Some(self.reporter));
+        self.result().register_test_case_result(
+            test_case_name,
+            test_result,
+            duration,
+            Some(self.reporter),
+        );
 
         result
     }

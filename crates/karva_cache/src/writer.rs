@@ -5,7 +5,9 @@ use camino::Utf8PathBuf;
 use karva_diagnostic::TestRunResult;
 use ruff_db::diagnostic::{DisplayDiagnosticConfig, DisplayDiagnostics, FileResolver};
 
-use crate::{DIAGNOSTICS_FILE, DISCOVER_DIAGNOSTICS_FILE, RunHash, STATS_FILE, worker_folder};
+use crate::{
+    DIAGNOSTICS_FILE, DISCOVER_DIAGNOSTICS_FILE, DURATIONS_FILE, RunHash, STATS_FILE, worker_folder,
+};
 
 /// Writes test results to the cache directory
 ///
@@ -47,6 +49,11 @@ impl CacheWriter {
         let json = serde_json::to_string_pretty(result.stats())?;
 
         fs::write(&stats_path, json)?;
+
+        let durations_path = self.worker_dir.join(DURATIONS_FILE);
+        let json = serde_json::to_string_pretty(result.durations())?;
+
+        fs::write(&durations_path, json)?;
 
         Ok(())
     }

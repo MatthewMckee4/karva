@@ -8,15 +8,13 @@ use serde::{Deserialize, Serialize};
 pub struct RunHash(String);
 
 impl RunHash {
-    pub fn random() -> Self {
+    pub fn current_time() -> Self {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("System time is before UNIX epoch")
             .as_secs();
 
-        let random: u32 = rand::random();
-
-        Self(format!("run-{timestamp:x}-{random:x}"))
+        Self(format!("run-{timestamp:x}"))
     }
 
     pub fn from_existing(hash: &str) -> Self {
@@ -31,25 +29,5 @@ impl RunHash {
 impl fmt::Display for RunHash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_generate_run_hash() {
-        let hash1 = RunHash::random();
-        let hash2 = RunHash::random();
-
-        assert_ne!(hash1, hash2);
-
-        assert!(hash1.0.starts_with("run-"));
-        assert!(hash2.0.starts_with("run-"));
-
-        let parts: Vec<&str> = hash1.0.split('-').collect();
-        assert_eq!(parts.len(), 3);
-        assert_eq!(parts[0], "run");
     }
 }
