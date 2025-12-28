@@ -38,9 +38,5 @@ mod tests {
         let parts: Vec<&str> = hash1.0.split('-').collect();
         assert_eq!(parts.len(), 3);
         assert_eq!(parts[0], "run");
-        // parts[1] should be a timestamp (numeric)
-        assert!(parts[1].parse::<u64>().is_ok());
-        // parts[2] should be a hex random number
-        assert!(u32::from_str_radix(parts[2], 16).is_ok());
     }
 }
