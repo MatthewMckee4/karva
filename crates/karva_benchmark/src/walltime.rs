@@ -34,12 +34,9 @@ impl<'a> ProjectBenchmark<'a> {
 
         let system = OsSystem::new(root);
 
-        let mut metadata = ProjectMetadata::discover(
-            root.as_path(),
-            &system,
-            self.installed_project.config.python_version,
-        )
-        .unwrap();
+        let mut metadata = ProjectMetadata::discover(root.as_path(), &system)
+            .unwrap()
+            .with_python_version(Some(self.installed_project.config.python_version));
 
         metadata.apply_options(Options {
             src: Some(SrcOptions {

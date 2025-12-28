@@ -28,32 +28,31 @@ karva_python_semantic = { path = "crates/karva_python_semantic" }
 karva_runner = { path = "crates/karva_runner" }
 karva_static = { path = "crates/karva_static" }
 karva_system = { path = "crates/karva_system" }
-karva_venv = { path = "crates/karva_venv" }
 
 anyhow = { version = "1.0.100" }
 argfile = { version = "0.2.1" }
 camino = { version = "1.2", features = ["serde1"] }
 chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
 clap = { version = "4.5.53", features = ["derive", "wrap_help"] }
-codspeed-criterion-compat = { version = "4.1.0", default-features = false }
+codspeed-criterion-compat = { version = "4.2.0", default-features = false }
 colored = { version = "3.0.0" }
 crossbeam-channel = "0.5.15"
-ctor = "0.6.1"
+ctor = "0.6.3"
 ctrlc = { version = "3.5.1" }
 directories = "6.0.0"
-divan = { package = "codspeed-divan-compat", version = "4.1.0" }
+divan = { package = "codspeed-divan-compat", version = "4.2.0" }
 dunce = { version = "1.0.5" }
 etcetera = { version = "0.11.0" }
-filetime = { version = "0.2.23" }
+filetime = { version = "0.2.26" }
 ignore = { version = "0.4.25" }
-insta = { version = "1.44.3" }
+insta = { version = "1.45.0" }
 insta-cmd = { version = "0.6.0" }
 itertools = { version = "0.14.0" }
 markdown = { version = "1.0.0" }
 pretty_assertions = { version = "1.4.1" }
-proc-macro2 = { version = "1.0.79" }
+proc-macro2 = { version = "1.0.104" }
 pyo3 = { version = "0.27.2", features = ["abi3-py310", "py-clone"] }
-quote = { version = "1.0.23" }
+quote = { version = "1.0.42" }
 regex = { version = "1.12.2" }
 rstest = { version = "0.26" }
 ruff_db = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
@@ -66,14 +65,14 @@ ruff_python_trivia = { git = "https://github.com/astral-sh/ruff/", branch = "mai
 ruff_source_file = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_text_size = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = { version = "1.0.145" }
-syn = { version = "2.0.55" }
-tempfile = "3.23"
-thiserror = { version = "2.0.0" }
-toml = { version = "0.9.0" }
-tracing = { version = "0.1.41", features = ["release_max_level_debug"] }
+serde_json = { version = "1.0.148" }
+syn = { version = "2.0.111" }
+tempfile = "3.24"
+thiserror = { version = "2.0.17" }
+toml = { version = "0.9.10" }
+tracing = { version = "0.1.44", features = ["release_max_level_debug"] }
 tracing-flame = { version = "0.2.0" }
-tracing-subscriber = { version = "0.3.20", default-features = false, features = [
+tracing-subscriber = { version = "0.3.22", default-features = false, features = [
     "env-filter",
     "fmt",
 ] }

@@ -139,15 +139,8 @@ impl TestContext {
             .unwrap();
     }
 
-    pub fn karva_bin(&self) -> Utf8PathBuf {
-        let venv_bin =
-            self.root()
-                .join(".venv")
-                .join(if cfg!(windows) { "Scripts" } else { "bin" });
-        venv_bin.join(if cfg!(windows) { "karva.exe" } else { "karva" })
-    }
     pub fn command(&self) -> Command {
-        let mut command = Command::new(self.karva_bin());
+        let mut command = Command::new(get_bin());
         command.current_dir(self.root()).arg("test");
         command
     }
@@ -167,4 +160,11 @@ impl Default for TestContext {
 
 pub fn tempdir_filter(path: &Utf8Path) -> String {
     format!(r"{}\\?/?", regex::escape(path.as_str()))
+}
+
+/// Returns the karva binary that cargo built before launching the tests.
+///
+/// <https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates>
+pub fn get_bin() -> Utf8PathBuf {
+    Utf8PathBuf::from(env!("CARGO_BIN_EXE_karva"))
 }

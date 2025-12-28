@@ -3,12 +3,11 @@ use std::fmt::Write;
 use colored::Colorize;
 use karva_logging::{Printer, VerbosityLevel};
 use karva_python_semantic::QualifiedTestName;
-use pyo3::marker::Ungil;
 
 use crate::result::IndividualTestResultKind;
 
 /// A reporter for test execution time logging to the user.
-pub trait Reporter: Send + Sync + Ungil {
+pub trait Reporter: Send + Sync {
     /// Report the completion of a given test.
     fn report_test_case_result(
         &self,

@@ -20,17 +20,17 @@ use crate::options::KarvaTomlError;
 pub struct ProjectMetadata {
     pub root: Utf8PathBuf,
 
-    pub python_version: PythonVersion,
+    pub python_version: Option<PythonVersion>,
 
     pub options: Options,
 }
 
 impl ProjectMetadata {
     /// Creates a project with the given name and root that uses the default options.
-    pub fn new(root: Utf8PathBuf, python_version: PythonVersion) -> Self {
+    pub fn new(root: Utf8PathBuf) -> Self {
         Self {
             root,
-            python_version,
+            python_version: None,
             options: Options::default(),
         }
     }
@@ -38,7 +38,6 @@ impl ProjectMetadata {
     pub fn from_config_file(
         path: Utf8PathBuf,
         system: &dyn System,
-        python_version: PythonVersion,
     ) -> Result<Self, ProjectMetadataError> {
         tracing::debug!("Using overridden configuration file at '{path}'");
 
@@ -51,36 +50,27 @@ impl ProjectMetadata {
 
         Ok(Self {
             root: system.current_directory().to_path_buf(),
-            python_version,
+            python_version: None,
             options,
         })
     }
 
     /// Loads a project from a `pyproject.toml` file.
-    pub(crate) fn from_pyproject(
-        pyproject: PyProject,
-        root: Utf8PathBuf,
-        python_version: PythonVersion,
-    ) -> Self {
+    pub(crate) fn from_pyproject(pyproject: PyProject, root: Utf8PathBuf) -> Self {
         Self::from_options(
             pyproject
                 .tool
                 .and_then(|tool| tool.karva)
                 .unwrap_or_default(),
             root,
-            python_version,
         )
     }
 
     /// Loads a project from a set of options with an optional pyproject-project table.
-    pub const fn from_options(
-        options: Options,
-        root: Utf8PathBuf,
-        python_version: PythonVersion,
-    ) -> Self {
+    pub const fn from_options(options: Options, root: Utf8PathBuf) -> Self {
         Self {
             root,
-            python_version,
+            python_version: None,
             options,
         }
     }
@@ -93,11 +83,7 @@ impl ProjectMetadata {
     /// 1. The closest `pyproject.toml` with a `tool.karva` section or `karva.toml`.
     /// 1. The closest `pyproject.toml`.
     /// 1. Fallback to use `path` as the root and use the default settings.
-    pub fn discover(
-        path: &Utf8Path,
-        system: &dyn System,
-        python_version: PythonVersion,
-    ) -> Result<Self, ProjectMetadataError> {
+    pub fn discover(path: &Utf8Path, system: &dyn System) -> Result<Self, ProjectMetadataError> {
         tracing::debug!("Searching for a project in '{path}'");
 
         if !system.is_directory(path) {
@@ -148,16 +134,14 @@ impl ProjectMetadata {
 
                 tracing::debug!("Found project at '{}'", project_root);
 
-                let metadata =
-                    Self::from_options(options, project_root.to_path_buf(), python_version);
+                let metadata = Self::from_options(options, project_root.to_path_buf());
 
                 return Ok(metadata);
             }
 
             if let Some(pyproject) = pyproject {
                 let has_karva_section = pyproject.karva().is_some();
-                let metadata =
-                    Self::from_pyproject(pyproject, project_root.to_path_buf(), python_version);
+                let metadata = Self::from_pyproject(pyproject, project_root.to_path_buf());
 
                 if has_karva_section {
                     tracing::debug!("Found project at '{}'", project_root);
@@ -186,18 +170,18 @@ impl ProjectMetadata {
             );
 
             // Create a project with a default configuration
-            Self::new(path.to_path_buf(), python_version)
+            Self::new(path.to_path_buf())
         };
 
         Ok(metadata)
     }
 
-    pub const fn python_version(&self) -> PythonVersion {
+    pub const fn python_version(&self) -> Option<PythonVersion> {
         self.python_version
     }
 
     #[must_use]
-    pub const fn with_python_version(mut self, python_version: PythonVersion) -> Self {
+    pub const fn with_python_version(mut self, python_version: Option<PythonVersion>) -> Self {
         self.python_version = python_version;
         self
     }
