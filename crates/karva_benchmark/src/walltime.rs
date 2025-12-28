@@ -43,8 +43,9 @@ impl<'a> ProjectBenchmark<'a> {
 
         let args = SubTestCommand {
             paths: vec![test_paths],
-            no_ignore: Some(false),
+            no_ignore: Some(true),
             output_format: Some(karva_cli::OutputFormat::Concise),
+            no_progress: Some(true),
             ..SubTestCommand::default()
         };
 
