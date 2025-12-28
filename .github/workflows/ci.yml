@@ -94,8 +94,15 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Update Rust toolchain
-        run: rustup update
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+
+      - name: "Install cargo nextest"
+        uses: taiki-e/install-action@a416ddeedbd372e614cc1386e8b642692f66865e # v2.57.1
+        with:
+          tool: cargo-nextest
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
@@ -120,7 +127,7 @@ jobs:
         env:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         run: |
-          cargo test -- --include-ignored
+          cargo nextest run --no-fail-fast
 
   build-docs:
     name: "Build docs"
@@ -155,11 +162,15 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670 # v1.2.2
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+
+      - name: "Install cargo nextest"
+        uses: taiki-e/install-action@a416ddeedbd372e614cc1386e8b642692f66865e # v2.57.1
         with:
-          channel: stable
-          cache-target: release
-          bins: cargo-codspeed
+          tool: cargo-codspeed
 
       - name: Setup Python
         uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
@@ -226,11 +237,15 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670 # v1.2.2
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+
+      - name: "Install cargo nextest"
+        uses: taiki-e/install-action@a416ddeedbd372e614cc1386e8b642692f66865e # v2.57.1
         with:
-          channel: stable
-          cache-target: release
-          bins: cargo-codspeed
+          tool: cargo-codspeed
 
       - name: Setup Python
         uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
