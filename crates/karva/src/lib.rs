@@ -11,7 +11,7 @@ use karva_core::utils::current_python_version;
 use karva_logging::{Printer, VerbosityLevel, set_colored_override, setup_tracing};
 use karva_metadata::{ProjectMetadata, ProjectOptionsOverrides};
 use karva_project::{Db, ProjectDatabase};
-use karva_system::{OsSystem, System, absolute};
+use karva_system::{OsSystem, System, path::absolute};
 
 use karva_cli::{Args, Command, TestCommand};
 

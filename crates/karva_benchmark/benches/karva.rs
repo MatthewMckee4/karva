@@ -12,7 +12,7 @@ use karva_benchmark::{
 use karva_core::testing::setup_module;
 use karva_core::{DummyReporter, TestRunner};
 use karva_project::ProjectDatabase;
-use karva_system::absolute;
+use karva_system::path::absolute;
 
 fn create_test_cases() -> Vec<TestCase> {
     vec![

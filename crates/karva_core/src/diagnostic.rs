@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use karva_diagnostic::Traceback;
 use karva_python_semantic::FunctionKind;
-use karva_system::TestPathError;
+use karva_system::path::TestPathError;
 use pyo3::{Py, PyAny, PyErr, Python};
 use ruff_db::diagnostic::{
     Annotation, Diagnostic, Severity, Span, SubDiagnostic, SubDiagnosticSeverity,

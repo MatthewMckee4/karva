@@ -1,4 +1,5 @@
-use karva_collector::{CollectedModule, CollectedPackage, ModuleType, ParallelCollector};
+use karva_collector::{CollectedModule, CollectedPackage, ModuleType, TestFunctionCollector};
+use karva_system::path::TestPath;
 use pyo3::prelude::*;
 
 use crate::Context;
@@ -23,25 +24,28 @@ impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
             return DiscoveredPackage::new(cwd.clone());
         }
 
-        let collector = ParallelCollector::new(
-            self.context.db().system(),
-            self.context.project().metadata(),
-            self.context.project().settings(),
-        );
-
         let test_paths = self
             .context
             .project()
             .test_paths()
             .iter()
             .filter_map(|path| match path {
-                Ok(path) => Some(path.clone()),
+                Ok(path) => match path {
+                    TestPath::Directory(_) | TestPath::File(_) => None,
+                    TestPath::Function(function) => Some(function.clone()),
+                },
                 Err(error) => {
                     report_invalid_path(self.context, error);
                     None
                 }
             })
             .collect();
+
+        let collector = TestFunctionCollector::new(
+            self.context.db().system(),
+            self.context.project().metadata(),
+            self.context.project().settings(),
+        );
 
         let collected_package = collector.collect_all(test_paths);
 

@@ -7,10 +7,8 @@ use filetime::FileTime;
 use karva_static::EnvVars;
 use ruff_db::system::{FileType, Metadata};
 
-mod path;
+pub mod path;
 pub mod time;
-
-pub use path::{TestPath, TestPathError, absolute};
 
 type Result<T> = std::io::Result<T>;
 

@@ -3,6 +3,7 @@ mod models;
 use karva_metadata::{ProjectMetadata, ProjectSettings};
 pub use models::{CollectedModule, CollectedPackage, ModuleType};
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
 
@@ -10,12 +11,19 @@ use camino::{Utf8Path, Utf8PathBuf};
 use crossbeam_channel::unbounded;
 use ignore::{WalkBuilder, WalkState};
 use karva_python_semantic::ModulePath;
-use karva_system::{System, TestPath};
+use karva_system::{
+    System,
+    path::{TestPath, TestPathFunction},
+};
 use ruff_python_ast::Stmt;
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 
 use karva_python_semantic::is_fixture_function;
 
+/// Collector used for collecting all test functions and fixtures in a package.
+///
+/// This is only used in the main `karva` cli.
+/// If we used this in the `karva-core` cli, this would be very inefficient.
 pub struct ParallelCollector<'a> {
     system: &'a dyn System,
     metadata: &'a ProjectMetadata,
@@ -79,7 +87,7 @@ impl<'a> ParallelCollector<'a> {
                 };
 
                 if let Some(module) =
-                    collect_file(&file_path, self.system, self.metadata, self.settings, None)
+                    collect_file(&file_path, self.system, self.metadata, self.settings, &[])
                 {
                     let _ = tx.send(module);
                 }
@@ -107,23 +115,23 @@ impl<'a> ParallelCollector<'a> {
                     let package = self.collect_directory(&dir_path);
                     session_package.add_package(package);
                 }
-                TestPath::Function {
+                TestPath::Function(TestPathFunction {
                     path: file_path,
                     function_name,
-                } => {
+                }) => {
                     if let Some(module) = collect_file(
                         &file_path,
                         self.system,
                         self.metadata,
                         self.settings,
-                        Some(&function_name),
+                        &[function_name],
                     ) {
                         session_package.add_module(module);
                     }
                 }
                 TestPath::File(file_path) => {
                     if let Some(module) =
-                        collect_file(&file_path, self.system, self.metadata, self.settings, None)
+                        collect_file(&file_path, self.system, self.metadata, self.settings, &[])
                     {
                         session_package.add_module(module);
                     }
@@ -163,7 +171,7 @@ impl<'a> ParallelCollector<'a> {
                     self.system,
                     self.metadata,
                     self.settings,
-                    None,
+                    &[],
                 ) {
                     package.add_configuration_module(module);
                     session_package.add_package(package);
@@ -203,12 +211,17 @@ impl<'a> ParallelCollector<'a> {
     }
 }
 
+/// Collects test functions and fixtures from a Python file.
+///
+/// If `function_names` is empty, all test functions matching the configured prefix are collected.
+/// If `function_names` is non-empty, only test functions with names in the list are collected.
+/// Fixtures are always collected regardless of the filter.
 fn collect_file(
     path: &Utf8PathBuf,
     system: &dyn System,
     metadata: &ProjectMetadata,
     settings: &ProjectSettings,
-    only_function_name: Option<&str>,
+    function_names: &[String],
 ) -> Option<CollectedModule> {
     let module_path = ModulePath::new(path, &system.current_directory().to_path_buf())?;
 
@@ -231,14 +244,17 @@ fn collect_file(
                 continue;
             }
 
-            if let Some(only_function_name) = only_function_name {
-                if function_def.name.as_str() == only_function_name {
+            if function_names.is_empty() {
+                if function_def
+                    .name
+                    .to_string()
+                    .starts_with(&settings.test().test_function_prefix)
+                {
                     collected_module.add_test_function_def(Arc::new(function_def));
                 }
-            } else if function_def
-                .name
-                .to_string()
-                .starts_with(&settings.test().test_function_prefix)
+            } else if function_names
+                .iter()
+                .any(|name| name.as_str() == function_def.name.as_str())
             {
                 collected_module.add_test_function_def(Arc::new(function_def));
             }
@@ -246,4 +262,103 @@ fn collect_file(
     }
 
     Some(collected_module)
+}
+
+/// Collector for efficiently collecting specific test functions from test files.
+///
+/// Groups multiple test functions from the same file and collects them in a single parse,
+/// improving performance when collecting many functions across the same files.
+pub struct TestFunctionCollector<'a> {
+    system: &'a dyn System,
+    metadata: &'a ProjectMetadata,
+    settings: &'a ProjectSettings,
+}
+
+impl<'a> TestFunctionCollector<'a> {
+    pub fn new(
+        system: &'a dyn System,
+        metadata: &'a ProjectMetadata,
+        settings: &'a ProjectSettings,
+    ) -> Self {
+        Self {
+            system,
+            metadata,
+            settings,
+        }
+    }
+
+    pub fn collect_all(&self, test_paths: Vec<TestPathFunction>) -> CollectedPackage {
+        let mut session_package =
+            CollectedPackage::new(self.system.current_directory().to_path_buf());
+
+        // Group test paths by file to avoid parsing the same file multiple times
+        let mut file_to_functions: HashMap<Utf8PathBuf, Vec<String>> = HashMap::new();
+        for test_path in test_paths {
+            file_to_functions
+                .entry(test_path.path.clone())
+                .or_default()
+                .push(test_path.function_name);
+        }
+
+        // Collect each file once with all its requested functions
+        for (file_path, function_names) in file_to_functions {
+            if let Some(module) = collect_file(
+                &file_path,
+                self.system,
+                self.metadata,
+                self.settings,
+                &function_names,
+            ) {
+                session_package.add_module(module);
+            }
+
+            self.collect_parent_configuration(&file_path, &mut session_package);
+        }
+
+        session_package.shrink();
+
+        session_package
+    }
+
+    fn collect_parent_configuration(
+        &self,
+        path: &Utf8Path,
+        session_package: &mut CollectedPackage,
+    ) {
+        let mut current_path = if path.is_dir() {
+            path
+        } else {
+            match path.parent() {
+                Some(parent) => parent,
+                None => return,
+            }
+        };
+
+        loop {
+            let conftest_path = current_path.join("conftest.py");
+            if conftest_path.exists() {
+                let mut package = CollectedPackage::new(current_path.to_path_buf());
+
+                if let Some(module) = collect_file(
+                    &conftest_path,
+                    self.system,
+                    self.metadata,
+                    self.settings,
+                    &[],
+                ) {
+                    package.add_configuration_module(module);
+                    session_package.add_package(package);
+                }
+            }
+
+            if current_path == self.system.current_directory() {
+                break;
+            }
+
+            current_path = match current_path.parent() {
+                Some(parent) => parent,
+                None => break,
+            };
+        }
+    }
 }

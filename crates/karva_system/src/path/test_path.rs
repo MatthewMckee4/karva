@@ -21,6 +21,47 @@ fn try_convert_to_py_path(path: &Utf8Path) -> Result<Utf8PathBuf, TestPathError>
 }
 
 #[derive(Eq, PartialEq, Clone, Hash, PartialOrd, Ord, Debug)]
+pub struct TestPathFunction {
+    pub path: Utf8PathBuf,
+    pub function_name: String,
+}
+
+impl TryFrom<&str> for TestPathFunction {
+    type Error = Option<TestPathError>;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if let Some(separator_pos) = value.rfind("::") {
+            let file_part = &value[..separator_pos];
+            let function_name = &value[separator_pos + 2..];
+
+            if function_name.is_empty() {
+                return Err(Some(TestPathError::MissingFunctionName(Utf8PathBuf::from(
+                    file_part,
+                ))));
+            }
+
+            let file_path = Utf8PathBuf::from(file_part);
+            let path = try_convert_to_py_path(&file_path)?;
+
+            if path.is_file() {
+                if is_python_file(&path) {
+                    Ok(Self {
+                        path,
+                        function_name: function_name.to_string(),
+                    })
+                } else {
+                    Err(Some(TestPathError::WrongFileExtension(path)))
+                }
+            } else {
+                Err(Some(TestPathError::InvalidUtf8Path(path)))
+            }
+        } else {
+            Err(None)
+        }
+    }
+}
+
+#[derive(Eq, PartialEq, Clone, Hash, PartialOrd, Ord, Debug)]
 pub enum TestPath {
     /// A file containing test functions.
     ///
@@ -40,60 +81,40 @@ pub enum TestPath {
     /// Some examples are:
     /// - `test_file.py::test_function`
     /// - `test_file::test_function`
-    Function {
-        path: Utf8PathBuf,
-        function_name: String,
-    },
+    Function(TestPathFunction),
 }
 
 impl TestPath {
     pub fn new(value: &str) -> Result<Self, TestPathError> {
-        if let Some(separator_pos) = value.rfind("::") {
-            let file_part = &value[..separator_pos];
-            let function_name = &value[separator_pos + 2..];
+        let try_function = TestPathFunction::try_from(value);
 
-            if function_name.is_empty() {
-                return Err(TestPathError::MissingFunctionName(Utf8PathBuf::from(
-                    file_part,
-                )));
-            }
+        match try_function {
+            Ok(function) => return Ok(Self::Function(function)),
+            Err(Some(error)) => return Err(error),
+            Err(None) => {}
+        }
 
-            let file_path = Utf8PathBuf::from(file_part);
-            let path = try_convert_to_py_path(&file_path)?;
+        let value = Utf8PathBuf::from(value);
+        let path = try_convert_to_py_path(&value)?;
 
-            if path.is_file() {
-                if is_python_file(&path) {
-                    Ok(Self::Function {
-                        path,
-                        function_name: function_name.to_string(),
-                    })
-                } else {
-                    Err(TestPathError::WrongFileExtension(path))
-                }
+        if path.is_file() {
+            if is_python_file(&path) {
+                Ok(Self::File(path))
             } else {
-                Err(TestPathError::InvalidUtf8Path(path))
+                Err(TestPathError::WrongFileExtension(path))
             }
+        } else if path.is_dir() {
+            Ok(Self::Directory(path))
         } else {
-            let value = Utf8PathBuf::from(value);
-            let path = try_convert_to_py_path(&value)?;
-
-            if path.is_file() {
-                if is_python_file(&path) {
-                    Ok(Self::File(path))
-                } else {
-                    Err(TestPathError::WrongFileExtension(path))
-                }
-            } else if path.is_dir() {
-                Ok(Self::Directory(path))
-            } else {
-                Err(TestPathError::InvalidUtf8Path(path))
-            }
+            Err(TestPathError::InvalidUtf8Path(path))
         }
     }
 
     pub const fn path(&self) -> &Utf8PathBuf {
         match self {
-            Self::File(path) | Self::Directory(path) | Self::Function { path, .. } => path,
+            Self::File(path)
+            | Self::Directory(path)
+            | Self::Function(TestPathFunction { path, .. }) => path,
         }
     }
 }
@@ -260,10 +281,10 @@ mod tests {
         let function_spec = format!("{path}::test_function");
         let result = TestPath::new(&function_spec);
 
-        if let Ok(TestPath::Function {
+        if let Ok(TestPath::Function(TestPathFunction {
             path: result_path,
             function_name,
-        }) = result
+        })) = result
         {
             assert_eq!(result_path, path);
             assert_eq!(function_name, "test_function");
@@ -282,7 +303,7 @@ mod tests {
         let result = TestPath::new(&function_spec);
 
         assert!(matches!(result, Ok(TestPath::Function { .. })));
-        if let Ok(TestPath::Function { function_name, .. }) = result {
+        if let Ok(TestPath::Function(TestPathFunction { function_name, .. })) = result {
             assert_eq!(function_name, "test_function");
         }
     }

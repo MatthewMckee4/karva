@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
 use karva_projects::{RealWorldProject, all_projects};
-use karva_system::absolute;
+use karva_system::path::absolute;
 use tempfile::NamedTempFile;
 
 #[derive(Debug, Parser)]

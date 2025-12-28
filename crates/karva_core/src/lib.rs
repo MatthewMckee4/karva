@@ -2,7 +2,6 @@ pub mod cli;
 mod context;
 pub(crate) mod diagnostic;
 pub(crate) mod discovery;
-pub mod executor;
 pub(crate) mod extensions;
 mod normalize;
 mod python;
