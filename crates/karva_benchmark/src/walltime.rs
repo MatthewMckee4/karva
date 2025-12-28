@@ -54,7 +54,7 @@ impl<'a> ProjectBenchmark<'a> {
 }
 
 fn test_project(project: &ProjectDatabase) {
-    let printer = Printer::new(VerbosityLevel::Default, true);
+    let printer = Printer::new(VerbosityLevel::Quiet, true);
 
     let num_workers = karva_system::max_parallelism().get();
 
