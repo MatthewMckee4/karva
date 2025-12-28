@@ -8,6 +8,7 @@ use karva_static::EnvVars;
 use ruff_db::system::{FileType, Metadata};
 
 mod path;
+pub mod time;
 
 pub use path::{TestPath, TestPathError, absolute};
 

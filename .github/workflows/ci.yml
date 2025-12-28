@@ -127,7 +127,7 @@ jobs:
         env:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         run: |
-          cargo nextest run --no-fail-fast
+          cargo nextest run --no-fail-fast -- --include-ignored
 
   build-docs:
     name: "Build docs"
@@ -167,7 +167,7 @@ jobs:
       - name: "Install Rust toolchain"
         run: rustup show
 
-      - name: "Install cargo nextest"
+      - name: "Install cargo codspeed"
         uses: taiki-e/install-action@a416ddeedbd372e614cc1386e8b642692f66865e # v2.57.1
         with:
           tool: cargo-codspeed
@@ -179,8 +179,12 @@ jobs:
 
       - name: Build wheels
         run: |
-          pip install maturin pytest
-          maturin build
+          pip install pytest
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
+        with:
+          command: build
 
       - name: Generate resources
         run: python crates/karva_benchmark/resources/generate.py
@@ -242,7 +246,7 @@ jobs:
       - name: "Install Rust toolchain"
         run: rustup show
 
-      - name: "Install cargo nextest"
+      - name: "Install cargo codspeed"
         uses: taiki-e/install-action@a416ddeedbd372e614cc1386e8b642692f66865e # v2.57.1
         with:
           tool: cargo-codspeed
@@ -257,8 +261,9 @@ jobs:
           python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
 
       - name: Build wheels
-        run: |
-          uv run --no-project --with maturin maturin build
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
+        with:
+          command: build
 
       - name: Build benchmarks
         run: cargo codspeed build -m walltime

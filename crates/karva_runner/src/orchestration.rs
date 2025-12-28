@@ -9,8 +9,8 @@ use karva_cli::{OutputFormat, SubTestCommand};
 use karva_collector::ParallelCollector;
 use karva_logging::Printer;
 use karva_project::{Db, ProjectDatabase};
+use karva_system::time::format_duration;
 use karva_system::venv_binary;
-use karva_time::format_duration;
 
 use crate::partition::{Partition, partition_collected_tests};
 
@@ -113,6 +113,7 @@ fn spawn_workers(
             .arg(run_hash.inner())
             .arg("--worker-id")
             .arg(worker_id.to_string())
+            .current_dir(db.system().current_directory())
             // Ensure python does not buffer output
             .env("PYTHONUNBUFFERED", "1");
 

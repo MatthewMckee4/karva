@@ -4,7 +4,7 @@ use std::{collections::HashMap, fmt};
 
 use colored::Colorize;
 use karva_python_semantic::QualifiedTestName;
-use karva_time::format_duration;
+use karva_system::time::format_duration;
 use ruff_db::diagnostic::Diagnostic;
 use serde::de::{self, MapAccess};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};

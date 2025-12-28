@@ -26,11 +26,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Build PR branch karva binary
-        run: cargo build
-
-      - name: Save PR branch binary
-        run: cp target/debug/karva target/debug/karva-pr
+      - name: Build PR wheel
+        run: |
+          uv run --no-project --with maturin maturin build --out new-karva
 
       - name: Checkout main branch
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -39,11 +37,9 @@ jobs:
           clean: false
           persist-credentials: false
 
-      - name: Build main branch karva binary
-        run: cargo build
-
-      - name: Rename main branch binary
-        run: cp target/debug/karva target/debug/karva-main
+      - name: Build main wheel
+        run: |
+          uv run --no-project --with maturin maturin build --out old-karva
 
       - name: Restore PR branch files
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -59,7 +55,9 @@ jobs:
 
       - name: Run karva_diff
         run: |
-          cargo run -p karva_diff -- target/debug/karva-main target/debug/karva-pr out.txt new.txt
+          OLD_WHEEL=$(ls old-karva/*.whl)
+          NEW_WHEEL=$(ls new-karva/*.whl)
+          cargo run -p karva_diff -- "$OLD_WHEEL" "$NEW_WHEEL" out.txt new.txt
 
       - name: Read diff output
         id: diff

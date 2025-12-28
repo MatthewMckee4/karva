@@ -28,7 +28,6 @@ karva_python_semantic = { path = "crates/karva_python_semantic" }
 karva_runner = { path = "crates/karva_runner" }
 karva_static = { path = "crates/karva_static" }
 karva_system = { path = "crates/karva_system" }
-karva_time = { path = "crates/karva_time" }
 karva_venv = { path = "crates/karva_venv" }
 
 anyhow = { version = "1.0.100" }
