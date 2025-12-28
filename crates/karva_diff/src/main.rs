@@ -203,8 +203,12 @@ fn run(
 fn extract_test_result(output: &[u8]) -> String {
     let output_str = String::from_utf8_lossy(output);
 
-    // Strip `; finished in` and all text after it.
-    let strip_index = output_str.find("; finished in").unwrap_or(output_str.len());
-
-    output_str[..strip_index].to_string()
+    // Find the line with `; finished in` and return everything before it on that line.
+    output_str
+        .lines()
+        .find_map(|line| {
+            line.find("; finished in")
+                .map(|pos| line[..pos].to_string())
+        })
+        .unwrap_or_default()
 }

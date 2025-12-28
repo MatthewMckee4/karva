@@ -573,3 +573,42 @@ def test_square(input, expected):
     ----- stderr -----
     ");
 }
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_parametrize_kwargs() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r#"
+import pytest
+
+@pytest.mark.parametrize(["input", "expected"], argvalues=[
+    pytest.param(2, 4),
+    pytest.param(4, 16),
+])
+def test1(input, expected):
+    assert input ** 2 == expected
+
+@pytest.mark.parametrize(argnames=["input", "expected"], argvalues=[
+    pytest.param(2, 4),
+    pytest.param(4, 16),
+])
+def test2(input, expected):
+    assert input ** 2 == expected
+    "#,
+    );
+
+    assert_cmd_snapshot!(test_context.command_no_parallel(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test1(expected=4, input=2) ... ok
+    test test::test1(expected=16, input=4) ... ok
+    test test::test2(expected=4, input=2) ... ok
+    test test::test2(expected=16, input=4) ... ok
+
+    test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}

@@ -190,3 +190,169 @@ fn test_auto_use_fixture_in_parent_module() {
     ----- stderr -----
     ");
 }
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_auto_use_fixture_setup_failure() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture(auto_use=True)
+def failing_fixture():
+    raise RuntimeError("Setup failed!")
+
+def test_something():
+    assert True
+
+def test_something_else():
+    assert True
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_something ... ok
+    test test::test_something_else ... ok
+
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_auto_use_fixture_teardown_failure() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture(auto_use=True)
+def failing_teardown_fixture():
+    yield
+    raise RuntimeError("Teardown failed!")
+
+def test_something():
+    assert True
+
+
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_something ... ok
+
+    diagnostics:
+
+    warning[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `failing_teardown_fixture`
+     --> test.py:5:5
+      |
+    4 | @karva.fixture(auto_use=True)
+    5 | def failing_teardown_fixture():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    6 |     yield
+    7 |     raise RuntimeError("Teardown failed!")
+      |
+    info: Failed to reset fixture: Teardown failed!
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_auto_use_fixture_with_failing_dependency() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture
+def failing_dep():
+    raise ValueError("Dependency failed!")
+
+@karva.fixture(auto_use=True)
+def auto_fixture(failing_dep):
+    return "should not reach here"
+
+def test_something():
+    assert True
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_something ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_scoped_auto_use_fixture_setup_failure() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture(scope="module", auto_use=True)
+def failing_scoped_fixture():
+    raise RuntimeError("Scoped fixture failed!")
+
+def test_first():
+    assert True
+
+def test_second():
+    assert True
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_first ... ok
+    test test::test_second ... ok
+
+    diagnostics:
+
+    error[fixture-failure]: Fixture `failing_scoped_fixture` failed
+     --> test.py:5:5
+      |
+    4 | @karva.fixture(scope="module", auto_use=True)
+    5 | def failing_scoped_fixture():
+      |     ^^^^^^^^^^^^^^^^^^^^^^
+    6 |     raise RuntimeError("Scoped fixture failed!")
+      |
+    info: Fixture failed here
+     --> test.py:6:5
+      |
+    4 | @karva.fixture(scope="module", auto_use=True)
+    5 | def failing_scoped_fixture():
+    6 |     raise RuntimeError("Scoped fixture failed!")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    7 |
+    8 | def test_first():
+      |
+    info: Scoped fixture failed!
+
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    "#);
+}

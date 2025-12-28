@@ -115,6 +115,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     // Listen to Ctrl+C and abort
     ctrlc::set_handler(move || {
+        #[allow(clippy::exit)]
         std::process::exit(0);
     })?;
 

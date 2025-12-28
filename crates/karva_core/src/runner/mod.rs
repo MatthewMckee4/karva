@@ -14,6 +14,8 @@ use finalizer_cache::FinalizerCache;
 use fixture_cache::FixtureCache;
 use package_runner::NormalizedPackageRunner;
 
+pub use package_runner::FixtureCallError;
+
 pub struct StandardTestRunner<'db> {
     db: &'db dyn Db,
 }

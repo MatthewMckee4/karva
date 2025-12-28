@@ -109,19 +109,15 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     let cwd = {
         let cwd = std::env::current_dir().context("Failed to get the current working directory")?;
         Utf8PathBuf::from_path_buf(cwd)
-                   .map_err(|path| {
-                       anyhow::anyhow!(
-                           "The current working directory `{}` contains non-Unicode characters. ty only supports Unicode paths.",
-                           path.display()
-                       )
-                   })?
+            .map_err(|path| {
+                anyhow::anyhow!(
+                    "The current working directory `{}` contains non-Unicode characters. ty only supports Unicode paths.",
+                    path.display()
+                )
+            })?
     };
 
-    tracing::debug!(cwd = %cwd, "Working directory");
-
     let python_version = current_python_version();
-
-    tracing::debug!(version = %python_version, "Detected Python version");
 
     let system = OsSystem::new(&cwd);
 
@@ -133,11 +129,10 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     let mut project_metadata = if let Some(config_file) = &config_file {
         ProjectMetadata::from_config_file(config_file.clone(), &system)?
-            .with_python_version(Some(python_version))
     } else {
         ProjectMetadata::discover(system.current_directory(), &system)?
-            .with_python_version(Some(python_version))
-    };
+    }
+    .with_python_version(Some(python_version));
 
     // We have already checked the include paths in the main worker.
     if let Some(src) = project_metadata.options.src.as_mut() {
@@ -160,25 +155,16 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         Box::new(TestCaseReporter::new(printer))
     };
 
-    let exit_code = execute_test_paths(&db, &cache_writer, reporter.as_ref())?;
-
-    std::process::exit(exit_code);
-}
-
-pub fn execute_test_paths(
-    db: &ProjectDatabase,
-    cache_writer: &CacheWriter,
-    reporter: &dyn Reporter,
-) -> anyhow::Result<i32> {
-    let test_runner = StandardTestRunner::new(db);
-    let result = test_runner.test_with_reporter(reporter);
+    let test_runner = StandardTestRunner::new(&db);
+    let result = test_runner.test_with_reporter(reporter.as_ref());
 
     let diagnostic_format = db.project().settings().terminal().output_format.into();
+
     let config = DisplayDiagnosticConfig::default()
         .format(diagnostic_format)
-        .color(false);
+        .color(colored::control::SHOULD_COLORIZE.should_colorize());
 
-    cache_writer.write_result(&result, db, &config)?;
+    cache_writer.write_result(&result, &db, &config)?;
 
-    Ok(0)
+    Ok(ExitStatus::Success)
 }

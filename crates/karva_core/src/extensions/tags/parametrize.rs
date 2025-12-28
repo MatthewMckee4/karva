@@ -117,6 +117,39 @@ pub struct ParametrizeTag {
     parametrizations: Vec<Parametrization>,
 }
 
+/// Extract argnames and argvalues from a pytest parametrize mark.
+///
+/// Handles both positional args and keyword arguments in any combination:
+/// - `@pytest.mark.parametrize("x", [1, 2])` - both positional
+/// - `@pytest.mark.parametrize(argnames="x", argvalues=[1, 2])` - both kwargs
+/// - `@pytest.mark.parametrize("x", argvalues=[1, 2])` - mixed
+/// - `@pytest.mark.parametrize(argnames="x", [1, 2])` - mixed
+fn extract_parametrize_args<'py>(
+    py_mark: &Bound<'py, PyAny>,
+) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+    // Try to get argnames from positional args first, then kwargs
+    let arg_names = py_mark
+        .getattr("args")
+        .and_then(|args| args.get_item(0))
+        .or_else(|_| {
+            py_mark
+                .getattr("kwargs")
+                .and_then(|kwargs| kwargs.get_item("argnames"))
+        })?;
+
+    // Try to get argvalues from positional args second position, then kwargs
+    let arg_values = py_mark
+        .getattr("args")
+        .and_then(|args| args.get_item(1))
+        .or_else(|_| {
+            py_mark
+                .getattr("kwargs")
+                .and_then(|kwargs| kwargs.get_item("argvalues"))
+        })?;
+
+    Ok((arg_names, arg_values))
+}
+
 impl ParametrizeTag {
     pub(crate) const fn new(names: Vec<String>, parametrizations: Vec<Parametrization>) -> Self {
         Self {
@@ -136,10 +169,7 @@ impl ParametrizeTag {
     }
 
     pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
-        let args = py_mark.getattr("args").ok()?;
-        // Extract first two elements from args tuple
-        let arg_names = args.get_item(0).ok()?;
-        let arg_values = args.get_item(1).ok()?;
+        let (arg_names, arg_values) = extract_parametrize_args(py_mark).ok()?;
 
         let (arg_names, parametrizations) = parse_parametrize_args(&arg_names, &arg_values)?;
 

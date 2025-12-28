@@ -251,7 +251,6 @@ fn test_fail_concise_output() {
 
     test_fail.py:5:5: warning[invalid-fixture-finalizer] Discovered an invalid fixture finalizer `fixture_1`
     test_fail.py:9:5: error[test-failure] Test `test_1` failed
-    test_fail.py:13:5: error[fixture-failure] Fixture `fixture_2` failed
     test_fail.py:16:5: error[missing-fixtures] Test `test_2` has missing fixtures: `fixture_2`
     test_fail.py:19:5: error[test-failure] Test `test_3` failed
 
