@@ -4,7 +4,7 @@ use divan::Bencher;
 use karva_cli::SubTestCommand;
 use karva_core::testing::setup_module;
 use karva_logging::{Printer, VerbosityLevel};
-use karva_metadata::ProjectMetadata;
+use karva_metadata::{Options, ProjectMetadata, SrcOptions};
 use karva_project::ProjectDatabase;
 use karva_projects::{InstalledProject, RealWorldProject};
 use karva_system::OsSystem;
@@ -21,7 +21,7 @@ impl<'a> ProjectBenchmark<'a> {
         Self { installed_project }
     }
 
-    fn project(&self) -> (ProjectDatabase, SubTestCommand) {
+    fn project(&self) -> ProjectDatabase {
         let test_paths = self
             .installed_project
             .config()
@@ -34,33 +34,40 @@ impl<'a> ProjectBenchmark<'a> {
 
         let system = OsSystem::new(root);
 
-        let metadata = ProjectMetadata::discover(
+        let mut metadata = ProjectMetadata::discover(
             root.as_path(),
             &system,
             self.installed_project.config.python_version,
         )
         .unwrap();
 
-        let args = SubTestCommand {
-            paths: vec![test_paths],
-            no_ignore: Some(true),
-            output_format: Some(karva_cli::OutputFormat::Concise),
-            no_progress: Some(true),
-            ..SubTestCommand::default()
-        };
+        metadata.apply_options(Options {
+            src: Some(SrcOptions {
+                include: Some(test_paths),
+                ..SrcOptions::default()
+            }),
+            ..Options::default()
+        });
 
-        (ProjectDatabase::new(metadata, system).unwrap(), args)
+        ProjectDatabase::new(metadata, system).unwrap()
     }
 }
 
-fn test_project(project: &ProjectDatabase, args: &SubTestCommand) {
+fn test_project(project: &ProjectDatabase) {
     let printer = Printer::new(VerbosityLevel::Default, true);
 
     let num_workers = karva_system::max_parallelism().get();
 
     let config = karva_runner::ParallelTestConfig { num_workers };
 
-    karva_runner::run_parallel_tests(project, &config, args, printer).unwrap();
+    let args = SubTestCommand {
+        no_ignore: Some(true),
+        output_format: Some(karva_cli::OutputFormat::Concise),
+        no_progress: Some(true),
+        ..SubTestCommand::default()
+    };
+
+    karva_runner::run_parallel_tests(project, &config, &args, printer).unwrap();
 }
 
 pub fn bench_project(bencher: Bencher, benchmark: &ProjectBenchmark) {
@@ -70,7 +77,7 @@ pub fn bench_project(bencher: Bencher, benchmark: &ProjectBenchmark) {
 
     bencher
         .with_inputs(|| benchmark.project())
-        .bench_local_refs(|(db, args)| test_project(db, args));
+        .bench_local_refs(|db| test_project(db));
 }
 
 pub fn warmup_project(benchmark: &ProjectBenchmark) {
@@ -78,7 +85,7 @@ pub fn warmup_project(benchmark: &ProjectBenchmark) {
         setup_module();
     });
 
-    let (project, args) = benchmark.project();
+    let project = benchmark.project();
 
-    test_project(&project, &args);
+    test_project(&project);
 }
