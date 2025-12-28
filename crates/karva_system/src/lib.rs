@@ -156,35 +156,6 @@ pub fn find_karva_wheel() -> anyhow::Result<Utf8PathBuf> {
     anyhow::bail!("Could not find karva wheel in target/wheels directory");
 }
 
-/// Find the cargo binary in the target directory.
-/// Returns the path to the binary file.
-pub fn find_cargo_binary(binary: &str) -> anyhow::Result<Utf8PathBuf> {
-    let karva_root = Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|p| p.parent())
-        .ok_or_else(|| anyhow::anyhow!("Could not determine KARVA_ROOT"))?
-        .to_path_buf();
-
-    let debug_dir = karva_root.join("target").join("debug");
-
-    let entries = std::fs::read_dir(&debug_dir)
-        .with_context(|| format!("Could not read target directory: {debug_dir}"))?;
-
-    for entry in entries {
-        let entry = entry?;
-        let file_name = entry.file_name();
-        if let Some(name) = file_name.to_str() {
-            if name.starts_with(binary) {
-                return Ok(
-                    Utf8PathBuf::from_path_buf(entry.path()).expect("Path is not valid UTF-8")
-                );
-            }
-        }
-    }
-
-    anyhow::bail!("Could not find karva wheel in target/wheels directory");
-}
-
 pub fn venv_binary(binary_name: &str, directory: &Utf8PathBuf) -> Option<Utf8PathBuf> {
     let venv_dir = directory.join(".venv");
 
