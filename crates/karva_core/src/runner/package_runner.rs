@@ -23,6 +23,59 @@ use crate::normalize::{NormalizedModule, NormalizedPackage, NormalizedTest};
 use crate::runner::{FinalizerCache, FixtureCache};
 use crate::utils::{full_test_name, source_file};
 
+/// Context information passed to fixtures for introspection via the `request` object.
+#[derive(Clone)]
+struct FixtureContext {
+    /// The name of the current test/scope (e.g., test name, module name, package path, "session")
+    name: String,
+    /// Tags associated with the test
+    tags: Option<crate::extensions::tags::python::PyTags>,
+    /// Pytest marks for compatibility
+    pytest_marks: Option<Py<PyAny>>,
+}
+
+impl FixtureContext {
+    /// Create a context for a function-scoped fixture with the test name
+    fn for_test(
+        test_name: String,
+        tags: Option<crate::extensions::tags::python::PyTags>,
+        pytest_marks: Option<Py<PyAny>>,
+    ) -> Self {
+        Self {
+            name: test_name,
+            tags,
+            pytest_marks,
+        }
+    }
+
+    /// Create a context for a module-scoped fixture with the module name
+    fn for_module(module_name: String) -> Self {
+        Self {
+            name: module_name,
+            tags: None,
+            pytest_marks: None,
+        }
+    }
+
+    /// Create a context for a package-scoped fixture with the package path
+    fn for_package(package_path: String) -> Self {
+        Self {
+            name: package_path,
+            tags: None,
+            pytest_marks: None,
+        }
+    }
+
+    /// Create a context for a session-scoped fixture
+    fn for_session() -> Self {
+        Self {
+            name: "session".to_string(),
+            tags: None,
+            pytest_marks: None,
+        }
+    }
+}
+
 /// A struct that is used to execute tests within a package.
 ///
 /// We assume a normalized state of the package.
@@ -45,14 +98,8 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
     ///
     /// The main entrypoint for actual test execution.
     pub(crate) fn execute(&self, py: Python<'_>, session: NormalizedPackage) {
-        // Session-scoped fixtures get "session" as the node name
-        let auto_use_errors = self.execute_fixtures(
-            py,
-            &session.auto_use_fixtures,
-            Some(&"session".to_string()),
-            None,
-            None,
-        );
+        let context = FixtureContext::for_session();
+        let auto_use_errors = self.execute_fixtures(py, &session.auto_use_fixtures, &context);
 
         for error in auto_use_errors {
             report_fixture_failure(self.context, py, error);
@@ -69,14 +116,9 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
     ///
     /// Failing fast if the user has specified that we should.
     fn execute_module(&self, py: Python<'_>, module: NormalizedModule) -> bool {
-        // Module-scoped fixtures get "module" as the node name
-        let auto_use_errors = self.execute_fixtures(
-            py,
-            &module.auto_use_fixtures,
-            Some(&"module".to_string()),
-            None,
-            None,
-        );
+        let module_name = module.path.module_name().to_string();
+        let context = FixtureContext::for_module(module_name);
+        let auto_use_errors = self.execute_fixtures(py, &module.auto_use_fixtures, &context);
 
         for error in auto_use_errors {
             report_fixture_failure(self.context, py, error);
@@ -104,19 +146,15 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
     /// Failing fast if the user has specified that we should.
     fn execute_package(&self, py: Python<'_>, package: NormalizedPackage) -> bool {
         let NormalizedPackage {
+            path: package_path,
             modules,
             packages,
             auto_use_fixtures,
         } = package;
 
-        // Package-scoped fixtures get "package" as the node name
-        let auto_use_errors = self.execute_fixtures(
-            py,
-            &auto_use_fixtures,
-            Some(&"package".to_string()),
-            None,
-            None,
-        );
+        let package_name = package_path.as_str().to_string();
+        let context = FixtureContext::for_package(package_name);
+        let auto_use_errors = self.execute_fixtures(py, &auto_use_fixtures, &context);
 
         for error in auto_use_errors {
             report_fixture_failure(self.context, py, error);
@@ -182,35 +220,21 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
 
         let mut fixture_call_errors = Vec::new();
 
-        // Convert internal Tags to PyTags for passing to fixtures
-        let py_tags = Some(test_tags.to_py_tags());
-
-        // Extract pytest marks from the test function for compatibility
-        let pytest_marks = function.getattr(py, "pytestmark").ok();
-
-        // Get test name for passing to fixtures
-        let test_name = Some(name.function_name().to_string());
-
-        let use_fixture_errors = self.execute_fixtures(
-            py,
-            &use_fixture_dependencies,
-            test_name.as_ref(),
-            py_tags.as_ref(),
-            pytest_marks.as_ref(),
+        let test_context = FixtureContext::for_test(
+            name.function_name().to_string(),
+            Some(test_tags.to_py_tags()),
+            function.getattr(py, "pytestmark").ok(),
         );
+
+        let use_fixture_errors =
+            self.execute_fixtures(py, &use_fixture_dependencies, &test_context);
 
         fixture_call_errors.extend(use_fixture_errors);
 
         let mut function_arguments = HashMap::new();
 
         for fixture in &fixture_dependencies {
-            match self.execute_fixture(
-                py,
-                fixture,
-                test_name.clone(),
-                py_tags.as_ref(),
-                pytest_marks.as_ref(),
-            ) {
+            match self.execute_fixture(py, fixture, &test_context) {
                 Ok((value, finalizer)) => {
                     function_arguments.insert(fixture.function_name().to_string(), value);
 
@@ -224,13 +248,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
             }
         }
 
-        let auto_use_errors = self.execute_fixtures(
-            py,
-            &auto_use_fixtures,
-            test_name.as_ref(),
-            py_tags.as_ref(),
-            pytest_marks.as_ref(),
-        );
+        let auto_use_errors = self.execute_fixtures(py, &auto_use_fixtures, &test_context);
         fixture_call_errors.extend(auto_use_errors);
 
         for (key, value) in params {
@@ -341,9 +359,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
         &self,
         py: Python<'_>,
         fixture: &NormalizedFixture,
-        test_name: Option<String>,
-        test_tags: Option<&crate::extensions::tags::python::PyTags>,
-        pytest_marks: Option<&Py<PyAny>>,
+        context: &FixtureContext,
     ) -> Result<(Py<PyAny>, Option<Finalizer>), FixtureCallError> {
         if let Some(cached) = self
             .fixture_cache
@@ -355,7 +371,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
         let mut function_arguments = HashMap::new();
 
         for fixture in fixture.dependencies() {
-            match self.execute_fixture(py, fixture, test_name.clone(), test_tags, pytest_marks) {
+            match self.execute_fixture(py, fixture, context) {
                 Ok((value, finalizer)) => {
                     function_arguments.insert(fixture.function_name().to_string(), value);
 
@@ -369,9 +385,11 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
             }
         }
 
-        // Create a fixture with test context before calling
-        let fixture_with_context =
-            fixture.with_test_context(test_name, test_tags.cloned(), pytest_marks.cloned());
+        let fixture_with_context = fixture.with_test_context(
+            Some(context.name.clone()),
+            context.tags.clone(),
+            context.pytest_marks.clone(),
+        );
 
         let fixture_call_result = match fixture_with_context.call(py, &function_arguments) {
             Ok(fixture_call_result) => fixture_call_result,
@@ -457,13 +475,11 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
         &self,
         py: Python,
         fixture: &[P],
-        test_name: Option<&String>,
-        test_tags: Option<&crate::extensions::tags::python::PyTags>,
-        pytest_marks: Option<&Py<PyAny>>,
+        context: &FixtureContext,
     ) -> Vec<FixtureCallError> {
         let mut errors = Vec::new();
         for fixture in fixture {
-            match self.execute_fixture(py, fixture, test_name.cloned(), test_tags, pytest_marks) {
+            match self.execute_fixture(py, fixture, context) {
                 Ok((_, finalizer)) => {
                     if let Some(finalizer) = finalizer {
                         self.finalizer_cache.add_finalizer(finalizer);

@@ -5,7 +5,6 @@ use pyo3::types::{PyDict, PyTuple};
 ///
 /// This allows users to create their own markers with custom names, args, and kwargs.
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // Fields are used via public API, just not internally yet
 pub struct CustomTag {
     name: String,
     args: Vec<Py<PyAny>>,
@@ -19,21 +18,6 @@ impl CustomTag {
         kwargs: Vec<(String, Py<PyAny>)>,
     ) -> Self {
         Self { name, args, kwargs }
-    }
-
-    #[allow(dead_code)] // Public API for future use
-    pub(crate) fn name(&self) -> &str {
-        &self.name
-    }
-
-    #[allow(dead_code)] // Public API for future use
-    pub(crate) fn args(&self) -> &[Py<PyAny>] {
-        &self.args
-    }
-
-    #[allow(dead_code)] // Public API for future use
-    pub(crate) fn kwargs(&self) -> &[(String, Py<PyAny>)] {
-        &self.kwargs
     }
 
     /// Convert this tag to a `PyTag` for use in Python.

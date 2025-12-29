@@ -250,8 +250,8 @@ def my_fixture(request):
 The `name` property returns different values based on the fixture scope:
 
 - **Function-scoped**: Returns the test function name (e.g., `"test_login"`)
-- **Module-scoped**: Returns `"module"`
-- **Package-scoped**: Returns `"package"`
+- **Module-scoped**: Returns the module name (e.g., `"test"` for `test.py`, or `"tests.unit.test_auth"` for `tests/unit/test_auth.py`)
+- **Package-scoped**: Returns the package path (e.g., `"tests"` or `"tests/unit"`)
 - **Session-scoped**: Returns `"session"`
 
 Example:
@@ -259,7 +259,8 @@ Example:
 ```py
 @karva.fixture(scope='module')
 def module_fixture(request):
-    assert request.node.name == 'module'
+    # For a file tests/test_auth.py, this would be 'tests.test_auth'
+    print(f"Module: {request.node.name}")
 
 @karva.fixture
 def function_fixture(request):

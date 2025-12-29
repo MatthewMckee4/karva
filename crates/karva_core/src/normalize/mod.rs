@@ -249,6 +249,7 @@ impl Normalizer {
         }
 
         NormalizedModule {
+            path: module.module_path().clone(),
             test_functions: normalized_test_functions,
             auto_use_fixtures: module_auto_use_fixtures,
         }
@@ -282,6 +283,7 @@ impl Normalizer {
         }
 
         NormalizedPackage {
+            path: package.path().clone(),
             modules,
             packages,
             auto_use_fixtures: package_auto_use_fixtures,
