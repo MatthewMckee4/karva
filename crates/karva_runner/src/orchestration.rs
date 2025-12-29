@@ -167,6 +167,7 @@ pub fn run_parallel_tests(
         python_version: db.project().metadata().python_version(),
         test_function_prefix: &db.project().settings().test().test_function_prefix,
         respect_ignore_files: db.project().settings().src().respect_ignore_files,
+        collect_fixtures: false,
     };
 
     let collector = ParallelCollector::new(db.system(), collection_settings);
@@ -320,6 +321,10 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
     if let Some(color) = args.color {
         cli_args.push("--color");
         cli_args.push(color.as_str());
+    }
+
+    if settings.test().try_import_fixtures {
+        cli_args.push("--try-import-fixtures");
     }
 
     cli_args.iter().map(ToString::to_string).collect()

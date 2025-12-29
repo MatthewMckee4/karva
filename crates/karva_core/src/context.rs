@@ -46,6 +46,7 @@ impl<'a> Context<'a> {
             python_version: self.python_version,
             test_function_prefix: &self.settings.test().test_function_prefix,
             respect_ignore_files: self.settings.src().respect_ignore_files,
+            collect_fixtures: true,
         }
     }
 
@@ -90,5 +91,9 @@ impl<'a> Context<'a> {
         rule: &'static DiagnosticType,
     ) -> DiagnosticGuardBuilder<'ctx, 'a> {
         DiagnosticGuardBuilder::new(self, rule, true)
+    }
+
+    pub fn python_version(&self) -> PythonVersion {
+        self.python_version
     }
 }

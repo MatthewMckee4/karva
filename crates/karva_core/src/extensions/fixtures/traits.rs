@@ -120,7 +120,7 @@ impl RequiresFixtures for DiscoveredModule {
     fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
         let mut fixtures = Vec::new();
 
-        for test_function in &self.test_functions() {
+        for test_function in self.test_functions() {
             fixtures.extend(test_function.required_fixtures(py));
         }
 

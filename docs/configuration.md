@@ -124,3 +124,22 @@ test-function-prefix = "test"
 
 ---
 
+### `try-import-fixtures`
+
+When set, we will try to import functions in each test file as well as parsing the ast to find them.
+
+This is often slower, so it is not recommended for most projects.
+
+**Default value**: `false`
+
+**Type**: `true | false`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.test]
+try-import-fixtures = true
+```
+
+---
+

@@ -123,6 +123,12 @@ pub struct SubTestCommand {
     #[clap(long, default_missing_value = "true", num_args=0..1)]
     pub no_progress: Option<bool>,
 
+    /// When set, we will try to import functions in each test file as well as parsing the ast to find them.
+    ///
+    /// This is often slower, so it is not recommended for most projects.
+    #[clap(long, default_missing_value = "true", num_args=0..1)]
+    pub try_import_fixtures: Option<bool>,
+
     /// Control when colored output is used.
     #[arg(long)]
     pub color: Option<TerminalColor>,
@@ -203,6 +209,7 @@ impl SubTestCommand {
             test: Some(TestOptions {
                 test_function_prefix: self.test_prefix,
                 fail_fast: self.fail_fast,
+                try_import_fixtures: self.try_import_fixtures,
             }),
         }
     }
