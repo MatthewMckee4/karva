@@ -1,6 +1,5 @@
 # Karva (0.0.1-alpha.1)
 
-[![codecov](https://codecov.io/gh/MatthewMckee4/karva/graph/badge.svg?token=VELHBTE1L9)](https://codecov.io/gh/MatthewMckee4/karva)
 ![PyPI - Version](https://img.shields.io/pypi/v/karva)
 
 A Python test framework, written in Rust.
