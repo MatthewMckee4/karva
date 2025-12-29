@@ -138,7 +138,7 @@ This is often slower, so it is not recommended for most projects.
 
 ```toml
 [tool.karva.test]
-fail-fast = true
+try-import-fixtures = true
 ```
 
 ---

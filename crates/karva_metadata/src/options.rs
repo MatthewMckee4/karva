@@ -190,7 +190,7 @@ pub struct TestOptions {
         default = r#"false"#,
         value_type = "true | false",
         example = r#"
-            fail-fast = true
+            try-import-fixtures = true
         "#
     )]
     pub try_import_fixtures: Option<bool>,
