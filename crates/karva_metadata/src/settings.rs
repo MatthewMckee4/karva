@@ -41,4 +41,5 @@ pub struct SrcSettings {
 pub struct TestSettings {
     pub test_function_prefix: String,
     pub fail_fast: bool,
+    pub try_import_fixtures: bool,
 }

@@ -36,8 +36,8 @@ impl DiscoveredModule {
         self.path.module_name()
     }
 
-    pub(crate) fn test_functions(&self) -> Vec<&TestFunction> {
-        self.test_functions.iter().collect()
+    pub(crate) fn test_functions(&self) -> &Vec<TestFunction> {
+        &self.test_functions
     }
 
     pub(crate) fn add_test_function(&mut self, test_function: TestFunction) {

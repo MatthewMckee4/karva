@@ -161,6 +161,7 @@ fn run(
         .arg("concise")
         .arg("--no-progress")
         .arg("--color")
+        .arg("--try-import-fixtures")
         .arg("never")
         .current_dir(&installed_project.path)
         .output()

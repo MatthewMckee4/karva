@@ -16,6 +16,7 @@ pub struct CollectionSettings<'a> {
     pub python_version: PythonVersion,
     pub test_function_prefix: &'a str,
     pub respect_ignore_files: bool,
+    pub collect_fixtures: bool,
 }
 
 /// Collects test functions and fixtures from a Python file.
@@ -45,7 +46,7 @@ pub fn collect_file(
 
     for stmt in parsed.into_syntax().body {
         if let Stmt::FunctionDef(function_def) = stmt {
-            if is_fixture_function(&function_def) {
+            if settings.collect_fixtures && is_fixture_function(&function_def) {
                 collected_module.add_fixture_function_def(Arc::new(function_def));
                 continue;
             }

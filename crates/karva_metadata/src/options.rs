@@ -181,6 +181,19 @@ pub struct TestOptions {
         "#
     )]
     pub fail_fast: Option<bool>,
+
+    /// When set, we will try to import functions in each test file as well as parsing the ast to find them.
+    ///
+    /// This is often slower, so it is not recommended for most projects.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"false"#,
+        value_type = "true | false",
+        example = r#"
+            fail-fast = true
+        "#
+    )]
+    pub try_import_fixtures: Option<bool>,
 }
 
 impl TestOptions {
@@ -191,6 +204,7 @@ impl TestOptions {
                 .clone()
                 .unwrap_or_else(|| "test".to_string()),
             fail_fast: self.fail_fast.unwrap_or_default(),
+            try_import_fixtures: self.try_import_fixtures.unwrap_or_default(),
         }
     }
 }

@@ -1596,3 +1596,108 @@ def test_1():
     ----- stderr -----
     ");
 }
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_try_import_fixtures() {
+    let context = TestContext::with_files([
+        (
+            "foo.py",
+            r"
+import karva
+
+@karva.fixture
+def x():
+    return 1
+
+@karva.fixture()
+def y():
+    return 1
+                ",
+        ),
+        (
+            "test_file.py",
+            "
+from foo import x, y
+def test_1(x): pass
+def test_2(y): pass
+                ",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--try-import-fixtures"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test_file::test_1(x=1) ... ok
+    test test_file::test_2(y=1) ... ok
+
+    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_try_import_fixtures_invalid_fixtures() {
+    let context = TestContext::with_files([
+        (
+            "foo.py",
+            r"
+import karva
+
+@karva.fixture
+def x():
+    raise ValueError('Invalid fixture')
+
+@karva.fixture()
+def y():
+    return 1
+                ",
+        ),
+        (
+            "test_file.py",
+            "
+from foo import x, y
+def test_1(x): pass
+def test_2(y): pass
+                ",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--try-import-fixtures"), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test_file::test_1 ... FAILED
+    test test_file::test_2(y=1) ... ok
+
+    diagnostics:
+
+    error[missing-fixtures]: Test `test_1` has missing fixtures
+     --> test_file.py:3:5
+      |
+    2 | from foo import x, y
+    3 | def test_1(x): pass
+      |     ^^^^^^
+    4 | def test_2(y): pass
+      |
+    info: Missing fixtures: `x`
+    info: Fixture `x` failed here
+     --> foo.py:6:5
+      |
+    4 | @karva.fixture
+    5 | def x():
+    6 |     raise ValueError('Invalid fixture')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    7 |
+    8 | @karva.fixture()
+      |
+    info: Invalid fixture
+
+    test result: FAILED. 1 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
