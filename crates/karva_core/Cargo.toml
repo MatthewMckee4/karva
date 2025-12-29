@@ -21,7 +21,6 @@ karva_collector = { workspace = true }
 karva_diagnostic = { workspace = true, features = ["traceback"] }
 karva_logging = { workspace = true }
 karva_metadata = { workspace = true }
-karva_project = { workspace = true }
 karva_python_semantic = { workspace = true }
 karva_system = { workspace = true }
 
@@ -34,6 +33,7 @@ pyo3 = { workspace = true }
 regex = { workspace = true }
 ruff_db = { workspace = true }
 ruff_macros = { workspace = true }
+ruff_notebook = { workspace = true }
 ruff_python_ast = { workspace = true }
 ruff_source_file = { workspace = true }
 tempfile = { workspace = true }

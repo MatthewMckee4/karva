@@ -795,7 +795,6 @@ def pyproject_test(): pass
 
     ----- stderr -----
     WARN Ignoring the `tool.ty` section in `<temp_dir>/pyproject.toml` because `<temp_dir>/karva.toml` takes precedence.
-    WARN Ignoring the `tool.ty` section in `<temp_dir>/pyproject.toml` because `<temp_dir>/karva.toml` takes precedence.
     ");
 }
 
@@ -1239,7 +1238,6 @@ def cli_should_run(): pass
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
-    WARN Ignoring the `tool.ty` section in `<temp_dir>/pyproject.toml` because `<temp_dir>/karva.toml` takes precedence.
     WARN Ignoring the `tool.ty` section in `<temp_dir>/pyproject.toml` because `<temp_dir>/karva.toml` takes precedence.
     ");
 }

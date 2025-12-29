@@ -10,13 +10,19 @@ use karva_cache::{CacheWriter, RunHash};
 use karva_cli::{SubTestCommand, Verbosity};
 use karva_diagnostic::{DummyReporter, Reporter, TestCaseReporter};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
-use karva_metadata::{ProjectMetadata, ProjectOptionsOverrides};
-use karva_project::{Db, ProjectDatabase};
-use karva_system::{OsSystem, System, path::absolute};
-use ruff_db::diagnostic::DisplayDiagnosticConfig;
+use karva_python_semantic::current_python_version;
+use karva_system::System;
+use karva_system::path::{TestPath, TestPathError};
+use karva_system::{OsSystem, path::absolute};
+use ruff_db::diagnostic::{DisplayDiagnosticConfig, FileResolver, Input, UnifiedFile};
+use ruff_db::files::File;
+use ruff_notebook::NotebookIndex;
 
-use crate::runner::StandardTestRunner;
-use crate::utils::current_python_version;
+use crate::Context;
+use crate::discovery::StandardDiscoverer;
+use crate::normalize::Normalizer;
+use crate::runner::NormalizedPackageRunner;
+use crate::utils::attach_with_project;
 
 #[derive(Parser)]
 #[command(name = "karva_core", about = "Karva test worker")]
@@ -121,29 +127,19 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     let system = OsSystem::new(&cwd);
 
-    let config_file = args
+    let test_paths: Vec<Utf8PathBuf> = args
         .sub_command
-        .config_file
-        .as_ref()
-        .map(|path| absolute(path, &cwd));
+        .paths
+        .iter()
+        .map(|p| absolute(p, cwd.clone()))
+        .collect();
 
-    let mut project_metadata = if let Some(config_file) = &config_file {
-        ProjectMetadata::from_config_file(config_file.clone(), &system)?
-    } else {
-        ProjectMetadata::discover(system.current_directory(), &system)?
-    }
-    .with_python_version(Some(python_version));
+    let test_paths: Vec<Result<TestPath, TestPathError>> = test_paths
+        .iter()
+        .map(|p| TestPath::new(p.as_str()))
+        .collect();
 
-    // We have already checked the include paths in the main worker.
-    if let Some(src) = project_metadata.options.src.as_mut() {
-        src.include = None;
-    }
-
-    let project_options_overrides =
-        ProjectOptionsOverrides::new(config_file, args.sub_command.into_options());
-    project_metadata.apply_overrides(&project_options_overrides);
-
-    let db = ProjectDatabase::new(project_metadata, system)?;
+    let settings = args.sub_command.into_options().to_settings();
 
     let run_hash = RunHash::from_existing(&args.run_hash);
 
@@ -155,16 +151,59 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         Box::new(TestCaseReporter::new(printer))
     };
 
-    let test_runner = StandardTestRunner::new(&db);
-    let result = test_runner.test_with_reporter(reporter.as_ref());
+    let context = Context::new(&system, &settings, python_version, reporter.as_ref());
 
-    let diagnostic_format = db.project().settings().terminal().output_format.into();
+    let result = attach_with_project(settings.terminal().show_python_output, |py| {
+        let session = StandardDiscoverer::new(&context).discover_with_py(py, test_paths);
+
+        let normalized_session = Normalizer::default().normalize(py, &session);
+
+        NormalizedPackageRunner::new(&context).execute(py, normalized_session);
+
+        context.into_result()
+    });
+
+    let diagnostic_format = settings.terminal().output_format.into();
 
     let config = DisplayDiagnosticConfig::default()
         .format(diagnostic_format)
         .color(colored::control::SHOULD_COLORIZE.should_colorize());
 
-    cache_writer.write_result(&result, &db, &config)?;
+    let diagnostic_resolver = DiagnosticFileResolver::new(&system);
+
+    cache_writer.write_result(&result, &diagnostic_resolver, &config)?;
 
     Ok(ExitStatus::Success)
+}
+
+struct DiagnosticFileResolver<'a> {
+    system: &'a dyn System,
+}
+
+impl<'a> DiagnosticFileResolver<'a> {
+    fn new(system: &'a dyn System) -> Self {
+        Self { system }
+    }
+}
+
+impl FileResolver for DiagnosticFileResolver<'_> {
+    fn path(&self, _file: File) -> &str {
+        unimplemented!("Expected a Ruff file for rendering a Ruff diagnostic");
+    }
+
+    fn input(&self, _file: File) -> Input {
+        unimplemented!("Expected a Ruff file for rendering a Ruff diagnostic");
+    }
+
+    fn notebook_index(&self, _file: &UnifiedFile) -> Option<NotebookIndex> {
+        None
+    }
+
+    fn is_notebook(&self, _file: &UnifiedFile) -> bool {
+        false
+    }
+
+    fn current_directory(&self) -> &std::path::Path {
+        self.system.current_directory().as_std_path()
+    }
 }

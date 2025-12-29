@@ -2,25 +2,11 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use camino::Utf8Path;
-use karva_metadata::ProjectSettings;
 use karva_system::System;
 use pyo3::prelude::*;
 use pyo3::types::PyAnyMethods;
 use pyo3::{PyResult, Python};
-use ruff_python_ast::PythonVersion;
 use ruff_source_file::{SourceFile, SourceFileBuilder};
-
-/// Retrieves the current Python interpreter version.
-///
-/// This function queries the embedded Python interpreter to determine
-/// the major and minor version numbers, which are used for AST parsing
-/// compatibility and feature detection.
-pub fn current_python_version() -> PythonVersion {
-    PythonVersion::from(attach(|py| {
-        let version_info = py.version_info();
-        (version_info.major, version_info.minor)
-    }))
-}
 
 /// Get the source file for the given utf8 path.
 pub(crate) fn source_file(system: &dyn System, path: &Utf8Path) -> SourceFile {
@@ -46,30 +32,29 @@ pub(crate) fn add_to_sys_path(py: Python<'_>, path: &Utf8Path, index: isize) -> 
 /// This function is used to suppress Python output during test execution
 /// when the user hasn't requested to see it. It returns a handle to the
 /// null file for later restoration.
-fn redirect_python_output<'py>(
-    py: Python<'py>,
-    settings: &ProjectSettings,
-) -> PyResult<Option<Bound<'py, PyAny>>> {
-    if settings.terminal().show_python_output {
-        Ok(None)
-    } else {
-        let sys = py.import("sys")?;
-        let os = py.import("os")?;
-        let builtins = py.import("builtins")?;
-        let logging = py.import("logging")?;
-
-        let devnull = os.getattr("devnull")?;
-        let open_file_function = builtins.getattr("open")?;
-        let null_file = open_file_function.call1((devnull, "w"))?;
-
-        for output in ["stdout", "stderr"] {
-            sys.setattr(output, null_file.clone())?;
-        }
-
-        logging.call_method1("disable", (logging.getattr("CRITICAL")?,))?;
-
-        Ok(Some(null_file))
+fn redirect_python_output(
+    py: Python<'_>,
+    show_python_output: bool,
+) -> PyResult<Option<Bound<'_, PyAny>>> {
+    if show_python_output {
+        return Ok(None);
     }
+    let sys = py.import("sys")?;
+    let os = py.import("os")?;
+    let builtins = py.import("builtins")?;
+    let logging = py.import("logging")?;
+
+    let devnull = os.getattr("devnull")?;
+    let open_file_function = builtins.getattr("open")?;
+    let null_file = open_file_function.call1((devnull, "w"))?;
+
+    for output in ["stdout", "stderr"] {
+        sys.setattr(output, null_file.clone())?;
+    }
+
+    logging.call_method1("disable", (logging.getattr("CRITICAL")?,))?;
+
+    Ok(Some(null_file))
 }
 
 /// Restores Python's stdout and stderr from the null file redirect.
@@ -92,12 +77,12 @@ fn restore_python_output<'py>(py: Python<'py>, null_file: &Bound<'py, PyAny>) ->
 }
 
 /// A wrapper around `Python::attach` so we can manage the stdout and stderr redirection.
-pub(crate) fn attach_with_project<F, R>(settings: &ProjectSettings, f: F) -> R
+pub(crate) fn attach_with_project<F, R>(show_python_output: bool, f: F) -> R
 where
     F: for<'py> FnOnce(Python<'py>) -> R,
 {
     attach(|py| {
-        let null_file = redirect_python_output(py, settings);
+        let null_file = redirect_python_output(py, show_python_output);
         let result = f(py);
         if let Ok(Some(null_file)) = null_file {
             let _ = restore_python_output(py, &null_file);
@@ -177,16 +162,6 @@ pub(crate) fn truncate_string(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    mod python_version_tests {
-        use super::*;
-
-        #[test]
-        fn test_current_python_version() {
-            let version = current_python_version();
-            assert!(version >= PythonVersion::PY37);
-        }
-    }
 
     mod utils_tests {
         use super::*;

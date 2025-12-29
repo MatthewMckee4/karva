@@ -5,7 +5,8 @@ mod name;
 
 pub use function_kind::FunctionKind;
 pub use name::{ModulePath, QualifiedFunctionName, QualifiedTestName};
-use ruff_python_ast::{Expr, StmtFunctionDef};
+use pyo3::Python;
+use ruff_python_ast::{Expr, PythonVersion, StmtFunctionDef};
 
 pub fn is_python_file(path: &Utf8Path) -> bool {
     path.extension().is_some_and(|extension| extension == "py")
@@ -39,6 +40,19 @@ pub fn module_name(cwd: &Utf8PathBuf, path: &Utf8Path) -> Option<String> {
         .collect();
 
     Some(components.join(".").trim_end_matches(".py").to_string())
+}
+
+/// Retrieves the current Python interpreter version.
+///
+/// This function queries the embedded Python interpreter to determine
+/// the major and minor version numbers, which are used for AST parsing
+/// compatibility and feature detection.
+pub fn current_python_version() -> PythonVersion {
+    Python::initialize();
+    PythonVersion::from(Python::attach(|py| {
+        let version_info = py.version_info();
+        (version_info.major, version_info.minor)
+    }))
 }
 
 #[cfg(test)]

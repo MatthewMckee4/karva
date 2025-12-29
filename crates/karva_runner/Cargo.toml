@@ -15,15 +15,16 @@ karva_cache = { workspace = true }
 karva_cli = { workspace = true }
 karva_collector = { workspace = true }
 karva_logging = { workspace = true }
+karva_metadata = { workspace = true }
 karva_project = { workspace = true }
 karva_system = { workspace = true }
 
 anyhow = { workspace = true }
 camino = { workspace = true }
+crossbeam-channel = { workspace = true }
+ignore = { workspace = true }
 tracing = { workspace = true }
-which = "6.0"
-
-[dev-dependencies]
+which = { workspace = true }
 
 [lints]
 workspace = true

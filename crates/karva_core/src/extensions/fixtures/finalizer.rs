@@ -42,7 +42,7 @@ impl Finalizer {
         {
             report_invalid_fixture_finalizer(
                 context,
-                source_file(context.db().system(), fixture_name.module_path().path()),
+                source_file(context.system(), fixture_name.module_path().path()),
                 &stmt_function_def,
                 invalid_finalizer_reason,
             );

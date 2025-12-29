@@ -9,6 +9,9 @@ repository.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[package.metadata.cargo-shear]
+ignored = ["ruff_options_metadata"]
+
 [dependencies]
 karva_combine = { workspace = true }
 karva_macros = { workspace = true }

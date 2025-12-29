@@ -64,7 +64,6 @@ impl TestContext {
         }
 
         let command_arguments = [
-            // vec!["init", "--bare", "--directory", project_path.as_str()],
             venv_args,
             vec![
                 "pip",

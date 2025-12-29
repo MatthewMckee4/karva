@@ -48,7 +48,7 @@ impl CollectedModule {
         self.path.path()
     }
 
-    pub(crate) const fn module_type(&self) -> ModuleType {
+    pub const fn module_type(&self) -> ModuleType {
         self.module_type
     }
 
@@ -68,7 +68,7 @@ pub struct CollectedPackage {
 }
 
 impl CollectedPackage {
-    pub(crate) fn new(path: Utf8PathBuf) -> Self {
+    pub fn new(path: Utf8PathBuf) -> Self {
         Self {
             path,
             modules: HashMap::new(),
@@ -88,7 +88,7 @@ impl CollectedPackage {
     /// If the module path equals our path, use update method.
     ///
     /// Otherwise, strip the current path from the start and add the module to the appropriate sub-package.
-    pub(crate) fn add_module(&mut self, module: CollectedModule) {
+    pub fn add_module(&mut self, module: CollectedModule) {
         if !module.file_path().starts_with(self.path()) {
             return;
         }
@@ -136,7 +136,7 @@ impl CollectedPackage {
         }
     }
 
-    pub(crate) fn add_configuration_module(&mut self, module: CollectedModule) {
+    pub fn add_configuration_module(&mut self, module: CollectedModule) {
         self.configuration_module_path = Some(module.file_path().clone());
         self.add_module(module);
     }
@@ -146,7 +146,7 @@ impl CollectedPackage {
     /// If the package path equals our path, use update method.
     ///
     /// Otherwise, strip the current path from the start and add the package to the appropriate sub-package.
-    pub(crate) fn add_package(&mut self, package: Self) {
+    pub fn add_package(&mut self, package: Self) {
         if !package.path().starts_with(self.path()) {
             return;
         }
@@ -196,7 +196,7 @@ impl CollectedPackage {
         self.modules.is_empty() && self.packages.is_empty()
     }
 
-    pub(crate) fn shrink(&mut self) {
+    pub fn shrink(&mut self) {
         self.modules.retain(|_, module| !module.is_empty());
 
         if let Some(configuration_module) = self.configuration_module_path.as_ref() {

@@ -8,12 +8,14 @@ use karva_cache::{
     AggregatedResults, CACHE_DIR, CacheReader, RunHash, reader::read_recent_durations,
 };
 use karva_cli::{OutputFormat, SubTestCommand};
-use karva_collector::ParallelCollector;
+use karva_collector::CollectionSettings;
 use karva_logging::Printer;
+use karva_metadata::ProjectSettings;
 use karva_project::{Db, ProjectDatabase};
 use karva_system::time::format_duration;
 use karva_system::venv_binary;
 
+use crate::collection::ParallelCollector;
 use crate::partition::{Partition, partition_collected_tests};
 
 struct Worker {
@@ -120,7 +122,7 @@ fn spawn_workers(
             cmd.arg(path);
         }
 
-        cmd.args(args.into_cli_args());
+        cmd.args(inner_cli_args(db.project().settings(), args));
 
         let child = cmd
             .stdout(printer.stream_for_details())
@@ -161,11 +163,13 @@ pub fn run_parallel_tests(
 
     tracing::debug!(path_count = test_paths.len(), "Found test paths");
 
-    let collector = ParallelCollector::new(
-        db.system(),
-        db.project().metadata(),
-        db.project().settings(),
-    );
+    let collection_settings = CollectionSettings {
+        python_version: db.project().metadata().python_version(),
+        test_function_prefix: &db.project().settings().test().test_function_prefix,
+        respect_ignore_files: db.project().settings().src().respect_ignore_files,
+    };
+
+    let collector = ParallelCollector::new(db.system(), collection_settings);
 
     let collection_start_time = std::time::Instant::now();
 
@@ -178,7 +182,7 @@ pub fn run_parallel_tests(
 
     tracing::debug!("Attempting to create {} workers", config.num_workers);
 
-    let cache_dir = db.project().cwd().join(CACHE_DIR);
+    let cache_dir = db.system().current_directory().join(CACHE_DIR);
 
     // Read durations from the most recent run to optimize partitioning
     let previous_durations = read_recent_durations(&cache_dir).unwrap_or_default();
@@ -289,4 +293,34 @@ fn print_test_output(
     write!(result_stdout, "{}", result.stats.display(start_time))?;
 
     Ok(result)
+}
+
+fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<String> {
+    let mut cli_args = Vec::new();
+
+    if let Some(arg) = args.verbosity.level().cli_arg() {
+        cli_args.push(arg);
+    }
+
+    if settings.test().fail_fast {
+        cli_args.push("--fail-fast");
+    }
+
+    if settings.terminal().show_python_output {
+        cli_args.push("-s");
+    }
+
+    cli_args.push("--output-format");
+    cli_args.push(settings.terminal().output_format.as_str());
+
+    if args.no_progress.is_some_and(|no_progress| no_progress) {
+        cli_args.push("--no-progress");
+    }
+
+    if let Some(color) = args.color {
+        cli_args.push("--color");
+        cli_args.push(color.as_str());
+    }
+
+    cli_args.iter().map(ToString::to_string).collect()
 }

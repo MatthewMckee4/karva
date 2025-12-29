@@ -11,12 +11,12 @@ use crate::discovery::{DiscoveredModule, TestFunction};
 use crate::extensions::fixtures::Fixture;
 
 /// Visitor for discovering test functions and fixture definitions in a given module.
-struct FunctionDefinitionVisitor<'ctx, 'proj, 'rep, 'py, 'a> {
+struct FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
     /// Context for the current session.
-    context: &'ctx Context<'proj, 'rep>,
+    context: &'ctx Context<'a>,
 
     /// The current module.
-    module: &'a mut DiscoveredModule,
+    module: &'b mut DiscoveredModule,
 
     /// We only import the module once we actually need it, this ensures we don't import random files.
     /// Which has a side effect of running them.
@@ -28,11 +28,11 @@ struct FunctionDefinitionVisitor<'ctx, 'proj, 'rep, 'py, 'a> {
     tried_to_import_module: bool,
 }
 
-impl<'ctx, 'proj, 'rep, 'py, 'a> FunctionDefinitionVisitor<'ctx, 'proj, 'rep, 'py, 'a> {
+impl<'ctx, 'py, 'a, 'b> FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
     const fn new(
         py: Python<'py>,
-        context: &'ctx Context<'proj, 'rep>,
-        module: &'a mut DiscoveredModule,
+        context: &'ctx Context<'a>,
+        module: &'b mut DiscoveredModule,
     ) -> Self {
         Self {
             context,
@@ -69,7 +69,7 @@ impl<'ctx, 'proj, 'rep, 'py, 'a> FunctionDefinitionVisitor<'ctx, 'proj, 'rep, 'p
     }
 }
 
-impl FunctionDefinitionVisitor<'_, '_, '_, '_, '_> {
+impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
     fn process_fixture_function(&mut self, stmt_function_def: &Arc<StmtFunctionDef>) {
         self.try_import_module();
 

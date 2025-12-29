@@ -26,14 +26,14 @@ use crate::utils::{full_test_name, source_file};
 /// A struct that is used to execute tests within a package.
 ///
 /// We assume a normalized state of the package.
-pub struct NormalizedPackageRunner<'ctx, 'proj, 'rep> {
-    context: &'ctx Context<'proj, 'rep>,
+pub struct NormalizedPackageRunner<'ctx, 'a> {
+    context: &'ctx Context<'a>,
     fixture_cache: FixtureCache,
     finalizer_cache: FinalizerCache,
 }
 
-impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
-    pub(crate) fn new(context: &'ctx Context<'proj, 'rep>) -> Self {
+impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
+    pub(crate) fn new(context: &'ctx Context<'a>) -> Self {
         Self {
             context,
             fixture_cache: FixtureCache::default(),
@@ -73,7 +73,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         for test_function in module.test_functions {
             passed &= self.execute_test(py, test_function);
 
-            if self.context.project().settings().test().fail_fast && !passed {
+            if self.context.settings().test().fail_fast && !passed {
                 break;
             }
         }
@@ -106,16 +106,16 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
         for module in modules.into_values() {
             passed &= self.execute_module(py, module);
 
-            if self.context.project().settings().test().fail_fast && !passed {
+            if self.context.settings().test().fail_fast && !passed {
                 break;
             }
         }
 
-        if !self.context.project().settings().test().fail_fast || passed {
+        if !self.context.settings().test().fail_fast || passed {
             for sub_package in packages.into_values() {
                 passed &= self.execute_package(py, sub_package);
 
-                if self.context.project().settings().test().fail_fast && !passed {
+                if self.context.settings().test().fail_fast && !passed {
                     break;
                 }
             }
@@ -212,7 +212,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
 
                     report_test_pass_on_expect_failure(
                         self.context,
-                        source_file(self.context.db().system(), &test_module_path),
+                        source_file(self.context.system(), &test_module_path),
                         &stmt_function_def,
                         reason,
                     );
@@ -252,7 +252,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                         report_test_failure(
                             self.context,
                             py,
-                            source_file(self.context.db().system(), &test_module_path),
+                            source_file(self.context.system(), &test_module_path),
                             &stmt_function_def,
                             &function_arguments,
                             &err,
@@ -261,7 +261,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                         report_missing_fixtures(
                             self.context,
                             py,
-                            source_file(self.context.db().system(), &test_module_path),
+                            source_file(self.context.system(), &test_module_path),
                             &stmt_function_def,
                             &missing_args,
                             FunctionKind::Test,
@@ -330,7 +330,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                     error: err,
                     stmt_function_def: fixture.stmt_function_def.clone(),
                     source_file: source_file(
-                        self.context.db().system(),
+                        self.context.system(),
                         fixture.name.module_path().path(),
                     ),
                     arguments: function_arguments.clone(),
@@ -351,7 +351,7 @@ impl<'ctx, 'proj, 'rep> NormalizedPackageRunner<'ctx, 'proj, 'rep> {
                         error: err,
                         stmt_function_def: fixture.stmt_function_def.clone(),
                         source_file: source_file(
-                            self.context.db().system(),
+                            self.context.system(),
                             fixture.name.module_path().path(),
                         ),
                         arguments: function_arguments.clone(),

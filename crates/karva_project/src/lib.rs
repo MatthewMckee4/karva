@@ -2,62 +2,33 @@ use std::panic::RefUnwindSafe;
 use std::sync::Arc;
 
 use camino::Utf8PathBuf;
-use ruff_db::diagnostic::{FileResolver, Input, UnifiedFile};
-use ruff_db::files::File;
-use ruff_notebook::NotebookIndex;
+use karva_metadata::{ProjectMetadata, ProjectSettings};
+use karva_system::{
+    System,
+    path::{TestPath, TestPathError, absolute},
+};
 
-use karva_metadata::{Options, ProjectMetadata, SrcOptions};
-use karva_system::{OsSystem, System};
-
-pub use project::Project;
-
-mod project;
-
-pub const KARVA_CONFIG_FILE_NAME: &str = "karva.toml";
-
-pub trait Db: FileResolver + Send + Sync {
+pub trait Db: Send + Sync {
     fn system(&self) -> &dyn System;
     fn project(&self) -> &Project;
-    fn project_mut(&mut self) -> &mut Project;
 }
 
 #[derive(Debug, Clone)]
 pub struct ProjectDatabase {
-    project: Option<Project>,
+    project: Project,
 
     system: Arc<dyn System + Send + Sync + RefUnwindSafe>,
 }
 
 impl ProjectDatabase {
-    pub fn new<S>(project_metadata: ProjectMetadata, system: S) -> anyhow::Result<Self>
+    pub fn new<S>(project_metadata: ProjectMetadata, system: S) -> Self
     where
         S: System + 'static + Send + Sync + RefUnwindSafe,
     {
-        let mut db = Self {
-            project: None,
+        Self {
+            project: Project::from_metadata(project_metadata),
             system: Arc::new(system),
-        };
-
-        db.project = Some(Project::from_metadata(project_metadata));
-
-        Ok(db)
-    }
-
-    pub fn test_db(cwd: Utf8PathBuf, paths: &[Utf8PathBuf]) -> Self {
-        let options = Options {
-            src: Some(SrcOptions {
-                include: Some(paths.iter().map(ToString::to_string).collect()),
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-        let metadata = ProjectMetadata {
-            root: cwd.clone(),
-            options,
-            ..Default::default()
-        };
-        let system = OsSystem::new(cwd);
-        Self::new(metadata, system).unwrap()
+        }
     }
 }
 
@@ -67,32 +38,53 @@ impl Db for ProjectDatabase {
     }
 
     fn project(&self) -> &Project {
-        self.project.as_ref().unwrap()
-    }
-
-    fn project_mut(&mut self) -> &mut Project {
-        self.project.as_mut().unwrap()
+        &self.project
     }
 }
 
-impl FileResolver for ProjectDatabase {
-    fn path(&self, _file: File) -> &str {
-        unimplemented!("Expected a Ruff file for rendering a Ruff diagnostic");
+#[derive(Debug, Clone)]
+pub struct Project {
+    settings: ProjectSettings,
+
+    metadata: ProjectMetadata,
+}
+
+impl Project {
+    pub fn from_metadata(metadata: ProjectMetadata) -> Self {
+        let settings = metadata.options.to_settings();
+        Self { settings, metadata }
     }
 
-    fn input(&self, _file: File) -> Input {
-        unimplemented!("Expected a Ruff file for rendering a Ruff diagnostic");
+    pub const fn settings(&self) -> &ProjectSettings {
+        &self.settings
     }
 
-    fn notebook_index(&self, _file: &UnifiedFile) -> Option<NotebookIndex> {
-        None
+    pub const fn cwd(&self) -> &Utf8PathBuf {
+        self.metadata.root()
     }
 
-    fn is_notebook(&self, _file: &UnifiedFile) -> bool {
-        false
+    pub fn test_paths(&self) -> Vec<Result<TestPath, TestPathError>> {
+        let mut discovered_paths: Vec<Utf8PathBuf> = self
+            .settings
+            .src()
+            .include_paths
+            .iter()
+            .map(|p| absolute(p, self.cwd()))
+            .collect();
+
+        if discovered_paths.is_empty() {
+            discovered_paths.push(self.cwd().clone());
+        }
+
+        let test_paths: Vec<Result<TestPath, TestPathError>> = discovered_paths
+            .iter()
+            .map(|p| TestPath::new(p.as_str()))
+            .collect();
+
+        test_paths
     }
 
-    fn current_directory(&self) -> &std::path::Path {
-        self.system.current_directory().as_std_path()
+    pub const fn metadata(&self) -> &ProjectMetadata {
+        &self.metadata
     }
 }
