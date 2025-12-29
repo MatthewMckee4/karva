@@ -1164,6 +1164,7 @@ dependencies = [
  "camino",
  "clap",
  "colored 3.0.0",
+ "ctor",
  "ctrlc",
  "directories",
  "dunce",
