@@ -47,7 +47,7 @@ impl<'a> ProjectBenchmark<'a> {
                 ..SrcOptions::default()
             }),
             test: Some(TestOptions {
-                try_import_fixtures: Some(true),
+                try_import_fixtures: Some(self.installed_project.config.try_import_fixtures),
                 ..TestOptions::default()
             }),
             ..Options::default()

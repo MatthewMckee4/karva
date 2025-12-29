@@ -38,6 +38,8 @@ pub struct RealWorldProject<'a> {
     pub python_version: PythonVersion,
     /// Whether to pip install the project root
     pub install_root: bool,
+    /// Whether to set this config variable.
+    pub try_import_fixtures: bool,
 }
 
 impl<'a> RealWorldProject<'a> {
@@ -360,6 +362,7 @@ pub static AFFECT_PROJECT: RealWorldProject<'static> = RealWorldProject {
     max_dep_date: "2025-12-01",
     python_version: PythonVersion::PY313,
     install_root: true,
+    try_import_fixtures: false,
 };
 
 pub static SQLMODEL_PROJECT: RealWorldProject<'static> = RealWorldProject {
@@ -381,6 +384,7 @@ pub static SQLMODEL_PROJECT: RealWorldProject<'static> = RealWorldProject {
     max_dep_date: "2025-12-01",
     python_version: PythonVersion::PY313,
     install_root: false,
+    try_import_fixtures: true,
 };
 
 pub static TYPER_PROJECT: RealWorldProject<'static> = RealWorldProject {
@@ -399,6 +403,7 @@ pub static TYPER_PROJECT: RealWorldProject<'static> = RealWorldProject {
     max_dep_date: "2025-12-01",
     python_version: PythonVersion::PY313,
     install_root: false,
+    try_import_fixtures: false,
 };
 
 pub static PYDANTIC_SETTINGS_PROJECT: RealWorldProject<'static> = RealWorldProject {
@@ -418,6 +423,7 @@ pub static PYDANTIC_SETTINGS_PROJECT: RealWorldProject<'static> = RealWorldProje
     max_dep_date: "2025-12-01",
     python_version: PythonVersion::PY313,
     install_root: false,
+    try_import_fixtures: false,
 };
 
 pub static PYDANTIC_PROJECT: RealWorldProject<'static> = RealWorldProject {
@@ -443,6 +449,7 @@ pub static PYDANTIC_PROJECT: RealWorldProject<'static> = RealWorldProject {
     max_dep_date: "2025-12-01",
     python_version: PythonVersion::PY313,
     install_root: false,
+    try_import_fixtures: true,
 };
 
 pub fn all_projects() -> Vec<&'static RealWorldProject<'static>> {
