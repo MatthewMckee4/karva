@@ -4,7 +4,7 @@ use divan::Bencher;
 use karva_cli::SubTestCommand;
 use karva_core::testing::setup_module;
 use karva_logging::{Printer, VerbosityLevel};
-use karva_metadata::{Options, ProjectMetadata, SrcOptions};
+use karva_metadata::{Options, ProjectMetadata, SrcOptions, TestOptions};
 use karva_project::ProjectDatabase;
 use karva_projects::{InstalledProject, RealWorldProject};
 use karva_system::OsSystem;
@@ -45,6 +45,10 @@ impl<'a> ProjectBenchmark<'a> {
             src: Some(SrcOptions {
                 include: Some(test_paths),
                 ..SrcOptions::default()
+            }),
+            test: Some(TestOptions {
+                try_import_fixtures: Some(true),
+                ..TestOptions::default()
             }),
             ..Options::default()
         });
