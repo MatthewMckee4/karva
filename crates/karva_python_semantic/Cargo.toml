@@ -11,9 +11,9 @@ license.workspace = true
 
 [dependencies]
 camino = { workspace = true }
+pyo3 = { workspace = true }
 ruff_python_ast = { workspace = true }
 serde = { workspace = true }
-pyo3 = { workspace = true }
 
 [lints]
 workspace = true

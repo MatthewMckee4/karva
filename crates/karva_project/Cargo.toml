@@ -11,9 +11,9 @@ authors = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
+camino = { workspace = true }
 karva_metadata = { workspace = true }
 karva_system = { workspace = true }
-camino = { workspace = true }
 
 [dev-dependencies]
 
