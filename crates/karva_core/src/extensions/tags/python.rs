@@ -28,16 +28,51 @@ pub enum PyTag {
         conditions: Vec<bool>,
         reason: Option<String>,
     },
+
+    #[pyo3(name = "custom")]
+    Custom {
+        tag_name: String,
+        tag_args: Vec<Py<PyAny>>,
+        tag_kwargs: Vec<(String, Py<PyAny>)>,
+    },
 }
 
 #[pymethods]
 impl PyTag {
+    #[getter]
     pub fn name(&self) -> String {
         match self {
             Self::Parametrize { .. } => "parametrize".to_string(),
             Self::UseFixtures { .. } => "use_fixtures".to_string(),
             Self::Skip { .. } => "skip".to_string(),
             Self::ExpectFail { .. } => "expect_fail".to_string(),
+            Self::Custom { tag_name, .. } => tag_name.clone(),
+        }
+    }
+
+    #[getter]
+    pub fn args<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, pyo3::types::PyTuple>> {
+        match self {
+            Self::Custom { tag_args, .. } => {
+                let py_args: Vec<Bound<'py, PyAny>> =
+                    tag_args.iter().map(|arg| arg.bind(py).clone()).collect();
+                pyo3::types::PyTuple::new(py, py_args)
+            }
+            _ => Ok(pyo3::types::PyTuple::empty(py)),
+        }
+    }
+
+    #[getter]
+    pub fn kwargs<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, pyo3::types::PyDict>> {
+        match self {
+            Self::Custom { tag_kwargs, .. } => {
+                let py_dict = pyo3::types::PyDict::new(py);
+                for (key, value) in tag_kwargs {
+                    py_dict.set_item(key, value.bind(py))?;
+                }
+                Ok(py_dict)
+            }
+            _ => Ok(pyo3::types::PyDict::new(py)),
         }
     }
 }
@@ -238,6 +273,38 @@ pub mod tags {
             inner: vec![PyTag::ExpectFail {
                 conditions: bool_conditions,
                 reason,
+            }],
+        }
+        .into_py_any(py)
+    }
+
+    #[pyfunction]
+    #[pyo3(signature = (*args, **kwargs))]
+    pub fn custom(
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        // Convert args to Vec<Py<PyAny>>
+        let args_vec: Vec<Py<PyAny>> = args.iter().map(pyo3::Bound::unbind).collect();
+
+        // Convert kwargs to Vec<(String, Py<PyAny>)>
+        let kwargs_vec: Vec<(String, Py<PyAny>)> = if let Some(kw) = kwargs {
+            kw.iter()
+                .filter_map(|(key, value): (Bound<'_, PyAny>, Bound<'_, PyAny>)| {
+                    let key_str = key.extract::<String>().ok()?;
+                    Some((key_str, value.unbind()))
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        PyTags {
+            inner: vec![PyTag::Custom {
+                tag_name: "custom".to_string(),
+                tag_args: args_vec,
+                tag_kwargs: kwargs_vec,
             }],
         }
         .into_py_any(py)

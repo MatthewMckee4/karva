@@ -215,9 +215,72 @@ This will run `test_username_email` twice, once with `username` and once with `e
 
 Here we also see that we can "introspect" the fixture by using the `request` object.
 
-Currently the only parameter you can use here is `request.param`.
+## Request Object
 
-In future you will be able to access other parameters.
+The `request` object provides access to fixture metadata and test context:
 
-It is important to note that this request object is not the same as the pytest `FixtureRequest` object. It is a custom object provided by Karva.
-And so it may not have all of the information that the pytest `FixtureRequest` object has.
+### `request.param`
+
+Access the current parameter value for parametrized fixtures:
+
+```py
+@karva.fixture(params=['username', 'email'])
+def some_fixture(request) -> str:
+    return request.param  # Returns 'username' or 'email'
+```
+
+### `request.node`
+
+Access the test node containing metadata about the current test:
+
+```py
+@karva.fixture
+def my_fixture(request):
+    # Access the test/scope name
+    name = request.node.name
+
+    # Get markers/tags
+    marker = request.node.get_closest_marker('skip')
+
+    return f"Running in {name}"
+```
+
+### `request.node.name`
+
+The `name` property returns different values based on the fixture scope:
+
+- **Function-scoped**: Returns the test function name (e.g., `"test_login"`)
+- **Module-scoped**: Returns `"module"`
+- **Package-scoped**: Returns `"package"`
+- **Session-scoped**: Returns `"session"`
+
+Example:
+
+```py
+@karva.fixture(scope='module')
+def module_fixture(request):
+    assert request.node.name == 'module'
+
+@karva.fixture
+def function_fixture(request):
+    # For a test named test_example, this would be 'test_example'
+    print(f"Running fixture for: {request.node.name}")
+
+def test_example(function_fixture):
+    pass
+```
+
+### `request.node.get_closest_marker(name)`
+
+Get the closest marker/tag with the given name:
+
+```py
+@karva.fixture
+def check_marker(request):
+    marker = request.node.get_closest_marker('skip')
+    if marker:
+        reason = marker.kwargs.get('reason', 'No reason')
+        print(f"Test will be skipped: {reason}")
+```
+
+**Note**: The Karva `request` object provides pytest compatibility but may not have all features of pytest's `FixtureRequest` object.

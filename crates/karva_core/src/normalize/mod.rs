@@ -124,6 +124,9 @@ impl Normalizer {
                     is_generator: fixture.is_generator(),
                     py_function: fixture.function().clone(),
                     stmt_function_def: fixture.stmt_function_def().clone(),
+                    test_name: None,
+                    test_tags: None,
+                    pytest_marks: None,
                 });
 
                 result.push(Arc::new(normalized));

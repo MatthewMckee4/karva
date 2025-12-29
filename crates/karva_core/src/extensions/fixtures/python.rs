@@ -1,5 +1,79 @@
+use pyo3::IntoPyObjectExt;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
+
+use crate::extensions::tags::python::PyTags;
+
+/// Represents a test node that can be accessed via request.node
+///
+/// This provides access to the test's tags/markers similar to pytest's Node.
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct TestNode {
+    /// Name of the test (e.g., `"test_foo"` or `"test_foo[param1]"`)
+    /// Exposed as read-only property for pytest compatibility
+    #[pyo3(get)]
+    pub name: String,
+    tags: PyTags,
+    /// Original pytest marks for compatibility
+    pytest_marks: Option<Py<PyAny>>,
+}
+
+#[pymethods]
+impl TestNode {
+    /// Get the first (closest) tag/marker with the given name.
+    ///
+    /// This is similar to pytest's `get_closest_marker`.
+    /// It checks both Karva tags and pytest markers for compatibility.
+    /// Returns None if no tag/marker with the given name is found.
+    pub fn get_closest_tag(&self, py: Python<'_>, name: &str) -> Option<Py<PyAny>> {
+        // First check pytest marks if available (to preserve original mark objects)
+        if let Some(ref pytest_marks) = self.pytest_marks {
+            if let Ok(marks_list) = pytest_marks.extract::<Vec<Bound<'_, PyAny>>>(py) {
+                for mark in marks_list {
+                    if let Ok(mark_name) = mark.getattr("name") {
+                        if let Ok(mark_name_str) = mark_name.extract::<String>() {
+                            if mark_name_str == name {
+                                return Some(mark.unbind());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Then check Karva tags
+        for tag in &self.tags.inner {
+            if tag.name() == name {
+                // Convert the tag to a Python object and return it
+                if let Ok(py_tag) = tag.clone().into_py_any(py) {
+                    return Some(py_tag);
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Alias for `get_closest_tag` for pytest compatibility
+    pub fn get_closest_marker(&self, py: Python<'_>, name: &str) -> Option<Py<PyAny>> {
+        self.get_closest_tag(py, name)
+    }
+}
+
+impl TestNode {
+    pub(crate) fn new(
+        test_name: Option<String>,
+        tags: PyTags,
+        pytest_marks: Option<Py<PyAny>>,
+    ) -> Self {
+        Self {
+            name: test_name.unwrap_or_default(),
+            tags,
+            pytest_marks,
+        }
+    }
+}
 
 /// Request context object that fixtures can access via the 'request' parameter.
 ///
@@ -10,11 +84,22 @@ use pyo3::types::{PyDict, PyTuple};
 pub struct FixtureRequest {
     #[pyo3(get)]
     pub param: Option<Py<PyAny>>,
+
+    #[pyo3(get)]
+    pub node: Option<Py<TestNode>>,
 }
 
 impl FixtureRequest {
-    pub(crate) const fn new(param: Option<Py<PyAny>>) -> Self {
-        Self { param }
+    pub(crate) fn new(
+        py: Python<'_>,
+        param: Option<Py<PyAny>>,
+        node: Option<TestNode>,
+    ) -> PyResult<Self> {
+        let node_py = node.map(|n| Py::new(py, n)).transpose()?;
+        Ok(Self {
+            param,
+            node: node_py,
+        })
     }
 }
 
