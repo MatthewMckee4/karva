@@ -34,6 +34,7 @@ tracing = { workspace = true, features = ["release_max_level_debug"] }
 wild = { workspace = true }
 
 [dev-dependencies]
+ctor = { workspace = true }
 directories = { workspace = true }
 dunce = { workspace = true }
 insta = { workspace = true, features = ["filters"] }
