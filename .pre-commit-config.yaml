@@ -108,13 +108,3 @@ repos:
       - id: clippy
         args: ["--all-targets", "--all-features", "--", "-D", "warnings"]
         priority: 20
-
-  - repo: local
-    hooks:
-      - id: cargo-shear
-        name: cargo shear
-        entry: cargo shear
-        language: system
-        types: [toml]
-        pass_filenames: false
-        priority: 20

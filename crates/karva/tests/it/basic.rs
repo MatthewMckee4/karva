@@ -1574,3 +1574,25 @@ def test_1():
     ----- stderr -----
     ");
 }
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_no_progress() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+def test_1():
+    assert True
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--no-progress"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}

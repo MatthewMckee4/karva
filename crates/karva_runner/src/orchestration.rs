@@ -313,13 +313,6 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
     cli_args.push("--output-format");
     cli_args.push(settings.terminal().output_format.as_str());
 
-    cli_args.push("--test-prefix");
-    cli_args.push(&settings.test().test_function_prefix);
-
-    if !settings.src().respect_ignore_files {
-        cli_args.push("--no-ignore");
-    }
-
     if args.no_progress.is_some_and(|no_progress| no_progress) {
         cli_args.push("--no-progress");
     }
