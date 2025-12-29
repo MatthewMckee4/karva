@@ -237,7 +237,7 @@ pub fn report_missing_fixtures(
             lines: _,
             error_source_file,
             location,
-        }) = Traceback::from_error(py, context.db().system(), &error)
+        }) = Traceback::from_error(py, context.system(), &error)
         {
             let mut sub = SubDiagnostic::new(
                 SubDiagnosticSeverity::Info,
@@ -342,7 +342,7 @@ fn handle_failed_function_call(
         lines: _,
         error_source_file,
         location,
-    }) = Traceback::from_error(py, context.db().system(), error)
+    }) = Traceback::from_error(py, context.system(), error)
     {
         let mut sub = SubDiagnostic::new(
             SubDiagnosticSeverity::Info,

@@ -1,51 +1,50 @@
-use karva_collector::{CollectedModule, CollectedPackage, ModuleType, TestFunctionCollector};
-use karva_system::path::TestPath;
+use karva_collector::{CollectedModule, CollectedPackage, ModuleType};
+use karva_system::path::{TestPath, TestPathError};
 use pyo3::prelude::*;
 
 use crate::Context;
+use crate::collection::TestFunctionCollector;
 use crate::diagnostic::report_invalid_path;
 use crate::discovery::visitor::discover;
 use crate::discovery::{DiscoveredModule, DiscoveredPackage};
 use crate::utils::add_to_sys_path;
 
-pub struct StandardDiscoverer<'ctx, 'proj, 'rep> {
-    context: &'ctx Context<'proj, 'rep>,
+pub struct StandardDiscoverer<'ctx, 'a> {
+    context: &'ctx Context<'a>,
 }
 
-impl<'ctx, 'proj, 'rep> StandardDiscoverer<'ctx, 'proj, 'rep> {
-    pub const fn new(context: &'ctx Context<'proj, 'rep>) -> Self {
+impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
+    pub const fn new(context: &'ctx Context<'a>) -> Self {
         Self { context }
     }
 
-    pub(crate) fn discover_with_py(self, py: Python<'_>) -> DiscoveredPackage {
-        let cwd = self.context.project().cwd();
+    pub(crate) fn discover_with_py(
+        self,
+        py: Python<'_>,
+        test_paths: Vec<Result<TestPath, TestPathError>>,
+    ) -> DiscoveredPackage {
+        let cwd = self.context.system().current_directory();
 
         if add_to_sys_path(py, cwd, 0).is_err() {
-            return DiscoveredPackage::new(cwd.clone());
+            return DiscoveredPackage::new(cwd.to_path_buf());
         }
 
-        let test_paths = self
-            .context
-            .project()
-            .test_paths()
-            .iter()
+        let test_paths = test_paths
+            .into_iter()
             .filter_map(|path| match path {
                 Ok(path) => match path {
                     TestPath::Directory(_) | TestPath::File(_) => None,
-                    TestPath::Function(function) => Some(function.clone()),
+                    TestPath::Function(function) => Some(function),
                 },
                 Err(error) => {
-                    report_invalid_path(self.context, error);
+                    report_invalid_path(self.context, &error);
                     None
                 }
             })
             .collect();
 
-        let collector = TestFunctionCollector::new(
-            self.context.db().system(),
-            self.context.project().metadata(),
-            self.context.project().settings(),
-        );
+        let collector =
+            TestFunctionCollector::new(self.context.system(), self.context.collection_settings());
 
         let collected_package = collector.collect_all(test_paths);
 

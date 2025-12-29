@@ -1,32 +1,52 @@
 use std::sync::{Arc, Mutex};
 
+use karva_collector::CollectionSettings;
 use karva_diagnostic::{IndividualTestResultKind, Reporter, TestRunResult};
-use karva_project::{Db, Project};
+use karva_metadata::ProjectSettings;
 use karva_python_semantic::QualifiedTestName;
+use karva_system::System;
+use ruff_python_ast::PythonVersion;
 
 use crate::diagnostic::{DiagnosticGuardBuilder, DiagnosticType};
 
-pub struct Context<'db, 'rep> {
-    db: &'db dyn Db,
+pub struct Context<'a> {
+    system: &'a dyn System,
+    settings: &'a ProjectSettings,
+    python_version: PythonVersion,
     result: Arc<Mutex<TestRunResult>>,
-    reporter: &'rep dyn Reporter,
+    reporter: &'a dyn Reporter,
 }
 
-impl<'db, 'rep> Context<'db, 'rep> {
-    pub(crate) fn new(db: &'db dyn Db, reporter: &'rep dyn Reporter) -> Self {
+impl<'a> Context<'a> {
+    pub(crate) fn new(
+        system: &'a dyn System,
+        settings: &'a ProjectSettings,
+        python_version: PythonVersion,
+        reporter: &'a dyn Reporter,
+    ) -> Self {
         Self {
-            db,
+            system,
+            settings,
+            python_version,
             result: Arc::new(Mutex::new(TestRunResult::default())),
             reporter,
         }
     }
 
-    pub(crate) fn db<'a>(&'a self) -> &'db (dyn Db + 'a) {
-        self.db
+    pub(crate) fn system(&self) -> &'a dyn System {
+        self.system
     }
 
-    pub(crate) fn project(&self) -> &Project {
-        self.db.project()
+    pub(crate) fn settings(&self) -> &'a ProjectSettings {
+        self.settings
+    }
+
+    pub(crate) fn collection_settings(&'a self) -> CollectionSettings<'a> {
+        CollectionSettings {
+            python_version: self.python_version,
+            test_function_prefix: &self.settings.test().test_function_prefix,
+            respect_ignore_files: self.settings.src().respect_ignore_files,
+        }
     }
 
     pub(crate) fn result(&self) -> std::sync::MutexGuard<'_, TestRunResult> {
@@ -61,14 +81,14 @@ impl<'db, 'rep> Context<'db, 'rep> {
     pub(crate) const fn report_diagnostic<'ctx>(
         &'ctx self,
         rule: &'static DiagnosticType,
-    ) -> DiagnosticGuardBuilder<'ctx, 'db, 'rep> {
+    ) -> DiagnosticGuardBuilder<'ctx, 'a> {
         DiagnosticGuardBuilder::new(self, rule, false)
     }
 
     pub(crate) const fn report_discovery_diagnostic<'ctx>(
         &'ctx self,
         rule: &'static DiagnosticType,
-    ) -> DiagnosticGuardBuilder<'ctx, 'db, 'rep> {
+    ) -> DiagnosticGuardBuilder<'ctx, 'a> {
         DiagnosticGuardBuilder::new(self, rule, true)
     }
 }

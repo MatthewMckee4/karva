@@ -33,16 +33,16 @@ macro_rules! declare_diagnostic_type {
     };
 }
 
-pub struct DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
-    context: &'ctx Context<'proj, 'rep>,
+pub struct DiagnosticGuardBuilder<'ctx, 'a> {
+    context: &'ctx Context<'a>,
     id: DiagnosticId,
     severity: Severity,
     is_discovery: bool,
 }
 
-impl<'ctx, 'proj, 'rep> DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
+impl<'ctx, 'a> DiagnosticGuardBuilder<'ctx, 'a> {
     pub(crate) const fn new(
-        context: &'ctx Context<'proj, 'rep>,
+        context: &'ctx Context<'a>,
         diagnostic_type: &'static DiagnosticType,
         is_discovery: bool,
     ) -> Self {
@@ -58,7 +58,7 @@ impl<'ctx, 'proj, 'rep> DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
     pub(crate) fn into_diagnostic(
         self,
         message: impl std::fmt::Display,
-    ) -> DiagnosticGuard<'ctx, 'proj, 'rep> {
+    ) -> DiagnosticGuard<'ctx, 'a> {
         DiagnosticGuard {
             context: self.context,
             diag: Some(Diagnostic::new(self.id, self.severity, message)),
@@ -68,8 +68,8 @@ impl<'ctx, 'proj, 'rep> DiagnosticGuardBuilder<'ctx, 'proj, 'rep> {
 }
 
 /// An abstraction for mutating a diagnostic.
-pub struct DiagnosticGuard<'ctx, 'proj, 'rep> {
-    context: &'ctx Context<'proj, 'rep>,
+pub struct DiagnosticGuard<'ctx, 'a> {
+    context: &'ctx Context<'a>,
 
     diag: Option<Diagnostic>,
 
@@ -77,7 +77,7 @@ pub struct DiagnosticGuard<'ctx, 'proj, 'rep> {
 }
 
 /// Return a immutable borrow of the diagnostic in this guard.
-impl std::ops::Deref for DiagnosticGuard<'_, '_, '_> {
+impl std::ops::Deref for DiagnosticGuard<'_, '_> {
     type Target = Diagnostic;
 
     fn deref(&self) -> &Diagnostic {
@@ -86,13 +86,13 @@ impl std::ops::Deref for DiagnosticGuard<'_, '_, '_> {
 }
 
 /// Return a mutable borrow of the diagnostic in this guard.
-impl std::ops::DerefMut for DiagnosticGuard<'_, '_, '_> {
+impl std::ops::DerefMut for DiagnosticGuard<'_, '_> {
     fn deref_mut(&mut self) -> &mut Diagnostic {
         self.diag.as_mut().unwrap()
     }
 }
 
-impl Drop for DiagnosticGuard<'_, '_, '_> {
+impl Drop for DiagnosticGuard<'_, '_> {
     fn drop(&mut self) {
         let diag = self.diag.take().unwrap();
 

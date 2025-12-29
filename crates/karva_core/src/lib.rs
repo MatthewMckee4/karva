@@ -1,4 +1,5 @@
 pub mod cli;
+pub(crate) mod collection;
 mod context;
 pub(crate) mod diagnostic;
 pub(crate) mod discovery;

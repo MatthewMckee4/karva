@@ -7,9 +7,10 @@ use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
-use karva_logging::{Printer, VerbosityLevel, set_colored_override, setup_tracing};
+use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::{ProjectMetadata, ProjectOptionsOverrides};
-use karva_project::{Db, ProjectDatabase};
+use karva_project::ProjectDatabase;
+use karva_python_semantic::current_python_version;
 use karva_system::{OsSystem, System, path::absolute};
 
 use karva_cli::{Args, Command, TestCommand};
@@ -88,16 +89,14 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     let system = OsSystem::new(&cwd);
 
-    let config_file = args
-        .sub_command
-        .config_file
-        .as_ref()
-        .map(|path| absolute(path, &cwd));
+    let python_version = current_python_version();
+
+    let config_file = args.config_file.as_ref().map(|path| absolute(path, &cwd));
 
     let mut project_metadata = if let Some(config_file) = &config_file {
-        ProjectMetadata::from_config_file(config_file.clone(), &system)?
+        ProjectMetadata::from_config_file(config_file.clone(), &system, python_version)?
     } else {
-        ProjectMetadata::discover(system.current_directory(), &system)?
+        ProjectMetadata::discover(system.current_directory(), &system, python_version)?
     };
 
     let sub_command = args.sub_command.clone();
@@ -108,10 +107,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let project_options_overrides = ProjectOptionsOverrides::new(config_file, args.into_options());
     project_metadata.apply_overrides(&project_options_overrides);
 
-    let mut db = ProjectDatabase::new(project_metadata, system)?;
-
-    db.project_mut()
-        .set_verbose(verbosity >= VerbosityLevel::Verbose);
+    let db = ProjectDatabase::new(project_metadata, system);
 
     // Listen to Ctrl+C and abort
     ctrlc::set_handler(move || {

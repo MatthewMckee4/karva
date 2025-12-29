@@ -1,3 +1,4 @@
+mod collection;
 mod orchestration;
 mod partition;
 

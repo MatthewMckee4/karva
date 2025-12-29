@@ -226,6 +226,13 @@ impl OutputFormat {
     pub const fn is_human_readable(self) -> bool {
         matches!(self, Self::Full | Self::Concise)
     }
+
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Concise => "concise",
+        }
+    }
 }
 
 impl From<OutputFormat> for DiagnosticFormat {

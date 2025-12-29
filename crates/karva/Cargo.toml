@@ -22,6 +22,7 @@ karva_metadata = { workspace = true }
 karva_project = { workspace = true }
 karva_runner = { workspace = true }
 karva_system = { workspace = true }
+karva_python_semantic = { workspace = true }
 
 anyhow = { workspace = true }
 argfile = { workspace = true }
