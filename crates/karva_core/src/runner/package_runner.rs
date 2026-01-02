@@ -90,7 +90,6 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
     /// Failing fast if the user has specified that we should.
     fn execute_package(&self, py: Python<'_>, package: NormalizedPackage) -> bool {
         let NormalizedPackage {
-            path: _package_path,
             modules,
             packages,
             auto_use_fixtures,
