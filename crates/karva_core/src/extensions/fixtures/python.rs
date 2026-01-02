@@ -4,19 +4,67 @@ use pyo3::types::{PyDict, PyTuple};
 
 use crate::extensions::tags::python::PyTags;
 
+/// Represents the source of test markers - either Karva tags or Pytest marks.
+///
+/// This enum ensures we always know where markers came from and can look them up correctly.
+#[derive(Debug, Clone)]
+pub enum TestMarkers {
+    /// Karva-native tags (from `@karva.tags.xxx` decorators)
+    Karva(PyTags),
+    /// Pytest marks (from `@pytest.mark.xxx` decorators)
+    /// We store both the original pytest marks and the converted karva tags
+    Pytest {
+        marks: Py<PyAny>,
+        converted_tags: PyTags,
+    },
+}
+
+impl TestMarkers {
+    /// Create markers from karva tags
+    pub fn from_karva(tags: PyTags) -> Self {
+        Self::Karva(tags)
+    }
+
+    /// Create markers from pytest marks with converted karva tags
+    pub fn from_pytest(marks: Py<PyAny>, converted_tags: PyTags) -> Self {
+        Self::Pytest {
+            marks,
+            converted_tags,
+        }
+    }
+
+    /// Get karva tags (either native or converted from pytest)
+    pub fn karva_tags(&self) -> &PyTags {
+        match self {
+            Self::Karva(tags) => tags,
+            Self::Pytest { converted_tags, .. } => converted_tags,
+        }
+    }
+
+    /// Get pytest marks if available
+    pub fn pytest_marks(&self) -> Option<&Py<PyAny>> {
+        match self {
+            Self::Karva(_) => None,
+            Self::Pytest { marks, .. } => Some(marks),
+        }
+    }
+}
+
 /// Represents a test node that can be accessed via request.node
 ///
 /// This provides access to the test's tags/markers similar to pytest's Node.
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct TestNode {
-    /// Name of the test (e.g., `"test_foo"` or `"test_foo[param1]"`)
-    /// Exposed as read-only property for pytest compatibility
+    /// Name based on fixture scope:
+    /// - Function scope: test function name (e.g., `"test_login"`)
+    /// - Module scope: module file name (e.g., `"test_auth"`)
+    /// - Package scope: package path (e.g., `"tests/unit"`)
+    /// - Session scope: empty string
     #[pyo3(get)]
     pub name: String,
-    tags: PyTags,
-    /// Original pytest marks for compatibility
-    pytest_marks: Option<Py<PyAny>>,
+    /// Test markers (either Karva tags or Pytest marks)
+    markers: TestMarkers,
 }
 
 #[pymethods]
@@ -28,7 +76,7 @@ impl TestNode {
     /// Returns None if no tag/marker with the given name is found.
     pub fn get_closest_tag(&self, py: Python<'_>, name: &str) -> Option<Py<PyAny>> {
         // First check pytest marks if available (to preserve original mark objects)
-        if let Some(ref pytest_marks) = self.pytest_marks {
+        if let Some(pytest_marks) = self.markers.pytest_marks() {
             if let Ok(marks_list) = pytest_marks.extract::<Vec<Bound<'_, PyAny>>>(py) {
                 for mark in marks_list {
                     if let Ok(mark_name) = mark.getattr("name") {
@@ -43,9 +91,8 @@ impl TestNode {
         }
 
         // Then check Karva tags
-        for tag in &self.tags.inner {
+        for tag in &self.markers.karva_tags().inner {
             if tag.name() == name {
-                // Convert the tag to a Python object and return it
                 if let Ok(py_tag) = tag.clone().into_py_any(py) {
                     return Some(py_tag);
                 }
@@ -62,15 +109,10 @@ impl TestNode {
 }
 
 impl TestNode {
-    pub(crate) fn new(
-        test_name: Option<String>,
-        tags: PyTags,
-        pytest_marks: Option<Py<PyAny>>,
-    ) -> Self {
+    pub(crate) fn new(scope_name: String, markers: TestMarkers) -> Self {
         Self {
-            name: test_name.unwrap_or_default(),
-            tags,
-            pytest_marks,
+            name: scope_name,
+            markers,
         }
     }
 }

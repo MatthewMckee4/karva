@@ -1,3 +1,4 @@
+pub mod custom;
 pub mod expect_fail;
 pub mod parametrize;
 pub mod skip;

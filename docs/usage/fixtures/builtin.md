@@ -59,8 +59,7 @@ The raising parameter determines whether or not a `KeyError` or `AttributeError`
 
 Consider a scenario where you are working with user configuration and you need to mock their cache directory.
 
-```py
-
+```py title="test.py"
 from pathlib import Path
 
 

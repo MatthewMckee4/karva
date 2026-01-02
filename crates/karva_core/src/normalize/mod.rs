@@ -36,12 +36,24 @@ pub use models::{NormalizedModule, NormalizedPackage, NormalizedTest};
 use crate::discovery::{DiscoveredModule, DiscoveredPackage, TestFunction};
 use crate::extensions::fixtures::{
     Fixture, FixtureScope, HasFixtures, NormalizedFixture, RequiresFixtures, UserDefinedFixture,
-    get_auto_use_fixtures, get_builtin_fixture,
+    get_auto_use_fixtures, get_builtin_fixture, python::TestMarkers,
 };
 use crate::extensions::tags::Parametrization;
 use crate::extensions::tags::parametrize::ParametrizationArgs;
 use crate::normalize::utils::cartesian_product;
 use crate::utils::iter_with_ancestors;
+
+/// Context for normalizing fixtures that belong to a specific test.
+///
+/// This provides the test-specific information needed when normalizing fixtures,
+/// particularly for setting up the `request.node` object.
+#[derive(Clone)]
+struct FixtureCallContext {
+    /// The test function name (for function-scoped fixtures)
+    test_name: String,
+    /// Test markers (either Karva tags or Pytest marks)
+    markers: TestMarkers,
+}
 
 /// Use the `Normalizer` to turn discovered test functions into a more normalized form.
 ///
@@ -62,7 +74,7 @@ impl Normalizer {
         session: &DiscoveredPackage,
     ) -> NormalizedPackage {
         let session_auto_use_fixtures =
-            self.get_normalized_auto_use_fixtures(py, FixtureScope::Session, &[], &session);
+            self.get_normalized_auto_use_fixtures(py, FixtureScope::Session, &[], &session, None);
 
         let mut normalized_package = self.normalize_package(py, session, &[]);
 
@@ -73,17 +85,24 @@ impl Normalizer {
 
     /// Normalizes a single fixture, handling parametrization and dependencies.
     /// Returns a Vec of `NormalizedFixture`, one for each parameter value.
+    ///
+    /// `call_context` should be provided when normalizing fixtures for a specific test function.
+    /// This sets the `scope_name` for function-scoped fixtures and the test markers for `request.node`.
     fn normalize_fixture(
         &mut self,
         py: Python,
         fixture: &Fixture,
         parents: &[&DiscoveredPackage],
         module: &DiscoveredModule,
+        call_context: Option<&FixtureCallContext>,
     ) -> Vec<Arc<NormalizedFixture>> {
+        // Only cache if no call_context (shared fixtures)
+        // Function-scoped fixtures with call_context are test-specific
         let cache_key = fixture.name().to_string();
-
-        if let Some(cached) = self.fixture_cache.get(&cache_key) {
-            return cached.clone();
+        if call_context.is_none() {
+            if let Some(cached) = self.fixture_cache.get(&cache_key) {
+                return cached.clone();
+            }
         }
 
         // Get all required fixtures (dependencies)
@@ -94,8 +113,14 @@ impl Normalizer {
             .filter(|name| name != "request")
             .collect();
 
-        let dependent_fixtures =
-            self.get_dependent_fixtures(py, Some(fixture), &required_fixtures, parents, module);
+        let dependent_fixtures = self.get_dependent_fixtures(
+            py,
+            Some(fixture),
+            &required_fixtures,
+            parents,
+            module,
+            call_context,
+        );
 
         let params = fixture.params().cloned().unwrap_or_default();
 
@@ -114,6 +139,26 @@ impl Normalizer {
             cartesian_product(dependent_fixtures)
         };
 
+        // Compute scope_name based on fixture scope
+        let scope_name = match fixture.scope() {
+            FixtureScope::Session => String::new(),
+            FixtureScope::Package => module
+                .module_path()
+                .path()
+                .parent()
+                .map(ToString::to_string)
+                .unwrap_or_default(),
+            FixtureScope::Module => module
+                .module_path()
+                .path()
+                .file_name()
+                .map(ToString::to_string)
+                .unwrap_or_default(),
+            FixtureScope::Function => call_context
+                .map(|ctx| ctx.test_name.clone())
+                .unwrap_or_default(),
+        };
+
         for dependent_fixtures in normalized_dependent_fixtures {
             for param in &param_list {
                 let normalized = NormalizedFixture::UserDefined(UserDefinedFixture {
@@ -124,16 +169,18 @@ impl Normalizer {
                     is_generator: fixture.is_generator(),
                     py_function: fixture.function().clone(),
                     stmt_function_def: fixture.stmt_function_def().clone(),
-                    test_name: None,
-                    test_tags: None,
-                    pytest_marks: None,
+                    scope_name: scope_name.clone(),
+                    markers: call_context.map(|ctx| ctx.markers.clone()),
                 });
 
                 result.push(Arc::new(normalized));
             }
         }
 
-        self.fixture_cache.insert(cache_key, result.clone());
+        // Only cache shared fixtures (no call_context)
+        if call_context.is_none() {
+            self.fixture_cache.insert(cache_key, result.clone());
+        }
 
         result
     }
@@ -147,8 +194,7 @@ impl Normalizer {
         parents: &[&DiscoveredPackage],
         module: &DiscoveredModule,
     ) -> Vec<NormalizedTest> {
-        let function_auto_use_fixtures =
-            self.get_normalized_auto_use_fixtures(py, FixtureScope::Function, parents, module);
+        let test_name = test_function.name.function_name();
 
         let test_params = test_function.tags.parametrize_args();
 
@@ -163,27 +209,46 @@ impl Normalizer {
             .filter(|name| !parametrize_param_names.contains(name))
             .collect();
 
+        // Create call context with test name and markers
+        let markers = if let Ok(pytest_marks) = test_function.py_function.getattr(py, "pytestmark")
+        {
+            TestMarkers::from_pytest(pytest_marks, test_function.tags.to_py_tags())
+        } else {
+            TestMarkers::from_karva(test_function.tags.to_py_tags())
+        };
+
+        let call_context = FixtureCallContext {
+            test_name: test_name.to_string(),
+            markers,
+        };
+
+        let function_auto_use_fixtures = self.get_normalized_auto_use_fixtures(
+            py,
+            FixtureScope::Function,
+            parents,
+            module,
+            Some(&call_context),
+        );
+
+        let dependent_fixtures = self.get_dependent_fixtures(
+            py,
+            None,
+            &regular_fixture_names,
+            parents,
+            module,
+            Some(&call_context),
+        );
+
         let use_fixture_names = test_function.tags.required_fixtures_names();
 
-        let dependent_fixtures =
-            self.get_dependent_fixtures(py, None, &regular_fixture_names, parents, module);
-
-        // Normalize use_fixtures
-        let mut normalized_use_fixtures = Vec::new();
-
-        for dep_name in &use_fixture_names {
-            // Check for builtin fixtures first
-            if let Some(builtin_fixture) =
-                crate::extensions::fixtures::get_builtin_fixture(py, dep_name)
-            {
-                normalized_use_fixtures.push(vec![Arc::new(builtin_fixture)]);
-            } else if let Some(fixture) = find_fixture(None, dep_name, parents, module) {
-                let normalized = self.normalize_fixture(py, fixture, parents, module);
-                if !normalized.is_empty() {
-                    normalized_use_fixtures.push(normalized);
-                }
-            }
-        }
+        let normalized_use_fixtures = self.get_dependent_fixtures(
+            py,
+            None,
+            &use_fixture_names,
+            parents,
+            module,
+            Some(&call_context),
+        );
 
         // Ensure at least one test case exists (no parametrization)
         let test_params = if test_params.is_empty() {
@@ -238,7 +303,7 @@ impl Normalizer {
         parents: &[&DiscoveredPackage],
     ) -> NormalizedModule {
         let module_auto_use_fixtures =
-            self.get_normalized_auto_use_fixtures(py, FixtureScope::Module, parents, module);
+            self.get_normalized_auto_use_fixtures(py, FixtureScope::Module, parents, module, None);
 
         let mut normalized_test_functions = Vec::new();
 
@@ -249,7 +314,6 @@ impl Normalizer {
         }
 
         NormalizedModule {
-            path: module.module_path().clone(),
             test_functions: normalized_test_functions,
             auto_use_fixtures: module_auto_use_fixtures,
         }
@@ -265,8 +329,13 @@ impl Normalizer {
 
         new_parents.push(package);
 
-        let package_auto_use_fixtures =
-            self.get_normalized_auto_use_fixtures(py, FixtureScope::Package, parents, package);
+        let package_auto_use_fixtures = self.get_normalized_auto_use_fixtures(
+            py,
+            FixtureScope::Package,
+            parents,
+            package,
+            None,
+        );
 
         let mut modules = HashMap::new();
 
@@ -296,6 +365,7 @@ impl Normalizer {
         scope: FixtureScope,
         parents: &'a [&'a DiscoveredPackage],
         current: &'a dyn HasFixtures<'a>,
+        call_context: Option<&FixtureCallContext>,
     ) -> Vec<Arc<NormalizedFixture>> {
         let auto_use_fixtures = get_auto_use_fixtures(parents, current, scope);
 
@@ -306,8 +376,9 @@ impl Normalizer {
         };
 
         for fixture in auto_use_fixtures {
+            // Auto-use fixtures don't have a specific test context
             let normalized_fixture =
-                self.normalize_fixture(py, fixture, parents, configuration_module);
+                self.normalize_fixture(py, fixture, parents, configuration_module, call_context);
 
             normalized_auto_use_fixtures.extend(normalized_fixture);
         }
@@ -322,6 +393,7 @@ impl Normalizer {
         fixture_names: &[String],
         parents: &'a [&'a DiscoveredPackage],
         current: &'a DiscoveredModule,
+        call_context: Option<&FixtureCallContext>,
     ) -> Vec<Vec<Arc<NormalizedFixture>>> {
         let mut normalized_fixtures = Vec::new();
 
@@ -330,7 +402,8 @@ impl Normalizer {
                 normalized_fixtures.push(vec![Arc::new(builtin_fixture)]);
             } else if let Some(fixture) = find_fixture(current_fixture, dep_name, parents, current)
             {
-                let normalized = self.normalize_fixture(py, fixture, parents, current);
+                let normalized =
+                    self.normalize_fixture(py, fixture, parents, current, call_context);
                 normalized_fixtures.push(normalized);
             }
         }

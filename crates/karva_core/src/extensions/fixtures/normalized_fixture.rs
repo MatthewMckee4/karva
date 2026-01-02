@@ -7,7 +7,8 @@ use pyo3::types::PyDict;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::extensions::fixtures::{
-    FixtureRequest, FixtureScope, RequiresFixtures, python::TestNode,
+    FixtureRequest, FixtureScope, RequiresFixtures,
+    python::{TestMarkers, TestNode},
 };
 use crate::extensions::tags::{Parametrization, Tags};
 
@@ -43,12 +44,10 @@ pub struct UserDefinedFixture {
     pub(crate) py_function: Py<PyAny>,
     /// The function definition for this fixture
     pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
-    /// Test name for the current test context (when executing within a test)
-    pub(crate) test_name: Option<String>,
-    /// Test tags for the current test context (when executing within a test)
-    pub(crate) test_tags: Option<crate::extensions::tags::python::PyTags>,
-    /// Pytest marks for the current test context (when executing within a test)
-    pub(crate) pytest_marks: Option<Py<PyAny>>,
+    /// Scope-based name for request.node.name:
+    pub(crate) scope_name: String,
+    /// Test markers (either Karva tags or Pytest marks)
+    pub(crate) markers: Option<TestMarkers>,
 }
 
 /// A normalized fixture represents a concrete variant of a fixture after parametrization.
@@ -149,26 +148,6 @@ impl NormalizedFixture {
         tags
     }
 
-    /// Create a version of this fixture with test tags populated.
-    /// This is used when executing a fixture in a test context.
-    pub(crate) fn with_test_context(
-        &self,
-        test_name: Option<String>,
-        test_tags: Option<crate::extensions::tags::python::PyTags>,
-        pytest_marks: Option<Py<PyAny>>,
-    ) -> Self {
-        match self {
-            Self::BuiltIn(b) => Self::BuiltIn(b.clone()),
-            Self::UserDefined(u) => {
-                let mut updated = u.clone();
-                updated.test_name = test_name;
-                updated.test_tags = test_tags;
-                updated.pytest_marks = pytest_marks;
-                Self::UserDefined(updated)
-            }
-        }
-    }
-
     /// Call this fixture with the already resolved arguments and return the result.
     pub(crate) fn call(
         &self,
@@ -195,13 +174,16 @@ impl NormalizedFixture {
                         .and_then(|param| param.values.first())
                         .cloned();
 
-                    // Always create a TestNode (even if empty) for pytest compatibility
-                    let tags_clone = user_defined_fixture.test_tags.clone().unwrap_or_else(|| {
-                        crate::extensions::tags::python::PyTags { inner: vec![] }
+                    // Create TestNode with scope name and markers
+                    let markers = user_defined_fixture.markers.clone().unwrap_or_else(|| {
+                        TestMarkers::from_karva(crate::extensions::tags::python::PyTags {
+                            inner: vec![],
+                        })
                     });
-                    let marks_clone = user_defined_fixture.pytest_marks.clone();
-                    let test_name_clone = user_defined_fixture.test_name.clone();
-                    let node = Some(TestNode::new(test_name_clone, tags_clone, marks_clone));
+                    let node = Some(TestNode::new(
+                        user_defined_fixture.scope_name.clone(),
+                        markers,
+                    ));
 
                     if let Ok(request_obj) =
                         FixtureRequest::new(py, param_value, node).and_then(|req| Py::new(py, req))
@@ -219,5 +201,13 @@ impl NormalizedFixture {
                 }
             }
         }
+    }
+
+    /// Returns `true` if the normalized fixture is [`UserDefined`].
+    ///
+    /// [`UserDefined`]: NormalizedFixture::UserDefined
+    #[must_use]
+    pub fn is_user_defined(&self) -> bool {
+        matches!(self, Self::UserDefined(..))
     }
 }

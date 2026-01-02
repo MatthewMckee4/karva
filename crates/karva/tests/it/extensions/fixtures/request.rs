@@ -199,25 +199,22 @@ fn test_fixture_request_node_name_module_scope(#[values("karva")] framework: &st
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_name_with_parametrize() {
-    let framework = "pytest";
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
-            r"
-                import {framework}
+        r"
+                import pytest
 
-                @{framework}.fixture
+                @pytest.fixture
                 def check_name(request):
                     # Should see test name (without parameters in current implementation)
                     name = request.node.name
                     assert name == 'test_params'
                     return name
 
-                @{framework}.mark.parametrize('value', [1, 2])
+                @pytest.mark.parametrize('value', [1, 2])
                 def test_params(value, check_name):
                     assert check_name == 'test_params'
-"
-        ),
+",
     );
 
     assert_cmd_snapshot!(test_context.command_no_parallel(), @r"
@@ -278,14 +275,12 @@ fn test_fixture_request_node_name_nested_fixtures(#[values("pytest", "karva")] f
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_get_closest_marker_skip() {
-    let framework = "pytest";
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
-            r"
-                import {framework}
+        r"
+                import pytest
 
-                @{framework}.fixture
+                @pytest.fixture
                 def check_marker(request):
                     # Get the skip marker
                     marker = request.node.get_closest_marker('skip')
@@ -293,11 +288,10 @@ fn test_fixture_request_node_get_closest_marker_skip() {
                     assert marker.kwargs.get('reason') == 'Testing skip marker'
                     return 'checked'
 
-                @{framework}.mark.skip(reason='Testing skip marker')
+                @pytest.mark.skip(reason='Testing skip marker')
                 def test_with_skip_marker(check_marker):
                     assert check_marker == 'checked'
-"
-        ),
+",
     );
 
     assert_cmd_snapshot!(test_context.command(), @r"
@@ -315,14 +309,12 @@ fn test_fixture_request_node_get_closest_marker_skip() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_get_closest_marker_not_found() {
-    let framework = "pytest";
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
-            r"
-                import {framework}
+        r"
+                import pytest
 
-                @{framework}.fixture
+                @pytest.fixture
                 def check_no_marker(request):
                     # Try to get a marker that doesn't exist
                     marker = request.node.get_closest_marker('nonexistent')
@@ -331,8 +323,7 @@ fn test_fixture_request_node_get_closest_marker_not_found() {
 
                 def test_without_marker(check_no_marker):
                     assert check_no_marker == 'checked'
-"
-        ),
+",
     );
 
     assert_cmd_snapshot!(test_context.command(), @r"
@@ -350,25 +341,22 @@ fn test_fixture_request_node_get_closest_marker_not_found() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_get_closest_tag() {
-    let framework = "pytest";
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
-            r"
-                import {framework}
+        r"
+                import pytest
 
-                @{framework}.fixture
+                @pytest.fixture
                 def check_tag(request):
                     # get_closest_tag is an alias for get_closest_marker
                     marker = request.node.get_closest_tag('skip')
                     assert marker is not None
                     return 'checked'
 
-                @{framework}.mark.skip(reason='Test reason')
+                @pytest.mark.skip(reason='Test reason')
                 def test_with_tag(check_tag):
                     assert check_tag == 'checked'
-"
-        ),
+",
     );
 
     assert_cmd_snapshot!(test_context.command(), @r"
@@ -386,27 +374,24 @@ fn test_fixture_request_node_get_closest_tag() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_with_parametrize() {
-    let framework = "pytest";
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
-            r#"
-                import {framework}
+        r#"
+                import pytest
 
-                @{framework}.fixture
+                @pytest.fixture
                 def check_parametrize(request):
                     # Get the parametrize marker
                     marker = request.node.get_closest_marker('parametrize')
                     assert marker is not None
                     # The marker should have the parametrize data
                     assert marker.args[0] == 'x'
-                    return f'x={{request.param if hasattr(request, "param") and request.param else "none"}}'
+                    return f'x={request.param if hasattr(request, "param") and request.param else "none"}'
 
-                @{framework}.mark.parametrize('x', [1, 2, 3])
+                @pytest.mark.parametrize('x', [1, 2, 3])
                 def test_parametrized(check_parametrize, x):
                     assert x in [1, 2, 3]
-"#
-        ),
+"#,
     );
 
     assert_cmd_snapshot!(test_context.command(), @r"
@@ -426,27 +411,24 @@ fn test_fixture_request_node_with_parametrize() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_with_custom_marker() {
-    let framework = "pytest";
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
-            r"
-                import {framework}
+        r"
+                import pytest
 
-                @{framework}.fixture
+                @pytest.fixture
                 def check_custom(request):
                     # Get a custom marker
                     marker = request.node.get_closest_marker('custom')
                     assert marker is not None
                     assert marker.args == ('arg1', 'arg2')
-                    assert marker.kwargs == {{'key': 'value'}}
+                    assert marker.kwargs == {'key': 'value'}
                     return 'checked'
 
-                @{framework}.mark.custom('arg1', 'arg2', key='value')
+                @pytest.mark.custom('arg1', 'arg2', key='value')
                 def test_with_custom_marker(check_custom):
                     assert check_custom == 'checked'
-"
-        ),
+",
     );
 
     assert_cmd_snapshot!(test_context.command(), @r"
@@ -464,14 +446,12 @@ fn test_fixture_request_node_with_custom_marker() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_multiple_markers() {
-    let framework = "pytest";
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
-            r"
-                import {framework}
+        r"
+                import pytest
 
-                @{framework}.fixture
+                @pytest.fixture
                 def check_multiple(request):
                     # Should find the first matching marker (closest)
                     skip_marker = request.node.get_closest_marker('skip')
@@ -482,12 +462,11 @@ fn test_fixture_request_node_multiple_markers() {
 
                     return 'checked'
 
-                @{framework}.mark.custom('value')
-                @{framework}.mark.skip(reason='Multiple markers test')
+                @pytest.mark.custom('value')
+                @pytest.mark.skip(reason='Multiple markers test')
                 def test_with_multiple_markers(check_multiple):
                     assert check_multiple == 'checked'
-"
-        ),
+",
     );
 
     assert_cmd_snapshot!(test_context.command(), @r"
@@ -505,27 +484,24 @@ fn test_fixture_request_node_multiple_markers() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_pytest_custom_marker() {
-    let framework = "pytest";
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
-            r"
-                import {framework}
+        r"
+                import pytest
 
-                @{framework}.fixture
+                @pytest.fixture
                 def check_custom_marker(request):
                     # Get a custom marker
                     marker = request.node.get_closest_marker('my_custom_marker')
                     assert marker is not None
                     assert marker.args == ('arg1', 'arg2')
-                    assert marker.kwargs == {{'key1': 'value1', 'key2': 42}}
+                    assert marker.kwargs == {'key1': 'value1', 'key2': 42}
                     return 'checked'
 
-                @{framework}.mark.my_custom_marker('arg1', 'arg2', key1='value1', key2=42)
+                @pytest.mark.my_custom_marker('arg1', 'arg2', key1='value1', key2=42)
                 def test_with_custom_marker(check_custom_marker):
                     assert check_custom_marker == 'checked'
-"
-        ),
+",
     );
 
     assert_cmd_snapshot!(test_context.command_no_parallel(), @r"
@@ -540,30 +516,28 @@ fn test_fixture_request_node_pytest_custom_marker() {
         ");
 }
 
-#[rstest]
+#[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
-fn test_fixture_request_node_karva_custom_tag(#[values("karva")] framework: &str) {
+fn test_fixture_request_node_karva_custom_tag() {
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
-            r"
-                import {framework}
+        r"
+                import karva
 
-                @{framework}.fixture
+                @karva.fixture
                 def check_custom_tag(request):
                     # Get a custom tag using get_closest_tag
-                    tag = request.node.get_closest_tag('custom')
+                    tag = request.node.get_closest_tag('my_custom_tag')
                     assert tag is not None
-                    assert tag.name == 'custom'
-                    assert tag.args == ('my_custom_tag', 'arg1', 'arg2')
-                    assert tag.kwargs == {{'key': 'value'}}
+                    assert tag.name == 'my_custom_tag'
+                    assert tag.args == ('arg1', 'arg2')
+                    assert tag.kwargs == {'key': 'value'}
                     return 'checked'
 
-                @{framework}.tags.custom('my_custom_tag', 'arg1', 'arg2', key='value')
+                @karva.tags.my_custom_tag('arg1', 'arg2', key='value')
                 def test_with_custom_tag(check_custom_tag):
                     assert check_custom_tag == 'checked'
-"
-        ),
+",
     );
 
     assert_cmd_snapshot!(test_context.command_no_parallel(), @r"
@@ -580,15 +554,49 @@ fn test_fixture_request_node_karva_custom_tag(#[values("karva")] framework: &str
 
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
-fn test_fixture_request_node_multiple_custom_markers() {
-    let framework = "pytest";
+fn test_fixture_request_node_karva_custom_tag_no_args() {
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
-            r"
-                import {framework}
+        r"
+                import karva
 
-                @{framework}.fixture
+                @karva.fixture
+                def check_custom_tag(request):
+                    # Get a custom tag using get_closest_tag (no args)
+                    tag = request.node.get_closest_tag('slow')
+                    assert tag is not None
+                    assert tag.name == 'slow'
+                    assert tag.args == ()
+                    assert tag.kwargs == {}
+                    return 'checked'
+
+                @karva.tags.slow
+                def test_with_slow_tag(check_custom_tag):
+                    assert check_custom_tag == 'checked'
+",
+    );
+
+    assert_cmd_snapshot!(test_context.command_no_parallel(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_with_slow_tag(check_custom_tag=checked) ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_fixture_request_node_multiple_custom_markers() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r"
+                import pytest
+
+                @pytest.fixture
                 def check_multiple_custom(request):
                     # Get different custom markers
                     marker1 = request.node.get_closest_marker('marker1')
@@ -602,12 +610,60 @@ fn test_fixture_request_node_multiple_custom_markers() {
 
                     return 'checked'
 
-                @{framework}.mark.marker1('data1')
-                @{framework}.mark.marker2('data2')
+                @pytest.mark.marker1('data1')
+                @pytest.mark.marker2('data2')
                 def test_with_multiple_custom(check_multiple_custom):
                     assert check_multiple_custom == 'checked'
-"
-        ),
+",
+    );
+
+    assert_cmd_snapshot!(test_context.command_no_parallel(), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_with_multiple_custom(check_multiple_custom=checked) ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
+}
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_fixture_request_node_karva_multiple_custom_tags() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r"
+                import karva
+
+                @karva.fixture
+                def check_multiple_custom(request):
+                    # Get different custom tags with arbitrary names
+                    tag1 = request.node.get_closest_tag('integration')
+                    tag2 = request.node.get_closest_tag('slow')
+                    tag3 = request.node.get_closest_tag('database')
+
+                    assert tag1 is not None
+                    assert tag1.name == 'integration'
+                    assert tag1.args == ('api',)
+
+                    assert tag2 is not None
+                    assert tag2.name == 'slow'
+                    assert tag2.args == ()
+
+                    assert tag3 is not None
+                    assert tag3.name == 'database'
+                    assert tag3.kwargs == {'engine': 'postgres'}
+
+                    return 'checked'
+
+                @karva.tags.integration('api')
+                @karva.tags.slow
+                @karva.tags.database(engine='postgres')
+                def test_with_multiple_custom(check_multiple_custom):
+                    assert check_multiple_custom == 'checked'
+",
     );
 
     assert_cmd_snapshot!(test_context.command_no_parallel(), @r"
@@ -625,27 +681,24 @@ fn test_fixture_request_node_multiple_custom_markers() {
 #[test]
 #[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_no_args_custom_marker() {
-    let framework = "pytest";
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
-            r"
-                import {framework}
+        r"
+                import pytest
 
-                @{framework}.fixture
+                @pytest.fixture
                 def check_no_args_marker(request):
                     # Get a custom marker with no args
                     marker = request.node.get_closest_marker('simple_marker')
                     assert marker is not None
                     assert marker.args == ()
-                    assert marker.kwargs == {{}}
+                    assert marker.kwargs == {}
                     return 'checked'
 
-                @{framework}.mark.simple_marker
+                @pytest.mark.simple_marker
                 def test_with_no_args_marker(check_no_args_marker):
                     assert check_no_args_marker == 'checked'
-"
-        ),
+",
     );
 
     assert_cmd_snapshot!(test_context.command_no_parallel(), @r"

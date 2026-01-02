@@ -117,10 +117,18 @@ pub mod tags {
     use pyo3::prelude::*;
     use pyo3::types::PyTuple;
 
-    use super::{PyTag, PyTags};
+    use super::{CustomTagBuilder, PyTag, PyTags};
     use crate::extensions::functions::python::Param;
     use crate::extensions::tags::parametrize::parse_parametrize_args;
     use crate::extensions::tags::python::PyTestFunction;
+
+    /// Handle dynamic attribute access for custom tags.
+    ///
+    /// This allows users to create tags like `@karva.tags.slow` or `@karva.tags.integration`.
+    #[pyfunction]
+    fn __getattr__(py: Python<'_>, name: String) -> PyResult<Py<PyAny>> {
+        CustomTagBuilder { tag_name: name }.into_py_any(py)
+    }
 
     #[pyfunction]
     pub fn parametrize(
@@ -277,18 +285,66 @@ pub mod tags {
         }
         .into_py_any(py)
     }
+}
 
-    #[pyfunction]
+/// A builder for creating custom tags with dynamic names.
+///
+/// This allows users to create tags like `@karva.tags.some_tag` or `@karva.tags.some_tag(arg1, arg2)`.
+#[derive(Debug, Clone)]
+#[pyclass(name = "CustomTagBuilder")]
+pub struct CustomTagBuilder {
+    pub(crate) tag_name: String,
+}
+
+#[pymethods]
+impl CustomTagBuilder {
     #[pyo3(signature = (*args, **kwargs))]
-    pub fn custom(
+    fn __call__(
+        &self,
         py: Python<'_>,
         args: &Bound<'_, PyTuple>,
-        kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
+        kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyAny>> {
-        // Convert args to Vec<Py<PyAny>>
-        let args_vec: Vec<Py<PyAny>> = args.iter().map(pyo3::Bound::unbind).collect();
+        let custom_tag = PyTag::Custom {
+            tag_name: self.tag_name.clone(),
+            tag_args: vec![],
+            tag_kwargs: vec![],
+        };
 
-        // Convert kwargs to Vec<(String, Py<PyAny>)>
+        // Check if the first argument is a function or test case (decorator without parentheses: @karva.tags.some_tag)
+        if args.len() == 1 && kwargs.is_none() {
+            if let Ok(first_item) = args.get_item(0) {
+                // Check if it's already a PyTestFunction (stacked decorators)
+                if let Ok(test_case) = first_item.extract::<PyRef<PyTestFunction>>() {
+                    let mut new_tags = test_case.tags.inner.clone();
+                    new_tags.push(custom_tag);
+                    return PyTestFunction {
+                        tags: PyTags { inner: new_tags },
+                        function: test_case.function.clone_ref(py),
+                    }
+                    .into_py_any(py);
+                }
+                // Check if it's a PyTags object
+                if let Ok(tag_obj) = first_item.extract::<PyRef<PyTags>>() {
+                    let mut new_tags = tag_obj.inner.clone();
+                    new_tags.push(custom_tag);
+                    return PyTags { inner: new_tags }.into_py_any(py);
+                }
+                // Check if it's a plain callable function
+                if first_item.is_callable() {
+                    return PyTestFunction {
+                        tags: PyTags {
+                            inner: vec![custom_tag],
+                        },
+                        function: first_item.unbind(),
+                    }
+                    .into_py_any(py);
+                }
+            }
+        }
+
+        // Otherwise, create a PyTags that can be used as a decorator: @karva.tags.some_tag(arg1, arg2)
+        let args_vec: Vec<Py<PyAny>> = args.iter().map(pyo3::Bound::unbind).collect();
         let kwargs_vec: Vec<(String, Py<PyAny>)> = if let Some(kw) = kwargs {
             kw.iter()
                 .filter_map(|(key, value): (Bound<'_, PyAny>, Bound<'_, PyAny>)| {
@@ -302,7 +358,7 @@ pub mod tags {
 
         PyTags {
             inner: vec![PyTag::Custom {
-                tag_name: "custom".to_string(),
+                tag_name: self.tag_name.clone(),
                 tag_args: args_vec,
                 tag_kwargs: kwargs_vec,
             }],
