@@ -212,8 +212,6 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
 
         let mut retry_count = self.context.settings().test().retry;
 
-        tracing::info!("Retrying test `{}` {} times", full_test_name, retry_count);
-
         while retry_count > 0 {
             if test_result.is_ok() {
                 break;
