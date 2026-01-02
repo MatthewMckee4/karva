@@ -12,9 +12,9 @@ impl RunHash {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("System time is before UNIX epoch")
-            .as_secs();
+            .as_millis();
 
-        Self(format!("run-{timestamp:x}"))
+        Self(format!("run-{timestamp}"))
     }
 
     pub fn from_existing(hash: &str) -> Self {
