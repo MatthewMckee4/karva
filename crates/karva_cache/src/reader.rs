@@ -70,10 +70,12 @@ fn read_worker_results(
     all_discovery_diagnostics: &mut String,
 ) -> Result<()> {
     let stats_path = worker_dir.join(STATS_FILE);
-    let content = fs::read_to_string(&stats_path)?;
 
-    let stats = serde_json::from_str(&content)?;
-    aggregated_stats.merge(&stats);
+    if stats_path.exists() {
+        let content = fs::read_to_string(&stats_path)?;
+        let stats = serde_json::from_str(&content)?;
+        aggregated_stats.merge(&stats);
+    }
 
     let diagnostics_path = worker_dir.join(DIAGNOSTICS_FILE);
     if diagnostics_path.exists() {
@@ -110,7 +112,7 @@ pub fn read_recent_durations(cache_dir: &Utf8PathBuf) -> Result<HashMap<String, 
         }
     }
 
-    run_dirs.sort();
+    run_dirs.sort_by_key(|hash| RunHash::from_existing(hash).sort_key());
 
     let most_recent = run_dirs
         .last()
