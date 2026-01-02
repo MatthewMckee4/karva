@@ -119,6 +119,10 @@ pub struct SubTestCommand {
     #[clap(long, default_missing_value = "true", num_args=0..1)]
     pub fail_fast: Option<bool>,
 
+    /// When set, the test will retry failed tests up to this number of times.
+    #[clap(long)]
+    pub retry: Option<u32>,
+
     /// When set, we will not show individual test case results during execution.
     #[clap(long, default_missing_value = "true", num_args=0..1)]
     pub no_progress: Option<bool>,
@@ -210,6 +214,7 @@ impl SubTestCommand {
                 test_function_prefix: self.test_prefix,
                 fail_fast: self.fail_fast,
                 try_import_fixtures: self.try_import_fixtures,
+                retry: self.retry,
             }),
         }
     }

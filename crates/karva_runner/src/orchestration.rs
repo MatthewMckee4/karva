@@ -327,5 +327,12 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
         cli_args.push("--try-import-fixtures");
     }
 
+    let retry = args.retry.map(|retry| retry.to_string());
+
+    if let Some(retry) = retry.as_deref() {
+        cli_args.push("--retry");
+        cli_args.push(retry);
+    }
+
     cli_args.iter().map(ToString::to_string).collect()
 }

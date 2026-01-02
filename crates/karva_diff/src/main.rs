@@ -95,6 +95,12 @@ fn run(
         .map(|path| installed_project.path.join(path).to_string())
         .collect();
 
+    let retry = installed_project
+        .config
+        .retry
+        .unwrap_or_default()
+        .to_string();
+
     // Install old wheel
     Command::new("uv")
         .arg("pip")
@@ -114,6 +120,8 @@ fn run(
         .arg("concise")
         .arg("--no-progress")
         .arg("--try-import-fixtures")
+        .arg("--retry")
+        .arg(retry.clone())
         .arg("--color")
         .arg("never")
         .current_dir(&installed_project.path)
@@ -162,6 +170,8 @@ fn run(
         .arg("concise")
         .arg("--no-progress")
         .arg("--try-import-fixtures")
+        .arg("--retry")
+        .arg(retry)
         .arg("--color")
         .arg("never")
         .current_dir(&installed_project.path)
