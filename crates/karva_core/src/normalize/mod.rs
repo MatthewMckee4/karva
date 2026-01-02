@@ -352,7 +352,6 @@ impl Normalizer {
         }
 
         NormalizedPackage {
-            path: package.path().clone(),
             modules,
             packages,
             auto_use_fixtures: package_auto_use_fixtures,
