@@ -5,12 +5,14 @@ use ruff_python_ast::StmtFunctionDef;
 
 use crate::extensions::tags::python::{PyTag, PyTags, PyTestFunction};
 
+pub mod custom;
 pub mod expect_fail;
 pub mod parametrize;
 pub mod python;
 pub mod skip;
 mod use_fixtures;
 
+use custom::CustomTag;
 use expect_fail::ExpectFailTag;
 pub use parametrize::Parametrization;
 use parametrize::{ParametrizationArgs, ParametrizeTag};
@@ -24,9 +26,23 @@ pub enum Tag {
     UseFixtures(UseFixturesTag),
     Skip(SkipTag),
     ExpectFail(ExpectFailTag),
+    /// Custom tag/marker with arbitrary name, args, and kwargs.
+    /// The inner `CustomTag` is stored for future API use but not currently accessed.
+    Custom(CustomTag),
 }
 
 impl Tag {
+    /// Convert this Tag to a `PyTag` for use in Python.
+    pub(crate) fn to_py_tag(&self) -> python::PyTag {
+        match self {
+            Self::Parametrize(p) => p.to_py_tag(),
+            Self::UseFixtures(u) => u.to_py_tag(),
+            Self::Skip(s) => s.to_py_tag(),
+            Self::ExpectFail(e) => e.to_py_tag(),
+            Self::Custom(c) => c.to_py_tag(),
+        }
+    }
+
     /// Converts a Pytest mark into an Karva Tag.
     ///
     /// This is used to allow Pytest marks to be used as Karva tags.
@@ -37,7 +53,8 @@ impl Tag {
             "usefixtures" => UseFixturesTag::try_from_pytest_mark(py_mark).map(Self::UseFixtures),
             "skip" | "skipif" => SkipTag::try_from_pytest_mark(py_mark).map(Self::Skip),
             "xfail" => ExpectFailTag::try_from_pytest_mark(py_mark).map(Self::ExpectFail),
-            _ => None,
+            // Any other marker is treated as a custom marker
+            _ => CustomTag::try_from_pytest_mark(py_mark).map(Self::Custom),
         }
     }
 
@@ -88,6 +105,15 @@ impl Tag {
             PyTag::ExpectFail { conditions, reason } => {
                 Self::ExpectFail(ExpectFailTag::new(conditions.clone(), reason.clone()))
             }
+            PyTag::Custom {
+                tag_name,
+                tag_args,
+                tag_kwargs,
+            } => Self::Custom(CustomTag::new(
+                tag_name.clone(),
+                tag_args.clone(),
+                tag_kwargs.clone(),
+            )),
         }
     }
 }
@@ -214,6 +240,16 @@ impl Tags {
             }
         }
         None
+    }
+
+    /// Convert this Tags struct to `PyTags` for use in Python.
+    ///
+    /// This converts all internal tags to their Python representation.
+    /// For pytest marks, the original pytest marks should be used instead when available.
+    pub(crate) fn to_py_tags(&self) -> python::PyTags {
+        python::PyTags {
+            inner: self.inner.iter().map(Tag::to_py_tag).collect(),
+        }
     }
 }
 

@@ -6,7 +6,10 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::extensions::fixtures::{FixtureRequest, FixtureScope, RequiresFixtures};
+use crate::extensions::fixtures::{
+    FixtureRequest, FixtureScope, RequiresFixtures,
+    python::{TestMarkers, TestNode},
+};
 use crate::extensions::tags::{Parametrization, Tags};
 
 /// Built-in fixture data
@@ -41,6 +44,10 @@ pub struct UserDefinedFixture {
     pub(crate) py_function: Py<PyAny>,
     /// The function definition for this fixture
     pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
+    /// Scope-based name for request.node.name:
+    pub(crate) scope_name: String,
+    /// Test markers (either Karva tags or Pytest marks)
+    pub(crate) markers: Option<TestMarkers>,
 }
 
 /// A normalized fixture represents a concrete variant of a fixture after parametrization.
@@ -167,7 +174,20 @@ impl NormalizedFixture {
                         .and_then(|param| param.values.first())
                         .cloned();
 
-                    if let Ok(request_obj) = Py::new(py, FixtureRequest::new(param_value)) {
+                    // Create TestNode with scope name and markers
+                    let markers = user_defined_fixture.markers.clone().unwrap_or_else(|| {
+                        TestMarkers::from_karva(crate::extensions::tags::python::PyTags {
+                            inner: vec![],
+                        })
+                    });
+                    let node = Some(TestNode::new(
+                        user_defined_fixture.scope_name.clone(),
+                        markers,
+                    ));
+
+                    if let Ok(request_obj) =
+                        FixtureRequest::new(py, param_value, node).and_then(|req| Py::new(py, req))
+                    {
                         kwargs_dict.set_item("request", request_obj).ok();
                     }
                 }
@@ -181,5 +201,13 @@ impl NormalizedFixture {
                 }
             }
         }
+    }
+
+    /// Returns `true` if the normalized fixture is [`UserDefined`].
+    ///
+    /// [`UserDefined`]: NormalizedFixture::UserDefined
+    #[must_use]
+    pub fn is_user_defined(&self) -> bool {
+        matches!(self, Self::UserDefined(..))
     }
 }

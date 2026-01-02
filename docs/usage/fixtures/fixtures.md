@@ -1,223 +1,421 @@
+# Fixtures
+
+Fixtures provide a mechanism for setup and teardown logic in tests. They enable dependency injection, allowing tests to declare their dependencies explicitly and receive them automatically.
+
+## Defining Fixtures
+
+Define a fixture using the `@karva.fixture` decorator:
+
+```py title="test.py"
+import karva
+
+@karva.fixture
+def database_connection():
+    return create_connection()
+
+def test_query(database_connection):
+    result = database_connection.execute("SELECT 1")
+    assert result == 1
+```
+
 ## Fixture Scopes
 
-Karva supports different types of fixtures based on their scope:
+Fixtures support different scopes that control their lifecycle and when they are created and destroyed.
 
-### Function Scope
+### Function Scope (Default)
 
-The default scope. The fixture is created for each test function.
+The fixture is created and destroyed for each test function that uses it:
+
+```py title="test.py"
+import karva
+
+@karva.fixture
+def counter():
+    return {"count": 0}
+
+def test_first(counter):
+    counter["count"] += 1
+    assert counter["count"] == 1
+
+def test_second(counter):
+    # Fresh instance, count is 0 again
+    assert counter["count"] == 0
+```
 
 ### Module Scope
 
-The fixture is created once per test module.
+The fixture is created once per test module and shared across all tests in that module:
+
+```py title="test.py"
+import karva
+
+@karva.fixture(scope="module")
+def shared_resource():
+    print("Creating resource")
+    return ExpensiveResource()
+```
 
 ### Package Scope
 
-The fixture is created once per folder.
+The fixture is created once per package (directory). Each sub-package that contains tests using the fixture receives its own instance.
 
-This means that every package that is a sub-package of the package with the fixture will create the fixture if and only if it has a module that requires the fixture.
-
-For example, if we have the following structure:
+Consider the following directory structure:
 
 ```text
-calculator
-├── src
-└── tests
-    ├── conftest.py
-    ├── bar
-    │   └── test_bar.py
-    └── foo
-        └── test_foo.py
+tests/
+├── conftest.py
+├── unit/
+│   └── test_unit.py
+└── integration/
+    └── test_integration.py
 ```
-
-And the following fixture:
 
 ```py title="tests/conftest.py"
-@fixture(scope="package")
-def package_fixture():
-    return "package"
+import karva
+
+@karva.fixture(scope="package")
+def package_resource():
+    return create_resource()
 ```
 
-If the fixture is used in `tests/foo/test_foo.py` and `tests/bar/test_bar.py`
-then fixture will be created once for the `foo` folder and once for the `bar` folder.
-
-If you wanted it to only create the fixture once you should use the `session` scope.
+If both `test_unit.py` and `test_integration.py` use `package_resource`, the fixture is instantiated once for `unit/` and once for `integration/`.
 
 ### Session Scope
 
-The fixture is created once per test session.
+The fixture is created once for the entire test session and shared across all tests:
+
+```py title="conftest.py"
+import karva
+
+@karva.fixture(scope="session")
+def global_config():
+    return load_configuration()
+```
 
 ### Dynamic Scope
 
-A dynamic scope is given as a function that returns a valid scope string.
+The scope can be determined at runtime using a callable:
 
-```py
-def dynamic_scope(fixture_name: str, config: object) -> str:
-    return "module"
+```py title="conftest.py"
+import karva
+import os
+
+def determine_scope(fixture_name: str, config: object) -> str:
+    if os.environ.get("CI"):
+        return "session"
+    return "function"
+
+@karva.fixture(scope=determine_scope)
+def adaptive_fixture():
+    return create_resource()
 ```
 
-Currently, we do not support config and that value is passed as `None`. The `fixture_name` argument is a string.
+The callable receives `fixture_name` as a string and `config` (currently `None`).
 
-## Dependent fixtures
+## Dependent Fixtures
 
-Fixture are allowed to depend on other fixtures, and so on.
+Fixtures can depend on other fixtures, enabling composition:
 
-```py
-from karva import fixture
-
-@fixture
-def function_fixture() -> str:
-    return "fixture"
-
-@fixture
-def dependent_fixture(function_fixture: str) -> str:
-    return "dependent_" + function_fixture
-
-def test_dependent(dependent_fixture: str):
-    assert dependent_fixture == "dependent_fixture"
-```
-
-## Finalizers
-
-Finalizers are called after the scope of the fixture has finished running.
-
-Here we do some setup for the fixture, then yield the value. Once the requesting function, here `test_finalizer`, is done, we run the finalizer, and the teardown logic is run.
-
-This can be useful for setting up a database, then deleting it after the test is done.
-
-```py
-from karva import fixture
-
-@fixture
-def finalizer_fixture() -> Iterator[int]:
-    print("setup")
-    yield 1
-    print("teardown")
-
-def test_finalizer(finalizer_fixture: int) -> None:
-    print("running test")
-    assert finalizer_fixture == 1
-```
-
-If we ran `karva test -s` here, we would see the following output:
-
-```text
-setup
-running test
-teardown
-```
-
-## Auto-use fixtures
-
-Auto-use fixtures are run before any functions in their scope.
-
-```py
-from karva import fixture
-
-data = {}
-
-@fixture(auto_use=True)
-def add_data():
-    data.update(value=True)
-
-def test_value():
-    assert data.get('value')
-```
-
-These can be useful with finalizers, since the requesting function may not need any value.
-
-```py
-from karva import fixture
-
-@fixture(auto_use=True)
-def setup_db():
-    print("setup")
-    yield
-    print("teardown")
-
-def test_db():
-    print("running test")
-```
-
-## Use-fixtures
-
-We can use the `use_fixtures` tag to specify fixtures that should be run before a function.
-
-This is useful when we don't need a value from the fixture, but we want to run some code before the test.
-
-```py
+```py title="conftest.py"
 import karva
 
 @karva.fixture
-def x():
-    # Do something
-
+def base_url():
+    return "https://api.example.com"
 
 @karva.fixture
-def y():
-    # Do something
-    yield
-    # Do something else
+def api_client(base_url):
+    return APIClient(base_url)
 
-@karva.tags.use_fixtures("x", "y")
-def test():
-    # Do something
-```
-
-## Overriding fixtures
-
-We can _override_ fixtures by giving them the same name. When overriding a fixture, we can still use the parent fixture.
-
-```py title="conftest.py"
-import pytest
-
-@pytest.fixture
-def username() -> str:
-    return 'username'
-
+@karva.fixture
+def authenticated_client(api_client):
+    api_client.authenticate()
+    return api_client
 ```
 
 ```py title="test.py"
-def test_username(username: str) -> None:
-    assert username == 'username'
+def test_api_call(authenticated_client):
+    response = authenticated_client.get("/users")
+    assert response.status_code == 200
 ```
 
-```py title="foo/conftest.py"
-import pytest
+## Teardown with Generators
 
-@pytest.fixture
-def username(username: str) -> str:
-    return 'overridden-' + username
+Use generator fixtures to implement teardown logic. Code after `yield` executes after the fixture's scope ends:
+
+```py title="conftest.py"
+import karva
+import shutil
+
+@karva.fixture
+def database():
+    db = create_database()
+    yield db
+    db.close()
+
+@karva.fixture(scope="module")
+def temp_directory():
+    path = create_temp_dir()
+    yield path
+    shutil.rmtree(path)
 ```
 
-```py title="foo/test.py"
-def test_username(username: str) -> None:
-    assert username == 'overridden-username'
+Example output when running with `karva test --show-output`:
+
+```text
+Creating database
+Running test
+Closing database
 ```
 
-## Parametrizing fixtures
+## Auto-Use Fixtures
 
-You can parametrize fixtures allowing us to run a test multiple times for each param of the fixture.
+Auto-use fixtures execute automatically for all tests within their scope, without requiring explicit declaration:
 
-Here you can also use `karva.param` here to add additional information to the param.
+```py title="conftest.py"
+import karva
+import logging
 
-```py
+@karva.fixture(auto_use=True)
+def setup_logging():
+    logging.basicConfig(level=logging.DEBUG)
+    yield
+    logging.shutdown()
+```
+
+```py title="test.py"
+def test_something():
+    # setup_logging runs automatically before this test
+    pass
+```
+
+This is particularly useful for global setup and teardown:
+
+```py title="conftest.py"
 import karva
 
-@karva.fixture(params=['username', 'email', karva.param("admin", tags=[karva.tags.skip])])
-def some_fixture(request) -> str:
-    return request.param
-
-def test_username_email(some_fixture: str):
-    assert some_fixture in ['username', 'email']
+@karva.fixture(scope="session", auto_use=True)
+def database_migrations():
+    run_migrations()
+    yield
+    rollback_migrations()
 ```
 
-This will run `test_username_email` twice, once with `username` and once with `email`.
+## Use-Fixtures Tag
 
-Here we also see that we can "introspect" the fixture by using the `request` object.
+The `use_fixtures` tag explicitly declares fixture dependencies when no return value is needed:
 
-Currently the only parameter you can use here is `request.param`.
+```py title="conftest.py"
+import karva
 
-In future you will be able to access other parameters.
+@karva.fixture
+def setup_cache():
+    initialize_cache()
+    yield
+    clear_cache()
 
-It is important to note that this request object is not the same as the pytest `FixtureRequest` object. It is a custom object provided by Karva.
-And so it may not have all of the information that the pytest `FixtureRequest` object has.
+@karva.fixture
+def seed_data():
+    insert_test_data()
+```
+
+```py title="test.py"
+import karva
+
+@karva.tags.use_fixtures("setup_cache", "seed_data")
+def test_cached_query():
+    result = query_with_cache()
+    assert result is not None
+```
+
+## Overriding Fixtures
+
+Fixtures can be overridden in nested directories. The overriding fixture can reference the parent fixture:
+
+```py title="conftest.py"
+import karva
+
+@karva.fixture
+def username():
+    return "default_user"
+```
+
+```py title="test_default.py"
+def test_default_user(username):
+    assert username == "default_user"
+```
+
+```py title="admin/conftest.py"
+import karva
+
+@karva.fixture
+def username(username):
+    return f"admin_{username}"
+```
+
+```py title="admin/test_admin.py"
+def test_admin_user(username):
+    assert username == "admin_default_user"
+```
+
+## Parametrized Fixtures
+
+Fixtures can be parametrized to run tests multiple times with different values:
+
+```py title="conftest.py"
+import karva
+
+@karva.fixture(params=["mysql", "postgresql", "sqlite"])
+def database_engine(request):
+    return create_engine(request.param)
+```
+
+```py title="test.py"
+def test_connection(database_engine):
+    assert database_engine.connect()
+```
+
+This runs `test_connection` three times, once for each database engine.
+
+### Using `karva.param` for Additional Metadata
+
+Use `karva.param` to attach metadata to individual parameter values:
+
+```py title="conftest.py"
+import karva
+
+@karva.fixture(params=[
+    "read",
+    "write",
+    karva.param("admin", tags=[karva.tags.slow]),
+    karva.param("superuser", tags=[karva.tags.skip]),
+])
+def permission_level(request):
+    return request.param
+```
+
+```py title="test.py"
+def test_permissions(permission_level):
+    assert has_permission(permission_level)
+```
+
+## Request Object
+
+The `request` object provides access to fixture metadata and test context.
+
+### `request.param`
+
+Access the current parameter value for parametrized fixtures:
+
+```py title="conftest.py"
+import karva
+
+@karva.fixture(params=["staging", "production"])
+def environment(request):
+    return configure_environment(request.param)
+```
+
+### `request.node`
+
+Access metadata about the current test or scope:
+
+```py title="conftest.py"
+import karva
+
+@karva.fixture
+def contextual_fixture(request):
+    test_name = request.node.name
+    return f"Fixture for {test_name}"
+```
+
+### `request.node.name`
+
+The `name` property returns context-specific values based on the fixture scope:
+
+| Scope | Return Value |
+| ------- | -------------- |
+| Function | Test function name (e.g., `"test_login"`) |
+| Module | Module file name (e.g., `"test_auth.py"`) |
+| Package | Package folder path (e.g., `"tests/unit"`) |
+| Session | Empty string (`""`) |
+
+```py title="conftest.py"
+import karva
+
+@karva.fixture(scope="module")
+def module_setup(request):
+    print(f"Setting up module: {request.node.name}")
+    yield
+    print(f"Tearing down module: {request.node.name}")
+```
+
+### `request.node.get_closest_marker(name)`
+
+Retrieve markers (tags) applied to the current test:
+
+```py title="conftest.py"
+import karva
+
+@karva.fixture
+def conditional_setup(request):
+    slow_marker = request.node.get_closest_marker("slow")
+    if slow_marker:
+        return setup_for_slow_test()
+    return setup_for_fast_test()
+```
+
+```py title="test.py"
+import karva
+
+@karva.tags.slow
+def test_intensive_operation(conditional_setup):
+    pass
+```
+
+The marker object provides access to:
+
+- `marker.name`: The marker name
+- `marker.args`: Positional arguments passed to the marker
+- `marker.kwargs`: Keyword arguments passed to the marker
+
+```py title="conftest.py"
+import karva
+
+@karva.fixture
+def timeout_aware(request):
+    timeout_marker = request.node.get_closest_marker("timeout")
+    if timeout_marker and timeout_marker.args:
+        return timeout_marker.args[0]
+    return 30  # default timeout
+```
+
+```py title="test.py"
+import karva
+
+@karva.tags.timeout(60)
+def test_long_running(timeout_aware):
+    assert timeout_aware == 60
+```
+
+### `request.node.get_closest_tag(name)`
+
+Alias for `get_closest_marker`. Both methods function identically:
+
+```py title="conftest.py"
+import karva
+
+@karva.fixture
+def check_priority(request):
+    priority = request.node.get_closest_tag("priority")
+    if priority and priority.args:
+        return priority.args[0]
+    return "normal"
+```
+
+```py title="test.py"
+import karva
+
+@karva.tags.priority("high")
+def test_critical(check_priority):
+    assert check_priority == "high"
+```
