@@ -40,6 +40,8 @@ pub struct RealWorldProject<'a> {
     pub install_root: bool,
     /// Whether to set this config variable.
     pub try_import_fixtures: bool,
+    /// Whether to retry failed tests
+    pub retry: Option<u32>,
 }
 
 impl<'a> RealWorldProject<'a> {
@@ -363,6 +365,7 @@ pub static AFFECT_PROJECT: RealWorldProject<'static> = RealWorldProject {
     python_version: PythonVersion::PY313,
     install_root: true,
     try_import_fixtures: false,
+    retry: None,
 };
 
 pub static SQLMODEL_PROJECT: RealWorldProject<'static> = RealWorldProject {
@@ -385,6 +388,7 @@ pub static SQLMODEL_PROJECT: RealWorldProject<'static> = RealWorldProject {
     python_version: PythonVersion::PY313,
     install_root: false,
     try_import_fixtures: true,
+    retry: Some(3),
 };
 
 pub static TYPER_PROJECT: RealWorldProject<'static> = RealWorldProject {
@@ -404,6 +408,7 @@ pub static TYPER_PROJECT: RealWorldProject<'static> = RealWorldProject {
     python_version: PythonVersion::PY313,
     install_root: false,
     try_import_fixtures: false,
+    retry: Some(3),
 };
 
 pub static PYDANTIC_SETTINGS_PROJECT: RealWorldProject<'static> = RealWorldProject {
@@ -424,6 +429,7 @@ pub static PYDANTIC_SETTINGS_PROJECT: RealWorldProject<'static> = RealWorldProje
     python_version: PythonVersion::PY313,
     install_root: false,
     try_import_fixtures: false,
+    retry: Some(3),
 };
 
 pub static PYDANTIC_PROJECT: RealWorldProject<'static> = RealWorldProject {
@@ -450,6 +456,7 @@ pub static PYDANTIC_PROJECT: RealWorldProject<'static> = RealWorldProject {
     python_version: PythonVersion::PY313,
     install_root: false,
     try_import_fixtures: true,
+    retry: Some(3),
 };
 
 pub fn all_projects() -> Vec<&'static RealWorldProject<'static>> {

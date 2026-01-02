@@ -194,6 +194,17 @@ pub struct TestOptions {
         "#
     )]
     pub try_import_fixtures: Option<bool>,
+
+    /// When set, we will retry failed tests up to this number of times.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"0"#,
+        value_type = "u32",
+        example = r#"
+            retry = 3
+        "#
+    )]
+    pub retry: Option<u32>,
 }
 
 impl TestOptions {
@@ -205,6 +216,7 @@ impl TestOptions {
                 .unwrap_or_else(|| "test".to_string()),
             fail_fast: self.fail_fast.unwrap_or_default(),
             try_import_fixtures: self.try_import_fixtures.unwrap_or_default(),
+            retry: self.retry.unwrap_or_default(),
         }
     }
 }

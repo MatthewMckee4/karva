@@ -195,15 +195,33 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
 
         tracing::debug!("Running test `{}`", full_test_name);
 
-        let test_result = if function_arguments.is_empty() {
-            function.call0(py)
-        } else {
-            let py_dict = PyDict::new(py);
-            for (key, value) in &function_arguments {
-                let _ = py_dict.set_item(key, value);
+        let py_dict = PyDict::new(py);
+        for (key, value) in &function_arguments {
+            let _ = py_dict.set_item(key, value);
+        }
+
+        let run_test = || {
+            if function_arguments.is_empty() {
+                function.call0(py)
+            } else {
+                function.call(py, (), Some(&py_dict))
             }
-            function.call(py, (), Some(&py_dict))
         };
+
+        let mut test_result = run_test();
+
+        let mut retry_count = self.context.settings().test().retry;
+
+        tracing::info!("Retrying test `{}` {} times", full_test_name, retry_count);
+
+        while retry_count > 0 {
+            if test_result.is_ok() {
+                break;
+            }
+            tracing::debug!("Retrying test `{}`", full_test_name);
+            retry_count -= 1;
+            test_result = run_test();
+        }
 
         let passed = match test_result {
             Ok(_) => {

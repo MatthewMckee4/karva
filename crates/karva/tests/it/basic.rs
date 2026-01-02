@@ -1701,3 +1701,33 @@ def test_2(y): pass
     ----- stderr -----
     ");
 }
+
+#[test]
+#[ignore = "Will fail unless `maturin build` is ran"]
+fn test_retry() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+a = 3
+
+def test_1():
+    global a
+    if a == 0:
+        assert True
+    else:
+        a -= 1
+        assert False
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry").arg("5"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_1 ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}

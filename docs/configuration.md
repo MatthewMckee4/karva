@@ -105,6 +105,23 @@ fail-fast = true
 
 ---
 
+### `retry`
+
+When set, we will retry failed tests up to this number of times.
+
+**Default value**: `0`
+
+**Type**: `u32`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.test]
+retry = 3
+```
+
+---
+
 ### `test-function-prefix`
 
 The prefix to use for test functions.
