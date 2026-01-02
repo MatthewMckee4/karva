@@ -17,6 +17,7 @@ confirm = true
 
 [changelog.section-labels]
 "Bug Fixes" = ["bug"]
+"Test Running" = ["test-running"]
 "Reporting" = ["reporting"]
 "Extensions" = ["extensions/fixtures", "extensions/tags"]
 "Configuration" = ["configuration"]
