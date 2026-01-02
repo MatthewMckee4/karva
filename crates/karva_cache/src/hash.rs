@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 
 /// A unique identifier for a test run
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct RunHash(String);
+pub struct RunHash {
+    timestamp: u128,
+}
 
 impl RunHash {
     pub fn current_time() -> Self {
@@ -14,20 +16,29 @@ impl RunHash {
             .expect("System time is before UNIX epoch")
             .as_millis();
 
-        Self(format!("run-{timestamp}"))
+        Self { timestamp }
     }
 
     pub fn from_existing(hash: &str) -> Self {
-        Self(hash.to_string())
+        let timestamp = hash
+            .strip_prefix("run-")
+            .unwrap_or(hash)
+            .parse()
+            .unwrap_or(0);
+        Self { timestamp }
     }
 
-    pub fn inner(&self) -> &str {
-        &self.0
+    pub fn inner(&self) -> String {
+        format!("run-{}", self.timestamp)
+    }
+
+    pub fn sort_key(&self) -> u128 {
+        self.timestamp
     }
 }
 
 impl fmt::Display for RunHash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.inner())
     }
 }

@@ -184,7 +184,9 @@ fn find_lightest_partition(partitions: &[Partition]) -> usize {
 fn compare_test_weights(a: &TestInfo, b: &TestInfo) -> std::cmp::Ordering {
     match (&a.duration, &b.duration) {
         (Some(dur_a), Some(dur_b)) => dur_b.cmp(dur_a),
-        (_, _) => b.body_length.cmp(&a.body_length),
+        (None, None) => b.body_length.cmp(&a.body_length),
+        (None, _) => std::cmp::Ordering::Greater,
+        (_, None) => std::cmp::Ordering::Less,
     }
 }
 

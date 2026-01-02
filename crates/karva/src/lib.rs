@@ -109,12 +109,6 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     let db = ProjectDatabase::new(project_metadata, system);
 
-    // Listen to Ctrl+C and abort
-    ctrlc::set_handler(move || {
-        #[allow(clippy::exit)]
-        std::process::exit(0);
-    })?;
-
     let num_workers = if no_parallel {
         1
     } else {

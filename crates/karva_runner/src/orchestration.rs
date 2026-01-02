@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
+use crossbeam_channel::{Receiver, TryRecvError, unbounded};
 use karva_cache::{
     AggregatedResults, CACHE_DIR, CacheReader, RunHash, reader::read_recent_durations,
 };
@@ -18,6 +19,7 @@ use karva_system::venv_binary;
 use crate::collection::ParallelCollector;
 use crate::partition::{Partition, partition_collected_tests};
 
+#[derive(Debug)]
 struct Worker {
     id: usize,
     child: Child,
@@ -38,7 +40,7 @@ impl Worker {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct WorkerManager {
     workers: Vec<Worker>,
 }
@@ -48,14 +50,33 @@ impl WorkerManager {
         self.workers.push(Worker::new(worker_id, child));
     }
 
-    fn wait_all(&mut self) -> usize {
+    /// Wait for all workers to complete.
+    /// Returns early if a message is received on `shutdown_rx`.
+    fn wait_all(&mut self, shutdown_rx: &Receiver<()>) -> usize {
         let num_workers = self.workers.len();
 
-        tracing::info!("All workers spawned, waiting for completion");
+        if num_workers == 0 {
+            return 0;
+        }
 
-        while !self.workers.is_empty() {
-            self.workers
-                .retain_mut(|worker| match worker.child.try_wait() {
+        tracing::info!(
+            "All {} workers spawned, waiting for completion (Ctrl+C to cancel)",
+            num_workers
+        );
+
+        loop {
+            // Check for shutdown signal (non-blocking)
+            match shutdown_rx.try_recv() {
+                Ok(()) | Err(TryRecvError::Disconnected) => {
+                    tracing::info!("Shutdown requested — stopping remaining workers");
+                    break;
+                }
+                Err(TryRecvError::Empty) => {} // continue polling
+            }
+
+            // Poll all children
+            self.workers.retain_mut(|worker| {
+                match worker.child.try_wait() {
                     Ok(Some(status)) => {
                         if status.success() {
                             tracing::info!(
@@ -65,17 +86,29 @@ impl WorkerManager {
                             );
                         } else {
                             tracing::error!(
-                                "Worker {} exited with non-zero status {} in {}",
+                                "Worker {} failed with exit code {} in {}",
                                 worker.id,
                                 status.code().unwrap_or(-1),
                                 format_duration(worker.duration()),
                             );
                         }
+                        false // remove
+                    }
+                    Ok(None) => true, // still running
+                    Err(e) => {
+                        tracing::error!("Error waiting on worker {}: {}", worker.id, e);
                         false
                     }
-                    Ok(None) => true,
-                    Err(_) => false,
-                });
+                }
+            });
+
+            if self.workers.is_empty() {
+                tracing::info!("All workers completed normally");
+                break;
+            }
+
+            // Avoid tight loop
+            std::thread::sleep(Duration::from_millis(50));
         }
 
         num_workers
@@ -203,7 +236,21 @@ pub fn run_parallel_tests(
 
     let mut worker_manager = spawn_workers(db, &partitions, &cache_dir, &run_hash, args, printer)?;
 
-    let num_workers = worker_manager.wait_all();
+    let (shutdown_tx, shutdown_rx) = unbounded();
+
+    ctrlc::set_handler(move || {
+        let _ = shutdown_tx.send(());
+    })
+    .expect("Error setting Ctrl+C handler");
+
+    let num_workers = worker_manager.wait_all(&shutdown_rx);
+
+    for worker in &mut worker_manager.workers {
+        let _ = worker.child.kill();
+    }
+    for worker in &mut worker_manager.workers {
+        let _ = worker.child.wait();
+    }
 
     let result = print_test_output(
         printer,
