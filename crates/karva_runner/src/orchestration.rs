@@ -1,16 +1,14 @@
-use std::fmt::Write;
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
-use crossbeam_channel::{Receiver, TryRecvError, unbounded};
+use crossbeam_channel::{Receiver, TryRecvError};
 use karva_cache::{
     AggregatedResults, CACHE_DIR, CacheReader, RunHash, reader::read_recent_durations,
 };
-use karva_cli::{OutputFormat, SubTestCommand};
+use karva_cli::SubTestCommand;
 use karva_collector::CollectionSettings;
-use karva_logging::Printer;
 use karva_metadata::ProjectSettings;
 use karva_project::{Db, ProjectDatabase};
 use karva_system::time::format_duration;
@@ -52,7 +50,7 @@ impl WorkerManager {
 
     /// Wait for all workers to complete.
     /// Returns early if a message is received on `shutdown_rx`.
-    fn wait_all(&mut self, shutdown_rx: &Receiver<()>) -> usize {
+    fn wait_all(&mut self, shutdown_rx: Option<&Receiver<()>>) -> usize {
         let num_workers = self.workers.len();
 
         if num_workers == 0 {
@@ -66,12 +64,14 @@ impl WorkerManager {
 
         loop {
             // Check for shutdown signal (non-blocking)
-            match shutdown_rx.try_recv() {
-                Ok(()) | Err(TryRecvError::Disconnected) => {
-                    tracing::info!("Shutdown requested — stopping remaining workers");
-                    break;
+            if let Some(rx) = shutdown_rx {
+                match rx.try_recv() {
+                    Ok(()) | Err(TryRecvError::Disconnected) => {
+                        tracing::info!("Shutdown requested — stopping remaining workers");
+                        break;
+                    }
+                    Err(TryRecvError::Empty) => {} // continue polling
                 }
-                Err(TryRecvError::Empty) => {} // continue polling
             }
 
             // Poll all children
@@ -129,7 +129,6 @@ fn spawn_workers(
     cache_dir: &Utf8PathBuf,
     run_hash: &RunHash,
     args: &SubTestCommand,
-    printer: Printer,
 ) -> Result<WorkerManager> {
     let core_binary = find_karva_core_binary(&db.system().current_directory().to_path_buf())?;
     let mut worker_manager = WorkerManager::default();
@@ -158,8 +157,8 @@ fn spawn_workers(
         cmd.args(inner_cli_args(db.project().settings(), args));
 
         let child = cmd
-            .stdout(printer.stream_for_details())
-            .stderr(printer.stream_for_details())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
             .spawn()
             .context("Failed to spawn karva_core worker process")?;
 
@@ -179,10 +178,8 @@ pub fn run_parallel_tests(
     db: &ProjectDatabase,
     config: &ParallelTestConfig,
     args: &SubTestCommand,
-    printer: Printer,
-) -> Result<bool> {
-    let start_time = std::time::Instant::now();
-
+    shutdown_rx: Option<&Receiver<()>>,
+) -> Result<AggregatedResults> {
     let mut test_paths = Vec::new();
 
     for path in db.project().test_paths() {
@@ -234,16 +231,9 @@ pub fn run_parallel_tests(
 
     tracing::info!("Attempting to spawn {} workers", partitions.len());
 
-    let mut worker_manager = spawn_workers(db, &partitions, &cache_dir, &run_hash, args, printer)?;
+    let mut worker_manager = spawn_workers(db, &partitions, &cache_dir, &run_hash, args)?;
 
-    let (shutdown_tx, shutdown_rx) = unbounded();
-
-    ctrlc::set_handler(move || {
-        let _ = shutdown_tx.send(());
-    })
-    .expect("Error setting Ctrl+C handler");
-
-    let num_workers = worker_manager.wait_all(&shutdown_rx);
+    let num_workers = worker_manager.wait_all(shutdown_rx);
 
     for worker in &mut worker_manager.workers {
         let _ = worker.child.kill();
@@ -252,16 +242,10 @@ pub fn run_parallel_tests(
         let _ = worker.child.wait();
     }
 
-    let result = print_test_output(
-        printer,
-        start_time,
-        &cache_dir,
-        &run_hash,
-        num_workers,
-        args.output_format.as_ref(),
-    )?;
+    let reader = CacheReader::new(&cache_dir, &run_hash, num_workers)?;
+    let result = reader.aggregate_results()?;
 
-    Ok(result.stats.is_success() && result.discovery_diagnostics.is_empty())
+    Ok(result)
 }
 
 const KARVA_CORE_BINARY_NAME: &str = "karva-core";
@@ -284,63 +268,6 @@ fn find_karva_core_binary(current_dir: &Utf8PathBuf) -> Result<Utf8PathBuf> {
     }
 
     anyhow::bail!("Could not find karva_core binary")
-}
-
-/// Print test output
-fn print_test_output(
-    printer: Printer,
-    start_time: Instant,
-    cache_dir: &Utf8PathBuf,
-    run_hash: &RunHash,
-    num_workers: usize,
-    output_format: Option<&OutputFormat>,
-) -> Result<AggregatedResults> {
-    let reader = CacheReader::new(cache_dir, run_hash, num_workers)?;
-    let result = reader.aggregate_results()?;
-
-    let mut stdout = printer.stream_for_details().lock();
-
-    let is_concise = matches!(output_format, Some(OutputFormat::Concise));
-
-    if (!result.diagnostics.is_empty() || !result.discovery_diagnostics.is_empty())
-        && result.stats.total() > 0
-        && stdout.is_enabled()
-    {
-        writeln!(stdout)?;
-    }
-
-    if !result.discovery_diagnostics.is_empty() {
-        writeln!(stdout, "discovery diagnostics:")?;
-        writeln!(stdout)?;
-        write!(stdout, "{}", result.discovery_diagnostics)?;
-
-        if is_concise {
-            writeln!(stdout)?;
-        }
-    }
-
-    if !result.diagnostics.is_empty() {
-        writeln!(stdout, "diagnostics:")?;
-        writeln!(stdout)?;
-        write!(stdout, "{}", result.diagnostics)?;
-
-        if is_concise {
-            writeln!(stdout)?;
-        }
-    }
-
-    if (result.diagnostics.is_empty() && result.discovery_diagnostics.is_empty())
-        && result.stats.total() > 0
-        && stdout.is_enabled()
-    {
-        writeln!(stdout)?;
-    }
-
-    let mut result_stdout = printer.stream_for_failure_summary().lock();
-
-    write!(result_stdout, "{}", result.stats.display(start_time))?;
-
-    Ok(result)
 }
 
 fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<String> {

@@ -2,18 +2,19 @@ use std::ffi::OsString;
 use std::fmt::Write;
 use std::io::{self};
 use std::process::{ExitCode, Termination};
+use std::time::Instant;
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
+use karva_cache::AggregatedResults;
+use karva_cli::{Args, Command, OutputFormat, TestCommand};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::{ProjectMetadata, ProjectOptionsOverrides};
 use karva_project::ProjectDatabase;
 use karva_python_semantic::current_python_version;
 use karva_system::{OsSystem, System, path::absolute};
-
-use karva_cli::{Args, Command, TestCommand};
 
 mod version;
 
@@ -117,13 +118,81 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     let config = karva_runner::ParallelTestConfig { num_workers };
 
-    let result = karva_runner::run_parallel_tests(&db, &config, &sub_command, printer)?;
+    let (shutdown_tx, shutdown_rx) = crossbeam_channel::unbounded();
 
-    if result {
+    ctrlc::set_handler(move || {
+        let _ = shutdown_tx.send(());
+    })
+    .expect("Error setting Ctrl+C handler");
+
+    let start_time = Instant::now();
+
+    let result = karva_runner::run_parallel_tests(&db, &config, &sub_command, Some(&shutdown_rx))?;
+
+    print_test_output(
+        printer,
+        start_time,
+        &result,
+        sub_command.output_format.as_ref(),
+    )?;
+
+    if result.stats.is_success() && result.discovery_diagnostics.is_empty() {
         Ok(ExitStatus::Success)
     } else {
         Ok(ExitStatus::Failure)
     }
+}
+
+/// Print test output
+fn print_test_output(
+    printer: Printer,
+    start_time: Instant,
+    result: &AggregatedResults,
+    output_format: Option<&OutputFormat>,
+) -> Result<()> {
+    let mut stdout = printer.stream_for_details().lock();
+
+    let is_concise = matches!(output_format, Some(OutputFormat::Concise));
+
+    if (!result.diagnostics.is_empty() || !result.discovery_diagnostics.is_empty())
+        && result.stats.total() > 0
+        && stdout.is_enabled()
+    {
+        writeln!(stdout)?;
+    }
+
+    if !result.discovery_diagnostics.is_empty() {
+        writeln!(stdout, "discovery diagnostics:")?;
+        writeln!(stdout)?;
+        write!(stdout, "{}", result.discovery_diagnostics)?;
+
+        if is_concise {
+            writeln!(stdout)?;
+        }
+    }
+
+    if !result.diagnostics.is_empty() {
+        writeln!(stdout, "diagnostics:")?;
+        writeln!(stdout)?;
+        write!(stdout, "{}", result.diagnostics)?;
+
+        if is_concise {
+            writeln!(stdout)?;
+        }
+    }
+
+    if (result.diagnostics.is_empty() && result.discovery_diagnostics.is_empty())
+        && result.stats.total() > 0
+        && stdout.is_enabled()
+    {
+        writeln!(stdout)?;
+    }
+
+    let mut result_stdout = printer.stream_for_failure_summary().lock();
+
+    write!(result_stdout, "{}", result.stats.display(start_time))?;
+
+    Ok(())
 }
 
 #[derive(Copy, Clone)]

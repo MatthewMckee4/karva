@@ -13,7 +13,6 @@ fn get_parametrize_function(framework: &str) -> &str {
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
@@ -50,7 +49,6 @@ fn test_parametrized_fixture(#[values("pytest", "karva")] framework: &str) {
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_in_conftest(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_files([
         (
@@ -92,7 +90,6 @@ fn test_parametrized_fixture_in_conftest(#[values("pytest", "karva")] framework:
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_module_scope(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_files([
         (
@@ -138,7 +135,6 @@ fn test_parametrized_fixture_module_scope(#[values("pytest", "karva")] framework
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_with_generator(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
@@ -187,7 +183,6 @@ fn test_parametrized_fixture_with_generator(#[values("pytest", "karva")] framewo
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_session_scope(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_files([
         (
@@ -238,7 +233,6 @@ fn test_parametrized_fixture_session_scope(#[values("pytest", "karva")] framewor
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_with_multiple_params(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
@@ -279,7 +273,6 @@ fn test_parametrized_fixture_with_multiple_params(#[values("pytest", "karva")] f
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_with_regular_parametrize(
     #[values("pytest", "karva")] framework: &str,
 ) {
@@ -320,7 +313,6 @@ fn test_parametrized_fixture_with_regular_parametrize(
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_generator_fixture_finalizer_order(
     #[values("pytest", "karva")] framework: &str,
 ) {
@@ -372,7 +364,6 @@ fn test_parametrized_generator_fixture_finalizer_order(
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_package_scope(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_files([
         (
@@ -417,7 +408,6 @@ fn test_parametrized_fixture_package_scope(#[values("pytest", "karva")] framewor
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_with_dependency(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
@@ -455,7 +445,6 @@ fn test_parametrized_fixture_with_dependency(#[values("pytest", "karva")] framew
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrized_fixture_finalizer_with_state(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
@@ -498,7 +487,6 @@ fn test_parametrized_fixture_finalizer_with_state(#[values("pytest", "karva")] f
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_pytest_param() {
     let context = TestContext::with_file(
         "test.py",
@@ -537,7 +525,6 @@ fn test_pytest_param() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_karva_param() {
     let context = TestContext::with_file(
         "test.py",
@@ -576,7 +563,6 @@ fn test_karva_param() {
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_complex_parametrized_generator_fixture_finalizer_order(
     #[values("pytest", "karva")] framework: &str,
 ) {

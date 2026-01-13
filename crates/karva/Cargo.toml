@@ -16,6 +16,7 @@ name = "karva"
 path = "src/main.rs"
 
 [dependencies]
+karva_cache = { workspace = true }
 karva_cli = { workspace = true }
 karva_logging = { workspace = true }
 karva_metadata = { workspace = true }
@@ -29,6 +30,8 @@ argfile = { workspace = true }
 camino = { workspace = true }
 clap = { workspace = true, features = ["wrap_help", "string", "env"] }
 colored = { workspace = true }
+crossbeam-channel = { workspace = true }
+ctrlc = { workspace = true }
 tracing = { workspace = true, features = ["release_max_level_debug"] }
 wild = { workspace = true }
 

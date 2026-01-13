@@ -13,7 +13,6 @@ fn get_auto_use_kw(framework: &str) -> &str {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
  {
     let context = TestContext::with_files([
@@ -50,7 +49,6 @@ def z(x, y):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_runner_given_nested_path() {
     let context = TestContext::with_files([
         (
@@ -78,7 +76,6 @@ def x():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_with_name_parameter() {
     let context = TestContext::with_file(
         "test.py",
@@ -106,7 +103,6 @@ def test_fixture_with_name_parameter(fixture_name):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_is_different_in_different_functions() {
     let context = TestContext::with_file(
         "test.py",
@@ -144,7 +140,6 @@ def test_fixture_2(fixture):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_from_current_package_session_scope() {
     let context = TestContext::with_files([
         (
@@ -173,7 +168,6 @@ def x():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_from_current_package_function_scope() {
     let context = TestContext::with_files([
         (
@@ -201,7 +195,6 @@ def x():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_finalizer_from_current_package_session_scope() {
     let context = TestContext::with_files([
         (
@@ -245,7 +238,6 @@ def test_2(x):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_finalizer_from_current_package_function_scope() {
     let context = TestContext::with_files([
         (
@@ -289,7 +281,6 @@ def test_2(x):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_discover_pytest_fixture() {
     let context = TestContext::with_files([
         (
@@ -318,7 +309,6 @@ def x():
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_dynamic_fixture_scope_session_scope(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
@@ -362,7 +352,6 @@ def test_2(x_session):
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_dynamic_fixture_scope_function_scope(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
@@ -406,7 +395,6 @@ def test_2(x_function):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_override_in_test_modules() {
     let context = TestContext::with_files([
         (
@@ -458,7 +446,6 @@ def test_username(username):
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
@@ -521,7 +508,6 @@ fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &st
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
@@ -561,7 +547,6 @@ fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
@@ -601,7 +586,6 @@ fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &st
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_depends_on_fixture_with_finalizer() {
     let context = TestContext::with_file(
         "test_file.py",

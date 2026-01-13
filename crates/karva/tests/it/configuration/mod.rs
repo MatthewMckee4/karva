@@ -3,7 +3,6 @@ use insta_cmd::assert_cmd_snapshot;
 use crate::common::TestContext;
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_src_respect_ignore_files_false() {
     let context = TestContext::with_files([
         (
@@ -40,7 +39,6 @@ def test_main(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_src_respect_ignore_files_true() {
     let context = TestContext::with_files([
         (
@@ -79,7 +77,6 @@ def test_main(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_src_include_paths() {
     let context = TestContext::with_files([
         (
@@ -121,7 +118,6 @@ def test_in_other(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_src_include_single_file() {
     let context = TestContext::with_files([
         (
@@ -159,7 +155,6 @@ def test_other(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_terminal_output_format_concise() {
     let context = TestContext::with_files([
         (
@@ -190,7 +185,6 @@ def test_example(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_terminal_output_format_full() {
     let context = TestContext::with_files([
         (
@@ -221,7 +215,6 @@ def test_example(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_terminal_show_python_output_false() {
     let context = TestContext::with_files([
         (
@@ -255,7 +248,6 @@ def test_with_print():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_terminal_show_python_output_true() {
     let context = TestContext::with_files([
         (
@@ -290,7 +282,6 @@ def test_with_print():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_test_function_prefix_custom() {
     let context = TestContext::with_files([
         (
@@ -323,7 +314,6 @@ def test_should_not_run(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_test_function_prefix_default() {
     let context = TestContext::with_files([
         (
@@ -356,7 +346,6 @@ def check_should_not_run(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fail_fast_true() {
     let context = TestContext::with_files([
         (
@@ -411,7 +400,6 @@ def test_second():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fail_fast_false() {
     let context = TestContext::with_files([
         (
@@ -488,7 +476,6 @@ def test_third():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_combined_all_options() {
     let context = TestContext::with_files([
         (
@@ -537,7 +524,6 @@ def check_other(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_combined_src_and_test_options() {
     let context = TestContext::with_files([
         (
@@ -579,7 +565,6 @@ def verify_in_tests(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_pyproject_src_options() {
     let context = TestContext::with_files([
         (
@@ -626,7 +611,6 @@ def test_other(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_pyproject_terminal_options() {
     let context = TestContext::with_files([
         (
@@ -663,7 +647,6 @@ def test_example():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_pyproject_test_options() {
     let context = TestContext::with_files([
         (
@@ -699,7 +682,6 @@ def test_should_not_run(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_pyproject_all_options() {
     let context = TestContext::with_files([
         (
@@ -755,7 +737,6 @@ def it_should_not_run(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_karva_toml_takes_precedence_over_pyproject() {
     let context = TestContext::with_files([
         (
@@ -799,7 +780,6 @@ def pyproject_test(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_empty_config() {
     let context = TestContext::with_files([
         ("karva.toml", ""),
@@ -825,7 +805,6 @@ def test_default(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_partial_config() {
     let context = TestContext::with_files([
         (
@@ -857,7 +836,6 @@ def custom_test(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_test_prefix_overrides_config() {
     let context = TestContext::with_files([
         (
@@ -890,7 +868,6 @@ def cli_should_run(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_output_format_overrides_config() {
     let context = TestContext::with_files([
         (
@@ -922,7 +899,6 @@ def test_example(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_show_output_overrides_config() {
     let context = TestContext::with_files([
         (
@@ -957,7 +933,6 @@ def test_with_print():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_no_ignore_overrides_config() {
     let context = TestContext::with_files([
         (
@@ -994,7 +969,6 @@ def test_main(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_fail_fast_overrides_config() {
     let context = TestContext::with_files([
         (
@@ -1049,7 +1023,6 @@ def test_second():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_paths_override_config_include() {
     let context = TestContext::with_files([
         (
@@ -1085,7 +1058,6 @@ def test_from_cli(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_multiple_arguments_override_config() {
     let context = TestContext::with_files([
         (
@@ -1147,7 +1119,6 @@ def config_should_not_run(): pass
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_overrides_pyproject_toml() {
     let context = TestContext::with_files([
         (
@@ -1198,7 +1169,6 @@ def cli_should_run():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_cli_overrides_both_config_files() {
     let context = TestContext::with_files([
         (

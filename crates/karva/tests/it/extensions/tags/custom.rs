@@ -3,7 +3,6 @@ use insta_cmd::assert_cmd_snapshot;
 use crate::common::TestContext;
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_custom_tag_basic() {
     let context = TestContext::with_file(
         "test.py",
@@ -29,7 +28,6 @@ def test_1():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_custom_tag_with_args() {
     let context = TestContext::with_file(
         "test.py",
@@ -55,7 +53,6 @@ def test_1():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_custom_tag_with_kwargs() {
     let context = TestContext::with_file(
         "test.py",
@@ -81,7 +78,6 @@ def test_1():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_custom_tag_with_mixed_args_and_kwargs() {
     let context = TestContext::with_file(
         "test.py",
@@ -107,7 +103,6 @@ def test_1():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_multiple_custom_tags() {
     let context = TestContext::with_file(
         "test.py",
@@ -135,7 +130,6 @@ def test_1():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_custom_tags_combined_with_builtin_tags() {
     let context = TestContext::with_file(
         "test.py",

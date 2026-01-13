@@ -13,7 +13,6 @@ fn get_parametrize_function(framework: &str) -> &str {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_with_fixture() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -45,7 +44,6 @@ def test_parametrize_with_fixture(a, fixture_value):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_with_fixture_parametrize_priority() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -75,7 +73,6 @@ def test_parametrize_with_fixture(a):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_two_decorators() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -104,7 +101,6 @@ def test_function(a: int, b: int):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_three_decorators() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -139,7 +135,6 @@ def test_function(a: int, b: int, c: int):
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_multiple_args_single_string(#[values("pytest", "karva")] framework: &str) {
     let test_context = TestContext::with_file(
         "test.py",
@@ -175,7 +170,6 @@ fn test_parametrize_multiple_args_single_string(#[values("pytest", "karva")] fra
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_with_pytest_param_single_arg() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -207,7 +201,6 @@ def test_single_arg(a):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_with_pytest_param_multiple_args() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -239,7 +232,6 @@ def test_square(input, expected):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_with_pytest_param_list_args() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -271,7 +263,6 @@ def test_square(input, expected):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_with_mixed_pytest_param_and_tuples() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -303,7 +294,6 @@ def test_square(input, expected):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_with_list_inside_param() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -341,7 +331,6 @@ def test_markup_mode_bullets_single_newline(length: int | None, nums: list[int])
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_with_pytest_param_and_skip() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -373,7 +362,6 @@ def test_square(input, expected):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_with_karva_param_single_arg() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -405,7 +393,6 @@ def test_single_arg(a):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_with_karva_param_multiple_args() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -437,7 +424,6 @@ def test_square(input, expected):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_with_karva_param_list_args() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -469,7 +455,6 @@ def test_square(input, expected):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_with_mixed_karva_param_and_tuples() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -501,7 +486,6 @@ def test_square(input, expected):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_with_karva_list_inside_param() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -539,7 +523,6 @@ def test_markup_mode_bullets_single_newline(length: int | None, nums: list[int])
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_with_karva_param_and_skip() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -575,7 +558,6 @@ def test_square(input, expected):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parametrize_kwargs() {
     let test_context = TestContext::with_file(
         "test.py",

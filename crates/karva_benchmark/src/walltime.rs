@@ -3,7 +3,6 @@ use std::sync::Once;
 use divan::Bencher;
 use karva_cli::SubTestCommand;
 use karva_core::testing::setup_module;
-use karva_logging::{Printer, VerbosityLevel};
 use karva_metadata::{Options, ProjectMetadata, SrcOptions, TestOptions};
 use karva_project::ProjectDatabase;
 use karva_projects::{InstalledProject, RealWorldProject};
@@ -58,8 +57,6 @@ impl<'a> ProjectBenchmark<'a> {
 }
 
 fn test_project(project: &ProjectDatabase) {
-    let printer = Printer::new(VerbosityLevel::Quiet, true);
-
     let num_workers = karva_system::max_parallelism().get();
 
     let config = karva_runner::ParallelTestConfig { num_workers };
@@ -71,7 +68,7 @@ fn test_project(project: &ProjectDatabase) {
         ..SubTestCommand::default()
     };
 
-    karva_runner::run_parallel_tests(project, &config, &args, printer).unwrap();
+    karva_runner::run_parallel_tests(project, &config, &args, None).unwrap();
 }
 
 pub fn bench_project(bencher: Bencher, benchmark: &ProjectBenchmark) {
