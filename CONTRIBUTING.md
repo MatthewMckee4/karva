@@ -59,7 +59,7 @@ If you want to run the cli tests, you need to build a wheel file, so you need to
 
 ```bash
 maturin build
-cargo test -- --include-ignored
+cargo test
 ```
 
 ### Documentation

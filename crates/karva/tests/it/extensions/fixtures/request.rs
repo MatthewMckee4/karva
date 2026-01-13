@@ -5,7 +5,6 @@ use rstest::rstest;
 use crate::common::TestContext;
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request(#[values("pytest", "karva")] framework: &str) {
     let test_context = TestContext::with_file(
         "test.py",
@@ -42,7 +41,6 @@ fn test_fixture_request(#[values("pytest", "karva")] framework: &str) {
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_exists(#[values("pytest", "karva")] framework: &str) {
     let test_context = TestContext::with_file(
         "test.py",
@@ -78,7 +76,6 @@ fn test_fixture_request_node_exists(#[values("pytest", "karva")] framework: &str
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_name(#[values("pytest", "karva")] framework: &str) {
     let test_context = TestContext::with_file(
         "test.py",
@@ -114,7 +111,6 @@ fn test_fixture_request_node_name(#[values("pytest", "karva")] framework: &str) 
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_autouse(#[values("pytest", "karva")] framework: &str) {
     // pytest uses 'autouse', karva uses 'auto_use'
     let autouse_param = if framework == "pytest" {
@@ -158,7 +154,6 @@ fn test_fixture_request_node_autouse(#[values("pytest", "karva")] framework: &st
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_name_module_scope(#[values("karva")] framework: &str) {
     let test_context = TestContext::with_file(
         "test.py",
@@ -197,7 +192,6 @@ fn test_fixture_request_node_name_module_scope(#[values("karva")] framework: &st
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_name_with_parametrize() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -231,7 +225,6 @@ fn test_fixture_request_node_name_with_parametrize() {
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_name_nested_fixtures(#[values("pytest", "karva")] framework: &str) {
     let test_context = TestContext::with_file(
         "test.py",
@@ -273,7 +266,6 @@ fn test_fixture_request_node_name_nested_fixtures(#[values("pytest", "karva")] f
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_get_closest_marker_skip() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -307,7 +299,6 @@ fn test_fixture_request_node_get_closest_marker_skip() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_get_closest_marker_not_found() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -339,7 +330,6 @@ fn test_fixture_request_node_get_closest_marker_not_found() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_get_closest_tag() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -372,7 +362,6 @@ fn test_fixture_request_node_get_closest_tag() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_with_parametrize() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -409,7 +398,6 @@ fn test_fixture_request_node_with_parametrize() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_with_custom_marker() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -444,7 +432,6 @@ fn test_fixture_request_node_with_custom_marker() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_multiple_markers() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -482,7 +469,6 @@ fn test_fixture_request_node_multiple_markers() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_pytest_custom_marker() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -517,7 +503,6 @@ fn test_fixture_request_node_pytest_custom_marker() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_karva_custom_tag() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -553,7 +538,6 @@ fn test_fixture_request_node_karva_custom_tag() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_karva_custom_tag_no_args() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -589,7 +573,6 @@ fn test_fixture_request_node_karva_custom_tag_no_args() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_multiple_custom_markers() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -630,7 +613,6 @@ fn test_fixture_request_node_multiple_custom_markers() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_karva_multiple_custom_tags() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -679,7 +661,6 @@ fn test_fixture_request_node_karva_multiple_custom_tags() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_request_node_no_args_custom_marker() {
     let test_context = TestContext::with_file(
         "test.py",

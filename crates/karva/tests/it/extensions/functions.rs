@@ -5,7 +5,6 @@ use rstest::rstest;
 use crate::common::TestContext;
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fail_function() {
     let context = TestContext::with_file(
         "test.py",
@@ -98,7 +97,6 @@ def test_with_fail_with_keyword_reason():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fail_function_conditional() {
     let context = TestContext::with_file(
         "test.py",
@@ -149,7 +147,6 @@ def test_conditional_fail():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fail_error_exception() {
     let context = TestContext::with_file(
         "test.py",
@@ -194,7 +191,6 @@ def test_raise_fail_error():
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_runtime_skip_pytest(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
@@ -236,7 +232,6 @@ def test_conditional_skip():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_mixed_skip_and_pass() {
     let context = TestContext::with_file(
         "test.py",
@@ -270,7 +265,6 @@ def test_another_pass():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_skip_error_exception() {
     let context = TestContext::with_file(
         "test.py",

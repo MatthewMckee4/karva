@@ -13,7 +13,6 @@ fn get_auto_use_kw(framework: &str) -> &str {
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_function_scope_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
@@ -56,7 +55,6 @@ def test_something_else():
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_scope_auto_use_fixture(
     #[values("pytest", "karva")] framework: &str,
     #[values("module", "package", "session")] scope: &str,
@@ -101,7 +99,6 @@ def test_something_else():
 }
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
@@ -147,7 +144,6 @@ fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
     }
 }
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_auto_use_fixture_in_parent_module() {
     let context = TestContext::with_files([
         (
@@ -192,7 +188,6 @@ fn test_auto_use_fixture_in_parent_module() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_auto_use_fixture_setup_failure() {
     let context = TestContext::with_file(
         "test.py",
@@ -225,7 +220,6 @@ def test_something_else():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_auto_use_fixture_teardown_failure() {
     let context = TestContext::with_file(
         "test.py",
@@ -270,7 +264,6 @@ def test_something():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_auto_use_fixture_with_failing_dependency() {
     let context = TestContext::with_file(
         "test.py",
@@ -303,7 +296,6 @@ def test_something():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_scoped_auto_use_fixture_setup_failure() {
     let context = TestContext::with_file(
         "test.py",

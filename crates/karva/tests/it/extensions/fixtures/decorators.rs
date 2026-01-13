@@ -3,7 +3,6 @@ use insta_cmd::assert_cmd_snapshot;
 use crate::common::TestContext;
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixtures_given_by_decorator() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -37,7 +36,6 @@ def test_fixtures_given_by_decorator(a):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixtures_given_by_decorator_and_fixture() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -77,7 +75,6 @@ def test_func(a, b):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixtures_given_by_decorator_and_parametrize() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -115,7 +112,6 @@ def test_func(a, b):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixtures_given_by_decorator_and_parametrize_and_fixture() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -158,7 +154,6 @@ def test_func(a, b, c):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixtures_given_by_decorator_one_missing() {
     let test_context = TestContext::with_file(
         "test.py",

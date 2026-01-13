@@ -5,7 +5,6 @@ use rstest::rstest;
 use crate::common::TestContext;
 
 #[rstest]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_temp_directory_fixture(
     #[values("tmp_path", "temp_path", "temp_dir", "tmpdir")] fixture_name: &str,
 ) {
@@ -37,7 +36,6 @@ fn test_temp_directory_fixture(
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_setattr() {
     let context = TestContext::with_file(
         "test.py",
@@ -84,7 +82,6 @@ def test_setattr_undo(monkeypatch):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_setitem() {
     let context = TestContext::with_file(
         "test.py",
@@ -124,7 +121,6 @@ def test_setitem_undo(monkeypatch):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_env() {
     let context = TestContext::with_file(
         "test.py",
@@ -166,7 +162,6 @@ def test_delenv(monkeypatch):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_syspath() {
     let context = TestContext::with_file(
         "test.py",
@@ -205,7 +200,6 @@ def test_syspath_prepend_multiple(monkeypatch):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_delattr() {
     let context = TestContext::with_file(
         "test.py",
@@ -242,7 +236,6 @@ def test_delattr_undo(monkeypatch):
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_monkeypatch_context_manager() {
     let context = TestContext::with_file(
         "test.py",
@@ -284,7 +277,6 @@ def test_context_manager_auto_undo():
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_finalizer() {
     let context = TestContext::with_file(
         "test.py",
@@ -315,7 +307,6 @@ def test_1():
 
 /// Taken from <https://github.com/pytest-dev/pytest/blob/main/testing/test_monkeypatch.py>
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_mock_env() {
     let context = TestContext::with_file(
         "test.py",
