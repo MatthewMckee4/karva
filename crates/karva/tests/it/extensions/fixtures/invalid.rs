@@ -3,7 +3,6 @@ use insta_cmd::assert_cmd_snapshot;
 use crate::common::TestContext;
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_invalid_pytest_fixture_scope() {
     let context = TestContext::with_file(
         "test.py",
@@ -58,7 +57,6 @@ fn test_invalid_pytest_fixture_scope() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_missing_fixture() {
     let context = TestContext::with_file(
         "test.py",
@@ -95,7 +93,6 @@ fn test_missing_fixture() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_fails_to_run() {
     let context = TestContext::with_file(
         "test.py",
@@ -148,7 +145,6 @@ fn test_fixture_fails_to_run() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_missing_fixtures() {
     let context = TestContext::with_file(
         "test.py",
@@ -191,7 +187,6 @@ fn test_fixture_missing_fixtures() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn missing_arguments_in_nested_function() {
     let context = TestContext::with_file(
         "test.py",
@@ -237,7 +232,6 @@ fn missing_arguments_in_nested_function() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_failing_yield_fixture() {
     let context = TestContext::with_file(
         "test.py",
@@ -291,7 +285,6 @@ fn test_failing_yield_fixture() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_generator_two_yields() {
     let context = TestContext::with_file(
         "test.py",
@@ -334,7 +327,6 @@ fn test_fixture_generator_two_yields() {
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_fixture_generator_fail_in_teardown() {
     let context = TestContext::with_file(
         "test.py",

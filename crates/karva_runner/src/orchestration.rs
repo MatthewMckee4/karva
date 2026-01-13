@@ -1,15 +1,14 @@
-use std::fmt::Write;
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
+use crossbeam_channel::{Receiver, TryRecvError};
 use karva_cache::{
     AggregatedResults, CACHE_DIR, CacheReader, RunHash, reader::read_recent_durations,
 };
-use karva_cli::{OutputFormat, SubTestCommand};
+use karva_cli::SubTestCommand;
 use karva_collector::CollectionSettings;
-use karva_logging::Printer;
 use karva_metadata::ProjectSettings;
 use karva_project::{Db, ProjectDatabase};
 use karva_system::time::format_duration;
@@ -18,6 +17,7 @@ use karva_system::venv_binary;
 use crate::collection::ParallelCollector;
 use crate::partition::{Partition, partition_collected_tests};
 
+#[derive(Debug)]
 struct Worker {
     id: usize,
     child: Child,
@@ -38,7 +38,7 @@ impl Worker {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct WorkerManager {
     workers: Vec<Worker>,
 }
@@ -48,14 +48,35 @@ impl WorkerManager {
         self.workers.push(Worker::new(worker_id, child));
     }
 
-    fn wait_all(&mut self) -> usize {
+    /// Wait for all workers to complete.
+    /// Returns early if a message is received on `shutdown_rx`.
+    fn wait_all(&mut self, shutdown_rx: Option<&Receiver<()>>) -> usize {
         let num_workers = self.workers.len();
 
-        tracing::info!("All workers spawned, waiting for completion");
+        if num_workers == 0 {
+            return 0;
+        }
 
-        while !self.workers.is_empty() {
-            self.workers
-                .retain_mut(|worker| match worker.child.try_wait() {
+        tracing::info!(
+            "All {} workers spawned, waiting for completion (Ctrl+C to cancel)",
+            num_workers
+        );
+
+        loop {
+            // Check for shutdown signal (non-blocking)
+            if let Some(rx) = shutdown_rx {
+                match rx.try_recv() {
+                    Ok(()) | Err(TryRecvError::Disconnected) => {
+                        tracing::info!("Shutdown requested — stopping remaining workers");
+                        break;
+                    }
+                    Err(TryRecvError::Empty) => {} // continue polling
+                }
+            }
+
+            // Poll all children
+            self.workers.retain_mut(|worker| {
+                match worker.child.try_wait() {
                     Ok(Some(status)) => {
                         if status.success() {
                             tracing::info!(
@@ -65,17 +86,29 @@ impl WorkerManager {
                             );
                         } else {
                             tracing::error!(
-                                "Worker {} exited with non-zero status {} in {}",
+                                "Worker {} failed with exit code {} in {}",
                                 worker.id,
                                 status.code().unwrap_or(-1),
                                 format_duration(worker.duration()),
                             );
                         }
+                        false // remove
+                    }
+                    Ok(None) => true, // still running
+                    Err(e) => {
+                        tracing::error!("Error waiting on worker {}: {}", worker.id, e);
                         false
                     }
-                    Ok(None) => true,
-                    Err(_) => false,
-                });
+                }
+            });
+
+            if self.workers.is_empty() {
+                tracing::info!("All workers completed normally");
+                break;
+            }
+
+            // Avoid tight loop
+            std::thread::sleep(Duration::from_millis(50));
         }
 
         num_workers
@@ -96,7 +129,6 @@ fn spawn_workers(
     cache_dir: &Utf8PathBuf,
     run_hash: &RunHash,
     args: &SubTestCommand,
-    printer: Printer,
 ) -> Result<WorkerManager> {
     let core_binary = find_karva_core_binary(&db.system().current_directory().to_path_buf())?;
     let mut worker_manager = WorkerManager::default();
@@ -125,8 +157,8 @@ fn spawn_workers(
         cmd.args(inner_cli_args(db.project().settings(), args));
 
         let child = cmd
-            .stdout(printer.stream_for_details())
-            .stderr(printer.stream_for_details())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
             .spawn()
             .context("Failed to spawn karva_core worker process")?;
 
@@ -146,10 +178,8 @@ pub fn run_parallel_tests(
     db: &ProjectDatabase,
     config: &ParallelTestConfig,
     args: &SubTestCommand,
-    printer: Printer,
-) -> Result<bool> {
-    let start_time = std::time::Instant::now();
-
+    shutdown_rx: Option<&Receiver<()>>,
+) -> Result<AggregatedResults> {
     let mut test_paths = Vec::new();
 
     for path in db.project().test_paths() {
@@ -201,20 +231,21 @@ pub fn run_parallel_tests(
 
     tracing::info!("Attempting to spawn {} workers", partitions.len());
 
-    let mut worker_manager = spawn_workers(db, &partitions, &cache_dir, &run_hash, args, printer)?;
+    let mut worker_manager = spawn_workers(db, &partitions, &cache_dir, &run_hash, args)?;
 
-    let num_workers = worker_manager.wait_all();
+    let num_workers = worker_manager.wait_all(shutdown_rx);
 
-    let result = print_test_output(
-        printer,
-        start_time,
-        &cache_dir,
-        &run_hash,
-        num_workers,
-        args.output_format.as_ref(),
-    )?;
+    for worker in &mut worker_manager.workers {
+        let _ = worker.child.kill();
+    }
+    for worker in &mut worker_manager.workers {
+        let _ = worker.child.wait();
+    }
 
-    Ok(result.stats.is_success() && result.discovery_diagnostics.is_empty())
+    let reader = CacheReader::new(&cache_dir, &run_hash, num_workers)?;
+    let result = reader.aggregate_results()?;
+
+    Ok(result)
 }
 
 const KARVA_CORE_BINARY_NAME: &str = "karva-core";
@@ -237,63 +268,6 @@ fn find_karva_core_binary(current_dir: &Utf8PathBuf) -> Result<Utf8PathBuf> {
     }
 
     anyhow::bail!("Could not find karva_core binary")
-}
-
-/// Print test output
-fn print_test_output(
-    printer: Printer,
-    start_time: Instant,
-    cache_dir: &Utf8PathBuf,
-    run_hash: &RunHash,
-    num_workers: usize,
-    output_format: Option<&OutputFormat>,
-) -> Result<AggregatedResults> {
-    let reader = CacheReader::new(cache_dir, run_hash, num_workers)?;
-    let result = reader.aggregate_results()?;
-
-    let mut stdout = printer.stream_for_details().lock();
-
-    let is_concise = matches!(output_format, Some(OutputFormat::Concise));
-
-    if (!result.diagnostics.is_empty() || !result.discovery_diagnostics.is_empty())
-        && result.stats.total() > 0
-        && stdout.is_enabled()
-    {
-        writeln!(stdout)?;
-    }
-
-    if !result.discovery_diagnostics.is_empty() {
-        writeln!(stdout, "discovery diagnostics:")?;
-        writeln!(stdout)?;
-        write!(stdout, "{}", result.discovery_diagnostics)?;
-
-        if is_concise {
-            writeln!(stdout)?;
-        }
-    }
-
-    if !result.diagnostics.is_empty() {
-        writeln!(stdout, "diagnostics:")?;
-        writeln!(stdout)?;
-        write!(stdout, "{}", result.diagnostics)?;
-
-        if is_concise {
-            writeln!(stdout)?;
-        }
-    }
-
-    if (result.diagnostics.is_empty() && result.discovery_diagnostics.is_empty())
-        && result.stats.total() > 0
-        && stdout.is_enabled()
-    {
-        writeln!(stdout)?;
-    }
-
-    let mut result_stdout = printer.stream_for_failure_summary().lock();
-
-    write!(result_stdout, "{}", result.stats.display(start_time))?;
-
-    Ok(result)
 }
 
 fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<String> {

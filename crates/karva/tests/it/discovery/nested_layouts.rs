@@ -3,7 +3,6 @@ use insta_cmd::assert_cmd_snapshot;
 use crate::common::TestContext;
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_deeply_nested_structure() {
     let context = TestContext::with_files([
         (
@@ -34,7 +33,6 @@ def test_root(): pass",
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_mixed_nesting_siblings() {
     let context = TestContext::with_files([
         (
@@ -70,7 +68,6 @@ def test_direct(): pass",
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_folder_with_underscores_and_numbers() {
     let context = TestContext::with_files([
         (
@@ -101,7 +98,6 @@ def test_versioned(): pass",
 }
 
 #[test]
-#[ignore = "Will fail unless `maturin build` is ran"]
 fn test_parallel_directory_trees() {
     let context = TestContext::with_files([
         (
