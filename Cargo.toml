@@ -32,10 +32,10 @@ karva_system = { path = "crates/karva_system" }
 anyhow = { version = "1.0.100" }
 argfile = { version = "0.2.1" }
 camino = { version = "1.2", features = ["serde1"] }
-chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
+chrono = { version = "0.4.43", default-features = false, features = ["clock"] }
 clap = { version = "4.5.54", features = ["derive", "wrap_help"] }
 codspeed-criterion-compat = { version = "4.2.1", default-features = false }
-colored = { version = "3.0.0" }
+colored = { version = "3.1.1" }
 crossbeam-channel = "0.5.15"
 ctor = "0.6.3"
 ctrlc = { version = "3.5.1" }
@@ -43,9 +43,9 @@ directories = "6.0.0"
 divan = { package = "codspeed-divan-compat", version = "4.2.1" }
 dunce = { version = "1.0.5" }
 etcetera = { version = "0.11.0" }
-filetime = { version = "0.2.26" }
+filetime = { version = "0.2.27" }
 ignore = { version = "0.4.25" }
-insta = { version = "1.46.0" }
+insta = { version = "1.46.1" }
 insta-cmd = { version = "0.6.0" }
 itertools = { version = "0.14.0" }
 markdown = { version = "1.0.0" }
@@ -68,7 +68,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.149" }
 syn = { version = "2.0.114" }
 tempfile = "3.24"
-thiserror = { version = "2.0.17" }
+thiserror = { version = "2.0.18" }
 toml = { version = "0.9.11" }
 tracing = { version = "0.1.44", features = ["release_max_level_debug"] }
 tracing-flame = { version = "0.2.0" }
