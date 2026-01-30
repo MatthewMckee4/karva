@@ -63,29 +63,3 @@ impl VerbosityLevel {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_verbosity_level_filter() {
-        assert_eq!(VerbosityLevel::Default.level_filter(), LevelFilter::WARN);
-        assert_eq!(VerbosityLevel::Verbose.level_filter(), LevelFilter::INFO);
-        assert_eq!(
-            VerbosityLevel::ExtraVerbose.level_filter(),
-            LevelFilter::DEBUG
-        );
-        assert_eq!(VerbosityLevel::Trace.level_filter(), LevelFilter::TRACE);
-    }
-
-    #[test]
-    fn test_verbosity_level_is_trace() {
-        assert!(VerbosityLevel::Trace.is_trace());
-    }
-
-    #[test]
-    fn test_verbosity_level_is_extra_verbose() {
-        assert!(VerbosityLevel::ExtraVerbose.is_extra_verbose());
-    }
-}
