@@ -1,18 +1,11 @@
 use std::sync::Arc;
 
 /// Computes the cartesian product of multiple Arc slices.
-///
-/// Returns `Vec<Arc<[T]>>` where each Arc slice is a combination.
-/// This is optimized for use with `Arc<NormalizedFixture>` to minimize cloning.
-///
-/// For example: `cartesian_product_arc(&[Arc::from([1,2]), Arc::from([3,4])])`
-/// returns combinations: [[1,3], [1,4], [2,3], [2,4]]
 pub fn cartesian_product_arc<T: Clone>(vecs: &[Arc<[T]>]) -> Vec<Arc<[T]>> {
     if vecs.is_empty() {
         return vec![Arc::from(Vec::new().into_boxed_slice())];
     }
 
-    // Handle single-element case efficiently
     if vecs.len() == 1 {
         return vecs[0]
             .iter()
@@ -20,7 +13,6 @@ pub fn cartesian_product_arc<T: Clone>(vecs: &[Arc<[T]>]) -> Vec<Arc<[T]>> {
             .collect();
     }
 
-    // Calculate total result size to pre-allocate
     let total_combinations: usize = vecs.iter().map(|v| v.len().max(1)).product();
 
     let mut result = Vec::with_capacity(total_combinations);
@@ -38,7 +30,6 @@ pub fn cartesian_product_arc<T: Clone>(vecs: &[Arc<[T]>]) -> Vec<Arc<[T]>> {
         result = new_result;
     }
 
-    // Convert Vec<Vec<T>> to Vec<Arc<[T]>>
     result
         .into_iter()
         .map(|v| Arc::from(v.into_boxed_slice()))

@@ -1,9 +1,7 @@
 //! Normalization of discovered tests.
 //!
-//! ## What is normalization?
 //! Normalization converts discovered tests and fixtures into a form that is easier to execute.
-//!
-//! When tests depend on fixtures, we need to resolve the fixture dependency graph and determine
+//! When tests depend on fixtures, we resolve the fixture dependency graph and determine
 //! all the combinations of fixtures needed for each test.
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -24,20 +22,12 @@ use crate::extensions::tags::parametrize::ParametrizationArgs;
 use crate::normalize::utils::cartesian_product_arc;
 use crate::utils::iter_with_ancestors;
 
-/// Use the `Normalizer` to turn discovered test functions into a more normalized form.
-///
-/// This struct converts discovered test functions into a form which is much easier to "run".
 #[derive(Default)]
 pub struct Normalizer {
-    /// Cache for normalized fixtures.
-    ///
-    /// We use `Arc<[Arc<NormalizedFixture>]>` to avoid cloning the Vec on cache hits.
-    /// The inner slice is immutable once created.
     fixture_cache: HashMap<String, Arc<[Arc<NormalizedFixture>]>>,
 }
 
 impl Normalizer {
-    /// Normalize a `DiscoveredPackage` into a `NormalizedPackage`.
     pub(crate) fn normalize(
         &mut self,
         py: Python,
@@ -47,15 +37,11 @@ impl Normalizer {
             self.get_normalized_auto_use_fixtures(py, FixtureScope::Session, &[], session);
 
         let mut normalized_package = self.normalize_package(py, session, &[]);
-
         normalized_package.extend_auto_use_fixtures(session_auto_use_fixtures);
 
         normalized_package
     }
 
-    /// Normalizes a single fixture, resolving its dependencies.
-    ///
-    /// Returns a cached `Arc<[Arc<NormalizedFixture>]>` to avoid repeated allocations.
     fn normalize_fixture(
         &mut self,
         py: Python,
@@ -65,13 +51,11 @@ impl Normalizer {
     ) -> Arc<[Arc<NormalizedFixture>]> {
         let cache_key = fixture.name().to_string();
 
-        // Return cached result directly - no cloning needed due to Arc
         if let Some(cached) = self.fixture_cache.get(&cache_key) {
             return Arc::clone(cached);
         }
 
         let required_fixtures: Vec<String> = fixture.required_fixtures(py);
-
         let dependent_fixtures =
             self.get_dependent_fixtures(py, Some(fixture), &required_fixtures, parents, module);
 
@@ -81,7 +65,6 @@ impl Normalizer {
             cartesian_product_arc(&dependent_fixtures)
         };
 
-        // Pre-clone shared fixture data once
         let fixture_name = fixture.name().clone();
         let fixture_scope = fixture.scope();
         let is_generator = fixture.is_generator();
@@ -107,8 +90,6 @@ impl Normalizer {
         result
     }
 
-    /// Normalizes a test function, handling parametrization and fixture dependencies.
-    /// Returns a Vec of `NormalizedTestFunction`, one for each parameter combination.
     fn normalize_test_function(
         &mut self,
         py: Python<'_>,
@@ -136,30 +117,23 @@ impl Normalizer {
             self.get_dependent_fixtures(py, None, &regular_fixture_names, parents, module);
 
         let use_fixture_names = test_function.tags.required_fixtures_names();
-
         let normalized_use_fixtures =
             self.get_dependent_fixtures(py, None, &use_fixture_names, parents, module);
 
-        // Ensure at least one test case exists (no parametrization)
         let test_params: Vec<ParametrizationArgs> = if test_params.is_empty() {
             vec![ParametrizationArgs::default()]
         } else {
             test_params
         };
 
-        // Compute cartesian products once
         let dep_combinations = cartesian_product_arc(&dependent_fixtures);
         let use_fixture_combinations = cartesian_product_arc(&normalized_use_fixtures);
-
-        // Wrap auto-use fixtures in Arc to share across all tests
         let auto_use_fixtures: Arc<[Arc<NormalizedFixture>]> = function_auto_use_fixtures.into();
 
-        // Pre-compute total capacity
         let total_tests =
             dep_combinations.len() * use_fixture_combinations.len() * test_params.len();
         let mut result = Vec::with_capacity(total_tests);
 
-        // Clone test function data once outside loops
         let test_name = test_function.name.clone();
         let test_py_function = test_function.py_function.clone();
         let test_stmt_function_def = Arc::clone(&test_function.stmt_function_def);
@@ -171,7 +145,7 @@ impl Normalizer {
                     let mut new_tags = base_tags.clone();
                     new_tags.extend(&param_args.tags);
 
-                    let normalized = NormalizedTest {
+                    result.push(NormalizedTest {
                         name: test_name.clone(),
                         params: param_args.values.clone(),
                         fixture_dependencies: dep_combination.to_vec(),
@@ -180,9 +154,7 @@ impl Normalizer {
                         function: test_py_function.clone(),
                         tags: new_tags,
                         stmt_function_def: Arc::clone(&test_stmt_function_def),
-                    };
-
-                    result.push(normalized);
+                    });
                 }
             }
         }
@@ -265,7 +237,6 @@ impl Normalizer {
 
         for fixture in auto_use_fixtures {
             let normalized = self.normalize_fixture(py, fixture, parents, configuration_module);
-            // Convert Arc<[T]> to iterator
             normalized_auto_use_fixtures.extend(normalized.iter().cloned());
         }
 
@@ -284,7 +255,6 @@ impl Normalizer {
 
         for dep_name in fixture_names {
             if let Some(builtin_fixture) = get_builtin_fixture(py, dep_name) {
-                // Builtin fixtures are created fresh each time (they have unique state like tmp dirs)
                 let single: Arc<[Arc<NormalizedFixture>]> =
                     Arc::from(vec![Arc::new(builtin_fixture)].into_boxed_slice());
                 normalized_fixtures.push(single);
@@ -299,24 +269,20 @@ impl Normalizer {
     }
 }
 
-/// Finds a fixture by name, searching in the current module and parent packages
-///
-/// We pass in the current fixture to ensure that we don't return the same fixture twice.
-/// This can cause a stack overflow.
+/// Finds a fixture by name, searching in the current module and parent packages.
+/// We pass in the current fixture to avoid returning it (which would cause infinite recursion).
 fn find_fixture<'a>(
     current_fixture: Option<&Fixture>,
     name: &str,
     parents: &'a [&'a DiscoveredPackage],
     current: &'a DiscoveredModule,
 ) -> Option<&'a Fixture> {
-    // First check the current module
     if let Some(fixture) = current.get_fixture(name)
         && current_fixture.is_none_or(|current_fixture| current_fixture.name() != fixture.name())
     {
         return Some(fixture);
     }
 
-    // Then check parent packages
     for (parent, _ancestors) in iter_with_ancestors(parents) {
         if let Some(fixture) = parent.get_fixture(name)
             && current_fixture
