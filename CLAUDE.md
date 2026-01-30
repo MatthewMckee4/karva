@@ -1,0 +1,9 @@
+- Read CONTRIBUTING.md for guidelines on how to run tools
+- ALWAYS attempt to add a test case for changed behavior
+- PREFER integration tests, e.g., at `it/...` over unit tests
+- PREFER running specific tests over running the entire test suite
+- AVOID using `panic!`, `unreachable!`, `.unwrap()`, unsafe code, and clippy rule ignores
+- PREFER patterns like `if let` to handle fallibility
+- PREFER `#[expect()]` over `[allow()]` if clippy must be disabled
+- PREFER let chains (`if let` combined with `&&`) over nested `if let` statements
+- ALWAYS run `prek run -a` at the end of a task
