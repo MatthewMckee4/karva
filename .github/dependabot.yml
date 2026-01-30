@@ -22,5 +22,6 @@ updates:
       - dependency-name: ruff_source_file
       - dependency-name: ruff_macros
       - dependency-name: ruff_options_metadata
+      - dependency-name: ruff_db
     cooldown:
       default-days: 7
