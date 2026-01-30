@@ -14,14 +14,6 @@ updates:
       interval: "weekly"
 
     ignore:
-      - dependency-name: ruff_python_trivia
-      - dependency-name: ruff_python_ast
-      - dependency-name: ruff_python_parser
-      - dependency-name: ruff_python_file
-      - dependency-name: ruff_notebook
-      - dependency-name: ruff_source_file
-      - dependency-name: ruff_macros
-      - dependency-name: ruff_options_metadata
-      - dependency-name: ruff_db
+      - dependency-name: ruff_*
     cooldown:
       default-days: 7
