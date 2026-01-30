@@ -11,7 +11,7 @@ mod settings;
 pub use options::{
     Options, OutputFormat, ProjectOptionsOverrides, SrcOptions, TerminalOptions, TestOptions,
 };
-pub use pyproject::{PyProject, PyProjectError, ResolveRequiresPythonError};
+pub use pyproject::{PyProject, PyProjectError};
 pub use settings::ProjectSettings;
 
 use crate::options::KarvaTomlError;
@@ -229,12 +229,6 @@ pub enum ProjectMetadataError {
     #[error("{path} is not a valid `karva.toml`: {source}")]
     InvalidKarvaToml {
         source: Box<KarvaTomlError>,
-        path: Utf8PathBuf,
-    },
-
-    #[error("Invalid `requires-python` version specifier (`{path}`): {source}")]
-    InvalidRequiresPythonConstraint {
-        source: ResolveRequiresPythonError,
         path: Utf8PathBuf,
     },
 }

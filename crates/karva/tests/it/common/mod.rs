@@ -72,7 +72,7 @@ impl TestContext {
                 "--python",
                 venv_path.as_str(),
                 &karva_wheel,
-                "pytest",
+                "pytest==9.0.2",
             ],
         ];
 
@@ -138,9 +138,20 @@ impl TestContext {
             .unwrap();
     }
 
+    fn venv_binary(&self, binary: &str) -> Utf8PathBuf {
+        self.project_dir_path
+            .join(".venv")
+            .join(if cfg!(windows) { "Scripts" } else { "bin" })
+            .join(if cfg!(windows) {
+                format!("{binary}.exe")
+            } else {
+                binary.to_string()
+            })
+    }
+
     pub fn command(&self) -> Command {
-        let mut command = Command::new(get_bin());
-        command.current_dir(self.root()).arg("test");
+        let mut command = Command::new(self.venv_binary("karva"));
+        command.arg("test").current_dir(self.root());
         command
     }
 
@@ -159,11 +170,4 @@ impl Default for TestContext {
 
 pub fn tempdir_filter(path: &Utf8Path) -> String {
     format!(r"{}\\?/?", regex::escape(path.as_str()))
-}
-
-/// Returns the karva binary that cargo built before launching the tests.
-///
-/// <https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates>
-pub fn get_bin() -> Utf8PathBuf {
-    Utf8PathBuf::from(env!("CARGO_BIN_EXE_karva"))
 }

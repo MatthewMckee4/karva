@@ -307,8 +307,6 @@ pub fn get_auto_use_fixtures<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::extensions::fixtures::scope::resolve_dynamic_scope;
-    use crate::utils::attach;
 
     #[test]
     fn test_invalid_fixture_scope() {
@@ -324,60 +322,5 @@ mod tests {
         assert_eq!(FixtureScope::Module.to_string(), "module");
         assert_eq!(FixtureScope::Package.to_string(), "package");
         assert_eq!(FixtureScope::Session.to_string(), "session");
-    }
-
-    #[test]
-    fn test_resolve_dynamic_scope() {
-        attach(|py| {
-            let func = py.eval(c"lambda **kwargs: 'session'", None, None).unwrap();
-
-            let resolved = resolve_dynamic_scope(py, &func, "test_fixture").unwrap();
-            assert_eq!(resolved, FixtureScope::Session);
-        });
-    }
-
-    #[test]
-    fn test_resolve_dynamic_scope_with_fixture_name() {
-        attach(|py| {
-            let func = py.eval(
-                c"lambda **kwargs: 'session' if kwargs.get('fixture_name') == 'important_fixture' else 'function'",
-                None,
-                None
-            ).unwrap();
-
-            let resolved_important = resolve_dynamic_scope(py, &func, "important_fixture").unwrap();
-            assert_eq!(resolved_important, FixtureScope::Session);
-
-            let resolved_normal = resolve_dynamic_scope(py, &func, "normal_fixture").unwrap();
-            assert_eq!(resolved_normal, FixtureScope::Function);
-        });
-    }
-
-    #[test]
-    fn test_resolve_dynamic_scope_invalid_return() {
-        attach(|py| {
-            let func = py
-                .eval(c"lambda **kwargs: 'invalid_scope'", None, None)
-                .unwrap();
-
-            let result = resolve_dynamic_scope(py, &func, "test_fixture");
-            assert!(result.is_err());
-            assert!(result.unwrap_err().contains("Invalid fixture scope"));
-        });
-    }
-
-    #[test]
-    fn test_resolve_dynamic_scope_exception() {
-        attach(|py| {
-            let func = py.eval(c"lambda **kwargs: 1/0", None, None).unwrap();
-
-            let result = resolve_dynamic_scope(py, &func, "test_fixture");
-            assert!(result.is_err());
-            assert!(
-                result
-                    .unwrap_err()
-                    .contains("Failed to call dynamic scope function")
-            );
-        });
     }
 }
