@@ -3,8 +3,7 @@ use pyo3::wrap_pymodule;
 
 use crate::extensions::fixtures::MockEnv;
 use crate::extensions::fixtures::python::{
-    FixtureFunctionDefinition, FixtureFunctionMarker, FixtureRequest, InvalidFixtureError,
-    fixture_decorator,
+    FixtureFunctionDefinition, FixtureFunctionMarker, InvalidFixtureError, fixture_decorator,
 };
 use crate::extensions::functions::{FailError, SkipError, fail, param, skip};
 use crate::extensions::tags::python::{PyTags, PyTestFunction, tags};
@@ -17,7 +16,6 @@ pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<FixtureFunctionMarker>()?;
     m.add_class::<FixtureFunctionDefinition>()?;
-    m.add_class::<FixtureRequest>()?;
     m.add_class::<PyTags>()?;
     m.add_class::<PyTestFunction>()?;
     m.add_class::<MockEnv>()?;

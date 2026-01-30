@@ -6,11 +6,8 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use ruff_python_ast::StmtFunctionDef;
 
-use crate::extensions::fixtures::{
-    FixtureRequest, FixtureScope, RequiresFixtures,
-    python::{TestMarkers, TestNode},
-};
-use crate::extensions::tags::{Parametrization, Tags};
+use crate::extensions::fixtures::FixtureScope;
+use crate::extensions::tags::Tags;
 
 /// Built-in fixture data
 #[derive(Debug, Clone)]
@@ -32,8 +29,6 @@ pub struct BuiltInFixture {
 pub struct UserDefinedFixture {
     /// Qualified function name
     pub(crate) name: QualifiedFunctionName,
-    /// The specific parameter value for this variant (if parametrized)
-    pub(crate) param: Option<Parametrization>,
     /// Normalized dependencies (already expanded for their params)
     pub(crate) dependencies: Vec<Arc<NormalizedFixture>>,
     /// Fixture scope
@@ -44,14 +39,9 @@ pub struct UserDefinedFixture {
     pub(crate) py_function: Py<PyAny>,
     /// The function definition for this fixture
     pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
-    /// Scope-based name for request.node.name:
-    pub(crate) scope_name: String,
-    /// Test markers (either Karva tags or Pytest marks)
-    pub(crate) markers: Option<TestMarkers>,
 }
 
-/// A normalized fixture represents a concrete variant of a fixture after parametrization.
-/// For parametrized fixtures, each parameter value gets its own `NormalizedFixture`.
+/// A normalized fixture represents a concrete instance of a fixture.
 ///
 /// We choose to make all variables `pub(crate)` so we can destructure and consume when needed.
 #[derive(Debug, Clone)]
@@ -95,14 +85,6 @@ impl NormalizedFixture {
         }
     }
 
-    /// Returns the parameter value if this is a parametrized fixture
-    pub(crate) const fn param(&self) -> Option<&Parametrization> {
-        match self {
-            Self::BuiltIn(_) => None,
-            Self::UserDefined(fixture) => fixture.param.as_ref(),
-        }
-    }
-
     /// Returns the fixture dependencies
     pub(crate) fn dependencies(&self) -> &Vec<Arc<Self>> {
         match self {
@@ -136,10 +118,7 @@ impl NormalizedFixture {
     }
 
     pub(crate) fn resolved_tags(&self) -> Tags {
-        let mut tags = self
-            .param()
-            .map(|param| param.tags().clone())
-            .unwrap_or_default();
+        let mut tags = Tags::default();
 
         for dependency in self.dependencies() {
             tags.extend(&dependency.resolved_tags());
@@ -163,33 +142,6 @@ impl NormalizedFixture {
 
                 for (key, value) in fixture_arguments {
                     let _ = kwargs_dict.set_item(key.clone(), value);
-                }
-
-                let required = user_defined_fixture.stmt_function_def.required_fixtures(py);
-
-                if required.contains(&"request".to_string()) {
-                    let param_value = user_defined_fixture
-                        .param
-                        .as_ref()
-                        .and_then(|param| param.values.first())
-                        .cloned();
-
-                    // Create TestNode with scope name and markers
-                    let markers = user_defined_fixture.markers.clone().unwrap_or_else(|| {
-                        TestMarkers::from_karva(crate::extensions::tags::python::PyTags {
-                            inner: vec![],
-                        })
-                    });
-                    let node = Some(TestNode::new(
-                        user_defined_fixture.scope_name.clone(),
-                        markers,
-                    ));
-
-                    if let Ok(request_obj) =
-                        FixtureRequest::new(py, param_value, node).and_then(|req| Py::new(py, req))
-                    {
-                        kwargs_dict.set_item("request", request_obj).ok();
-                    }
                 }
 
                 if kwargs_dict.is_empty() {

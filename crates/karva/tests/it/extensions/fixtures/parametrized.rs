@@ -13,35 +13,31 @@ fn get_parametrize_function(framework: &str) -> &str {
 }
 
 #[rstest]
-fn test_parametrized_fixture(#[values("pytest", "karva")] framework: &str) {
+fn test_fixture_basic(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
                 import {framework}
 
-                @{framework}.fixture(params=['a', 'b', 'c'])
-                def my_fixture(request):
-                    assert hasattr(request, 'param')
-                    assert request.param in ['a', 'b', 'c']
-                    return request.param
+                @{framework}.fixture
+                def my_fixture():
+                    return 'value'
 
-                def test_with_parametrized_fixture(my_fixture):
-                    assert my_fixture in ['a', 'b', 'c']
+                def test_with_fixture(my_fixture):
+                    assert my_fixture == 'value'
 "
         ),
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command(), @"
         success: true
         exit_code: 0
         ----- stdout -----
-        test test::test_with_parametrized_fixture(my_fixture=a) ... ok
-        test test::test_with_parametrized_fixture(my_fixture=b) ... ok
-        test test::test_with_parametrized_fixture(my_fixture=c) ... ok
+        test test::test_with_fixture(my_fixture=value) ... ok
 
-        test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
 
         ----- stderr -----
         ");
@@ -49,7 +45,7 @@ fn test_parametrized_fixture(#[values("pytest", "karva")] framework: &str) {
 }
 
 #[rstest]
-fn test_parametrized_fixture_in_conftest(#[values("pytest", "karva")] framework: &str) {
+fn test_fixture_in_conftest(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_files([
         (
             "conftest.py",
@@ -57,9 +53,9 @@ fn test_parametrized_fixture_in_conftest(#[values("pytest", "karva")] framework:
                 r"
                     import {framework}
 
-                    @{framework}.fixture(params=[1, 2, 3])
-                    def number_fixture(request):
-                        return request.param * 10
+                    @{framework}.fixture
+                    def number_fixture():
+                        return 42
                 "
             )
             .as_str(),
@@ -68,21 +64,19 @@ fn test_parametrized_fixture_in_conftest(#[values("pytest", "karva")] framework:
             "test.py",
             r"
                     def test_with_number(number_fixture):
-                        assert number_fixture in [10, 20, 30]
+                        assert number_fixture == 42
                 ",
         ),
     ]);
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.command(), @"
         success: true
         exit_code: 0
         ----- stdout -----
-        test test::test_with_number(number_fixture=10) ... ok
-        test test::test_with_number(number_fixture=20) ... ok
-        test test::test_with_number(number_fixture=30) ... ok
+        test test::test_with_number(number_fixture=42) ... ok
 
-        test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
 
         ----- stderr -----
         ");
@@ -90,100 +84,7 @@ fn test_parametrized_fixture_in_conftest(#[values("pytest", "karva")] framework:
 }
 
 #[rstest]
-fn test_parametrized_fixture_module_scope(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_files([
-        (
-            "conftest.py",
-            format!(
-                r"
-                    import {framework}
-
-                    @{framework}.fixture(scope='module', params=['x', 'y'])
-                    def module_fixture(request):
-                        return request.param.upper()
-                "
-            )
-            .as_str(),
-        ),
-        (
-            "test.py",
-            r"
-                    def test_first(module_fixture):
-                        assert module_fixture in ['X', 'Y']
-
-                    def test_second(module_fixture):
-                        assert module_fixture in ['X', 'Y']
-                ",
-        ),
-    ]);
-
-    allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @r"
-        success: true
-        exit_code: 0
-        ----- stdout -----
-        test test::test_first(module_fixture=X) ... ok
-        test test::test_first(module_fixture=X) ... ok
-        test test::test_second(module_fixture=X) ... ok
-        test test::test_second(module_fixture=X) ... ok
-
-        test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]
-
-        ----- stderr -----
-        ");
-    }
-}
-
-#[rstest]
-fn test_parametrized_fixture_with_generator(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "test.py",
-        &format!(
-            r"
-                import {framework}
-
-                results = []
-
-                @{framework}.fixture(params=['setup_a', 'setup_b'])
-                def setup_fixture(request):
-                    value = request.param
-                    results.append(f'{{value}}_start')
-                    yield value
-                    results.append(f'{{value}}_end')
-
-                def test_with_setup(setup_fixture):
-                    assert setup_fixture in ['setup_a', 'setup_b']
-                    assert len(results) >= 1
-
-                def test_verify_finalizers_ran():
-                    # This test runs after the parametrized tests
-                    # Both finalizers should have run
-                    assert 'setup_a_start' in results
-                    assert 'setup_a_end' in results
-                    assert 'setup_b_start' in results
-                    assert 'setup_b_end' in results
-"
-        ),
-    );
-
-    allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @r"
-        success: true
-        exit_code: 0
-        ----- stdout -----
-        test test::test_with_setup(setup_fixture=setup_a) ... ok
-        test test::test_with_setup(setup_fixture=setup_b) ... ok
-        test test::test_verify_finalizers_ran ... ok
-
-        test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
-
-        ----- stderr -----
-        ");
-    }
-}
-
-#[rstest]
-fn test_parametrized_fixture_session_scope(#[values("pytest", "karva")] framework: &str) {
+fn test_fixture_module_scope(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_files([
         (
             "conftest.py",
@@ -193,249 +94,37 @@ fn test_parametrized_fixture_session_scope(#[values("pytest", "karva")] framewor
 
                     call_count = []
 
-                    @{framework}.fixture(scope='session', params=['session_1', 'session_2'])
-                    def session_fixture(request):
-                        call_count.append(request.param)
-                        return request.param
+                    @{framework}.fixture(scope='module')
+                    def module_fixture():
+                        call_count.append(1)
+                        return 'MODULE'
                 "
             )
             .as_str(),
         ),
         (
-            "test_1.py",
+            "test.py",
             r"
-                    def test_a1(session_fixture):
-                        assert session_fixture in ['session_1', 'session_2']
+                    from conftest import call_count
 
-                    def test_a2(session_fixture):
-                        assert session_fixture in ['session_1', 'session_2']
-                ",
-        ),
-        (
-            "test_2.py",
-            r"
-                    def test_b1(session_fixture):
-                        assert session_fixture in ['session_1', 'session_2']
+                    def test_first(module_fixture):
+                        assert module_fixture == 'MODULE'
+
+                    def test_second(module_fixture):
+                        assert module_fixture == 'MODULE'
+                        # Module scope means fixture is called once
+                        assert len(call_count) == 1
                 ",
         ),
     ]);
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command().arg("-q"), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
         success: true
         exit_code: 0
         ----- stdout -----
-        test result: ok. 6 passed; 0 failed; 0 skipped; finished in [TIME]
-
-        ----- stderr -----
-        ");
-    }
-}
-
-#[rstest]
-fn test_parametrized_fixture_with_multiple_params(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "test.py",
-        &format!(
-            r"
-                import {framework}
-
-                @{framework}.fixture(params=[10, 20])
-                def number(request):
-                    return request.param
-
-                @{framework}.fixture(params=['a', 'b'])
-                def letter(request):
-                    return request.param
-
-                def test_combination(number, letter):
-                    assert number in [10, 20]
-                    assert letter in ['a', 'b']
-"
-        ),
-    );
-
-    allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
-        success: true
-        exit_code: 0
-        ----- stdout -----
-        test test::test_combination(letter=a, number=10) ... ok
-        test test::test_combination(letter=b, number=10) ... ok
-        test test::test_combination(letter=a, number=20) ... ok
-        test test::test_combination(letter=b, number=20) ... ok
-
-        test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]
-
-        ----- stderr -----
-        ");
-    }
-}
-
-#[rstest]
-fn test_parametrized_fixture_with_regular_parametrize(
-    #[values("pytest", "karva")] framework: &str,
-) {
-    let context = TestContext::with_file(
-        "test.py",
-        &format!(
-            r"
-                import {framework}
-
-                @{framework}.fixture(params=[1, 2])
-                def fixture_param(request):
-                    return request.param
-
-                @{parametrize}('test_param', [10, 20])
-                def test_both(fixture_param, test_param):
-                    assert fixture_param in [1, 2]
-                    assert test_param in [10, 20]
-",
-            parametrize = get_parametrize_function(framework)
-        ),
-    );
-
-    allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
-        success: true
-        exit_code: 0
-        ----- stdout -----
-        test test::test_both(fixture_param=1, test_param=10) ... ok
-        test test::test_both(fixture_param=1, test_param=20) ... ok
-        test test::test_both(fixture_param=2, test_param=10) ... ok
-        test test::test_both(fixture_param=2, test_param=20) ... ok
-
-        test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]
-
-        ----- stderr -----
-        ");
-    }
-}
-
-#[rstest]
-fn test_parametrized_generator_fixture_finalizer_order(
-    #[values("pytest", "karva")] framework: &str,
-) {
-    let context = TestContext::with_file(
-        "test.py",
-        &format!(
-            r"
-                import {framework}
-
-                execution_log = []
-
-                @{framework}.fixture(params=['first', 'second'])
-                def ordered_fixture(request):
-                    execution_log.append(f'{{request.param}}_setup')
-                    yield request.param
-                    execution_log.append(f'{{request.param}}_teardown')
-
-                def test_one(ordered_fixture):
-                    execution_log.append(f'test_one_{{ordered_fixture}}')
-                    assert ordered_fixture in ['first', 'second']
-
-                def test_check_order():
-                    assert execution_log == [
-                        'first_setup',
-                        'test_one_first',
-                        'first_teardown',
-                        'second_setup',
-                        'test_one_second',
-                        'second_teardown',
-                    ], execution_log
-"
-        ),
-    );
-
-    allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @r"
-        success: true
-        exit_code: 0
-        ----- stdout -----
-        test test::test_one(ordered_fixture=first) ... ok
-        test test::test_one(ordered_fixture=second) ... ok
-        test test::test_check_order ... ok
-
-        test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
-
-        ----- stderr -----
-        ");
-    }
-}
-
-#[rstest]
-fn test_parametrized_fixture_package_scope(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_files([
-        (
-            "package/conftest.py",
-            format!(
-                r"
-                    import {framework}
-
-                    @{framework}.fixture(scope='package', params=['pkg_a', 'pkg_b'])
-                    def package_fixture(request):
-                        return request.param
-                "
-            )
-            .as_str(),
-        ),
-        (
-            "package/test_one.py",
-            r"
-                    def test_in_one(package_fixture):
-                        assert package_fixture in ['pkg_a', 'pkg_b']
-                ",
-        ),
-        (
-            "package/test_two.py",
-            r"
-                    def test_in_two(package_fixture):
-                        assert package_fixture in ['pkg_a', 'pkg_b']
-                ",
-        ),
-    ]);
-
-    allow_duplicates! {
-        assert_cmd_snapshot!(context.command().arg("-q"), @r"
-        success: true
-        exit_code: 0
-        ----- stdout -----
-        test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]
-
-        ----- stderr -----
-        ");
-    }
-}
-
-#[rstest]
-fn test_parametrized_fixture_with_dependency(#[values("pytest", "karva")] framework: &str) {
-    let context = TestContext::with_file(
-        "test.py",
-        &format!(
-            r"
-                import {framework}
-
-                @{framework}.fixture(params=[1, 2])
-                def base_fixture(request):
-                    return request.param
-
-                @{framework}.fixture
-                def dependent_fixture(base_fixture):
-                    return base_fixture * 100
-
-                def test_dependent(dependent_fixture):
-                    assert dependent_fixture in [100, 200]
-"
-        ),
-    );
-
-    allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
-        success: true
-        exit_code: 0
-        ----- stdout -----
-        test test::test_dependent(dependent_fixture=100) ... ok
-        test test::test_dependent(dependent_fixture=200) ... ok
+        test test::test_first(module_fixture=MODULE) ... ok
+        test test::test_second(module_fixture=MODULE) ... ok
 
         test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
 
@@ -445,7 +134,299 @@ fn test_parametrized_fixture_with_dependency(#[values("pytest", "karva")] framew
 }
 
 #[rstest]
-fn test_parametrized_fixture_finalizer_with_state(#[values("pytest", "karva")] framework: &str) {
+fn test_fixture_with_generator(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+                import {framework}
+
+                results = []
+
+                @{framework}.fixture
+                def setup_fixture():
+                    value = 'resource'
+                    results.append('start')
+                    yield value
+                    results.append('end')
+
+                def test_with_setup(setup_fixture):
+                    assert setup_fixture == 'resource'
+                    assert results == ['start']
+
+                def test_verify_finalizer_ran():
+                    # Fixture teardown runs after test_with_setup completes
+                    assert results == ['start', 'end']
+"
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_with_setup(setup_fixture=resource) ... ok
+        test test::test_verify_finalizer_ran ... ok
+
+        test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn test_fixture_session_scope(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            format!(
+                r"
+                    import {framework}
+
+                    call_count = []
+
+                    @{framework}.fixture(scope='session')
+                    def session_fixture():
+                        call_count.append(1)
+                        return 'session_value'
+                "
+            )
+            .as_str(),
+        ),
+        (
+            "test_1.py",
+            r"
+                    def test_a1(session_fixture):
+                        assert session_fixture == 'session_value'
+
+                    def test_a2(session_fixture):
+                        assert session_fixture == 'session_value'
+                ",
+        ),
+        (
+            "test_2.py",
+            r"
+                    def test_b1(session_fixture):
+                        assert session_fixture == 'session_value'
+                ",
+        ),
+    ]);
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command().arg("-q"), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn test_fixture_with_multiple_fixtures(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+                import {framework}
+
+                @{framework}.fixture
+                def number():
+                    return 100
+
+                @{framework}.fixture
+                def letter():
+                    return 'X'
+
+                def test_combination(number, letter):
+                    assert number == 100
+                    assert letter == 'X'
+"
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_combination(letter=X, number=100) ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn test_fixture_with_test_parametrize(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+                import {framework}
+
+                @{framework}.fixture
+                def fixture_value():
+                    return 'fixture_value'
+
+                @{parametrize}('test_param', [10, 20])
+                def test_both(fixture_value, test_param):
+                    assert fixture_value == 'fixture_value'
+                    assert test_param in [10, 20]
+",
+            parametrize = get_parametrize_function(framework)
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_both(fixture_value=fixture_value, test_param=10) ... ok
+        test test::test_both(fixture_value=fixture_value, test_param=20) ... ok
+
+        test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn test_fixture_generator_finalizer_order(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+                import {framework}
+
+                execution_log = []
+
+                @{framework}.fixture
+                def ordered_fixture():
+                    execution_log.append('setup')
+                    yield 'value'
+                    execution_log.append('teardown')
+
+                def test_one(ordered_fixture):
+                    execution_log.append('test_one')
+                    assert ordered_fixture == 'value'
+
+                def test_check_order():
+                    # After test_one completes, fixture is torn down
+                    assert execution_log == [
+                        'setup',
+                        'test_one',
+                        'teardown',
+                    ], execution_log
+"
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_one(ordered_fixture=value) ... ok
+        test test::test_check_order ... ok
+
+        test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn test_fixture_package_scope(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_files([
+        (
+            "package/conftest.py",
+            format!(
+                r"
+                    import {framework}
+
+                    @{framework}.fixture(scope='package')
+                    def package_fixture():
+                        return 'package_value'
+                "
+            )
+            .as_str(),
+        ),
+        (
+            "package/test_one.py",
+            r"
+                    def test_in_one(package_fixture):
+                        assert package_fixture == 'package_value'
+                ",
+        ),
+        (
+            "package/test_two.py",
+            r"
+                    def test_in_two(package_fixture):
+                        assert package_fixture == 'package_value'
+                ",
+        ),
+    ]);
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command().arg("-q"), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn test_fixture_with_dependency(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+                import {framework}
+
+                @{framework}.fixture
+                def base_fixture():
+                    return 10
+
+                @{framework}.fixture
+                def dependent_fixture(base_fixture):
+                    return base_fixture * 100
+
+                def test_dependent(dependent_fixture):
+                    assert dependent_fixture == 1000
+"
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        test test::test_dependent(dependent_fixture=1000) ... ok
+
+        test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn test_fixture_finalizer_with_state(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -454,118 +435,39 @@ fn test_parametrized_fixture_finalizer_with_state(#[values("pytest", "karva")] f
 
                 arr = []
 
-                @{framework}.fixture(params=['resource_1', 'resource_2', 'resource_3'])
-                def resource(request):
-                    resource_name = request.param
+                @{framework}.fixture
+                def resource():
+                    resource_name = 'resource'
                     yield resource_name
                     arr.append(resource_name)
 
                 def test_uses_resource(resource):
-                    assert resource in ['resource_1', 'resource_2', 'resource_3']
+                    assert resource == 'resource'
 
                 def test_all_cleaned_up():
-                    assert arr == ['resource_1', 'resource_2', 'resource_3']
+                    # Only one test used the fixture
+                    assert arr == ['resource']
 "
         ),
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
         success: true
         exit_code: 0
         ----- stdout -----
-        test test::test_uses_resource(resource=resource_1) ... ok
-        test test::test_uses_resource(resource=resource_2) ... ok
-        test test::test_uses_resource(resource=resource_3) ... ok
+        test test::test_uses_resource(resource=resource) ... ok
         test test::test_all_cleaned_up ... ok
 
-        test result: ok. 4 passed; 0 failed; 0 skipped; finished in [TIME]
+        test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
 
         ----- stderr -----
         ");
     }
 }
 
-#[test]
-fn test_pytest_param() {
-    let context = TestContext::with_file(
-        "test.py",
-        r"
-            import pytest
-
-            @pytest.fixture(params=[
-                'resource_1',
-                pytest.param('resource_2'),
-                pytest.param('resource_3'),
-                pytest.param('resource_4', marks=pytest.mark.skip),
-                pytest.param('resource_5', marks=pytest.mark.xfail)
-            ])
-            def resource(request):
-               return request.param
-
-            def test_resource(resource):
-                assert resource in ['resource_1', 'resource_2', 'resource_3']
-   ",
-    );
-
-    assert_cmd_snapshot!(context.command(), @r"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-    test test::test_resource(resource=resource_1) ... ok
-    test test::test_resource(resource=resource_2) ... ok
-    test test::test_resource(resource=resource_3) ... ok
-    test test::test_resource ... skipped
-    test test::test_resource(resource=resource_5) ... ok
-
-    test result: ok. 4 passed; 0 failed; 1 skipped; finished in [TIME]
-
-    ----- stderr -----
-    ");
-}
-
-#[test]
-fn test_karva_param() {
-    let context = TestContext::with_file(
-        "test.py",
-        r"
-            import karva
-
-            @karva.fixture(params=[
-                'resource_1',
-                karva.param('resource_2'),
-                karva.param('resource_3'),
-                karva.param('resource_4', tags=[karva.tags.skip]),
-                karva.param('resource_5', tags=[karva.tags.expect_fail]),
-            ])
-            def resource(request):
-               return request.param
-
-            def test_resource(resource):
-                assert resource in ['resource_1', 'resource_2', 'resource_3']
-   ",
-    );
-
-    assert_cmd_snapshot!(context.command(), @r"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-    test test::test_resource(resource=resource_1) ... ok
-    test test::test_resource(resource=resource_2) ... ok
-    test test::test_resource(resource=resource_3) ... ok
-    test test::test_resource ... skipped
-    test test::test_resource(resource=resource_5) ... ok
-
-    test result: ok. 4 passed; 0 failed; 1 skipped; finished in [TIME]
-
-    ----- stderr -----
-    ");
-}
-
 #[rstest]
-fn test_complex_parametrized_generator_fixture_finalizer_order(
-    #[values("pytest", "karva")] framework: &str,
-) {
+fn test_complex_fixture_generator_finalizer_order(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -576,46 +478,32 @@ fn test_complex_parametrized_generator_fixture_finalizer_order(
             execution_log: list[str] = []
 
 
-            @{framework}.fixture(params=["1_1", "1_2"])
-            def ordered_fixture(request):
-                execution_log.append(f"{{request.param}}_setup")
-                yield request.param
-                execution_log.append(f"{{request.param}}_teardown")
+            @{framework}.fixture
+            def ordered_fixture():
+                execution_log.append("1_setup")
+                yield "value1"
+                execution_log.append("1_teardown")
 
 
-            @{framework}.fixture(params=["2_1", "2_2"])
-            def ordered_fixture2(request):
-                execution_log.append(f"{{request.param}}_setup")
-                yield request.param
-                execution_log.append(f"{{request.param}}_teardown")
+            @{framework}.fixture
+            def ordered_fixture2():
+                execution_log.append("2_setup")
+                yield "value2"
+                execution_log.append("2_teardown")
 
 
             def test_one(ordered_fixture, ordered_fixture2):
-                execution_log.append(f"{{ordered_fixture}}-{{ordered_fixture2}}_test")
+                execution_log.append("test")
 
 
             def test_check_order():
+                # After test_one, both fixtures are torn down in reverse order
                 assert execution_log == [
-                    "1_1_setup",
-                    "2_1_setup",
-                    "1_1-2_1_test",
-                    "2_1_teardown",
-                    "1_1_teardown",
-                    "1_1_setup",
-                    "2_2_setup",
-                    "1_1-2_2_test",
-                    "2_2_teardown",
-                    "1_1_teardown",
-                    "1_2_setup",
-                    "2_1_setup",
-                    "1_2-2_1_test",
-                    "2_1_teardown",
-                    "1_2_teardown",
-                    "1_2_setup",
-                    "2_2_setup",
-                    "1_2-2_2_test",
-                    "2_2_teardown",
-                    "1_2_teardown",
+                    "1_setup",
+                    "2_setup",
+                    "test",
+                    "2_teardown",
+                    "1_teardown",
                 ], execution_log
 
 "#
@@ -623,19 +511,16 @@ fn test_complex_parametrized_generator_fixture_finalizer_order(
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r#"
         success: true
         exit_code: 0
         ----- stdout -----
-        test test::test_one(ordered_fixture=1_1, ordered_fixture2=2_1) ... ok
-        test test::test_one(ordered_fixture=1_1, ordered_fixture2=2_2) ... ok
-        test test::test_one(ordered_fixture=1_2, ordered_fixture2=2_1) ... ok
-        test test::test_one(ordered_fixture=1_2, ordered_fixture2=2_2) ... ok
+        test test::test_one(ordered_fixture=value1, ordered_fixture2=value2) ... ok
         test test::test_check_order ... ok
 
-        test result: ok. 5 passed; 0 failed; 0 skipped; finished in [TIME]
+        test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
 
         ----- stderr -----
-        ");
+        "#);
     }
 }
