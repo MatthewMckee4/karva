@@ -18,5 +18,9 @@ updates:
       - dependency-name: ruff_python_ast
       - dependency-name: ruff_python_parser
       - dependency-name: ruff_python_file
+      - dependency-name: ruff_notebook
+      - dependency-name: ruff_source_file
+      - dependency-name: ruff_macros
+      - dependency-name: ruff_options_metadata
     cooldown:
       default-days: 7
