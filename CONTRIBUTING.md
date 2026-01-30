@@ -22,11 +22,11 @@ If you have suggestions on how we might improve the contributing documentation, 
 
 Karva is written in Rust. You can install the [Rust Toolchain](https://www.rust-lang.org/tools/install) to get started.
 
-You can optionally install pre-commit hooks to automatically run the validation checks when making a commit:
+You can optionally install prek hooks to automatically run the validation checks when making a commit:
 
 ```bash
-uv tool install pre-commit
-pre-commit install
+uv tool install prek
+prek install
 ```
 
 ### Development
@@ -41,25 +41,11 @@ Annoyingly, you need a global python with pytest installed.
 
 We have had many issues with local development using `uv` virtual environments with pytest installed, but this does not always work well.
 
-So make sure you have python installed on your system, and pytest globally installed for that python version too.
-
-To verify you have everything installed correctly, run:
-
-```bash
-python -c "import pytest;print('pytest installed')"
-```
-
-Then you can run the tests with:
-
-```bash
-cargo test
-```
-
-If you want to run the cli tests, you need to build a wheel file, so you need to run the following:
+If you want to run the tests, you need to build a wheel every time, so you need to run the following:
 
 ```bash
 maturin build
-cargo test
+cargo nextest run 
 ```
 
 ### Documentation

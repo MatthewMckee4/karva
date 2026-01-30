@@ -27,7 +27,7 @@ karva = "karva._karva:karva_run"
 karva-core = "karva._karva:karva_core_run"
 
 [dependency-groups]
-dev = ["pre-commit", "ruff"]
+dev = ["ruff"]
 docs = ["zensical==0.0.10"]
 release = ["tbump"]
 
