@@ -7,4 +7,4 @@
 - PREFER `#[expect()]` over `[allow()]` if clippy must be disabled
 - PREFER let chains (`if let` combined with `&&`) over nested `if let` statements
 - ALWAYS run `prek run -a` at the end of a task
-- ALWAYS run `maturin build` before running the tests where you should run `cargo nextest run`
+- ALWAYS run `just test` to run all tests.

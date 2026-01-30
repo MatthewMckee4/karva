@@ -1,4 +1,5 @@
 use std::process::Command;
+use std::sync::Once;
 
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -6,6 +7,8 @@ use directories::ProjectDirs;
 use insta::Settings;
 use insta::internals::SettingsBindDropGuard;
 use tempfile::TempDir;
+
+static VENV_INIT: Once = Once::new();
 
 pub struct TestContext {
     _temp_dir: TempDir,
@@ -21,29 +24,17 @@ pub fn get_test_cache_dir() -> Utf8PathBuf {
     Utf8PathBuf::from_path_buf(test_cache).expect("Path is not valid UTF-8")
 }
 
-impl TestContext {
-    pub fn new() -> Self {
+fn create_venv() {
+    VENV_INIT.call_once(|| {
         let cache_dir = get_test_cache_dir();
+        let venv_path = cache_dir.join(".venv");
+
+        // Skip if venv already exists
+        if venv_path.join("bin").exists() || venv_path.join("Scripts").exists() {
+            return;
+        }
 
         std::fs::create_dir_all(&cache_dir).expect("Failed to create cache directory");
-
-        let temp_dir =
-            TempDir::new_in(&cache_dir).expect("Failed to create temp directory in cache");
-
-        let project_path = Utf8PathBuf::from_path_buf(
-            dunce::simplified(
-                &temp_dir
-                    .path()
-                    .canonicalize()
-                    .context("Failed to canonicalize project path")
-                    .unwrap(),
-            )
-            .to_path_buf(),
-        )
-        .expect("Path is not valid UTF-8");
-
-        // Create venv in project directory
-        let venv_path = project_path.join(".venv");
 
         let karva_wheel = karva_system::find_karva_wheel()
             .expect(
@@ -83,6 +74,44 @@ impl TestContext {
                 .with_context(|| format!("Failed to run command: {arguments:?}"))
                 .unwrap();
         }
+    });
+}
+
+impl TestContext {
+    pub fn new() -> Self {
+        let cache_dir = get_test_cache_dir();
+
+        // Ensure the global venv exists (created only once)
+        create_venv();
+
+        std::fs::create_dir_all(&cache_dir).expect("Failed to create cache directory");
+
+        let temp_dir =
+            TempDir::new_in(&cache_dir).expect("Failed to create temp directory in cache");
+
+        let project_path = Utf8PathBuf::from_path_buf(
+            dunce::simplified(
+                &temp_dir
+                    .path()
+                    .canonicalize()
+                    .context("Failed to canonicalize project path")
+                    .unwrap(),
+            )
+            .to_path_buf(),
+        )
+        .expect("Path is not valid UTF-8");
+
+        // Create symlink to global venv
+        let global_venv = cache_dir.join(".venv");
+        let project_venv = project_path.join(".venv");
+
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&global_venv, &project_venv)
+            .expect("Failed to create venv symlink");
+
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(&global_venv, &project_venv)
+            .expect("Failed to create venv symlink");
 
         let mut settings = Settings::clone_current();
 
