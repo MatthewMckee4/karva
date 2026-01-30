@@ -114,10 +114,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install Python dependencies
-        run: |
-          pip install pytest
-
       - name: Build wheels
         uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
         with:
@@ -128,7 +124,7 @@ jobs:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
           KARVA_MAX_PARALLELISM: 2
         run: |
-          cargo nextest run --no-fail-fast -- --include-ignored
+          cargo nextest run --no-fail-fast
 
   build-docs:
     name: "Build docs"
