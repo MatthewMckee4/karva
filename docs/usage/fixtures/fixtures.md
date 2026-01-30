@@ -257,3 +257,7 @@ def username(username):
 def test_admin_user(username):
     assert username == "admin_default_user"
 ```
+
+## Limitations
+
+Karva does not support the `request` fixture. This is an intentional design decision and there are no plans to add support for it.
