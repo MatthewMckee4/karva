@@ -20,14 +20,6 @@ impl ExpectFailTag {
         self.reason.clone()
     }
 
-    /// Convert this tag to a `PyTag` for use in Python.
-    pub(crate) fn to_py_tag(&self) -> super::python::PyTag {
-        super::python::PyTag::ExpectFail {
-            conditions: self.conditions.clone(),
-            reason: self.reason.clone(),
-        }
-    }
-
     /// Check if the test should be expected to fail.
     /// If there are no conditions, always expect fail.
     /// If there are conditions, expect fail only if any condition is true.

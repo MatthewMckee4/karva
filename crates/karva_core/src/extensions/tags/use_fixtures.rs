@@ -19,13 +19,6 @@ impl UseFixturesTag {
         &self.fixture_names
     }
 
-    /// Convert this tag to a `PyTag` for use in Python.
-    pub(crate) fn to_py_tag(&self) -> super::python::PyTag {
-        super::python::PyTag::UseFixtures {
-            fixture_names: self.fixture_names.clone(),
-        }
-    }
-
     pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let args = py_mark.getattr("args").ok()?;
         args.extract::<Vec<String>>()

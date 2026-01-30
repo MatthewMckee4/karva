@@ -14,7 +14,6 @@ mod use_fixtures;
 
 use custom::CustomTag;
 use expect_fail::ExpectFailTag;
-pub use parametrize::Parametrization;
 use parametrize::{ParametrizationArgs, ParametrizeTag};
 use skip::SkipTag;
 use use_fixtures::UseFixturesTag;
@@ -28,21 +27,11 @@ pub enum Tag {
     ExpectFail(ExpectFailTag),
     /// Custom tag/marker with arbitrary name, args, and kwargs.
     /// The inner `CustomTag` is stored for future API use but not currently accessed.
+    #[expect(dead_code)]
     Custom(CustomTag),
 }
 
 impl Tag {
-    /// Convert this Tag to a `PyTag` for use in Python.
-    pub(crate) fn to_py_tag(&self) -> python::PyTag {
-        match self {
-            Self::Parametrize(p) => p.to_py_tag(),
-            Self::UseFixtures(u) => u.to_py_tag(),
-            Self::Skip(s) => s.to_py_tag(),
-            Self::ExpectFail(e) => e.to_py_tag(),
-            Self::Custom(c) => c.to_py_tag(),
-        }
-    }
-
     /// Converts a Pytest mark into an Karva Tag.
     ///
     /// This is used to allow Pytest marks to be used as Karva tags.
@@ -240,15 +229,5 @@ impl Tags {
             }
         }
         None
-    }
-
-    /// Convert this Tags struct to `PyTags` for use in Python.
-    ///
-    /// This converts all internal tags to their Python representation.
-    /// For pytest marks, the original pytest marks should be used instead when available.
-    pub(crate) fn to_py_tags(&self) -> python::PyTags {
-        python::PyTags {
-            inner: self.inner.iter().map(Tag::to_py_tag).collect(),
-        }
     }
 }

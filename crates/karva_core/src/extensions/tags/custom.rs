@@ -6,8 +6,11 @@ use pyo3::types::{PyDict, PyTuple};
 /// This allows users to create their own markers with custom names, args, and kwargs.
 #[derive(Debug, Clone)]
 pub struct CustomTag {
+    #[expect(dead_code)]
     name: String,
+    #[expect(dead_code)]
     args: Vec<Py<PyAny>>,
+    #[expect(dead_code)]
     kwargs: Vec<(String, Py<PyAny>)>,
 }
 
@@ -18,15 +21,6 @@ impl CustomTag {
         kwargs: Vec<(String, Py<PyAny>)>,
     ) -> Self {
         Self { name, args, kwargs }
-    }
-
-    /// Convert this tag to a `PyTag` for use in Python.
-    pub(crate) fn to_py_tag(&self) -> super::python::PyTag {
-        super::python::PyTag::Custom {
-            tag_name: self.name.clone(),
-            tag_args: self.args.clone(),
-            tag_kwargs: self.kwargs.clone(),
-        }
     }
 
     /// Try to create a `CustomTag` from a pytest mark.

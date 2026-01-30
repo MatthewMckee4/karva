@@ -16,7 +16,6 @@ mod utils;
 pub use builtins::{MockEnv, create_fixture_with_finalizer, get_builtin_fixture};
 pub use finalizer::Finalizer;
 pub use normalized_fixture::{NormalizedFixture, UserDefinedFixture};
-pub use python::FixtureRequest;
 pub use scope::FixtureScope;
 pub use traits::{HasFixtures, RequiresFixtures};
 pub use utils::missing_arguments_from_error;
@@ -24,8 +23,6 @@ pub use utils::missing_arguments_from_error;
 use crate::discovery::DiscoveredPackage;
 use crate::extensions::fixtures::python::InvalidFixtureError;
 use crate::extensions::fixtures::scope::fixture_scope;
-use crate::extensions::fixtures::utils::handle_custom_fixture_params;
-use crate::extensions::tags::Parametrization;
 
 #[derive(Clone)]
 pub struct Fixture {
@@ -35,20 +32,16 @@ pub struct Fixture {
     auto_use: bool,
     function: Py<PyAny>,
     is_generator: bool,
-    params: Option<Vec<Parametrization>>,
 }
 
 impl Fixture {
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        py: Python,
         name: QualifiedFunctionName,
         stmt_function_def: Arc<StmtFunctionDef>,
         scope: FixtureScope,
         auto_use: bool,
         function: Py<PyAny>,
         is_generator: bool,
-        params: Option<Vec<Py<PyAny>>>,
     ) -> Self {
         Self {
             name,
@@ -57,7 +50,6 @@ impl Fixture {
             auto_use,
             function,
             is_generator,
-            params: params.map(|params| handle_custom_fixture_params(py, params)),
         }
     }
 
@@ -75,10 +67,6 @@ impl Fixture {
 
     pub(crate) const fn auto_use(&self) -> bool {
         self.auto_use
-    }
-
-    pub(crate) const fn params(&self) -> Option<&Vec<Parametrization>> {
-        self.params.as_ref()
     }
 
     pub(crate) const fn function(&self) -> &Py<PyAny> {
@@ -148,17 +136,6 @@ impl Fixture {
 
         let auto_use = fixture_function_marker.getattr("autouse")?;
 
-        let params = fixture_function_marker
-            .getattr("params")
-            .ok()
-            .and_then(|p| {
-                if p.is_none() {
-                    None
-                } else {
-                    p.extract::<Vec<Py<PyAny>>>().ok()
-                }
-            });
-
         let fixture_function = get_fixture_function(function)?;
 
         let name = if found_name.is_none() {
@@ -171,14 +148,12 @@ impl Fixture {
             fixture_scope(py, &scope, &name).map_err(InvalidFixtureError::new_err)?;
 
         Ok(Self::new(
-            py,
             QualifiedFunctionName::new(name, module_name),
             stmt_function_def,
             fixture_scope,
             auto_use.extract::<bool>().unwrap_or(false),
             fixture_function.into(),
             is_generator_function,
-            params,
         ))
     }
 
@@ -198,20 +173,17 @@ impl Fixture {
         let scope_obj = py_function_borrow.scope.clone();
         let name = py_function_borrow.name.clone();
         let auto_use = py_function_borrow.auto_use;
-        let params = py_function_borrow.params.clone();
 
         let fixture_scope =
             fixture_scope(py, scope_obj.bind(py), &name).map_err(InvalidFixtureError::new_err)?;
 
         Ok(Self::new(
-            py,
             QualifiedFunctionName::new(name, module_path),
             stmt_function_def,
             fixture_scope,
             auto_use,
             py_function.into(),
             is_generator_function,
-            params,
         ))
     }
 }

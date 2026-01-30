@@ -176,21 +176,6 @@ impl ParametrizeTag {
         Some(Self::new(arg_names, parametrizations))
     }
 
-    /// Convert this tag to a `PyTag` for use in Python.
-    pub(crate) fn to_py_tag(&self) -> super::python::PyTag {
-        super::python::PyTag::Parametrize {
-            arg_names: self.names.clone(),
-            arg_values: self
-                .parametrizations
-                .iter()
-                .map(|param| Param {
-                    values: param.values.clone(),
-                    tags: param.tags.clone(),
-                })
-                .collect(),
-        }
-    }
-
     /// Returns each parameterize case.
     ///
     /// Each [`HashMap`] is used as keyword arguments for the test function.

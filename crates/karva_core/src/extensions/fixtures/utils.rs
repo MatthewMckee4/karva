@@ -1,12 +1,6 @@
 use std::sync::LazyLock;
 
-use pyo3::IntoPyObjectExt;
-use pyo3::prelude::*;
-use pyo3::types::{PyAnyMethods, PyTypeMethods};
 use regex::Regex;
-
-use crate::extensions::functions::Param;
-use crate::extensions::tags::{Parametrization, Tags};
 
 static RE_MULTI: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"missing \d+ required positional arguments?: (.+)").unwrap());
@@ -44,75 +38,6 @@ pub fn missing_arguments_from_error(test_name: &str, err: &str) -> Vec<String> {
             result
         },
     )
-}
-
-/// Check for instances of `pytest.ParameterSet` and extract the parameters
-/// from it.
-pub(super) fn handle_custom_fixture_params(
-    py: Python,
-    params: Vec<Py<PyAny>>,
-) -> Vec<Parametrization> {
-    params
-        .into_iter()
-        .map(|param| {
-            let default_parametrization = || Parametrization {
-                values: vec![param.clone()],
-                tags: Tags::default(),
-            };
-
-            if let Ok(param) = param.cast_bound::<Param>(py) {
-                let param = param.borrow();
-                return Parametrization::from(param);
-            }
-
-            let Ok(bound_param) = param.clone().into_bound_py_any(py) else {
-                return default_parametrization();
-            };
-
-            let a_type = bound_param.get_type();
-
-            let Ok(type_name) = a_type.name() else {
-                return default_parametrization();
-            };
-
-            if !type_name.contains("ParameterSet").unwrap_or_default() {
-                return default_parametrization();
-            }
-
-            let Ok(params) = bound_param.getattr("values") else {
-                return default_parametrization();
-            };
-
-            let Ok(first_param) = params.get_item(0) else {
-                return default_parametrization();
-            };
-
-            let Ok(first_param) = first_param.into_py_any(py) else {
-                return default_parametrization();
-            };
-
-            let Ok(marks) = bound_param.getattr("marks") else {
-                return Parametrization {
-                    values: vec![first_param],
-                    tags: Tags::default(),
-                };
-            };
-
-            let Ok(marks) = marks.into_py_any(py) else {
-                return Parametrization {
-                    values: vec![first_param],
-                    tags: Tags::default(),
-                };
-            };
-
-            let tags = Tags::from_pytest_marks(py, &marks).unwrap_or_default();
-
-            Parametrization {
-                values: vec![first_param],
-                tags,
-            }
-        })
-        .collect()
 }
 
 #[cfg(test)]

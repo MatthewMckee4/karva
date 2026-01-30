@@ -21,14 +21,6 @@ impl SkipTag {
         self.reason.clone()
     }
 
-    /// Convert this tag to a `PyTag` for use in Python.
-    pub(crate) fn to_py_tag(&self) -> super::python::PyTag {
-        super::python::PyTag::Skip {
-            conditions: self.conditions.clone(),
-            reason: self.reason.clone(),
-        }
-    }
-
     /// Check if the test should be skipped.
     /// If there are no conditions, always skip.
     /// If there are conditions, skip only if any condition is true.

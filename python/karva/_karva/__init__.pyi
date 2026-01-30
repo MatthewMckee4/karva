@@ -19,10 +19,6 @@ class FixtureFunctionMarker(Generic[_P, _T]):
 class FixtureFunctionDefinition(Generic[_P, _T]):
     def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T: ...
 
-class FixtureRequest:
-    @property
-    def param(self) -> object: ...
-
 @overload
 def fixture(func: Callable[_P, _T]) -> FixtureFunctionDefinition[_P, _T]: ...
 @overload
@@ -32,7 +28,6 @@ def fixture(
     scope: _ScopeName = "function",
     name: str | None = ...,
     auto_use: bool = ...,
-    params: Sequence[object] | None = ...,
 ) -> FixtureFunctionMarker[_P, _T]: ...
 
 class TestFunction(Generic[_P, _T]):
