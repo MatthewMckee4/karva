@@ -31,6 +31,8 @@ prek install
 
 ### Development
 
+Note, you can use [just](https://github.com/casey/just) to run some useful commands.
+
 To run the cli on a test file, run:
 
 ```bash
@@ -46,6 +48,12 @@ If you want to run the tests, you need to build a wheel every time, so you need 
 ```bash
 maturin build
 cargo nextest run 
+```
+
+Or simply, with just, run:
+
+```bash
+just test
 ```
 
 ### Documentation
