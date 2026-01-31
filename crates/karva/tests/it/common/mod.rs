@@ -13,6 +13,8 @@ use insta::internals::SettingsBindDropGuard;
 use tempfile::TempDir;
 
 /// Lazily initialized shared venv path for test reuse (within single process).
+/// Only used on Unix where symlinks work properly with venvs.
+#[cfg(unix)]
 static SHARED_VENV: OnceLock<Utf8PathBuf> = OnceLock::new();
 
 pub struct TestContext {
@@ -50,17 +52,10 @@ impl TestContext {
             .expect("Could not find karva wheel. Run `maturin build` before running tests.")
             .to_string();
 
-        // Get or create the shared venv
-        let shared_venv = get_or_create_shared_venv(&cache_dir, &python_version, &karva_wheel);
-
-        // On Unix, symlink the shared venv into the test directory for cleaner paths.
-        // On Windows, symlinks don't work properly with venvs (scripts have hardcoded paths),
-        // so we use the shared venv path directly.
-        #[cfg(unix)]
-        {
-            let venv_link = project_path.join(".venv");
-            symlink_venv(shared_venv, &venv_link).expect("Failed to symlink shared venv");
-        }
+        // Platform-specific venv setup:
+        // - Unix: Use shared venv with symlinks for speed
+        // - Windows: Create per-test venv (symlinks don't work properly with venvs on Windows)
+        let venv_path = setup_venv(&cache_dir, &project_path, &python_version, &karva_wheel);
 
         let mut settings = Settings::clone_current();
 
@@ -75,7 +70,7 @@ impl TestContext {
 
         Self {
             project_dir_path: project_path,
-            venv_path: shared_venv.clone(),
+            venv_path,
             _temp_dir: temp_dir,
             _settings_scope: settings_scope,
         }
@@ -160,10 +155,51 @@ pub fn get_test_cache_dir() -> Utf8PathBuf {
     Utf8PathBuf::from_path_buf(test_cache).expect("Path is not valid UTF-8")
 }
 
+/// Sets up the venv for tests.
+///
+/// On Unix: Creates a shared venv once and symlinks it into each test directory.
+/// On Windows: Creates a fresh venv in each test directory (symlinks don't work with venvs).
+#[cfg(unix)]
+fn setup_venv(
+    cache_dir: &Utf8Path,
+    project_path: &Utf8Path,
+    python_version: &str,
+    karva_wheel_path: &str,
+) -> Utf8PathBuf {
+    let shared_venv = get_or_create_shared_venv(cache_dir, python_version, karva_wheel_path);
+    let venv_link = project_path.join(".venv");
+
+    std::os::unix::fs::symlink(shared_venv.as_std_path(), venv_link.as_std_path())
+        .expect("Failed to symlink shared venv");
+
+    shared_venv.clone()
+}
+
+/// Sets up the venv for tests.
+///
+/// On Windows: Creates a fresh venv in each test directory.
+/// This is slower but necessary because Windows venv scripts have hardcoded paths
+/// that break when accessed via symlinks.
+#[cfg(windows)]
+fn setup_venv(
+    _cache_dir: &Utf8Path,
+    project_path: &Utf8Path,
+    python_version: &str,
+    karva_wheel_path: &str,
+) -> Utf8PathBuf {
+    let venv_path = project_path.join(".venv");
+
+    create_and_populate_venv(&venv_path, python_version, karva_wheel_path)
+        .expect("Failed to create and populate test venv");
+
+    venv_path
+}
+
 /// Returns a reference to the shared venv path, creating it if necessary.
 ///
 /// The shared venv is stored in the cache directory and reused across all tests.
 /// Uses file locking to coordinate venv creation across parallel test processes.
+#[cfg(unix)]
 fn get_or_create_shared_venv(
     cache_dir: &Utf8Path,
     python_version: &str,
@@ -195,9 +231,7 @@ fn get_or_create_shared_venv(
             .expect("Failed to acquire lock on venv lock file");
 
         // Check if the shared venv already exists and is valid (after acquiring lock)
-        let venv_python = venv_path
-            .join(if cfg!(windows) { "Scripts" } else { "bin" })
-            .join("python");
+        let venv_python = venv_path.join("bin").join("python");
 
         if !venv_python.exists() {
             // Clean up any partial/stale shared venvs
@@ -227,6 +261,7 @@ fn get_or_create_shared_venv(
 }
 
 /// Removes old shared venvs that are no longer needed.
+#[cfg(unix)]
 fn cleanup_old_shared_venvs(cache_dir: &Utf8Path, current_venv_name: &str) {
     let Ok(entries) = std::fs::read_dir(cache_dir) else {
         return;
@@ -253,14 +288,6 @@ fn cleanup_old_shared_venvs(cache_dir: &Utf8Path, current_venv_name: &str) {
             }
         }
     }
-}
-
-/// Creates a symlink from `link_path` to `target_path`.
-#[cfg(unix)]
-fn symlink_venv(target: &Utf8Path, link_path: &Utf8Path) -> anyhow::Result<()> {
-    std::os::unix::fs::symlink(target, link_path)
-        .with_context(|| format!("Failed to symlink {link_path} -> {target}"))?;
-    Ok(())
 }
 
 fn create_and_populate_venv(
