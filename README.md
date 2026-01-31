@@ -5,7 +5,7 @@
 A Python test framework, written in Rust.
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/MatthewMckee4/karva/main/docs/assets/benchmark_results.svg" alt="Benchmark results" width="70%">
+  <img src="https://raw.githubusercontent.com/karva-dev/karva/main/docs/assets/benchmark_results.svg" alt="Benchmark results" width="70%">
 </div>
 
 ## About Karva
@@ -126,6 +126,6 @@ test result: FAILED. 1 passed; 2 failed; 0 skipped; finished in 8ms
 
 ## Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](https://github.com/MatthewMckee4/karva/blob/main/CONTRIBUTING.md) for more information.
+Contributions are welcome! See [CONTRIBUTING.md](https://github.com/karva-dev/karva/blob/main/CONTRIBUTING.md) for more information.
 
 You can also join us on [Discord](https://discord.gg/XG95vNz4Zu)
