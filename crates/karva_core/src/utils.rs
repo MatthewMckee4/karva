@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Write;
+use std::sync::Arc;
 
 use camino::Utf8Path;
 use karva_system::System;
@@ -125,7 +126,7 @@ pub(crate) fn iter_with_ancestors<'a, T: ?Sized>(
 pub(crate) fn full_test_name(
     py: Python,
     function: String,
-    kwargs: &HashMap<String, Py<PyAny>>,
+    kwargs: &HashMap<String, Arc<Py<PyAny>>>,
 ) -> String {
     if kwargs.is_empty() {
         function

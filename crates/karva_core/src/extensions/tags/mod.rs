@@ -1,4 +1,5 @@
 use std::ops::Deref;
+use std::sync::Arc;
 
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
@@ -53,19 +54,19 @@ impl Tag {
     /// If not, we try to call it to see if it returns a `PyTag` or `PyTags`.
     pub(crate) fn try_from_py_any(py: Python, py_any: &Py<PyAny>) -> Option<Self> {
         if let Ok(tag) = py_any.cast_bound::<PyTag>(py) {
-            return Some(Self::from_karva_tag(tag.borrow()));
+            return Some(Self::from_karva_tag(py, tag.borrow()));
         } else if let Ok(tag) = py_any.cast_bound::<PyTags>(py)
             && let Some(tag) = tag.borrow().inner.first()
         {
-            return Some(Self::from_karva_tag(tag));
+            return Some(Self::from_karva_tag(py, tag));
         } else if let Ok(tag) = py_any.call0(py) {
             if let Ok(tag) = tag.cast_bound::<PyTag>(py) {
-                return Some(Self::from_karva_tag(tag.borrow()));
+                return Some(Self::from_karva_tag(py, tag.borrow()));
             }
             if let Ok(tag) = tag.cast_bound::<PyTags>(py)
                 && let Some(tag) = tag.borrow().inner.first()
             {
-                return Some(Self::from_karva_tag(tag));
+                return Some(Self::from_karva_tag(py, tag));
             }
         }
 
@@ -73,7 +74,7 @@ impl Tag {
     }
 
     /// Converts a Karva Python tag into our internal representation.
-    pub(crate) fn from_karva_tag<T>(py_tag: T) -> Self
+    pub(crate) fn from_karva_tag<T>(py: Python, py_tag: T) -> Self
     where
         T: Deref<Target = PyTag>,
     {
@@ -100,8 +101,11 @@ impl Tag {
                 tag_kwargs,
             } => Self::Custom(CustomTag::new(
                 tag_name.clone(),
-                tag_args.clone(),
-                tag_kwargs.clone(),
+                tag_args.iter().map(|a| Arc::new(a.clone_ref(py))).collect(),
+                tag_kwargs
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Arc::new(v.clone_ref(py))))
+                    .collect(),
             )),
         }
     }
@@ -136,14 +140,14 @@ impl Tags {
         if let Ok(py_test_function) = py_function.extract::<Py<PyTestFunction>>(py) {
             let mut tags = Vec::new();
             for tag in &py_test_function.borrow(py).tags.inner {
-                tags.push(Tag::from_karva_tag(tag));
+                tags.push(Tag::from_karva_tag(py, tag));
             }
             return Self::new(tags);
         } else if let Ok(wrapped) = py_function.getattr(py, "__wrapped__") {
             if let Ok(py_wrapped_function) = wrapped.extract::<Py<PyTestFunction>>(py) {
                 let mut tags = Vec::new();
                 for tag in &py_wrapped_function.borrow(py).tags.inner {
-                    tags.push(Tag::from_karva_tag(tag));
+                    tags.push(Tag::from_karva_tag(py, tag));
                 }
                 return Self::new(tags);
             }

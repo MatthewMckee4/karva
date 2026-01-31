@@ -15,13 +15,13 @@ pub struct BuiltInFixture {
     /// Built-in fixture name
     pub(crate) name: String,
     /// Pre-computed value for the built-in fixture
-    pub(crate) py_value: Py<PyAny>,
+    pub(crate) py_value: Arc<Py<PyAny>>,
     /// Normalized dependencies (already expanded for their params)
     pub(crate) dependencies: Vec<Arc<NormalizedFixture>>,
     /// Fixture scope
     pub(crate) scope: FixtureScope,
     /// Optional finalizer to call after the fixture is used
-    pub(crate) finalizer: Option<Py<PyAny>>,
+    pub(crate) finalizer: Option<Arc<Py<PyAny>>>,
 }
 
 /// User-defined fixture data
@@ -36,7 +36,7 @@ pub struct UserDefinedFixture {
     /// If this fixture is a generator
     pub(crate) is_generator: bool,
     /// The computed value or imported python function to compute the value
-    pub(crate) py_function: Py<PyAny>,
+    pub(crate) py_function: Arc<Py<PyAny>>,
     /// The function definition for this fixture
     pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
 }
@@ -55,7 +55,7 @@ impl NormalizedFixture {
     pub(crate) fn built_in(name: String, value: Py<PyAny>) -> Self {
         Self::BuiltIn(BuiltInFixture {
             name,
-            py_value: value,
+            py_value: Arc::new(value),
             dependencies: vec![],
             scope: FixtureScope::Function,
             finalizer: None,
@@ -70,10 +70,10 @@ impl NormalizedFixture {
     ) -> Self {
         Self::BuiltIn(BuiltInFixture {
             name,
-            py_value: value,
+            py_value: Arc::new(value),
             dependencies: vec![],
             scope: FixtureScope::Function,
-            finalizer: Some(finalizer),
+            finalizer: Some(Arc::new(finalizer)),
         })
     }
 
@@ -131,17 +131,17 @@ impl NormalizedFixture {
     pub(crate) fn call(
         &self,
         py: Python,
-        fixture_arguments: &HashMap<String, Py<PyAny>>,
+        fixture_arguments: &HashMap<String, Arc<Py<PyAny>>>,
     ) -> PyResult<Py<PyAny>> {
         // For builtin fixtures, the value is stored directly in the function field
         // and function_definition is None. Return the value directly without calling.
         match self {
-            Self::BuiltIn(built_in_fixture) => Ok(built_in_fixture.py_value.clone()),
+            Self::BuiltIn(built_in_fixture) => Ok(built_in_fixture.py_value.clone_ref(py)),
             Self::UserDefined(user_defined_fixture) => {
                 let kwargs_dict = PyDict::new(py);
 
                 for (key, value) in fixture_arguments {
-                    let _ = kwargs_dict.set_item(key.clone(), value);
+                    let _ = kwargs_dict.set_item(key.clone(), value.as_ref());
                 }
 
                 if kwargs_dict.is_empty() {

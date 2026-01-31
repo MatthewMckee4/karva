@@ -68,7 +68,6 @@ impl Normalizer {
         let fixture_name = fixture.name().clone();
         let fixture_scope = fixture.scope();
         let is_generator = fixture.is_generator();
-        let py_function = fixture.function().clone();
         let stmt_function_def = Arc::clone(fixture.stmt_function_def());
 
         let result: Arc<[Arc<NormalizedFixture>]> = normalized_dependent_fixtures
@@ -79,7 +78,7 @@ impl Normalizer {
                     dependencies: dependencies.to_vec(),
                     scope: fixture_scope,
                     is_generator,
-                    py_function: py_function.clone(),
+                    py_function: Arc::new(fixture.function().clone_ref(py)),
                     stmt_function_def: Arc::clone(&stmt_function_def),
                 }))
             })
@@ -135,7 +134,7 @@ impl Normalizer {
         let mut result = Vec::with_capacity(total_tests);
 
         let test_name = test_function.name.clone();
-        let test_py_function = test_function.py_function.clone();
+        let test_py_function = test_function.py_function.clone_ref(py);
         let test_stmt_function_def = Arc::clone(&test_function.stmt_function_def);
         let base_tags = &test_function.tags;
 
@@ -145,13 +144,18 @@ impl Normalizer {
                     let mut new_tags = base_tags.clone();
                     new_tags.extend(&param_args.tags);
 
+                    let params: HashMap<String, Py<PyAny>> = param_args
+                        .values
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone_ref(py)))
+                        .collect();
                     result.push(NormalizedTest {
                         name: test_name.clone(),
-                        params: param_args.values.clone(),
+                        params,
                         fixture_dependencies: dep_combination.to_vec(),
                         use_fixture_dependencies: use_fixture_combination.to_vec(),
                         auto_use_fixtures: auto_use_fixtures.to_vec(),
-                        function: test_py_function.clone(),
+                        function: test_py_function.clone_ref(py),
                         tags: new_tags,
                         stmt_function_def: Arc::clone(&test_stmt_function_def),
                     });

@@ -5,6 +5,7 @@
 //! Ruff diagnostics look great and have a great API.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use karva_diagnostic::Traceback;
 use karva_python_semantic::FunctionKind;
@@ -286,7 +287,7 @@ pub fn report_test_failure(
     py: Python,
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
-    arguments: &HashMap<String, Py<PyAny>>,
+    arguments: &HashMap<String, Arc<Py<PyAny>>>,
     error: &PyErr,
 ) {
     let builder = context.report_diagnostic(&TEST_FAILURE);
@@ -313,7 +314,7 @@ fn handle_failed_function_call(
     py: Python,
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
-    arguments: &HashMap<String, Py<PyAny>>,
+    arguments: &HashMap<String, Arc<Py<PyAny>>>,
     function_kind: FunctionKind,
     error: &PyErr,
 ) {

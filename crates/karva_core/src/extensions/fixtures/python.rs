@@ -47,7 +47,7 @@ impl FixtureFunctionMarker {
         let fixture_def = FixtureFunctionDefinition {
             function,
             name: func_name,
-            scope: self.scope.clone(),
+            scope: self.scope.clone_ref(py),
             auto_use: self.auto_use,
         };
 

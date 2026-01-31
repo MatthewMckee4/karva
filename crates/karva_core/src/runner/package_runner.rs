@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+type FixtureArguments = HashMap<String, Arc<Py<PyAny>>>;
+
 use karva_diagnostic::IndividualTestResultKind;
 use karva_python_semantic::{FunctionKind, QualifiedTestName};
 use pyo3::prelude::*;
@@ -165,7 +167,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
 
         fixture_call_errors.extend(use_fixture_errors);
 
-        let mut function_arguments = HashMap::new();
+        let mut function_arguments: FixtureArguments = HashMap::new();
 
         for fixture in &fixture_dependencies {
             match self.run_fixture(py, fixture) {
@@ -186,7 +188,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
         fixture_call_errors.extend(auto_use_errors);
 
         for (key, value) in params {
-            function_arguments.insert(key, value);
+            function_arguments.insert(key, Arc::new(value));
         }
 
         let full_test_name = full_test_name(py, name.to_string(), &function_arguments);
@@ -197,7 +199,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
 
         let py_dict = PyDict::new(py);
         for (key, value) in &function_arguments {
-            let _ = py_dict.set_item(key, value);
+            let _ = py_dict.set_item(key, value.as_ref());
         }
 
         let run_test = || {
@@ -309,7 +311,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
         &self,
         py: Python<'_>,
         fixture: &NormalizedFixture,
-    ) -> Result<(Py<PyAny>, Option<Finalizer>), FixtureCallError> {
+    ) -> Result<(Arc<Py<PyAny>>, Option<Finalizer>), FixtureCallError> {
         if let Some(cached) = self
             .fixture_cache
             .get(fixture.function_name(), fixture.scope())
@@ -317,7 +319,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
             return Ok((cached, None));
         }
 
-        let mut function_arguments = HashMap::new();
+        let mut function_arguments: FixtureArguments = HashMap::new();
 
         for fixture in fixture.dependencies() {
             match self.run_fixture(py, fixture) {
@@ -349,7 +351,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
                         self.context.system(),
                         fixture_def.name.module_path().path(),
                     ),
-                    arguments: function_arguments.clone(),
+                    arguments: function_arguments,
                 });
             }
         };
@@ -370,16 +372,18 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
                             self.context.system(),
                             fixture_def.name.module_path().path(),
                         ),
-                        arguments: function_arguments.clone(),
+                        arguments: HashMap::new(),
                     });
                 }
             };
+
+        let final_result = Arc::new(final_result);
 
         if fixture.is_user_defined() {
             // Cache the result
             self.fixture_cache.insert(
                 fixture.function_name().to_string(),
-                final_result.clone(),
+                Arc::clone(&final_result),
                 fixture.scope(),
             );
         }
@@ -447,7 +451,7 @@ fn get_value_and_finalizer(
     if let Some(user_defined_fixture) = fixture.as_user_defined()
         && user_defined_fixture.is_generator
         && let Ok(mut bound_iterator) = fixture_call_result
-            .clone()
+            .clone_ref(py)
             .into_bound(py)
             .cast_into::<PyIterator>()
     {
@@ -456,7 +460,7 @@ fn get_value_and_finalizer(
                 let py_iter = bound_iterator.clone().unbind();
                 let finalizer = {
                     Finalizer {
-                        fixture_return: py_iter,
+                        fixture_return: Arc::new(py_iter),
                         scope: fixture.scope(),
                         fixture_name: Some(user_defined_fixture.name.clone()),
                         stmt_function_def: Some(user_defined_fixture.stmt_function_def.clone()),
@@ -476,7 +480,7 @@ fn get_value_and_finalizer(
     {
         let py_iter_unbound = bound_iterator.clone().unbind();
         let finalizer = Finalizer {
-            fixture_return: py_iter_unbound,
+            fixture_return: Arc::new(py_iter_unbound),
             scope: builtin_fixture.scope,
             fixture_name: None,
             stmt_function_def: None,
@@ -493,5 +497,5 @@ pub struct FixtureCallError {
     pub error: PyErr,
     pub stmt_function_def: Arc<StmtFunctionDef>,
     pub source_file: SourceFile,
-    pub arguments: HashMap<String, Py<PyAny>>,
+    pub arguments: FixtureArguments,
 }

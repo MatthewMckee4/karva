@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
@@ -9,16 +11,16 @@ pub struct CustomTag {
     #[expect(dead_code)]
     name: String,
     #[expect(dead_code)]
-    args: Vec<Py<PyAny>>,
+    args: Vec<Arc<Py<PyAny>>>,
     #[expect(dead_code)]
-    kwargs: Vec<(String, Py<PyAny>)>,
+    kwargs: Vec<(String, Arc<Py<PyAny>>)>,
 }
 
 impl CustomTag {
     pub(crate) fn new(
         name: String,
-        args: Vec<Py<PyAny>>,
-        kwargs: Vec<(String, Py<PyAny>)>,
+        args: Vec<Arc<Py<PyAny>>>,
+        kwargs: Vec<(String, Arc<Py<PyAny>>)>,
     ) -> Self {
         Self { name, args, kwargs }
     }
@@ -30,7 +32,7 @@ impl CustomTag {
         // Extract args
         let args = if let Ok(args_tuple) = py_mark.getattr("args") {
             if let Ok(tuple) = args_tuple.cast::<PyTuple>() {
-                tuple.iter().map(pyo3::Bound::unbind).collect()
+                tuple.iter().map(|item| Arc::new(item.unbind())).collect()
             } else {
                 Vec::new()
             }
@@ -44,7 +46,7 @@ impl CustomTag {
                 dict.iter()
                     .filter_map(|(key, value)| {
                         let key_str = key.extract::<String>().ok()?;
-                        Some((key_str, value.unbind()))
+                        Some((key_str, Arc::new(value.unbind())))
                     })
                     .collect()
             } else {

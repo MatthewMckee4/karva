@@ -30,7 +30,7 @@ pub struct Fixture {
     stmt_function_def: Arc<StmtFunctionDef>,
     scope: FixtureScope,
     auto_use: bool,
-    function: Py<PyAny>,
+    function: Arc<Py<PyAny>>,
     is_generator: bool,
 }
 
@@ -48,7 +48,7 @@ impl Fixture {
             stmt_function_def,
             scope,
             auto_use,
-            function,
+            function: Arc::new(function),
             is_generator,
         }
     }
@@ -69,7 +69,7 @@ impl Fixture {
         self.auto_use
     }
 
-    pub(crate) const fn function(&self) -> &Py<PyAny> {
+    pub(crate) fn function(&self) -> &Py<PyAny> {
         &self.function
     }
 
@@ -170,7 +170,7 @@ impl Fixture {
 
         let py_function_borrow = py_function.try_borrow_mut()?;
 
-        let scope_obj = py_function_borrow.scope.clone();
+        let scope_obj = py_function_borrow.scope.clone_ref(py);
         let name = py_function_borrow.name.clone();
         let auto_use = py_function_borrow.auto_use;
 

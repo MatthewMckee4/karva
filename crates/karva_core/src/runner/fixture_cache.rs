@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use pyo3::prelude::*;
 
@@ -8,18 +8,18 @@ use crate::extensions::fixtures::FixtureScope;
 /// Manages caching of fixture values based on their scope.
 #[derive(Debug, Default)]
 pub struct FixtureCache {
-    session: Mutex<HashMap<String, Py<PyAny>>>,
+    session: Mutex<HashMap<String, Arc<Py<PyAny>>>>,
 
-    package: Mutex<HashMap<String, Py<PyAny>>>,
+    package: Mutex<HashMap<String, Arc<Py<PyAny>>>>,
 
-    module: Mutex<HashMap<String, Py<PyAny>>>,
+    module: Mutex<HashMap<String, Arc<Py<PyAny>>>>,
 
-    function: Mutex<HashMap<String, Py<PyAny>>>,
+    function: Mutex<HashMap<String, Arc<Py<PyAny>>>>,
 }
 
 impl FixtureCache {
     /// Get a fixture value from the cache based on its scope
-    pub fn get(&self, name: &str, scope: FixtureScope) -> Option<Py<PyAny>> {
+    pub fn get(&self, name: &str, scope: FixtureScope) -> Option<Arc<Py<PyAny>>> {
         match scope {
             FixtureScope::Session => self.session.lock().unwrap().get(name).cloned(),
             FixtureScope::Package => self.package.lock().unwrap().get(name).cloned(),
@@ -29,7 +29,7 @@ impl FixtureCache {
     }
 
     /// Insert a fixture value into the cache based on its scope
-    pub fn insert(&self, name: String, value: Py<PyAny>, scope: FixtureScope) {
+    pub fn insert(&self, name: String, value: Arc<Py<PyAny>>, scope: FixtureScope) {
         match scope {
             FixtureScope::Session => {
                 self.session.lock().unwrap().insert(name, value);
