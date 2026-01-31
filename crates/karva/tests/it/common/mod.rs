@@ -1,13 +1,19 @@
 #![allow(clippy::print_stderr)]
+use std::fs::File;
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 use std::time::Instant;
 
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use directories::ProjectDirs;
+use fs4::fs_std::FileExt;
 use insta::Settings;
 use insta::internals::SettingsBindDropGuard;
 use tempfile::TempDir;
+
+/// Lazily initialized shared venv path for test reuse (within single process).
+static SHARED_VENV: OnceLock<Utf8PathBuf> = OnceLock::new();
 
 pub struct TestContext {
     _temp_dir: TempDir,
@@ -45,8 +51,9 @@ impl TestContext {
             .expect("Could not find karva wheel. Run `maturin build` before running tests.")
             .to_string();
 
-        create_and_populate_venv(&venv_path, &python_version, &karva_wheel)
-            .expect("Failed to create and populate test venv");
+        // Get or create the shared venv and symlink it into the test directory
+        let shared_venv = get_or_create_shared_venv(&cache_dir, &python_version, &karva_wheel);
+        symlink_venv(shared_venv, &venv_path).expect("Failed to symlink shared venv");
 
         let mut settings = Settings::clone_current();
 
@@ -57,10 +64,7 @@ impl TestContext {
 
         let settings_scope = settings.bind_to_scope();
 
-        eprintln!(
-            "Time to create and populate test venv: {:?}",
-            start.elapsed()
-        );
+        eprintln!("Time to set up test context: {:?}", start.elapsed());
 
         Self {
             project_dir_path: project_path,
@@ -147,6 +151,119 @@ pub fn get_test_cache_dir() -> Utf8PathBuf {
     let cache_dir = proj_dirs.cache_dir();
     let test_cache = cache_dir.join("test-cache");
     Utf8PathBuf::from_path_buf(test_cache).expect("Path is not valid UTF-8")
+}
+
+/// Returns a reference to the shared venv path, creating it if necessary.
+///
+/// The shared venv is stored in the cache directory and reused across all tests.
+/// Uses file locking to coordinate venv creation across parallel test processes.
+fn get_or_create_shared_venv(
+    cache_dir: &Utf8Path,
+    python_version: &str,
+    karva_wheel_path: &str,
+) -> &'static Utf8PathBuf {
+    SHARED_VENV.get_or_init(|| {
+        let start = Instant::now();
+
+        // Include wheel modification time in the venv name to invalidate when wheel changes
+        let wheel_mtime = std::fs::metadata(karva_wheel_path)
+            .and_then(|m| m.modified())
+            .map(|t| {
+                t.duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0)
+            })
+            .unwrap_or(0);
+
+        let venv_name = format!("shared-venv-py{python_version}-{wheel_mtime}");
+        let venv_path = cache_dir.join(&venv_name);
+
+        // Use a lock file to coordinate venv creation across parallel test processes
+        let lock_path = cache_dir.join(format!("{venv_name}.lock"));
+        let lock_file = File::create(&lock_path).expect("Failed to create lock file");
+
+        // Acquire exclusive lock (blocks until available)
+        lock_file
+            .lock_exclusive()
+            .expect("Failed to acquire lock on venv lock file");
+
+        // Check if the shared venv already exists and is valid (after acquiring lock)
+        let venv_python = venv_path
+            .join(if cfg!(windows) { "Scripts" } else { "bin" })
+            .join("python");
+
+        if !venv_python.exists() {
+            // Clean up any partial/stale shared venvs
+            if venv_path.exists() {
+                let _ = std::fs::remove_dir_all(&venv_path);
+            }
+
+            // Clean up old shared venvs (from previous wheel builds)
+            cleanup_old_shared_venvs(cache_dir, &venv_name);
+
+            create_and_populate_venv(&venv_path, python_version, karva_wheel_path)
+                .expect("Failed to create shared venv");
+
+            eprintln!(
+                "Created shared venv at {venv_path} in {:?}",
+                start.elapsed()
+            );
+        } else {
+            eprintln!("Reusing shared venv at {venv_path}");
+        }
+
+        // Lock is automatically released when lock_file goes out of scope
+        drop(lock_file);
+
+        venv_path
+    })
+}
+
+/// Removes old shared venvs that are no longer needed.
+fn cleanup_old_shared_venvs(cache_dir: &Utf8Path, current_venv_name: &str) {
+    let Ok(entries) = std::fs::read_dir(cache_dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+
+        // Remove old shared venvs and their lock files (but not the current one)
+        let is_lock_file = std::path::Path::new(name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("lock"));
+
+        if name.starts_with("shared-venv-") && !is_lock_file && name != current_venv_name {
+            let _ = std::fs::remove_dir_all(&path);
+            eprintln!("Cleaned up old shared venv: {name}");
+        } else if name.starts_with("shared-venv-") && is_lock_file {
+            let venv_name = name.trim_end_matches(".lock");
+            if venv_name != current_venv_name {
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+    }
+}
+
+/// Creates a symlink from `link_path` to `target_path`.
+fn symlink_venv(target: &Utf8Path, link_path: &Utf8Path) -> anyhow::Result<()> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(target, link_path)
+            .with_context(|| format!("Failed to symlink {link_path} -> {target}"))?;
+    }
+
+    #[cfg(windows)]
+    {
+        // Use junction on Windows as it doesn't require elevated privileges
+        std::os::windows::fs::symlink_dir(target, link_path)
+            .with_context(|| format!("Failed to symlink {link_path} -> {target}"))?;
+    }
+
+    Ok(())
 }
 
 fn create_and_populate_venv(
