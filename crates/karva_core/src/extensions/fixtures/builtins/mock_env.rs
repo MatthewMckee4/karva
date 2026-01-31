@@ -142,7 +142,7 @@ impl MockEnv {
 
         // Store for undo
         self.setattr.lock().unwrap().push((
-            actual_target.clone(),
+            actual_target.clone_ref(py),
             actual_name.clone(),
             final_oldval,
         ));
@@ -212,10 +212,11 @@ impl MockEnv {
         };
 
         // Store for undo
-        self.setattr
-            .lock()
-            .unwrap()
-            .push((actual_target.clone(), actual_name.clone(), oldval));
+        self.setattr.lock().unwrap().push((
+            actual_target.clone_ref(py),
+            actual_name.clone(),
+            oldval,
+        ));
 
         // Delete attribute
         actual_target.bind(py).delattr(&actual_name)?;
@@ -244,7 +245,7 @@ impl MockEnv {
         self.setitem
             .lock()
             .unwrap()
-            .push((dic.clone(), name.clone(), oldval));
+            .push((dic.clone_ref(py), name.clone_ref(py), oldval));
 
         // Set new value
         bound_dic.set_item(&name, value)?;
@@ -276,7 +277,7 @@ impl MockEnv {
         self.setitem
             .lock()
             .unwrap()
-            .push((dic.clone(), name.clone(), oldval));
+            .push((dic.clone_ref(py), name.clone_ref(py), oldval));
 
         bound_dic.del_item(&name)?;
 
@@ -316,10 +317,11 @@ impl MockEnv {
             .get_item(&name_key)
             .map_or_else(|_| py.None(), Into::into);
 
-        self.setitem
-            .lock()
-            .unwrap()
-            .push((environ.clone().unbind(), name_key.clone(), oldval));
+        self.setitem.lock().unwrap().push((
+            environ.clone().unbind(),
+            name_key.clone_ref(py),
+            oldval,
+        ));
 
         environ.set_item(&name_key, value_obj)?;
 
@@ -344,10 +346,11 @@ impl MockEnv {
 
         let oldval = environ.get_item(&name_key)?.into();
 
-        self.setitem
-            .lock()
-            .unwrap()
-            .push((environ.clone().unbind(), name_key.clone(), oldval));
+        self.setitem.lock().unwrap().push((
+            environ.clone().unbind(),
+            name_key.clone_ref(py),
+            oldval,
+        ));
 
         environ.del_item(&name_key)?;
 

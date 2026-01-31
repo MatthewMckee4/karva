@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::rc::Rc;
 
 use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
@@ -15,13 +15,13 @@ pub struct BuiltInFixture {
     /// Built-in fixture name
     pub(crate) name: String,
     /// Pre-computed value for the built-in fixture
-    pub(crate) py_value: Py<PyAny>,
+    pub(crate) py_value: Rc<Py<PyAny>>,
     /// Normalized dependencies (already expanded for their params)
-    pub(crate) dependencies: Vec<Arc<NormalizedFixture>>,
+    pub(crate) dependencies: Vec<Rc<NormalizedFixture>>,
     /// Fixture scope
     pub(crate) scope: FixtureScope,
     /// Optional finalizer to call after the fixture is used
-    pub(crate) finalizer: Option<Py<PyAny>>,
+    pub(crate) finalizer: Option<Rc<Py<PyAny>>>,
 }
 
 /// User-defined fixture data
@@ -30,15 +30,15 @@ pub struct UserDefinedFixture {
     /// Qualified function name
     pub(crate) name: QualifiedFunctionName,
     /// Normalized dependencies (already expanded for their params)
-    pub(crate) dependencies: Vec<Arc<NormalizedFixture>>,
+    pub(crate) dependencies: Vec<Rc<NormalizedFixture>>,
     /// Fixture scope
     pub(crate) scope: FixtureScope,
     /// If this fixture is a generator
     pub(crate) is_generator: bool,
     /// The computed value or imported python function to compute the value
-    pub(crate) py_function: Py<PyAny>,
+    pub(crate) py_function: Rc<Py<PyAny>>,
     /// The function definition for this fixture
-    pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
+    pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
 }
 
 /// A normalized fixture represents a concrete instance of a fixture.
@@ -55,7 +55,7 @@ impl NormalizedFixture {
     pub(crate) fn built_in(name: String, value: Py<PyAny>) -> Self {
         Self::BuiltIn(BuiltInFixture {
             name,
-            py_value: value,
+            py_value: Rc::new(value),
             dependencies: vec![],
             scope: FixtureScope::Function,
             finalizer: None,
@@ -70,10 +70,10 @@ impl NormalizedFixture {
     ) -> Self {
         Self::BuiltIn(BuiltInFixture {
             name,
-            py_value: value,
+            py_value: Rc::new(value),
             dependencies: vec![],
             scope: FixtureScope::Function,
-            finalizer: Some(finalizer),
+            finalizer: Some(Rc::new(finalizer)),
         })
     }
 
@@ -86,7 +86,7 @@ impl NormalizedFixture {
     }
 
     /// Returns the fixture dependencies
-    pub(crate) fn dependencies(&self) -> &Vec<Arc<Self>> {
+    pub(crate) fn dependencies(&self) -> &Vec<Rc<Self>> {
         match self {
             Self::BuiltIn(fixture) => &fixture.dependencies,
             Self::UserDefined(fixture) => &fixture.dependencies,
@@ -136,7 +136,7 @@ impl NormalizedFixture {
         // For builtin fixtures, the value is stored directly in the function field
         // and function_definition is None. Return the value directly without calling.
         match self {
-            Self::BuiltIn(built_in_fixture) => Ok(built_in_fixture.py_value.clone()),
+            Self::BuiltIn(built_in_fixture) => Ok(built_in_fixture.py_value.clone_ref(py)),
             Self::UserDefined(user_defined_fixture) => {
                 let kwargs_dict = PyDict::new(py);
 

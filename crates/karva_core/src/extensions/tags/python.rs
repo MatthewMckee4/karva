@@ -5,7 +5,7 @@ use pyo3::types::{PyDict, PyTuple};
 
 use crate::extensions::functions::python::Param;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 #[pyclass(name = "tag")]
 pub enum PyTag {
     #[pyo3(name = "parametrize")]
@@ -35,6 +35,43 @@ pub enum PyTag {
         tag_args: Vec<Py<PyAny>>,
         tag_kwargs: Vec<(String, Py<PyAny>)>,
     },
+}
+
+impl PyTag {
+    pub(crate) fn clone_ref(&self, py: Python<'_>) -> Self {
+        match self {
+            Self::Parametrize {
+                arg_names,
+                arg_values,
+            } => Self::Parametrize {
+                arg_names: arg_names.clone(),
+                arg_values: arg_values.clone(),
+            },
+            Self::UseFixtures { fixture_names } => Self::UseFixtures {
+                fixture_names: fixture_names.clone(),
+            },
+            Self::Skip { conditions, reason } => Self::Skip {
+                conditions: conditions.clone(),
+                reason: reason.clone(),
+            },
+            Self::ExpectFail { conditions, reason } => Self::ExpectFail {
+                conditions: conditions.clone(),
+                reason: reason.clone(),
+            },
+            Self::Custom {
+                tag_name,
+                tag_args,
+                tag_kwargs,
+            } => Self::Custom {
+                tag_name: tag_name.clone(),
+                tag_args: tag_args.iter().map(|arg| arg.clone_ref(py)).collect(),
+                tag_kwargs: tag_kwargs
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone_ref(py)))
+                    .collect(),
+            },
+        }
+    }
 }
 
 #[pymethods]
@@ -77,10 +114,18 @@ impl PyTag {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 #[pyclass(name = "Tags")]
 pub struct PyTags {
     pub inner: Vec<PyTag>,
+}
+
+impl PyTags {
+    pub(crate) fn clone_ref(&self, py: Python<'_>) -> Self {
+        Self {
+            inner: self.inner.iter().map(|tag| tag.clone_ref(py)).collect(),
+        }
+    }
 }
 
 #[pymethods]
@@ -88,20 +133,23 @@ impl PyTags {
     #[pyo3(signature = (f, /))]
     pub fn __call__(&self, py: Python<'_>, f: Py<PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(tag_obj) = f.cast_bound::<Self>(py) {
-            tag_obj.borrow_mut().inner.extend(self.inner.clone());
+            let cloned_inner: Vec<PyTag> = self.inner.iter().map(|tag| tag.clone_ref(py)).collect();
+            tag_obj.borrow_mut().inner.extend(cloned_inner);
             return tag_obj.into_py_any(py);
         } else if let Ok(test_case) = f.cast_bound::<PyTestFunction>(py) {
-            test_case.borrow_mut().tags.inner.extend(self.inner.clone());
+            let cloned_inner: Vec<PyTag> = self.inner.iter().map(|tag| tag.clone_ref(py)).collect();
+            test_case.borrow_mut().tags.inner.extend(cloned_inner);
             return test_case.into_py_any(py);
         } else if f.bind(py).is_callable() {
             let test_case = PyTestFunction {
-                tags: self.clone(),
+                tags: self.clone_ref(py),
                 function: f,
             };
             return test_case.into_py_any(py);
-        } else if let Ok(tag) = f.extract::<PyTag>(py) {
-            let mut new_tags = self.inner.clone();
-            new_tags.push(tag);
+        } else if let Ok(tag_bound) = f.cast_bound::<PyTag>(py) {
+            let tag = tag_bound.borrow();
+            let mut new_tags: Vec<PyTag> = self.inner.iter().map(|t| t.clone_ref(py)).collect();
+            new_tags.push(tag.clone_ref(py));
             return new_tags.into_py_any(py);
         }
         Err(PyErr::new::<PyTypeError, _>(
@@ -316,7 +364,12 @@ impl CustomTagBuilder {
             if let Ok(first_item) = args.get_item(0) {
                 // Check if it's already a PyTestFunction (stacked decorators)
                 if let Ok(test_case) = first_item.extract::<PyRef<PyTestFunction>>() {
-                    let mut new_tags = test_case.tags.inner.clone();
+                    let mut new_tags: Vec<PyTag> = test_case
+                        .tags
+                        .inner
+                        .iter()
+                        .map(|t| t.clone_ref(py))
+                        .collect();
                     new_tags.push(custom_tag);
                     return PyTestFunction {
                         tags: PyTags { inner: new_tags },
@@ -326,7 +379,8 @@ impl CustomTagBuilder {
                 }
                 // Check if it's a PyTags object
                 if let Ok(tag_obj) = first_item.extract::<PyRef<PyTags>>() {
-                    let mut new_tags = tag_obj.inner.clone();
+                    let mut new_tags: Vec<PyTag> =
+                        tag_obj.inner.iter().map(|t| t.clone_ref(py)).collect();
                     new_tags.push(custom_tag);
                     return PyTags { inner: new_tags }.into_py_any(py);
                 }
@@ -370,13 +424,17 @@ impl CustomTagBuilder {
 #[derive(Debug)]
 #[pyclass(name = "TestFunction")]
 pub struct PyTestFunction {
-    #[pyo3(get)]
     pub tags: PyTags,
     pub function: Py<PyAny>,
 }
 
 #[pymethods]
 impl PyTestFunction {
+    #[getter]
+    fn tags(&self, py: Python<'_>) -> PyTags {
+        self.tags.clone_ref(py)
+    }
+
     #[pyo3(signature = (*args, **kwargs))]
     fn __call__(
         &self,

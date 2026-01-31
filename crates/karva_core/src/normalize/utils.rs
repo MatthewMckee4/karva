@@ -1,15 +1,15 @@
-use std::sync::Arc;
+use std::rc::Rc;
 
-/// Computes the cartesian product of multiple Arc slices.
-pub fn cartesian_product_arc<T: Clone>(vecs: &[Arc<[T]>]) -> Vec<Arc<[T]>> {
+/// Computes the cartesian product of multiple Rc slices.
+pub fn cartesian_product_rc<T: Clone>(vecs: &[Rc<[T]>]) -> Vec<Rc<[T]>> {
     if vecs.is_empty() {
-        return vec![Arc::from(Vec::new().into_boxed_slice())];
+        return vec![Rc::from(Vec::new().into_boxed_slice())];
     }
 
     if vecs.len() == 1 {
         return vecs[0]
             .iter()
-            .map(|item| Arc::from(vec![item.clone()].into_boxed_slice()))
+            .map(|item| Rc::from(vec![item.clone()].into_boxed_slice()))
             .collect();
     }
 
@@ -32,7 +32,7 @@ pub fn cartesian_product_arc<T: Clone>(vecs: &[Arc<[T]>]) -> Vec<Arc<[T]>> {
 
     result
         .into_iter()
-        .map(|v| Arc::from(v.into_boxed_slice()))
+        .map(|v| Rc::from(v.into_boxed_slice()))
         .collect()
 }
 
@@ -42,16 +42,16 @@ mod tests {
 
     #[test]
     fn test_cartesian_product_empty() {
-        let input: Vec<Arc<[i32]>> = vec![];
-        let result = cartesian_product_arc(&input);
+        let input: Vec<Rc<[i32]>> = vec![];
+        let result = cartesian_product_rc(&input);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].len(), 0);
     }
 
     #[test]
     fn test_cartesian_product_single() {
-        let input = vec![Arc::from(vec![1, 2, 3].into_boxed_slice())];
-        let result = cartesian_product_arc(&input);
+        let input = vec![Rc::from(vec![1, 2, 3].into_boxed_slice())];
+        let result = cartesian_product_rc(&input);
         assert_eq!(result.len(), 3);
         assert_eq!(&*result[0], &[1]);
         assert_eq!(&*result[1], &[2]);
@@ -61,10 +61,10 @@ mod tests {
     #[test]
     fn test_cartesian_product_two() {
         let input = vec![
-            Arc::from(vec![1, 2].into_boxed_slice()),
-            Arc::from(vec![3, 4].into_boxed_slice()),
+            Rc::from(vec![1, 2].into_boxed_slice()),
+            Rc::from(vec![3, 4].into_boxed_slice()),
         ];
-        let result = cartesian_product_arc(&input);
+        let result = cartesian_product_rc(&input);
         assert_eq!(result.len(), 4);
         assert_eq!(&*result[0], &[1, 3]);
         assert_eq!(&*result[1], &[1, 4]);
@@ -75,11 +75,11 @@ mod tests {
     #[test]
     fn test_cartesian_product_three() {
         let input = vec![
-            Arc::from(vec![1, 2].into_boxed_slice()),
-            Arc::from(vec![3].into_boxed_slice()),
-            Arc::from(vec![4, 5].into_boxed_slice()),
+            Rc::from(vec![1, 2].into_boxed_slice()),
+            Rc::from(vec![3].into_boxed_slice()),
+            Rc::from(vec![4, 5].into_boxed_slice()),
         ];
-        let result = cartesian_product_arc(&input);
+        let result = cartesian_product_rc(&input);
         assert_eq!(result.len(), 4);
         assert_eq!(&*result[0], &[1, 3, 4]);
         assert_eq!(&*result[1], &[1, 3, 5]);

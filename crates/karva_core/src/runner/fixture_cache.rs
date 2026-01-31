@@ -1,5 +1,5 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::Mutex;
 
 use pyo3::prelude::*;
 
@@ -8,23 +8,23 @@ use crate::extensions::fixtures::FixtureScope;
 /// Manages caching of fixture values based on their scope.
 #[derive(Debug, Default)]
 pub struct FixtureCache {
-    session: Mutex<HashMap<String, Py<PyAny>>>,
+    session: RefCell<HashMap<String, Py<PyAny>>>,
 
-    package: Mutex<HashMap<String, Py<PyAny>>>,
+    package: RefCell<HashMap<String, Py<PyAny>>>,
 
-    module: Mutex<HashMap<String, Py<PyAny>>>,
+    module: RefCell<HashMap<String, Py<PyAny>>>,
 
-    function: Mutex<HashMap<String, Py<PyAny>>>,
+    function: RefCell<HashMap<String, Py<PyAny>>>,
 }
 
 impl FixtureCache {
     /// Get a fixture value from the cache based on its scope
-    pub fn get(&self, name: &str, scope: FixtureScope) -> Option<Py<PyAny>> {
+    pub fn get(&self, py: Python, name: &str, scope: FixtureScope) -> Option<Py<PyAny>> {
         match scope {
-            FixtureScope::Session => self.session.lock().unwrap().get(name).cloned(),
-            FixtureScope::Package => self.package.lock().unwrap().get(name).cloned(),
-            FixtureScope::Module => self.module.lock().unwrap().get(name).cloned(),
-            FixtureScope::Function => self.function.lock().unwrap().get(name).cloned(),
+            FixtureScope::Session => self.session.borrow().get(name).map(|v| v.clone_ref(py)),
+            FixtureScope::Package => self.package.borrow().get(name).map(|v| v.clone_ref(py)),
+            FixtureScope::Module => self.module.borrow().get(name).map(|v| v.clone_ref(py)),
+            FixtureScope::Function => self.function.borrow().get(name).map(|v| v.clone_ref(py)),
         }
     }
 
@@ -32,26 +32,26 @@ impl FixtureCache {
     pub fn insert(&self, name: String, value: Py<PyAny>, scope: FixtureScope) {
         match scope {
             FixtureScope::Session => {
-                self.session.lock().unwrap().insert(name, value);
+                self.session.borrow_mut().insert(name, value);
             }
             FixtureScope::Package => {
-                self.package.lock().unwrap().insert(name, value);
+                self.package.borrow_mut().insert(name, value);
             }
             FixtureScope::Module => {
-                self.module.lock().unwrap().insert(name, value);
+                self.module.borrow_mut().insert(name, value);
             }
             FixtureScope::Function => {
-                self.function.lock().unwrap().insert(name, value);
+                self.function.borrow_mut().insert(name, value);
             }
         }
     }
 
     pub(crate) fn clear_fixtures(&self, scope: FixtureScope) {
         match scope {
-            FixtureScope::Function => self.function.lock().unwrap().clear(),
-            FixtureScope::Module => self.module.lock().unwrap().clear(),
-            FixtureScope::Package => self.package.lock().unwrap().clear(),
-            FixtureScope::Session => self.session.lock().unwrap().clear(),
+            FixtureScope::Function => self.function.borrow_mut().clear(),
+            FixtureScope::Module => self.module.borrow_mut().clear(),
+            FixtureScope::Package => self.package.borrow_mut().clear(),
+            FixtureScope::Session => self.session.borrow_mut().clear(),
         }
     }
 }

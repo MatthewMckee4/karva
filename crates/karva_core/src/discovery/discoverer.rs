@@ -1,4 +1,4 @@
-use karva_collector::{CollectedModule, CollectedPackage, ModuleType};
+use karva_collector::{CollectedModule, CollectedPackage};
 use karva_system::path::{TestPath, TestPathError};
 use pyo3::prelude::*;
 
@@ -48,7 +48,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
 
         let collected_package = collector.collect_all(test_paths);
 
-        let mut session_package = self.convert_collected_to_discovered(py, collected_package);
+        let mut session_package = self.convert_package(py, collected_package);
 
         session_package.shrink();
 
@@ -57,54 +57,56 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
 
     /// Convert a collected package to a discovered package by importing Python modules
     /// and resolving test functions and fixtures.
-    fn convert_collected_to_discovered(
+    fn convert_package(
         &self,
-        py: Python<'_>,
+        py: Python,
         collected_package: CollectedPackage,
     ) -> DiscoveredPackage {
         let CollectedPackage {
             path,
             modules,
             packages,
-            configuration_module_path: _,
+            configuration_module,
         } = collected_package;
 
         let mut discovered_package = DiscoveredPackage::new(path);
 
-        // Convert all modules
-        for collected_module in modules.into_values() {
-            let CollectedModule {
-                path,
-                module_type,
-                source_text,
-                test_function_defs,
-                fixture_function_defs,
-            } = collected_module;
-
-            let mut module = DiscoveredModule::new_with_source(path.clone(), source_text);
-
-            discover(
-                self.context,
-                py,
-                &mut module,
-                test_function_defs,
-                fixture_function_defs,
-            );
-
-            if module_type == ModuleType::Configuration {
-                discovered_package.add_configuration_module(module);
-            } else {
-                discovered_package.add_direct_module(module);
-            }
+        if let Some(collected_module) = configuration_module {
+            discovered_package
+                .set_configuration_module(Some(self.convert_module(py, collected_module)));
         }
 
-        // Convert all subpackages recursively
+        for collected_module in modules.into_values() {
+            discovered_package.add_direct_module(self.convert_module(py, collected_module));
+        }
+
         for collected_subpackage in packages.into_values() {
-            let discovered_subpackage =
-                self.convert_collected_to_discovered(py, collected_subpackage);
-            discovered_package.add_direct_subpackage(discovered_subpackage);
+            discovered_package
+                .add_direct_subpackage(self.convert_package(py, collected_subpackage));
         }
 
         discovered_package
+    }
+
+    fn convert_module(&self, py: Python, collected_module: CollectedModule) -> DiscoveredModule {
+        let CollectedModule {
+            path,
+            module_type: _,
+            source_text,
+            test_function_defs,
+            fixture_function_defs,
+        } = collected_module;
+
+        let mut module = DiscoveredModule::new_with_source(path.clone(), source_text);
+
+        discover(
+            self.context,
+            py,
+            &mut module,
+            test_function_defs,
+            fixture_function_defs,
+        );
+
+        module
     }
 }

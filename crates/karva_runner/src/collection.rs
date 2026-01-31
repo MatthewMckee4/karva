@@ -4,7 +4,7 @@ use karva_collector::{
 
 use std::thread;
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use crossbeam_channel::unbounded;
 use ignore::{WalkBuilder, WalkState};
 use karva_system::{
@@ -88,8 +88,6 @@ impl<'a> ParallelCollector<'a> {
             CollectedPackage::new(self.system.current_directory().to_path_buf());
 
         for path in test_paths {
-            let path_for_config = path.path().to_owned();
-
             match path {
                 TestPath::Directory(dir_path) => {
                     let package = self.collect_directory(&dir_path);
@@ -112,51 +110,11 @@ impl<'a> ParallelCollector<'a> {
                     }
                 }
             }
-
-            self.collect_parent_configuration(&path_for_config, &mut session_package);
         }
 
         session_package.shrink();
 
         session_package
-    }
-
-    /// Collect parent configuration files (conftest.py).
-    fn collect_parent_configuration(
-        &self,
-        path: &Utf8Path,
-        session_package: &mut CollectedPackage,
-    ) {
-        let mut current_path = if path.is_dir() {
-            path
-        } else {
-            match path.parent() {
-                Some(parent) => parent,
-                None => return,
-            }
-        };
-
-        loop {
-            let conftest_path = current_path.join("conftest.py");
-            if conftest_path.exists() {
-                let mut package = CollectedPackage::new(current_path.to_path_buf());
-
-                if let Some(module) = collect_file(&conftest_path, self.system, &self.settings, &[])
-                {
-                    package.add_configuration_module(module);
-                    session_package.add_package(package);
-                }
-            }
-
-            if current_path == self.system.current_directory() {
-                break;
-            }
-
-            current_path = match current_path.parent() {
-                Some(parent) => parent,
-                None => break,
-            };
-        }
     }
 
     /// Creates a configured parallel directory walker for Python file discovery.

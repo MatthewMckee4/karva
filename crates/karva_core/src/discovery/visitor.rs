@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::sync::Arc;
+use std::rc::Rc;
 
 use camino::Utf8Path;
 use karva_python_semantic::{ModulePath, is_fixture_function};
@@ -75,7 +75,7 @@ impl<'ctx, 'py, 'a, 'b> FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
 }
 
 impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
-    fn process_fixture_function(&mut self, stmt_function_def: &Arc<StmtFunctionDef>) {
+    fn process_fixture_function(&mut self, stmt_function_def: StmtFunctionDef) {
         self.try_import_module();
 
         let Some(py_module) = self.py_module.as_ref() else {
@@ -87,6 +87,8 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
         source_order::walk_body(&mut generator_function_visitor, &stmt_function_def.body);
 
         let is_generator_function = generator_function_visitor.is_generator;
+
+        let stmt_function_def = Rc::new(stmt_function_def);
 
         match Fixture::try_from_function(
             self.py,
@@ -101,14 +103,14 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                     self.context,
                     self.py,
                     self.module.source_file(),
-                    stmt_function_def,
+                    &stmt_function_def,
                     &e,
                 );
             }
         }
     }
 
-    fn process_test_function(&mut self, stmt_function_def: Arc<StmtFunctionDef>) {
+    fn process_test_function(&mut self, stmt_function_def: StmtFunctionDef) {
         self.try_import_module();
 
         let Some(py_module) = self.py_module.as_ref() else {
@@ -119,7 +121,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             self.module.add_test_function(TestFunction::new(
                 self.py,
                 self.module,
-                stmt_function_def,
+                Rc::new(stmt_function_def),
                 py_function.unbind(),
             ));
         }
@@ -251,8 +253,8 @@ pub fn discover(
     context: &Context,
     py: Python,
     module: &mut DiscoveredModule,
-    test_function_defs: Vec<Arc<StmtFunctionDef>>,
-    fixture_function_defs: Vec<Arc<StmtFunctionDef>>,
+    test_function_defs: Vec<StmtFunctionDef>,
+    fixture_function_defs: Vec<StmtFunctionDef>,
 ) {
     let mut visitor = FunctionDefinitionVisitor::new(py, context, module);
 
@@ -261,7 +263,7 @@ pub fn discover(
     }
 
     for fixture_function_def in fixture_function_defs {
-        visitor.process_fixture_function(&fixture_function_def);
+        visitor.process_fixture_function(fixture_function_def);
     }
 
     if context.settings().test().try_import_fixtures {
@@ -286,7 +288,7 @@ fn find_function_statement(
     name: &str,
     source_text: &str,
     python_version: PythonVersion,
-) -> Option<Arc<StmtFunctionDef>> {
+) -> Option<Rc<StmtFunctionDef>> {
     let mut parse_options = ParseOptions::from(Mode::Module);
 
     parse_options = parse_options.with_target_version(python_version);
@@ -296,7 +298,7 @@ fn find_function_statement(
     for stmt in parsed.into_syntax().body {
         if let Stmt::FunctionDef(function_def) = stmt {
             if function_def.name.as_str() == name {
-                return Some(Arc::new(function_def));
+                return Some(Rc::new(function_def));
             }
         }
     }

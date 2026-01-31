@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use pyo3::IntoPyObjectExt;
 use pyo3::prelude::*;
@@ -12,7 +13,7 @@ pub struct Parametrization {
     /// The values of the arguments
     ///
     /// These are used as values for the test function.
-    pub(crate) values: Vec<Py<PyAny>>,
+    pub(crate) values: Vec<Arc<Py<PyAny>>>,
 
     /// Tags associated with this parametrization
     pub(crate) tags: Tags,
@@ -35,13 +36,13 @@ impl From<PyRef<'_, Param>> for Parametrization {
 
 #[derive(Debug, Clone, Default)]
 pub struct ParametrizationArgs {
-    pub(crate) values: HashMap<String, Py<PyAny>>,
+    pub(crate) values: HashMap<String, Arc<Py<PyAny>>>,
 
     pub(crate) tags: Tags,
 }
 
 impl ParametrizationArgs {
-    pub(crate) const fn values(&self) -> &HashMap<String, Py<PyAny>> {
+    pub(crate) const fn values(&self) -> &HashMap<String, Arc<Py<PyAny>>> {
         &self.values
     }
 
@@ -163,7 +164,15 @@ impl ParametrizeTag {
             arg_names,
             arg_values
                 .into_iter()
-                .map(|Param { values, tags }| Parametrization { values, tags })
+                .map(
+                    |Param {
+                         values: param_values,
+                         tags,
+                     }| Parametrization {
+                        values: param_values,
+                        tags,
+                    },
+                )
                 .collect(),
         )
     }
@@ -186,7 +195,7 @@ impl ParametrizeTag {
         for parametrization in &self.parametrizations {
             let mut current_parameratisation = HashMap::with_capacity(self.names.len());
             for (arg_name, arg_value) in self.names.iter().zip(parametrization.values.iter()) {
-                current_parameratisation.insert(arg_name.clone(), arg_value.clone());
+                current_parameratisation.insert(arg_name.clone(), Arc::clone(arg_value));
             }
             let current_param_args = ParametrizationArgs {
                 values: current_parameratisation,
@@ -205,17 +214,18 @@ pub(super) fn handle_custom_parametrize_param(
     param: Py<PyAny>,
     expect_multiple: bool,
 ) -> Parametrization {
+    let param_arc = Arc::new(param);
     let default_parametrization = || Parametrization {
-        values: vec![param.clone()],
+        values: vec![Arc::clone(&param_arc)],
         tags: Tags::default(),
     };
 
-    if let Ok(param) = param.cast_bound::<Param>(py) {
-        let param = param.borrow();
-        return Parametrization::from(param);
+    if let Ok(param_bound) = param_arc.cast_bound::<Param>(py) {
+        let param_ref = param_bound.borrow();
+        return Parametrization::from(param_ref);
     }
 
-    let Ok(bound_param) = param.clone().into_bound_py_any(py) else {
+    let Ok(bound_param) = param_arc.clone_ref(py).into_bound_py_any(py) else {
         return default_parametrization();
     };
 
@@ -236,9 +246,10 @@ pub(super) fn handle_custom_parametrize_param(
         };
 
         // The values attribute is a tuple - extract it as a list
-        let values = values_attr
+        let values: Vec<Arc<Py<PyAny>>> = values_attr
             .extract::<Vec<Py<PyAny>>>()
-            .unwrap_or_else(|_| vec![param]);
+            .map(|v| v.into_iter().map(Arc::new).collect())
+            .unwrap_or_else(|_| vec![Arc::clone(&param_arc)]);
 
         let Ok(marks) = bound_param.getattr("marks") else {
             return Parametrization {
@@ -259,7 +270,7 @@ pub(super) fn handle_custom_parametrize_param(
         Parametrization { values, tags }
     } else if expect_multiple && let Ok(params) = bound_param.extract::<Vec<Py<PyAny>>>() {
         Parametrization {
-            values: params,
+            values: params.into_iter().map(Arc::new).collect(),
             tags: Tags::default(),
         }
     } else {

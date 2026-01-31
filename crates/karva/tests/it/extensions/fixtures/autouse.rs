@@ -166,10 +166,10 @@ fn test_auto_use_fixture_in_parent_module() {
             from ..conftest import arr
 
             def test_function1():
-                assert arr == [1]
+                assert arr == [1], arr
 
             def test_function2():
-                assert arr == [1, 2, 1]
+                assert arr == [1, 2, 1], arr
             ",
         ),
     ]);

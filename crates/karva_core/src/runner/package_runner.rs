@@ -1,5 +1,7 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::rc::Rc;
+
+type FixtureArguments = HashMap<String, Py<PyAny>>;
 
 use karva_diagnostic::IndividualTestResultKind;
 use karva_python_semantic::{FunctionKind, QualifiedTestName};
@@ -103,7 +105,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
 
         let mut passed = true;
 
-        for module in modules.into_values() {
+        for module in modules {
             passed &= self.execute_module(py, module);
 
             if self.context.settings().test().fail_fast && !passed {
@@ -112,7 +114,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
         }
 
         if !self.context.settings().test().fail_fast || passed {
-            for sub_package in packages.into_values() {
+            for sub_package in packages {
                 passed &= self.execute_package(py, sub_package);
 
                 if self.context.settings().test().fail_fast && !passed {
@@ -165,12 +167,13 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
 
         fixture_call_errors.extend(use_fixture_errors);
 
-        let mut function_arguments = HashMap::new();
+        let mut function_arguments: FixtureArguments = HashMap::new();
 
         for fixture in &fixture_dependencies {
             match self.run_fixture(py, fixture) {
                 Ok((value, finalizer)) => {
-                    function_arguments.insert(fixture.function_name().to_string(), value);
+                    function_arguments
+                        .insert(fixture.function_name().to_string(), value.clone_ref(py));
 
                     if let Some(finalizer) = finalizer {
                         test_finalizers.push(finalizer);
@@ -197,7 +200,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
 
         let py_dict = PyDict::new(py);
         for (key, value) in &function_arguments {
-            let _ = py_dict.set_item(key, value);
+            let _ = py_dict.set_item(key, value.as_ref());
         }
 
         let run_test = || {
@@ -312,17 +315,18 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
     ) -> Result<(Py<PyAny>, Option<Finalizer>), FixtureCallError> {
         if let Some(cached) = self
             .fixture_cache
-            .get(fixture.function_name(), fixture.scope())
+            .get(py, fixture.function_name(), fixture.scope())
         {
             return Ok((cached, None));
         }
 
-        let mut function_arguments = HashMap::new();
+        let mut function_arguments: FixtureArguments = HashMap::new();
 
         for fixture in fixture.dependencies() {
             match self.run_fixture(py, fixture) {
                 Ok((value, finalizer)) => {
-                    function_arguments.insert(fixture.function_name().to_string(), value);
+                    function_arguments
+                        .insert(fixture.function_name().to_string(), value.clone_ref(py));
 
                     if let Some(finalizer) = finalizer {
                         self.finalizer_cache.add_finalizer(finalizer);
@@ -349,7 +353,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
                         self.context.system(),
                         fixture_def.name.module_path().path(),
                     ),
-                    arguments: function_arguments.clone(),
+                    arguments: function_arguments,
                 });
             }
         };
@@ -370,7 +374,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
                             self.context.system(),
                             fixture_def.name.module_path().path(),
                         ),
-                        arguments: function_arguments.clone(),
+                        arguments: HashMap::new(),
                     });
                 }
             };
@@ -379,7 +383,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
             // Cache the result
             self.fixture_cache.insert(
                 fixture.function_name().to_string(),
-                final_result.clone(),
+                final_result.clone_ref(py),
                 fixture.scope(),
             );
         }
@@ -447,7 +451,7 @@ fn get_value_and_finalizer(
     if let Some(user_defined_fixture) = fixture.as_user_defined()
         && user_defined_fixture.is_generator
         && let Ok(mut bound_iterator) = fixture_call_result
-            .clone()
+            .clone_ref(py)
             .into_bound(py)
             .cast_into::<PyIterator>()
     {
@@ -474,7 +478,7 @@ fn get_value_and_finalizer(
             create_fixture_with_finalizer(py, &fixture_call_result, finalizer_fn)
         && let Some(Ok(value)) = bound_iterator.next()
     {
-        let py_iter_unbound = bound_iterator.clone().unbind();
+        let py_iter_unbound = bound_iterator.unbind();
         let finalizer = Finalizer {
             fixture_return: py_iter_unbound,
             scope: builtin_fixture.scope,
@@ -491,7 +495,7 @@ fn get_value_and_finalizer(
 pub struct FixtureCallError {
     pub fixture_name: String,
     pub error: PyErr,
-    pub stmt_function_def: Arc<StmtFunctionDef>,
+    pub stmt_function_def: Rc<StmtFunctionDef>,
     pub source_file: SourceFile,
-    pub arguments: HashMap<String, Py<PyAny>>,
+    pub arguments: FixtureArguments,
 }

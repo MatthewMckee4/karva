@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use camino::Utf8PathBuf;
 use ruff_python_ast::{PythonVersion, Stmt};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
@@ -47,16 +45,16 @@ pub fn collect_file(
     for stmt in parsed.into_syntax().body {
         if let Stmt::FunctionDef(function_def) = stmt {
             if settings.collect_fixtures && is_fixture_function(&function_def) {
-                collected_module.add_fixture_function_def(Arc::new(function_def));
+                collected_module.add_fixture_function_def(function_def);
                 continue;
             }
 
             if function_names.is_empty() {
                 if function_def.name.starts_with(settings.test_function_prefix) {
-                    collected_module.add_test_function_def(Arc::new(function_def));
+                    collected_module.add_test_function_def(function_def);
                 }
             } else if function_names.iter().any(|name| function_def.name == *name) {
-                collected_module.add_test_function_def(Arc::new(function_def));
+                collected_module.add_test_function_def(function_def);
             }
         }
     }

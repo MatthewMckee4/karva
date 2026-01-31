@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::rc::Rc;
 
 use camino::Utf8PathBuf;
 use karva_python_semantic::QualifiedFunctionName;
@@ -28,14 +28,14 @@ pub struct NormalizedTest {
     /// Normalized fixture dependencies (already expanded)
     /// Each fixture dependency is a specific variant
     /// These are the regular fixtures that should be passed as arguments to the test function
-    pub(crate) fixture_dependencies: Vec<Arc<NormalizedFixture>>,
+    pub(crate) fixture_dependencies: Vec<Rc<NormalizedFixture>>,
 
     /// Fixtures from `use_fixtures` tag that should only be executed for side effects
     /// These should NOT be passed as arguments to the test function
-    pub(crate) use_fixture_dependencies: Vec<Arc<NormalizedFixture>>,
+    pub(crate) use_fixture_dependencies: Vec<Rc<NormalizedFixture>>,
 
     /// Fixtures that will be automatically run before the test is executed
-    pub(crate) auto_use_fixtures: Vec<Arc<NormalizedFixture>>,
+    pub(crate) auto_use_fixtures: Vec<Rc<NormalizedFixture>>,
 
     /// Imported Python function
     pub(crate) function: Py<PyAny>,
@@ -44,7 +44,7 @@ pub struct NormalizedTest {
     pub(crate) tags: Tags,
 
     /// The function definition for this fixture
-    pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
+    pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
 }
 
 impl NormalizedTest {

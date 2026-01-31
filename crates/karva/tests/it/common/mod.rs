@@ -1,5 +1,6 @@
-use std::process::Command;
-use std::sync::Once;
+#![allow(clippy::print_stderr)]
+use std::process::{Command, Stdio};
+use std::time::Instant;
 
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -8,81 +9,16 @@ use insta::Settings;
 use insta::internals::SettingsBindDropGuard;
 use tempfile::TempDir;
 
-static VENV_INIT: Once = Once::new();
-
 pub struct TestContext {
     _temp_dir: TempDir,
     project_dir_path: Utf8PathBuf,
     _settings_scope: SettingsBindDropGuard,
 }
 
-// Use user cache directory so we can use `uv` caching.
-pub fn get_test_cache_dir() -> Utf8PathBuf {
-    let proj_dirs = ProjectDirs::from("", "", "karva").expect("Failed to get project directories");
-    let cache_dir = proj_dirs.cache_dir();
-    let test_cache = cache_dir.join("test-cache");
-    Utf8PathBuf::from_path_buf(test_cache).expect("Path is not valid UTF-8")
-}
-
-fn create_venv() {
-    VENV_INIT.call_once(|| {
-        let cache_dir = get_test_cache_dir();
-        let venv_path = cache_dir.join(".venv");
-
-        // Skip if venv already exists
-        if venv_path.join("bin").exists() || venv_path.join("Scripts").exists() {
-            return;
-        }
-
-        std::fs::create_dir_all(&cache_dir).expect("Failed to create cache directory");
-
-        let karva_wheel = karva_system::find_karva_wheel()
-            .expect(
-                "Could not find karva wheel.
-
-                Run `maturin build` before running tests.",
-            )
-            .to_string();
-
-        let mut venv_args = vec!["venv", venv_path.as_str()];
-
-        let env_python_version = std::env::var("PYTHON_VERSION");
-
-        venv_args.push("-p");
-        if let Ok(version) = &env_python_version {
-            venv_args.push(version);
-        } else {
-            venv_args.push("3.13");
-        }
-
-        let command_arguments = [
-            venv_args,
-            vec![
-                "pip",
-                "install",
-                "--python",
-                venv_path.as_str(),
-                &karva_wheel,
-                "pytest==9.0.2",
-            ],
-        ];
-
-        for arguments in &command_arguments {
-            Command::new("uv")
-                .args(arguments)
-                .output()
-                .with_context(|| format!("Failed to run command: {arguments:?}"))
-                .unwrap();
-        }
-    });
-}
-
 impl TestContext {
     pub fn new() -> Self {
+        let start = Instant::now();
         let cache_dir = get_test_cache_dir();
-
-        // Ensure the global venv exists (created only once)
-        create_venv();
 
         std::fs::create_dir_all(&cache_dir).expect("Failed to create cache directory");
 
@@ -101,17 +37,16 @@ impl TestContext {
         )
         .expect("Path is not valid UTF-8");
 
-        // Create symlink to global venv
-        let global_venv = cache_dir.join(".venv");
-        let project_venv = project_path.join(".venv");
+        let venv_path = project_path.join(".venv");
 
-        #[cfg(unix)]
-        std::os::unix::fs::symlink(&global_venv, &project_venv)
-            .expect("Failed to create venv symlink");
+        let python_version = std::env::var("PYTHON_VERSION").unwrap_or_else(|_| "3.13".to_string());
 
-        #[cfg(windows)]
-        std::os::windows::fs::symlink_dir(&global_venv, &project_venv)
-            .expect("Failed to create venv symlink");
+        let karva_wheel = karva_system::find_karva_wheel()
+            .expect("Could not find karva wheel. Run `maturin build` before running tests.")
+            .to_string();
+
+        create_and_populate_venv(&venv_path, &python_version, &karva_wheel)
+            .expect("Failed to create and populate test venv");
 
         let mut settings = Settings::clone_current();
 
@@ -121,6 +56,11 @@ impl TestContext {
         settings.add_filter(r"(\s|\()(\d+m )?(\d+\.)?\d+(ms|s)", "$1[TIME]");
 
         let settings_scope = settings.bind_to_scope();
+
+        eprintln!(
+            "Time to create and populate test venv: {:?}",
+            start.elapsed()
+        );
 
         Self {
             project_dir_path: project_path,
@@ -199,4 +139,49 @@ impl Default for TestContext {
 
 pub fn tempdir_filter(path: &Utf8Path) -> String {
     format!(r"{}\\?/?", regex::escape(path.as_str()))
+}
+
+// Use user cache directory so we can use `uv` caching.
+pub fn get_test_cache_dir() -> Utf8PathBuf {
+    let proj_dirs = ProjectDirs::from("", "", "karva").expect("Failed to get project directories");
+    let cache_dir = proj_dirs.cache_dir();
+    let test_cache = cache_dir.join("test-cache");
+    Utf8PathBuf::from_path_buf(test_cache).expect("Path is not valid UTF-8")
+}
+
+fn create_and_populate_venv(
+    venv_path: &Utf8PathBuf,
+    python_version: &str,
+    karva_wheel_path: &str,
+) -> anyhow::Result<()> {
+    // 1. Create the venv with uv venv
+    let status = Command::new("uv")
+        .args(["venv", venv_path.as_str(), "--python", python_version])
+        .stderr(Stdio::inherit()) // Show errors directly
+        .status()
+        .context("Failed to execute `uv venv`")?;
+
+    if !status.success() {
+        anyhow::bail!("`uv venv` failed with exit code {status}");
+    }
+
+    // 2. Install karva wheel + pytest (or any fixed baseline deps)
+    let status = Command::new("uv")
+        .args([
+            "pip",
+            "install",
+            "--python",
+            venv_path.as_str(),
+            karva_wheel_path,
+            "pytest==9.0.2", // or whatever fixed version you need
+        ])
+        .stderr(Stdio::inherit())
+        .status()
+        .context("Failed to install base packages into venv")?;
+
+    if !status.success() {
+        anyhow::bail!("Package installation failed with exit code {status}");
+    }
+
+    Ok(())
 }

@@ -12,7 +12,7 @@ use karva_collector::CollectionSettings;
 use karva_metadata::ProjectSettings;
 use karva_project::{Db, ProjectDatabase};
 use karva_system::time::format_duration;
-use karva_system::venv_binary;
+use karva_system::{venv_binary, venv_binary_from_active_env};
 
 use crate::collection::ParallelCollector;
 use crate::partition::{Partition, partition_collected_tests};
@@ -259,12 +259,12 @@ fn find_karva_core_binary(current_dir: &Utf8PathBuf) -> Result<Utf8PathBuf> {
         }
     }
 
-    let venv_binary = venv_binary(KARVA_CORE_BINARY_NAME, current_dir);
+    if let Some(venv_binary) = venv_binary(KARVA_CORE_BINARY_NAME, current_dir) {
+        return Ok(venv_binary);
+    }
 
-    if let Some(venv_binary) = venv_binary {
-        if venv_binary.exists() {
-            return Ok(venv_binary);
-        }
+    if let Some(venv_binary) = venv_binary_from_active_env(KARVA_CORE_BINARY_NAME) {
+        return Ok(venv_binary);
     }
 
     anyhow::bail!("Could not find karva_core binary")

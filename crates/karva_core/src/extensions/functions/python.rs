@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 
@@ -10,8 +12,7 @@ pub struct Param {
     /// The values of the arguments
     ///
     /// These are used as values for the test function.
-    #[pyo3(get)]
-    pub(crate) values: Vec<Py<PyAny>>,
+    pub(crate) values: Vec<Arc<Py<PyAny>>>,
 
     /// Tags associated with this parametrization
     pub(crate) tags: Tags,
@@ -29,7 +30,7 @@ impl Param {
         }
 
         Ok(Self {
-            values,
+            values: values.into_iter().map(Arc::new).collect(),
             tags: Tags::new(new_tags),
         })
     }
@@ -38,7 +39,7 @@ impl Param {
         Self { values, tags }
     }
 
-    pub(crate) const fn values(&self) -> &Vec<Py<PyAny>> {
+    pub(crate) const fn values(&self) -> &Vec<Arc<Py<PyAny>>> {
         &self.values
     }
 
