@@ -18,6 +18,7 @@ static SHARED_VENV: OnceLock<Utf8PathBuf> = OnceLock::new();
 pub struct TestContext {
     _temp_dir: TempDir,
     project_dir_path: Utf8PathBuf,
+    venv_path: Utf8PathBuf,
     _settings_scope: SettingsBindDropGuard,
 }
 
@@ -43,17 +44,23 @@ impl TestContext {
         )
         .expect("Path is not valid UTF-8");
 
-        let venv_path = project_path.join(".venv");
-
         let python_version = std::env::var("PYTHON_VERSION").unwrap_or_else(|_| "3.13".to_string());
 
         let karva_wheel = karva_system::find_karva_wheel()
             .expect("Could not find karva wheel. Run `maturin build` before running tests.")
             .to_string();
 
-        // Get or create the shared venv and symlink it into the test directory
+        // Get or create the shared venv
         let shared_venv = get_or_create_shared_venv(&cache_dir, &python_version, &karva_wheel);
-        symlink_venv(shared_venv, &venv_path).expect("Failed to symlink shared venv");
+
+        // On Unix, symlink the shared venv into the test directory for cleaner paths.
+        // On Windows, symlinks don't work properly with venvs (scripts have hardcoded paths),
+        // so we use the shared venv path directly.
+        #[cfg(unix)]
+        {
+            let venv_link = project_path.join(".venv");
+            symlink_venv(shared_venv, &venv_link).expect("Failed to symlink shared venv");
+        }
 
         let mut settings = Settings::clone_current();
 
@@ -68,6 +75,7 @@ impl TestContext {
 
         Self {
             project_dir_path: project_path,
+            venv_path: shared_venv.clone(),
             _temp_dir: temp_dir,
             _settings_scope: settings_scope,
         }
@@ -112,8 +120,7 @@ impl TestContext {
     }
 
     fn venv_binary(&self, binary: &str) -> Utf8PathBuf {
-        self.project_dir_path
-            .join(".venv")
+        self.venv_path
             .join(if cfg!(windows) { "Scripts" } else { "bin" })
             .join(if cfg!(windows) {
                 format!("{binary}.exe")
@@ -249,20 +256,10 @@ fn cleanup_old_shared_venvs(cache_dir: &Utf8Path, current_venv_name: &str) {
 }
 
 /// Creates a symlink from `link_path` to `target_path`.
+#[cfg(unix)]
 fn symlink_venv(target: &Utf8Path, link_path: &Utf8Path) -> anyhow::Result<()> {
-    #[cfg(unix)]
-    {
-        std::os::unix::fs::symlink(target, link_path)
-            .with_context(|| format!("Failed to symlink {link_path} -> {target}"))?;
-    }
-
-    #[cfg(windows)]
-    {
-        // Use junction on Windows as it doesn't require elevated privileges
-        std::os::windows::fs::symlink_dir(target, link_path)
-            .with_context(|| format!("Failed to symlink {link_path} -> {target}"))?;
-    }
-
+    std::os::unix::fs::symlink(target, link_path)
+        .with_context(|| format!("Failed to symlink {link_path} -> {target}"))?;
     Ok(())
 }
 
