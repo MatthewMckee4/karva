@@ -121,7 +121,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             self.module.add_test_function(TestFunction::new(
                 self.py,
                 self.module,
-                stmt_function_def,
+                Rc::new(stmt_function_def),
                 py_function.unbind(),
             ));
         }

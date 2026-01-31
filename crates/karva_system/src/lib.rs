@@ -1,3 +1,4 @@
+use std::env;
 use std::sync::Arc;
 use std::{fmt::Debug, num::NonZeroUsize};
 
@@ -163,6 +164,31 @@ pub fn venv_binary(binary_name: &str, directory: &Utf8PathBuf) -> Option<Utf8Pat
         venv_dir.join("Scripts")
     } else {
         venv_dir.join("bin")
+    };
+
+    let binary_path = if cfg!(target_os = "windows") {
+        binary_dir.join(format!("{binary_name}.exe"))
+    } else {
+        binary_dir.join(binary_name)
+    };
+
+    if binary_path.exists() {
+        Some(binary_path)
+    } else {
+        None
+    }
+}
+
+pub fn venv_binary_from_active_env(binary_name: &str) -> Option<Utf8PathBuf> {
+    let venv_root = env::var_os("VIRTUAL_ENV")?;
+
+    // Convert OsString → Utf8PathBuf (fail gracefully if invalid utf-8)
+    let venv_root = Utf8PathBuf::from_path_buf(venv_root.into()).ok()?;
+
+    let binary_dir = if cfg!(target_os = "windows") {
+        venv_root.join("Scripts")
+    } else {
+        venv_root.join("bin")
     };
 
     let binary_path = if cfg!(target_os = "windows") {

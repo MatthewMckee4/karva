@@ -31,10 +31,10 @@ impl Normalizer {
     pub(crate) fn normalize(
         &mut self,
         py: Python,
-        session: DiscoveredPackage,
+        session: &DiscoveredPackage,
     ) -> NormalizedPackage {
         let session_auto_use_fixtures =
-            self.get_normalized_auto_use_fixtures(py, FixtureScope::Session, &[], &session);
+            self.get_normalized_auto_use_fixtures(py, FixtureScope::Session, &[], session);
 
         let mut normalized_package = self.normalize_package(py, session, &[]);
         normalized_package.extend_auto_use_fixtures(session_auto_use_fixtures);
@@ -92,7 +92,7 @@ impl Normalizer {
     fn normalize_test_function(
         &mut self,
         py: Python<'_>,
-        test_function: TestFunction,
+        test_function: &TestFunction,
         parents: &[&DiscoveredPackage],
         module: &DiscoveredModule,
     ) -> Vec<NormalizedTest> {
@@ -115,14 +115,7 @@ impl Normalizer {
         let dependent_fixtures =
             self.get_dependent_fixtures(py, None, &regular_fixture_names, parents, module);
 
-        let TestFunction {
-            name,
-            stmt_function_def,
-            py_function,
-            tags,
-        } = test_function;
-
-        let use_fixture_names = tags.required_fixtures_names();
+        let use_fixture_names = test_function.tags.required_fixtures_names();
         let normalized_use_fixtures =
             self.get_dependent_fixtures(py, None, &use_fixture_names, parents, module);
 
@@ -140,14 +133,15 @@ impl Normalizer {
             dep_combinations.len() * use_fixture_combinations.len() * test_params.len();
         let mut result = Vec::with_capacity(total_tests);
 
-        let test_name = name.clone();
-        let test_py_function = py_function.clone_ref(py);
-        let test_stmt_function_def = Rc::new(stmt_function_def);
+        let test_name = test_function.name.clone();
+        let test_py_function = test_function.py_function.clone_ref(py);
+        let test_stmt_function_def = Rc::clone(&test_function.stmt_function_def);
+        let base_tags = &test_function.tags;
 
         for dep_combination in &dep_combinations {
             for use_fixture_combination in &use_fixture_combinations {
                 for param_args in &test_params {
-                    let mut new_tags = tags.clone();
+                    let mut new_tags = base_tags.clone();
                     new_tags.extend(&param_args.tags);
 
                     let params: HashMap<String, Py<PyAny>> = param_args
@@ -155,7 +149,6 @@ impl Normalizer {
                         .iter()
                         .map(|(k, v)| (k.clone(), v.clone_ref(py)))
                         .collect();
-
                     result.push(NormalizedTest {
                         name: test_name.clone(),
                         params,
@@ -176,17 +169,17 @@ impl Normalizer {
     fn normalize_module(
         &mut self,
         py: Python<'_>,
-        mut module: DiscoveredModule,
+        module: &DiscoveredModule,
         parents: &[&DiscoveredPackage],
     ) -> NormalizedModule {
         let module_auto_use_fixtures =
-            self.get_normalized_auto_use_fixtures(py, FixtureScope::Module, parents, &module);
+            self.get_normalized_auto_use_fixtures(py, FixtureScope::Module, parents, module);
 
         let normalized_test_functions = module
-            .take_test_functions()
-            .into_iter()
+            .test_functions()
+            .iter()
             .flat_map(|test_function| {
-                self.normalize_test_function(py, test_function, parents, &module)
+                self.normalize_test_function(py, test_function, parents, module)
             })
             .collect();
 
@@ -199,31 +192,30 @@ impl Normalizer {
     fn normalize_package(
         &mut self,
         py: Python<'_>,
-        mut package: DiscoveredPackage,
+        package: &DiscoveredPackage,
         parents: &[&DiscoveredPackage],
     ) -> NormalizedPackage {
-        let modules = package.take_modules();
-        let sub_packages = package.take_packages();
-
         let mut new_parents = parents.to_vec();
-        new_parents.push(&package);
+        new_parents.push(package);
 
         let package_auto_use_fixtures =
-            self.get_normalized_auto_use_fixtures(py, FixtureScope::Package, parents, &package);
+            self.get_normalized_auto_use_fixtures(py, FixtureScope::Package, parents, package);
 
-        let modules = modules
-            .into_values()
+        let modules = package
+            .modules()
+            .values()
             .map(|module| self.normalize_module(py, module, &new_parents))
             .collect();
 
-        let sub_packages = sub_packages
-            .into_values()
+        let packages = package
+            .packages()
+            .values()
             .map(|sub_package| self.normalize_package(py, sub_package, &new_parents))
             .collect();
 
         NormalizedPackage {
             modules,
-            packages: sub_packages,
+            packages,
             auto_use_fixtures: package_auto_use_fixtures,
         }
     }

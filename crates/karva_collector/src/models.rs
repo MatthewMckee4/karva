@@ -63,7 +63,7 @@ pub struct CollectedPackage {
     pub path: Utf8PathBuf,
     pub modules: HashMap<Utf8PathBuf, CollectedModule>,
     pub packages: HashMap<Utf8PathBuf, Self>,
-    pub configuration_module_path: Option<Utf8PathBuf>,
+    pub configuration_module: Option<CollectedModule>,
 }
 
 impl CollectedPackage {
@@ -72,7 +72,7 @@ impl CollectedPackage {
             path,
             modules: HashMap::new(),
             packages: HashMap::new(),
-            configuration_module_path: None,
+            configuration_module: None,
         }
     }
 
@@ -105,9 +105,10 @@ impl CollectedPackage {
                 existing_module.update(module);
             } else {
                 if module.module_type() == ModuleType::Configuration {
-                    self.configuration_module_path = Some(module.file_path().clone());
+                    self.update_configuration_module(module);
+                } else {
+                    self.modules.insert(module.file_path().clone(), module);
                 }
-                self.modules.insert(module.file_path().clone(), module);
             }
             return;
         }
@@ -136,8 +137,7 @@ impl CollectedPackage {
     }
 
     pub fn add_configuration_module(&mut self, module: CollectedModule) {
-        self.configuration_module_path = Some(module.file_path().clone());
-        self.add_module(module);
+        self.configuration_module = Some(module);
     }
 
     /// Add a package to this package.
@@ -186,8 +186,16 @@ impl CollectedPackage {
             self.add_package(package);
         }
 
-        if let Some(module_path) = package.configuration_module_path {
-            self.configuration_module_path = Some(module_path);
+        if let Some(module) = package.configuration_module {
+            self.update_configuration_module(module);
+        }
+    }
+
+    fn update_configuration_module(&mut self, module: CollectedModule) {
+        if let Some(current_config_module) = self.configuration_module.as_mut() {
+            current_config_module.update(module);
+        } else {
+            self.configuration_module = Some(module);
         }
     }
 
@@ -197,12 +205,6 @@ impl CollectedPackage {
 
     pub fn shrink(&mut self) {
         self.modules.retain(|_, module| !module.is_empty());
-
-        if let Some(configuration_module) = self.configuration_module_path.as_ref() {
-            if !self.modules.contains_key(configuration_module) {
-                self.configuration_module_path = None;
-            }
-        }
 
         self.packages.retain(|_, package| !package.is_empty());
 

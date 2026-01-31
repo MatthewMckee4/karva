@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use camino::Utf8PathBuf;
-use karva_python_semantic::ModulePath;
 
 use crate::discovery::DiscoveredModule;
 
@@ -11,7 +10,7 @@ pub struct DiscoveredPackage {
     path: Utf8PathBuf,
     modules: HashMap<Utf8PathBuf, DiscoveredModule>,
     packages: HashMap<Utf8PathBuf, Self>,
-    configuration_module_path: Option<ModulePath>,
+    configuration_module: Option<DiscoveredModule>,
 }
 
 impl DiscoveredPackage {
@@ -20,7 +19,7 @@ impl DiscoveredPackage {
             path,
             modules: HashMap::new(),
             packages: HashMap::new(),
-            configuration_module_path: None,
+            configuration_module: None,
         }
     }
 
@@ -28,12 +27,12 @@ impl DiscoveredPackage {
         &self.path
     }
 
-    pub(crate) fn take_modules(&mut self) -> HashMap<Utf8PathBuf, DiscoveredModule> {
-        std::mem::take(&mut self.modules)
+    pub(crate) fn modules(&self) -> &HashMap<Utf8PathBuf, DiscoveredModule> {
+        &self.modules
     }
 
-    pub(crate) fn take_packages(&mut self) -> HashMap<Utf8PathBuf, Self> {
-        std::mem::take(&mut self.packages)
+    pub(crate) const fn packages(&self) -> &HashMap<Utf8PathBuf, Self> {
+        &self.packages
     }
 
     /// Add a module directly to this package.
@@ -41,9 +40,8 @@ impl DiscoveredPackage {
         self.modules.insert(module.path().clone(), module);
     }
 
-    pub(crate) fn add_configuration_module(&mut self, module: DiscoveredModule) {
-        self.configuration_module_path = Some(module.module_path().clone());
-        self.add_direct_module(module);
+    pub(crate) fn set_configuration_module(&mut self, module: Option<DiscoveredModule>) {
+        self.configuration_module = module;
     }
 
     /// Adds a package directly as a subpackage.
@@ -52,11 +50,7 @@ impl DiscoveredPackage {
     }
 
     pub(crate) fn configuration_module_impl(&self) -> Option<&DiscoveredModule> {
-        self.configuration_module_path.as_ref().map(|module_path| {
-            self.modules
-                .get(module_path.path())
-                .expect("If configuration module path is not none, we should be able to find it")
-        })
+        self.configuration_module.as_ref()
     }
 
     /// Remove empty modules and packages.
@@ -65,12 +59,6 @@ impl DiscoveredPackage {
 
         for module in self.modules.values_mut() {
             module.shrink();
-        }
-
-        if let Some(configuration_module) = self.configuration_module_path.as_ref() {
-            if !self.modules.contains_key(configuration_module.path()) {
-                self.configuration_module_path = None;
-            }
         }
 
         self.packages.retain(|_, package| !package.is_empty());
