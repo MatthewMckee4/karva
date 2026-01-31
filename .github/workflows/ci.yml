@@ -173,7 +173,7 @@ jobs:
   benchmarks-walltime:
     name: "walltime benchmarks (${{ matrix.project }})"
 
-    runs-on: ubuntu-latest # This should be `codspeed-macro`
+    runs-on: codspeed-macro
 
     needs: [determine_changes, generate-walltime-benchmarks-matrix]
     if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
