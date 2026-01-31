@@ -156,7 +156,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     let result = attach_with_project(settings.terminal().show_python_output, |py| {
         let session = StandardDiscoverer::new(&context).discover_with_py(py, test_paths);
 
-        let normalized_session = Normalizer::default().normalize(py, &session);
+        let normalized_session = Normalizer::default().normalize(py, session);
 
         NormalizedPackageRunner::new(&context).execute(py, normalized_session);
 

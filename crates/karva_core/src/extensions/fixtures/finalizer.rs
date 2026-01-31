@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::rc::Rc;
 
 use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
@@ -17,17 +17,17 @@ use crate::utils::source_file;
 ///     yield
 ///     # Finalizer logic here
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Finalizer {
-    pub(crate) fixture_return: Arc<Py<PyIterator>>,
+    pub(crate) fixture_return: Py<PyIterator>,
     pub(crate) scope: FixtureScope,
     pub(crate) fixture_name: Option<QualifiedFunctionName>,
-    pub(crate) stmt_function_def: Option<Arc<StmtFunctionDef>>,
+    pub(crate) stmt_function_def: Option<Rc<StmtFunctionDef>>,
 }
 
 impl Finalizer {
     pub(crate) fn run(self, context: &Context, py: Python<'_>) {
-        let mut generator = self.fixture_return.as_ref().bind(py).clone();
+        let mut generator = self.fixture_return.bind(py).clone();
         let Some(generator_next_result) = generator.next() else {
             // We do not care if the `next` function fails, this should not happen.
             return;

@@ -40,6 +40,10 @@ impl DiscoveredModule {
         &self.test_functions
     }
 
+    pub(crate) fn take_test_functions(&mut self) -> Vec<TestFunction> {
+        std::mem::take(&mut self.test_functions)
+    }
+
     pub(crate) fn add_test_function(&mut self, test_function: TestFunction) {
         self.test_functions.push(test_function);
     }

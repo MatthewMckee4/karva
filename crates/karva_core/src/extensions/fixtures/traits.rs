@@ -99,35 +99,3 @@ impl RequiresFixtures for Fixture {
         self.stmt_function_def.required_fixtures(py)
     }
 }
-
-impl RequiresFixtures for DiscoveredPackage {
-    fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
-        let mut fixtures = Vec::new();
-
-        for module in self.modules().values() {
-            fixtures.extend(module.required_fixtures(py));
-        }
-
-        for sub_package in self.packages().values() {
-            fixtures.extend(sub_package.required_fixtures(py));
-        }
-
-        fixtures
-    }
-}
-
-impl RequiresFixtures for DiscoveredModule {
-    fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
-        let mut fixtures = Vec::new();
-
-        for test_function in self.test_functions() {
-            fixtures.extend(test_function.required_fixtures(py));
-        }
-
-        for fixture in self.fixtures() {
-            fixtures.extend(fixture.required_fixtures(py));
-        }
-
-        fixtures
-    }
-}

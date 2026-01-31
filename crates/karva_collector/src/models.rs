@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use camino::Utf8PathBuf;
 use karva_python_semantic::ModulePath;
@@ -16,9 +15,9 @@ pub struct CollectedModule {
     /// The source text of the file (cached to avoid re-reading)
     pub source_text: String,
     /// Test function definitions (functions starting with test prefix)
-    pub test_function_defs: Vec<Arc<StmtFunctionDef>>,
+    pub test_function_defs: Vec<StmtFunctionDef>,
     /// Fixture function definitions (functions with fixture decorators)
-    pub fixture_function_defs: Vec<Arc<StmtFunctionDef>>,
+    pub fixture_function_defs: Vec<StmtFunctionDef>,
 }
 
 impl CollectedModule {
@@ -36,11 +35,11 @@ impl CollectedModule {
         }
     }
 
-    pub(crate) fn add_test_function_def(&mut self, function_def: Arc<StmtFunctionDef>) {
+    pub(crate) fn add_test_function_def(&mut self, function_def: StmtFunctionDef) {
         self.test_function_defs.push(function_def);
     }
 
-    pub(crate) fn add_fixture_function_def(&mut self, function_def: Arc<StmtFunctionDef>) {
+    pub(crate) fn add_fixture_function_def(&mut self, function_def: StmtFunctionDef) {
         self.fixture_function_defs.push(function_def);
     }
 

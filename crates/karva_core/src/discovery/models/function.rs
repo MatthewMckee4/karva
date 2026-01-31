@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
@@ -15,7 +13,7 @@ pub struct TestFunction {
     pub(crate) name: QualifiedFunctionName,
 
     /// The ast function statement.
-    pub(crate) stmt_function_def: Arc<StmtFunctionDef>,
+    pub(crate) stmt_function_def: StmtFunctionDef,
 
     /// The Python function object.
     pub(crate) py_function: Py<PyAny>,
@@ -28,7 +26,7 @@ impl TestFunction {
     pub(crate) fn new(
         py: Python<'_>,
         module: &DiscoveredModule,
-        stmt_function_def: Arc<StmtFunctionDef>,
+        stmt_function_def: StmtFunctionDef,
         py_function: Py<PyAny>,
     ) -> Self {
         let name = QualifiedFunctionName::new(

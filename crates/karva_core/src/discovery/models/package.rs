@@ -28,12 +28,12 @@ impl DiscoveredPackage {
         &self.path
     }
 
-    pub(crate) const fn modules(&self) -> &HashMap<Utf8PathBuf, DiscoveredModule> {
-        &self.modules
+    pub(crate) fn take_modules(&mut self) -> HashMap<Utf8PathBuf, DiscoveredModule> {
+        std::mem::take(&mut self.modules)
     }
 
-    pub(crate) const fn packages(&self) -> &HashMap<Utf8PathBuf, Self> {
-        &self.packages
+    pub(crate) fn take_packages(&mut self) -> HashMap<Utf8PathBuf, Self> {
+        std::mem::take(&mut self.packages)
     }
 
     /// Add a module directly to this package.

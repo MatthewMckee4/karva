@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use karva_collector::CollectionSettings;
 use karva_diagnostic::{IndividualTestResultKind, Reporter, TestRunResult};
@@ -13,7 +14,7 @@ pub struct Context<'a> {
     system: &'a dyn System,
     settings: &'a ProjectSettings,
     python_version: PythonVersion,
-    result: Arc<Mutex<TestRunResult>>,
+    result: Rc<RefCell<TestRunResult>>,
     reporter: &'a dyn Reporter,
 }
 
@@ -28,7 +29,7 @@ impl<'a> Context<'a> {
             system,
             settings,
             python_version,
-            result: Arc::new(Mutex::new(TestRunResult::default())),
+            result: Rc::new(RefCell::new(TestRunResult::default())),
             reporter,
         }
     }
@@ -50,12 +51,12 @@ impl<'a> Context<'a> {
         }
     }
 
-    pub(crate) fn result(&self) -> std::sync::MutexGuard<'_, TestRunResult> {
-        self.result.lock().unwrap()
+    pub(crate) fn result(&self) -> std::cell::RefMut<'_, TestRunResult> {
+        self.result.borrow_mut()
     }
 
     pub(crate) fn into_result(self) -> TestRunResult {
-        self.result.lock().unwrap().clone().into_sorted()
+        self.result.borrow().clone().into_sorted()
     }
 
     pub fn register_test_case_result(

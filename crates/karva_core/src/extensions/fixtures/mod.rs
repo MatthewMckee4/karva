@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::rc::Rc;
 
 use karva_python_semantic::{ModulePath, QualifiedFunctionName};
 use pyo3::exceptions::PyAttributeError;
@@ -27,17 +27,17 @@ use crate::extensions::fixtures::scope::fixture_scope;
 #[derive(Clone)]
 pub struct Fixture {
     name: QualifiedFunctionName,
-    stmt_function_def: Arc<StmtFunctionDef>,
+    stmt_function_def: Rc<StmtFunctionDef>,
     scope: FixtureScope,
     auto_use: bool,
-    function: Arc<Py<PyAny>>,
+    function: Rc<Py<PyAny>>,
     is_generator: bool,
 }
 
 impl Fixture {
     pub(crate) fn new(
         name: QualifiedFunctionName,
-        stmt_function_def: Arc<StmtFunctionDef>,
+        stmt_function_def: Rc<StmtFunctionDef>,
         scope: FixtureScope,
         auto_use: bool,
         function: Py<PyAny>,
@@ -48,7 +48,7 @@ impl Fixture {
             stmt_function_def,
             scope,
             auto_use,
-            function: Arc::new(function),
+            function: Rc::new(function),
             is_generator,
         }
     }
@@ -73,13 +73,13 @@ impl Fixture {
         &self.function
     }
 
-    pub(crate) const fn stmt_function_def(&self) -> &Arc<StmtFunctionDef> {
+    pub(crate) const fn stmt_function_def(&self) -> &Rc<StmtFunctionDef> {
         &self.stmt_function_def
     }
 
     pub(crate) fn try_from_function(
         py: Python<'_>,
-        stmt_function_def: Arc<StmtFunctionDef>,
+        stmt_function_def: Rc<StmtFunctionDef>,
         py_module: &Bound<'_, PyModule>,
         module_path: &ModulePath,
         is_generator_function: bool,
@@ -123,7 +123,7 @@ impl Fixture {
 
     pub(crate) fn try_from_pytest_function(
         py: Python<'_>,
-        stmt_function_def: Arc<StmtFunctionDef>,
+        stmt_function_def: Rc<StmtFunctionDef>,
         function: &Bound<'_, PyAny>,
         module_name: ModulePath,
         is_generator_function: bool,
@@ -159,7 +159,7 @@ impl Fixture {
 
     pub(crate) fn try_from_karva_function(
         py: Python<'_>,
-        stmt_function_def: Arc<StmtFunctionDef>,
+        stmt_function_def: Rc<StmtFunctionDef>,
         function: &Bound<'_, PyAny>,
         module_path: ModulePath,
         is_generator_function: bool,

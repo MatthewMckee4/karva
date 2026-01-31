@@ -1,5 +1,4 @@
-use std::ops::Deref;
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
