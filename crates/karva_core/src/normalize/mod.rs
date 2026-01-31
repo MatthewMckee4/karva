@@ -115,7 +115,14 @@ impl Normalizer {
         let dependent_fixtures =
             self.get_dependent_fixtures(py, None, &regular_fixture_names, parents, module);
 
-        let use_fixture_names = test_function.tags.required_fixtures_names();
+        let TestFunction {
+            name,
+            stmt_function_def,
+            py_function,
+            tags,
+        } = test_function;
+
+        let use_fixture_names = tags.required_fixtures_names();
         let normalized_use_fixtures =
             self.get_dependent_fixtures(py, None, &use_fixture_names, parents, module);
 
@@ -133,15 +140,14 @@ impl Normalizer {
             dep_combinations.len() * use_fixture_combinations.len() * test_params.len();
         let mut result = Vec::with_capacity(total_tests);
 
-        let test_name = test_function.name.clone();
-        let test_py_function = test_function.py_function.clone_ref(py);
-        let test_stmt_function_def = Rc::new(test_function.stmt_function_def);
-        let base_tags = &test_function.tags;
+        let test_name = name.clone();
+        let test_py_function = py_function.clone_ref(py);
+        let test_stmt_function_def = Rc::new(stmt_function_def);
 
         for dep_combination in &dep_combinations {
             for use_fixture_combination in &use_fixture_combinations {
                 for param_args in &test_params {
-                    let mut new_tags = base_tags.clone();
+                    let mut new_tags = tags.clone();
                     new_tags.extend(&param_args.tags);
 
                     let params: HashMap<String, Py<PyAny>> = param_args
@@ -149,6 +155,7 @@ impl Normalizer {
                         .iter()
                         .map(|(k, v)| (k.clone(), v.clone_ref(py)))
                         .collect();
+
                     result.push(NormalizedTest {
                         name: test_name.clone(),
                         params,
