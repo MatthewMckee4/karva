@@ -34,8 +34,8 @@ release = ["tbump"]
 [project.urls]
 Documentation = "https://matthewmckee4.github.io/karva/"
 Homepage = "https://matthewmckee4.github.io/karva/"
-Issues = "https://github.com/MatthewMckee4/karva/issues"
-Repository = "https://github.com/MatthewMckee4/karva"
+Issues = "https://github.com/karva-dev/karva/issues"
+Repository = "https://github.com/karva-dev/karva"
 
 [tool.maturin]
 manifest-path = "crates/karva_python/Cargo.toml"

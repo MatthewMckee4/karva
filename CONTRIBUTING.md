@@ -4,11 +4,11 @@ Thank you for considering contributing to Karva! We welcome contributions from e
 
 Not only do we aim to make Karva a better tool for everyone, but we also aim to make the contributing process as smooth and enjoyable as possible.
 
-So, if you come across any issues or have suggestions for improving development in the karva repo, please [open an issue](https://github.com/MatthewMckee4/karva/issues/new).
+So, if you come across any issues or have suggestions for improving development in the karva repo, please [open an issue](https://github.com/karva-dev/karva/issues/new).
 
 ## Reporting Issues
 
-If you encounter any issues or have suggestions for improvements, please [open an issue](https://github.com/MatthewMckee4/karva/issues/new).
+If you encounter any issues or have suggestions for improvements, please [open an issue](https://github.com/karva-dev/karva/issues/new).
 
 ## The Basics
 
