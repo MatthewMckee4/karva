@@ -1,5 +1,5 @@
 #![allow(clippy::print_stdout)]
-use std::fs;
+use std::fs::File;
 use std::io::Write;
 use std::process::{Command, ExitCode};
 
@@ -17,8 +17,6 @@ struct Args {
     new_karva_wheel: Utf8PathBuf,
 
     output_diff_file: Utf8PathBuf,
-
-    output_new_file: Option<Utf8PathBuf>,
 }
 
 fn main() -> Result<ExitCode> {
@@ -43,48 +41,25 @@ fn main() -> Result<ExitCode> {
         args.new_karva_wheel = absolute(&args.new_karva_wheel, &cwd);
     }
 
-    let mut old_temp = NamedTempFile::new()?;
-    let mut new_temp = NamedTempFile::new()?;
-    let mut accumulation_temp = NamedTempFile::new()?;
+    let mut output_file =
+        File::create(&args.output_diff_file).context("Failed to create output file")?;
 
     for project in all_projects() {
-        run(
-            &args,
-            project.clone(),
-            &mut old_temp,
-            &mut new_temp,
-            &mut accumulation_temp,
-        )?;
-    }
-
-    old_temp.flush()?;
-    new_temp.flush()?;
-
-    let diff_output = Command::new("diff")
-        .arg(old_temp.path())
-        .arg(new_temp.path())
-        .output()
-        .context("Failed to run diff")?;
-
-    fs::write(&args.output_diff_file, &diff_output.stdout)
-        .context("Failed to write output file")?;
-
-    if let Some(output_new_file) = &args.output_new_file {
-        accumulation_temp.flush()?;
-        fs::copy(accumulation_temp.path(), output_new_file)
-            .context("Failed to write new output file")?;
+        if let Some(diff) = run(&args, project.clone())? {
+            writeln!(output_file, "## {}\n", diff.project_name)?;
+            writeln!(output_file, "{}", diff.diff)?;
+        }
     }
 
     Ok(ExitCode::SUCCESS)
 }
 
-fn run(
-    args: &Args,
-    project: RealWorldProject,
-    old_temp: &mut NamedTempFile,
-    new_temp: &mut NamedTempFile,
-    accumulation_temp: &mut NamedTempFile,
-) -> Result<()> {
+struct ProjectDiff {
+    project_name: String,
+    diff: String,
+}
+
+fn run(args: &Args, project: RealWorldProject) -> Result<Option<ProjectDiff>> {
     println!("testing {:?}", project.name);
     let installed_project = project.setup(true)?;
 
@@ -191,25 +166,32 @@ fn run(
         );
     }
 
-    write!(
-        accumulation_temp,
-        "{}\n\nstdout\n\n{}\nstderr\n\n{}----------------\n\n",
-        installed_project.config.name,
-        String::from_utf8_lossy(&new_output.stdout),
-        String::from_utf8_lossy(&new_output.stderr)
-    )?;
-
     let old_result = extract_test_result(&old_output.stdout);
-
     let new_result = extract_test_result(&new_output.stdout);
 
-    writeln!(old_temp, "{}", installed_project.config.name)?;
-    writeln!(old_temp, "{old_result}")?;
+    if old_result == new_result {
+        return Ok(None);
+    }
 
-    writeln!(new_temp, "{}", installed_project.config.name)?;
+    let mut old_temp = NamedTempFile::new()?;
+    let mut new_temp = NamedTempFile::new()?;
+
+    writeln!(old_temp, "{old_result}")?;
     writeln!(new_temp, "{new_result}")?;
 
-    Ok(())
+    old_temp.flush()?;
+    new_temp.flush()?;
+
+    let diff_output = Command::new("diff")
+        .arg(old_temp.path())
+        .arg(new_temp.path())
+        .output()
+        .context("Failed to run diff")?;
+
+    Ok(Some(ProjectDiff {
+        project_name: installed_project.config.name.to_string(),
+        diff: String::from_utf8_lossy(&diff_output.stdout).into_owned(),
+    }))
 }
 
 fn extract_test_result(output: &[u8]) -> String {

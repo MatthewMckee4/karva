@@ -57,7 +57,7 @@ jobs:
         run: |
           OLD_WHEEL=$(ls old-karva/*.whl)
           NEW_WHEEL=$(ls new-karva/*.whl)
-          cargo run -p karva_diff -- "$OLD_WHEEL" "$NEW_WHEEL" out.txt new.txt
+          cargo run -p karva_diff -- "$OLD_WHEEL" "$NEW_WHEEL" out.txt
 
       - name: Read diff output
         id: diff
@@ -65,11 +65,6 @@ jobs:
           {
             echo "diff<<EOF"
             cat out.txt
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-          {
-            echo "new<<EOF"
-            cat new.txt
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
           if [ -s out.txt ]; then
@@ -94,15 +89,6 @@ jobs:
           ## Project Diff Results
 
           No changes between this PR and main.
-
-          <details>
-          <summary>New outputs</summary>
-
-          ```
-          ${{ steps.diff.outputs.new }}
-          ```
-
-          </details>
           EOF
 
       - name: Create or update comment (no changes)
@@ -126,15 +112,6 @@ jobs:
 
           ```diff
           ${{ steps.diff.outputs.diff }}
-          ```
-
-          </details>
-
-          <details>
-          <summary>New outputs</summary>
-
-          ```
-          ${{ steps.diff.outputs.new }}
           ```
 
           </details>
