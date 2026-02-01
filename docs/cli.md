@@ -48,7 +48,7 @@ karva test [OPTIONS] [PATH]...
 <p>This only works when running tests in parallel.</p>
 </dd><dt id="karva-test--help"><a href="#karva-test--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help (see a summary with '-h')</p>
 </dd><dt id="karva-test--no-ignore"><a href="#karva-test--no-ignore"><code>--no-ignore</code></a></dt><dd><p>When set, .gitignore files will not be respected</p>
-</dd><dt id="karva-test--no-parallel"><a href="#karva-test--no-parallel"><code>--no-parallel</code></a></dt><dd><p>Disable parallel execution</p>
+</dd><dt id="karva-test--no-parallel"><a href="#karva-test--no-parallel"><code>--no-parallel</code></a></dt><dd><p>Disable parallel execution (equivalent to <code>--num-workers 1</code>)</p>
 </dd><dt id="karva-test--no-progress"><a href="#karva-test--no-progress"><code>--no-progress</code></a></dt><dd><p>When set, we will not show individual test case results during execution</p>
 </dd><dt id="karva-test--num-workers"><a href="#karva-test--num-workers"><code>--num-workers</code></a>, <code>-n</code> <i>num-workers</i></dt><dd><p>Number of parallel workers (default: number of CPU cores)</p>
 </dd><dt id="karva-test--output-format"><a href="#karva-test--output-format"><code>--output-format</code></a> <i>output-format</i></dt><dd><p>The format to use for printing diagnostic messages</p>
