@@ -4,6 +4,8 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use crossbeam_channel::{Receiver, TryRecvError};
+
+use crate::shutdown::shutdown_receiver;
 use karva_cache::{
     AggregatedResults, CACHE_DIR, CacheReader, RunHash, reader::read_recent_durations,
 };
@@ -118,6 +120,12 @@ impl WorkerManager {
 pub struct ParallelTestConfig {
     pub num_workers: usize,
     pub no_cache: bool,
+    /// Whether to create a Ctrl+C handler for graceful shutdown.
+    ///
+    /// When `true`, a signal handler is installed (idempotently) to handle
+    /// Ctrl+C and gracefully stop workers. Set to `false` in contexts where
+    /// the handler should not be installed (e.g., benchmarks).
+    pub create_ctrlc_handler: bool,
 }
 
 /// Spawn worker processes for each partition
@@ -179,7 +187,6 @@ pub fn run_parallel_tests(
     db: &ProjectDatabase,
     config: &ParallelTestConfig,
     args: &SubTestCommand,
-    shutdown_rx: Option<&Receiver<()>>,
 ) -> Result<AggregatedResults> {
     let mut test_paths = Vec::new();
 
@@ -237,6 +244,12 @@ pub fn run_parallel_tests(
     tracing::info!("Attempting to spawn {} workers", partitions.len());
 
     let mut worker_manager = spawn_workers(db, &partitions, &cache_dir, &run_hash, args)?;
+
+    let shutdown_rx = if config.create_ctrlc_handler {
+        Some(shutdown_receiver())
+    } else {
+        None
+    };
 
     let num_workers = worker_manager.wait_all(shutdown_rx);
 
