@@ -157,7 +157,7 @@ pub struct TestCommand {
     #[clap(short = 'n', long)]
     pub num_workers: Option<usize>,
 
-    /// Disable parallel execution
+    /// Disable parallel execution (equivalent to `--num-workers 1`)
     #[clap(long, default_missing_value = "true", num_args=0..1)]
     pub no_parallel: Option<bool>,
 }
