@@ -62,6 +62,7 @@ fn test_project(project: &ProjectDatabase) {
     let config = karva_runner::ParallelTestConfig {
         num_workers,
         no_cache: false,
+        create_ctrlc_handler: false,
     };
 
     let args = SubTestCommand {
@@ -71,7 +72,7 @@ fn test_project(project: &ProjectDatabase) {
         ..SubTestCommand::default()
     };
 
-    karva_runner::run_parallel_tests(project, &config, &args, None).unwrap();
+    karva_runner::run_parallel_tests(project, &config, &args).unwrap();
 }
 
 pub fn bench_project(bencher: Bencher, benchmark: &ProjectBenchmark) {

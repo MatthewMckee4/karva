@@ -120,18 +120,12 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let config = karva_runner::ParallelTestConfig {
         num_workers,
         no_cache,
+        create_ctrlc_handler: true,
     };
-
-    let (shutdown_tx, shutdown_rx) = crossbeam_channel::unbounded();
-
-    ctrlc::set_handler(move || {
-        let _ = shutdown_tx.send(());
-    })
-    .expect("Error setting Ctrl+C handler");
 
     let start_time = Instant::now();
 
-    let result = karva_runner::run_parallel_tests(&db, &config, &sub_command, Some(&shutdown_rx))?;
+    let result = karva_runner::run_parallel_tests(&db, &config, &sub_command)?;
 
     print_test_output(
         printer,

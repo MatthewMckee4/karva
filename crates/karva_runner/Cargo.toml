@@ -21,6 +21,7 @@ karva_system = { workspace = true }
 anyhow = { workspace = true }
 camino = { workspace = true }
 crossbeam-channel = { workspace = true }
+ctrlc = { workspace = true }
 ignore = { workspace = true }
 tracing = { workspace = true }
 which = { workspace = true }
