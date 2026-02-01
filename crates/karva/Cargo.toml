@@ -1,6 +1,6 @@
 [package]
 name = "karva"
-version = "0.0.0"
+version = "0.0.1-alpha.2"
 default-run = "karva"
 
 edition = { workspace = true }

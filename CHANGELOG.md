@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.0.1-alpha.2
+
+### Bug Fixes
+
+- Fix ctrl-c ([#357](https://github.com/karva-dev/karva/pull/357))
+- Fix run hash timestamp ([#356](https://github.com/karva-dev/karva/pull/356))
+- Fix `pytest.parametrize` with kwargs ([#342](https://github.com/karva-dev/karva/pull/342))
+
+### CLI
+
+- Add --no-cache flag to disable reading cache ([#400](https://github.com/karva-dev/karva/pull/400))
+
+### Documentation
+
+- Document that --no-parallel is equivalent to --num-workers 1 ([#399](https://github.com/karva-dev/karva/pull/399))
+- Update documentation URLs to karva-dev.github.io ([#398](https://github.com/karva-dev/karva/pull/398))
+- Add disclaimer to docs that we won't support request ([#387](https://github.com/karva-dev/karva/pull/387))
+- Remove README note ([#340](https://github.com/karva-dev/karva/pull/340))
+
+### Extensions
+
+- Remove `request` and fixture params ([#384](https://github.com/karva-dev/karva/pull/384))
+- Request node and custom tags ([#352](https://github.com/karva-dev/karva/pull/352))
+- Try import fixtures ([#351](https://github.com/karva-dev/karva/pull/351))
+
+### Test Running
+
+- Support retrying tests ([#354](https://github.com/karva-dev/karva/pull/354))
+
+### Contributors
+
+- [@MatthewMckee4](https://github.com/MatthewMckee4)
+
 ## 0.0.1-alpha.1
 
 Since karva has been re-released, this is the first proper pre-release.
