@@ -1164,7 +1164,7 @@ dependencies = [
 
 [[package]]
 name = "karva"
-version = "0.0.0"
+version = "0.0.1-alpha.2"
 dependencies = [
  "anyhow",
  "argfile",
@@ -1388,7 +1388,7 @@ dependencies = [
 
 [[package]]
 name = "karva_python"
-version = "0.0.1-alpha.1"
+version = "0.0.1-alpha.2"
 dependencies = [
  "karva",
  "karva_core",
