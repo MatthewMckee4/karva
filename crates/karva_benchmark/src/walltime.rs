@@ -59,7 +59,10 @@ impl<'a> ProjectBenchmark<'a> {
 fn test_project(project: &ProjectDatabase) {
     let num_workers = karva_system::max_parallelism().get();
 
-    let config = karva_runner::ParallelTestConfig { num_workers };
+    let config = karva_runner::ParallelTestConfig {
+        num_workers,
+        no_cache: false,
+    };
 
     let args = SubTestCommand {
         no_ignore: Some(true),
