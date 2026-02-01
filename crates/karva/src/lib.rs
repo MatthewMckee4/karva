@@ -103,6 +103,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let sub_command = args.sub_command.clone();
 
     let no_parallel = args.no_parallel.unwrap_or(false);
+    let no_cache = args.no_cache.unwrap_or(false);
     let num_workers = args.num_workers;
 
     let project_options_overrides = ProjectOptionsOverrides::new(config_file, args.into_options());
@@ -116,7 +117,10 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         num_workers.unwrap_or_else(|| karva_system::max_parallelism().get())
     };
 
-    let config = karva_runner::ParallelTestConfig { num_workers };
+    let config = karva_runner::ParallelTestConfig {
+        num_workers,
+        no_cache,
+    };
 
     let (shutdown_tx, shutdown_rx) = crossbeam_channel::unbounded();
 

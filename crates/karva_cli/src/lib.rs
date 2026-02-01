@@ -160,6 +160,10 @@ pub struct TestCommand {
     /// Disable parallel execution (equivalent to `--num-workers 1`)
     #[clap(long, default_missing_value = "true", num_args=0..1)]
     pub no_parallel: Option<bool>,
+
+    /// Disable reading the karva cache for test duration history
+    #[clap(long, default_missing_value = "true", num_args=0..1)]
+    pub no_cache: Option<bool>,
 }
 
 impl TestCommand {

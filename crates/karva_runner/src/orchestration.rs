@@ -117,6 +117,7 @@ impl WorkerManager {
 
 pub struct ParallelTestConfig {
     pub num_workers: usize,
+    pub no_cache: bool,
 }
 
 /// Spawn worker processes for each partition
@@ -216,7 +217,11 @@ pub fn run_parallel_tests(
     let cache_dir = db.system().current_directory().join(CACHE_DIR);
 
     // Read durations from the most recent run to optimize partitioning
-    let previous_durations = read_recent_durations(&cache_dir).unwrap_or_default();
+    let previous_durations = if config.no_cache {
+        std::collections::HashMap::new()
+    } else {
+        read_recent_durations(&cache_dir).unwrap_or_default()
+    };
 
     if !previous_durations.is_empty() {
         tracing::debug!(
