@@ -1,6 +1,6 @@
 [project]
 site_name = "Karva"
-site_url = "https://matthewmckee4.github.io/karva"
+site_url = "https://karva-dev.github.io/karva"
 site_description = "A Python test framework, written in Rust"
 site_author = "Matthew McKee"
 repo_url = "https://github.com/karva-dev/karva"
