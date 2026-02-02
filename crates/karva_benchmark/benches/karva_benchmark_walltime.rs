@@ -1,16 +1,16 @@
 use divan::{Bencher, bench};
 use karva_benchmark::walltime::{ProjectBenchmark, bench_project, warmup_project};
-use karva_projects::real_world_projects::PYDANTIC_SETTINGS_PROJECT;
+use karva_projects::real_world_projects::KARVA_BENCHMARK_PROJECT;
 
 #[bench(sample_size = 4, sample_count = 5)]
-fn pydantic_settings(bencher: Bencher) {
-    let benchmark = ProjectBenchmark::new(PYDANTIC_SETTINGS_PROJECT.clone());
+fn karva_benchmark(bencher: Bencher) {
+    let benchmark = ProjectBenchmark::new(KARVA_BENCHMARK_PROJECT.clone());
 
     bench_project(bencher, &benchmark);
 }
 
 fn main() {
-    let benchmark = ProjectBenchmark::new(PYDANTIC_SETTINGS_PROJECT.clone());
+    let benchmark = ProjectBenchmark::new(KARVA_BENCHMARK_PROJECT.clone());
 
     warmup_project(&benchmark);
 
