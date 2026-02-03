@@ -266,28 +266,27 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
             "No dependencies to install for project '{}'",
             checkout.project().name
         );
-        return Ok(());
+    } else {
+        let output = Command::new("uv")
+            .args([
+                "pip",
+                "install",
+                "--python",
+                venv_path.to_str().unwrap(),
+                "--exclude-newer",
+                checkout.project().max_dep_date,
+                "--no-build",
+            ])
+            .args(checkout.project().dependencies)
+            .output()
+            .context("Failed to execute uv pip install command")?;
+
+        anyhow::ensure!(
+            output.status.success(),
+            "Dependency installation failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
-
-    let output = Command::new("uv")
-        .args([
-            "pip",
-            "install",
-            "--python",
-            venv_path.to_str().unwrap(),
-            "--exclude-newer",
-            checkout.project().max_dep_date,
-            "--no-build",
-        ])
-        .args(checkout.project().dependencies)
-        .output()
-        .context("Failed to execute uv pip install command")?;
-
-    anyhow::ensure!(
-        output.status.success(),
-        "Dependency installation failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
 
     if let Ok(karva_wheel) = karva_system::find_karva_wheel() {
         let output = Command::new("uv")
@@ -355,116 +354,19 @@ fn cargo_target_directory() -> Option<&'static PathBuf> {
         .as_ref()
 }
 
-pub static AFFECT_PROJECT: RealWorldProject<'static> = RealWorldProject {
-    name: "affect",
-    repository: "https://github.com/MatthewMckee4/affect",
-    commit: "9a5198e46a5895ae3b3d56be80beb3bbb92c629e",
+pub static KARVA_BENCHMARK_PROJECT: RealWorldProject<'static> = RealWorldProject {
+    name: "karva-benchmark-1",
+    repository: "https://github.com/karva-dev/karva-benchmark-1",
+    commit: "f099028b217f15311eae16f726ac12dabbeb87e9",
     paths: &["tests"],
-    dependencies: &["pydantic", "pydantic-settings", "pytest"],
-    max_dep_date: "2025-12-01",
+    dependencies: &[],
+    max_dep_date: "2026-12-01",
     python_version: PythonVersion::PY313,
     install_root: true,
     try_import_fixtures: false,
     retry: None,
 };
 
-pub static SQLMODEL_PROJECT: RealWorldProject<'static> = RealWorldProject {
-    name: "sqlmodel",
-    repository: "https://github.com/fastapi/sqlmodel",
-    commit: "43570910db2d7ab2e5efd96f60a0e2a3a61c5474",
-    paths: &["tests"],
-    dependencies: &[
-        "pydantic",
-        "SQLAlchemy",
-        "pytest",
-        "dirty-equals",
-        "fastapi",
-        "httpx",
-        "coverage",
-        "black",
-        "jinja2",
-    ],
-    max_dep_date: "2025-12-01",
-    python_version: PythonVersion::PY313,
-    install_root: false,
-    try_import_fixtures: true,
-    retry: Some(3),
-};
-
-pub static TYPER_PROJECT: RealWorldProject<'static> = RealWorldProject {
-    name: "typer",
-    repository: "https://github.com/fastapi/typer",
-    commit: "a9a6595ad74ed59805c085f9d5369e666b955818",
-    paths: &["tests"],
-    dependencies: &[
-        "click",
-        "typing-extensions",
-        "pytest",
-        "coverage",
-        "shellingham",
-        "rich",
-    ],
-    max_dep_date: "2025-12-01",
-    python_version: PythonVersion::PY313,
-    install_root: false,
-    try_import_fixtures: false,
-    retry: Some(3),
-};
-
-pub static PYDANTIC_SETTINGS_PROJECT: RealWorldProject<'static> = RealWorldProject {
-    name: "pydantic-settings",
-    repository: "https://github.com/pydantic/pydantic-settings",
-    commit: "ffb3ac673633e4f26a512b0fbf986d9bf8821a50",
-    paths: &["tests"],
-    dependencies: &[
-        "pydantic",
-        "pytest",
-        "python-dotenv",
-        "typing-extensions",
-        "pytest-examples",
-        "pytest-mock",
-        "pyyaml",
-    ],
-    max_dep_date: "2025-12-01",
-    python_version: PythonVersion::PY313,
-    install_root: false,
-    try_import_fixtures: false,
-    retry: Some(3),
-};
-
-pub static PYDANTIC_PROJECT: RealWorldProject<'static> = RealWorldProject {
-    name: "pydantic",
-    // Skip recursive test that fails crashes karva and pytest.
-    repository: "https://github.com/MatthewMckee4/pydantic",
-    commit: "95068e360c8921db3b342e368154fab925fa299e",
-    paths: &["tests"],
-    dependencies: &[
-        "pytest",
-        "typing-extensions",
-        "annotated-types",
-        "pydantic-core",
-        "typing-inspection",
-        "pytest-examples",
-        "pytest-mock",
-        "dirty-equals",
-        "jsonschema",
-        "pytz",
-        "hypothesis",
-        "inline_snapshot",
-    ],
-    max_dep_date: "2025-12-01",
-    python_version: PythonVersion::PY313,
-    install_root: false,
-    try_import_fixtures: true,
-    retry: Some(3),
-};
-
 pub fn all_projects() -> Vec<&'static RealWorldProject<'static>> {
-    vec![
-        &AFFECT_PROJECT,
-        &PYDANTIC_SETTINGS_PROJECT,
-        &PYDANTIC_PROJECT,
-        &SQLMODEL_PROJECT,
-        &TYPER_PROJECT,
-    ]
+    vec![&KARVA_BENCHMARK_PROJECT]
 }

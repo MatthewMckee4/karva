@@ -23,23 +23,7 @@ karva_runner = { workspace = true }
 karva_system = { workspace = true }
 
 [[bench]]
-name = "affect_walltime"
-harness = false
-
-[[bench]]
-name = "pydantic_settings_walltime"
-harness = false
-
-[[bench]]
-name = "pydantic_walltime"
-harness = false
-
-[[bench]]
-name = "sqlmodel_walltime"
-harness = false
-
-[[bench]]
-name = "typer_walltime"
+name = "karva_benchmark_walltime"
 harness = false
 
 [lints]
