@@ -266,28 +266,27 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
             "No dependencies to install for project '{}'",
             checkout.project().name
         );
-        return Ok(());
+    } else {
+        let output = Command::new("uv")
+            .args([
+                "pip",
+                "install",
+                "--python",
+                venv_path.to_str().unwrap(),
+                "--exclude-newer",
+                checkout.project().max_dep_date,
+                "--no-build",
+            ])
+            .args(checkout.project().dependencies)
+            .output()
+            .context("Failed to execute uv pip install command")?;
+
+        anyhow::ensure!(
+            output.status.success(),
+            "Dependency installation failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
-
-    let output = Command::new("uv")
-        .args([
-            "pip",
-            "install",
-            "--python",
-            venv_path.to_str().unwrap(),
-            "--exclude-newer",
-            checkout.project().max_dep_date,
-            "--no-build",
-        ])
-        .args(checkout.project().dependencies)
-        .output()
-        .context("Failed to execute uv pip install command")?;
-
-    anyhow::ensure!(
-        output.status.success(),
-        "Dependency installation failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
 
     if let Ok(karva_wheel) = karva_system::find_karva_wheel() {
         let output = Command::new("uv")
