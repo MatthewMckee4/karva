@@ -94,7 +94,7 @@ fn parse_traceback_line(line: &str) -> Option<TracebackLocation> {
 }
 
 /// Calculate the `TextRange` for a specific line in the source text
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation)]
 fn calculate_line_range(source_text: &str, line_number: OneIndexed) -> Option<TextRange> {
     let target_line = line_number.to_zero_indexed();
     let mut current_line = 0;

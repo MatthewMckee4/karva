@@ -38,7 +38,7 @@ struct Args {
 }
 
 #[derive(Subcommand)]
-#[allow(clippy::enum_variant_names)]
+#[expect(clippy::enum_variant_names)]
 enum Command {
     /// Generate CLI reference.
     GenerateCliReference(generate_cli_reference::Args),

@@ -65,7 +65,7 @@ impl OsSystem {
     }
 
     #[cfg(unix)]
-    #[allow(clippy::unnecessary_wraps)]
+    #[expect(clippy::unnecessary_wraps)]
     fn permissions(metadata: &std::fs::Metadata) -> Option<u32> {
         use std::os::unix::fs::PermissionsExt;
 
