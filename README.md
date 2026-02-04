@@ -4,11 +4,11 @@
 
 A Python test framework, written in Rust.
 
-> **We'd love for you to try Karva!** It's currently in alpha, and your feedback helps shape the project. [Get started](#getting-started) or join us on [Discord](https://discord.gg/XG95vNz4Zu).
-
 <div align="center">
   <img src="https://raw.githubusercontent.com/karva-dev/karva/main/docs/assets/benchmark_results.svg" alt="Benchmark results" width="70%">
 </div>
+
+**We'd love for you to try Karva!** It's currently in alpha, and your feedback helps shape the project. [Get started](#getting-started) or join us on [Discord](https://discord.gg/XG95vNz4Zu).
 
 ## About Karva
 
