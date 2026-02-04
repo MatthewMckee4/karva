@@ -10,7 +10,10 @@ use karva_system::{System, path::TestPathFunction};
 /// Groups multiple test functions from the same file and collects them in a single parse,
 /// improving performance when collecting many functions across the same files.
 pub struct TestFunctionCollector<'a> {
+    /// Reference to the system abstraction for file operations.
     system: &'a dyn System,
+
+    /// Configuration settings for test collection.
     settings: CollectionSettings<'a>,
 }
 

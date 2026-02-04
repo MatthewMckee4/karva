@@ -24,13 +24,29 @@ use crate::discovery::DiscoveredPackage;
 use crate::extensions::fixtures::python::InvalidFixtureError;
 use crate::extensions::fixtures::scope::fixture_scope;
 
+/// Represents a pytest-style fixture discovered from Python source code.
+///
+/// Fixtures provide reusable setup and teardown logic for tests. They can be
+/// scoped to function, module, package, or session level, and may optionally
+/// be auto-used without explicit declaration.
 #[derive(Clone)]
 pub struct Fixture {
+    /// Fully qualified name including module path and function name.
     name: QualifiedFunctionName,
+
+    /// AST representation of the fixture function definition.
     stmt_function_def: Rc<StmtFunctionDef>,
+
+    /// The scope at which this fixture's value is cached.
     scope: FixtureScope,
+
+    /// Whether this fixture is automatically used without explicit request.
     auto_use: bool,
+
+    /// Reference to the actual Python callable object.
     function: Rc<Py<PyAny>>,
+
+    /// Whether this fixture is a generator (uses yield for teardown).
     is_generator: bool,
 }
 

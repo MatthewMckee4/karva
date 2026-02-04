@@ -6,15 +6,22 @@ use pyo3::prelude::*;
 use crate::Context;
 use crate::extensions::fixtures::{Finalizer, FixtureScope};
 
-/// Manages finalizers for fixtures at different scope levels.
+/// Manages fixture teardown callbacks at different scope levels.
+///
+/// Finalizers are collected during fixture setup and executed in LIFO
+/// order when their scope ends (e.g., after a test, module, or package).
 #[derive(Debug, Default)]
 pub struct FinalizerCache {
+    /// Session-scoped finalizers (run at end of test run).
     session: Rc<RefCell<Vec<Finalizer>>>,
 
+    /// Package-scoped finalizers (run after each package).
     package: Rc<RefCell<Vec<Finalizer>>>,
 
+    /// Module-scoped finalizers (run after each module).
     module: Rc<RefCell<Vec<Finalizer>>>,
 
+    /// Function-scoped finalizers (run after each test).
     function: Rc<RefCell<Vec<Finalizer>>>,
 }
 

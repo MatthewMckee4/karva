@@ -5,15 +5,22 @@ use pyo3::prelude::*;
 
 use crate::extensions::fixtures::FixtureScope;
 
-/// Manages caching of fixture values based on their scope.
+/// Caches fixture values at different scope levels.
+///
+/// Fixtures are cached based on their declared scope to avoid redundant
+/// setup when the same fixture is used multiple times within a scope.
 #[derive(Debug, Default)]
 pub struct FixtureCache {
+    /// Session-scoped fixture values (persist for entire test run).
     session: RefCell<HashMap<String, Py<PyAny>>>,
 
+    /// Package-scoped fixture values (cleared after each package).
     package: RefCell<HashMap<String, Py<PyAny>>>,
 
+    /// Module-scoped fixture values (cleared after each module).
     module: RefCell<HashMap<String, Py<PyAny>>>,
 
+    /// Function-scoped fixture values (cleared after each test).
     function: RefCell<HashMap<String, Py<PyAny>>>,
 }
 

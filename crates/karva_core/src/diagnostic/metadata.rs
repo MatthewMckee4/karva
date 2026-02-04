@@ -2,16 +2,20 @@ use ruff_db::diagnostic::{Diagnostic, DiagnosticId, LintName, Severity};
 
 use crate::Context;
 
+/// Defines a type of diagnostic that can be reported during test execution.
+///
+/// Each diagnostic type has a unique name, summary description, and severity level
+/// that determines how it should be displayed to the user.
 #[derive(Debug, Clone)]
 pub struct DiagnosticType {
-    /// The unique identifier for the rule.
+    /// The unique identifier for this diagnostic type.
     pub name: LintName,
 
-    /// A one-sentence summary of what the rule catches.
+    /// A one-sentence summary of what this diagnostic catches.
     #[expect(unused)]
     pub summary: &'static str,
 
-    /// The level of the diagnostic.
+    /// The severity level (error, warning, etc.) of this diagnostic.
     pub(crate) severity: Severity,
 }
 
@@ -33,10 +37,21 @@ macro_rules! declare_diagnostic_type {
     };
 }
 
+/// Builder for creating diagnostic guards with the appropriate context.
+///
+/// Used to construct diagnostics with the correct ID, severity, and context
+/// before they are finalized and reported.
 pub struct DiagnosticGuardBuilder<'ctx, 'a> {
+    /// Reference to the test execution context.
     context: &'ctx Context<'a>,
+
+    /// Unique identifier for this diagnostic.
     id: DiagnosticId,
+
+    /// Severity level for this diagnostic.
     severity: Severity,
+
+    /// Whether this diagnostic occurred during test discovery.
     is_discovery: bool,
 }
 
@@ -67,12 +82,18 @@ impl<'ctx, 'a> DiagnosticGuardBuilder<'ctx, 'a> {
     }
 }
 
-/// An abstraction for mutating a diagnostic.
+/// A guard that holds a diagnostic and reports it when dropped.
+///
+/// Allows mutation of the diagnostic before it is automatically
+/// reported to the test results when the guard goes out of scope.
 pub struct DiagnosticGuard<'ctx, 'a> {
+    /// Reference to the test execution context.
     context: &'ctx Context<'a>,
 
+    /// The diagnostic being built, wrapped in Option for take-on-drop.
     diag: Option<Diagnostic>,
 
+    /// Whether this diagnostic occurred during test discovery.
     is_discovery: bool,
 }
 

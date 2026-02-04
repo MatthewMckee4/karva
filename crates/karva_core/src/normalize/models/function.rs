@@ -9,41 +9,34 @@ use ruff_python_ast::StmtFunctionDef;
 use crate::extensions::fixtures::NormalizedFixture;
 use crate::extensions::tags::Tags;
 
-/// A normalized test represents a concrete test function with resolved dependencies.
+/// A concrete test instance ready for execution.
 ///
-/// Resolved dependencies include:
-/// - params from `tags.parametrize`.
-/// - fixtures from function arguments.
-/// - use fixtures from `use_fixtures` tag.
-/// - auto use fixtures from externally defined autouse fixtures.
+/// Represents a single test invocation with all dependencies resolved:
+/// parametrize values expanded, fixtures identified, and tags combined.
 #[derive(Debug)]
 pub struct NormalizedTest {
-    /// Original test function name: "`test_foo`"
+    /// Fully qualified name of the test function.
     pub(crate) name: QualifiedFunctionName,
 
-    /// Test-level parameters (from @pytest.mark.parametrize)
-    /// Maps parameter name to its value for this variant
+    /// Parameter values for this test variant (from @parametrize).
     pub(crate) params: HashMap<String, Py<PyAny>>,
 
-    /// Normalized fixture dependencies (already expanded)
-    /// Each fixture dependency is a specific variant
-    /// These are the regular fixtures that should be passed as arguments to the test function
+    /// Fixtures to be passed as arguments to the test function.
     pub(crate) fixture_dependencies: Vec<Rc<NormalizedFixture>>,
 
-    /// Fixtures from `use_fixtures` tag that should only be executed for side effects
-    /// These should NOT be passed as arguments to the test function
+    /// Fixtures from @usefixtures (run for side effects, not passed as args).
     pub(crate) use_fixture_dependencies: Vec<Rc<NormalizedFixture>>,
 
-    /// Fixtures that will be automatically run before the test is executed
+    /// Auto-use fixtures that run automatically before this test.
     pub(crate) auto_use_fixtures: Vec<Rc<NormalizedFixture>>,
 
-    /// Imported Python function
+    /// Reference to the Python callable to execute.
     pub(crate) function: Py<PyAny>,
 
-    /// Resolved tags
+    /// Combined tags from the test and its parameter set.
     pub(crate) tags: Tags,
 
-    /// The function definition for this fixture
+    /// AST representation for diagnostic reporting.
     pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
 }
 

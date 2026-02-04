@@ -7,15 +7,16 @@ use pyo3::prelude::*;
 use crate::extensions::functions::Param;
 use crate::extensions::tags::Tags;
 
-/// A single parametrization of a function
+/// A single set of parameter values for a parametrized test.
+///
+/// Represents one "row" of test data that will be used to run the test
+/// function once, along with any tags specific to this parameter set.
 #[derive(Debug, Clone)]
 pub struct Parametrization {
-    /// The values of the arguments
-    ///
-    /// These are used as values for the test function.
+    /// The argument values for this test variant.
     pub(crate) values: Vec<Arc<Py<PyAny>>>,
 
-    /// Tags associated with this parametrization
+    /// Tags specific to this parameter set (e.g., marks on pytest.param).
     pub(crate) tags: Tags,
 }
 
@@ -34,10 +35,16 @@ impl From<PyRef<'_, Param>> for Parametrization {
     }
 }
 
+/// Named parameter values for a single test invocation.
+///
+/// Maps parameter names to their values, combining multiple
+/// `@parametrize` decorators into a single set of arguments.
 #[derive(Debug, Clone, Default)]
 pub struct ParametrizationArgs {
+    /// Mapping of parameter name to its value.
     pub(crate) values: HashMap<String, Arc<Py<PyAny>>>,
 
+    /// Combined tags from all parameter sets.
     pub(crate) tags: Tags,
 }
 

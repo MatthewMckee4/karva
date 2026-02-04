@@ -5,12 +5,22 @@ use ruff_source_file::{SourceFile, SourceFileBuilder};
 use crate::discovery::TestFunction;
 use crate::extensions::fixtures::Fixture;
 
-/// A module represents a single python file.
+/// Represents a single Python file containing tests and/or fixtures.
+///
+/// Holds the discovered test functions and fixtures along with the
+/// source text needed for diagnostic reporting.
 #[derive(Debug)]
 pub struct DiscoveredModule {
+    /// The module's path information including file path and module name.
     path: ModulePath,
+
+    /// Test functions discovered in this module.
     test_functions: Vec<TestFunction>,
+
+    /// Fixture definitions discovered in this module.
     fixtures: Vec<Fixture>,
+
+    /// Original source code text for diagnostic reporting.
     source_text: String,
 }
 

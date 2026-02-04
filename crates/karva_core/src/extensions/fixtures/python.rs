@@ -1,14 +1,21 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
+/// Marker object created when `@fixture(...)` is called with arguments.
+///
+/// This is an intermediate object that captures the decorator arguments
+/// and waits to be called with the actual function to decorate.
 #[pyclass]
 pub struct FixtureFunctionMarker {
+    /// The scope at which the fixture value should be cached.
     #[pyo3(get)]
     pub scope: Py<PyAny>,
 
+    /// Optional custom name for the fixture (defaults to function name).
     #[pyo3(get)]
     pub name: Option<String>,
 
+    /// Whether this fixture should be automatically used.
     #[pyo3(get)]
     pub auto_use: bool,
 }
@@ -55,18 +62,26 @@ impl FixtureFunctionMarker {
     }
 }
 
+/// The final decorated fixture function with all metadata attached.
+///
+/// This object wraps the original Python function and carries the fixture
+/// configuration (scope, name, `auto_use`) for later discovery.
 #[derive(Debug)]
 #[pyclass]
 pub struct FixtureFunctionDefinition {
+    /// The fixture's name (either custom or derived from function name).
     #[pyo3(get)]
     pub name: String,
 
+    /// The scope at which the fixture value should be cached.
     #[pyo3(get)]
     pub scope: Py<PyAny>,
 
+    /// Whether this fixture should be automatically used.
     #[pyo3(get)]
     pub auto_use: bool,
 
+    /// The underlying Python function that produces the fixture value.
     #[pyo3(get)]
     pub function: Py<PyAny>,
 }

@@ -9,7 +9,12 @@ use crate::discovery::visitor::discover;
 use crate::discovery::{DiscoveredModule, DiscoveredPackage};
 use crate::utils::add_to_sys_path;
 
+/// Discovers test functions and fixtures from Python source files.
+///
+/// Handles the conversion from collected AST information to fully discovered
+/// test entities by importing Python modules and resolving function references.
 pub struct StandardDiscoverer<'ctx, 'a> {
+    /// Reference to the test execution context.
     context: &'ctx Context<'a>,
 }
 

@@ -9,18 +9,22 @@ use crate::extensions::fixtures::RequiresFixtures;
 use crate::extensions::tags::Tags;
 
 /// Represents a single test function discovered from Python source code.
+///
+/// Contains all the information needed to execute a test, including the
+/// function's qualified name, AST representation, Python callable, and
+/// any associated decorator tags.
 #[derive(Debug)]
 pub struct TestFunction {
-    /// The name of the test function.
+    /// Fully qualified name including module path and function name.
     pub(crate) name: QualifiedFunctionName,
 
-    /// The ast function statement.
+    /// AST representation of the function definition.
     pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
 
-    /// The Python function object.
+    /// Reference to the actual Python callable object.
     pub(crate) py_function: Py<PyAny>,
 
-    /// The tags associated with the test function.
+    /// Decorator tags like parametrize, skip, xfail, etc.
     pub(crate) tags: Tags,
 }
 

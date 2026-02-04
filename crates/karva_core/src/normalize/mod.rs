@@ -22,8 +22,13 @@ use crate::extensions::tags::parametrize::ParametrizationArgs;
 use crate::normalize::utils::cartesian_product_rc;
 use crate::utils::iter_with_ancestors;
 
+/// Transforms discovered tests and fixtures into normalized, executable form.
+///
+/// Resolves fixture dependencies, expands parametrized tests, and produces
+/// concrete test instances ready for execution.
 #[derive(Default)]
 pub struct Normalizer {
+    /// Cache of normalized fixtures to avoid redundant processing.
     fixture_cache: HashMap<String, Rc<[Rc<NormalizedFixture>]>>,
 }
 
