@@ -226,14 +226,13 @@ fn generate_command<'a>(output: &mut String, command: &'a Command, parents: &mut
                     .get_num_args()
                     .unwrap_or_else(|| 1.into())
                     .takes_values()
+                    && let Some(values) = opt.get_value_names()
                 {
-                    if let Some(values) = opt.get_value_names() {
-                        for value in values {
-                            output.push_str(&format!(
-                                " <i>{}</i>",
-                                value.to_lowercase().replace('_', "-")
-                            ));
-                        }
+                    for value in values {
+                        output.push_str(&format!(
+                            " <i>{}</i>",
+                            value.to_lowercase().replace('_', "-")
+                        ));
                     }
                 }
                 output.push_str("</dt>");

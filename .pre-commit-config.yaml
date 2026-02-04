@@ -1,9 +1,9 @@
-exclude: |
-  (?x)^(
-    .*.svg|
-    docs/cli.md|
-    docs/configuration.md
-  )$
+exclude:
+  glob:
+    - "*.svg"
+    - docs/cli.md
+    - docs/configuration.md
+    - .claude/commands/**
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks

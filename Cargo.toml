@@ -4,7 +4,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.93"
 homepage = "https://github.com/karva-dev/karva"
 documentation = "https://github.com/karva-dev/karva"
 repository = "https://github.com/karva-dev/karva"
