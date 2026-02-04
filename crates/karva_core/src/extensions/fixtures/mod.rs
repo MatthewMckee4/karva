@@ -30,7 +30,7 @@ use crate::extensions::fixtures::scope::fixture_scope;
 /// scoped to function, module, package, or session level, and may optionally
 /// be auto-used without explicit declaration.
 #[derive(Clone)]
-pub struct Fixture {
+pub struct DiscoveredFixture {
     /// Fully qualified name including module path and function name.
     name: QualifiedFunctionName,
 
@@ -50,7 +50,7 @@ pub struct Fixture {
     is_generator: bool,
 }
 
-impl Fixture {
+impl DiscoveredFixture {
     pub(crate) fn new(
         name: QualifiedFunctionName,
         stmt_function_def: Rc<StmtFunctionDef>,
@@ -238,7 +238,7 @@ fn get_fixture_function<'py>(function: &Bound<'py, PyAny>) -> PyResult<Bound<'py
     ))
 }
 
-impl std::fmt::Debug for Fixture {
+impl std::fmt::Debug for DiscoveredFixture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -254,7 +254,7 @@ pub fn get_auto_use_fixtures<'a>(
     parents: &'a [&'a DiscoveredPackage],
     current: &'a dyn HasFixtures<'a>,
     scope: FixtureScope,
-) -> Vec<&'a Fixture> {
+) -> Vec<&'a DiscoveredFixture> {
     let mut auto_use_fixtures_called = Vec::new();
     let auto_use_fixtures = current.auto_use_fixtures(&scope.scopes_above());
 
@@ -263,7 +263,7 @@ pub fn get_auto_use_fixtures<'a>(
 
         if auto_use_fixtures_called
             .iter()
-            .any(|fixture: &&Fixture| fixture.name().function_name() == fixture_name)
+            .any(|fixture: &&DiscoveredFixture| fixture.name().function_name() == fixture_name)
         {
             continue;
         }
@@ -279,7 +279,7 @@ pub fn get_auto_use_fixtures<'a>(
 
             if auto_use_fixtures_called
                 .iter()
-                .any(|fixture: &&Fixture| fixture.name().function_name() == fixture_name)
+                .any(|fixture: &&DiscoveredFixture| fixture.name().function_name() == fixture_name)
             {
                 continue;
             }

@@ -26,7 +26,7 @@ pub struct FixtureCache {
 
 impl FixtureCache {
     /// Get a fixture value from the cache based on its scope
-    pub fn get(&self, py: Python, name: &str, scope: FixtureScope) -> Option<Py<PyAny>> {
+    pub(crate) fn get(&self, py: Python, name: &str, scope: FixtureScope) -> Option<Py<PyAny>> {
         match scope {
             FixtureScope::Session => self.session.borrow().get(name).map(|v| v.clone_ref(py)),
             FixtureScope::Package => self.package.borrow().get(name).map(|v| v.clone_ref(py)),
@@ -36,7 +36,7 @@ impl FixtureCache {
     }
 
     /// Insert a fixture value into the cache based on its scope
-    pub fn insert(&self, name: String, value: Py<PyAny>, scope: FixtureScope) {
+    pub(crate) fn insert(&self, name: String, value: Py<PyAny>, scope: FixtureScope) {
         match scope {
             FixtureScope::Session => {
                 self.session.borrow_mut().insert(name, value);

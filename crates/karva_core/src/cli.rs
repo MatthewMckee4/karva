@@ -20,8 +20,7 @@ use ruff_notebook::NotebookIndex;
 
 use crate::Context;
 use crate::discovery::StandardDiscoverer;
-use crate::normalize::Normalizer;
-use crate::runner::NormalizedPackageRunner;
+use crate::runner::PackageRunner;
 use crate::utils::attach_with_project;
 
 /// Command-line arguments for the `karva_core` worker process.
@@ -160,9 +159,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     let result = attach_with_project(settings.terminal().show_python_output, |py| {
         let session = StandardDiscoverer::new(&context).discover_with_py(py, test_paths);
 
-        let normalized_session = Normalizer::default().normalize(py, &session);
-
-        NormalizedPackageRunner::new(&context).execute(py, normalized_session);
+        PackageRunner::new(&context).execute(py, &session);
 
         context.into_result()
     });
