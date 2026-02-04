@@ -10,18 +10,30 @@ use crate::diagnostic::report_invalid_fixture_finalizer;
 use crate::extensions::fixtures::FixtureScope;
 use crate::utils::source_file;
 
-/// Represents a generator function that can be used to run the finalizer section of a fixture.
+/// Represents the teardown portion of a generator fixture.
 ///
-/// ```py
-/// def fixture():
-///     yield
-///     # Finalizer logic here
+/// When a fixture yields a value, the code after the yield runs as cleanup.
+/// This struct holds the generator iterator to resume for teardown.
+///
+/// ```python
+/// @fixture
+/// def my_fixture():
+///     # setup
+///     yield value
+///     # teardown (finalizer runs this part)
 /// ```
 #[derive(Debug)]
 pub struct Finalizer {
+    /// The generator iterator, positioned after yield, ready for teardown.
     pub(crate) fixture_return: Py<PyIterator>,
+
+    /// The scope determines when this finalizer runs.
     pub(crate) scope: FixtureScope,
+
+    /// Optional name of the fixture for error reporting.
     pub(crate) fixture_name: Option<QualifiedFunctionName>,
+
+    /// Optional AST definition for error reporting.
     pub(crate) stmt_function_def: Option<Rc<StmtFunctionDef>>,
 }
 

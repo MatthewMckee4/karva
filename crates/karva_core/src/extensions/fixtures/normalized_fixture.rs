@@ -9,35 +9,50 @@ use ruff_python_ast::StmtFunctionDef;
 use crate::extensions::fixtures::FixtureScope;
 use crate::extensions::tags::Tags;
 
-/// Built-in fixture data
+/// Represents a built-in fixture provided by the test framework.
+///
+/// Built-in fixtures like `request`, `tmp_path`, or `monkeypatch` are
+/// provided by the framework rather than defined in user code.
 #[derive(Debug, Clone)]
 pub struct BuiltInFixture {
-    /// Built-in fixture name
+    /// Name of the built-in fixture.
     pub(crate) name: String,
-    /// Pre-computed value for the built-in fixture
+
+    /// Pre-computed Python value for this fixture.
     pub(crate) py_value: Rc<Py<PyAny>>,
-    /// Normalized dependencies (already expanded for their params)
+
+    /// Resolved fixture dependencies.
     pub(crate) dependencies: Vec<Rc<NormalizedFixture>>,
-    /// Fixture scope
+
+    /// The scope at which this fixture's value is cached.
     pub(crate) scope: FixtureScope,
-    /// Optional finalizer to call after the fixture is used
+
+    /// Optional cleanup function to call after the fixture is used.
     pub(crate) finalizer: Option<Rc<Py<PyAny>>>,
 }
 
-/// User-defined fixture data
+/// Represents a user-defined fixture from Python test code.
+///
+/// User-defined fixtures are created with the `@fixture` decorator and
+/// provide custom setup/teardown logic for tests.
 #[derive(Debug, Clone)]
 pub struct UserDefinedFixture {
-    /// Qualified function name
+    /// Fully qualified name including module path and function name.
     pub(crate) name: QualifiedFunctionName,
-    /// Normalized dependencies (already expanded for their params)
+
+    /// Resolved fixture dependencies this fixture requires.
     pub(crate) dependencies: Vec<Rc<NormalizedFixture>>,
-    /// Fixture scope
+
+    /// The scope at which this fixture's value is cached.
     pub(crate) scope: FixtureScope,
-    /// If this fixture is a generator
+
+    /// Whether this fixture uses yield for teardown logic.
     pub(crate) is_generator: bool,
-    /// The computed value or imported python function to compute the value
+
+    /// Reference to the Python callable that produces the fixture value.
     pub(crate) py_function: Rc<Py<PyAny>>,
-    /// The function definition for this fixture
+
+    /// AST representation of the fixture function definition.
     pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
 }
 

@@ -1,13 +1,16 @@
 use pyo3::prelude::*;
 
-/// Represents a test that is expected to fail.
+/// Represents a test marked as expected to fail (xfail).
 ///
-/// If the test fails, it will be reported as passed (expected failure).
-/// If the test passes, it will be reported as failed (unexpected pass).
-/// Can optionally have conditions that determine if the test should be expected to fail.
+/// If the test fails, it counts as passed (expected failure).
+/// If the test passes unexpectedly, it counts as failed.
+/// Supports conditional xfail via boolean conditions.
 #[derive(Debug, Clone)]
 pub struct ExpectFailTag {
+    /// Boolean conditions; test is xfailed if any is true (or if empty).
     conditions: Vec<bool>,
+
+    /// Optional explanation for why failure is expected.
     reason: Option<String>,
 }
 

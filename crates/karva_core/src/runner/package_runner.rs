@@ -25,12 +25,18 @@ use crate::normalize::{NormalizedModule, NormalizedPackage, NormalizedTest};
 use crate::runner::{FinalizerCache, FixtureCache};
 use crate::utils::{full_test_name, source_file};
 
-/// A struct that is used to execute tests within a package.
+/// Executes normalized tests within a package hierarchy.
 ///
-/// We assume a normalized state of the package.
+/// Manages fixture caching and finalization across different scopes
+/// (function, module, package, session) during test execution.
 pub struct NormalizedPackageRunner<'ctx, 'a> {
+    /// Reference to the test execution context.
     context: &'ctx Context<'a>,
+
+    /// Cache for fixture values to avoid re-computation within a scope.
     fixture_cache: FixtureCache,
+
+    /// Cache for fixture finalizers to run cleanup at appropriate times.
     finalizer_cache: FinalizerCache,
 }
 

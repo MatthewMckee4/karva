@@ -2,13 +2,16 @@ use pyo3::prelude::*;
 
 use crate::extensions::functions::SkipError;
 
-/// Represents a test that should be skipped.
+/// Represents a test marked to be skipped.
 ///
-/// A given reason will be logged if given.
-/// Can optionally have conditions that determine if the test should be skipped.
+/// Supports unconditional skipping and conditional skipping via `skipif`.
+/// An optional reason can be provided for documentation.
 #[derive(Debug, Clone)]
 pub struct SkipTag {
+    /// Boolean conditions; test is skipped if any is true (or if empty).
     conditions: Vec<bool>,
+
+    /// Optional explanation for why the test is skipped.
     reason: Option<String>,
 }
 

@@ -16,20 +16,23 @@ use crate::discovery::{DiscoveredModule, TestFunction};
 use crate::extensions::fixtures::Fixture;
 
 /// Visitor for discovering test functions and fixture definitions in a given module.
+///
+/// Processes function definitions found during AST traversal and converts them
+/// into test functions or fixtures by importing the corresponding Python module.
 struct FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
-    /// Context for the current session.
+    /// Reference to the test execution context.
     context: &'ctx Context<'a>,
 
-    /// The current module.
+    /// The module being populated with discovered test functions and fixtures.
     module: &'b mut DiscoveredModule,
 
-    /// We only import the module once we actually need it, this ensures we don't import random files.
-    /// Which has a side effect of running them.
+    /// Lazily-loaded Python module, imported only when needed to avoid side effects.
     py_module: Option<Bound<'py, PyModule>>,
 
+    /// Python interpreter handle for this visitor.
     py: Python<'py>,
 
-    /// Used to track whether we have tried to import the current module yet.
+    /// Flag to prevent multiple import attempts for the same module.
     tried_to_import_module: bool,
 }
 
@@ -271,8 +274,13 @@ pub fn discover(
     }
 }
 
+/// Visitor that detects whether a function contains yield expressions.
+///
+/// Used to identify generator functions, which is important for fixture
+/// finalization behavior.
 #[derive(Default)]
 struct GeneratorFunctionVisitor {
+    /// Set to true if a yield or yield-from expression is found.
     is_generator: bool,
 }
 
@@ -306,7 +314,11 @@ fn find_function_statement(
     None
 }
 
+/// Represents a symbol imported into a module via `from ... import ...`.
+///
+/// Used to track imported fixtures that may need to be discovered.
 struct ImportedSymbol {
+    /// The name of the imported symbol.
     name: String,
 }
 

@@ -10,11 +10,24 @@ use ruff_python_ast::PythonVersion;
 
 use crate::diagnostic::{DiagnosticGuardBuilder, DiagnosticType};
 
+/// Central context object that holds shared state for a test run.
+///
+/// Provides access to system operations, project settings, and test result
+/// accumulation throughout the test discovery and execution phases.
 pub struct Context<'a> {
+    /// Reference to the system abstraction for file operations.
     system: &'a dyn System,
+
+    /// Project-level configuration settings.
     settings: &'a ProjectSettings,
+
+    /// The Python version being used for this test run.
     python_version: PythonVersion,
+
+    /// Accumulated test results, wrapped in `RefCell` for interior mutability.
     result: Rc<RefCell<TestRunResult>>,
+
+    /// Reporter for outputting test progress and results.
     reporter: &'a dyn Reporter,
 }
 

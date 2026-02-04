@@ -4,12 +4,22 @@ use camino::Utf8PathBuf;
 
 use crate::discovery::DiscoveredModule;
 
-/// A package represents a single python directory.
+/// Represents a Python package directory containing modules and sub-packages.
+///
+/// Organizes discovered modules hierarchically and holds any conftest.py
+/// configuration module for fixture sharing.
 #[derive(Debug)]
 pub struct DiscoveredPackage {
+    /// Filesystem path to this package directory.
     path: Utf8PathBuf,
+
+    /// Test modules directly in this package, keyed by file path.
     modules: HashMap<Utf8PathBuf, DiscoveredModule>,
+
+    /// Sub-packages within this package, keyed by directory path.
     packages: HashMap<Utf8PathBuf, Self>,
+
+    /// Optional conftest.py module containing shared fixtures.
     configuration_module: Option<DiscoveredModule>,
 }
 

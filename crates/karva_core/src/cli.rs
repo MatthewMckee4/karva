@@ -24,22 +24,26 @@ use crate::normalize::Normalizer;
 use crate::runner::NormalizedPackageRunner;
 use crate::utils::attach_with_project;
 
+/// Command-line arguments for the `karva_core` worker process.
+///
+/// This struct is used internally when tests are distributed across
+/// multiple worker processes for parallel execution.
 #[derive(Parser)]
 #[command(name = "karva_core", about = "Karva test worker")]
 struct Args {
-    /// Cache directory
+    /// Directory where test results and duration cache are stored.
     #[arg(long)]
     cache_dir: Utf8PathBuf,
 
-    /// Run hash
+    /// Unique identifier for this test run, used for cache coordination.
     #[arg(long)]
     run_hash: String,
 
-    /// Worker ID
+    /// Numeric identifier for this worker in a parallel test run.
     #[arg(long)]
     worker_id: usize,
 
-    /// Shared test command options
+    /// Shared test execution options inherited from the main CLI.
     #[clap(flatten)]
     sub_command: SubTestCommand,
 }
@@ -176,7 +180,12 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     Ok(ExitStatus::Success)
 }
 
+/// Resolves file paths for diagnostic messages.
+///
+/// Implements the `FileResolver` trait to provide file path information
+/// when rendering diagnostic error messages to the user.
 struct DiagnosticFileResolver<'a> {
+    /// Reference to the system abstraction for file operations.
     system: &'a dyn System,
 }
 

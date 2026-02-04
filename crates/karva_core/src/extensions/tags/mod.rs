@@ -18,7 +18,10 @@ use parametrize::{ParametrizationArgs, ParametrizeTag};
 use skip::SkipTag;
 use use_fixtures::UseFixturesTag;
 
-/// Represents a decorator function in Python that can be used to extend the functionality of a test.
+/// Represents a decorator/marker that modifies test behavior.
+///
+/// Tags are extracted from Python decorators like `@pytest.mark.parametrize`,
+/// `@pytest.mark.skip`, etc., and control how tests are executed.
 #[derive(Debug, Clone)]
 pub enum Tag {
     Parametrize(ParametrizeTag),
@@ -110,11 +113,13 @@ impl Tag {
     }
 }
 
-/// Represents a collection of tags associated with a test function.
+/// A collection of tags associated with a test function.
 ///
-/// This means we can collect tags and use them all for the same function.
+/// Holds all decorator tags applied to a test, allowing multiple
+/// markers (parametrize, skip, xfail, etc.) to be combined.
 #[derive(Debug, Clone, Default)]
 pub struct Tags {
+    /// The list of tags applied to a test function.
     inner: Vec<Tag>,
 }
 
