@@ -47,12 +47,16 @@ jobs:
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             . \
             ':!docs/' \
+            ':!.markdownlint.yaml' \
+            ':!pre-commit-config.yaml' \
+            ':!CHANGELOG.md' \
             ':!CODE_OF_CONDUCT.md' \
             ':!CONTRIBUTING.md' \
+            ':!justfile' \
             ':!LICENSE' \
             ':!README.md' \
+            ':!seal.toml' \
             ':!zensical.toml' \
-            ':!pre-commit-config.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
