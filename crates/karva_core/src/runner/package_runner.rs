@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 type FixtureArguments = HashMap<String, Py<PyAny>>;
 
@@ -15,21 +16,24 @@ use crate::diagnostic::{
     report_fixture_failure, report_missing_fixtures, report_test_failure,
     report_test_pass_on_expect_failure,
 };
+use crate::discovery::{DiscoveredModule, DiscoveredPackage};
 use crate::extensions::fixtures::{
     Finalizer, FixtureScope, NormalizedFixture, create_fixture_with_finalizer,
     missing_arguments_from_error,
 };
 use crate::extensions::tags::expect_fail::ExpectFailTag;
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
-use crate::normalize::{NormalizedModule, NormalizedPackage, NormalizedTest};
+use crate::runner::fixture_resolver::RuntimeFixtureResolver;
+use crate::runner::test_iterator::{TestVariant, TestVariantIterator};
 use crate::runner::{FinalizerCache, FixtureCache};
 use crate::utils::{full_test_name, source_file};
 
-/// Executes normalized tests within a package hierarchy.
+/// Executes discovered tests within a package hierarchy.
 ///
 /// Manages fixture caching and finalization across different scopes
 /// (function, module, package, session) during test execution.
-pub struct NormalizedPackageRunner<'ctx, 'a> {
+/// Fixtures are resolved at runtime rather than pre-computed.
+pub struct PackageRunner<'ctx, 'a> {
     /// Reference to the test execution context.
     context: &'ctx Context<'a>,
 
@@ -40,7 +44,7 @@ pub struct NormalizedPackageRunner<'ctx, 'a> {
     finalizer_cache: FinalizerCache,
 }
 
-impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
+impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
     pub(crate) fn new(context: &'ctx Context<'a>) -> Self {
         Self {
             context,
@@ -52,14 +56,19 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
     /// Executes all tests in a package.
     ///
     /// The main entrypoint for actual test execution.
-    pub(crate) fn execute(&self, py: Python<'_>, session: NormalizedPackage) {
-        let auto_use_errors = self.run_fixtures(py, &session.auto_use_fixtures);
-
-        for error in auto_use_errors {
-            report_fixture_failure(self.context, py, error);
+    pub(crate) fn execute(&self, py: Python<'_>, session: &DiscoveredPackage) {
+        // Get session-scoped auto-use fixtures
+        if let Some(config_module) = session.configuration_module_impl() {
+            let mut resolver = RuntimeFixtureResolver::new(&[], config_module);
+            let session_auto_use_fixtures =
+                resolver.get_normalized_auto_use_fixtures(py, FixtureScope::Session);
+            let auto_use_errors = self.run_fixtures(py, &session_auto_use_fixtures);
+            for error in auto_use_errors {
+                report_fixture_failure(self.context, py, error);
+            }
         }
 
-        self.execute_package(py, session);
+        self.execute_package(py, session, &[]);
 
         self.clean_up_scope(py, FixtureScope::Session);
     }
@@ -69,8 +78,18 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
     /// Executes all tests in a module.
     ///
     /// Failing fast if the user has specified that we should.
-    fn execute_module(&self, py: Python<'_>, module: NormalizedModule) -> bool {
-        let auto_use_errors = self.run_fixtures(py, &module.auto_use_fixtures);
+    fn execute_module(
+        &self,
+        py: Python<'_>,
+        module: &DiscoveredModule,
+        parents: &[&DiscoveredPackage],
+    ) -> bool {
+        let mut resolver = RuntimeFixtureResolver::new(parents, module);
+
+        // Run module-scoped auto-use fixtures
+        let module_auto_use_fixtures =
+            resolver.get_normalized_auto_use_fixtures(py, FixtureScope::Module);
+        let auto_use_errors = self.run_fixtures(py, &module_auto_use_fixtures);
 
         for error in auto_use_errors {
             report_fixture_failure(self.context, py, error);
@@ -78,8 +97,18 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
 
         let mut passed = true;
 
-        for test_function in module.test_functions {
-            passed &= self.execute_test(py, test_function);
+        for test_function in module.test_functions() {
+            // Create a new resolver for each test to handle fixture resolution
+            let mut test_resolver = RuntimeFixtureResolver::new(parents, module);
+
+            // Iterate over all test variants (parametrize combinations × fixture combinations)
+            for variant in TestVariantIterator::new(py, test_function, &mut test_resolver) {
+                passed &= self.execute_test_variant(py, variant);
+
+                if self.context.settings().test().fail_fast && !passed {
+                    break;
+                }
+            }
 
             if self.context.settings().test().fail_fast && !passed {
                 break;
@@ -96,23 +125,30 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
     /// Executes all tests in each module and sub-package.
     ///
     /// Failing fast if the user has specified that we should.
-    fn execute_package(&self, py: Python<'_>, package: NormalizedPackage) -> bool {
-        let NormalizedPackage {
-            modules,
-            packages,
-            auto_use_fixtures,
-        } = package;
+    fn execute_package(
+        &self,
+        py: Python<'_>,
+        package: &DiscoveredPackage,
+        parents: &[&DiscoveredPackage],
+    ) -> bool {
+        let mut new_parents = parents.to_vec();
+        new_parents.push(package);
 
-        let auto_use_errors = self.run_fixtures(py, &auto_use_fixtures);
-
-        for error in auto_use_errors {
-            report_fixture_failure(self.context, py, error);
+        // Run package-scoped auto-use fixtures
+        if let Some(config_module) = package.configuration_module_impl() {
+            let mut resolver = RuntimeFixtureResolver::new(parents, config_module);
+            let package_auto_use_fixtures =
+                resolver.get_normalized_auto_use_fixtures(py, FixtureScope::Package);
+            let auto_use_errors = self.run_fixtures(py, &package_auto_use_fixtures);
+            for error in auto_use_errors {
+                report_fixture_failure(self.context, py, error);
+            }
         }
 
         let mut passed = true;
 
-        for module in modules {
-            passed &= self.execute_module(py, module);
+        for module in package.modules().values() {
+            passed &= self.execute_module(py, module, &new_parents);
 
             if self.context.settings().test().fail_fast && !passed {
                 break;
@@ -120,8 +156,8 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
         }
 
         if !self.context.settings().test().fail_fast || passed {
-            for sub_package in packages {
-                passed &= self.execute_package(py, sub_package);
+            for sub_package in package.packages().values() {
+                passed &= self.execute_package(py, sub_package, &new_parents);
 
                 if self.context.settings().test().fail_fast && !passed {
                     break;
@@ -134,21 +170,23 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
         passed
     }
 
-    /// Run a normalized test function.
-    fn execute_test(&self, py: Python<'_>, test: NormalizedTest) -> bool {
-        let tags = test.resolved_tags();
-        let test_module_path = test.module_path().clone();
+    /// Run a test variant (a specific combination of parametrize values and fixtures).
+    fn execute_test_variant(&self, py: Python<'_>, variant: TestVariant) -> bool {
+        let tags = variant.resolved_tags();
+        let test_module_path = variant.module_path().clone();
 
-        let NormalizedTest {
-            name,
+        let TestVariant {
+            test,
             params,
             fixture_dependencies,
             use_fixture_dependencies,
             auto_use_fixtures,
-            function,
-            tags: _test_tags,
-            stmt_function_def,
-        } = test;
+            tags: _variant_tags,
+        } = variant;
+
+        let name = test.name.clone();
+        let function = test.py_function.clone_ref(py);
+        let stmt_function_def = Rc::clone(&test.stmt_function_def);
 
         if let (true, reason) = tags.should_skip() {
             return self.context.register_test_case_result(
@@ -194,15 +232,20 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
         let auto_use_errors = self.run_fixtures(py, &auto_use_fixtures);
         fixture_call_errors.extend(auto_use_errors);
 
+        // Add parametrize params to function arguments
         for (key, value) in params {
-            function_arguments.insert(key, value);
+            function_arguments.insert(
+                key,
+                Arc::try_unwrap(value).unwrap_or_else(|arc| (*arc).clone_ref(py)),
+            );
         }
 
-        let full_test_name = full_test_name(py, name.to_string(), &function_arguments);
+        let computed_full_test_name = full_test_name(py, name.to_string(), &function_arguments);
 
-        let full_test_name = QualifiedTestName::new(name.clone(), Some(full_test_name));
+        let qualified_test_name =
+            QualifiedTestName::new(name.clone(), Some(computed_full_test_name));
 
-        tracing::debug!("Running test `{}`", full_test_name);
+        tracing::debug!("Running test `{}`", qualified_test_name);
 
         let py_dict = PyDict::new(py);
         for (key, value) in &function_arguments {
@@ -225,7 +268,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
             if test_result.is_ok() {
                 break;
             }
-            tracing::debug!("Retrying test `{}`", full_test_name);
+            tracing::debug!("Retrying test `{}`", qualified_test_name);
             retry_count -= 1;
             test_result = run_test();
         }
@@ -243,13 +286,13 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
                     );
 
                     self.context.register_test_case_result(
-                        &full_test_name,
+                        &qualified_test_name,
                         IndividualTestResultKind::Failed,
                         start_time.elapsed(),
                     )
                 } else {
                     self.context.register_test_case_result(
-                        &full_test_name,
+                        &qualified_test_name,
                         IndividualTestResultKind::Passed,
                         start_time.elapsed(),
                     )
@@ -259,13 +302,13 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
                 if is_skip_exception(py, &err) {
                     let reason = extract_skip_reason(py, &err);
                     self.context.register_test_case_result(
-                        &full_test_name,
+                        &qualified_test_name,
                         IndividualTestResultKind::Skipped { reason },
                         start_time.elapsed(),
                     )
                 } else if expect_fail {
                     self.context.register_test_case_result(
-                        &full_test_name,
+                        &qualified_test_name,
                         IndividualTestResultKind::Passed,
                         start_time.elapsed(),
                     )
@@ -295,7 +338,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
                     }
 
                     self.context.register_test_case_result(
-                        &full_test_name,
+                        &qualified_test_name,
                         IndividualTestResultKind::Failed,
                         start_time.elapsed(),
                     )
@@ -499,9 +542,9 @@ fn get_value_and_finalizer(
 }
 
 pub struct FixtureCallError {
-    pub fixture_name: String,
-    pub error: PyErr,
-    pub stmt_function_def: Rc<StmtFunctionDef>,
-    pub source_file: SourceFile,
-    pub arguments: FixtureArguments,
+    pub(crate) fixture_name: String,
+    pub(crate) error: PyErr,
+    pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
+    pub(crate) source_file: SourceFile,
+    pub(crate) arguments: FixtureArguments,
 }

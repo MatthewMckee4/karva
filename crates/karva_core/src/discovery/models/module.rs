@@ -2,8 +2,8 @@ use camino::Utf8PathBuf;
 use karva_python_semantic::ModulePath;
 use ruff_source_file::{SourceFile, SourceFileBuilder};
 
-use crate::discovery::TestFunction;
-use crate::extensions::fixtures::Fixture;
+use crate::discovery::DiscoveredTestFunction;
+use crate::extensions::fixtures::DiscoveredFixture;
 
 /// Represents a single Python file containing tests and/or fixtures.
 ///
@@ -15,10 +15,10 @@ pub struct DiscoveredModule {
     path: ModulePath,
 
     /// Test functions discovered in this module.
-    test_functions: Vec<TestFunction>,
+    test_functions: Vec<DiscoveredTestFunction>,
 
     /// Fixture definitions discovered in this module.
-    fixtures: Vec<Fixture>,
+    fixtures: Vec<DiscoveredFixture>,
 
     /// Original source code text for diagnostic reporting.
     source_text: String,
@@ -46,19 +46,19 @@ impl DiscoveredModule {
         self.path.module_name()
     }
 
-    pub(crate) fn test_functions(&self) -> &Vec<TestFunction> {
+    pub(crate) fn test_functions(&self) -> &Vec<DiscoveredTestFunction> {
         &self.test_functions
     }
 
-    pub(crate) fn add_test_function(&mut self, test_function: TestFunction) {
+    pub(crate) fn add_test_function(&mut self, test_function: DiscoveredTestFunction) {
         self.test_functions.push(test_function);
     }
 
-    pub(crate) const fn fixtures(&self) -> &Vec<Fixture> {
+    pub(crate) const fn fixtures(&self) -> &Vec<DiscoveredFixture> {
         &self.fixtures
     }
 
-    pub(crate) fn add_fixture(&mut self, fixture: Fixture) {
+    pub(crate) fn add_fixture(&mut self, fixture: DiscoveredFixture) {
         self.fixtures.push(fixture);
     }
 

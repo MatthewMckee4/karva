@@ -14,7 +14,7 @@ use crate::extensions::tags::Tags;
 /// function's qualified name, AST representation, Python callable, and
 /// any associated decorator tags.
 #[derive(Debug)]
-pub struct TestFunction {
+pub struct DiscoveredTestFunction {
     /// Fully qualified name including module path and function name.
     pub(crate) name: QualifiedFunctionName,
 
@@ -28,7 +28,7 @@ pub struct TestFunction {
     pub(crate) tags: Tags,
 }
 
-impl TestFunction {
+impl DiscoveredTestFunction {
     pub(crate) fn new(
         py: Python<'_>,
         module: &DiscoveredModule,
@@ -51,7 +51,7 @@ impl TestFunction {
     }
 }
 
-impl RequiresFixtures for TestFunction {
+impl RequiresFixtures for DiscoveredTestFunction {
     fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
         let mut required_fixtures = self.stmt_function_def.required_fixtures(py);
 

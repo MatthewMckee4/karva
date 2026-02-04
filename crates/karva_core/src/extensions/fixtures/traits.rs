@@ -4,7 +4,7 @@ use pyo3::Python;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::discovery::{DiscoveredModule, DiscoveredPackage};
-use crate::extensions::fixtures::{Fixture, FixtureScope};
+use crate::extensions::fixtures::{DiscoveredFixture, FixtureScope};
 
 /// This trait is used to get all fixtures (from a module or package) that have a given scope.
 ///
@@ -12,43 +12,36 @@ use crate::extensions::fixtures::{Fixture, FixtureScope};
 /// If we are in a package, we want to get all fixtures used in the package from the configuration module.
 pub trait HasFixtures<'a>: Debug {
     /// Get a fixture with the given name
-    fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a Fixture>;
+    fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a DiscoveredFixture>;
 
     /// Get all autouse fixtures
     ///
     /// If this returns a non-empty list, it means that the module or package has a configuration module.
-    fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a Fixture>;
-
-    /// Get the configuration module for this module or package.
-    fn configuration_module(&'a self) -> Option<&'a DiscoveredModule>;
+    fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a DiscoveredFixture>;
 }
 
 impl<'a> HasFixtures<'a> for DiscoveredModule {
-    fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a Fixture> {
+    fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a DiscoveredFixture> {
         self.fixtures()
             .iter()
             .find(|f| f.name().function_name() == fixture_name)
     }
 
-    fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a Fixture> {
+    fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a DiscoveredFixture> {
         self.fixtures()
             .iter()
             .filter(|f| f.auto_use() && scopes.contains(&f.scope()))
             .collect()
     }
-
-    fn configuration_module(&'a self) -> Option<&'a DiscoveredModule> {
-        Some(self)
-    }
 }
 
 impl<'a> HasFixtures<'a> for DiscoveredPackage {
-    fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a Fixture> {
+    fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a DiscoveredFixture> {
         self.configuration_module_impl()
             .and_then(|module| module.get_fixture(fixture_name))
     }
 
-    fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a Fixture> {
+    fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a DiscoveredFixture> {
         let mut fixtures = Vec::new();
 
         if let Some(module) = self.configuration_module_impl() {
@@ -57,23 +50,15 @@ impl<'a> HasFixtures<'a> for DiscoveredPackage {
 
         fixtures
     }
-
-    fn configuration_module(&'a self) -> Option<&'a DiscoveredModule> {
-        self.configuration_module_impl()
-    }
 }
 
 impl<'a> HasFixtures<'a> for &'a DiscoveredPackage {
-    fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a Fixture> {
+    fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a DiscoveredFixture> {
         (*self).get_fixture(fixture_name)
     }
 
-    fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a Fixture> {
+    fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a DiscoveredFixture> {
         (*self).auto_use_fixtures(scopes)
-    }
-
-    fn configuration_module(&'a self) -> Option<&'a DiscoveredModule> {
-        self.configuration_module_impl()
     }
 }
 
@@ -94,7 +79,7 @@ impl RequiresFixtures for StmtFunctionDef {
     }
 }
 
-impl RequiresFixtures for Fixture {
+impl RequiresFixtures for DiscoveredFixture {
     fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
         self.stmt_function_def.required_fixtures(py)
     }

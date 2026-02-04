@@ -12,8 +12,8 @@ use ruff_source_file::SourceFileBuilder;
 
 use crate::Context;
 use crate::diagnostic::{report_failed_to_import_module, report_invalid_fixture};
-use crate::discovery::{DiscoveredModule, TestFunction};
-use crate::extensions::fixtures::Fixture;
+use crate::discovery::{DiscoveredModule, DiscoveredTestFunction};
+use crate::extensions::fixtures::DiscoveredFixture;
 
 /// Visitor for discovering test functions and fixture definitions in a given module.
 ///
@@ -93,7 +93,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
 
         let stmt_function_def = Rc::new(stmt_function_def);
 
-        match Fixture::try_from_function(
+        match DiscoveredFixture::try_from_function(
             self.py,
             stmt_function_def.clone(),
             py_module,
@@ -121,7 +121,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
         };
 
         if let Ok(py_function) = py_module.getattr(stmt_function_def.name.to_string()) {
-            self.module.add_test_function(TestFunction::new(
+            self.module.add_test_function(DiscoveredTestFunction::new(
                 self.py,
                 self.module,
                 Rc::new(stmt_function_def),
@@ -230,7 +230,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
 
             let is_generator_function = generator_function_visitor.is_generator;
 
-            match Fixture::try_from_function(
+            match DiscoveredFixture::try_from_function(
                 self.py,
                 stmt_function_def.clone(),
                 &py_module,

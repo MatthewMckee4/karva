@@ -4,7 +4,6 @@ mod context;
 pub(crate) mod diagnostic;
 pub(crate) mod discovery;
 pub(crate) mod extensions;
-mod normalize;
 mod python;
 mod runner;
 pub mod testing;
