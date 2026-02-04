@@ -53,6 +53,7 @@ jobs:
             ':!pyproject.toml' \
             ':!README.md' \
             ':!zensical.toml' \
+            ':!pre-commit-config.yaml'
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
