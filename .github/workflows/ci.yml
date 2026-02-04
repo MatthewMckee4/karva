@@ -48,7 +48,7 @@ jobs:
             . \
             ':!docs/' \
             ':!.markdownlint.yaml' \
-            ':!pre-commit-config.yaml' \
+            ':!.pre-commit-config.yaml' \
             ':!CHANGELOG.md' \
             ':!CODE_OF_CONDUCT.md' \
             ':!CONTRIBUTING.md' \
