@@ -1,4 +1,4 @@
-#![allow(clippy::print_stderr)]
+#![expect(clippy::print_stderr)]
 
 //! Infrastructure for benchmarking real-world Python projects.
 //!

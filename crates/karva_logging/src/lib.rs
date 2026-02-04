@@ -76,7 +76,7 @@ pub fn setup_tracing(level: VerbosityLevel) -> TracingGuard {
     }
 }
 
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 fn setup_profile<S>() -> (
     Option<tracing_flame::FlameLayer<S, BufWriter<File>>>,
     Option<tracing_flame::FlushGuard<BufWriter<File>>>,

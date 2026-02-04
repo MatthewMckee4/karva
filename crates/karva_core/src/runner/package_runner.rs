@@ -307,7 +307,7 @@ impl<'ctx, 'a> NormalizedPackageRunner<'ctx, 'a> {
     }
 
     /// Run a fixture
-    #[allow(clippy::result_large_err)]
+    #[expect(clippy::result_large_err)]
     fn run_fixture(
         &self,
         py: Python<'_>,

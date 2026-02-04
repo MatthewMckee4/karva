@@ -20,7 +20,7 @@ pub fn derive_impl(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> 
             Ok(quote! {
                 #[automatically_derived]
                 impl karva_combine::Combine for #ident {
-                    #[allow(deprecated)]
+                    #[expect(deprecated)]
                     fn combine_with(&mut self, other: Self) {
                         #(
                             #output

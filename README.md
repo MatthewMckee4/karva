@@ -8,6 +8,8 @@ A Python test framework, written in Rust.
   <img src="https://raw.githubusercontent.com/karva-dev/karva/main/docs/assets/benchmark_results.svg" alt="Benchmark results" width="70%">
 </div>
 
+**We'd love for you to try Karva!** It's currently in alpha, and your feedback helps shape the project. [Get started](#getting-started) or join us on [Discord](https://discord.gg/XG95vNz4Zu).
+
 ## About Karva
 
 Karva aims to be an efficient alternative to `pytest` and `unittest`.
@@ -59,7 +61,7 @@ karva test tests/test_example.py
 
 #### Example
 
-Here is a small example usage
+Here is a small example of using karva, as you can see it works just like pytest.
 
 ```py title="tests/test.py"
 def test_pass():
@@ -68,10 +70,6 @@ def test_pass():
 
 def test_fail():
     assert False, "This test should fail"
-
-
-def test_error():
-    raise ValueError("This is an error")
 ```
 
 Running karva:
@@ -85,7 +83,6 @@ Provides the following output:
 ```text
 test tests.test::test_pass ... ok
 test tests.test::test_fail ... FAILED
-test tests.test::test_error ... FAILED
 
 diagnostics:
 
@@ -105,23 +102,7 @@ info: Test failed here
   |
 info: Error message: This test should fail
 
-error[test-failure]: Test `test_error` failed
-  --> tests/test.py:9:5
-   |
- 9 | def test_error():
-   |     ^^^^^^^^^^
-10 |     raise ValueError("This is an error")
-   |
-info: Test failed here
-  --> tests/test.py:10:5
-   |
- 9 | def test_error():
-10 |     raise ValueError("This is an error")
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   |
-info: Error message: This is an error
-
-test result: FAILED. 1 passed; 2 failed; 0 skipped; finished in 8ms
+test result: FAILED. 1 passed; 1 failed; 0 skipped; finished in 8ms
 ```
 
 ## Contributing

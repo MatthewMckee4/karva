@@ -1,4 +1,4 @@
-- Read CONTRIBUTING.md for guidelines on how to run tools
+- ALWAYS read CONTRIBUTING.md for guidelines on how to run tools
 - ALWAYS attempt to add a test case for changed behavior
 - PREFER integration tests, e.g., at `it/...` over unit tests
 - PREFER running specific tests over running the entire test suite
@@ -8,3 +8,5 @@
 - PREFER let chains (`if let` combined with `&&`) over nested `if let` statements
 - ALWAYS run `prek run -a` at the end of a task
 - ALWAYS run `just test` to run all tests.
+- AVOID adding redundant comments throughout the codebase.
+- PREFER function comments over inline comments.

@@ -87,7 +87,6 @@ pub enum Command {
 }
 
 /// Shared test execution options that can be used by both main CLI and worker processes
-#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Parser, Clone, Default)]
 pub struct SubTestCommand {
     /// List of files or directories to test.
@@ -141,7 +140,6 @@ pub struct SubTestCommand {
     pub verbosity: Verbosity,
 }
 
-#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Parser)]
 pub struct TestCommand {
     #[clap(flatten)]
