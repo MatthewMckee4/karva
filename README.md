@@ -61,7 +61,7 @@ karva test tests/test_example.py
 
 #### Example
 
-Here is a small example of using karva, as you can see it works just like pytest. 
+Here is a small example of using karva, as you can see it works just like pytest.
 
 ```py title="tests/test.py"
 def test_pass():
