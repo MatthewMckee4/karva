@@ -69,19 +69,18 @@ uv run --isolated --only-group docs zensical build
 
 Currently, everything is automated for releasing a new version of Karva.
 
-Simply run the following command with your new version (eg `0.1.0`):
+First, install [seal](https://github.com/MatthewMckee4/seal), then bump the version with the following:
+
 
 ```bash
-gcb bump-<new-version>
-uv run --isolated --only-group release tbump <new-version> --no-tag --no-push
+# Bump the alpha version
+seal bump alpha
+
+# Bump to a version
+seal bump <version>
 ```
 
-Once you have merged this branch, checkout main and pull the latest changes. Then run:
-
-```bash
-git tag --annotate --message v<new-version> v<new-version>
-git push --atomic origin main v<new-version>
-```
+This will create a new branch and make a commit, so you just need to make a pull request.
 
 ## GitHub Actions
 
