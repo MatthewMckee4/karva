@@ -20,8 +20,8 @@ def main() -> None:
     """Create and save a benchmark comparison graph."""
     plt.style.use("dark_background")
 
-    labels = ["pytest", "pytest-xdist (20 cores)", "karva (20 cores)"]
-    means = [51.96, 21.34, 2.55]
+    labels = ["pytest", "pytest-xdist", "karva"]
+    means = [6.8, 3.3, 1.1]
 
     y_pos = np.arange(len(labels))
 
@@ -72,7 +72,7 @@ def main() -> None:
         )
 
     plt.title(
-        "Running pydantic tests",
+        "Running benchmark tests (14 cores)",
         fontsize=18,
         pad=20,
         color="grey",
