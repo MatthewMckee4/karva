@@ -71,7 +71,6 @@ Currently, everything is automated for releasing a new version of Karva.
 
 First, install [seal](https://github.com/MatthewMckee4/seal), then bump the version with the following:
 
-
 ```bash
 # Bump the alpha version
 seal bump alpha
