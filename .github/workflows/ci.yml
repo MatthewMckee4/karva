@@ -217,15 +217,16 @@ jobs:
           uv run --no-project --with maturin maturin build
 
       - name: Build benchmarks
-        run: cargo codspeed build -m walltime
-        with:
+        env:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
+        run: cargo codspeed build -m walltime
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@972e3437949c89e1357ebd1a2dbc852fcbc57245 # v4.5.1
+        env:
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
-          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
           run: cargo codspeed run --bench ${{ matrix.project }}
           mode: walltime
 
