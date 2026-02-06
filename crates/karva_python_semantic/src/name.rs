@@ -13,6 +13,7 @@ pub struct QualifiedFunctionName {
 }
 
 impl QualifiedFunctionName {
+    /// Create a new qualified function name.
     pub const fn new(function_name: String, module_path: ModulePath) -> Self {
         Self {
             function_name,
@@ -20,10 +21,12 @@ impl QualifiedFunctionName {
         }
     }
 
+    /// Return the unqualified function name.
     pub fn function_name(&self) -> &str {
         &self.function_name
     }
 
+    /// Return the module path this function belongs to.
     pub const fn module_path(&self) -> &ModulePath {
         &self.module_path
     }
@@ -82,7 +85,7 @@ impl FromStr for QualifiedFunctionName {
     }
 }
 
-/// Represents a fully qualified function name including its module path.
+/// Represents a fully qualified test name, optionally including a parametrized variant.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct QualifiedTestName {
     function_name: QualifiedFunctionName,
@@ -90,6 +93,7 @@ pub struct QualifiedTestName {
 }
 
 impl QualifiedTestName {
+    /// Create a new qualified test name.
     pub const fn new(function_name: QualifiedFunctionName, full_name: Option<String>) -> Self {
         Self {
             function_name,
@@ -97,10 +101,12 @@ impl QualifiedTestName {
         }
     }
 
+    /// Return the underlying qualified function name.
     pub const fn function_name(&self) -> &QualifiedFunctionName {
         &self.function_name
     }
 
+    /// Return the full parametrized name, if any (e.g., `"test_add[1-2]"`).
     pub fn full_name(&self) -> Option<&str> {
         self.full_name.as_deref()
     }
@@ -116,6 +122,7 @@ impl std::fmt::Display for QualifiedTestName {
     }
 }
 
+/// A Python module path combining the filesystem path with its dotted module name.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ModulePath {
     path: Utf8PathBuf,
@@ -123,16 +130,19 @@ pub struct ModulePath {
 }
 
 impl ModulePath {
+    /// Create a new module path by computing the dotted module name relative to `cwd`.
     pub fn new<P: Into<Utf8PathBuf>>(path: P, cwd: &Utf8PathBuf) -> Option<Self> {
         let path = path.into();
         let module_name = module_name(cwd, path.as_ref())?;
         Some(Self { path, module_name })
     }
 
+    /// Return the dotted module name (e.g., `"tests.test_add"`).
     pub fn module_name(&self) -> &str {
         self.module_name.as_str()
     }
 
+    /// Return the filesystem path of this module.
     pub const fn path(&self) -> &Utf8PathBuf {
         &self.path
     }
@@ -175,5 +185,54 @@ impl FromStr for ModulePath {
             path: path.into(),
             module_name: s.to_string(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_module_path_from_str() {
+        let path: ModulePath = "foo.bar.baz".parse().expect("valid module path");
+        assert_eq!(path.module_name(), "foo.bar.baz");
+        assert_eq!(path.path().as_str(), "foo/bar/baz.py");
+    }
+
+    #[test]
+    fn test_qualified_function_name_from_str() {
+        let name: QualifiedFunctionName =
+            "foo.bar::test_add".parse().expect("valid qualified name");
+        assert_eq!(name.function_name(), "test_add");
+        assert_eq!(name.module_path().module_name(), "foo.bar");
+    }
+
+    #[test]
+    fn test_qualified_function_name_from_str_invalid() {
+        let result: Result<QualifiedFunctionName, _> = "foo.bar.test_add".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_qualified_function_name_display() {
+        let name: QualifiedFunctionName =
+            "foo.bar::test_add".parse().expect("valid qualified name");
+        assert_eq!(name.to_string(), "foo.bar::test_add");
+    }
+
+    #[test]
+    fn test_qualified_test_name_display_with_full_name() {
+        let func_name: QualifiedFunctionName =
+            "foo.bar::test_add".parse().expect("valid qualified name");
+        let test_name = QualifiedTestName::new(func_name, Some("test_add[1-2]".to_string()));
+        assert_eq!(test_name.to_string(), "test_add[1-2]");
+    }
+
+    #[test]
+    fn test_qualified_test_name_display_without_full_name() {
+        let func_name: QualifiedFunctionName =
+            "foo.bar::test_add".parse().expect("valid qualified name");
+        let test_name = QualifiedTestName::new(func_name, None);
+        assert_eq!(test_name.to_string(), "foo.bar::test_add");
     }
 }
