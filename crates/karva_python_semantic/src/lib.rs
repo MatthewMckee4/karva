@@ -8,6 +8,7 @@ pub use name::{ModulePath, QualifiedFunctionName, QualifiedTestName};
 use pyo3::Python;
 use ruff_python_ast::{Expr, PythonVersion, StmtFunctionDef};
 
+/// Check whether a file path has a `.py` extension.
 pub fn is_python_file(path: &Utf8Path) -> bool {
     path.extension().is_some_and(|extension| extension == "py")
 }
@@ -19,6 +20,7 @@ pub fn is_fixture_function(val: &StmtFunctionDef) -> bool {
         .any(|decorator| is_fixture(&decorator.expression))
 }
 
+/// Check whether an expression resolves to a fixture reference.
 pub fn is_fixture(expr: &Expr) -> bool {
     match expr {
         Expr::Name(name) => name.id == "fixture",
@@ -124,5 +126,32 @@ mod tests {
                 Some("src.module.test".to_string())
             );
         }
+    }
+
+    #[test]
+    fn test_is_python_file_with_py_extension() {
+        assert!(is_python_file(Utf8Path::new("test.py")));
+    }
+
+    #[test]
+    fn test_is_python_file_with_non_py_extension() {
+        assert!(!is_python_file(Utf8Path::new("test.txt")));
+    }
+
+    #[test]
+    fn test_is_python_file_with_no_extension() {
+        assert!(!is_python_file(Utf8Path::new("test")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_module_name_not_relative() {
+        assert_eq!(
+            module_name(
+                &Utf8PathBuf::from("/home/user/project"),
+                &Utf8PathBuf::from("/other/path/test.py")
+            ),
+            None
+        );
     }
 }

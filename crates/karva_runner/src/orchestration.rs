@@ -6,9 +6,7 @@ use camino::Utf8PathBuf;
 use crossbeam_channel::{Receiver, TryRecvError};
 
 use crate::shutdown::shutdown_receiver;
-use karva_cache::{
-    AggregatedResults, CACHE_DIR, CacheReader, RunHash, reader::read_recent_durations,
-};
+use karva_cache::{AggregatedResults, CACHE_DIR, Cache, RunHash, read_recent_durations};
 use karva_cli::SubTestCommand;
 use karva_collector::CollectionSettings;
 use karva_metadata::ProjectSettings;
@@ -52,33 +50,29 @@ impl WorkerManager {
 
     /// Wait for all workers to complete.
     /// Returns early if a message is received on `shutdown_rx`.
-    fn wait_all(&mut self, shutdown_rx: Option<&Receiver<()>>) -> usize {
-        let num_workers = self.workers.len();
-
-        if num_workers == 0 {
-            return 0;
+    fn wait_for_completion(&mut self, shutdown_rx: Option<&Receiver<()>>) {
+        if self.workers.is_empty() {
+            return;
         }
 
         tracing::info!(
-            "All {} workers spawned, waiting for completion (Ctrl+C to cancel)",
-            num_workers
+            "Waiting for {} workers to complete (Ctrl+C to cancel)",
+            self.workers.len()
         );
 
         loop {
-            // Check for shutdown signal (non-blocking)
             if let Some(rx) = shutdown_rx {
                 match rx.try_recv() {
                     Ok(()) | Err(TryRecvError::Disconnected) => {
                         tracing::info!("Shutdown requested — stopping remaining workers");
                         break;
                     }
-                    Err(TryRecvError::Empty) => {} // continue polling
+                    Err(TryRecvError::Empty) => {}
                 }
             }
 
-            // Poll all children
-            self.workers.retain_mut(|worker| {
-                match worker.child.try_wait() {
+            self.workers
+                .retain_mut(|worker| match worker.child.try_wait() {
                     Ok(Some(status)) => {
                         if status.success() {
                             tracing::info!(
@@ -94,26 +88,32 @@ impl WorkerManager {
                                 format_duration(worker.duration()),
                             );
                         }
-                        false // remove
+                        false
                     }
-                    Ok(None) => true, // still running
+                    Ok(None) => true,
                     Err(e) => {
                         tracing::error!("Error waiting on worker {}: {}", worker.id, e);
                         false
                     }
-                }
-            });
+                });
 
             if self.workers.is_empty() {
-                tracing::info!("All workers completed normally");
+                tracing::info!("All workers completed");
                 break;
             }
 
-            // Avoid tight loop
-            std::thread::sleep(Duration::from_millis(50));
+            std::thread::sleep(Duration::from_millis(10));
         }
+    }
 
-        num_workers
+    /// Kill and wait on any remaining worker processes.
+    fn kill_remaining(&mut self) {
+        for worker in &mut self.workers {
+            let _ = worker.child.kill();
+        }
+        for worker in &mut self.workers {
+            let _ = worker.child.wait();
+        }
     }
 }
 
@@ -144,7 +144,7 @@ fn spawn_workers(
 
     for (worker_id, partition) in partitions.iter().enumerate() {
         if partition.tests().is_empty() {
-            tracing::debug!(worker_id = worker_id, "Skipping worker with no tests");
+            tracing::debug!("Skipping worker {} with no tests", worker_id);
             continue;
         }
 
@@ -193,9 +193,7 @@ pub fn run_parallel_tests(
     for path in db.project().test_paths() {
         match path {
             Ok(path) => test_paths.push(path),
-            Err(err) => {
-                anyhow::bail!(err);
-            }
+            Err(err) => return Err(err.into()),
         }
     }
 
@@ -212,14 +210,14 @@ pub fn run_parallel_tests(
 
     let collection_start_time = std::time::Instant::now();
 
-    let collected = collector.collect_all(test_paths);
+    let collected = collector.collect_all(test_paths)?;
 
     tracing::info!(
         "Collected all tests in {}",
         format_duration(collection_start_time.elapsed())
     );
 
-    tracing::debug!("Attempting to create {} workers", config.num_workers);
+    tracing::debug!(num_workers = config.num_workers, "Partitioning tests");
 
     let cache_dir = db.system().current_directory().join(CACHE_DIR);
 
@@ -241,7 +239,7 @@ pub fn run_parallel_tests(
 
     let run_hash = RunHash::current_time();
 
-    tracing::info!("Attempting to spawn {} workers", partitions.len());
+    tracing::info!("Spawning {} workers", partitions.len());
 
     let mut worker_manager = spawn_workers(db, &partitions, &cache_dir, &run_hash, args)?;
 
@@ -251,17 +249,11 @@ pub fn run_parallel_tests(
         None
     };
 
-    let num_workers = worker_manager.wait_all(shutdown_rx);
+    worker_manager.wait_for_completion(shutdown_rx);
+    worker_manager.kill_remaining();
 
-    for worker in &mut worker_manager.workers {
-        let _ = worker.child.kill();
-    }
-    for worker in &mut worker_manager.workers {
-        let _ = worker.child.wait();
-    }
-
-    let reader = CacheReader::new(&cache_dir, &run_hash, num_workers)?;
-    let result = reader.aggregate_results()?;
+    let cache = Cache::new(&cache_dir, &run_hash);
+    let result = cache.aggregate_results()?;
 
     Ok(result)
 }

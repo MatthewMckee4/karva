@@ -60,9 +60,13 @@ impl CollectedModule {
 /// This is populated during the parallel collection phase.
 #[derive(Debug, Clone)]
 pub struct CollectedPackage {
+    /// The root directory path of this package.
     pub path: Utf8PathBuf,
+    /// Test modules directly contained in this package, keyed by file path.
     pub modules: HashMap<Utf8PathBuf, CollectedModule>,
+    /// Subpackages contained in this package, keyed by directory path.
     pub packages: HashMap<Utf8PathBuf, Self>,
+    /// The `conftest.py` configuration module for this package, if any.
     pub configuration_module: Option<CollectedModule>,
 }
 
@@ -136,6 +140,7 @@ impl CollectedPackage {
         }
     }
 
+    /// Set the configuration module (e.g., `conftest.py`) for this package.
     pub fn add_configuration_module(&mut self, module: CollectedModule) {
         self.configuration_module = Some(module);
     }
@@ -203,6 +208,7 @@ impl CollectedPackage {
         self.modules.is_empty() && self.packages.is_empty()
     }
 
+    /// Remove empty modules and packages recursively.
     pub fn shrink(&mut self) {
         self.modules.retain(|_, module| !module.is_empty());
 
@@ -242,10 +248,12 @@ impl CollectedModule {
 }
 
 /// The type of module.
-/// This is used to differentiation between files that contain only test functions and files that contain only configuration functions.
+/// Differentiates between test modules and configuration modules (e.g., `conftest.py`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModuleType {
+    /// A test module containing test function definitions.
     Test,
+    /// A configuration module (e.g., `conftest.py`) containing fixtures and hooks.
     Configuration,
 }
 

@@ -6,7 +6,7 @@ use anyhow::Context as _;
 use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
-use karva_cache::{CacheWriter, RunHash};
+use karva_cache::{Cache, RunHash};
 use karva_cli::{SubTestCommand, Verbosity};
 use karva_diagnostic::{DummyReporter, Reporter, TestCaseReporter};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
@@ -146,7 +146,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     let run_hash = RunHash::from_existing(&args.run_hash);
 
-    let cache_writer = CacheWriter::new(&args.cache_dir, &run_hash, args.worker_id)?;
+    let cache = Cache::new(&args.cache_dir, &run_hash);
 
     let reporter: Box<dyn Reporter> = if verbosity.is_quiet() {
         Box::new(DummyReporter)
@@ -172,7 +172,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     let diagnostic_resolver = DiagnosticFileResolver::new(&system);
 
-    cache_writer.write_result(&result, &diagnostic_resolver, &config)?;
+    cache.write_result(args.worker_id, &result, &diagnostic_resolver, &config)?;
 
     Ok(ExitStatus::Success)
 }
