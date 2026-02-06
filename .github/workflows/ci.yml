@@ -218,6 +218,8 @@ jobs:
 
       - name: Build benchmarks
         run: cargo codspeed build -m walltime
+        with:
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@972e3437949c89e1357ebd1a2dbc852fcbc57245 # v4.5.1
