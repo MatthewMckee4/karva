@@ -4,6 +4,7 @@ use karva_collector::{
 
 use std::thread;
 
+use anyhow::Result;
 use camino::Utf8PathBuf;
 use crossbeam_channel::unbounded;
 use ignore::{WalkBuilder, WalkState};
@@ -27,7 +28,7 @@ impl<'a> ParallelCollector<'a> {
     }
 
     /// Collect from a directory in parallel using `WalkParallel`.
-    pub(crate) fn collect_directory(&self, path: &Utf8PathBuf) -> CollectedPackage {
+    pub(crate) fn collect_directory(&self, path: &Utf8PathBuf) -> Result<CollectedPackage> {
         let (tx, rx) = unbounded::<CollectedModule>();
 
         let cloned_path = path.clone();
@@ -79,18 +80,20 @@ impl<'a> ParallelCollector<'a> {
         // Drop the original sender to close the channel
         drop(tx);
 
-        receiver_handle.join().unwrap()
+        receiver_handle
+            .join()
+            .map_err(|_| anyhow::anyhow!("Test collection thread panicked"))
     }
 
     /// Collect from all paths and build a complete package structure.
-    pub fn collect_all(&self, test_paths: Vec<TestPath>) -> CollectedPackage {
+    pub fn collect_all(&self, test_paths: Vec<TestPath>) -> Result<CollectedPackage> {
         let mut session_package =
             CollectedPackage::new(self.system.current_directory().to_path_buf());
 
         for path in test_paths {
             match path {
                 TestPath::Directory(dir_path) => {
-                    let package = self.collect_directory(&dir_path);
+                    let package = self.collect_directory(&dir_path)?;
                     session_package.add_package(package);
                 }
                 TestPath::Function(TestPathFunction {
@@ -114,7 +117,7 @@ impl<'a> ParallelCollector<'a> {
 
         session_package.shrink();
 
-        session_package
+        Ok(session_package)
     }
 
     /// Creates a configured parallel directory walker for Python file discovery.

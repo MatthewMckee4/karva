@@ -10,10 +10,15 @@ mod models;
 
 pub use models::{CollectedModule, CollectedPackage, ModuleType};
 
+/// Settings that control how test files are collected and parsed.
 pub struct CollectionSettings<'a> {
+    /// The Python version to use when parsing source files.
     pub python_version: PythonVersion,
+    /// The prefix used to identify test functions (e.g., `"test_"`).
     pub test_function_prefix: &'a str,
+    /// Whether to respect `.gitignore` and similar ignore files during file discovery.
     pub respect_ignore_files: bool,
+    /// Whether to collect fixture function definitions in addition to test functions.
     pub collect_fixtures: bool,
 }
 
