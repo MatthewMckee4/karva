@@ -1,3 +1,4 @@
+import types
 from collections.abc import Callable, Sequence
 from typing import Generic, Literal, NoReturn, Self, TypeAlias, TypeVar, overload
 
@@ -69,6 +70,45 @@ def param(
     ])
     def test_square(input, expected):
         assert input ** 2 == expected
+    """
+
+class ExceptionInfo:
+    """Stores information about a caught exception from `karva.raises`."""
+
+    @property
+    def type(self) -> type[BaseException] | None:
+        """The exception type."""
+
+    @property
+    def value(self) -> BaseException | None:
+        """The exception instance."""
+
+    @property
+    def tb(self) -> object | None:
+        """The traceback object."""
+
+class RaisesContext:
+    """Context manager returned by `karva.raises`."""
+
+    def __enter__(self) -> ExceptionInfo: ...
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> bool: ...
+
+def raises(
+    expected_exception: type[BaseException],
+    *,
+    match: str | None = None,
+) -> RaisesContext:
+    """Assert that a block of code raises a specific exception.
+
+    Args:
+        expected_exception: The expected exception type.
+        match: An optional regex pattern to match against the string
+            representation of the exception.
     """
 
 class SkipError(Exception):

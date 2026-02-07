@@ -288,3 +288,250 @@ def test_raise_skip_error():
     ----- stderr -----
     ");
 }
+
+#[test]
+fn test_raises_matching_exception() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_raises_value_error():
+    with karva.raises(ValueError):
+        raise ValueError('oops')
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_raises_value_error ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_raises_no_exception() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_raises_no_exception():
+    with karva.raises(ValueError):
+        pass
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_raises_no_exception ... FAILED
+
+    diagnostics:
+
+    error[test-failure]: Test `test_raises_no_exception` failed
+     --> test.py:4:5
+      |
+    2 | import karva
+    3 |
+    4 | def test_raises_no_exception():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    5 |     with karva.raises(ValueError):
+    6 |         pass
+      |
+    info: Test failed here
+     --> test.py:5:5
+      |
+    4 | def test_raises_no_exception():
+    5 |     with karva.raises(ValueError):
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    6 |         pass
+      |
+    info: DID NOT RAISE <class 'ValueError'>
+
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_raises_with_match() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_raises_match_passes():
+    with karva.raises(ValueError, match='oops'):
+        raise ValueError('oops something happened')
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_raises_match_passes ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_raises_with_match_fails() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_raises_match_fails():
+    with karva.raises(ValueError, match='xyz'):
+        raise ValueError('oops')
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_raises_match_fails ... FAILED
+
+    diagnostics:
+
+    error[test-failure]: Test `test_raises_match_fails` failed
+     --> test.py:4:5
+      |
+    2 | import karva
+    3 |
+    4 | def test_raises_match_fails():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^
+    5 |     with karva.raises(ValueError, match='xyz'):
+    6 |         raise ValueError('oops')
+      |
+    info: Test failed here
+     --> test.py:5:5
+      |
+    4 | def test_raises_match_fails():
+    5 |     with karva.raises(ValueError, match='xyz'):
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    6 |         raise ValueError('oops')
+      |
+    info: Raised exception did not match pattern 'xyz'
+
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_raises_wrong_exception_type() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_raises_wrong_type():
+    with karva.raises(ValueError):
+        raise TypeError('wrong type')
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_raises_wrong_type ... FAILED
+
+    diagnostics:
+
+    error[test-failure]: Test `test_raises_wrong_type` failed
+     --> test.py:4:5
+      |
+    2 | import karva
+    3 |
+    4 | def test_raises_wrong_type():
+      |     ^^^^^^^^^^^^^^^^^^^^^^
+    5 |     with karva.raises(ValueError):
+    6 |         raise TypeError('wrong type')
+      |
+    info: Test failed here
+     --> test.py:6:9
+      |
+    4 | def test_raises_wrong_type():
+    5 |     with karva.raises(ValueError):
+    6 |         raise TypeError('wrong type')
+      |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: wrong type
+
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_raises_exc_info() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_raises_exc_info():
+    with karva.raises(ValueError) as exc_info:
+        raise ValueError('info test')
+    assert str(exc_info.value) == 'info test'
+    assert exc_info.type is ValueError
+    assert exc_info.tb is not None
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_raises_exc_info ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_raises_subclass() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+class CustomError(ValueError):
+    pass
+
+def test_raises_subclass():
+    with karva.raises(ValueError):
+        raise CustomError('subclass')
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_raises_subclass ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
