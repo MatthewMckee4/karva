@@ -2,6 +2,125 @@ use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
 
+// ── Invalid tag expression errors ──────────────────────────────────────
+
+const MINIMAL_TEST_FILE: &str = r"
+def test_placeholder():
+    assert True
+";
+
+#[test]
+fn test_tag_filter_unexpected_character() {
+    let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
+    assert_cmd_snapshot!(context.command().arg("-t").arg("slow!"), @r"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    Karva failed
+      Cause: unexpected character `!` in tag expression `slow!`
+    ");
+}
+
+#[test]
+fn test_tag_filter_unclosed_parenthesis() {
+    let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
+    assert_cmd_snapshot!(context.command().arg("-t").arg("(slow"), @r"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    Karva failed
+      Cause: expected closing `)` in tag expression `(slow`
+    ");
+}
+
+#[test]
+fn test_tag_filter_trailing_operator() {
+    let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
+    assert_cmd_snapshot!(context.command().arg("-t").arg("slow and"), @r"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    Karva failed
+      Cause: unexpected end of tag expression `slow and`
+    ");
+}
+
+#[test]
+fn test_tag_filter_leading_operator() {
+    let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
+    assert_cmd_snapshot!(context.command().arg("-t").arg("and slow"), @r"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    Karva failed
+      Cause: unexpected token `and` in tag expression `and slow`
+    ");
+}
+
+#[test]
+fn test_tag_filter_extra_closing_paren() {
+    let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
+    assert_cmd_snapshot!(context.command().arg("-t").arg("slow)"), @r"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    Karva failed
+      Cause: unexpected token `)` in tag expression `slow)`
+    ");
+}
+
+#[test]
+fn test_tag_filter_empty_parentheses() {
+    let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
+    assert_cmd_snapshot!(context.command().arg("-t").arg("()"), @r"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    Karva failed
+      Cause: unexpected token `)` in tag expression `()`
+    ");
+}
+
+#[test]
+fn test_tag_filter_double_operator() {
+    let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
+    assert_cmd_snapshot!(context.command().arg("-t").arg("slow and and fast"), @r"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    Karva failed
+      Cause: unexpected token `and` in tag expression `slow and and fast`
+    ");
+}
+
+#[test]
+fn test_tag_filter_whitespace_only() {
+    let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
+    assert_cmd_snapshot!(context.command().arg("-t").arg(" "), @r"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    Karva failed
+      Cause: empty tag expression ` `
+    ");
+}
+
 #[test]
 fn test_custom_tag_basic() {
     let context = TestContext::with_file(

@@ -143,7 +143,8 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         .map(|p| TestPath::new(p.as_str()))
         .collect();
 
-    let tag_filter = TagFilterSet::new(&args.sub_command.tag_expressions)?;
+    let tag_filter =
+        TagFilterSet::new(&args.sub_command.tag_expressions).expect("Failed to create tag filter");
 
     let mut settings = args.sub_command.into_options().to_settings();
     settings.set_tag_filter(tag_filter);
