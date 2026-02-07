@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <url>
+        <loc>https://karva-dev.github.io/karva/</loc>
+      </url>
+      <url>
+        <loc>https://karva-dev.github.io/karva/installation/</loc>
+      </url>
+      <url>
+        <loc>https://karva-dev.github.io/karva/tutorial/</loc>
+      </url>
+      <url>
+        <loc>https://karva-dev.github.io/karva/usage/fixtures/fixtures/</loc>
+      </url>
+      <url>
+        <loc>https://karva-dev.github.io/karva/usage/fixtures/builtin/</loc>
+      </url>
+      <url>
+        <loc>https://karva-dev.github.io/karva/usage/tags/parametrize/</loc>
+      </url>
+      <url>
+        <loc>https://karva-dev.github.io/karva/usage/tags/skip/</loc>
+      </url>
+      <url>
+        <loc>https://karva-dev.github.io/karva/usage/tags/expect_fail/</loc>
+      </url>
+      <url>
+        <loc>https://karva-dev.github.io/karva/usage/functions/</loc>
+      </url>
+      <url>
+        <loc>https://karva-dev.github.io/karva/configuration/</loc>
+      </url>
+      <url>
+        <loc>https://karva-dev.github.io/karva/cli/</loc>
+      </url>
+</urlset>
