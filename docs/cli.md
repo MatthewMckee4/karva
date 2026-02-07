@@ -47,6 +47,9 @@ karva test [OPTIONS] [PATH]...
 <p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-test--fail-fast"><a href="#karva-test--fail-fast"><code>--fail-fast</code></a></dt><dd><p>When set, the test will fail immediately if any test fails.</p>
 <p>This only works when running tests in parallel.</p>
 </dd><dt id="karva-test--help"><a href="#karva-test--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help (see a summary with '-h')</p>
+</dd><dt id="karva-test--match"><a href="#karva-test--match"><code>--match</code></a>, <code>-m</code> <i>name-patterns</i></dt><dd><p>Filter tests by name using a regular expression.</p>
+<p>Only tests whose fully qualified name matches the pattern will run. Uses partial matching (the pattern can match anywhere in the name). When specified multiple times, a test runs if it matches any of the patterns.</p>
+<p>Examples: <code>-m auth</code>, <code>-m '^test::test_login'</code>, <code>-m 'slow|fast'</code>.</p>
 </dd><dt id="karva-test--no-cache"><a href="#karva-test--no-cache"><code>--no-cache</code></a></dt><dd><p>Disable reading the karva cache for test duration history</p>
 </dd><dt id="karva-test--no-ignore"><a href="#karva-test--no-ignore"><code>--no-ignore</code></a></dt><dd><p>When set, .gitignore files will not be respected</p>
 </dd><dt id="karva-test--no-parallel"><a href="#karva-test--no-parallel"><code>--no-parallel</code></a></dt><dd><p>Disable parallel execution (equivalent to <code>--num-workers 1</code>)</p>

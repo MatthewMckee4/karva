@@ -10,7 +10,7 @@ use karva_cache::{Cache, RunHash};
 use karva_cli::{SubTestCommand, Verbosity};
 use karva_diagnostic::{DummyReporter, Reporter, TestCaseReporter};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
-use karva_metadata::filter::TagFilterSet;
+use karva_metadata::filter::{NameFilterSet, TagFilterSet};
 use karva_python_semantic::current_python_version;
 use karva_system::System;
 use karva_system::path::{TestPath, TestPathError};
@@ -143,11 +143,13 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         .map(|p| TestPath::new(p.as_str()))
         .collect();
 
-    let tag_filter =
-        TagFilterSet::new(&args.sub_command.tag_expressions).expect("Failed to create tag filter");
+    let tag_filter = TagFilterSet::new(&args.sub_command.tag_expressions)?;
+
+    let name_filter = NameFilterSet::new(&args.sub_command.name_patterns)?;
 
     let mut settings = args.sub_command.into_options().to_settings();
     settings.set_tag_filter(tag_filter);
+    settings.set_name_filter(name_filter);
 
     let run_hash = RunHash::from_existing(&args.run_hash);
 

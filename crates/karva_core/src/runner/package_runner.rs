@@ -200,6 +200,18 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             }
         }
 
+        let name_filter = &self.context.settings().test().name_filter;
+        if !name_filter.is_empty() {
+            let display_name = QualifiedTestName::new(name.clone(), None).to_string();
+            if !name_filter.matches(&display_name) {
+                return self.context.register_test_case_result(
+                    &QualifiedTestName::new(name, None),
+                    IndividualTestResultKind::Skipped { reason: None },
+                    std::time::Duration::ZERO,
+                );
+            }
+        }
+
         if let (true, reason) = tags.should_skip() {
             return self.context.register_test_case_result(
                 &QualifiedTestName::new(name, None),
