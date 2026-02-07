@@ -380,8 +380,6 @@ def test_ab():
     ");
 }
 
-// ── Invalid regex error cases ────────────────────────────────────────
-
 #[test]
 fn name_filter_invalid_regex_unclosed_group() {
     let context = TestContext::with_file("test.py", TWO_TESTS);

@@ -736,8 +736,6 @@ mod tests {
         assert!(TagFilterSet::new(&["slow".to_string(), "and".to_string()]).is_err());
     }
 
-    // ── NameFilter tests ─────────────────────────────────────────────────
-
     #[test]
     fn name_filter_partial_match() {
         let f = NameFilter::new("auth").expect("parse");
