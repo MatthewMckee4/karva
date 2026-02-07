@@ -230,33 +230,27 @@ def test_abb():
 
 #[test]
 fn name_filter_qualified_name_prefix() {
-    let context = TestContext::with_files([
-        (
-            "test_auth.py",
-            r"
+    let context = TestContext::with_file(
+        "test.py",
+        r"
 def test_login():
     assert True
 
 def test_logout():
     assert True
-            ",
-        ),
-        (
-            "test_users.py",
-            r"
-def test_login():
-    assert True
-            ",
-        ),
-    ]);
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg("^test_auth::"), @r"
+def test_signup():
+    assert True
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg("^test::test_log"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
-    test test_users::test_login ... skipped
-    test test_auth::test_login ... ok
-    test test_auth::test_logout ... ok
+    test test::test_login ... ok
+    test test::test_logout ... ok
+    test test::test_signup ... skipped
 
     test result: ok. 2 passed; 0 failed; 1 skipped; finished in [TIME]
 
