@@ -146,6 +146,16 @@ pub struct SubTestCommand {
     #[clap(short = 't', long = "tag")]
     pub tag_expressions: Vec<String>,
 
+    /// Filter tests by name using a regular expression.
+    ///
+    /// Only tests whose fully qualified name matches the pattern will run.
+    /// Uses partial matching (the pattern can match anywhere in the name).
+    /// When specified multiple times, a test runs if it matches any of the patterns.
+    ///
+    /// Examples: `-m auth`, `-m '^test::test_login'`, `-m 'slow|fast'`.
+    #[clap(short = 'm', long = "match")]
+    pub name_patterns: Vec<String>,
+
     #[clap(flatten)]
     pub verbosity: Verbosity,
 }

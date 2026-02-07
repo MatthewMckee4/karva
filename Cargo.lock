@@ -1356,6 +1356,7 @@ dependencies = [
  "karva_combine",
  "karva_macros",
  "karva_system",
+ "regex",
  "ruff_db",
  "ruff_options_metadata",
  "ruff_python_ast",

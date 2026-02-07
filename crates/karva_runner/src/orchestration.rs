@@ -319,6 +319,7 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
     }
 
     let tag_expressions: Vec<String> = args.tag_expressions.clone();
+    let name_patterns: Vec<String> = args.name_patterns.clone();
 
     cli_args
         .iter()
@@ -327,6 +328,11 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
             tag_expressions
                 .iter()
                 .flat_map(|expr| vec!["--tag".to_string(), expr.clone()]),
+        )
+        .chain(
+            name_patterns
+                .iter()
+                .flat_map(|pattern| vec!["--match".to_string(), pattern.clone()]),
         )
         .collect()
 }

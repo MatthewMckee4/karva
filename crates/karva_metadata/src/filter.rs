@@ -1,5 +1,72 @@
 use std::fmt;
 
+use regex::Regex;
+
+/// A name filter that matches test names using a regular expression.
+#[derive(Debug, Clone)]
+pub struct NameFilter {
+    regex: Regex,
+}
+
+impl NameFilter {
+    pub fn new(pattern: &str) -> Result<Self, NameFilterError> {
+        let regex = Regex::new(pattern).map_err(|err| NameFilterError::InvalidRegex {
+            pattern: pattern.to_string(),
+            source: err,
+        })?;
+        Ok(Self { regex })
+    }
+
+    pub fn matches(&self, name: &str) -> bool {
+        self.regex.is_match(name)
+    }
+}
+
+/// A set of name filters. Any filter must match for the set to match (OR semantics across `-m` flags).
+#[derive(Debug, Clone, Default)]
+pub struct NameFilterSet {
+    filters: Vec<NameFilter>,
+}
+
+impl NameFilterSet {
+    pub fn new(patterns: &[String]) -> Result<Self, NameFilterError> {
+        let mut filters = Vec::with_capacity(patterns.len());
+        for pattern in patterns {
+            filters.push(NameFilter::new(pattern)?);
+        }
+        Ok(Self { filters })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.filters.is_empty()
+    }
+
+    pub fn matches(&self, name: &str) -> bool {
+        self.filters.is_empty() || self.filters.iter().any(|f| f.matches(name))
+    }
+}
+
+/// Error that occurs when parsing a name filter pattern.
+#[derive(Debug)]
+pub enum NameFilterError {
+    InvalidRegex {
+        pattern: String,
+        source: regex::Error,
+    },
+}
+
+impl fmt::Display for NameFilterError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidRegex { pattern, source } => {
+                write!(f, "invalid regex pattern `{pattern}`: {source}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for NameFilterError {}
+
 /// A parsed tag filter expression that can be matched against a set of tag names.
 #[derive(Debug, Clone)]
 pub struct TagFilter {
@@ -667,5 +734,71 @@ mod tests {
     #[test]
     fn filter_set_rejects_invalid_expression() {
         assert!(TagFilterSet::new(&["slow".to_string(), "and".to_string()]).is_err());
+    }
+
+    #[test]
+    fn name_filter_partial_match() {
+        let f = NameFilter::new("auth").expect("parse");
+        assert!(f.matches("test::test_auth_login"));
+        assert!(f.matches("test::test_auth"));
+        assert!(!f.matches("test::test_login"));
+    }
+
+    #[test]
+    fn name_filter_anchored_start() {
+        let f = NameFilter::new("^test::test_login").expect("parse");
+        assert!(f.matches("test::test_login"));
+        assert!(f.matches("test::test_login_flow"));
+        assert!(!f.matches("other::test_login"));
+    }
+
+    #[test]
+    fn name_filter_anchored_end() {
+        let f = NameFilter::new("login$").expect("parse");
+        assert!(f.matches("test::test_login"));
+        assert!(!f.matches("test::test_login_flow"));
+    }
+
+    #[test]
+    fn name_filter_alternation() {
+        let f = NameFilter::new("slow|fast").expect("parse");
+        assert!(f.matches("test::test_slow"));
+        assert!(f.matches("test::test_fast"));
+        assert!(!f.matches("test::test_medium"));
+    }
+
+    #[test]
+    fn name_filter_invalid_regex() {
+        assert!(matches!(
+            NameFilter::new("[invalid"),
+            Err(NameFilterError::InvalidRegex { .. })
+        ));
+    }
+
+    #[test]
+    fn name_filter_set_or_semantics() {
+        let set = NameFilterSet::new(&["test_a".to_string(), "test_b".to_string()]).expect("parse");
+        assert!(set.matches("test::test_a"));
+        assert!(set.matches("test::test_b"));
+        assert!(!set.matches("test::test_c"));
+    }
+
+    #[test]
+    fn name_filter_set_empty_always_matches() {
+        let set = NameFilterSet::new(&[]).expect("parse");
+        assert!(set.is_empty());
+        assert!(set.matches("anything"));
+    }
+
+    #[test]
+    fn name_filter_set_rejects_invalid_pattern() {
+        assert!(NameFilterSet::new(&["valid".to_string(), "[invalid".to_string()]).is_err());
+    }
+
+    #[test]
+    fn name_filter_parametrized_name() {
+        let f = NameFilter::new(r"param=1").expect("parse");
+        assert!(f.matches("test::test_add(param=1)"));
+        assert!(!f.matches("test::test_add(param=2)"));
     }
 }

@@ -18,6 +18,7 @@ karva_macros = { workspace = true }
 karva_system = { workspace = true }
 
 camino = { workspace = true }
+regex = { workspace = true }
 ruff_db = { workspace = true }
 ruff_options_metadata = { workspace = true }
 ruff_python_ast = { workspace = true }

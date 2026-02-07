@@ -1,4 +1,4 @@
-use crate::filter::TagFilterSet;
+use crate::filter::{NameFilterSet, TagFilterSet};
 use crate::options::OutputFormat;
 
 #[derive(Default, Debug, Clone)]
@@ -28,6 +28,10 @@ impl ProjectSettings {
     pub fn set_tag_filter(&mut self, tag_filter: TagFilterSet) {
         self.test.tag_filter = tag_filter;
     }
+
+    pub fn set_name_filter(&mut self, name_filter: NameFilterSet) {
+        self.test.name_filter = name_filter;
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -49,4 +53,5 @@ pub struct TestSettings {
     pub try_import_fixtures: bool,
     pub retry: u32,
     pub tag_filter: TagFilterSet,
+    pub name_filter: NameFilterSet,
 }
