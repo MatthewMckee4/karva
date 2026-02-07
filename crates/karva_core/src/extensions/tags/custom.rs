@@ -8,7 +8,6 @@ use pyo3::types::{PyDict, PyTuple};
 /// This allows users to create their own markers with custom names, args, and kwargs.
 #[derive(Debug, Clone)]
 pub struct CustomTag {
-    #[expect(dead_code)]
     name: String,
     #[expect(dead_code)]
     args: Vec<Arc<Py<PyAny>>>,
@@ -17,6 +16,10 @@ pub struct CustomTag {
 }
 
 impl CustomTag {
+    pub(crate) fn name(&self) -> &str {
+        &self.name
+    }
+
     pub(crate) fn new(
         name: String,
         args: Vec<Arc<Py<PyAny>>>,

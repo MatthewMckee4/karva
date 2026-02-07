@@ -1,3 +1,5 @@
+pub mod filter;
+
 use camino::Utf8PathBuf;
 use clap::Parser;
 use clap::builder::Styles;
@@ -135,6 +137,16 @@ pub struct SubTestCommand {
     /// Control when colored output is used.
     #[arg(long)]
     pub color: Option<TerminalColor>,
+
+    /// Filter tests by tag expression. Only tests with matching custom tags will run.
+    ///
+    /// Expressions support `and`, `or`, `not`, and parentheses for grouping.
+    /// When specified multiple times, a test runs if it matches any of the expressions.
+    ///
+    /// Examples: `-t slow`, `-t 'not slow'`, `-t 'slow and integration'`,
+    /// `-t 'slow or integration'`, `-t '(slow or fast) and not flaky'`.
+    #[clap(short = 't', long = "tag")]
+    pub tag_expressions: Vec<String>,
 
     #[clap(flatten)]
     pub verbosity: Verbosity,

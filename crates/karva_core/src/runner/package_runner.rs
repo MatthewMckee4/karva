@@ -103,10 +103,12 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
             // Iterate over all test variants (parametrize combinations × fixture combinations)
             for variant in TestVariantIterator::new(py, test_function, &mut test_resolver) {
-                passed &= self.execute_test_variant(py, variant);
+                if let Some(result) = self.execute_test_variant(py, variant) {
+                    passed &= result;
 
-                if self.context.settings().test().fail_fast && !passed {
-                    break;
+                    if self.context.settings().test().fail_fast && !passed {
+                        break;
+                    }
                 }
             }
 
@@ -171,9 +173,18 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
     }
 
     /// Run a test variant (a specific combination of parametrize values and fixtures).
-    fn execute_test_variant(&self, py: Python<'_>, variant: TestVariant) -> bool {
+    ///
+    /// Returns `None` if the test was filtered out by tag expressions, or `Some(passed)` otherwise.
+    fn execute_test_variant(&self, py: Python<'_>, variant: TestVariant) -> Option<bool> {
         let tags = variant.resolved_tags();
         let test_module_path = variant.module_path().clone();
+
+        if !self.context.tag_filter().is_empty() {
+            let custom_names = tags.custom_tag_names();
+            if !self.context.tag_filter().matches(&custom_names) {
+                return None;
+            }
+        }
 
         let TestVariant {
             test,
@@ -189,11 +200,11 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let stmt_function_def = Rc::clone(&test.stmt_function_def);
 
         if let (true, reason) = tags.should_skip() {
-            return self.context.register_test_case_result(
+            return Some(self.context.register_test_case_result(
                 &QualifiedTestName::new(name, None),
                 IndividualTestResultKind::Skipped { reason },
                 std::time::Duration::ZERO,
-            );
+            ));
         }
 
         let start_time = std::time::Instant::now();
@@ -352,7 +363,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
         self.clean_up_scope(py, FixtureScope::Function);
 
-        passed
+        Some(passed)
     }
 
     /// Run a fixture

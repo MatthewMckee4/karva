@@ -8,6 +8,8 @@ use karva_python_semantic::QualifiedTestName;
 use karva_system::System;
 use ruff_python_ast::PythonVersion;
 
+use karva_cli::filter::TagFilterSet;
+
 use crate::diagnostic::{DiagnosticGuardBuilder, DiagnosticType};
 
 /// Central context object that holds shared state for a test run.
@@ -29,6 +31,9 @@ pub struct Context<'a> {
 
     /// Reporter for outputting test progress and results.
     reporter: &'a dyn Reporter,
+
+    /// Tag filter set for filtering tests by custom tag expressions.
+    tag_filter: TagFilterSet,
 }
 
 impl<'a> Context<'a> {
@@ -37,6 +42,7 @@ impl<'a> Context<'a> {
         settings: &'a ProjectSettings,
         python_version: PythonVersion,
         reporter: &'a dyn Reporter,
+        tag_filter: TagFilterSet,
     ) -> Self {
         Self {
             system,
@@ -44,6 +50,7 @@ impl<'a> Context<'a> {
             python_version,
             result: Rc::new(RefCell::new(TestRunResult::default())),
             reporter,
+            tag_filter,
         }
     }
 
@@ -109,5 +116,9 @@ impl<'a> Context<'a> {
 
     pub fn python_version(&self) -> PythonVersion {
         self.python_version
+    }
+
+    pub(crate) fn tag_filter(&self) -> &TagFilterSet {
+        &self.tag_filter
     }
 }

@@ -29,8 +29,8 @@ impl Parametrization {
 impl From<PyRef<'_, Param>> for Parametrization {
     fn from(param: PyRef<'_, Param>) -> Self {
         Self {
-            values: param.values().clone(),
-            tags: param.tags().clone(),
+            values: param.values.clone(),
+            tags: param.tags.clone(),
         }
     }
 }

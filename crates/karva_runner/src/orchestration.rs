@@ -318,5 +318,15 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
         cli_args.push(retry);
     }
 
-    cli_args.iter().map(ToString::to_string).collect()
+    let tag_expressions: Vec<String> = args.tag_expressions.clone();
+
+    cli_args
+        .iter()
+        .map(ToString::to_string)
+        .chain(
+            tag_expressions
+                .iter()
+                .flat_map(|expr| vec!["--tag".to_string(), expr.clone()]),
+        )
+        .collect()
 }

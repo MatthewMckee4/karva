@@ -7,6 +7,7 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
 use karva_cache::{Cache, RunHash};
+use karva_cli::filter::TagFilterSet;
 use karva_cli::{SubTestCommand, Verbosity};
 use karva_diagnostic::{DummyReporter, Reporter, TestCaseReporter};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
@@ -142,6 +143,8 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         .map(|p| TestPath::new(p.as_str()))
         .collect();
 
+    let tag_filter = TagFilterSet::new(&args.sub_command.tag_expressions)?;
+
     let settings = args.sub_command.into_options().to_settings();
 
     let run_hash = RunHash::from_existing(&args.run_hash);
@@ -154,7 +157,13 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         Box::new(TestCaseReporter::new(printer))
     };
 
-    let context = Context::new(&system, &settings, python_version, reporter.as_ref());
+    let context = Context::new(
+        &system,
+        &settings,
+        python_version,
+        reporter.as_ref(),
+        tag_filter,
+    );
 
     let result = attach_with_project(settings.terminal().show_python_output, |py| {
         let session = StandardDiscoverer::new(&context).discover_with_py(py, test_paths);

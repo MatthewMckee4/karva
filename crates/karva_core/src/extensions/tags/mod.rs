@@ -28,9 +28,6 @@ pub enum Tag {
     UseFixtures(UseFixturesTag),
     Skip(SkipTag),
     ExpectFail(ExpectFailTag),
-    /// Custom tag/marker with arbitrary name, args, and kwargs.
-    /// The inner `CustomTag` is stored for future API use but not currently accessed.
-    #[expect(dead_code)]
     Custom(CustomTag),
 }
 
@@ -227,6 +224,20 @@ impl Tags {
             }
         }
         (false, None)
+    }
+
+    /// Return the names of all custom tags.
+    pub(crate) fn custom_tag_names(&self) -> Vec<&str> {
+        self.inner
+            .iter()
+            .filter_map(|tag| {
+                if let Tag::Custom(custom) = tag {
+                    Some(custom.name())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// Return the `ExpectFailTag` if it exists.
