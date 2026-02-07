@@ -1199,12 +1199,12 @@ dependencies = [
  "codspeed-criterion-compat",
  "codspeed-divan-compat",
  "karva_cli",
- "karva_core",
  "karva_metadata",
  "karva_project",
- "karva_projects",
  "karva_runner",
  "karva_system",
+ "karva_test_projects",
+ "karva_test_semantic",
 ]
 
 [[package]]
@@ -1250,38 +1250,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "karva_core"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "argfile",
- "camino",
- "clap",
- "colored 3.1.1",
- "ctor",
- "karva_cache",
- "karva_cli",
- "karva_collector",
- "karva_diagnostic",
- "karva_logging",
- "karva_metadata",
- "karva_python_semantic",
- "karva_system",
- "pyo3",
- "regex",
- "rstest",
- "ruff_db",
- "ruff_macros",
- "ruff_notebook",
- "ruff_python_ast",
- "ruff_python_parser",
- "ruff_source_file",
- "tempfile",
- "tracing",
- "wild",
-]
-
-[[package]]
 name = "karva_dev"
 version = "0.0.0"
 dependencies = [
@@ -1319,8 +1287,8 @@ dependencies = [
  "anyhow",
  "camino",
  "clap",
- "karva_projects",
  "karva_system",
+ "karva_test_projects",
  "tempfile",
 ]
 
@@ -1376,24 +1344,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "karva_projects"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "camino",
- "karva_system",
- "ruff_python_ast",
- "serde",
- "serde_json",
- "tracing",
-]
-
-[[package]]
 name = "karva_python"
 version = "0.0.1-alpha.3"
 dependencies = [
  "karva",
- "karva_core",
+ "karva_test_semantic",
+ "karva_worker",
  "pyo3",
 ]
 
@@ -1428,10 +1384,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "karva_static"
-version = "0.0.0"
-
-[[package]]
 name = "karva_system"
 version = "0.0.0"
 dependencies = [
@@ -1440,11 +1392,72 @@ dependencies = [
  "etcetera",
  "filetime",
  "karva_python_semantic",
- "karva_static",
- "ruff_db",
  "tempfile",
  "thiserror",
  "tracing",
+]
+
+[[package]]
+name = "karva_test_projects"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "camino",
+ "karva_system",
+ "ruff_python_ast",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "karva_test_semantic"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "camino",
+ "ctor",
+ "karva_cache",
+ "karva_cli",
+ "karva_collector",
+ "karva_diagnostic",
+ "karva_logging",
+ "karva_metadata",
+ "karva_python_semantic",
+ "karva_system",
+ "pyo3",
+ "regex",
+ "ruff_db",
+ "ruff_macros",
+ "ruff_notebook",
+ "ruff_python_ast",
+ "ruff_python_parser",
+ "ruff_source_file",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "karva_worker"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "argfile",
+ "camino",
+ "clap",
+ "colored 3.1.1",
+ "karva_cache",
+ "karva_cli",
+ "karva_diagnostic",
+ "karva_logging",
+ "karva_metadata",
+ "karva_python_semantic",
+ "karva_system",
+ "karva_test_semantic",
+ "ruff_db",
+ "ruff_notebook",
+ "ruff_source_file",
+ "wild",
 ]
 
 [[package]]

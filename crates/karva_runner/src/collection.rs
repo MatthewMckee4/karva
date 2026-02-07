@@ -16,7 +16,7 @@ use karva_system::{
 /// Collector used for collecting all test functions and fixtures in a package.
 ///
 /// This is only used in the main `karva` cli.
-/// If we used this in the `karva-core` cli, this would be very inefficient.
+/// If we used this in the `karva-worker` cli, this would be very inefficient.
 pub struct ParallelCollector<'a> {
     system: &'a dyn System,
     settings: CollectionSettings<'a>,

@@ -15,12 +15,12 @@ license = { workspace = true }
 codspeed-criterion-compat = { workspace = true }
 divan = { workspace = true }
 karva_cli = { workspace = true }
-karva_core = { workspace = true }
 karva_metadata = { workspace = true }
 karva_project = { workspace = true }
-karva_projects = { workspace = true }
 karva_runner = { workspace = true }
 karva_system = { workspace = true }
+karva_test_projects = { workspace = true }
+karva_test_semantic = { workspace = true }
 
 [[bench]]
 name = "karva_benchmark_walltime"
