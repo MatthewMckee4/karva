@@ -65,13 +65,7 @@ impl fmt::Display for NameFilterError {
     }
 }
 
-impl std::error::Error for NameFilterError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::InvalidRegex { source, .. } => Some(source),
-        }
-    }
-}
+impl std::error::Error for NameFilterError {}
 
 /// A parsed tag filter expression that can be matched against a set of tag names.
 #[derive(Debug, Clone)]
