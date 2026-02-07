@@ -1,6 +1,7 @@
 # https://just.systems
 
 test *args:
+    rm -rf target/wheels
     maturin build
     @if command -v cargo-nextest > /dev/null 2>&1; then \
         cargo nextest run {{args}}; \
