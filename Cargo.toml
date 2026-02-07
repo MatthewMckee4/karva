@@ -17,17 +17,17 @@ karva_cache = { path = "crates/karva_cache" }
 karva_cli = { path = "crates/karva_cli" }
 karva_collector = { path = "crates/karva_collector" }
 karva_combine = { path = "crates/karva_combine" }
-karva_core = { path = "crates/karva_core" }
 karva_diagnostic = { path = "crates/karva_diagnostic" }
 karva_logging = { path = "crates/karva_logging" }
 karva_macros = { path = "crates/karva_macros" }
 karva_metadata = { path = "crates/karva_metadata" }
 karva_project = { path = "crates/karva_project" }
-karva_projects = { path = "crates/karva_projects" }
 karva_python_semantic = { path = "crates/karva_python_semantic" }
 karva_runner = { path = "crates/karva_runner" }
-karva_static = { path = "crates/karva_static" }
 karva_system = { path = "crates/karva_system" }
+karva_test_projects = { path = "crates/karva_test_projects" }
+karva_test_semantic = { path = "crates/karva_test_semantic" }
+karva_worker = { path = "crates/karva_worker" }
 
 anyhow = { version = "1.0.100" }
 argfile = { version = "0.2.1" }
@@ -116,3 +116,5 @@ rc_mutex = "warn"
 rest_pat_in_fully_bound_structs = "warn"
 if_not_else = "allow"
 use_self = "warn"
+cast_sign_loss = "allow"
+cast_possible_truncation = "allow"

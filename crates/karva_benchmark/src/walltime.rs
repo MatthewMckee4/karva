@@ -2,11 +2,11 @@ use std::sync::Once;
 
 use divan::Bencher;
 use karva_cli::SubTestCommand;
-use karva_core::testing::setup_module;
 use karva_metadata::{Options, ProjectMetadata, SrcOptions, TestOptions};
 use karva_project::ProjectDatabase;
-use karva_projects::{InstalledProject, RealWorldProject};
 use karva_system::OsSystem;
+use karva_test_projects::{InstalledProject, RealWorldProject};
+use karva_test_semantic::testing::setup_module;
 
 static SETUP_MODULE_ONCE: Once = Once::new();
 

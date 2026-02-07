@@ -139,7 +139,7 @@ fn spawn_workers(
     run_hash: &RunHash,
     args: &SubTestCommand,
 ) -> Result<WorkerManager> {
-    let core_binary = find_karva_core_binary(&db.system().current_directory().to_path_buf())?;
+    let core_binary = find_karva_worker_binary(&db.system().current_directory().to_path_buf())?;
     let mut worker_manager = WorkerManager::default();
 
     for (worker_id, partition) in partitions.iter().enumerate() {
@@ -169,7 +169,7 @@ fn spawn_workers(
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()
-            .context("Failed to spawn karva_core worker process")?;
+            .context("Failed to spawn karva-worker process")?;
 
         tracing::info!(
             "Worker {} spawned with {} tests",
@@ -258,26 +258,26 @@ pub fn run_parallel_tests(
     Ok(result)
 }
 
-const KARVA_CORE_BINARY_NAME: &str = "karva-core";
+const KARVA_WORKER_BINARY_NAME: &str = "karva-worker";
 
-/// Find the `karva-core` binary
-fn find_karva_core_binary(current_dir: &Utf8PathBuf) -> Result<Utf8PathBuf> {
-    if let Ok(path) = which::which(KARVA_CORE_BINARY_NAME) {
+/// Find the `karva-worker` binary
+fn find_karva_worker_binary(current_dir: &Utf8PathBuf) -> Result<Utf8PathBuf> {
+    if let Ok(path) = which::which(KARVA_WORKER_BINARY_NAME) {
         if let Ok(utf8_path) = Utf8PathBuf::try_from(path) {
             tracing::debug!(path = %utf8_path, "Found binary in PATH");
             return Ok(utf8_path);
         }
     }
 
-    if let Some(venv_binary) = venv_binary(KARVA_CORE_BINARY_NAME, current_dir) {
+    if let Some(venv_binary) = venv_binary(KARVA_WORKER_BINARY_NAME, current_dir) {
         return Ok(venv_binary);
     }
 
-    if let Some(venv_binary) = venv_binary_from_active_env(KARVA_CORE_BINARY_NAME) {
+    if let Some(venv_binary) = venv_binary_from_active_env(KARVA_WORKER_BINARY_NAME) {
         return Ok(venv_binary);
     }
 
-    anyhow::bail!("Could not find karva_core binary")
+    anyhow::bail!("Could not find karva-worker binary")
 }
 
 fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<String> {

@@ -19,17 +19,12 @@ use ruff_db::diagnostic::{DisplayDiagnosticConfig, FileResolver, Input, UnifiedF
 use ruff_db::files::File;
 use ruff_notebook::NotebookIndex;
 
-use crate::Context;
-use crate::discovery::StandardDiscoverer;
-use crate::runner::PackageRunner;
-use crate::utils::attach_with_project;
-
-/// Command-line arguments for the `karva_core` worker process.
+/// Command-line arguments for the `karva_worker` process.
 ///
 /// This struct is used internally when tests are distributed across
 /// multiple worker processes for parallel execution.
 #[derive(Parser)]
-#[command(name = "karva_core", about = "Karva test worker")]
+#[command(name = "karva_worker", about = "Karva test worker")]
 struct Args {
     /// Directory where test results and duration cache are stored.
     #[arg(long)]
@@ -77,7 +72,7 @@ impl ExitStatus {
         self as i32
     }
 }
-pub fn karva_core_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> ExitStatus {
+pub fn karva_worker_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> ExitStatus {
     run(f).unwrap_or_else(|error| {
         use std::io::Write;
 
@@ -161,15 +156,13 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         Box::new(TestCaseReporter::new(printer))
     };
 
-    let context = Context::new(&system, &settings, python_version, reporter.as_ref());
-
-    let result = attach_with_project(settings.terminal().show_python_output, |py| {
-        let session = StandardDiscoverer::new(&context).discover_with_py(py, test_paths);
-
-        PackageRunner::new(&context).execute(py, &session);
-
-        context.into_result()
-    });
+    let result = karva_test_semantic::run_tests(
+        &system,
+        &settings,
+        python_version,
+        reporter.as_ref(),
+        test_paths,
+    );
 
     let diagnostic_format = settings.terminal().output_format.into();
 

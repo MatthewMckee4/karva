@@ -6,8 +6,8 @@ use std::process::{Command, ExitCode};
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
-use karva_projects::{RealWorldProject, all_projects};
 use karva_system::path::absolute;
+use karva_test_projects::{RealWorldProject, all_projects};
 use tempfile::NamedTempFile;
 
 #[derive(Debug, Parser)]

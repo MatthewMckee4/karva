@@ -12,8 +12,8 @@ authors = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
-karva_projects = { workspace = true }
 karva_system = { workspace = true }
+karva_test_projects = { workspace = true }
 
 anyhow = { workspace = true }
 camino = { workspace = true }

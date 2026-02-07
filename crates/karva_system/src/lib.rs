@@ -5,9 +5,23 @@ use std::{fmt::Debug, num::NonZeroUsize};
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use filetime::FileTime;
-use karva_static::EnvVars;
-use ruff_db::system::{FileType, Metadata};
 
+pub struct EnvVars;
+
+impl EnvVars {
+    /// This is a standard Rayon environment variable.
+    pub const RAYON_NUM_THREADS: &'static str = "RAYON_NUM_THREADS";
+
+    /// This is a standard Karva environment variable.
+    pub const KARVA_MAX_PARALLELISM: &'static str = "KARVA_MAX_PARALLELISM";
+
+    /// This is a standard Karva environment variable.
+    pub const KARVA_CONFIG_FILE: &'static str = "KARVA_CONFIG_FILE";
+}
+
+use crate::file_revision::FileRevision;
+
+mod file_revision;
 pub mod path;
 pub mod time;
 
@@ -201,5 +215,55 @@ pub fn venv_binary_from_active_env(binary_name: &str) -> Option<Utf8PathBuf> {
         Some(binary_path)
     } else {
         None
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Metadata {
+    revision: FileRevision,
+    permissions: Option<u32>,
+    file_type: FileType,
+}
+
+impl Metadata {
+    pub fn new(revision: FileRevision, permissions: Option<u32>, file_type: FileType) -> Self {
+        Self {
+            revision,
+            permissions,
+            file_type,
+        }
+    }
+
+    pub fn revision(&self) -> FileRevision {
+        self.revision
+    }
+
+    pub fn permissions(&self) -> Option<u32> {
+        self.permissions
+    }
+
+    pub fn file_type(&self) -> FileType {
+        self.file_type
+    }
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
+pub enum FileType {
+    File,
+    Directory,
+    Symlink,
+}
+
+impl FileType {
+    pub const fn is_file(self) -> bool {
+        matches!(self, Self::File)
+    }
+
+    pub const fn is_directory(self) -> bool {
+        matches!(self, Self::Directory)
+    }
+
+    pub const fn is_symlink(self) -> bool {
+        matches!(self, Self::Symlink)
     }
 }

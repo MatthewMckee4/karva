@@ -18,6 +18,56 @@ For larger changes, consider creating an issue outlining your proposed change.
 
 If you have suggestions on how we might improve the contributing documentation, let us know!
 
+## Architecture
+
+Karva uses a **main-process + worker-subprocess** execution model. When you run `karva test`, the main process (`karva`) collects test files, partitions them across workers, then spawns one or more `karva-worker` subprocesses to actually execute the tests. Each worker writes its results to a shared cache directory, and the main process aggregates results when all workers finish.
+
+### Crate Map
+
+**Binaries:**
+
+- `karva` — Main CLI binary. Parses args, discovers test files, partitions work, spawns workers, aggregates results.
+- `karva_worker` — Worker subprocess binary. Receives a subset of test files, runs them, writes results to cache.
+
+**Shared libraries (used by both binaries):**
+
+- `karva_cli` — Shared CLI types (`SubTestCommand`, `Verbosity`, etc.), the bridge between main and worker.
+- `karva_cache` — Cache directory layout, result serialization, duration tracking.
+- `karva_system` — OS abstraction (`System` trait), file metadata, path utilities, environment variables.
+- `karva_metadata` — Project configuration (`ProjectSettings`), config file parsing.
+- `karva_diagnostic` — Test result types (`TestRunResult`), diagnostic reporting.
+- `karva_logging` — Tracing setup, `Printer`, colored output control.
+- `karva_python_semantic` — Python version detection, AST-level semantic types.
+
+**Main-process only:**
+
+- `karva_runner` — Orchestration: worker spawning, partitioning, parallel collection.
+- `karva_project` — Project database, test path resolution.
+- `karva_collector` — File-level test collection (parsing Python files for test functions).
+- `karva_combine` — Result combination and summary output.
+
+**Worker-process only:**
+
+- `karva_test_semantic` — Core test execution library: discovery, context, extensions, PyO3 runner.
+
+**Infrastructure / Build:**
+
+- `karva_python` — PyO3 `cdylib`, the Python wheel entry point. Wraps both `karva` and `karva_worker`.
+- `karva_macros` — Procedural macros.
+- `karva_dev` — Dev tools (CLI reference generation, etc.).
+
+**Dev / Testing:**
+
+- `karva_benchmark` — Wall-time benchmarks using divan.
+- `karva_test_projects` — Real-world project definitions for benchmarks and diff testing.
+- `karva_diff` — Binary for comparing output between two karva wheel versions.
+
+### Key Design Decisions
+
+- **Binaries don't depend on each other.** `karva` and `karva_worker` communicate only through the filesystem (cache directory) and CLI arguments.
+- **Shared types live in `karva_cli`.** Both binaries depend on `karva_cli` for common command-line types like `SubTestCommand`.
+- **The worker embeds a Python interpreter.** `karva_test_semantic` uses PyO3 to attach to Python for test execution, while the main process only needs Python for the wheel packaging.
+
 ### Prerequisites
 
 Karva is written in Rust. You can install the [Rust Toolchain](https://www.rust-lang.org/tools/install) to get started.
