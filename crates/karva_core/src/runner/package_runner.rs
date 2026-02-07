@@ -103,12 +103,10 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
             // Iterate over all test variants (parametrize combinations × fixture combinations)
             for variant in TestVariantIterator::new(py, test_function, &mut test_resolver) {
-                if let Some(result) = self.execute_test_variant(py, variant) {
-                    passed &= result;
+                passed &= self.execute_test_variant(py, variant);
 
-                    if self.context.settings().test().fail_fast && !passed {
-                        break;
-                    }
+                if self.context.settings().test().fail_fast && !passed {
+                    break;
                 }
             }
 
@@ -173,18 +171,9 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
     }
 
     /// Run a test variant (a specific combination of parametrize values and fixtures).
-    ///
-    /// Returns `None` if the test was filtered out by tag expressions, or `Some(passed)` otherwise.
-    fn execute_test_variant(&self, py: Python<'_>, variant: TestVariant) -> Option<bool> {
+    fn execute_test_variant(&self, py: Python<'_>, variant: TestVariant) -> bool {
         let tags = variant.resolved_tags();
         let test_module_path = variant.module_path().clone();
-
-        if !self.context.tag_filter().is_empty() {
-            let custom_names = tags.custom_tag_names();
-            if !self.context.tag_filter().matches(&custom_names) {
-                return None;
-            }
-        }
 
         let TestVariant {
             test,
@@ -199,12 +188,24 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let function = test.py_function.clone_ref(py);
         let stmt_function_def = Rc::clone(&test.stmt_function_def);
 
+        let tag_filter = &self.context.settings().test().tag_filter;
+        if !tag_filter.is_empty() {
+            let custom_names = tags.custom_tag_names();
+            if !tag_filter.matches(&custom_names) {
+                return self.context.register_test_case_result(
+                    &QualifiedTestName::new(name, None),
+                    IndividualTestResultKind::Skipped { reason: None },
+                    std::time::Duration::ZERO,
+                );
+            }
+        }
+
         if let (true, reason) = tags.should_skip() {
-            return Some(self.context.register_test_case_result(
+            return self.context.register_test_case_result(
                 &QualifiedTestName::new(name, None),
                 IndividualTestResultKind::Skipped { reason },
                 std::time::Duration::ZERO,
-            ));
+            );
         }
 
         let start_time = std::time::Instant::now();
@@ -363,7 +364,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
         self.clean_up_scope(py, FixtureScope::Function);
 
-        Some(passed)
+        passed
     }
 
     /// Run a fixture

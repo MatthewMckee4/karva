@@ -1,5 +1,3 @@
-pub mod filter;
-
 use camino::Utf8PathBuf;
 use clap::Parser;
 use clap::builder::Styles;

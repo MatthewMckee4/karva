@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::System;
+use crate::filter::TagFilterSet;
 use crate::settings::{ProjectSettings, SrcSettings, TerminalSettings, TestSettings};
 
 #[derive(
@@ -217,6 +218,7 @@ impl TestOptions {
             fail_fast: self.fail_fast.unwrap_or_default(),
             try_import_fixtures: self.try_import_fixtures.unwrap_or_default(),
             retry: self.retry.unwrap_or_default(),
+            tag_filter: TagFilterSet::default(),
         }
     }
 }

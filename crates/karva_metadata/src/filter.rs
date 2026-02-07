@@ -1,6 +1,7 @@
 use std::fmt;
 
 /// A parsed tag filter expression that can be matched against a set of tag names.
+#[derive(Debug, Clone)]
 pub struct TagFilter {
     expr: Expr,
 }
@@ -27,7 +28,7 @@ impl TagFilter {
 }
 
 /// A set of tag filters. Any filter must match for the set to match (OR semantics across `-t` flags).
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct TagFilterSet {
     filters: Vec<TagFilter>,
 }
@@ -64,7 +65,7 @@ impl fmt::Display for TagFilterError {
 
 impl std::error::Error for TagFilterError {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Expr {
     Tag(String),
     Not(Box<Self>),

@@ -7,10 +7,10 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
 use karva_cache::{Cache, RunHash};
-use karva_cli::filter::TagFilterSet;
 use karva_cli::{SubTestCommand, Verbosity};
 use karva_diagnostic::{DummyReporter, Reporter, TestCaseReporter};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
+use karva_metadata::filter::TagFilterSet;
 use karva_python_semantic::current_python_version;
 use karva_system::System;
 use karva_system::path::{TestPath, TestPathError};
@@ -145,7 +145,8 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     let tag_filter = TagFilterSet::new(&args.sub_command.tag_expressions)?;
 
-    let settings = args.sub_command.into_options().to_settings();
+    let mut settings = args.sub_command.into_options().to_settings();
+    settings.set_tag_filter(tag_filter);
 
     let run_hash = RunHash::from_existing(&args.run_hash);
 
@@ -157,13 +158,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         Box::new(TestCaseReporter::new(printer))
     };
 
-    let context = Context::new(
-        &system,
-        &settings,
-        python_version,
-        reporter.as_ref(),
-        tag_filter,
-    );
+    let context = Context::new(&system, &settings, python_version, reporter.as_ref());
 
     let result = attach_with_project(settings.terminal().show_python_output, |py| {
         let session = StandardDiscoverer::new(&context).discover_with_py(py, test_paths);

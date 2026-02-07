@@ -181,8 +181,9 @@ def test_fast():
     exit_code: 0
     ----- stdout -----
     test test::test_slow ... ok
+    test test::test_fast ... skipped
 
-    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+    test result: ok. 1 passed; 0 failed; 1 skipped; finished in [TIME]
 
     ----- stderr -----
     ");
@@ -208,9 +209,10 @@ def test_fast():
     success: true
     exit_code: 0
     ----- stdout -----
+    test test::test_slow ... skipped
     test test::test_fast ... ok
 
-    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+    test result: ok. 1 passed; 0 failed; 1 skipped; finished in [TIME]
 
     ----- stderr -----
     ");
@@ -243,8 +245,10 @@ def test_integration_only():
     exit_code: 0
     ----- stdout -----
     test test::test_slow_integration ... ok
+    test test::test_slow_only ... skipped
+    test test::test_integration_only ... skipped
 
-    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+    test result: ok. 1 passed; 0 failed; 2 skipped; finished in [TIME]
 
     ----- stderr -----
     ");
@@ -276,8 +280,9 @@ def test_untagged():
     ----- stdout -----
     test test::test_slow ... ok
     test test::test_integration ... ok
+    test test::test_untagged ... skipped
 
-    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+    test result: ok. 2 passed; 0 failed; 1 skipped; finished in [TIME]
 
     ----- stderr -----
     ");
@@ -339,7 +344,10 @@ def test_fast():
     success: true
     exit_code: 0
     ----- stdout -----
-    test result: ok. 0 passed; 0 failed; 0 skipped; finished in [TIME]
+    test test::test_untagged ... skipped
+    test test::test_fast ... skipped
+
+    test result: ok. 0 passed; 0 failed; 2 skipped; finished in [TIME]
 
     ----- stderr -----
     ");
@@ -368,8 +376,9 @@ def test_untagged():
     ----- stdout -----
     test test::test_param(x=1) ... ok
     test test::test_param(x=2) ... ok
+    test test::test_untagged ... skipped
 
-    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+    test result: ok. 2 passed; 0 failed; 1 skipped; finished in [TIME]
 
     ----- stderr -----
     ");
@@ -400,9 +409,11 @@ def test_untagged():
     success: true
     exit_code: 0
     ----- stdout -----
+    test test::test_slow_flaky ... skipped
     test test::test_slow_stable ... ok
+    test test::test_untagged ... skipped
 
-    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+    test result: ok. 1 passed; 0 failed; 2 skipped; finished in [TIME]
 
     ----- stderr -----
     ");
@@ -441,8 +452,10 @@ def test_linux_only():
     ----- stdout -----
     test test::test_slow_linux ... ok
     test test::test_fast_linux ... ok
+    test test::test_slow_only ... skipped
+    test test::test_linux_only ... skipped
 
-    test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
+    test result: ok. 2 passed; 0 failed; 2 skipped; finished in [TIME]
 
     ----- stderr -----
     ");
@@ -475,8 +488,9 @@ def test_untagged():
     ----- stdout -----
     test test::test_slow_skipped ... skipped
     test test::test_slow_runs ... ok
+    test test::test_untagged ... skipped
 
-    test result: ok. 1 passed; 0 failed; 1 skipped; finished in [TIME]
+    test result: ok. 1 passed; 0 failed; 2 skipped; finished in [TIME]
 
     ----- stderr -----
     ");
