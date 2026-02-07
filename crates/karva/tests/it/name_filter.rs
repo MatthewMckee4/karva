@@ -123,6 +123,7 @@ def test_other():
 }
 
 #[test]
+#[cfg(unix)]
 fn name_filter_match_all() {
     let context = TestContext::with_file("test.py", TWO_TESTS);
     assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg(".*"), @r"
