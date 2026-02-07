@@ -1,7 +1,4 @@
 rules:
-  template-injection:
-    ignore:
-      - "diff.yml"
   unpinned-uses:
     config:
       policies:

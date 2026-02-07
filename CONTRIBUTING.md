@@ -58,9 +58,7 @@ Karva uses a **main-process + worker-subprocess** execution model. When you run 
 
 **Dev / Testing:**
 
-- `karva_benchmark` — Wall-time benchmarks using divan.
-- `karva_test_projects` — Real-world project definitions for benchmarks and diff testing.
-- `karva_diff` — Binary for comparing output between two karva wheel versions.
+- `karva_benchmark` — Wall-time benchmarks using divan, including real-world project definitions.
 
 ### Key Design Decisions
 

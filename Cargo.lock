@@ -1196,6 +1196,8 @@ dependencies = [
 name = "karva_benchmark"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
+ "camino",
  "codspeed-criterion-compat",
  "codspeed-divan-compat",
  "karva_cli",
@@ -1203,8 +1205,11 @@ dependencies = [
  "karva_project",
  "karva_runner",
  "karva_system",
- "karva_test_projects",
  "karva_test_semantic",
+ "ruff_python_ast",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -1278,18 +1283,6 @@ dependencies = [
  "ruff_source_file",
  "ruff_text_size",
  "serde",
-]
-
-[[package]]
-name = "karva_diff"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "camino",
- "clap",
- "karva_system",
- "karva_test_projects",
- "tempfile",
 ]
 
 [[package]]
@@ -1394,19 +1387,6 @@ dependencies = [
  "karva_python_semantic",
  "tempfile",
  "thiserror",
- "tracing",
-]
-
-[[package]]
-name = "karva_test_projects"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "camino",
- "karva_system",
- "ruff_python_ast",
- "serde",
- "serde_json",
  "tracing",
 ]
 
