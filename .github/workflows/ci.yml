@@ -224,14 +224,3 @@ jobs:
           token: ${{ secrets.CODSPEED_TOKEN }}
           run: cargo codspeed run --bench ${{ matrix.project }}
           mode: walltime
-
-  project-diff:
-    name: "run project diff"
-
-    needs: determine_changes
-    if: ${{ (needs.determine_changes.outputs.code == 'true') }}
-
-    permissions:
-      pull-requests: write
-
-    uses: ./.github/workflows/diff.yml
