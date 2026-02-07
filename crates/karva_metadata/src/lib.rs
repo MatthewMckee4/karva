@@ -4,6 +4,7 @@ use karva_system::System;
 use ruff_python_ast::PythonVersion;
 use thiserror::Error;
 
+pub mod filter;
 mod options;
 mod pyproject;
 mod settings;

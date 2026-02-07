@@ -210,7 +210,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                 continue;
             };
 
-            let Ok(source_text) = std::fs::read_to_string(utf8_file_name) else {
+            let Ok(source_text) = self.context.system().read_to_string(utf8_file_name) else {
                 continue;
             };
 

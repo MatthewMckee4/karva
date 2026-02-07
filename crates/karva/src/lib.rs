@@ -11,6 +11,7 @@ use colored::Colorize;
 use karva_cache::AggregatedResults;
 use karva_cli::{Args, Command, OutputFormat, TestCommand};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
+use karva_metadata::filter::TagFilterSet;
 use karva_metadata::{ProjectMetadata, ProjectOptionsOverrides};
 use karva_project::ProjectDatabase;
 use karva_python_semantic::current_python_version;
@@ -116,6 +117,8 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     } else {
         num_workers.unwrap_or_else(|| karva_system::max_parallelism().get())
     };
+
+    TagFilterSet::new(&sub_command.tag_expressions)?;
 
     let config = karva_runner::ParallelTestConfig {
         num_workers,

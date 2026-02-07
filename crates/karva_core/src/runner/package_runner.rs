@@ -188,6 +188,18 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let function = test.py_function.clone_ref(py);
         let stmt_function_def = Rc::clone(&test.stmt_function_def);
 
+        let tag_filter = &self.context.settings().test().tag_filter;
+        if !tag_filter.is_empty() {
+            let custom_names = tags.custom_tag_names();
+            if !tag_filter.matches(&custom_names) {
+                return self.context.register_test_case_result(
+                    &QualifiedTestName::new(name, None),
+                    IndividualTestResultKind::Skipped { reason: None },
+                    std::time::Duration::ZERO,
+                );
+            }
+        }
+
         if let (true, reason) = tags.should_skip() {
             return self.context.register_test_case_result(
                 &QualifiedTestName::new(name, None),

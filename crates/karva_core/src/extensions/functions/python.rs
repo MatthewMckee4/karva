@@ -10,8 +10,6 @@ use crate::extensions::tags::{Tag, Tags};
 #[pyclass]
 pub struct Param {
     /// The values of the arguments
-    ///
-    /// These are used as values for the test function.
     pub(crate) values: Vec<Arc<Py<PyAny>>>,
 
     /// Tags associated with this parametrization
@@ -37,13 +35,5 @@ impl Param {
 
     pub(crate) fn from_parametrization(Parametrization { values, tags }: Parametrization) -> Self {
         Self { values, tags }
-    }
-
-    pub(crate) const fn values(&self) -> &Vec<Arc<Py<PyAny>>> {
-        &self.values
-    }
-
-    pub(crate) const fn tags(&self) -> &Tags {
-        &self.tags
     }
 }

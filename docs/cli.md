@@ -59,6 +59,9 @@ karva test [OPTIONS] [PATH]...
 <li><code>concise</code>:  Print diagnostics concisely, one per line</li>
 </ul></dd><dt id="karva-test--quiet"><a href="#karva-test--quiet"><code>--quiet</code></a>, <code>-q</code></dt><dd><p>Use quiet output (or <code>-qq</code> for silent output)</p>
 </dd><dt id="karva-test--retry"><a href="#karva-test--retry"><code>--retry</code></a> <i>retry</i></dt><dd><p>When set, the test will retry failed tests up to this number of times</p>
+</dd><dt id="karva-test--tag"><a href="#karva-test--tag"><code>--tag</code></a>, <code>-t</code> <i>tag-expressions</i></dt><dd><p>Filter tests by tag expression. Only tests with matching custom tags will run.</p>
+<p>Expressions support <code>and</code>, <code>or</code>, <code>not</code>, and parentheses for grouping. When specified multiple times, a test runs if it matches any of the expressions.</p>
+<p>Examples: <code>-t slow</code>, <code>-t 'not slow'</code>, <code>-t 'slow and integration'</code>, <code>-t 'slow or integration'</code>, <code>-t '(slow or fast) and not flaky'</code>.</p>
 </dd><dt id="karva-test--test-prefix"><a href="#karva-test--test-prefix"><code>--test-prefix</code></a> <i>test-prefix</i></dt><dd><p>The prefix of the test functions</p>
 </dd><dt id="karva-test--try-import-fixtures"><a href="#karva-test--try-import-fixtures"><code>--try-import-fixtures</code></a></dt><dd><p>When set, we will try to import functions in each test file as well as parsing the ast to find them.</p>
 <p>This is often slower, so it is not recommended for most projects.</p>

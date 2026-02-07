@@ -1,3 +1,4 @@
+use crate::filter::TagFilterSet;
 use crate::options::OutputFormat;
 
 #[derive(Default, Debug, Clone)]
@@ -23,6 +24,10 @@ impl ProjectSettings {
     pub const fn fail_fast(&self) -> bool {
         self.test.fail_fast
     }
+
+    pub fn set_tag_filter(&mut self, tag_filter: TagFilterSet) {
+        self.test.tag_filter = tag_filter;
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -43,4 +48,5 @@ pub struct TestSettings {
     pub fail_fast: bool,
     pub try_import_fixtures: bool,
     pub retry: u32,
+    pub tag_filter: TagFilterSet,
 }
