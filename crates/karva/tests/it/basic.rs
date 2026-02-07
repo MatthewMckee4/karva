@@ -1085,3 +1085,36 @@ def test_1():
     ----- stderr -----
     ");
 }
+
+#[test]
+fn test_parallel_worker_capping() {
+    let context = TestContext::with_file(
+        "test_a.py",
+        r"
+def test_1(): pass
+def test_2(): pass
+def test_3(): pass",
+    );
+
+    // With 3 tests and 8 requested workers, worker capping reduces to 1 worker
+    // (ceil(3/5) = 1). The -v flag shows info logs confirming "Spawning 1 workers".
+    assert_cmd_snapshot!(context.command().args(["-v", "--num-workers", "8"]), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test_a::test_1 ... ok
+    test test_a::test_2 ... ok
+    test test_a::test_3 ... ok
+
+    test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    INFO Collected all tests in [TIME]
+    INFO Capped worker count to avoid underutilized workers total_tests=3 requested_workers=8 capped_workers=1
+    INFO Spawning 1 workers
+    INFO Worker 0 spawned with 3 tests
+    INFO Waiting for 1 workers to complete (Ctrl+C to cancel)
+    INFO Worker 0 completed successfully in [TIME]
+    INFO All workers completed
+    ");
+}

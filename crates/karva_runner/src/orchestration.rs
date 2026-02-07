@@ -217,7 +217,20 @@ pub fn run_parallel_tests(
         format_duration(collection_start_time.elapsed())
     );
 
-    tracing::debug!(num_workers = config.num_workers, "Partitioning tests");
+    let total_tests = collected.test_count();
+    let max_useful_workers = total_tests.div_ceil(MIN_TESTS_PER_WORKER).max(1);
+    let num_workers = config.num_workers.min(max_useful_workers);
+
+    if num_workers < config.num_workers {
+        tracing::info!(
+            total_tests,
+            requested_workers = config.num_workers,
+            capped_workers = num_workers,
+            "Capped worker count to avoid underutilized workers"
+        );
+    }
+
+    tracing::debug!(num_workers, "Partitioning tests");
 
     let cache_dir = db.system().current_directory().join(CACHE_DIR);
 
@@ -235,7 +248,7 @@ pub fn run_parallel_tests(
         );
     }
 
-    let partitions = partition_collected_tests(&collected, config.num_workers, &previous_durations);
+    let partitions = partition_collected_tests(&collected, num_workers, &previous_durations);
 
     let run_hash = RunHash::current_time();
 
@@ -258,6 +271,7 @@ pub fn run_parallel_tests(
     Ok(result)
 }
 
+const MIN_TESTS_PER_WORKER: usize = 5;
 const KARVA_WORKER_BINARY_NAME: &str = "karva-worker";
 
 /// Find the `karva-worker` binary
@@ -335,4 +349,51 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
                 .flat_map(|pattern| vec!["--match".to_string(), pattern.clone()]),
         )
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MIN_TESTS_PER_WORKER;
+
+    /// Helper to compute the effective worker count using the same formula as `run_parallel_tests`.
+    fn effective_workers(num_workers: usize, total_tests: usize) -> usize {
+        let max_useful = total_tests.div_ceil(MIN_TESTS_PER_WORKER).max(1);
+        num_workers.min(max_useful)
+    }
+
+    #[test]
+    fn test_workers_capped_for_small_test_count() {
+        // 9 tests / 5 per worker = ceil(1.8) = 2 workers
+        assert_eq!(effective_workers(8, 9), 2);
+    }
+
+    #[test]
+    fn test_workers_capped_for_medium_test_count() {
+        // 25 tests / 5 per worker = ceil(5) = 5 workers
+        assert_eq!(effective_workers(8, 25), 5);
+    }
+
+    #[test]
+    fn test_workers_unchanged_when_test_count_is_high() {
+        // 100 tests / 5 per worker = ceil(20) = 20, but only 8 workers requested
+        assert_eq!(effective_workers(8, 100), 8);
+    }
+
+    #[test]
+    fn test_at_least_one_worker_with_zero_tests() {
+        // 0 tests should still yield at least 1 worker
+        assert_eq!(effective_workers(8, 0), 1);
+    }
+
+    #[test]
+    fn test_workers_capped_for_very_few_tests() {
+        // 3 tests / 5 per worker = ceil(0.6) = 1 worker
+        assert_eq!(effective_workers(8, 3), 1);
+    }
+
+    #[test]
+    fn test_workers_exact_multiple() {
+        // 40 tests / 5 per worker = 8 workers exactly
+        assert_eq!(effective_workers(8, 40), 8);
+    }
 }

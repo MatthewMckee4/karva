@@ -204,6 +204,17 @@ impl CollectedPackage {
         }
     }
 
+    /// Returns the total number of tests in this package and all subpackages.
+    pub fn test_count(&self) -> usize {
+        let module_tests: usize = self
+            .modules
+            .values()
+            .map(|m| m.test_function_defs.len())
+            .sum();
+        let package_tests: usize = self.packages.values().map(Self::test_count).sum();
+        module_tests + package_tests
+    }
+
     pub(crate) fn is_empty(&self) -> bool {
         self.modules.is_empty() && self.packages.is_empty()
     }
