@@ -1,7 +1,9 @@
+pub use self::raises::{ExceptionInfo, RaisesContext};
 use pyo3::prelude::*;
 pub use python::Param;
 
 pub mod python;
+pub mod raises;
 
 // SkipError exception that can be raised to skip tests at runtime with an optional reason
 pyo3::create_exception!(karva, SkipError, pyo3::exceptions::PyException);
