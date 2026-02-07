@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.1-alpha.3
+
+### Extensions
+
+- Add `-t` / `--tag` flag for filtering tests by custom tag expressions ([#422](https://github.com/karva-dev/karva/pull/422))
+
+### Test Running
+
+- Add `karva.raises` context manager for asserting exceptions ([#430](https://github.com/karva-dev/karva/pull/430))
+- Add `-m` / `--match` flag for regex-based test name filtering ([#428](https://github.com/karva-dev/karva/pull/428))
+- Replace body_length heuristic with random ordering ([#425](https://github.com/karva-dev/karva/pull/425))
+
+### Contributors
+
+- [@MatthewMckee4](https://github.com/MatthewMckee4)
+
 ## 0.0.1-alpha.2
 
 ### Bug Fixes
