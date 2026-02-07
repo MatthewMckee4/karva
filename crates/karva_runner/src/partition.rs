@@ -6,8 +6,6 @@ use std::time::Duration;
 struct TestInfo {
     module_name: String,
     path: String,
-    /// Number of AST nodes in the test body (used as fallback heuristic)
-    body_length: usize,
     /// Actual runtime from previous test run (if available)
     duration: Option<Duration>,
 }
@@ -37,7 +35,7 @@ impl ModuleGroup {
 #[derive(Debug)]
 pub struct Partition {
     tests: Vec<String>,
-    /// Cumulative weight (duration in microseconds or body length)
+    /// Cumulative weight (duration in microseconds or 1 for unknown tests)
     weight: u128,
 }
 
@@ -91,7 +89,7 @@ impl Partition {
 ///
 /// ## Weighting Strategy
 /// - **With historical data**: Uses actual test duration in microseconds
-/// - **Without historical data**: Falls back to AST body length as a proxy for complexity
+/// - **Without historical data**: Tests are shuffled randomly and assigned with equal weight
 pub fn partition_collected_tests(
     package: &karva_collector::CollectedPackage,
     num_workers: usize,
@@ -100,14 +98,15 @@ pub fn partition_collected_tests(
     let mut test_infos = Vec::new();
     collect_test_paths_recursive(package, &mut test_infos, previous_durations);
 
+    // Shuffle tests without durations so they distribute randomly across partitions
+    shuffle_tests_without_durations(&mut test_infos);
+
     // Step 1: Group tests by module and calculate module weights
     let mut module_groups: HashMap<String, Vec<TestInfo>> = HashMap::new();
     let mut module_weights: HashMap<String, u128> = HashMap::new();
 
     for test_info in test_infos {
-        let test_weight = test_info
-            .duration
-            .map_or(test_info.body_length as u128, |d| d.as_micros());
+        let test_weight = test_info.duration.map_or(1, |d| d.as_micros());
 
         *module_weights
             .entry(test_info.module_name.clone())
@@ -147,9 +146,7 @@ pub fn partition_collected_tests(
     for module_group in small_modules {
         let min_partition_idx = find_lightest_partition(&partitions);
         for test_info in module_group.tests {
-            let test_weight = test_info
-                .duration
-                .map_or(test_info.body_length as u128, |d| d.as_micros());
+            let test_weight = test_info.duration.map_or(1, |d| d.as_micros());
             partitions[min_partition_idx].add_test(test_info, test_weight);
         }
     }
@@ -160,9 +157,7 @@ pub fn partition_collected_tests(
         module_group.tests.sort_by(compare_test_weights);
 
         for test_info in module_group.tests {
-            let test_weight = test_info
-                .duration
-                .map_or(test_info.body_length as u128, |d| d.as_micros());
+            let test_weight = test_info.duration.map_or(1, |d| d.as_micros());
             let min_partition_idx = find_lightest_partition(&partitions);
             partitions[min_partition_idx].add_test(test_info, test_weight);
         }
@@ -180,20 +175,38 @@ fn find_lightest_partition(partitions: &[Partition]) -> usize {
         .map_or(0, |(idx, _)| idx)
 }
 
-/// Compares two tests by weight (`duration` or `body_length`), descending order
+/// Compares two tests by duration descending; tests without durations are considered equal
 fn compare_test_weights(a: &TestInfo, b: &TestInfo) -> std::cmp::Ordering {
     match (&a.duration, &b.duration) {
         (Some(dur_a), Some(dur_b)) => dur_b.cmp(dur_a),
-        (None, None) => b.body_length.cmp(&a.body_length),
+        (None, None) => std::cmp::Ordering::Equal,
         (None, _) => std::cmp::Ordering::Greater,
         (_, None) => std::cmp::Ordering::Less,
     }
 }
 
-/// Recursively collects test information from a package and all its subpackages
+/// Shuffles only the tests that have no historical duration data.
 ///
-/// For each test, looks up its historical duration from `previous_durations` and
-/// combines it with the test's AST body length to create a `TestInfo` record.
+/// This ensures tests without timing info are randomly distributed across partitions
+/// rather than always landing in the same order.
+fn shuffle_tests_without_durations(test_infos: &mut [TestInfo]) {
+    let no_duration_indices: Vec<usize> = test_infos
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| t.duration.is_none())
+        .map(|(i, _)| i)
+        .collect();
+
+    // Fisher-Yates shuffle on the indices
+    for i in (1..no_duration_indices.len()).rev() {
+        let j = fastrand::usize(..=i);
+        let idx_a = no_duration_indices[i];
+        let idx_b = no_duration_indices[j];
+        test_infos.swap(idx_a, idx_b);
+    }
+}
+
+/// Recursively collects test information from a package and all its subpackages
 fn collect_test_paths_recursive(
     package: &karva_collector::CollectedPackage,
     test_infos: &mut Vec<TestInfo>,
@@ -207,7 +220,6 @@ fn collect_test_paths_recursive(
             test_infos.push(TestInfo {
                 module_name: module.path.module_name().to_string(),
                 path: format!("{}::{}", module.path.path(), test_fn_def.name),
-                body_length: test_fn_def.body.len(),
                 duration,
             });
         }

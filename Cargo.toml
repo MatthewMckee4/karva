@@ -43,6 +43,7 @@ directories = "6.0.0"
 divan = { package = "codspeed-divan-compat", version = "4.2.1" }
 dunce = { version = "1.0.5" }
 etcetera = { version = "0.11.0" }
+fastrand = { version = "2.3" }
 filetime = { version = "0.2.27" }
 fs4 = { version = "0.13" }
 ignore = { version = "0.4.25" }

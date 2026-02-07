@@ -1414,6 +1414,7 @@ dependencies = [
  "camino",
  "crossbeam-channel",
  "ctrlc",
+ "fastrand",
  "ignore",
  "karva_cache",
  "karva_cli",
