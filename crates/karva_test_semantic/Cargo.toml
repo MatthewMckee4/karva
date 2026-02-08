@@ -11,6 +11,7 @@ authors = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
+camino = { workspace = true }
 karva_collector = { workspace = true }
 karva_diagnostic = { workspace = true, features = ["traceback"] }
 karva_metadata = { workspace = true }
@@ -18,7 +19,6 @@ karva_project = { workspace = true }
 karva_python_semantic = { workspace = true }
 karva_snapshot = { workspace = true }
 karva_static = { workspace = true }
-camino = { workspace = true }
 pyo3 = { workspace = true }
 regex = { workspace = true }
 ruff_db = { workspace = true }
