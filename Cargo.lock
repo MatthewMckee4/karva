@@ -479,6 +479,7 @@ dependencies = [
  "encode_unicode",
  "libc",
  "once_cell",
+ "unicode-width",
  "windows-sys 0.59.0",
 ]
 
@@ -1173,6 +1174,7 @@ dependencies = [
  "karva_project",
  "karva_python_semantic",
  "karva_runner",
+ "karva_snapshot",
  "karva_static",
  "regex",
  "rstest",
@@ -1368,6 +1370,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "karva_snapshot"
+version = "0.0.0"
+dependencies = [
+ "camino",
+ "colored 3.1.1",
+ "console",
+ "similar",
+ "tempfile",
+ "terminal_size",
+]
+
+[[package]]
 name = "karva_static"
 version = "0.0.0"
 
@@ -1386,6 +1400,8 @@ dependencies = [
  "karva_metadata",
  "karva_project",
  "karva_python_semantic",
+ "karva_snapshot",
+ "karva_static",
  "pyo3",
  "regex",
  "ruff_db",
@@ -1414,6 +1430,7 @@ dependencies = [
  "karva_metadata",
  "karva_project",
  "karva_python_semantic",
+ "karva_static",
  "karva_test_semantic",
  "ruff_db",
  "ruff_notebook",

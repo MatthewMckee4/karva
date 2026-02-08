@@ -24,6 +24,7 @@ karva_metadata = { path = "crates/karva_metadata" }
 karva_project = { path = "crates/karva_project" }
 karva_python_semantic = { path = "crates/karva_python_semantic" }
 karva_runner = { path = "crates/karva_runner" }
+karva_snapshot = { path = "crates/karva_snapshot" }
 karva_static = { path = "crates/karva_static" }
 karva_test_semantic = { path = "crates/karva_test_semantic" }
 karva_worker = { path = "crates/karva_worker" }
@@ -35,6 +36,8 @@ chrono = { version = "0.4.43", default-features = false, features = ["clock"] }
 clap = { version = "4.5.56", features = ["derive", "wrap_help"] }
 codspeed-criterion-compat = { version = "4.2.1", default-features = false }
 colored = { version = "3.1.1" }
+console = { version = "0.15" }
+
 crossbeam-channel = "0.5.15"
 ctor = "0.6.3"
 ctrlc = { version = "3.5.1" }
@@ -67,8 +70,10 @@ ruff_source_file = { git = "https://github.com/astral-sh/ruff/", branch = "main"
 ruff_text_size = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.149" }
+similar = { version = "2.7", features = ["inline"] }
 syn = { version = "2.0.114" }
 tempfile = "3.24"
+terminal_size = { version = "0.4" }
 thiserror = { version = "2.0.18" }
 toml = { version = "0.9.11" }
 tracing = { version = "0.1.44", features = ["release_max_level_debug"] }
