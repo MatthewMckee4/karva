@@ -1,3 +1,6 @@
+use std::io::Write;
+use std::process::Stdio;
+
 use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
@@ -735,5 +738,824 @@ def test_hello():
     No pending snapshots to review.
 
     ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_snapshot_multiline_content() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_lines():
+    karva.assert_snapshot('line one\nline two\nline three')
+        ",
+    );
+
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+    let _ = cmd.output();
+
+    let content = context.read_file("snapshots/test__test_lines.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:5::test_lines
+    ---
+    line one
+    line two
+    line three
+    ");
+}
+
+#[test]
+fn test_snapshot_content_with_leading_trailing_spaces() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_spaces():
+    karva.assert_snapshot('  hello  ')
+        ",
+    );
+
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+    let _ = cmd.output();
+
+    let content = context.read_file("snapshots/test__test_spaces.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:5::test_spaces
+    ---
+      hello
+    ");
+}
+
+#[test]
+fn test_snapshot_content_with_tabs_and_mixed_whitespace() {
+    let context = TestContext::with_file(
+        "test.py",
+        "
+import karva
+
+def test_tabs():
+    karva.assert_snapshot('col1\\tcol2\\tcol3\\n  indented\\n\\ttab indented')
+        ",
+    );
+
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+    let _ = cmd.output();
+
+    let content = context.read_file("snapshots/test__test_tabs.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:5::test_tabs
+    ---
+    col1	col2	col3
+      indented
+    	tab indented
+    ");
+}
+
+#[test]
+fn test_snapshot_empty_string() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_empty():
+    karva.assert_snapshot('')
+        ",
+    );
+
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+    let _ = cmd.output();
+
+    let content = context.read_file("snapshots/test__test_empty.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:5::test_empty
+    ---
+
+    ");
+}
+
+#[test]
+fn test_snapshot_unicode_content() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_unicode():
+    karva.assert_snapshot('Hello \u00e9\u00e8\u00ea \u2603 \u2764 \u00fc\u00f1\u00ee\u00e7\u00f6d\u00e9')
+        ",
+    );
+
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+    let _ = cmd.output();
+
+    let content = context.read_file("snapshots/test__test_unicode.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:5::test_unicode
+    ---
+    Hello éèê ☃ ❤ üñîçödé
+    ");
+}
+
+#[test]
+fn test_snapshot_update_overwrites_existing() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_overwrite():
+    karva.assert_snapshot('original')
+        ",
+    );
+
+    // Create initial snapshot
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+    let _ = cmd.output();
+
+    let content = context.read_file("snapshots/test__test_overwrite.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:5::test_overwrite
+    ---
+    original
+    ");
+
+    // Change the test content
+    context.write_file(
+        "test.py",
+        r"
+import karva
+
+def test_overwrite():
+    karva.assert_snapshot('updated')
+        ",
+    );
+
+    // Run with --snapshot-update to overwrite
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+
+    assert_cmd_snapshot!(cmd, @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_overwrite ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let content = context.read_file("snapshots/test__test_overwrite.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:5::test_overwrite
+    ---
+    updated
+    ");
+}
+
+#[test]
+fn test_snapshot_multiple_tests_mixed_results() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_one():
+    karva.assert_snapshot('first')
+
+def test_two():
+    karva.assert_snapshot('second')
+        ",
+    );
+
+    // Create snapshots for both tests
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+    let _ = cmd.output();
+
+    // Change only one test
+    context.write_file(
+        "test.py",
+        r"
+import karva
+
+def test_one():
+    karva.assert_snapshot('first')
+
+def test_two():
+    karva.assert_snapshot('changed')
+        ",
+    );
+
+    // Run without update — test_one passes, test_two fails
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_one ... ok
+    test test::test_two ... FAILED
+
+    diagnostics:
+
+    error[test-failure]: Test `test_two` failed
+     --> test.py:7:5
+      |
+    5 |     karva.assert_snapshot('first')
+    6 |
+    7 | def test_two():
+      |     ^^^^^^^^
+    8 |     karva.assert_snapshot('changed')
+      |
+    info: Test failed here
+     --> test.py:8:5
+      |
+    7 | def test_two():
+    8 |     karva.assert_snapshot('changed')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Snapshot mismatch for 'test_two'.
+          Snapshot file: <temp_dir>/snapshots/test__test_two.snap
+          [LONG-LINE]┬[LONG-LINE]
+              1       | -second
+                    1 | +changed
+          [LONG-LINE]┴[LONG-LINE]
+
+    test result: FAILED. 1 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_snapshot_multiline_mismatch() {
+    let context = TestContext::with_file(
+        "test.py",
+        "
+import karva
+
+def test_poem():
+    karva.assert_snapshot('roses are red\\nviolets are blue')
+        ",
+    );
+
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+    let _ = cmd.output();
+
+    context.write_file(
+        "test.py",
+        "
+import karva
+
+def test_poem():
+    karva.assert_snapshot('roses are red\\nviolets are purple\\nsugar is sweet')
+        ",
+    );
+
+    // Mismatch with multiline content shows diff
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_poem ... FAILED
+
+    diagnostics:
+
+    error[test-failure]: Test `test_poem` failed
+     --> test.py:4:5
+      |
+    2 | import karva
+    3 |
+    4 | def test_poem():
+      |     ^^^^^^^^^
+    5 |     karva.assert_snapshot('roses are red/nviolets are purple/nsugar is sweet')
+      |
+    info: Test failed here
+     --> test.py:5:5
+      |
+    4 | def test_poem():
+    5 |     karva.assert_snapshot('roses are red/nviolets are purple/nsugar is sweet')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Snapshot mismatch for 'test_poem'.
+          Snapshot file: <temp_dir>/snapshots/test__test_poem.snap
+          [LONG-LINE]┬[LONG-LINE]
+              1     1 |  roses are red
+              2       | -violets are blue
+                    2 | +violets are purple
+                    3 | +sugar is sweet
+          [LONG-LINE]┴[LONG-LINE]
+
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_snapshot_review_accept_all() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_alpha():
+    karva.assert_snapshot('alpha')
+
+def test_beta():
+    karva.assert_snapshot('beta')
+        ",
+    );
+
+    let _ = context.command_no_parallel().output();
+
+    // 'A' accepts all remaining
+    let mut child = context
+        .snapshot("review")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn");
+    child
+        .stdin
+        .take()
+        .expect("no stdin")
+        .write_all(b"A\n")
+        .expect("write failed");
+    let _ = child.wait_with_output();
+
+    // Both .snap files should exist, no .snap.new remains
+    let snap_alpha = context.root().join("snapshots/test__test_alpha.snap");
+    let snap_beta = context.root().join("snapshots/test__test_beta.snap");
+    let pending_alpha = context.root().join("snapshots/test__test_alpha.snap.new");
+    let pending_beta = context.root().join("snapshots/test__test_beta.snap.new");
+
+    assert!(snap_alpha.exists(), "Expected alpha .snap after accept all");
+    assert!(snap_beta.exists(), "Expected beta .snap after accept all");
+    assert!(
+        !pending_alpha.exists(),
+        "Expected alpha .snap.new removed after accept all"
+    );
+    assert!(
+        !pending_beta.exists(),
+        "Expected beta .snap.new removed after accept all"
+    );
+}
+
+#[test]
+fn test_snapshot_review_reject_all() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_alpha():
+    karva.assert_snapshot('alpha')
+
+def test_beta():
+    karva.assert_snapshot('beta')
+        ",
+    );
+
+    let _ = context.command_no_parallel().output();
+
+    // 'R' rejects all remaining
+    let mut child = context
+        .snapshot("review")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn");
+    child
+        .stdin
+        .take()
+        .expect("no stdin")
+        .write_all(b"R\n")
+        .expect("write failed");
+    let _ = child.wait_with_output();
+
+    // No .snap files, no .snap.new files
+    let snap_alpha = context.root().join("snapshots/test__test_alpha.snap");
+    let snap_beta = context.root().join("snapshots/test__test_beta.snap");
+    let pending_alpha = context.root().join("snapshots/test__test_alpha.snap.new");
+    let pending_beta = context.root().join("snapshots/test__test_beta.snap.new");
+
+    assert!(
+        !snap_alpha.exists(),
+        "Expected no alpha .snap after reject all"
+    );
+    assert!(
+        !snap_beta.exists(),
+        "Expected no beta .snap after reject all"
+    );
+    assert!(
+        !pending_alpha.exists(),
+        "Expected alpha .snap.new removed after reject all"
+    );
+    assert!(
+        !pending_beta.exists(),
+        "Expected beta .snap.new removed after reject all"
+    );
+}
+
+#[test]
+fn test_snapshot_review_mixed_actions() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_alpha():
+    karva.assert_snapshot('alpha')
+
+def test_beta():
+    karva.assert_snapshot('beta')
+        ",
+    );
+
+    let _ = context.command_no_parallel().output();
+
+    // Accept first, reject second
+    let mut child = context
+        .snapshot("review")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn");
+    child
+        .stdin
+        .take()
+        .expect("no stdin")
+        .write_all(b"a\nr\n")
+        .expect("write failed");
+    let _ = child.wait_with_output();
+
+    let snap_alpha = context.root().join("snapshots/test__test_alpha.snap");
+    let snap_beta = context.root().join("snapshots/test__test_beta.snap");
+    let pending_alpha = context.root().join("snapshots/test__test_alpha.snap.new");
+    let pending_beta = context.root().join("snapshots/test__test_beta.snap.new");
+
+    assert!(snap_alpha.exists(), "Expected alpha .snap after accept");
+    assert!(!snap_beta.exists(), "Expected no beta .snap after reject");
+    assert!(!pending_alpha.exists(), "Expected alpha .snap.new removed");
+    assert!(!pending_beta.exists(), "Expected beta .snap.new removed");
+}
+
+#[test]
+fn test_snapshot_accept_multiple_pending() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_first():
+    karva.assert_snapshot('aaa')
+
+def test_second():
+    karva.assert_snapshot('bbb')
+
+def test_third():
+    karva.assert_snapshot('ccc')
+        ",
+    );
+
+    let _ = context.command_no_parallel().output();
+
+    assert_cmd_snapshot!(context.snapshot("accept"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Accepted: <temp_dir>/snapshots/test__test_first.snap.new
+    Accepted: <temp_dir>/snapshots/test__test_second.snap.new
+    Accepted: <temp_dir>/snapshots/test__test_third.snap.new
+
+    3 snapshot(s) accepted.
+
+    ----- stderr -----
+    ");
+
+    // All tests pass now
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_first ... ok
+    test test::test_second ... ok
+    test test::test_third ... ok
+
+    test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_snapshot_reject_multiple_pending() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_first():
+    karva.assert_snapshot('aaa')
+
+def test_second():
+    karva.assert_snapshot('bbb')
+        ",
+    );
+
+    let _ = context.command_no_parallel().output();
+
+    assert_cmd_snapshot!(context.snapshot("reject"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Rejected: <temp_dir>/snapshots/test__test_first.snap.new
+    Rejected: <temp_dir>/snapshots/test__test_second.snap.new
+
+    2 snapshot(s) rejected.
+
+    ----- stderr -----
+    ");
+
+    // No .snap files remain
+    assert!(
+        !context
+            .root()
+            .join("snapshots/test__test_first.snap")
+            .exists(),
+        "Expected no .snap after reject"
+    );
+    assert!(
+        !context
+            .root()
+            .join("snapshots/test__test_second.snap")
+            .exists(),
+        "Expected no .snap after reject"
+    );
+}
+
+#[test]
+fn test_snapshot_pending_multiple() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_aaa():
+    karva.assert_snapshot('aaa')
+
+def test_bbb():
+    karva.assert_snapshot('bbb')
+
+def test_ccc():
+    karva.assert_snapshot('ccc')
+        ",
+    );
+
+    let _ = context.command_no_parallel().output();
+
+    assert_cmd_snapshot!(context.snapshot("pending"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    <temp_dir>/snapshots/test__test_aaa.snap.new
+    <temp_dir>/snapshots/test__test_bbb.snap.new
+    <temp_dir>/snapshots/test__test_ccc.snap.new
+
+    3 pending snapshot(s).
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_snapshot_multiple_named_in_one_test() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_multi_named():
+    karva.assert_snapshot('header content', name='header')
+    karva.assert_snapshot('body\nwith\nmultiple lines', name='body')
+    karva.assert_snapshot('footer', name='footer')
+        ",
+    );
+
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+    let _ = cmd.output();
+
+    let header = context.read_file("snapshots/test__test_multi_named--header.snap");
+    insta::assert_snapshot!(header, @r"
+    ---
+    source: test.py:5::test_multi_named
+    ---
+    header content
+    ");
+
+    let body = context.read_file("snapshots/test__test_multi_named--body.snap");
+    insta::assert_snapshot!(body, @r"
+    ---
+    source: test.py:6::test_multi_named
+    ---
+    body
+    with
+    multiple lines
+    ");
+
+    let footer = context.read_file("snapshots/test__test_multi_named--footer.snap");
+    insta::assert_snapshot!(footer, @r"
+    ---
+    source: test.py:7::test_multi_named
+    ---
+    footer
+    ");
+}
+
+#[test]
+fn test_snapshot_content_with_special_characters() {
+    let context = TestContext::with_file(
+        "test.py",
+        "
+import karva
+
+def test_special():
+    karva.assert_snapshot('angle <brackets> & ampersand\\n\"double quotes\"\\n$dollar @at #hash')
+        ",
+    );
+
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+    let _ = cmd.output();
+
+    let content = context.read_file("snapshots/test__test_special.snap");
+    insta::assert_snapshot!(content, @r#"
+    ---
+    source: test.py:5::test_special
+    ---
+    angle <brackets> & ampersand
+    "double quotes"
+    $dollar @at #hash
+    "#);
+}
+
+#[test]
+fn test_snapshot_content_with_dashes_like_yaml() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_dashes():
+    karva.assert_snapshot('---\nthis looks like yaml\n---')
+        ",
+    );
+
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+    let _ = cmd.output();
+
+    let content = context.read_file("snapshots/test__test_dashes.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:5::test_dashes
+    ---
+    ---
+    this looks like yaml
+    ---
+    ");
+}
+
+#[test]
+fn test_snapshot_multiline_json_format() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_nested_json():
+    data = {'users': [{'name': 'Alice', 'age': 30}, {'name': 'Bob', 'age': 25}], 'count': 2}
+    karva.assert_snapshot(data, format='json')
+        ",
+    );
+
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+    let _ = cmd.output();
+
+    let content = context.read_file("snapshots/test__test_nested_json.snap");
+    insta::assert_snapshot!(content, @r#"
+    ---
+    source: test.py:6::test_nested_json
+    ---
+    {
+      "count": 2,
+      "users": [
+        {
+          "age": 30,
+          "name": "Alice"
+        },
+        {
+          "age": 25,
+          "name": "Bob"
+        }
+      ]
+    }
+    "#);
+}
+
+#[test]
+fn test_snapshot_parametrized_with_named() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+@karva.tags.parametrize('greeting', ['hello', 'hi'])
+def test_greet(greeting):
+    karva.assert_snapshot(f'{greeting} world', name='output')
+        ",
+    );
+
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+    let _ = cmd.output();
+
+    let hello = context.read_file("snapshots/test__test_greet--output(greeting=hello).snap");
+    insta::assert_snapshot!(hello, @r"
+    ---
+    source: test.py:6::test_greet(greeting=hello)
+    ---
+    hello world
+    ");
+
+    let hi = context.read_file("snapshots/test__test_greet--output(greeting=hi).snap");
+    insta::assert_snapshot!(hi, @r"
+    ---
+    source: test.py:6::test_greet(greeting=hi)
+    ---
+    hi world
+    ");
+}
+
+#[test]
+fn test_snapshot_multiple_files() {
+    let context = TestContext::default();
+    context.write_file(
+        "test_one.py",
+        r"
+import karva
+
+def test_from_one():
+    karva.assert_snapshot('from file one')
+        ",
+    );
+    context.write_file(
+        "test_two.py",
+        r"
+import karva
+
+def test_from_two():
+    karva.assert_snapshot('from file two')
+        ",
+    );
+
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+    let _ = cmd.output();
+
+    let one = context.read_file("snapshots/test_one__test_from_one.snap");
+    insta::assert_snapshot!(one, @r"
+    ---
+    source: test_one.py:5::test_from_one
+    ---
+    from file one
+    ");
+
+    let two = context.read_file("snapshots/test_two__test_from_two.snap");
+    insta::assert_snapshot!(two, @r"
+    ---
+    source: test_two.py:5::test_from_two
+    ---
+    from file two
     ");
 }
