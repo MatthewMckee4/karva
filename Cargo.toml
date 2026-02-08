@@ -39,14 +39,11 @@ colored = { version = "3.1.1" }
 console = { version = "0.15" }
 
 crossbeam-channel = "0.5.15"
-ctor = "0.6.3"
 ctrlc = { version = "3.5.1" }
 directories = "6.0.0"
 divan = { package = "codspeed-divan-compat", version = "4.2.1" }
 dunce = { version = "1.0.5" }
-etcetera = { version = "0.11.0" }
 fastrand = { version = "2.3" }
-filetime = { version = "0.2.27" }
 fs4 = { version = "0.13" }
 ignore = { version = "0.4.25" }
 insta = { version = "1.46.2" }

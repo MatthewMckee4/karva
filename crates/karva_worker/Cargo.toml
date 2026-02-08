@@ -32,7 +32,6 @@ clap = { workspace = true, features = ["wrap_help", "string", "env"] }
 colored = { workspace = true }
 ruff_db = { workspace = true }
 ruff_notebook = { workspace = true }
-ruff_source_file = { workspace = true }
 wild = { workspace = true }
 
 [lints]
