@@ -271,6 +271,23 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
         tracing::debug!("Running test `{}`", qualified_test_name);
 
+        // Set snapshot context so `karva.assert_snapshot()` can determine the current test
+        if let Ok(karva_module) = py.import("karva") {
+            if let Err(err) =
+                karva_module.setattr("_snapshot_test_file", test_module_path.to_string())
+            {
+                tracing::warn!("Failed to set _snapshot_test_file: {err}");
+            }
+            if let Err(err) =
+                karva_module.setattr("_snapshot_test_name", qualified_test_name.to_string())
+            {
+                tracing::warn!("Failed to set _snapshot_test_name: {err}");
+            }
+            if let Err(err) = karva_module.setattr("_snapshot_counter", 0u32) {
+                tracing::warn!("Failed to set _snapshot_counter: {err}");
+            }
+        }
+
         let py_dict = PyDict::new(py);
         for (key, value) in &function_arguments {
             let _ = py_dict.set_item(key, value.as_ref());

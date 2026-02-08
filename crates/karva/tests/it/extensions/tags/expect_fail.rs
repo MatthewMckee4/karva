@@ -29,7 +29,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -56,7 +56,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: false
         exit_code: 1
         ----- stdout -----
@@ -95,7 +95,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: false
         exit_code: 1
         ----- stdout -----
@@ -137,7 +137,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -167,7 +167,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -197,7 +197,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -227,7 +227,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -258,7 +258,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -288,7 +288,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -318,7 +318,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -344,7 +344,7 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -369,7 +369,7 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -402,7 +402,7 @@ def test_expected_fail_passes():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @r"
+        assert_cmd_snapshot!(context.test_no_parallel(), @r"
         success: false
         exit_code: 1
         ----- stdout -----
@@ -449,7 +449,7 @@ def test_expected_fail_passes():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @r"
+        assert_cmd_snapshot!(context.test_no_parallel(), @r"
         success: false
         exit_code: 1
         ----- stdout -----
@@ -488,7 +488,7 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -513,7 +513,7 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -540,7 +540,7 @@ def test_1():
     );
 
     // Skip takes precedence - test should be skipped, not treated as expected fail
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -565,7 +565,7 @@ def test_should_fail():
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: false
     exit_code: 1
     ----- stdout -----

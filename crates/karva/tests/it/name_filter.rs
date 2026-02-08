@@ -13,7 +13,7 @@ def test_beta():
 #[test]
 fn name_filter_substring_match() {
     let context = TestContext::with_file("test.py", TWO_TESTS);
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg("alpha"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg("alpha"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -29,7 +29,7 @@ fn name_filter_substring_match() {
 #[test]
 fn name_filter_anchored_regex() {
     let context = TestContext::with_file("test.py", TWO_TESTS);
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg("beta$"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg("beta$"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -45,7 +45,7 @@ fn name_filter_anchored_regex() {
 #[test]
 fn name_filter_multiple_flags_or_semantics() {
     let context = TestContext::with_file("test.py", TWO_TESTS);
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg("alpha").arg("-m").arg("beta"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg("alpha").arg("-m").arg("beta"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -61,7 +61,7 @@ fn name_filter_multiple_flags_or_semantics() {
 #[test]
 fn name_filter_no_matches() {
     let context = TestContext::with_file("test.py", TWO_TESTS);
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg("nonexistent"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg("nonexistent"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -77,7 +77,7 @@ fn name_filter_no_matches() {
 #[test]
 fn name_filter_invalid_regex() {
     let context = TestContext::with_file("test.py", TWO_TESTS);
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg("[invalid"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg("[invalid"), @r"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -107,7 +107,7 @@ def test_other():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg("test_param"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg("test_param"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -126,7 +126,7 @@ def test_other():
 #[cfg(unix)]
 fn name_filter_match_all() {
     let context = TestContext::with_file("test.py", TWO_TESTS);
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg(".*"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg(".*"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -155,7 +155,7 @@ def test_signup():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg("login|signup"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg("login|signup"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -185,7 +185,7 @@ def test_v10():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg(r"test_v[12]$"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg(r"test_v[12]$"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -215,7 +215,7 @@ def test_abb():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg(r"test_ab+$"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg(r"test_ab+$"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -245,7 +245,7 @@ def test_signup():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg("^test::test_log"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg("^test::test_log"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -279,7 +279,7 @@ def test_fast_alpha():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-t").arg("slow").arg("-m").arg("alpha"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-t").arg("slow").arg("-m").arg("alpha"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -306,7 +306,7 @@ def test_alpha():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg("Alpha"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg("Alpha"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -332,7 +332,7 @@ def test_alpha():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg("(?i)alpha"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg("(?i)alpha"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -361,7 +361,7 @@ def test_ab():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg(r"test_a\d"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg(r"test_a\d"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -378,7 +378,7 @@ def test_ab():
 #[test]
 fn name_filter_invalid_regex_unclosed_group() {
     let context = TestContext::with_file("test.py", TWO_TESTS);
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg("(unclosed"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg("(unclosed"), @r"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -395,7 +395,7 @@ fn name_filter_invalid_regex_unclosed_group() {
 #[test]
 fn name_filter_invalid_regex_invalid_repetition() {
     let context = TestContext::with_file("test.py", TWO_TESTS);
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg("*invalid"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg("*invalid"), @r"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -412,7 +412,7 @@ fn name_filter_invalid_regex_invalid_repetition() {
 #[test]
 fn name_filter_invalid_regex_bad_escape() {
     let context = TestContext::with_file("test.py", TWO_TESTS);
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-m").arg(r"\p{Invalid}"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-m").arg(r"\p{Invalid}"), @r"
     success: false
     exit_code: 2
     ----- stdout -----

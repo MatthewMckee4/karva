@@ -370,6 +370,10 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
         cli_args.push("--try-import-fixtures");
     }
 
+    if args.snapshot_update.unwrap_or(false) {
+        cli_args.push("--snapshot-update");
+    }
+
     let retry = args.retry.map(|retry| retry.to_string());
 
     if let Some(retry) = retry.as_deref() {

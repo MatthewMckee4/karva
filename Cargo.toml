@@ -24,6 +24,7 @@ karva_metadata = { path = "crates/karva_metadata" }
 karva_project = { path = "crates/karva_project" }
 karva_python_semantic = { path = "crates/karva_python_semantic" }
 karva_runner = { path = "crates/karva_runner" }
+karva_snapshot = { path = "crates/karva_snapshot" }
 karva_static = { path = "crates/karva_static" }
 karva_test_semantic = { path = "crates/karva_test_semantic" }
 karva_worker = { path = "crates/karva_worker" }
@@ -67,6 +68,7 @@ ruff_source_file = { git = "https://github.com/astral-sh/ruff/", branch = "main"
 ruff_text_size = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.149" }
+similar = { version = "2.7" }
 syn = { version = "2.0.114" }
 tempfile = "3.24"
 thiserror = { version = "2.0.18" }

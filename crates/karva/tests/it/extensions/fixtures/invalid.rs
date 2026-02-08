@@ -20,7 +20,7 @@ fn test_invalid_pytest_fixture_scope() {
                 "#,
     );
 
-    assert_cmd_snapshot!(context.command(), @r#"
+    assert_cmd_snapshot!(context.test(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -68,7 +68,7 @@ fn test_missing_fixture() {
                 ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -108,7 +108,7 @@ fn test_fixture_fails_to_run() {
                 ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -160,7 +160,7 @@ fn test_fixture_missing_fixtures() {
                 ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -199,7 +199,7 @@ fn missing_arguments_in_nested_function() {
                    ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -249,7 +249,7 @@ fn test_failing_yield_fixture() {
                    ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -301,7 +301,7 @@ fn test_fixture_generator_two_yields() {
                 ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -343,7 +343,7 @@ fn test_fixture_generator_fail_in_teardown() {
                 "#,
     );
 
-    assert_cmd_snapshot!(context.command(), @r#"
+    assert_cmd_snapshot!(context.test(), @r#"
     success: true
     exit_code: 0
     ----- stdout -----

@@ -31,7 +31,7 @@ fn test_fixture_basic(#[values("pytest", "karva")] framework: &str) {
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @"
+        assert_cmd_snapshot!(context.test(), @"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -70,7 +70,7 @@ fn test_fixture_in_conftest(#[values("pytest", "karva")] framework: &str) {
     ]);
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @"
+        assert_cmd_snapshot!(context.test(), @"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -119,7 +119,7 @@ fn test_fixture_module_scope(#[values("pytest", "karva")] framework: &str) {
     ]);
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        assert_cmd_snapshot!(context.test_no_parallel(), @"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -162,7 +162,7 @@ fn test_fixture_with_generator(#[values("pytest", "karva")] framework: &str) {
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        assert_cmd_snapshot!(context.test_no_parallel(), @"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -215,7 +215,7 @@ fn test_fixture_session_scope(#[values("pytest", "karva")] framework: &str) {
     ]);
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command().arg("-q"), @r"
+        assert_cmd_snapshot!(context.test().arg("-q"), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -250,7 +250,7 @@ fn test_fixture_with_multiple_fixtures(#[values("pytest", "karva")] framework: &
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @"
+        assert_cmd_snapshot!(context.test(), @"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -285,7 +285,7 @@ fn test_fixture_with_test_parametrize(#[values("pytest", "karva")] framework: &s
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @"
+        assert_cmd_snapshot!(context.test(), @"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -331,7 +331,7 @@ fn test_fixture_generator_finalizer_order(#[values("pytest", "karva")] framework
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        assert_cmd_snapshot!(context.test_no_parallel(), @"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -378,7 +378,7 @@ fn test_fixture_package_scope(#[values("pytest", "karva")] framework: &str) {
     ]);
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command().arg("-q"), @r"
+        assert_cmd_snapshot!(context.test().arg("-q"), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -412,7 +412,7 @@ fn test_fixture_with_dependency(#[values("pytest", "karva")] framework: &str) {
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @"
+        assert_cmd_snapshot!(context.test(), @"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -452,7 +452,7 @@ fn test_fixture_finalizer_with_state(#[values("pytest", "karva")] framework: &st
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        assert_cmd_snapshot!(context.test_no_parallel(), @"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -511,7 +511,7 @@ fn test_complex_fixture_generator_finalizer_order(#[values("pytest", "karva")] f
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+        assert_cmd_snapshot!(context.test_no_parallel(), @r#"
         success: true
         exit_code: 0
         ----- stdout -----

@@ -20,7 +20,7 @@ def test_fixture_generator(fixture_generator):
 ",
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -55,7 +55,7 @@ def test_fixture_generator(fixture_generator):
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(test_context.command(), @r"
+        assert_cmd_snapshot!(test_context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----

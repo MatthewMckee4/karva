@@ -38,7 +38,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -68,7 +68,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -98,7 +98,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -128,7 +128,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -159,7 +159,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -189,7 +189,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -220,7 +220,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -250,7 +250,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -280,7 +280,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -317,7 +317,7 @@ def test_normal():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @r"
+        assert_cmd_snapshot!(context.test_no_parallel(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -349,7 +349,7 @@ def test_1():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -375,7 +375,7 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -400,7 +400,7 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -425,7 +425,7 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -452,7 +452,7 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -485,7 +485,7 @@ def test_skip_with_true():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r"
+        assert_cmd_snapshot!(context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----

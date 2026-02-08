@@ -28,7 +28,7 @@ def test_main(): pass
     ]);
 
     // With respect-ignore-files = false, the ignored file should be included
-    assert_cmd_snapshot!(context.command().arg("-q"), @r"
+    assert_cmd_snapshot!(context.test().arg("-q"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -64,7 +64,7 @@ def test_main(): pass
     ]);
 
     // With respect-ignore-files = true, the ignored file should be excluded
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -107,7 +107,7 @@ def test_in_other(): pass
     ]);
 
     // Only files in 'src' and 'tests' should be included
-    assert_cmd_snapshot!(context.command().arg("-q"), @r"
+    assert_cmd_snapshot!(context.test().arg("-q"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -142,7 +142,7 @@ def test_other(): pass
     ]);
 
     // Only the specifically included file should be tested
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -172,7 +172,7 @@ def test_example(): pass
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -202,7 +202,7 @@ def test_example(): pass
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -235,7 +235,7 @@ def test_with_print():
     ]);
 
     // Python output should be hidden
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -268,7 +268,7 @@ def test_with_print():
     ]);
 
     // Python output should be visible
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -301,7 +301,7 @@ def test_should_not_run(): pass
     ]);
 
     // Only functions with 'check' prefix should run
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -333,7 +333,7 @@ def check_should_not_run(): pass
     ]);
 
     // Only functions with 'test' prefix should run
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -368,7 +368,7 @@ def test_second():
     ]);
 
     // Should stop after first failure
-    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    assert_cmd_snapshot!(context.test_no_parallel(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -425,7 +425,7 @@ def test_third():
     ]);
 
     // Should run all tests even after failures
-    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    assert_cmd_snapshot!(context.test_no_parallel(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -511,7 +511,7 @@ def check_other(): pass
     ]);
 
     // Should respect all configuration options
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -552,7 +552,7 @@ def verify_in_tests(): pass
     ]);
 
     // Should only run verify_* functions in src directory
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -600,7 +600,7 @@ def test_other(): pass
     ]);
 
     // Should respect pyproject.toml configuration
-    assert_cmd_snapshot!(context.command().arg("-q"), @r"
+    assert_cmd_snapshot!(context.test().arg("-q"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -634,7 +634,7 @@ def test_example():
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -669,7 +669,7 @@ def test_should_not_run(): pass
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -722,7 +722,7 @@ def it_should_not_run(): pass
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    assert_cmd_snapshot!(context.test_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -766,7 +766,7 @@ def pyproject_test(): pass
     ]);
 
     // karva.toml should take precedence, so only karva_* functions run
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -792,7 +792,7 @@ def test_default(): pass
     ]);
 
     // Should use default settings
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -823,7 +823,7 @@ def custom_test(): pass
     ]);
 
     // Should use custom prefix but default for other options
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -855,7 +855,7 @@ def cli_should_run(): pass
     ]);
 
     // CLI argument --test-prefix should override config file
-    assert_cmd_snapshot!(context.command().arg("--test-prefix").arg("cli"), @r"
+    assert_cmd_snapshot!(context.test().arg("--test-prefix").arg("cli"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -886,7 +886,7 @@ def test_example(): pass
     ]);
 
     // CLI argument --output-format should override config file
-    assert_cmd_snapshot!(context.command().arg("--output-format").arg("concise"), @r"
+    assert_cmd_snapshot!(context.test().arg("--output-format").arg("concise"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -919,7 +919,7 @@ def test_with_print():
     ]);
 
     // CLI argument -s should override config file and show output
-    assert_cmd_snapshot!(context.command().arg("-s"), @r"
+    assert_cmd_snapshot!(context.test().arg("-s"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -958,7 +958,7 @@ def test_main(): pass
     ]);
 
     // CLI argument --no-ignore should override config and include ignored files
-    assert_cmd_snapshot!(context.command().arg("--no-ignore").arg("-q"), @r"
+    assert_cmd_snapshot!(context.test().arg("--no-ignore").arg("-q"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -991,7 +991,7 @@ def test_second():
     ]);
 
     // CLI argument --fail-fast should override config and stop after first failure
-    assert_cmd_snapshot!(context.command_no_parallel().arg("--fail-fast"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("--fail-fast"), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1047,7 +1047,7 @@ def test_from_cli(): pass
     ]);
 
     // CLI path argument should add to config include
-    assert_cmd_snapshot!(context.command().arg("cli_dir").arg("-q"), @r"
+    assert_cmd_snapshot!(context.test().arg("cli_dir").arg("-q"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1096,7 +1096,7 @@ def config_should_not_run(): pass
     // Multiple CLI arguments should all override their respective config values
     assert_cmd_snapshot!(
         context
-            .command_no_parallel()
+            .test_no_parallel()
             .arg("--test-prefix")
             .arg("custom")
             .arg("--output-format")
@@ -1149,7 +1149,7 @@ def cli_should_run():
     // CLI arguments should override pyproject.toml configuration
     assert_cmd_snapshot!(
         context
-            .command()
+            .test()
             .arg("--test-prefix")
             .arg("cli")
             .arg("-s")
@@ -1199,7 +1199,7 @@ def cli_should_run(): pass
     ]);
 
     // CLI argument should override both karva.toml and pyproject.toml
-    assert_cmd_snapshot!(context.command().arg("--test-prefix").arg("cli"), @r"
+    assert_cmd_snapshot!(context.test().arg("--test-prefix").arg("cli"), @r"
     success: true
     exit_code: 0
     ----- stdout -----

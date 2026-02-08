@@ -12,7 +12,7 @@ def test_placeholder():
 #[test]
 fn test_tag_filter_unexpected_character() {
     let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
-    assert_cmd_snapshot!(context.command().arg("-t").arg("slow!"), @r"
+    assert_cmd_snapshot!(context.test().arg("-t").arg("slow!"), @r"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -26,7 +26,7 @@ fn test_tag_filter_unexpected_character() {
 #[test]
 fn test_tag_filter_unclosed_parenthesis() {
     let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
-    assert_cmd_snapshot!(context.command().arg("-t").arg("(slow"), @r"
+    assert_cmd_snapshot!(context.test().arg("-t").arg("(slow"), @r"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -40,7 +40,7 @@ fn test_tag_filter_unclosed_parenthesis() {
 #[test]
 fn test_tag_filter_trailing_operator() {
     let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
-    assert_cmd_snapshot!(context.command().arg("-t").arg("slow and"), @r"
+    assert_cmd_snapshot!(context.test().arg("-t").arg("slow and"), @r"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -54,7 +54,7 @@ fn test_tag_filter_trailing_operator() {
 #[test]
 fn test_tag_filter_leading_operator() {
     let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
-    assert_cmd_snapshot!(context.command().arg("-t").arg("and slow"), @r"
+    assert_cmd_snapshot!(context.test().arg("-t").arg("and slow"), @r"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -68,7 +68,7 @@ fn test_tag_filter_leading_operator() {
 #[test]
 fn test_tag_filter_extra_closing_paren() {
     let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
-    assert_cmd_snapshot!(context.command().arg("-t").arg("slow)"), @r"
+    assert_cmd_snapshot!(context.test().arg("-t").arg("slow)"), @r"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -82,7 +82,7 @@ fn test_tag_filter_extra_closing_paren() {
 #[test]
 fn test_tag_filter_empty_parentheses() {
     let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
-    assert_cmd_snapshot!(context.command().arg("-t").arg("()"), @r"
+    assert_cmd_snapshot!(context.test().arg("-t").arg("()"), @r"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -96,7 +96,7 @@ fn test_tag_filter_empty_parentheses() {
 #[test]
 fn test_tag_filter_double_operator() {
     let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
-    assert_cmd_snapshot!(context.command().arg("-t").arg("slow and and fast"), @r"
+    assert_cmd_snapshot!(context.test().arg("-t").arg("slow and and fast"), @r"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -110,7 +110,7 @@ fn test_tag_filter_double_operator() {
 #[test]
 fn test_tag_filter_whitespace_only() {
     let context = TestContext::with_file("test.py", MINIMAL_TEST_FILE);
-    assert_cmd_snapshot!(context.command().arg("-t").arg(" "), @r"
+    assert_cmd_snapshot!(context.test().arg("-t").arg(" "), @r"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -134,7 +134,7 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -159,7 +159,7 @@ def test_1():
         "#,
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -184,7 +184,7 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -209,7 +209,7 @@ def test_1():
         "#,
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -236,7 +236,7 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -266,7 +266,7 @@ def test_runs():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    assert_cmd_snapshot!(context.test_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -295,7 +295,7 @@ def test_fast():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-t").arg("slow"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-t").arg("slow"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -324,7 +324,7 @@ def test_fast():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-t").arg("not slow"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-t").arg("not slow"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -359,7 +359,7 @@ def test_integration_only():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-t").arg("slow and integration"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-t").arg("slow and integration"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -393,7 +393,7 @@ def test_untagged():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-t").arg("slow or integration"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-t").arg("slow or integration"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -429,7 +429,7 @@ def test_integration_only():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-t").arg("slow").arg("-t").arg("integration"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-t").arg("slow").arg("-t").arg("integration"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -459,7 +459,7 @@ def test_fast():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-t").arg("slow"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-t").arg("slow"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -489,7 +489,7 @@ def test_untagged():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-t").arg("slow"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-t").arg("slow"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -524,7 +524,7 @@ def test_untagged():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-t").arg("slow and not flaky"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-t").arg("slow and not flaky"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -565,7 +565,7 @@ def test_linux_only():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-t").arg("(slow or fast) and linux"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-t").arg("(slow or fast) and linux"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -601,7 +601,7 @@ def test_untagged():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-t").arg("slow"), @r"
+    assert_cmd_snapshot!(context.test_no_parallel().arg("-t").arg("slow"), @r"
     success: true
     exit_code: 0
     ----- stdout -----

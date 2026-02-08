@@ -23,7 +23,7 @@ def test_fixtures_given_by_decorator(a):
 ",
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -62,7 +62,7 @@ def test_func(a, b):
 ",
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -98,7 +98,7 @@ def test_func(a, b):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -140,7 +140,7 @@ def test_func(a, b, c):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -175,7 +175,7 @@ def test_fixtures_given_by_decorator(a, b):
 ",
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: false
     exit_code: 1
     ----- stdout -----

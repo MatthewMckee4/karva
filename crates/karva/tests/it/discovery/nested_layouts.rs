@@ -22,7 +22,7 @@ def test_root(): pass",
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command().arg("-q"), @r"
+    assert_cmd_snapshot!(context.test().arg("-q"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -57,7 +57,7 @@ def test_direct(): pass",
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command().arg("-q"), @r"
+    assert_cmd_snapshot!(context.test().arg("-q"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -87,7 +87,7 @@ def test_versioned(): pass",
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command().arg("-q"), @r"
+    assert_cmd_snapshot!(context.test().arg("-q"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -117,7 +117,7 @@ def test_path_3(): pass",
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command().arg("-q"), @r"
+    assert_cmd_snapshot!(context.test().arg("-q"), @r"
     success: true
     exit_code: 0
     ----- stdout -----

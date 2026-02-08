@@ -1,9 +1,11 @@
 pub use self::raises::{ExceptionInfo, RaisesContext};
+pub use self::snapshot::SnapshotMismatchError;
 use pyo3::prelude::*;
 pub use python::Param;
 
 pub mod python;
 pub mod raises;
+pub mod snapshot;
 
 // SkipError exception that can be raised to skip tests at runtime with an optional reason
 pyo3::create_exception!(karva, SkipError, pyo3::exceptions::PyException);

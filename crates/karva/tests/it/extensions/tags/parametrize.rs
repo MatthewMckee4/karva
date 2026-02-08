@@ -29,7 +29,7 @@ def test_parametrize_with_fixture(a, fixture_value):
     assert fixture_value == 42"#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -58,7 +58,7 @@ def test_parametrize_with_fixture(a):
     assert a > 0"#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -85,7 +85,7 @@ def test_function(a: int, b: int):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -115,7 +115,7 @@ def test_function(a: int, b: int, c: int):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -155,7 +155,7 @@ fn test_parametrize_multiple_args_single_string(#[values("pytest", "karva")] fra
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(test_context.command(), @r"
+        assert_cmd_snapshot!(test_context.test(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -186,7 +186,7 @@ def test_single_arg(a):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -217,7 +217,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -248,7 +248,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -279,7 +279,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -316,7 +316,7 @@ def test_markup_mode_bullets_single_newline(length: int | None, nums: list[int])
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -347,7 +347,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -378,7 +378,7 @@ def test_single_arg(a):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -409,7 +409,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -440,7 +440,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -471,7 +471,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -508,7 +508,7 @@ def test_markup_mode_bullets_single_newline(length: int | None, nums: list[int])
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -541,7 +541,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @r"
+    assert_cmd_snapshot!(test_context.test(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -580,7 +580,7 @@ def test2(input, expected):
     "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @r"
+    assert_cmd_snapshot!(test_context.test_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
