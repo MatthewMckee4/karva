@@ -49,8 +49,13 @@ pub fn run_review(root: &Utf8Path, filter_paths: &[String]) -> io::Result<Review
     for (i, info) in filtered.iter().enumerate() {
         let mut out = stdout.lock();
 
-        writeln!(out, "\n--- Snapshot {}/{total} ---", i + 1)?;
+        writeln!(out)?;
+        writeln!(out, "Snapshot {}/{total}", i + 1)?;
         writeln!(out, "File: {}", info.pending_path)?;
+
+        if let Some(source) = read_snapshot(&info.pending_path).and_then(|s| s.metadata.source) {
+            writeln!(out, "Source: {source}")?;
+        }
 
         print_snapshot_diff(&mut out, info)?;
 
@@ -120,16 +125,8 @@ fn print_snapshot_diff(out: &mut impl Write, info: &PendingSnapshotInfo) -> io::
         .map(|s| s.content)
         .unwrap_or_default();
 
-    if old_content.is_empty() {
-        writeln!(out, "(new snapshot)")?;
-        writeln!(out)?;
-        for line in new_content.lines() {
-            writeln!(out, "+{line}")?;
-        }
-    } else {
-        writeln!(out)?;
-        write!(out, "{}", format_diff(&old_content, &new_content))?;
-    }
+    writeln!(out)?;
+    write!(out, "{}", format_diff(&old_content, &new_content))?;
 
     Ok(())
 }

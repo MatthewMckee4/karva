@@ -4,7 +4,6 @@ use std::fmt::Write;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SnapshotMetadata {
     pub source: Option<String>,
-    pub expression: Option<String>,
 }
 
 /// A parsed snapshot file containing metadata and content.
@@ -34,8 +33,6 @@ impl SnapshotFile {
         for line in frontmatter.lines() {
             if let Some(value) = line.strip_prefix("source: ") {
                 metadata.source = Some(value.to_string());
-            } else if let Some(value) = line.strip_prefix("expression: ") {
-                metadata.expression = Some(value.trim_matches('"').to_string());
             }
         }
 
@@ -52,9 +49,6 @@ impl SnapshotFile {
 
         if let Some(source) = &self.metadata.source {
             let _ = writeln!(output, "source: {source}");
-        }
-        if let Some(expression) = &self.metadata.expression {
-            let _ = writeln!(output, "expression: \"{expression}\"");
         }
 
         output.push_str("---\n");
@@ -74,13 +68,12 @@ mod tests {
 
     #[test]
     fn test_parse_snapshot_file() {
-        let input = "---\nsource: tests/test_example.py::test_example\nexpression: \"str(result)\"\n---\n{'key': 'value'}\n";
+        let input = "---\nsource: tests/test_example.py:5::test_example\n---\n{'key': 'value'}\n";
         let snapshot = SnapshotFile::parse(input).expect("should parse");
         assert_eq!(
             snapshot.metadata.source.as_deref(),
-            Some("tests/test_example.py::test_example")
+            Some("tests/test_example.py:5::test_example")
         );
-        assert_eq!(snapshot.metadata.expression.as_deref(), Some("str(result)"));
         assert_eq!(snapshot.content, "{'key': 'value'}\n");
     }
 
@@ -88,8 +81,7 @@ mod tests {
     fn test_serialize_snapshot_file() {
         let snapshot = SnapshotFile {
             metadata: SnapshotMetadata {
-                source: Some("tests/test_example.py::test_example".to_string()),
-                expression: Some("str(result)".to_string()),
+                source: Some("tests/test_example.py:5::test_example".to_string()),
             },
             content: "{'key': 'value'}\n".to_string(),
         };
@@ -103,8 +95,7 @@ mod tests {
     fn test_roundtrip_no_trailing_newline() {
         let snapshot = SnapshotFile {
             metadata: SnapshotMetadata {
-                source: Some("test.py::test_foo".to_string()),
-                expression: None,
+                source: Some("test.py:3::test_foo".to_string()),
             },
             content: "hello".to_string(),
         };
@@ -118,7 +109,6 @@ mod tests {
         let input = "---\n\n---\nsome content\n";
         let snapshot = SnapshotFile::parse(input).expect("should parse");
         assert!(snapshot.metadata.source.is_none());
-        assert!(snapshot.metadata.expression.is_none());
         assert_eq!(snapshot.content, "some content\n");
     }
 }

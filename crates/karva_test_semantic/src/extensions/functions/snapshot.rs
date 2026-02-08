@@ -81,18 +81,19 @@ pub fn assert_snapshot(
     let fs_snapshot_name = snapshot_name.replace("::", "__");
     let snap_path = snapshot_path(test_file_path, module_name, &fs_snapshot_name);
 
-    let expression = format!("{format_name}(value)");
-
     let relative_test_file = test_file_path
         .file_name()
         .unwrap_or(test_file_path.as_str());
 
-    let source = format!("{relative_test_file}::{test_name}");
+    let source = if let Some(lineno) = caller_line_number(py) {
+        format!("{relative_test_file}:{lineno}::{test_name}")
+    } else {
+        format!("{relative_test_file}::{test_name}")
+    };
 
     let new_snapshot = SnapshotFile {
         metadata: SnapshotMetadata {
             source: Some(source),
-            expression: Some(expression),
         },
         content: serialized.clone(),
     };
@@ -140,6 +141,16 @@ pub fn assert_snapshot(
     }
 
     Ok(())
+}
+
+/// Get the line number of the Python caller using `sys._getframe(0)`.
+///
+/// Since `assert_snapshot` is a `#[pyfunction]`, it doesn't create a Python frame,
+/// so depth 0 gives the test function's frame.
+fn caller_line_number(py: Python<'_>) -> Option<u32> {
+    let sys = py.import("sys").ok()?;
+    let frame = sys.call_method1("_getframe", (0,)).ok()?;
+    frame.getattr("f_lineno").ok()?.extract::<u32>().ok()
 }
 
 /// Compute the snapshot name based on test name, explicit name, and counter.

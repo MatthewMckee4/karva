@@ -150,8 +150,7 @@ mod tests {
 
         let snapshot = SnapshotFile {
             metadata: crate::format::SnapshotMetadata {
-                source: Some("test.py::test_foo".to_string()),
-                expression: Some("str(x)".to_string()),
+                source: Some("test.py:3::test_foo".to_string()),
             },
             content: "hello world\n".to_string(),
         };

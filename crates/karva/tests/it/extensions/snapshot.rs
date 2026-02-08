@@ -49,13 +49,12 @@ def test_hello():
     ");
 
     let content = context.read_file("snapshots/test__test_hello.snap.new");
-    insta::assert_snapshot!(content, @r#"
+    insta::assert_snapshot!(content, @r"
     ---
-    source: test.py::test_hello
-    expression: "str(value)"
+    source: test.py:5::test_hello
     ---
     hello world
-    "#);
+    ");
 }
 
 #[test]
@@ -85,13 +84,12 @@ def test_hello():
     ");
 
     let content = context.read_file("snapshots/test__test_hello.snap");
-    insta::assert_snapshot!(content, @r#"
+    insta::assert_snapshot!(content, @r"
     ---
-    source: test.py::test_hello
-    expression: "str(value)"
+    source: test.py:5::test_hello
     ---
     hello world
-    "#);
+    ");
 }
 
 #[test]
@@ -180,8 +178,12 @@ def test_hello():
     info: Snapshot mismatch for 'test_hello'.
           Snapshot file: <temp_dir>/snapshots/test__test_hello.snap
 
-          -hello world
-          +goodbye world
+          -old snapshot
+          +new results
+          ────────────┬───────────────────────────
+             1      │ -hello world
+                  1 │ +goodbye world
+          ────────────┴───────────────────────────
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -216,13 +218,12 @@ def test_hello():
     ");
 
     let content = context.read_file("snapshots/test__test_hello--greeting.snap");
-    insta::assert_snapshot!(content, @r#"
+    insta::assert_snapshot!(content, @r"
     ---
-    source: test.py::test_hello
-    expression: "str(value)"
+    source: test.py:5::test_hello
     ---
     hello
-    "#);
+    ");
 }
 
 #[test]
@@ -252,13 +253,12 @@ def test_hello():
     ");
 
     let content = context.read_file("snapshots/test__test_hello.snap");
-    insta::assert_snapshot!(content, @r#"
+    insta::assert_snapshot!(content, @r"
     ---
-    source: test.py::test_hello
-    expression: "repr(value)"
+    source: test.py:5::test_hello
     ---
     {'a': 1}
-    "#);
+    ");
 }
 
 #[test]
@@ -290,8 +290,7 @@ def test_hello():
     let content = context.read_file("snapshots/test__test_hello.snap");
     insta::assert_snapshot!(content, @r#"
     ---
-    source: test.py::test_hello
-    expression: "json(value)"
+    source: test.py:5::test_hello
     ---
     {
       "a": 1,
@@ -329,31 +328,28 @@ def test_multi():
     ");
 
     let content_1 = context.read_file("snapshots/test__test_multi.snap");
-    insta::assert_snapshot!(content_1, @r#"
+    insta::assert_snapshot!(content_1, @r"
     ---
-    source: test.py::test_multi
-    expression: "str(value)"
+    source: test.py:5::test_multi
     ---
     first
-    "#);
+    ");
 
     let content_2 = context.read_file("snapshots/test__test_multi-2.snap");
-    insta::assert_snapshot!(content_2, @r#"
+    insta::assert_snapshot!(content_2, @r"
     ---
-    source: test.py::test_multi
-    expression: "str(value)"
+    source: test.py:6::test_multi
     ---
     second
-    "#);
+    ");
 
     let content_3 = context.read_file("snapshots/test__test_multi-3.snap");
-    insta::assert_snapshot!(content_3, @r#"
+    insta::assert_snapshot!(content_3, @r"
     ---
-    source: test.py::test_multi
-    expression: "str(value)"
+    source: test.py:7::test_multi
     ---
     third
-    "#);
+    ");
 }
 
 #[test]
@@ -385,13 +381,12 @@ def test_hello():
 
     // Verify .snap file content and .snap.new is gone
     let content = context.read_file("snapshots/test__test_hello.snap");
-    insta::assert_snapshot!(content, @r#"
+    insta::assert_snapshot!(content, @r"
     ---
-    source: test.py::test_hello
-    expression: "str(value)"
+    source: test.py:5::test_hello
     ---
     hello world
-    "#);
+    ");
 
     let snap_new_path = context.root().join("snapshots/test__test_hello.snap.new");
     assert!(
@@ -494,11 +489,175 @@ def test_param(x):
     ");
 
     let content = context.read_file("snapshots/test__test_param(x=1).snap");
-    insta::assert_snapshot!(content, @r#"
+    insta::assert_snapshot!(content, @r"
     ---
-    source: test.py::test_param(x=1)
-    expression: "str(value)"
+    source: test.py:6::test_param(x=1)
     ---
     1
-    "#);
+    ");
+}
+
+#[test]
+fn test_snapshot_review_accept() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_hello():
+    karva.assert_snapshot('hello world')
+        ",
+    );
+
+    // Run tests to create .snap.new
+    let _ = context.command_no_parallel().output();
+
+    // Pipe 'a' to review to accept
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\n"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/1
+    File: <temp_dir>/snapshots/test__test_hello.snap.new
+    Source: test.py:5::test_hello
+
+    -old snapshot
+    +new results
+    ────────────┬───────────────────────────
+            1 │ +hello world
+    ────────────┴───────────────────────────
+
+    (a)ccept  (r)eject  (s)kip  (A)ccept all  (R)eject all
+    >
+    Review complete: 1 accepted, 0 rejected, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    // Verify .snap exists and .snap.new is gone
+    let snap_path = context.root().join("snapshots/test__test_hello.snap");
+    let snap_new_path = context.root().join("snapshots/test__test_hello.snap.new");
+    assert!(snap_path.exists(), "Expected .snap file after accept");
+    assert!(
+        !snap_new_path.exists(),
+        "Expected .snap.new file to be removed after accept"
+    );
+}
+
+#[test]
+fn test_snapshot_review_reject() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_hello():
+    karva.assert_snapshot('hello world')
+        ",
+    );
+
+    // Run tests to create .snap.new
+    let _ = context.command_no_parallel().output();
+
+    // Pipe 'r' to review to reject
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("r\n"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/1
+    File: <temp_dir>/snapshots/test__test_hello.snap.new
+    Source: test.py:5::test_hello
+
+    -old snapshot
+    +new results
+    ────────────┬───────────────────────────
+            1 │ +hello world
+    ────────────┴───────────────────────────
+
+    (a)ccept  (r)eject  (s)kip  (A)ccept all  (R)eject all
+    >
+    Review complete: 0 accepted, 1 rejected, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    // Verify both are gone
+    let snap_path = context.root().join("snapshots/test__test_hello.snap");
+    let snap_new_path = context.root().join("snapshots/test__test_hello.snap.new");
+    assert!(!snap_path.exists(), "Expected no .snap file after reject");
+    assert!(
+        !snap_new_path.exists(),
+        "Expected .snap.new file to be removed after reject"
+    );
+}
+
+#[test]
+fn test_snapshot_review_skip() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_hello():
+    karva.assert_snapshot('hello world')
+        ",
+    );
+
+    // Run tests to create .snap.new
+    let _ = context.command_no_parallel().output();
+
+    // Pipe 's' to review to skip
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("s\n"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/1
+    File: <temp_dir>/snapshots/test__test_hello.snap.new
+    Source: test.py:5::test_hello
+
+    -old snapshot
+    +new results
+    ────────────┬───────────────────────────
+            1 │ +hello world
+    ────────────┴───────────────────────────
+
+    (a)ccept  (r)eject  (s)kip  (A)ccept all  (R)eject all
+    >
+    Review complete: 0 accepted, 0 rejected, 1 skipped
+
+    ----- stderr -----
+    ");
+
+    // Verify .snap.new still exists
+    let snap_new_path = context.root().join("snapshots/test__test_hello.snap.new");
+    assert!(
+        snap_new_path.exists(),
+        "Expected .snap.new file to still exist after skip"
+    );
+}
+
+#[test]
+fn test_snapshot_review_no_pending() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_hello():
+    karva.assert_snapshot('hello world')
+        ",
+    );
+
+    // Don't run tests, so no .snap.new files exist
+    assert_cmd_snapshot!(context.snapshot("review"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    No pending snapshots to review.
+
+    ----- stderr -----
+    ");
 }
