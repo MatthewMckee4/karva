@@ -11,10 +11,8 @@ use karva_cli::{SubTestCommand, Verbosity};
 use karva_diagnostic::{DummyReporter, Reporter, TestCaseReporter};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::filter::{NameFilterSet, TagFilterSet};
+use karva_project::path::{TestPath, TestPathError, absolute};
 use karva_python_semantic::current_python_version;
-use karva_system::System;
-use karva_system::path::{TestPath, TestPathError};
-use karva_system::{OsSystem, path::absolute};
 use ruff_db::diagnostic::{DisplayDiagnosticConfig, FileResolver, Input, UnifiedFile};
 use ruff_db::files::File;
 use ruff_notebook::NotebookIndex;
@@ -124,8 +122,6 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     let python_version = current_python_version();
 
-    let system = OsSystem::new(&cwd);
-
     let test_paths: Vec<Utf8PathBuf> = args
         .sub_command
         .paths
@@ -157,7 +153,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     };
 
     let result = karva_test_semantic::run_tests(
-        &system,
+        &cwd,
         &settings,
         python_version,
         reporter.as_ref(),
@@ -170,7 +166,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         .format(diagnostic_format)
         .color(colored::control::SHOULD_COLORIZE.should_colorize());
 
-    let diagnostic_resolver = DiagnosticFileResolver::new(&system);
+    let diagnostic_resolver = DiagnosticFileResolver::new(&cwd);
 
     cache.write_result(args.worker_id, &result, &diagnostic_resolver, &config)?;
 
@@ -182,13 +178,12 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 /// Implements the `FileResolver` trait to provide file path information
 /// when rendering diagnostic error messages to the user.
 struct DiagnosticFileResolver<'a> {
-    /// Reference to the system abstraction for file operations.
-    system: &'a dyn System,
+    cwd: &'a Utf8PathBuf,
 }
 
 impl<'a> DiagnosticFileResolver<'a> {
-    fn new(system: &'a dyn System) -> Self {
-        Self { system }
+    fn new(cwd: &'a Utf8PathBuf) -> Self {
+        Self { cwd }
     }
 }
 
@@ -210,6 +205,6 @@ impl FileResolver for DiagnosticFileResolver<'_> {
     }
 
     fn current_directory(&self) -> &std::path::Path {
-        self.system.current_directory().as_std_path()
+        self.cwd.as_std_path()
     }
 }

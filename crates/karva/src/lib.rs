@@ -13,9 +13,9 @@ use karva_cli::{Args, Command, OutputFormat, TestCommand};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::filter::{NameFilterSet, TagFilterSet};
 use karva_metadata::{ProjectMetadata, ProjectOptionsOverrides};
-use karva_project::ProjectDatabase;
+use karva_project::Project;
+use karva_project::path::absolute;
 use karva_python_semantic::current_python_version;
-use karva_system::{OsSystem, System, path::absolute};
 
 mod version;
 
@@ -89,16 +89,14 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     tracing::debug!(cwd = %cwd, "Working directory");
 
-    let system = OsSystem::new(&cwd);
-
     let python_version = current_python_version();
 
     let config_file = args.config_file.as_ref().map(|path| absolute(path, &cwd));
 
     let mut project_metadata = if let Some(config_file) = &config_file {
-        ProjectMetadata::from_config_file(config_file.clone(), &system, python_version)?
+        ProjectMetadata::from_config_file(config_file.clone(), &cwd, python_version)?
     } else {
-        ProjectMetadata::discover(system.current_directory(), &system, python_version)?
+        ProjectMetadata::discover(&cwd, python_version)?
     };
 
     let sub_command = args.sub_command.clone();
@@ -110,12 +108,12 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let project_options_overrides = ProjectOptionsOverrides::new(config_file, args.into_options());
     project_metadata.apply_overrides(&project_options_overrides);
 
-    let db = ProjectDatabase::new(project_metadata, system);
+    let project = Project::from_metadata(project_metadata);
 
     let num_workers = if no_parallel {
         1
     } else {
-        num_workers.unwrap_or_else(|| karva_system::max_parallelism().get())
+        num_workers.unwrap_or_else(|| karva_static::max_parallelism().get())
     };
 
     TagFilterSet::new(&sub_command.tag_expressions)?;
@@ -129,7 +127,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
 
     let start_time = Instant::now();
 
-    let result = karva_runner::run_parallel_tests(&db, &config, &sub_command)?;
+    let result = karva_runner::run_parallel_tests(&project, &config, &sub_command)?;
 
     print_test_output(
         printer,

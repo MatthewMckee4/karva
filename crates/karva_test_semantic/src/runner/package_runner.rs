@@ -304,7 +304,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
                     report_test_pass_on_expect_failure(
                         self.context,
-                        source_file(self.context.system(), &test_module_path),
+                        source_file(&test_module_path),
                         &stmt_function_def,
                         reason,
                     );
@@ -344,7 +344,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                         report_test_failure(
                             self.context,
                             py,
-                            source_file(self.context.system(), &test_module_path),
+                            source_file(&test_module_path),
                             &stmt_function_def,
                             &function_arguments,
                             &err,
@@ -353,7 +353,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                         report_missing_fixtures(
                             self.context,
                             py,
-                            source_file(self.context.system(), &test_module_path),
+                            source_file(&test_module_path),
                             &stmt_function_def,
                             &missing_args,
                             FunctionKind::Test,
@@ -422,10 +422,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                     fixture_name: fixture_def.name.function_name().to_string(),
                     error: err,
                     stmt_function_def: fixture_def.stmt_function_def.clone(),
-                    source_file: source_file(
-                        self.context.system(),
-                        fixture_def.name.module_path().path(),
-                    ),
+                    source_file: source_file(fixture_def.name.module_path().path()),
                     arguments: function_arguments,
                 });
             }
@@ -443,10 +440,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                         fixture_name: fixture_def.name.function_name().to_string(),
                         error: err,
                         stmt_function_def: fixture_def.stmt_function_def.clone(),
-                        source_file: source_file(
-                            self.context.system(),
-                            fixture_def.name.module_path().path(),
-                        ),
+                        source_file: source_file(fixture_def.name.module_path().path()),
                         arguments: HashMap::new(),
                     });
                 }

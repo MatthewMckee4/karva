@@ -48,7 +48,7 @@ impl TestContext {
 
         let python_version = std::env::var("PYTHON_VERSION").unwrap_or_else(|_| "3.13".to_string());
 
-        let karva_wheel = karva_system::find_karva_wheel()
+        let karva_wheel = karva_project::find_karva_wheel()
             .expect("Could not find karva wheel. Run `maturin build` before running tests.")
             .to_string();
 

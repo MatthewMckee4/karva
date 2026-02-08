@@ -5,26 +5,23 @@ use karva_collector::{
 use std::thread;
 
 use anyhow::Result;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use crossbeam_channel::unbounded;
 use ignore::{WalkBuilder, WalkState};
-use karva_system::{
-    System,
-    path::{TestPath, TestPathFunction},
-};
+use karva_project::path::{TestPath, TestPathFunction};
 
 /// Collector used for collecting all test functions and fixtures in a package.
 ///
 /// This is only used in the main `karva` cli.
 /// If we used this in the `karva-worker` cli, this would be very inefficient.
 pub struct ParallelCollector<'a> {
-    system: &'a dyn System,
+    cwd: &'a Utf8Path,
     settings: CollectionSettings<'a>,
 }
 
 impl<'a> ParallelCollector<'a> {
-    pub fn new(system: &'a dyn System, settings: CollectionSettings<'a>) -> Self {
-        Self { system, settings }
+    pub fn new(cwd: &'a Utf8Path, settings: CollectionSettings<'a>) -> Self {
+        Self { cwd, settings }
     }
 
     /// Collect from a directory in parallel using `WalkParallel`.
@@ -69,7 +66,7 @@ impl<'a> ParallelCollector<'a> {
                     return WalkState::Continue;
                 };
 
-                if let Some(module) = collect_file(&file_path, self.system, &self.settings, &[]) {
+                if let Some(module) = collect_file(&file_path, self.cwd, &self.settings, &[]) {
                     let _ = tx.send(module);
                 }
 
@@ -87,8 +84,7 @@ impl<'a> ParallelCollector<'a> {
 
     /// Collect from all paths and build a complete package structure.
     pub fn collect_all(&self, test_paths: Vec<TestPath>) -> Result<CollectedPackage> {
-        let mut session_package =
-            CollectedPackage::new(self.system.current_directory().to_path_buf());
+        let mut session_package = CollectedPackage::new(self.cwd.to_path_buf());
 
         for path in test_paths {
             match path {
@@ -101,14 +97,13 @@ impl<'a> ParallelCollector<'a> {
                     function_name,
                 }) => {
                     if let Some(module) =
-                        collect_file(&file_path, self.system, &self.settings, &[function_name])
+                        collect_file(&file_path, self.cwd, &self.settings, &[function_name])
                     {
                         session_package.add_module(module);
                     }
                 }
                 TestPath::File(file_path) => {
-                    if let Some(module) = collect_file(&file_path, self.system, &self.settings, &[])
-                    {
+                    if let Some(module) = collect_file(&file_path, self.cwd, &self.settings, &[]) {
                         session_package.add_module(module);
                     }
                 }
@@ -122,7 +117,7 @@ impl<'a> ParallelCollector<'a> {
 
     /// Creates a configured parallel directory walker for Python file discovery.
     fn create_parallel_walker(&self, path: &Utf8PathBuf) -> ignore::WalkParallel {
-        let num_threads = karva_system::max_parallelism().get();
+        let num_threads = karva_static::max_parallelism().get();
 
         WalkBuilder::new(path)
             .threads(num_threads)

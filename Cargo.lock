@@ -749,16 +749,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "etcetera"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de48cc4d1c1d97a20fd819def54b890cadde72ed3ad0c614822a0a433361be96"
-dependencies = [
- "cfg-if",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1183,7 +1173,7 @@ dependencies = [
  "karva_project",
  "karva_python_semantic",
  "karva_runner",
- "karva_system",
+ "karva_static",
  "regex",
  "rstest",
  "ruff_python_trivia",
@@ -1204,7 +1194,7 @@ dependencies = [
  "karva_metadata",
  "karva_project",
  "karva_runner",
- "karva_system",
+ "karva_static",
  "karva_test_semantic",
  "ruff_python_ast",
  "serde",
@@ -1242,7 +1232,6 @@ version = "0.0.0"
 dependencies = [
  "camino",
  "karva_python_semantic",
- "karva_system",
  "ruff_python_ast",
  "ruff_python_parser",
 ]
@@ -1277,7 +1266,6 @@ dependencies = [
  "colored 3.1.1",
  "karva_logging",
  "karva_python_semantic",
- "karva_system",
  "pyo3",
  "ruff_db",
  "ruff_source_file",
@@ -1316,7 +1304,6 @@ dependencies = [
  "camino",
  "karva_combine",
  "karva_macros",
- "karva_system",
  "regex",
  "ruff_db",
  "ruff_options_metadata",
@@ -1331,9 +1318,12 @@ dependencies = [
 name = "karva_project"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "camino",
  "karva_metadata",
- "karva_system",
+ "karva_python_semantic",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -1369,26 +1359,17 @@ dependencies = [
  "karva_cache",
  "karva_cli",
  "karva_collector",
+ "karva_logging",
  "karva_metadata",
  "karva_project",
- "karva_system",
+ "karva_static",
  "tracing",
  "which",
 ]
 
 [[package]]
-name = "karva_system"
+name = "karva_static"
 version = "0.0.0"
-dependencies = [
- "anyhow",
- "camino",
- "etcetera",
- "filetime",
- "karva_python_semantic",
- "tempfile",
- "thiserror",
- "tracing",
-]
 
 [[package]]
 name = "karva_test_semantic"
@@ -1403,8 +1384,8 @@ dependencies = [
  "karva_diagnostic",
  "karva_logging",
  "karva_metadata",
+ "karva_project",
  "karva_python_semantic",
- "karva_system",
  "pyo3",
  "regex",
  "ruff_db",
@@ -1431,8 +1412,8 @@ dependencies = [
  "karva_diagnostic",
  "karva_logging",
  "karva_metadata",
+ "karva_project",
  "karva_python_semantic",
- "karva_system",
  "karva_test_semantic",
  "ruff_db",
  "ruff_notebook",

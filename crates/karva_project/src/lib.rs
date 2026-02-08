@@ -1,45 +1,42 @@
-use std::panic::RefUnwindSafe;
-use std::sync::Arc;
+pub mod path;
 
-use camino::Utf8PathBuf;
+use anyhow::Context;
+use camino::{Utf8Path, Utf8PathBuf};
 use karva_metadata::{ProjectMetadata, ProjectSettings};
-use karva_system::{
-    System,
-    path::{TestPath, TestPathError, absolute},
-};
 
-pub trait Db: Send + Sync {
-    fn system(&self) -> &dyn System;
-    fn project(&self) -> &Project;
-}
+use crate::path::{TestPath, TestPathError, absolute};
 
-#[derive(Debug, Clone)]
-pub struct ProjectDatabase {
-    project: Project,
+/// Find the karva wheel in the target/wheels directory.
+/// Returns the path to the wheel file.
+pub fn find_karva_wheel() -> anyhow::Result<Utf8PathBuf> {
+    let karva_root = Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .ok_or_else(|| anyhow::anyhow!("Could not determine KARVA_ROOT"))?
+        .to_path_buf();
 
-    system: Arc<dyn System + Send + Sync + RefUnwindSafe>,
-}
+    let wheels_dir = karva_root.join("target").join("wheels");
 
-impl ProjectDatabase {
-    pub fn new<S>(project_metadata: ProjectMetadata, system: S) -> Self
-    where
-        S: System + 'static + Send + Sync + RefUnwindSafe,
-    {
-        Self {
-            project: Project::from_metadata(project_metadata),
-            system: Arc::new(system),
+    let entries = std::fs::read_dir(&wheels_dir)
+        .with_context(|| format!("Could not read wheels directory: {wheels_dir}"))?;
+
+    for entry in entries {
+        let entry = entry?;
+        let file_name = entry.file_name();
+        if let Some(name) = file_name.to_str() {
+            if name.starts_with("karva-")
+                && Utf8Path::new(name)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("whl"))
+            {
+                return Ok(
+                    Utf8PathBuf::from_path_buf(entry.path()).expect("Path is not valid UTF-8")
+                );
+            }
         }
     }
-}
 
-impl Db for ProjectDatabase {
-    fn system(&self) -> &dyn System {
-        self.system.as_ref()
-    }
-
-    fn project(&self) -> &Project {
-        &self.project
-    }
+    anyhow::bail!("Could not find karva wheel in target/wheels directory");
 }
 
 #[derive(Debug, Clone)]

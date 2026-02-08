@@ -1,14 +1,9 @@
-use std::sync::Once;
-
-use crate::real_world_projects::{InstalledProject, RealWorldProject};
 use divan::Bencher;
 use karva_cli::SubTestCommand;
 use karva_metadata::{Options, ProjectMetadata, SrcOptions, TestOptions};
-use karva_project::ProjectDatabase;
-use karva_system::OsSystem;
-use karva_test_semantic::testing::setup_module;
+use karva_project::Project;
 
-static SETUP_MODULE_ONCE: Once = Once::new();
+use crate::real_world_projects::{InstalledProject, RealWorldProject};
 
 pub struct ProjectBenchmark<'a> {
     installed_project: InstalledProject<'a>,
@@ -20,7 +15,7 @@ impl<'a> ProjectBenchmark<'a> {
         Self { installed_project }
     }
 
-    fn project(&self) -> ProjectDatabase {
+    fn project(&self) -> Project {
         let test_paths = self
             .installed_project
             .config()
@@ -31,14 +26,9 @@ impl<'a> ProjectBenchmark<'a> {
 
         let root = self.installed_project.path();
 
-        let system = OsSystem::new(root);
-
-        let mut metadata = ProjectMetadata::discover(
-            root.as_path(),
-            &system,
-            self.installed_project.config.python_version,
-        )
-        .unwrap();
+        let mut metadata =
+            ProjectMetadata::discover(root.as_path(), self.installed_project.config.python_version)
+                .unwrap();
 
         metadata.apply_options(Options {
             src: Some(SrcOptions {
@@ -52,12 +42,12 @@ impl<'a> ProjectBenchmark<'a> {
             ..Options::default()
         });
 
-        ProjectDatabase::new(metadata, system)
+        Project::from_metadata(metadata)
     }
 }
 
-fn test_project(project: &ProjectDatabase) {
-    let num_workers = karva_system::max_parallelism().get();
+fn test_project(project: &Project) {
+    let num_workers = karva_static::max_parallelism().get();
 
     let config = karva_runner::ParallelTestConfig {
         num_workers,
@@ -76,20 +66,12 @@ fn test_project(project: &ProjectDatabase) {
 }
 
 pub fn bench_project(bencher: Bencher, benchmark: &ProjectBenchmark) {
-    SETUP_MODULE_ONCE.call_once(|| {
-        setup_module();
-    });
-
     bencher
         .with_inputs(|| benchmark.project())
         .bench_local_refs(|db| test_project(db));
 }
 
 pub fn warmup_project(benchmark: &ProjectBenchmark) {
-    SETUP_MODULE_ONCE.call_once(|| {
-        setup_module();
-    });
-
     let project = benchmark.project();
 
     test_project(&project);

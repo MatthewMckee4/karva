@@ -1,5 +1,5 @@
 use karva_collector::{CollectedModule, CollectedPackage};
-use karva_system::path::{TestPath, TestPathError};
+use karva_project::path::{TestPath, TestPathError};
 use pyo3::prelude::*;
 
 use crate::Context;
@@ -28,7 +28,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
         py: Python<'_>,
         test_paths: Vec<Result<TestPath, TestPathError>>,
     ) -> DiscoveredPackage {
-        let cwd = self.context.system().current_directory();
+        let cwd = self.context.cwd();
 
         if add_to_sys_path(py, cwd, 0).is_err() {
             return DiscoveredPackage::new(cwd.to_path_buf());
@@ -49,7 +49,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
             .collect();
 
         let collector =
-            TestFunctionCollector::new(self.context.system(), self.context.collection_settings());
+            TestFunctionCollector::new(self.context.cwd(), self.context.collection_settings());
 
         let collected_package = collector.collect_all(test_paths);
 

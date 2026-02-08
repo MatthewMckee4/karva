@@ -5,7 +5,6 @@ use ruff_db::diagnostic::DiagnosticFormat;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::System;
 use crate::filter::{NameFilterSet, TagFilterSet};
 use crate::settings::{ProjectSettings, SrcSettings, TerminalSettings, TestSettings};
 
@@ -53,15 +52,12 @@ impl Options {
 
     pub(crate) fn from_karva_configuration_file(
         path: &Utf8PathBuf,
-        system: &dyn System,
     ) -> Result<Self, KarvaTomlError> {
         let karva_toml_str =
-            system
-                .read_to_string(path)
-                .map_err(|source| KarvaTomlError::FileReadError {
-                    source,
-                    path: path.clone(),
-                })?;
+            std::fs::read_to_string(path).map_err(|source| KarvaTomlError::FileReadError {
+                source,
+                path: path.clone(),
+            })?;
 
         Self::from_toml_str(&karva_toml_str)
     }

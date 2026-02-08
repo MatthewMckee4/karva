@@ -1,6 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_combine::Combine;
-use karva_system::System;
 use ruff_python_ast::PythonVersion;
 use thiserror::Error;
 
@@ -38,12 +37,12 @@ impl ProjectMetadata {
 
     pub fn from_config_file(
         path: Utf8PathBuf,
-        system: &dyn System,
+        cwd: &Utf8Path,
         python_version: PythonVersion,
     ) -> Result<Self, ProjectMetadataError> {
         tracing::debug!("Using overridden configuration file at '{path}'");
 
-        let options = Options::from_karva_configuration_file(&path, system).map_err(|error| {
+        let options = Options::from_karva_configuration_file(&path).map_err(|error| {
             ProjectMetadataError::InvalidKarvaToml {
                 source: Box::new(error),
                 path,
@@ -51,7 +50,7 @@ impl ProjectMetadata {
         })?;
 
         Ok(Self {
-            root: system.current_directory().to_path_buf(),
+            root: cwd.to_path_buf(),
             python_version,
             options,
         })
@@ -96,12 +95,11 @@ impl ProjectMetadata {
     /// 1. Fallback to use `path` as the root and use the default settings.
     pub fn discover(
         path: &Utf8Path,
-        system: &dyn System,
         python_version: PythonVersion,
     ) -> Result<Self, ProjectMetadataError> {
         tracing::debug!("Searching for a project in '{path}'");
 
-        if !system.is_directory(path) {
+        if !path.as_std_path().is_dir() {
             return Err(ProjectMetadataError::NotADirectory(path.to_path_buf()));
         }
 
@@ -110,7 +108,7 @@ impl ProjectMetadata {
         for project_root in path.ancestors() {
             let pyproject_path = project_root.join("pyproject.toml");
 
-            let pyproject = if let Ok(pyproject_str) = system.read_to_string(&pyproject_path) {
+            let pyproject = if let Ok(pyproject_str) = std::fs::read_to_string(&pyproject_path) {
                 match PyProject::from_toml_str(&pyproject_str) {
                     Ok(pyproject) => Some(pyproject),
                     Err(error) => {
@@ -126,7 +124,7 @@ impl ProjectMetadata {
 
             // A `karva.toml` takes precedence over a `pyproject.toml`.
             let karva_toml_path = project_root.join("karva.toml");
-            if let Ok(karva_str) = system.read_to_string(&karva_toml_path) {
+            if let Ok(karva_str) = std::fs::read_to_string(&karva_toml_path) {
                 let options = match Options::from_toml_str(&karva_str) {
                     Ok(options) => options,
                     Err(error) => {
