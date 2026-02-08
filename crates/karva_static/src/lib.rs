@@ -11,6 +11,10 @@ impl EnvVars {
 
     /// This is a standard Karva environment variable.
     pub const KARVA_CONFIG_FILE: &'static str = "KARVA_CONFIG_FILE";
+
+    /// When set to "1" or "true", snapshot assertions write directly to `.snap`
+    /// instead of creating `.snap.new` pending files.
+    pub const KARVA_SNAPSHOT_UPDATE: &'static str = "KARVA_SNAPSHOT_UPDATE";
 }
 
 pub fn max_parallelism() -> NonZeroUsize {

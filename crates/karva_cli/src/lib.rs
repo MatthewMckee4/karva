@@ -82,8 +82,39 @@ pub enum Command {
     /// Run tests.
     Test(TestCommand),
 
+    /// Manage snapshots created by `karva.assert_snapshot()`.
+    Snapshot(SnapshotCommand),
+
     /// Display Karva's version
     Version,
+}
+
+#[derive(Debug, Parser)]
+pub struct SnapshotCommand {
+    #[command(subcommand)]
+    pub action: SnapshotAction,
+}
+
+#[derive(Debug, clap::Subcommand)]
+pub enum SnapshotAction {
+    /// Accept all (or filtered) pending snapshots.
+    Accept(SnapshotFilterArgs),
+
+    /// Reject all (or filtered) pending snapshots.
+    Reject(SnapshotFilterArgs),
+
+    /// List pending snapshots.
+    Pending(SnapshotFilterArgs),
+
+    /// Interactively review pending snapshots.
+    Review(SnapshotFilterArgs),
+}
+
+#[derive(Debug, Parser, Default)]
+pub struct SnapshotFilterArgs {
+    /// Optional paths to filter snapshots by directory or file.
+    #[clap(value_name = "PATH")]
+    pub paths: Vec<String>,
 }
 
 /// Shared test execution options that can be used by both main CLI and worker processes
@@ -155,6 +186,13 @@ pub struct SubTestCommand {
     /// Examples: `-m auth`, `-m '^test::test_login'`, `-m 'slow|fast'`.
     #[clap(short = 'm', long = "match")]
     pub name_patterns: Vec<String>,
+
+    /// Update snapshots directly instead of creating pending `.snap.new` files.
+    ///
+    /// When set, `karva.assert_snapshot()` will write directly to `.snap` files,
+    /// accepting any changes automatically.
+    #[clap(long, default_missing_value = "true", num_args=0..1)]
+    pub snapshot_update: Option<bool>,
 
     #[clap(flatten)]
     pub verbosity: Verbosity,

@@ -9,7 +9,7 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
 use karva_cache::AggregatedResults;
-use karva_cli::{Args, Command, OutputFormat, TestCommand};
+use karva_cli::{Args, Command, OutputFormat, SnapshotAction, SnapshotCommand, TestCommand};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::filter::{NameFilterSet, TagFilterSet};
 use karva_metadata::{ProjectMetadata, ProjectOptionsOverrides};
@@ -52,6 +52,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     match args.command {
         Command::Test(test_args) => test(test_args),
+        Command::Snapshot(snapshot_args) => snapshot(snapshot_args),
         Command::Version => version().map(|()| ExitStatus::Success),
     }
 }
@@ -65,6 +66,93 @@ pub(crate) fn version() -> Result<()> {
     }
 
     Ok(())
+}
+
+pub(crate) fn snapshot(args: SnapshotCommand) -> Result<ExitStatus> {
+    let cwd = {
+        let cwd = std::env::current_dir().context("Failed to get the current working directory")?;
+        Utf8PathBuf::from_path_buf(cwd).map_err(|path| {
+            anyhow::anyhow!(
+                "The current working directory `{}` contains non-Unicode characters.",
+                path.display()
+            )
+        })?
+    };
+
+    let printer = Printer::default();
+    let mut stdout = printer.stream_for_requested_summary().lock();
+
+    match args.action {
+        SnapshotAction::Accept(filter) => {
+            let pending = karva_snapshot::storage::find_pending_snapshots(&cwd);
+            let filtered = filter_pending(&pending, &filter.paths);
+            if filtered.is_empty() {
+                writeln!(stdout, "No pending snapshots found.")?;
+                return Ok(ExitStatus::Success);
+            }
+            let mut accepted = 0;
+            for info in &filtered {
+                karva_snapshot::storage::accept_pending(&info.pending_path)?;
+                writeln!(stdout, "Accepted: {}", info.pending_path)?;
+                accepted += 1;
+            }
+            writeln!(stdout, "\n{accepted} snapshot(s) accepted.")?;
+            Ok(ExitStatus::Success)
+        }
+        SnapshotAction::Reject(filter) => {
+            let pending = karva_snapshot::storage::find_pending_snapshots(&cwd);
+            let filtered = filter_pending(&pending, &filter.paths);
+            if filtered.is_empty() {
+                writeln!(stdout, "No pending snapshots found.")?;
+                return Ok(ExitStatus::Success);
+            }
+            let mut rejected = 0;
+            for info in &filtered {
+                karva_snapshot::storage::reject_pending(&info.pending_path)?;
+                writeln!(stdout, "Rejected: {}", info.pending_path)?;
+                rejected += 1;
+            }
+            writeln!(stdout, "\n{rejected} snapshot(s) rejected.")?;
+            Ok(ExitStatus::Success)
+        }
+        SnapshotAction::Pending(filter) => {
+            let pending = karva_snapshot::storage::find_pending_snapshots(&cwd);
+            let filtered = filter_pending(&pending, &filter.paths);
+            if filtered.is_empty() {
+                writeln!(stdout, "No pending snapshots.")?;
+                return Ok(ExitStatus::Success);
+            }
+            for info in &filtered {
+                writeln!(stdout, "{}", info.pending_path)?;
+            }
+            writeln!(stdout, "\n{} pending snapshot(s).", filtered.len())?;
+            Ok(ExitStatus::Success)
+        }
+        SnapshotAction::Review(filter) => {
+            // Drop stdout lock before interactive review (it needs stdin/stdout)
+            drop(stdout);
+            karva_snapshot::review::run_review(&cwd, &filter.paths)?;
+            Ok(ExitStatus::Success)
+        }
+    }
+}
+
+fn filter_pending<'a>(
+    pending: &'a [karva_snapshot::storage::PendingSnapshotInfo],
+    filter_paths: &[String],
+) -> Vec<&'a karva_snapshot::storage::PendingSnapshotInfo> {
+    if filter_paths.is_empty() {
+        pending.iter().collect()
+    } else {
+        pending
+            .iter()
+            .filter(|info| {
+                filter_paths
+                    .iter()
+                    .any(|f| info.pending_path.as_str().contains(f.as_str()))
+            })
+            .collect()
+    }
 }
 
 pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {

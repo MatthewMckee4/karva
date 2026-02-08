@@ -15,6 +15,7 @@ karva <COMMAND>
 <h3 class="cli-reference">Commands</h3>
 
 <dl class="cli-reference"><dt><a href="#karva-test"><code>karva test</code></a></dt><dd><p>Run tests</p></dd>
+<dt><a href="#karva-snapshot"><code>karva snapshot</code></a></dt><dd><p>Manage snapshots created by <code>karva.assert_snapshot()</code></p></dd>
 <dt><a href="#karva-version"><code>karva version</code></a></dt><dd><p>Display Karva's version</p></dd>
 <dt><a href="#karva-help"><code>karva help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
 </dl>
@@ -62,6 +63,8 @@ karva test [OPTIONS] [PATH]...
 <li><code>concise</code>:  Print diagnostics concisely, one per line</li>
 </ul></dd><dt id="karva-test--quiet"><a href="#karva-test--quiet"><code>--quiet</code></a>, <code>-q</code></dt><dd><p>Use quiet output (or <code>-qq</code> for silent output)</p>
 </dd><dt id="karva-test--retry"><a href="#karva-test--retry"><code>--retry</code></a> <i>retry</i></dt><dd><p>When set, the test will retry failed tests up to this number of times</p>
+</dd><dt id="karva-test--snapshot-update"><a href="#karva-test--snapshot-update"><code>--snapshot-update</code></a></dt><dd><p>Update snapshots directly instead of creating pending <code>.snap.new</code> files.</p>
+<p>When set, <code>karva.assert_snapshot()</code> will write directly to <code>.snap</code> files, accepting any changes automatically.</p>
 </dd><dt id="karva-test--tag"><a href="#karva-test--tag"><code>--tag</code></a>, <code>-t</code> <i>tag-expressions</i></dt><dd><p>Filter tests by tag expression. Only tests with matching custom tags will run.</p>
 <p>Expressions support <code>and</code>, <code>or</code>, <code>not</code>, and parentheses for grouping. When specified multiple times, a test runs if it matches any of the expressions.</p>
 <p>Examples: <code>-t slow</code>, <code>-t 'not slow'</code>, <code>-t 'slow and integration'</code>, <code>-t 'slow or integration'</code>, <code>-t '(slow or fast) and not flaky'</code>.</p>
@@ -70,6 +73,115 @@ karva test [OPTIONS] [PATH]...
 <p>This is often slower, so it is not recommended for most projects.</p>
 </dd><dt id="karva-test--verbose"><a href="#karva-test--verbose"><code>--verbose</code></a>, <code>-v</code></dt><dd><p>Use verbose output (or <code>-vv</code> and <code>-vvv</code> for more verbose output)</p>
 </dd></dl>
+
+## karva snapshot
+
+Manage snapshots created by `karva.assert_snapshot()`
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva snapshot <COMMAND>
+```
+
+<h3 class="cli-reference">Commands</h3>
+
+<dl class="cli-reference"><dt><a href="#karva-snapshot-accept"><code>karva snapshot accept</code></a></dt><dd><p>Accept all (or filtered) pending snapshots</p></dd>
+<dt><a href="#karva-snapshot-reject"><code>karva snapshot reject</code></a></dt><dd><p>Reject all (or filtered) pending snapshots</p></dd>
+<dt><a href="#karva-snapshot-pending"><code>karva snapshot pending</code></a></dt><dd><p>List pending snapshots</p></dd>
+<dt><a href="#karva-snapshot-review"><code>karva snapshot review</code></a></dt><dd><p>Interactively review pending snapshots</p></dd>
+<dt><a href="#karva-snapshot-help"><code>karva snapshot help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
+</dl>
+
+### karva snapshot accept
+
+Accept all (or filtered) pending snapshots
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva snapshot accept [PATH]...
+```
+
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-accept--paths"><a href="#karva-snapshot-accept--paths"><code>PATHS</code></a></dt><dd><p>Optional paths to filter snapshots by directory or file</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-accept--help"><a href="#karva-snapshot-accept--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+### karva snapshot reject
+
+Reject all (or filtered) pending snapshots
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva snapshot reject [PATH]...
+```
+
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-reject--paths"><a href="#karva-snapshot-reject--paths"><code>PATHS</code></a></dt><dd><p>Optional paths to filter snapshots by directory or file</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-reject--help"><a href="#karva-snapshot-reject--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+### karva snapshot pending
+
+List pending snapshots
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva snapshot pending [PATH]...
+```
+
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-pending--paths"><a href="#karva-snapshot-pending--paths"><code>PATHS</code></a></dt><dd><p>Optional paths to filter snapshots by directory or file</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-pending--help"><a href="#karva-snapshot-pending--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+### karva snapshot review
+
+Interactively review pending snapshots
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva snapshot review [PATH]...
+```
+
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-review--paths"><a href="#karva-snapshot-review--paths"><code>PATHS</code></a></dt><dd><p>Optional paths to filter snapshots by directory or file</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-review--help"><a href="#karva-snapshot-review--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+### karva snapshot help
+
+Print this message or the help of the given subcommand(s)
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva snapshot help [COMMAND]
+```
 
 ## karva version
 

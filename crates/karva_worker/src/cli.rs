@@ -13,6 +13,7 @@ use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::filter::{NameFilterSet, TagFilterSet};
 use karva_project::path::{TestPath, TestPathError, absolute};
 use karva_python_semantic::current_python_version;
+use karva_static::EnvVars;
 use ruff_db::diagnostic::{DisplayDiagnosticConfig, FileResolver, Input, UnifiedFile};
 use ruff_db::files::File;
 use ruff_notebook::NotebookIndex;
@@ -100,6 +101,14 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     );
 
     let args = Args::parse_from(args);
+
+    // SAFETY: This is called during single-threaded initialization before any
+    // concurrent work begins. The env var is read later by `assert_snapshot`.
+    if args.sub_command.snapshot_update.unwrap_or(false) {
+        unsafe {
+            std::env::set_var(EnvVars::KARVA_SNAPSHOT_UPDATE, "1");
+        }
+    }
 
     let verbosity = args.verbosity().level();
 

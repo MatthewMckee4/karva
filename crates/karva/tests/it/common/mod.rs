@@ -124,6 +124,12 @@ impl TestContext {
             })
     }
 
+    pub fn read_file(&self, path: impl AsRef<Utf8Path>) -> String {
+        let full_path = self.project_dir_path.join(path.as_ref());
+        std::fs::read_to_string(&full_path)
+            .unwrap_or_else(|e| panic!("Failed to read file `{full_path}`: {e}"))
+    }
+
     pub fn command(&self) -> Command {
         let mut command = Command::new(self.venv_binary("karva"));
         command.arg("test").current_dir(self.root());
@@ -133,6 +139,15 @@ impl TestContext {
     pub fn command_no_parallel(&self) -> Command {
         let mut command = self.command();
         command.arg("--no-parallel");
+        command
+    }
+
+    pub fn snapshot(&self, subcommand: &str) -> Command {
+        let mut command = Command::new(self.venv_binary("karva"));
+        command
+            .arg("snapshot")
+            .arg(subcommand)
+            .current_dir(self.root());
         command
     }
 }

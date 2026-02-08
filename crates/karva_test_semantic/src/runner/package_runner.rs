@@ -271,6 +271,16 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
         tracing::debug!("Running test `{}`", qualified_test_name);
 
+        // Set snapshot context so `karva.assert_snapshot()` can determine the current test.
+        // Use `function_name()` (not `qualified_test_name`) to avoid doubling the module prefix,
+        // since `snapshot_path()` already prepends the module name from the file stem.
+        let snapshot_test_name =
+            full_test_name(py, name.function_name().to_string(), &function_arguments);
+        crate::extensions::functions::snapshot::set_snapshot_context(
+            test_module_path.to_string(),
+            snapshot_test_name,
+        );
+
         let py_dict = PyDict::new(py);
         for (key, value) in &function_arguments {
             let _ = py_dict.set_item(key, value.as_ref());
