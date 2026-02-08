@@ -151,7 +151,7 @@ def test_hello():
     );
 
     // Run again — should fail with mismatch
-    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -178,8 +178,8 @@ def test_hello():
     info: Snapshot mismatch for 'test_hello'.
           Snapshot file: <temp_dir>/snapshots/test__test_hello.snap
           [LONG-LINE]┬[LONG-LINE]
-              1       │ -hello world
-                    1 │ +goodbye world
+              1       | -hello world
+                    1 | +goodbye world
           [LONG-LINE]┴[LONG-LINE]
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
@@ -520,7 +520,7 @@ def test_hello():
     Source: test.py:5::test_hello
 
     [LONG-LINE]┬[LONG-LINE]
-              1 │ +hello world
+              1 | +hello world
     [LONG-LINE]┴[LONG-LINE]
 
       a accept     keep the new snapshot
@@ -574,7 +574,7 @@ def test_hello():
     Source: test.py:5::test_hello
 
     [LONG-LINE]┬[LONG-LINE]
-              1 │ +hello world
+              1 | +hello world
     [LONG-LINE]┴[LONG-LINE]
 
       a accept     keep the new snapshot
@@ -628,7 +628,7 @@ def test_hello():
     Source: test.py:5::test_hello
 
     [LONG-LINE]┬[LONG-LINE]
-              1 │ +hello world
+              1 | +hello world
     [LONG-LINE]┴[LONG-LINE]
 
       a accept     keep the new snapshot
@@ -651,6 +651,67 @@ def test_hello():
     assert!(
         snap_new_path.exists(),
         "Expected .snap.new file to still exist after skip"
+    );
+}
+
+#[test]
+fn test_snapshot_review_skip_all() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_one():
+    karva.assert_snapshot('first')
+
+def test_two():
+    karva.assert_snapshot('second')
+        ",
+    );
+
+    // Run tests to create .snap.new files
+    let _ = context.command_no_parallel().output();
+
+    // Pipe 'S' to review to skip all
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("S\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/2
+    File: <temp_dir>/snapshots/test__test_one.snap.new
+    Source: test.py:5::test_one
+
+    [LONG-LINE]┬[LONG-LINE]
+              1 | +first
+    [LONG-LINE]┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    > 
+    insta review finished
+    skipped:
+      <temp_dir>/snapshots/test__test_one.snap.new
+      <temp_dir>/snapshots/test__test_two.snap.new
+
+    ----- stderr -----
+    ");
+
+    // Verify both .snap.new files still exist
+    let snap_new_one = context.root().join("snapshots/test__test_one.snap.new");
+    let snap_new_two = context.root().join("snapshots/test__test_two.snap.new");
+    assert!(
+        snap_new_one.exists(),
+        "Expected .snap.new file to still exist after skip all"
+    );
+    assert!(
+        snap_new_two.exists(),
+        "Expected .snap.new file to still exist after skip all"
     );
 }
 

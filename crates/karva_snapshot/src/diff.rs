@@ -2,14 +2,16 @@ use std::fmt::Write;
 use std::io;
 
 use colored::Colorize;
-use similar::{ChangeTag, TextDiff};
+use similar::{Algorithm, ChangeTag, TextDiff};
 
 /// Render a diff between `old` and `new` content into `output`.
 ///
 /// Uses `grouped_ops` for context-aware output with separators between groups,
 /// and `iter_inline_changes` for word-level emphasis on changed portions.
 fn render_diff(output: &mut String, old: &str, new: &str, width: usize) {
-    let diff = TextDiff::from_lines(old, new);
+    let diff = TextDiff::configure()
+        .algorithm(Algorithm::Patience)
+        .diff_lines(old, new);
     let ops = diff.grouped_ops(4);
 
     if ops.is_empty() {
@@ -64,8 +66,6 @@ fn render_diff(output: &mut String, old: &str, new: &str, width: usize) {
                     }
                 }
 
-                let content = content.trim_end_matches('\n');
-
                 let colored_marker = match style {
                     Style::Delete => marker.red().to_string(),
                     Style::Insert => marker.green().to_string(),
@@ -78,11 +78,14 @@ fn render_diff(output: &mut String, old: &str, new: &str, width: usize) {
                     Style::Equal => (old_num.dimmed().to_string(), new_num.dimmed().to_string()),
                 };
 
-                let _ = writeln!(
+                let _ = write!(
                     output,
-                    "{styled_old} {styled_new} {} {colored_marker}{content}",
-                    "│".dimmed(),
+                    "{styled_old} {styled_new} | {colored_marker}{content}",
                 );
+
+                if change.missing_newline() {
+                    let _ = writeln!(output);
+                }
             }
         }
     }

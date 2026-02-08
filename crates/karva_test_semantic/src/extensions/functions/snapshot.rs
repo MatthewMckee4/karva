@@ -182,15 +182,15 @@ fn compute_snapshot_name(test_name: &str, explicit_name: Option<&str>, counter: 
 fn serialize_value(py: Python<'_>, value: &Py<PyAny>, format: &str) -> PyResult<String> {
     let bound = value.bind(py);
     match format {
-        "str" => Ok(format!("{}\n", bound.str()?.to_string_lossy())),
-        "repr" => Ok(format!("{}\n", bound.repr()?.to_string_lossy())),
+        "str" => Ok(format!("{}", bound.str()?.to_string_lossy())),
+        "repr" => Ok(format!("{}", bound.repr()?.to_string_lossy())),
         "json" => {
             let json_module = py.import("json")?;
             let kwargs = pyo3::types::PyDict::new(py);
             kwargs.set_item("indent", 2)?;
             kwargs.set_item("sort_keys", true)?;
             let result = json_module.call_method("dumps", (bound,), Some(&kwargs))?;
-            Ok(format!("{}\n", result.str()?.to_string_lossy()))
+            Ok(format!("{}", result.str()?.to_string_lossy()))
         }
         _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
             "Unknown snapshot format: '{format}'. Use 'str', 'repr', or 'json'."

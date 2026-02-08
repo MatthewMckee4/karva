@@ -48,12 +48,8 @@ fn write_prompt(out: &mut impl Write, show_info: bool, show_diff: bool) -> io::R
         "reject"
     )?;
     writeln!(out, "  {} {:<11}keep both for now", "s".yellow(), "skip")?;
-    writeln!(
-        out,
-        "  {:<1} {:<11}toggles extended snapshot info",
-        "i", info_label
-    )?;
-    writeln!(out, "  {:<1} {:<11}toggle snapshot diff", "d", diff_label)?;
+    writeln!(out, "  i {info_label:<11}toggles extended snapshot info")?;
+    writeln!(out, "  d {diff_label:<11}toggle snapshot diff")?;
     writeln!(out)?;
     writeln!(
         out,
