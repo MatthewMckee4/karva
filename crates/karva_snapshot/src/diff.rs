@@ -5,11 +5,11 @@ use similar::{Algorithm, ChangeTag, TextDiff};
 
 /// Format a line number for display in the diff gutter.
 ///
-/// Numbers are right-aligned in a 4-char field; blanks are shown for absent lines.
+/// Numbers are right-aligned in a 5-char field; blanks are shown for absent lines.
 fn format_line_num(num: Option<usize>) -> String {
     match num {
-        Some(n) => format!("{:>4}", n + 1),
-        None => "    ".to_string(),
+        Some(n) => format!("{:>5}", n + 1),
+        None => "     ".to_string(),
     }
 }
 

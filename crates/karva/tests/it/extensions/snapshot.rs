@@ -181,8 +181,8 @@ def test_hello():
           -old snapshot
           +new results
           ────────────┬───────────────────────────
-             1      │ -hello world
-                  1 │ +goodbye world
+              1       │ -hello world
+                    1 │ +goodbye world
           ────────────┴───────────────────────────
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
@@ -525,7 +525,7 @@ def test_hello():
     -old snapshot
     +new results
     ────────────┬───────────────────────────
-            1 │ +hello world
+              1 │ +hello world
     ────────────┴───────────────────────────
 
     (a)ccept  (r)eject  (s)kip  (A)ccept all  (R)eject all
@@ -573,7 +573,7 @@ def test_hello():
     -old snapshot
     +new results
     ────────────┬───────────────────────────
-            1 │ +hello world
+              1 │ +hello world
     ────────────┴───────────────────────────
 
     (a)ccept  (r)eject  (s)kip  (A)ccept all  (R)eject all
@@ -621,7 +621,7 @@ def test_hello():
     -old snapshot
     +new results
     ────────────┬───────────────────────────
-            1 │ +hello world
+              1 │ +hello world
     ────────────┴───────────────────────────
 
     (a)ccept  (r)eject  (s)kip  (A)ccept all  (R)eject all
