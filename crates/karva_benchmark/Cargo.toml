@@ -21,7 +21,6 @@ karva_metadata = { workspace = true }
 karva_project = { workspace = true }
 karva_runner = { workspace = true }
 karva_static = { workspace = true }
-karva_test_semantic = { workspace = true }
 ruff_python_ast = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
