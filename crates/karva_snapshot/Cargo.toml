@@ -13,7 +13,9 @@ license = { workspace = true }
 [dependencies]
 camino = { workspace = true }
 colored = { workspace = true }
+console = { workspace = true }
 similar = { workspace = true }
+terminal_size = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

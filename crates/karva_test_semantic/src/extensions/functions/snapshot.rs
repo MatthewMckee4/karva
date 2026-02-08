@@ -120,7 +120,7 @@ pub fn assert_snapshot(
 
         let diff = format_diff(&existing.content, &serialized);
         return Err(SnapshotMismatchError::new_err(format!(
-            "Snapshot mismatch for '{snapshot_name}'.\nSnapshot file: {snap_path}\n\n{diff}"
+            "Snapshot mismatch for '{snapshot_name}'.\nSnapshot file: {snap_path}\n{diff}"
         )));
     }
 

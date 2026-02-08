@@ -479,6 +479,7 @@ dependencies = [
  "encode_unicode",
  "libc",
  "once_cell",
+ "unicode-width",
  "windows-sys 0.59.0",
 ]
 
@@ -1374,8 +1375,10 @@ version = "0.0.0"
 dependencies = [
  "camino",
  "colored 3.1.1",
+ "console",
  "similar",
  "tempfile",
+ "terminal_size",
 ]
 
 [[package]]

@@ -177,13 +177,10 @@ def test_hello():
       |
     info: Snapshot mismatch for 'test_hello'.
           Snapshot file: <temp_dir>/snapshots/test__test_hello.snap
-
-          -old snapshot
-          +new results
-          ────────────┬───────────────────────────
+          [LONG-LINE]┬[LONG-LINE]
               1       │ -hello world
                     1 │ +goodbye world
-          ────────────┴───────────────────────────
+          [LONG-LINE]┴[LONG-LINE]
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -513,7 +510,7 @@ def test_hello():
     let _ = context.command_no_parallel().output();
 
     // Pipe 'a' to review to accept
-    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\n"), @r"
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\n"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -522,15 +519,21 @@ def test_hello():
     File: <temp_dir>/snapshots/test__test_hello.snap.new
     Source: test.py:5::test_hello
 
-    -old snapshot
-    +new results
-    ────────────┬───────────────────────────
+    [LONG-LINE]┬[LONG-LINE]
               1 │ +hello world
-    ────────────┴───────────────────────────
+    [LONG-LINE]┴[LONG-LINE]
 
-    (a)ccept  (r)eject  (s)kip  (A)ccept all  (R)eject all
-    >
-    Review complete: 1 accepted, 0 rejected, 0 skipped
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    > 
+    insta review finished
+    accepted:
+      <temp_dir>/snapshots/test__test_hello.snap.new
 
     ----- stderr -----
     ");
@@ -561,7 +564,7 @@ def test_hello():
     let _ = context.command_no_parallel().output();
 
     // Pipe 'r' to review to reject
-    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("r\n"), @r"
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("r\n"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -570,15 +573,21 @@ def test_hello():
     File: <temp_dir>/snapshots/test__test_hello.snap.new
     Source: test.py:5::test_hello
 
-    -old snapshot
-    +new results
-    ────────────┬───────────────────────────
+    [LONG-LINE]┬[LONG-LINE]
               1 │ +hello world
-    ────────────┴───────────────────────────
+    [LONG-LINE]┴[LONG-LINE]
 
-    (a)ccept  (r)eject  (s)kip  (A)ccept all  (R)eject all
-    >
-    Review complete: 0 accepted, 1 rejected, 0 skipped
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    > 
+    insta review finished
+    rejected:
+      <temp_dir>/snapshots/test__test_hello.snap.new
 
     ----- stderr -----
     ");
@@ -609,7 +618,7 @@ def test_hello():
     let _ = context.command_no_parallel().output();
 
     // Pipe 's' to review to skip
-    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("s\n"), @r"
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("s\n"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -618,15 +627,21 @@ def test_hello():
     File: <temp_dir>/snapshots/test__test_hello.snap.new
     Source: test.py:5::test_hello
 
-    -old snapshot
-    +new results
-    ────────────┬───────────────────────────
+    [LONG-LINE]┬[LONG-LINE]
               1 │ +hello world
-    ────────────┴───────────────────────────
+    [LONG-LINE]┴[LONG-LINE]
 
-    (a)ccept  (r)eject  (s)kip  (A)ccept all  (R)eject all
-    >
-    Review complete: 0 accepted, 0 rejected, 1 skipped
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    > 
+    insta review finished
+    skipped:
+      <temp_dir>/snapshots/test__test_hello.snap.new
 
     ----- stderr -----
     ");
