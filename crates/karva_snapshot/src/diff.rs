@@ -1,10 +1,11 @@
 use std::fmt::Write;
 
+use colored::Colorize;
 use similar::{Algorithm, ChangeTag, TextDiff};
 
 /// Generate a unified diff between old and new content.
 ///
-/// Returns a formatted string with `+` for additions and `-` for deletions.
+/// Returns a formatted string with `+` for additions (green) and `-` for deletions (red).
 pub fn format_diff(old: &str, new: &str) -> String {
     let diff = TextDiff::configure()
         .algorithm(Algorithm::Patience)
@@ -12,12 +13,12 @@ pub fn format_diff(old: &str, new: &str) -> String {
 
     let mut output = String::new();
     for change in diff.iter_all_changes() {
-        let sign = match change.tag() {
-            ChangeTag::Delete => "-",
-            ChangeTag::Insert => "+",
-            ChangeTag::Equal => " ",
+        let line = match change.tag() {
+            ChangeTag::Delete => format!("-{change}").red().to_string(),
+            ChangeTag::Insert => format!("+{change}").green().to_string(),
+            ChangeTag::Equal => format!(" {change}"),
         };
-        let _ = write!(output, "{sign}{change}");
+        let _ = write!(output, "{line}");
         if !change.as_str().unwrap_or("").ends_with('\n') {
             output.push('\n');
         }

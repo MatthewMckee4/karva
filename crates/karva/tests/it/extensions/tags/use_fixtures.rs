@@ -21,7 +21,7 @@ def test_with_use_fixture():
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.test(), @r"
+    assert_cmd_snapshot!(test_context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -56,7 +56,7 @@ def test_with_multiple_use_fixtures():
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.test(), @r"
+    assert_cmd_snapshot!(test_context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -90,7 +90,7 @@ def test_combined_fixtures(param_fixture):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.test(), @r"
+    assert_cmd_snapshot!(test_context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -122,7 +122,7 @@ def test_use_fixtures_with_parametrize(value):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.test(), @r"
+    assert_cmd_snapshot!(test_context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -161,7 +161,7 @@ def test_multiple_use_fixtures_decorators():
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.test(), @r"
+    assert_cmd_snapshot!(test_context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -186,7 +186,7 @@ def test_missing_fixture():
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.test(), @r"
+    assert_cmd_snapshot!(test_context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -218,7 +218,7 @@ def test_use_fixtures_with_generator():
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.test(), @r"
+    assert_cmd_snapshot!(test_context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -253,7 +253,7 @@ def test_session_2():
 "#,
     )]);
 
-    assert_cmd_snapshot!(test_context.test_no_parallel(), @r"
+    assert_cmd_snapshot!(test_context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -295,7 +295,7 @@ def test_mixed_fixtures(shared_fixture):
         ),
     ]);
 
-    assert_cmd_snapshot!(test_context.test(), @r"
+    assert_cmd_snapshot!(test_context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -326,7 +326,7 @@ def test_with_pytest_use_fixture():
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.test(), @r"
+    assert_cmd_snapshot!(test_context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -361,7 +361,7 @@ def test_with_multiple_pytest_use_fixtures():
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.test(), @r"
+    assert_cmd_snapshot!(test_context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -395,7 +395,7 @@ def test_pytest_use_fixtures_with_parametrize(value):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.test(), @r"
+    assert_cmd_snapshot!(test_context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -432,7 +432,7 @@ def test_pytest_session_2():
 "#,
     )]);
 
-    assert_cmd_snapshot!(test_context.test_no_parallel(), @r"
+    assert_cmd_snapshot!(test_context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----

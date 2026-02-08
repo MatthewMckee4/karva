@@ -15,7 +15,7 @@ def test_hello():
     );
 
     // First run: no existing snapshot, creates .snap.new and fails
-    assert_cmd_snapshot!(context.test_no_parallel(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -39,20 +39,23 @@ def test_hello():
     5 |     karva.assert_snapshot('hello world')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
-    info: New snapshot for 'test::test_hello'.
-    Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-    Pending file: <temp_dir>/snapshots/test__test__test_hello.snap.new
+    info: New snapshot for 'test_hello'.
+          Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+          Pending file: <temp_dir>/snapshots/test__test_hello.snap.new
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
     ");
 
-    // Verify .snap.new file was created
-    let snap_new_path = context
-        .root()
-        .join("snapshots/test__test__test_hello.snap.new");
-    assert!(snap_new_path.exists(), "Expected .snap.new file to exist");
+    let content = context.read_file("snapshots/test__test_hello.snap.new");
+    insta::assert_snapshot!(content, @r#"
+    ---
+    source: test.py::test_hello
+    expression: "str(value)"
+    ---
+    hello world
+    "#);
 }
 
 #[test]
@@ -67,7 +70,7 @@ def test_hello():
         ",
     );
 
-    let mut cmd = context.test_no_parallel();
+    let mut cmd = context.command_no_parallel();
     cmd.arg("--snapshot-update");
 
     assert_cmd_snapshot!(cmd, @r"
@@ -81,9 +84,14 @@ def test_hello():
     ----- stderr -----
     ");
 
-    // Verify .snap file was created
-    let snap_path = context.root().join("snapshots/test__test__test_hello.snap");
-    assert!(snap_path.exists(), "Expected .snap file to exist");
+    let content = context.read_file("snapshots/test__test_hello.snap");
+    insta::assert_snapshot!(content, @r#"
+    ---
+    source: test.py::test_hello
+    expression: "str(value)"
+    ---
+    hello world
+    "#);
 }
 
 #[test]
@@ -99,12 +107,12 @@ def test_hello():
     );
 
     // First create the snapshot
-    let mut cmd = context.test_no_parallel();
+    let mut cmd = context.command_no_parallel();
     cmd.arg("--snapshot-update");
     let _ = cmd.output();
 
     // Second run should match
-    assert_cmd_snapshot!(context.test_no_parallel(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -129,7 +137,7 @@ def test_hello():
     );
 
     // Create the initial snapshot
-    let mut cmd = context.test_no_parallel();
+    let mut cmd = context.command_no_parallel();
     cmd.arg("--snapshot-update");
     let _ = cmd.output();
 
@@ -145,7 +153,7 @@ def test_hello():
     );
 
     // Run again — should fail with mismatch
-    assert_cmd_snapshot!(context.test_no_parallel(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -169,12 +177,11 @@ def test_hello():
     5 |     karva.assert_snapshot('goodbye world')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
-    info: Snapshot mismatch for 'test::test_hello'.
-    Snapshot file: <temp_dir>/snapshots/test__test__test_hello.snap
+    info: Snapshot mismatch for 'test_hello'.
+          Snapshot file: <temp_dir>/snapshots/test__test_hello.snap
 
-    -hello world
-    +goodbye world
-
+          -hello world
+          +goodbye world
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -194,7 +201,7 @@ def test_hello():
         ",
     );
 
-    let mut cmd = context.test_no_parallel();
+    let mut cmd = context.command_no_parallel();
     cmd.arg("--snapshot-update");
 
     assert_cmd_snapshot!(cmd, @r"
@@ -208,10 +215,14 @@ def test_hello():
     ----- stderr -----
     ");
 
-    let snap_path = context
-        .root()
-        .join("snapshots/test__test__test_hello--greeting.snap");
-    assert!(snap_path.exists(), "Expected named snapshot file to exist");
+    let content = context.read_file("snapshots/test__test_hello--greeting.snap");
+    insta::assert_snapshot!(content, @r#"
+    ---
+    source: test.py::test_hello
+    expression: "str(value)"
+    ---
+    hello
+    "#);
 }
 
 #[test]
@@ -226,7 +237,7 @@ def test_hello():
         ",
     );
 
-    let mut cmd = context.test_no_parallel();
+    let mut cmd = context.command_no_parallel();
     cmd.arg("--snapshot-update");
 
     assert_cmd_snapshot!(cmd, @r"
@@ -240,12 +251,14 @@ def test_hello():
     ----- stderr -----
     ");
 
-    let snap_path = context.root().join("snapshots/test__test__test_hello.snap");
-    let content = std::fs::read_to_string(&snap_path).expect("read snap file");
-    assert!(
-        content.contains("{'a': 1}"),
-        "Expected repr format in snapshot, got: {content}"
-    );
+    let content = context.read_file("snapshots/test__test_hello.snap");
+    insta::assert_snapshot!(content, @r#"
+    ---
+    source: test.py::test_hello
+    expression: "repr(value)"
+    ---
+    {'a': 1}
+    "#);
 }
 
 #[test]
@@ -260,7 +273,7 @@ def test_hello():
         ",
     );
 
-    let mut cmd = context.test_no_parallel();
+    let mut cmd = context.command_no_parallel();
     cmd.arg("--snapshot-update");
 
     assert_cmd_snapshot!(cmd, @r"
@@ -274,12 +287,17 @@ def test_hello():
     ----- stderr -----
     ");
 
-    let snap_path = context.root().join("snapshots/test__test__test_hello.snap");
-    let content = std::fs::read_to_string(&snap_path).expect("read snap file");
-    assert!(
-        content.contains(r#""a": 1"#),
-        "Expected JSON format in snapshot, got: {content}"
-    );
+    let content = context.read_file("snapshots/test__test_hello.snap");
+    insta::assert_snapshot!(content, @r#"
+    ---
+    source: test.py::test_hello
+    expression: "json(value)"
+    ---
+    {
+      "a": 1,
+      "b": 2
+    }
+    "#);
 }
 
 #[test]
@@ -296,7 +314,7 @@ def test_multi():
         ",
     );
 
-    let mut cmd = context.test_no_parallel();
+    let mut cmd = context.command_no_parallel();
     cmd.arg("--snapshot-update");
 
     assert_cmd_snapshot!(cmd, @r"
@@ -310,27 +328,32 @@ def test_multi():
     ----- stderr -----
     ");
 
-    // First snapshot: test_multi (no suffix)
-    assert!(
-        context
-            .root()
-            .join("snapshots/test__test__test_multi.snap")
-            .exists()
-    );
-    // Second snapshot: test_multi-2
-    assert!(
-        context
-            .root()
-            .join("snapshots/test__test__test_multi-2.snap")
-            .exists()
-    );
-    // Third snapshot: test_multi-3
-    assert!(
-        context
-            .root()
-            .join("snapshots/test__test__test_multi-3.snap")
-            .exists()
-    );
+    let content_1 = context.read_file("snapshots/test__test_multi.snap");
+    insta::assert_snapshot!(content_1, @r#"
+    ---
+    source: test.py::test_multi
+    expression: "str(value)"
+    ---
+    first
+    "#);
+
+    let content_2 = context.read_file("snapshots/test__test_multi-2.snap");
+    insta::assert_snapshot!(content_2, @r#"
+    ---
+    source: test.py::test_multi
+    expression: "str(value)"
+    ---
+    second
+    "#);
+
+    let content_3 = context.read_file("snapshots/test__test_multi-3.snap");
+    insta::assert_snapshot!(content_3, @r#"
+    ---
+    source: test.py::test_multi
+    expression: "str(value)"
+    ---
+    third
+    "#);
 }
 
 #[test]
@@ -346,29 +369,31 @@ def test_hello():
     );
 
     // Run tests to create .snap.new
-    let _ = context.test_no_parallel().output();
+    let _ = context.command_no_parallel().output();
 
     // Run accept command
     assert_cmd_snapshot!(context.snapshot("accept"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
-    Accepted: <temp_dir>/snapshots/test__test__test_hello.snap.new
+    Accepted: <temp_dir>/snapshots/test__test_hello.snap.new
 
     1 snapshot(s) accepted.
 
     ----- stderr -----
     ");
 
-    // Verify .snap file now exists and .snap.new is gone
-    let snap_path = context.root().join("snapshots/test__test__test_hello.snap");
-    let snap_new_path = context
-        .root()
-        .join("snapshots/test__test__test_hello.snap.new");
-    assert!(
-        snap_path.exists(),
-        "Expected .snap file to exist after accept"
-    );
+    // Verify .snap file content and .snap.new is gone
+    let content = context.read_file("snapshots/test__test_hello.snap");
+    insta::assert_snapshot!(content, @r#"
+    ---
+    source: test.py::test_hello
+    expression: "str(value)"
+    ---
+    hello world
+    "#);
+
+    let snap_new_path = context.root().join("snapshots/test__test_hello.snap.new");
     assert!(
         !snap_new_path.exists(),
         "Expected .snap.new file to be removed after accept"
@@ -388,14 +413,14 @@ def test_hello():
     );
 
     // Run tests to create .snap.new
-    let _ = context.test_no_parallel().output();
+    let _ = context.command_no_parallel().output();
 
     // Run reject command
     assert_cmd_snapshot!(context.snapshot("reject"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
-    Rejected: <temp_dir>/snapshots/test__test__test_hello.snap.new
+    Rejected: <temp_dir>/snapshots/test__test_hello.snap.new
 
     1 snapshot(s) rejected.
 
@@ -403,10 +428,8 @@ def test_hello():
     ");
 
     // Verify .snap.new is gone and no .snap was created
-    let snap_path = context.root().join("snapshots/test__test__test_hello.snap");
-    let snap_new_path = context
-        .root()
-        .join("snapshots/test__test__test_hello.snap.new");
+    let snap_path = context.root().join("snapshots/test__test_hello.snap");
+    let snap_new_path = context.root().join("snapshots/test__test_hello.snap.new");
     assert!(!snap_path.exists(), "Expected no .snap file after reject");
     assert!(
         !snap_new_path.exists(),
@@ -427,14 +450,14 @@ def test_hello():
     );
 
     // Run tests to create .snap.new
-    let _ = context.test_no_parallel().output();
+    let _ = context.command_no_parallel().output();
 
     // Run pending command
     assert_cmd_snapshot!(context.snapshot("pending"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
-    <temp_dir>/snapshots/test__test__test_hello.snap.new
+    <temp_dir>/snapshots/test__test_hello.snap.new
 
     1 pending snapshot(s).
 
@@ -455,7 +478,7 @@ def test_param(x):
         ",
     );
 
-    let mut cmd = context.test_no_parallel();
+    let mut cmd = context.command_no_parallel();
     cmd.arg("--snapshot-update");
 
     assert_cmd_snapshot!(cmd, @r"
@@ -470,11 +493,12 @@ def test_param(x):
     ----- stderr -----
     ");
 
-    // Check that parametrized snapshot files exist
-    assert!(
-        context
-            .root()
-            .join("snapshots/test__test__test_param(x=1).snap")
-            .exists()
-    );
+    let content = context.read_file("snapshots/test__test_param(x=1).snap");
+    insta::assert_snapshot!(content, @r#"
+    ---
+    source: test.py::test_param(x=1)
+    expression: "str(value)"
+    ---
+    1
+    "#);
 }

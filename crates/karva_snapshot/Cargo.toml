@@ -12,6 +12,7 @@ license = { workspace = true }
 
 [dependencies]
 camino = { workspace = true }
+colored = { workspace = true }
 similar = { workspace = true }
 
 [dev-dependencies]

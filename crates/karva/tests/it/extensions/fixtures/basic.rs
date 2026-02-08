@@ -36,7 +36,7 @@ def z(x, y):
         ("test.py", "def test_1(z): pass"),
     ]);
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -63,7 +63,7 @@ def x():
         ("test.py", "def test_1(x): pass"),
     ]);
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -90,7 +90,7 @@ def test_fixture_with_name_parameter(fixture_name):
 "#,
     );
 
-    assert_cmd_snapshot!(context.test(), @r#"
+    assert_cmd_snapshot!(context.command(), @r#"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -126,7 +126,7 @@ def test_fixture_2(fixture):
 ",
     );
 
-    assert_cmd_snapshot!(context.test_no_parallel(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -155,7 +155,7 @@ def x():
         ("tests/test.py", "def test_1(x): pass"),
     ]);
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -182,7 +182,7 @@ def x():
         ("tests/test.py", "def test_1(x): pass"),
     ]);
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -224,7 +224,7 @@ def test_2(x):
         ),
     ]);
 
-    assert_cmd_snapshot!(context.test_no_parallel(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -267,7 +267,7 @@ def test_2(x):
         ),
     ]);
 
-    assert_cmd_snapshot!(context.test_no_parallel(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -296,7 +296,7 @@ def x():
         ("tests/test.py", "def test_1(x): pass"),
     ]);
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -337,7 +337,7 @@ def test_2(x_session):
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.test_no_parallel(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -380,7 +380,7 @@ def test_2(x_function):
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.test_no_parallel(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -435,7 +435,7 @@ def test_username(username):
         ),
     ]);
 
-    assert_cmd_snapshot!(context.test().arg("-q"), @r"
+    assert_cmd_snapshot!(context.command().arg("-q"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -494,7 +494,7 @@ fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &st
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.test(), @r"
+        assert_cmd_snapshot!(context.command(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -533,7 +533,7 @@ fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.test(), @r"
+        assert_cmd_snapshot!(context.command(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -572,7 +572,7 @@ fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &st
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.test(), @r"
+        assert_cmd_snapshot!(context.command(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -608,7 +608,7 @@ def test_z(y):
             ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----

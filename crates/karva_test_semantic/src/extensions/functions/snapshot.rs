@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_snapshot::diff::format_diff;
 use karva_snapshot::format::{SnapshotFile, SnapshotMetadata};
@@ -13,6 +15,27 @@ pyo3::create_exception!(
     pyo3::exceptions::PyAssertionError
 );
 
+struct SnapshotContext {
+    test_file: String,
+    test_name: String,
+    counter: u32,
+}
+
+thread_local! {
+    static SNAPSHOT_CONTEXT: RefCell<Option<SnapshotContext>> = const { RefCell::new(None) };
+}
+
+/// Called by the test runner before each test to set snapshot context.
+pub(crate) fn set_snapshot_context(test_file: String, test_name: String) {
+    SNAPSHOT_CONTEXT.with(|ctx| {
+        *ctx.borrow_mut() = Some(SnapshotContext {
+            test_file,
+            test_name,
+            counter: 0,
+        });
+    });
+}
+
 /// Assert that a value matches a stored snapshot.
 ///
 /// On first run (no existing snapshot), writes a pending `.snap.new` file.
@@ -27,14 +50,23 @@ pub fn assert_snapshot(
     name: Option<String>,
     format: Option<String>,
 ) -> PyResult<()> {
-    let karva_module = py.import("karva")?;
-
-    let test_file: String = karva_module.getattr("_snapshot_test_file")?.extract()?;
-    let test_name: String = karva_module.getattr("_snapshot_test_name")?.extract()?;
-    let counter: u32 = karva_module.getattr("_snapshot_counter")?.extract()?;
-
-    // Increment the counter for the next call
-    karva_module.setattr("_snapshot_counter", counter + 1)?;
+    let (test_file, test_name, counter) = SNAPSHOT_CONTEXT
+        .with(|ctx| {
+            let mut ctx = ctx.borrow_mut();
+            let snapshot_ctx = ctx.as_mut()?;
+            let result = (
+                snapshot_ctx.test_file.clone(),
+                snapshot_ctx.test_name.clone(),
+                snapshot_ctx.counter,
+            );
+            snapshot_ctx.counter += 1;
+            Some(result)
+        })
+        .ok_or_else(|| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "assert_snapshot() called outside of a karva test context",
+            )
+        })?;
 
     let format_name = format.as_deref().unwrap_or("str");
 

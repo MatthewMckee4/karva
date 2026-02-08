@@ -19,7 +19,7 @@ def test_4(): pass",
         ),
     ]);
 
-    assert_cmd_snapshot!(context.test_no_parallel().arg("test_file1.py"), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("test_file1.py"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -36,7 +36,7 @@ def test_4(): pass",
 fn test_empty_file() {
     let context = TestContext::with_file("test.py", "");
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -50,7 +50,7 @@ fn test_empty_file() {
 fn test_empty_directory() {
     let context = TestContext::new();
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -69,7 +69,7 @@ fn test_single_function() {
             def test_2(): pass",
     );
 
-    assert_cmd_snapshot!(context.test().arg("test.py::test_1"), @r"
+    assert_cmd_snapshot!(context.command().arg("test.py::test_1"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -90,7 +90,7 @@ def test_1(): pass
 def test_2(): pass",
     );
 
-    assert_cmd_snapshot!(context.test_no_parallel().args(["test.py::test_1", "test.py"]), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().args(["test.py::test_1", "test.py"]), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -112,7 +112,7 @@ def test_1(): pass
 def test_2(): pass",
     );
 
-    assert_cmd_snapshot!(context.test_no_parallel().args(["test.py::test_1", "."]), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().args(["test.py::test_1", "."]), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -129,7 +129,7 @@ def test_2(): pass",
 fn test_no_tests_found() {
     let context = TestContext::with_file("test_no_tests.py", r"");
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -149,7 +149,7 @@ fn test_one_test_passes() {
         ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -171,7 +171,7 @@ fn test_one_test_fail() {
     ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -227,7 +227,7 @@ fn test_fail_concise_output() {
     ",
     );
 
-    assert_cmd_snapshot!(context.test_no_parallel().arg("--output-format").arg("concise"), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--output-format").arg("concise"), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -261,7 +261,7 @@ fn test_two_test_fails() {
     ",
     );
 
-    assert_cmd_snapshot!(context.test_no_parallel(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -334,7 +334,7 @@ fn test_file_importing_another_file() {
         ),
     ]);
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -378,7 +378,7 @@ fn test_stdout() {
         ",
     );
 
-    assert_cmd_snapshot!(context.test_no_parallel().arg("-s"), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("-s"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -390,7 +390,7 @@ fn test_stdout() {
     ----- stderr -----
     ");
 
-    assert_cmd_snapshot!(context.test().arg("-s"), @r"
+    assert_cmd_snapshot!(context.command().arg("-s"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -402,7 +402,7 @@ fn test_stdout() {
     ----- stderr -----
     ");
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -421,7 +421,7 @@ fn test_multiple_fixtures_not_found() {
         "def test_multiple_fixtures_not_found(a, b, c): ...",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -450,7 +450,7 @@ fn test_text_file_in_directory() {
         ("random.txt", "pass"),
     ]);
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -467,7 +467,7 @@ fn test_text_file() {
     let context = TestContext::with_file("random.txt", "pass");
 
     assert_cmd_snapshot!(
-        context.test().args(["random.txt"]),
+        context.command().args(["random.txt"]),
         @r"
     success: false
     exit_code: 2
@@ -489,7 +489,7 @@ fn test_quiet_output_passing() {
         ",
     );
 
-    assert_cmd_snapshot!(context.test().args(["-q"]), @r"
+    assert_cmd_snapshot!(context.command().args(["-q"]), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -509,7 +509,7 @@ fn test_quiet_output_failing() {
         ",
     );
 
-    assert_cmd_snapshot!(context.test().args(["-q"]), @r"
+    assert_cmd_snapshot!(context.command().args(["-q"]), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -523,7 +523,7 @@ fn test_quiet_output_failing() {
 fn test_invalid_path() {
     let context = TestContext::new();
 
-    assert_cmd_snapshot!(context.test().arg("non_existing_path.py"), @r"
+    assert_cmd_snapshot!(context.command().arg("non_existing_path.py"), @r"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -551,7 +551,7 @@ fn test_fixture_generator_two_yields_passing_test() {
 ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -593,7 +593,7 @@ fn test_fixture_generator_two_yields_failing_test() {
 ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -654,7 +654,7 @@ fn test_fixture_generator_fail_in_teardown() {
 "#,
     );
 
-    assert_cmd_snapshot!(context.test(), @r#"
+    assert_cmd_snapshot!(context.command(), @r#"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -695,7 +695,7 @@ fn test_invalid_fixture() {
 "#,
     );
 
-    assert_cmd_snapshot!(context.test(), @r#"
+    assert_cmd_snapshot!(context.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -743,7 +743,7 @@ fn test_failfast() {
         ",
     );
 
-    assert_cmd_snapshot!(context.test_no_parallel().args(["--fail-fast"]), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--fail-fast"]), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -788,7 +788,7 @@ def tests_1(): ...
         ",
     );
 
-    assert_cmd_snapshot!(context.test().arg("--test-prefix").arg("tests_"), @r"
+    assert_cmd_snapshot!(context.command().arg("--test-prefix").arg("tests_"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -813,7 +813,7 @@ def test_1():
 
     context.write_file("foo.py", "print('hello world')");
 
-    assert_cmd_snapshot!(context.test().arg("-s"), @r"
+    assert_cmd_snapshot!(context.command().arg("-s"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -843,7 +843,7 @@ def test_1():
     sys.exit(1)",
     );
 
-    assert_cmd_snapshot!(context.test().arg("-s"), @r"
+    assert_cmd_snapshot!(context.command().arg("-s"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -871,7 +871,7 @@ def test_1(fixture_very_very_very_very_very_long_name):
         ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -920,7 +920,7 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.test_no_parallel().arg("-s"), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("-s"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -943,7 +943,7 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.test_no_parallel().arg("--no-progress"), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--no-progress"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -981,7 +981,7 @@ def test_2(y): pass
         ),
     ]);
 
-    assert_cmd_snapshot!(context.test_no_parallel().arg("--try-import-fixtures"), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--try-import-fixtures"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1021,7 +1021,7 @@ def test_2(y): pass
         ),
     ]);
 
-    assert_cmd_snapshot!(context.test_no_parallel().arg("--try-import-fixtures"), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--try-import-fixtures"), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1074,7 +1074,7 @@ def test_1():
         ",
     );
 
-    assert_cmd_snapshot!(context.test_no_parallel().arg("--retry").arg("5"), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry").arg("5"), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1098,7 +1098,7 @@ def test_3(): pass",
 
     // With 3 tests and 8 requested workers, worker capping reduces to 1 worker
     // (ceil(3/5) = 1). The -v flag shows info logs confirming "Spawning 1 workers".
-    assert_cmd_snapshot!(context.test().args(["-v", "--num-workers", "8"]), @r"
+    assert_cmd_snapshot!(context.command().args(["-v", "--num-workers", "8"]), @r"
     success: true
     exit_code: 0
     ----- stdout -----

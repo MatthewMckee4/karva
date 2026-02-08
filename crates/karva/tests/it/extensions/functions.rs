@@ -23,7 +23,7 @@ def test_with_fail_with_keyword_reason():
         ",
     );
 
-    assert_cmd_snapshot!(context.test_no_parallel(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -111,7 +111,7 @@ def test_conditional_fail():
         ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -158,7 +158,7 @@ def test_raise_fail_error():
         ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -216,7 +216,7 @@ def test_conditional_skip():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.test_no_parallel(), @r"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -250,7 +250,7 @@ def test_another_pass():
         ",
     );
 
-    assert_cmd_snapshot!(context.test_no_parallel(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -277,7 +277,7 @@ def test_raise_skip_error():
         ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -302,7 +302,7 @@ def test_raises_value_error():
         ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -327,7 +327,7 @@ def test_raises_no_exception():
         ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -374,7 +374,7 @@ def test_raises_match_passes():
         ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -399,7 +399,7 @@ def test_raises_match_fails():
         ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -446,7 +446,7 @@ def test_raises_wrong_type():
         ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -496,7 +496,7 @@ def test_raises_exc_info():
         ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -524,7 +524,7 @@ def test_raises_subclass():
         ",
     );
 
-    assert_cmd_snapshot!(context.test(), @r"
+    assert_cmd_snapshot!(context.command(), @r"
     success: true
     exit_code: 0
     ----- stdout -----

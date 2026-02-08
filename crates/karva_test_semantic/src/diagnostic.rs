@@ -143,7 +143,7 @@ pub fn report_invalid_fixture(
     let error_string = error.value(py).to_string();
 
     if !error_string.is_empty() {
-        diagnostic.info(error_string);
+        diagnostic.info(indent_continuation_lines(&error_string));
     }
 }
 
@@ -253,7 +253,7 @@ pub fn report_missing_fixtures(
         let error_string = error.value(py).to_string();
 
         if !error_string.is_empty() {
-            diagnostic.info(error_string);
+            diagnostic.info(indent_continuation_lines(&error_string));
         }
     }
 }
@@ -355,6 +355,27 @@ fn handle_failed_function_call(
     let error_string = error.value(py).to_string();
 
     if !error_string.is_empty() {
-        diagnostic.info(error_string);
+        diagnostic.info(indent_continuation_lines(&error_string));
     }
+}
+
+/// Indent continuation lines in a multi-line message so they align under the first line's text.
+///
+/// The first line is left as-is (it appears after `info: ` in diagnostic output).
+/// Subsequent lines are indented with 6 spaces to align with the first line's text.
+fn indent_continuation_lines(message: &str) -> String {
+    let mut lines = message.lines();
+    let Some(first) = lines.next() else {
+        return String::new();
+    };
+
+    let mut result = first.to_string();
+    for line in lines {
+        result.push('\n');
+        if !line.is_empty() {
+            result.push_str("      ");
+        }
+        result.push_str(line);
+    }
+    result
 }
