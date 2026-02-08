@@ -9,7 +9,7 @@
 //! 1. Clone or update the project into a directory inside `./target`. The commits are pinnted to prevent flaky benchmark results due to new commits.
 //! 2. For projects with dependencies, run uv to create a virtual environment and install the dependencies.
 //! 3. (optionally) Copy the entire project structure into a memory file system to reduce the IO noise in benchmarks.
-//! 4. (not in this module) Create a `ProjectDatabase` and run the benchmark.
+//! 4. (not in this module) Create a `Project` and run the benchmark.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -288,7 +288,7 @@ fn install_dependencies(checkout: &Checkout, venv_dir: Option<PathBuf>) -> Resul
         );
     }
 
-    if let Ok(karva_wheel) = karva_system::find_karva_wheel() {
+    if let Ok(karva_wheel) = karva_project::find_karva_wheel() {
         let output = Command::new("uv")
             .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
             .arg(karva_wheel)

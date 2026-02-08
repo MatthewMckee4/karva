@@ -33,16 +33,16 @@ Karva uses a **main-process + worker-subprocess** execution model. When you run 
 
 - `karva_cli` — Shared CLI types (`SubTestCommand`, `Verbosity`, etc.), the bridge between main and worker.
 - `karva_cache` — Cache directory layout, result serialization, duration tracking.
-- `karva_system` — OS abstraction (`System` trait), file metadata, path utilities, environment variables.
+- `karva_static` — Environment variable constants, `max_parallelism()`.
 - `karva_metadata` — Project configuration (`ProjectSettings`), config file parsing.
 - `karva_diagnostic` — Test result types (`TestRunResult`), diagnostic reporting.
-- `karva_logging` — Tracing setup, `Printer`, colored output control.
+- `karva_logging` — Tracing setup, `Printer`, colored output control, duration formatting.
 - `karva_python_semantic` — Python version detection, AST-level semantic types.
 
 **Main-process only:**
 
 - `karva_runner` — Orchestration: worker spawning, partitioning, parallel collection.
-- `karva_project` — Project database, test path resolution.
+- `karva_project` — Project metadata, test path resolution, path utilities.
 - `karva_collector` — File-level test collection (parsing Python files for test functions).
 - `karva_combine` — Result combination and summary output.
 

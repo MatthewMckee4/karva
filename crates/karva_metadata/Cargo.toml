@@ -15,7 +15,6 @@ ignored = ["ruff_options_metadata"]
 [dependencies]
 karva_combine = { workspace = true }
 karva_macros = { workspace = true }
-karva_system = { workspace = true }
 
 camino = { workspace = true }
 regex = { workspace = true }

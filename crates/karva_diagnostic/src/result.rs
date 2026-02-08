@@ -3,8 +3,8 @@ use std::time::Instant;
 use std::{collections::HashMap, fmt};
 
 use colored::Colorize;
+use karva_logging::time::format_duration;
 use karva_python_semantic::{QualifiedFunctionName, QualifiedTestName};
-use karva_system::time::format_duration;
 use ruff_db::diagnostic::Diagnostic;
 use serde::de::{self, MapAccess};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};

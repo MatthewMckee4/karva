@@ -11,6 +11,7 @@ use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields};
 use tracing_subscriber::registry::LookupSpan;
 
 mod printer;
+pub mod time;
 mod verbosity;
 
 pub use printer::Printer;

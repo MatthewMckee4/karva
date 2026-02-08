@@ -1,11 +1,11 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use camino::Utf8Path;
 use karva_collector::CollectionSettings;
 use karva_diagnostic::{IndividualTestResultKind, Reporter, TestRunResult};
 use karva_metadata::ProjectSettings;
 use karva_python_semantic::QualifiedTestName;
-use karva_system::System;
 use ruff_python_ast::PythonVersion;
 
 use crate::diagnostic::{DiagnosticGuardBuilder, DiagnosticType};
@@ -15,8 +15,8 @@ use crate::diagnostic::{DiagnosticGuardBuilder, DiagnosticType};
 /// Provides access to system operations, project settings, and test result
 /// accumulation throughout the test discovery and execution phases.
 pub struct Context<'a> {
-    /// Reference to the system abstraction for file operations.
-    system: &'a dyn System,
+    /// Current working directory.
+    cwd: &'a Utf8Path,
 
     /// Project-level configuration settings.
     settings: &'a ProjectSettings,
@@ -33,13 +33,13 @@ pub struct Context<'a> {
 
 impl<'a> Context<'a> {
     pub(crate) fn new(
-        system: &'a dyn System,
+        cwd: &'a Utf8Path,
         settings: &'a ProjectSettings,
         python_version: PythonVersion,
         reporter: &'a dyn Reporter,
     ) -> Self {
         Self {
-            system,
+            cwd,
             settings,
             python_version,
             result: Rc::new(RefCell::new(TestRunResult::default())),
@@ -47,8 +47,8 @@ impl<'a> Context<'a> {
         }
     }
 
-    pub(crate) fn system(&self) -> &'a dyn System {
-        self.system
+    pub(crate) fn cwd(&self) -> &'a Utf8Path {
+        self.cwd
     }
 
     pub(crate) fn settings(&self) -> &'a ProjectSettings {

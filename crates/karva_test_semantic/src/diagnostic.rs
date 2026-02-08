@@ -7,8 +7,8 @@
 use std::collections::HashMap;
 
 use karva_diagnostic::Traceback;
+use karva_project::path::TestPathError;
 use karva_python_semantic::FunctionKind;
-use karva_system::path::TestPathError;
 use pyo3::{Py, PyAny, PyErr, Python};
 use ruff_db::diagnostic::{
     Annotation, Diagnostic, Severity, Span, SubDiagnostic, SubDiagnosticSeverity,
@@ -181,7 +181,6 @@ pub fn report_fixture_failure(context: &Context, py: Python, error: FixtureCallE
     let mut diagnostic = builder.into_diagnostic(format!("Fixture `{fixture_name}` failed"));
 
     handle_failed_function_call(
-        context,
         &mut diagnostic,
         py,
         source_file,
@@ -237,7 +236,7 @@ pub fn report_missing_fixtures(
             lines: _,
             error_source_file,
             location,
-        }) = Traceback::from_error(py, context.system(), &error)
+        }) = Traceback::from_error(py, &error)
         {
             let mut sub = SubDiagnostic::new(
                 SubDiagnosticSeverity::Info,
@@ -295,7 +294,6 @@ pub fn report_test_failure(
         builder.into_diagnostic(format!("Test `{}` failed", stmt_function_def.name));
 
     handle_failed_function_call(
-        context,
         &mut diagnostic,
         py,
         source_file,
@@ -306,9 +304,7 @@ pub fn report_test_failure(
     );
 }
 
-#[allow(clippy::too_many_arguments)]
 fn handle_failed_function_call(
-    context: &Context,
     diagnostic: &mut Diagnostic,
     py: Python,
     source_file: SourceFile,
@@ -342,7 +338,7 @@ fn handle_failed_function_call(
         lines: _,
         error_source_file,
         location,
-    }) = Traceback::from_error(py, context.system(), error)
+    }) = Traceback::from_error(py, error)
     {
         let mut sub = SubDiagnostic::new(
             SubDiagnosticSeverity::Info,

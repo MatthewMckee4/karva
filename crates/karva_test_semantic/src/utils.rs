@@ -2,19 +2,16 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use camino::Utf8Path;
-use karva_system::System;
 use pyo3::prelude::*;
 use pyo3::types::PyAnyMethods;
 use pyo3::{PyResult, Python};
 use ruff_source_file::{SourceFile, SourceFileBuilder};
 
 /// Get the source file for the given utf8 path.
-pub(crate) fn source_file(system: &dyn System, path: &Utf8Path) -> SourceFile {
+pub(crate) fn source_file(path: &Utf8Path) -> SourceFile {
     SourceFileBuilder::new(
         path.as_str(),
-        system
-            .read_to_string(path)
-            .expect("Failed to read source file"),
+        std::fs::read_to_string(path).expect("Failed to read source file"),
     )
     .finish()
 }

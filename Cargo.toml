@@ -24,7 +24,7 @@ karva_metadata = { path = "crates/karva_metadata" }
 karva_project = { path = "crates/karva_project" }
 karva_python_semantic = { path = "crates/karva_python_semantic" }
 karva_runner = { path = "crates/karva_runner" }
-karva_system = { path = "crates/karva_system" }
+karva_static = { path = "crates/karva_static" }
 karva_test_semantic = { path = "crates/karva_test_semantic" }
 karva_worker = { path = "crates/karva_worker" }
 

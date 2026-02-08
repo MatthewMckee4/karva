@@ -1,10 +1,9 @@
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use ruff_python_ast::{PythonVersion, Stmt};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 
 use karva_python_semantic::ModulePath;
 use karva_python_semantic::is_fixture_function;
-use karva_system::System;
 
 mod models;
 
@@ -29,13 +28,13 @@ pub struct CollectionSettings<'a> {
 /// Fixtures are always collected regardless of the filter.
 pub fn collect_file(
     path: &Utf8PathBuf,
-    system: &dyn System,
+    cwd: &Utf8Path,
     settings: &CollectionSettings,
     function_names: &[String],
 ) -> Option<CollectedModule> {
-    let module_path = ModulePath::new(path, &system.current_directory().to_path_buf())?;
+    let module_path = ModulePath::new(path, &cwd.to_path_buf())?;
 
-    let source_text = system.read_to_string(path).ok()?;
+    let source_text = std::fs::read_to_string(path).ok()?;
 
     let module_type: ModuleType = path.into();
 

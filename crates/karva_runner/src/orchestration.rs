@@ -9,10 +9,9 @@ use crate::shutdown::shutdown_receiver;
 use karva_cache::{AggregatedResults, CACHE_DIR, Cache, RunHash, read_recent_durations};
 use karva_cli::SubTestCommand;
 use karva_collector::CollectionSettings;
+use karva_logging::time::format_duration;
 use karva_metadata::ProjectSettings;
-use karva_project::{Db, ProjectDatabase};
-use karva_system::time::format_duration;
-use karva_system::{venv_binary, venv_binary_from_active_env};
+use karva_project::Project;
 
 use crate::collection::ParallelCollector;
 use crate::partition::{Partition, partition_collected_tests};
@@ -133,13 +132,13 @@ pub struct ParallelTestConfig {
 /// Creates a worker process for each non-empty partition, passing the appropriate
 /// subset of tests and command-line arguments to each worker.
 fn spawn_workers(
-    db: &ProjectDatabase,
+    project: &Project,
     partitions: &[Partition],
     cache_dir: &Utf8PathBuf,
     run_hash: &RunHash,
     args: &SubTestCommand,
 ) -> Result<WorkerManager> {
-    let core_binary = find_karva_worker_binary(&db.system().current_directory().to_path_buf())?;
+    let core_binary = find_karva_worker_binary(project.cwd())?;
     let mut worker_manager = WorkerManager::default();
 
     for (worker_id, partition) in partitions.iter().enumerate() {
@@ -155,7 +154,7 @@ fn spawn_workers(
             .arg(run_hash.inner())
             .arg("--worker-id")
             .arg(worker_id.to_string())
-            .current_dir(db.system().current_directory())
+            .current_dir(project.cwd())
             // Ensure python does not buffer output
             .env("PYTHONUNBUFFERED", "1");
 
@@ -163,7 +162,7 @@ fn spawn_workers(
             cmd.arg(path);
         }
 
-        cmd.args(inner_cli_args(db.project().settings(), args));
+        cmd.args(inner_cli_args(project.settings(), args));
 
         let child = cmd
             .stdout(Stdio::inherit())
@@ -184,13 +183,13 @@ fn spawn_workers(
 }
 
 pub fn run_parallel_tests(
-    db: &ProjectDatabase,
+    project: &Project,
     config: &ParallelTestConfig,
     args: &SubTestCommand,
 ) -> Result<AggregatedResults> {
     let mut test_paths = Vec::new();
 
-    for path in db.project().test_paths() {
+    for path in project.test_paths() {
         match path {
             Ok(path) => test_paths.push(path),
             Err(err) => return Err(err.into()),
@@ -200,13 +199,13 @@ pub fn run_parallel_tests(
     tracing::debug!(path_count = test_paths.len(), "Found test paths");
 
     let collection_settings = CollectionSettings {
-        python_version: db.project().metadata().python_version(),
-        test_function_prefix: &db.project().settings().test().test_function_prefix,
-        respect_ignore_files: db.project().settings().src().respect_ignore_files,
+        python_version: project.metadata().python_version(),
+        test_function_prefix: &project.settings().test().test_function_prefix,
+        respect_ignore_files: project.settings().src().respect_ignore_files,
         collect_fixtures: false,
     };
 
-    let collector = ParallelCollector::new(db.system(), collection_settings);
+    let collector = ParallelCollector::new(project.cwd(), collection_settings);
 
     let collection_start_time = std::time::Instant::now();
 
@@ -232,7 +231,7 @@ pub fn run_parallel_tests(
 
     tracing::debug!(num_workers, "Partitioning tests");
 
-    let cache_dir = db.system().current_directory().join(CACHE_DIR);
+    let cache_dir = project.cwd().join(CACHE_DIR);
 
     // Read durations from the most recent run to optimize partitioning
     let previous_durations = if config.no_cache {
@@ -254,7 +253,7 @@ pub fn run_parallel_tests(
 
     tracing::info!("Spawning {} workers", partitions.len());
 
-    let mut worker_manager = spawn_workers(db, &partitions, &cache_dir, &run_hash, args)?;
+    let mut worker_manager = spawn_workers(project, &partitions, &cache_dir, &run_hash, args)?;
 
     let shutdown_rx = if config.create_ctrlc_handler {
         Some(shutdown_receiver())
@@ -269,6 +268,52 @@ pub fn run_parallel_tests(
     let result = cache.aggregate_results()?;
 
     Ok(result)
+}
+
+fn venv_binary(binary_name: &str, directory: &Utf8PathBuf) -> Option<Utf8PathBuf> {
+    let venv_dir = directory.join(".venv");
+
+    let binary_dir = if cfg!(target_os = "windows") {
+        venv_dir.join("Scripts")
+    } else {
+        venv_dir.join("bin")
+    };
+
+    let binary_path = if cfg!(target_os = "windows") {
+        binary_dir.join(format!("{binary_name}.exe"))
+    } else {
+        binary_dir.join(binary_name)
+    };
+
+    if binary_path.exists() {
+        Some(binary_path)
+    } else {
+        None
+    }
+}
+
+fn venv_binary_from_active_env(binary_name: &str) -> Option<Utf8PathBuf> {
+    let venv_root = std::env::var_os("VIRTUAL_ENV")?;
+
+    let venv_root = Utf8PathBuf::from_path_buf(venv_root.into()).ok()?;
+
+    let binary_dir = if cfg!(target_os = "windows") {
+        venv_root.join("Scripts")
+    } else {
+        venv_root.join("bin")
+    };
+
+    let binary_path = if cfg!(target_os = "windows") {
+        binary_dir.join(format!("{binary_name}.exe"))
+    } else {
+        binary_dir.join(binary_name)
+    };
+
+    if binary_path.exists() {
+        Some(binary_path)
+    } else {
+        None
+    }
 }
 
 const MIN_TESTS_PER_WORKER: usize = 5;
