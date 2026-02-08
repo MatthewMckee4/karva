@@ -46,7 +46,7 @@ fastrand = { version = "2.3" }
 filetime = { version = "0.2.27" }
 fs4 = { version = "0.13" }
 ignore = { version = "0.4.25" }
-insta = { version = "1.46.1" }
+insta = { version = "1.46.2" }
 insta-cmd = { version = "0.6.0" }
 itertools = { version = "0.14.0" }
 markdown = { version = "1.0.0" }
