@@ -28,7 +28,7 @@ struct NotSetType;
 
 #[pymethods]
 impl NotSetType {
-    #[allow(clippy::unused_self)]
+    #[expect(clippy::unused_self)]
     const fn __repr__(&self) -> &'static str {
         "NOTSET"
     }
@@ -59,7 +59,7 @@ impl MockEnv {
     }
 
     /// Return a string representation of the Mock object.
-    #[allow(clippy::unused_self)]
+    #[expect(clippy::unused_self)]
     pub fn __repr__(&self) -> String {
         "<MockEnv object>".to_string()
     }
@@ -225,7 +225,7 @@ impl MockEnv {
     }
 
     /// Set dictionary entry name to value.
-    #[allow(clippy::needless_pass_by_value)]
+    #[expect(clippy::needless_pass_by_value)]
     fn setitem(
         &mut self,
         py: Python<'_>,
@@ -254,7 +254,7 @@ impl MockEnv {
     }
 
     /// Delete name from dict.
-    #[allow(clippy::needless_pass_by_value)]
+    #[expect(clippy::needless_pass_by_value)]
     #[pyo3(signature = (dic, name, raising = true))]
     fn delitem(
         &mut self,
@@ -286,7 +286,7 @@ impl MockEnv {
 
     /// Set environment variable name to value.
     #[pyo3(signature = (name, value, prepend = None))]
-    #[allow(clippy::needless_pass_by_value)]
+    #[expect(clippy::needless_pass_by_value)]
     fn setenv(
         &mut self,
         py: Python<'_>,
@@ -330,7 +330,7 @@ impl MockEnv {
 
     /// Delete name from the environment.
     #[pyo3(signature = (name, raising = true))]
-    #[allow(clippy::needless_pass_by_value)]
+    #[expect(clippy::needless_pass_by_value)]
     fn delenv(&mut self, py: Python<'_>, name: String, raising: bool) -> PyResult<()> {
         let os_module = py.import("os")?;
         let environ = os_module.getattr("environ")?;
@@ -378,7 +378,7 @@ impl MockEnv {
     }
 
     /// Change the current working directory to the specified path.
-    #[allow(clippy::needless_pass_by_value)]
+    #[expect(clippy::needless_pass_by_value)]
     fn chdir(&mut self, py: Python<'_>, path: Py<PyAny>) -> PyResult<()> {
         let os_module = py.import("os")?;
         let path_string = path.to_string();
@@ -480,7 +480,7 @@ struct MockEnvContext {
 
 #[pymethods]
 impl MockEnvContext {
-    #[allow(clippy::needless_pass_by_value)]
+    #[expect(clippy::needless_pass_by_value)]
     fn __enter__(slf: PyRef<'_, Self>) -> PyResult<Py<MockEnv>> {
         let py = slf.py();
         Py::new(py, MockEnv::new())

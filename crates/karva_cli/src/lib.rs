@@ -205,7 +205,7 @@ pub struct TestCommand {
 
     /// The path to a `karva.toml` file to use for configuration.
     ///
-    /// While ty configuration can be included in a `pyproject.toml` file, it is not allowed in this context.
+    /// While karva configuration can be included in a `pyproject.toml` file, it is not allowed in this context.
     #[arg(long, env = "KARVA_CONFIG_FILE", value_name = "PATH")]
     pub config_file: Option<Utf8PathBuf>,
 

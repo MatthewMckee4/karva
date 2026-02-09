@@ -16,7 +16,8 @@ pub fn absolute(path: impl AsRef<Utf8Path>, cwd: impl AsRef<Utf8Path>) -> Utf8Pa
 
     for component in components {
         match component {
-            Utf8Component::Prefix(..) => unreachable!(),
+            Utf8Component::Prefix(..) => {}
+
             Utf8Component::RootDir => {
                 ret.push(component.as_str());
             }

@@ -123,7 +123,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         Utf8PathBuf::from_path_buf(cwd)
             .map_err(|path| {
                 anyhow::anyhow!(
-                    "The current working directory `{}` contains non-Unicode characters. ty only supports Unicode paths.",
+                    "The current working directory `{}` contains non-Unicode characters. karva only supports Unicode paths.",
                     path.display()
                 )
             })?
