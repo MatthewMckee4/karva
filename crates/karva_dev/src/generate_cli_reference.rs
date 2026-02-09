@@ -275,7 +275,12 @@ fn emit_env_option(opt: &clap::Arg, output: &mut String) {
 }
 
 fn emit_default_option(opt: &clap::Arg, output: &mut String) {
-    if opt.is_hide_default_value_set() || !opt.get_num_args().expect("built").takes_values() {
+    if opt.is_hide_default_value_set()
+        || !opt
+            .get_num_args()
+            .expect("argument should have num_args set after build")
+            .takes_values()
+    {
         return;
     }
 

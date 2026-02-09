@@ -1,6 +1,6 @@
 #![warn(
     clippy::disallowed_methods,
-    reason = "Prefer System trait methods over std methods in ty crates"
+    reason = "Prefer explicit path methods over std methods in karva crates"
 )]
 
 use std::collections::HashMap;

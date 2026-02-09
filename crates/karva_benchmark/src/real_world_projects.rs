@@ -27,7 +27,7 @@ pub struct RealWorldProject<'a> {
     pub repository: &'a str,
     /// Specific commit hash to checkout
     pub commit: &'a str,
-    /// List of paths within the project to check (`ty check <paths>`)
+    /// List of paths within the project to check (`karva test <paths>`)
     pub paths: &'a [&'a str],
     /// Dependencies to install via uv
     pub dependencies: &'a [&'a str],

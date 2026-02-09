@@ -140,7 +140,7 @@ impl ProjectMetadata {
                     .is_some_and(|project| project.karva().is_some())
                 {
                     tracing::warn!(
-                        "Ignoring the `tool.ty` section in `{pyproject_path}` because `{karva_toml_path}` takes precedence."
+                        "Ignoring the `tool.karva` section in `{pyproject_path}` because `{karva_toml_path}` takes precedence."
                     );
                 }
 
@@ -173,7 +173,7 @@ impl ProjectMetadata {
         // No project found, but maybe a pyproject.toml was found.
         let metadata = if let Some(closest_project) = closest_project {
             tracing::debug!(
-                "Project without `tool.ty` section: '{}'",
+                "Project without `tool.karva` section: '{}'",
                 closest_project.root()
             );
 

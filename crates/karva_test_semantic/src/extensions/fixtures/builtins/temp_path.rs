@@ -2,13 +2,10 @@ use pyo3::prelude::*;
 use tempfile::TempDir;
 
 pub fn is_temp_path_fixture_name(fixture_name: &str) -> bool {
-    match fixture_name {
-        // pytest names
-        "tmp_path" | "tmpdir" |
-        // karva names
-        "temp_path" | "temp_dir" => true,
-        _ => false,
-    }
+    matches!(
+        fixture_name,
+        "tmp_path" | "tmpdir" | "temp_path" | "temp_dir"
+    )
 }
 
 pub fn create_temp_dir_fixture(py: Python<'_>) -> Option<Py<PyAny>> {
