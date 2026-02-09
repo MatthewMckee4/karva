@@ -547,7 +547,9 @@ fn get_value_and_finalizer(
                 Ok((value.unbind(), Some(finalizer)))
             }
             Some(Err(err)) => Err(err),
-            None => unreachable!(),
+            None => Err(pyo3::exceptions::PyRuntimeError::new_err(
+                "Generator fixture yielded no value",
+            )),
         }
     } else if let Some(builtin_fixture) = fixture.as_builtin()
         && let Some(finalizer_fn) = &builtin_fixture.finalizer
