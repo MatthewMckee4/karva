@@ -1,8 +1,3 @@
-#![warn(
-    clippy::disallowed_methods,
-    reason = "Prefer explicit path methods over std methods in karva crates"
-)]
-
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 
