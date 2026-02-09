@@ -75,7 +75,7 @@ fn generate_set(output: &mut String, set: Set, parents: &mut Vec<Set>) {
                 .filter_map(|set| set.name())
                 .chain(std::iter::once(name.as_str()))
                 .join(".");
-            writeln!(output, "## `{title}`\n",).unwrap();
+            let _ = writeln!(output, "## `{title}`\n",);
         }
     }
 
@@ -125,15 +125,15 @@ enum Set {
 impl Set {
     fn name(&self) -> Option<&str> {
         match self {
-            Set::Toplevel(_) => None,
-            Set::Named { name, .. } => Some(name),
+            Self::Toplevel(_) => None,
+            Self::Named { name, .. } => Some(name),
         }
     }
 
     fn metadata(&self) -> &OptionSet {
         match self {
-            Set::Toplevel(set) => set,
-            Set::Named { set, .. } => set,
+            Self::Toplevel(set) => set,
+            Self::Named { set, .. } => set,
         }
     }
 }
@@ -150,13 +150,13 @@ fn emit_field(output: &mut String, name: &str, field: &OptionField, parents: &[S
         output.push_str("> This option has been deprecated");
 
         if let Some(since) = deprecated.since {
-            write!(output, " in {since}").unwrap();
+            let _ = write!(output, " in {since}");
         }
 
         output.push('.');
 
         if let Some(message) = deprecated.message {
-            writeln!(output, " {message}").unwrap();
+            let _ = writeln!(output, " {message}");
         }
 
         output.push('\n');

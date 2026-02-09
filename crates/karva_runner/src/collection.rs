@@ -129,9 +129,9 @@ impl<'a> ParallelCollector<'a> {
             .git_ignore(self.settings.respect_ignore_files)
             .types({
                 let mut types = ignore::types::TypesBuilder::new();
-                types.add("python", "*.py").unwrap();
+                types.add("python", "*.py").expect("static pattern");
                 types.select("python");
-                types.build().unwrap()
+                types.build().expect("finalize file types")
             })
             .build_parallel()
     }

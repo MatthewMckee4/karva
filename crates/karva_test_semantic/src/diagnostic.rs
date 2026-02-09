@@ -1,8 +1,8 @@
 //! Karva Diagnostics
 //!
-//! We use ruff diagnostics for all test diagnostics.
+//! We use `ruff_db` diagnostics for all test diagnostics.
 //!
-//! Ruff diagnostics look great and have a great API.
+//! `ruff_db` diagnostics look great and have a great API.
 
 use std::collections::HashMap;
 

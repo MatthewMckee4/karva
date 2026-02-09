@@ -78,10 +78,10 @@ impl<'a> Context<'a> {
         test_result: IndividualTestResultKind,
         duration: std::time::Duration,
     ) -> bool {
-        let result = match &test_result {
-            IndividualTestResultKind::Passed | IndividualTestResultKind::Skipped { .. } => true,
-            IndividualTestResultKind::Failed => false,
-        };
+        let result = matches!(
+            &test_result,
+            IndividualTestResultKind::Passed | IndividualTestResultKind::Skipped { .. }
+        );
 
         self.result().register_test_case_result(
             test_case_name,

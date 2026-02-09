@@ -198,11 +198,11 @@ impl<'a> DiagnosticFileResolver<'a> {
 
 impl FileResolver for DiagnosticFileResolver<'_> {
     fn path(&self, _file: File) -> &str {
-        unimplemented!("Expected a Ruff file for rendering a Ruff diagnostic");
+        unimplemented!("karva does not resolve file paths via ruff_db");
     }
 
     fn input(&self, _file: File) -> Input {
-        unimplemented!("Expected a Ruff file for rendering a Ruff diagnostic");
+        unimplemented!("karva does not resolve file inputs via ruff_db");
     }
 
     fn notebook_index(&self, _file: &UnifiedFile) -> Option<NotebookIndex> {

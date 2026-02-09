@@ -6,11 +6,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyString, PyType};
 
 pub fn is_mock_env_fixture_name(fixture_name: &str) -> bool {
-    match fixture_name {
-        // pytest names
-        "monkeypatch" => true,
-        _ => false,
-    }
+    matches!(fixture_name, "monkeypatch")
 }
 
 pub fn create_mock_env_fixture(py: Python<'_>) -> Option<(Py<PyAny>, Py<PyAny>)> {

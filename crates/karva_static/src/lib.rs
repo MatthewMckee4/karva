@@ -22,7 +22,5 @@ pub fn max_parallelism() -> NonZeroUsize {
         .or_else(|_| std::env::var(EnvVars::RAYON_NUM_THREADS))
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or_else(|| {
-            std::thread::available_parallelism().unwrap_or_else(|_| NonZeroUsize::new(1).unwrap())
-        })
+        .unwrap_or_else(|| std::thread::available_parallelism().unwrap_or(NonZeroUsize::MIN))
 }
