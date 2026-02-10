@@ -206,8 +206,9 @@ fn test_inline_snapshot_multiple_per_test() {
 import karva
 
 def test_multi():
-    karva.assert_snapshot("first", inline="")
-    karva.assert_snapshot("second", inline="")
+    with karva.snapshot_settings(allow_duplicates=True):
+        karva.assert_snapshot("first", inline="")
+        karva.assert_snapshot("second", inline="")
         "#,
     );
 
@@ -227,8 +228,9 @@ def test_multi():
     import karva
 
     def test_multi():
-        karva.assert_snapshot("first", inline="first")
-        karva.assert_snapshot("second", inline="second")
+        with karva.snapshot_settings(allow_duplicates=True):
+            karva.assert_snapshot("first", inline="first")
+            karva.assert_snapshot("second", inline="second")
     "#);
 }
 
@@ -304,6 +306,69 @@ def test_hello():
     def test_hello():
         karva.assert_snapshot("hello world", inline="")
     "#);
+}
+
+#[test]
+fn test_inline_snapshot_with_backslash() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_backslash():
+    karva.assert_snapshot("path\\to\\file", inline="")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_backslash ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let source = context.read_file("test.py");
+    insta::assert_snapshot!(source, @r#"
+
+    import karva
+
+    def test_backslash():
+        karva.assert_snapshot("path\/to\/file", inline="path\/to\/file")
+    "#);
+}
+
+#[test]
+fn test_inline_snapshot_with_quotes() {
+    let context = TestContext::with_file(
+        "test.py",
+        "
+import karva
+
+def test_quotes():
+    karva.assert_snapshot('say \"hi\"', inline=\"\")
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_quotes ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    "#);
+
+    let source = context.read_file("test.py");
+    assert!(
+        source.contains("say \\\"hi\\\""),
+        "Expected escaped double quotes in inline value, got: {source}"
+    );
 }
 
 #[test]

@@ -108,10 +108,20 @@ pub fn find_inline_argument(source: &str, line_number: u32) -> Option<InlineLoca
 
     let indent = lines[start_line_idx].len() - lines[start_line_idx].trim_start().len();
 
-    // Find `assert_snapshot(` from the start line to locate the call
+    // Find `assert_snapshot(` or `assert_json_snapshot(` from the start line
     let search_start = line_byte_offset;
-    let call_pattern = "assert_snapshot(";
-    let call_pos = source[search_start..].find(call_pattern)?;
+    let candidates = [
+        source[search_start..]
+            .find("assert_snapshot(")
+            .map(|p| (p, "assert_snapshot(")),
+        source[search_start..]
+            .find("assert_json_snapshot(")
+            .map(|p| (p, "assert_json_snapshot(")),
+    ];
+    let (call_pos, call_pattern) = candidates
+        .into_iter()
+        .flatten()
+        .min_by_key(|(pos, _)| *pos)?;
     let abs_open_paren = search_start + call_pos + call_pattern.len() - 1;
 
     // Track paren depth to find the matching close paren
@@ -455,6 +465,13 @@ mod tests {
         assert!(find_inline_argument(source, 1).is_none());
         // Line 2 should find it
         let loc = find_inline_argument(source, 2).expect("should find on line 2");
+        assert_eq!(&source[loc.start..loc.end], "\"\"");
+    }
+
+    #[test]
+    fn test_find_inline_json_snapshot() {
+        let source = "    karva.assert_json_snapshot({'a': 1}, inline=\"\")\n";
+        let loc = find_inline_argument(source, 1).expect("should find");
         assert_eq!(&source[loc.start..loc.end], "\"\"");
     }
 

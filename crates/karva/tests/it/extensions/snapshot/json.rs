@@ -188,6 +188,103 @@ def test_json_filtered():
 }
 
 #[test]
+fn test_json_snapshot_inline_creates_value() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_inline_json():
+    karva.assert_json_snapshot({"a": 1}, inline="")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_inline_json ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let source = context.read_file("test.py");
+    assert!(
+        source.contains(r#""a": 1"#),
+        "Expected source to contain JSON content inline"
+    );
+}
+
+#[test]
+fn test_json_snapshot_inline_accept() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_inline_json():
+    karva.assert_json_snapshot({"a": 1}, inline="")
+        "#,
+    );
+
+    let _ = context.command_no_parallel().output();
+
+    assert_cmd_snapshot!(context.snapshot("accept"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Accepted: <temp_dir>/snapshots/test__test_inline_json_inline_5.snap.new
+
+    1 snapshot(s) accepted.
+
+    ----- stderr -----
+    ");
+
+    let source = context.read_file("test.py");
+    assert!(
+        source.contains(r#""a": 1"#),
+        "Expected source to contain JSON content inline after accept"
+    );
+}
+
+#[test]
+fn test_json_snapshot_named() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_fn():
+    karva.assert_json_snapshot({'b': 2, 'a': 1}, name='config')
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_fn ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let content = context.read_file("snapshots/test__test_fn--config.snap");
+    insta::assert_snapshot!(content, @r#"
+    ---
+    source: test.py:5::test_fn
+    ---
+    {
+      "a": 1,
+      "b": 2
+    }
+    "#);
+}
+
+#[test]
 fn test_json_snapshot_non_serializable() {
     let context = TestContext::with_file(
         "test.py",
