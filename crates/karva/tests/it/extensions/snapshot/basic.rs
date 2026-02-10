@@ -392,6 +392,54 @@ def test_two():
 }
 
 #[test]
+fn test_snapshot_named_and_unnamed_counter_gap() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_mixed():
+    karva.assert_snapshot('first')
+    karva.assert_snapshot('named value', name='special')
+    karva.assert_snapshot('third')
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_mixed ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    assert!(
+        context
+            .root()
+            .join("snapshots/test__test_mixed.snap")
+            .exists(),
+        "Expected first unnamed snapshot"
+    );
+    assert!(
+        context
+            .root()
+            .join("snapshots/test__test_mixed--special.snap")
+            .exists(),
+        "Expected named snapshot"
+    );
+    assert!(
+        context
+            .root()
+            .join("snapshots/test__test_mixed-3.snap")
+            .exists(),
+        "Expected third snapshot with -3 suffix"
+    );
+}
+
+#[test]
 fn test_snapshot_multiple_files() {
     let context = TestContext::default();
     context.write_file(

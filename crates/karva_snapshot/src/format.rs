@@ -135,6 +135,30 @@ mod tests {
     }
 
     #[test]
+    fn test_roundtrip_content_with_dashes() {
+        let snapshot = SnapshotFile {
+            metadata: SnapshotMetadata {
+                source: Some("test.py:5::test_dashes".to_string()),
+                ..Default::default()
+            },
+            content: "---\nthis looks like yaml\n---\n".to_string(),
+        };
+        let serialized = snapshot.serialize();
+        let reparsed = SnapshotFile::parse(&serialized).expect("should reparse");
+        assert_eq!(snapshot, reparsed);
+    }
+
+    #[test]
+    fn test_parse_malformed_no_closing_separator() {
+        assert!(SnapshotFile::parse("---\nsource: test.py::test\nno closing").is_none());
+    }
+
+    #[test]
+    fn test_parse_malformed_no_opening() {
+        assert!(SnapshotFile::parse("just content").is_none());
+    }
+
+    #[test]
     fn test_parse_no_metadata() {
         let input = "---\n\n---\nsome content\n";
         let snapshot = SnapshotFile::parse(input).expect("should parse");

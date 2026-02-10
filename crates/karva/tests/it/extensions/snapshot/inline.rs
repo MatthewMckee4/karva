@@ -307,6 +307,66 @@ def test_hello():
 }
 
 #[test]
+fn test_inline_snapshot_with_backslash() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_backslash():
+    karva.assert_snapshot("path\\to\\file", inline="")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_backslash ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let source = context.read_file("test.py");
+    assert!(
+        source.contains(r#"inline="path\\to\\file""#),
+        "Expected escaped backslashes in inline value, got: {source}"
+    );
+}
+
+#[test]
+fn test_inline_snapshot_with_quotes() {
+    let context = TestContext::with_file(
+        "test.py",
+        "
+import karva
+
+def test_quotes():
+    karva.assert_snapshot('say \"hi\"', inline=\"\")
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_quotes ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    "#);
+
+    let source = context.read_file("test.py");
+    assert!(
+        source.contains("say \\\"hi\\\""),
+        "Expected escaped double quotes in inline value, got: {source}"
+    );
+}
+
+#[test]
 fn test_inline_snapshot_pending() {
     let context = TestContext::with_file(
         "test.py",

@@ -207,7 +207,7 @@ pub fn run_review(root: &Utf8Path, resolved_filters: &[Utf8PathBuf]) -> io::Resu
 
     let mut out = stdout.lock();
     writeln!(out)?;
-    writeln!(out, "insta review finished")?;
+    writeln!(out, "review finished")?;
 
     if !summary.accepted.is_empty() {
         writeln!(out, "accepted:")?;

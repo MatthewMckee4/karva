@@ -254,6 +254,96 @@ def test_both():
 }
 
 #[test]
+fn test_snapshot_named_accept() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_hello():
+    karva.assert_snapshot('hello world', name='greeting')
+        ",
+    );
+
+    let _ = context.command_no_parallel().output();
+
+    assert!(
+        context
+            .root()
+            .join("snapshots/test__test_hello--greeting.snap.new")
+            .exists(),
+        "Expected .snap.new file to be created"
+    );
+
+    assert_cmd_snapshot!(context.snapshot("accept"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Accepted: <temp_dir>/snapshots/test__test_hello--greeting.snap.new
+
+    1 snapshot(s) accepted.
+
+    ----- stderr -----
+    ");
+
+    assert!(
+        context
+            .root()
+            .join("snapshots/test__test_hello--greeting.snap")
+            .exists(),
+        "Expected .snap file after accept"
+    );
+    assert!(
+        !context
+            .root()
+            .join("snapshots/test__test_hello--greeting.snap.new")
+            .exists(),
+        "Expected .snap.new file removed after accept"
+    );
+}
+
+#[test]
+fn test_snapshot_named_reject() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_hello():
+    karva.assert_snapshot('hello world', name='greeting')
+        ",
+    );
+
+    let _ = context.command_no_parallel().output();
+
+    assert_cmd_snapshot!(context.snapshot("reject"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Rejected: <temp_dir>/snapshots/test__test_hello--greeting.snap.new
+
+    1 snapshot(s) rejected.
+
+    ----- stderr -----
+    ");
+
+    assert!(
+        !context
+            .root()
+            .join("snapshots/test__test_hello--greeting.snap")
+            .exists(),
+        "Expected no .snap file after reject"
+    );
+    assert!(
+        !context
+            .root()
+            .join("snapshots/test__test_hello--greeting.snap.new")
+            .exists(),
+        "Expected .snap.new file removed after reject"
+    );
+}
+
+#[test]
 fn test_snapshot_named_parametrized() {
     let context = TestContext::with_file(
         "test.py",

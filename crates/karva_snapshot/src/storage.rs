@@ -187,8 +187,9 @@ pub fn base_function_name(name: &str) -> &str {
             name
         }
     });
-    if let Some(base) = name.strip_suffix(|c: char| c.is_ascii_digit()) {
-        if let Some(base) = base.strip_suffix("_inline_") {
+    let digits_stripped = name.trim_end_matches(|c: char| c.is_ascii_digit());
+    if digits_stripped.len() < name.len() {
+        if let Some(base) = digits_stripped.strip_suffix("_inline_") {
             return base;
         }
     }
@@ -480,6 +481,12 @@ mod tests {
     #[test]
     fn test_base_function_name_inline() {
         assert_eq!(base_function_name("test_foo_inline_5"), "test_foo");
+    }
+
+    #[test]
+    fn test_base_function_name_inline_multi_digit() {
+        assert_eq!(base_function_name("test_foo_inline_15"), "test_foo");
+        assert_eq!(base_function_name("test_foo_inline_123"), "test_foo");
     }
 
     #[test]

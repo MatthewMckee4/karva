@@ -40,7 +40,7 @@ def test_hello():
 
       Tip: Use uppercase A/R/S to apply to all remaining snapshots
     > 
-    insta review finished
+    review finished
     accepted:
       <temp_dir>/snapshots/test__test_hello.snap.new
 
@@ -91,7 +91,7 @@ def test_hello():
 
       Tip: Use uppercase A/R/S to apply to all remaining snapshots
     > 
-    insta review finished
+    review finished
     rejected:
       <temp_dir>/snapshots/test__test_hello.snap.new
 
@@ -142,7 +142,7 @@ def test_hello():
 
       Tip: Use uppercase A/R/S to apply to all remaining snapshots
     > 
-    insta review finished
+    review finished
     skipped:
       <temp_dir>/snapshots/test__test_hello.snap.new
 
@@ -194,7 +194,7 @@ def test_two():
 
       Tip: Use uppercase A/R/S to apply to all remaining snapshots
     > 
-    insta review finished
+    review finished
     skipped:
       <temp_dir>/snapshots/test__test_one.snap.new
       <temp_dir>/snapshots/test__test_two.snap.new
