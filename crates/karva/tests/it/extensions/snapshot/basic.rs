@@ -189,9 +189,10 @@ fn test_snapshot_multiple_per_test() {
 import karva
 
 def test_multi():
-    karva.assert_snapshot('first')
-    karva.assert_snapshot('second')
-    karva.assert_snapshot('third')
+    with karva.snapshot_settings(allow_duplicates=True):
+        karva.assert_snapshot('first')
+        karva.assert_snapshot('second')
+        karva.assert_snapshot('third')
         ",
     );
 
@@ -209,7 +210,7 @@ def test_multi():
     let content_1 = context.read_file("snapshots/test__test_multi.snap");
     insta::assert_snapshot!(content_1, @r"
     ---
-    source: test.py:5::test_multi
+    source: test.py:6::test_multi
     ---
     first
     ");
@@ -217,7 +218,7 @@ def test_multi():
     let content_2 = context.read_file("snapshots/test__test_multi-2.snap");
     insta::assert_snapshot!(content_2, @r"
     ---
-    source: test.py:6::test_multi
+    source: test.py:7::test_multi
     ---
     second
     ");
@@ -225,7 +226,7 @@ def test_multi():
     let content_3 = context.read_file("snapshots/test__test_multi-3.snap");
     insta::assert_snapshot!(content_3, @r"
     ---
-    source: test.py:7::test_multi
+    source: test.py:8::test_multi
     ---
     third
     ");
@@ -399,9 +400,10 @@ fn test_snapshot_named_and_unnamed_counter_gap() {
 import karva
 
 def test_mixed():
-    karva.assert_snapshot('first')
-    karva.assert_snapshot('named value', name='special')
-    karva.assert_snapshot('third')
+    with karva.snapshot_settings(allow_duplicates=True):
+        karva.assert_snapshot('first')
+        karva.assert_snapshot('named value', name='special')
+        karva.assert_snapshot('third')
         ",
     );
 
@@ -433,9 +435,9 @@ def test_mixed():
     assert!(
         context
             .root()
-            .join("snapshots/test__test_mixed-3.snap")
+            .join("snapshots/test__test_mixed-2.snap")
             .exists(),
-        "Expected third snapshot with -3 suffix"
+        "Expected third snapshot with -2 suffix (named snapshots don't consume counter)"
     );
 }
 
@@ -480,5 +482,94 @@ def test_from_two():
     source: test_two.py:5::test_from_two
     ---
     from file two
+    ");
+}
+
+#[test]
+fn test_snapshot_duplicate_unnamed_errors() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_multi():
+    karva.assert_snapshot('first')
+    karva.assert_snapshot('second')
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_multi ... FAILED
+
+    diagnostics:
+
+    error[test-failure]: Test `test_multi` failed
+     --> test.py:4:5
+      |
+    2 | import karva
+    3 |
+    4 | def test_multi():
+      |     ^^^^^^^^^^
+    5 |     karva.assert_snapshot('first')
+    6 |     karva.assert_snapshot('second')
+      |
+    info: Test failed here
+     --> test.py:6:5
+      |
+    4 | def test_multi():
+    5 |     karva.assert_snapshot('first')
+    6 |     karva.assert_snapshot('second')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Multiple unnamed snapshots in one test. Use 'name=' for each, or wrap in 'karva.snapshot_settings(allow_duplicates=True)'
+
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_snapshot_duplicate_unnamed_with_allow_duplicates() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_multi():
+    with karva.snapshot_settings(allow_duplicates=True):
+        karva.assert_snapshot('first')
+        karva.assert_snapshot('second')
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_multi ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let content_1 = context.read_file("snapshots/test__test_multi.snap");
+    insta::assert_snapshot!(content_1, @r"
+    ---
+    source: test.py:6::test_multi
+    ---
+    first
+    ");
+
+    let content_2 = context.read_file("snapshots/test__test_multi-2.snap");
+    insta::assert_snapshot!(content_2, @r"
+    ---
+    source: test.py:7::test_multi
+    ---
+    second
     ");
 }

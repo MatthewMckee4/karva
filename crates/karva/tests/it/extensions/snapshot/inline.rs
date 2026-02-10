@@ -206,8 +206,9 @@ fn test_inline_snapshot_multiple_per_test() {
 import karva
 
 def test_multi():
-    karva.assert_snapshot("first", inline="")
-    karva.assert_snapshot("second", inline="")
+    with karva.snapshot_settings(allow_duplicates=True):
+        karva.assert_snapshot("first", inline="")
+        karva.assert_snapshot("second", inline="")
         "#,
     );
 
@@ -227,8 +228,9 @@ def test_multi():
     import karva
 
     def test_multi():
-        karva.assert_snapshot("first", inline="first")
-        karva.assert_snapshot("second", inline="second")
+        with karva.snapshot_settings(allow_duplicates=True):
+            karva.assert_snapshot("first", inline="first")
+            karva.assert_snapshot("second", inline="second")
     "#);
 }
 
@@ -330,10 +332,13 @@ def test_backslash():
     ");
 
     let source = context.read_file("test.py");
-    assert!(
-        source.contains(r#"inline="path\\to\\file""#),
-        "Expected escaped backslashes in inline value, got: {source}"
-    );
+    insta::assert_snapshot!(source, @r#"
+
+    import karva
+
+    def test_backslash():
+        karva.assert_snapshot("path\/to\/file", inline="path\/to\/file")
+    "#);
 }
 
 #[test]

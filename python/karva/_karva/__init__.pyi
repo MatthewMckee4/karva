@@ -147,6 +147,7 @@ class SnapshotSettings:
         self,
         *,
         filters: list[tuple[str, str]] | None = None,
+        allow_duplicates: bool = False,
     ) -> None: ...
     def __enter__(self) -> Self: ...
     def __exit__(
@@ -159,12 +160,14 @@ class SnapshotSettings:
 def snapshot_settings(
     *,
     filters: list[tuple[str, str]] | None = None,
+    allow_duplicates: bool = False,
 ) -> SnapshotSettings:
     """Create a context manager for scoped snapshot configuration.
 
     Args:
         filters: List of (regex_pattern, replacement) pairs applied sequentially
             to the serialized snapshot value before comparison/storage.
+        allow_duplicates: If True, allow multiple unnamed snapshots in a single test.
     """
 
 class SkipError(Exception):

@@ -58,7 +58,14 @@ If the value is not JSON-serializable (e.g., a custom object without a default s
 
 ## Named Snapshots
 
-By default, each snapshot is named after the test function. If you need multiple snapshots in a single test, you can provide explicit names with the `name` parameter.
+By default, each snapshot is named after the test function. If a test contains more than one unnamed `assert_snapshot()` call, karva raises an error:
+
+```text
+Multiple unnamed snapshots in one test. Use 'name=' for each,
+or wrap in 'karva.snapshot_settings(allow_duplicates=True)'
+```
+
+Use the `name` parameter to give each snapshot a distinct name:
 
 ```python title="test.py"
 import karva
@@ -75,7 +82,17 @@ This creates three separate snapshot files:
 - `snapshots/test__test_page--body.snap`
 - `snapshots/test__test_page--footer.snap`
 
-Without explicit names, multiple snapshots in the same test are numbered automatically (`test_page`, `test_page-2`, `test_page-3`).
+Alternatively, wrap the calls in `snapshot_settings(allow_duplicates=True)` to opt in to auto-numbered unnamed snapshots (`test_page`, `test_page-2`, `test_page-3`):
+
+```python title="test.py"
+import karva
+
+def test_page():
+    with karva.snapshot_settings(allow_duplicates=True):
+        karva.assert_snapshot("<h1>Title</h1>")
+        karva.assert_snapshot("<p>Body text</p>")
+        karva.assert_snapshot("<footer>2024</footer>")
+```
 
 ## Snapshot Files
 

@@ -24,6 +24,7 @@ struct SnapshotContext {
 
 struct ActiveSettings {
     filters: Vec<(String, String)>,
+    allow_duplicates: bool,
 }
 
 thread_local! {
@@ -34,15 +35,17 @@ thread_local! {
 #[pyclass]
 pub struct SnapshotSettings {
     filters: Vec<(String, String)>,
+    allow_duplicates: bool,
 }
 
 #[pymethods]
 impl SnapshotSettings {
     #[new]
-    #[pyo3(signature = (*, filters=None))]
-    fn new(filters: Option<Vec<(String, String)>>) -> Self {
+    #[pyo3(signature = (*, filters=None, allow_duplicates=false))]
+    fn new(filters: Option<Vec<(String, String)>>, allow_duplicates: bool) -> Self {
         Self {
             filters: filters.unwrap_or_default(),
+            allow_duplicates,
         }
     }
 
@@ -50,6 +53,7 @@ impl SnapshotSettings {
         SNAPSHOT_SETTINGS.with(|stack| {
             stack.borrow_mut().push(ActiveSettings {
                 filters: slf.filters.clone(),
+                allow_duplicates: slf.allow_duplicates,
             });
         });
         slf
@@ -66,9 +70,17 @@ impl SnapshotSettings {
 
 /// Create a `SnapshotSettings` context manager for scoped snapshot configuration.
 #[pyfunction]
-#[pyo3(signature = (*, filters=None))]
-pub fn snapshot_settings(filters: Option<Vec<(String, String)>>) -> SnapshotSettings {
-    SnapshotSettings::new(filters)
+#[pyo3(signature = (*, filters=None, allow_duplicates=false))]
+pub fn snapshot_settings(
+    filters: Option<Vec<(String, String)>>,
+    allow_duplicates: bool,
+) -> SnapshotSettings {
+    SnapshotSettings::new(filters, allow_duplicates)
+}
+
+/// Check if any active settings scope has `allow_duplicates` enabled.
+fn is_allow_duplicates_active() -> bool {
+    SNAPSHOT_SETTINGS.with(|stack| stack.borrow().iter().any(|s| s.allow_duplicates))
 }
 
 /// Collect all filters from the settings stack and apply them to the input.
@@ -159,17 +171,14 @@ fn assert_snapshot_impl(
         ));
     }
 
-    let (test_file, test_name, counter) = SNAPSHOT_CONTEXT
+    let (test_file, test_name) = SNAPSHOT_CONTEXT
         .with(|ctx| {
-            let mut ctx = ctx.borrow_mut();
-            let snapshot_ctx = ctx.as_mut()?;
-            let result = (
+            let ctx = ctx.borrow();
+            let snapshot_ctx = ctx.as_ref()?;
+            Some((
                 snapshot_ctx.test_file.clone(),
                 snapshot_ctx.test_name.clone(),
-                snapshot_ctx.counter,
-            );
-            snapshot_ctx.counter += 1;
-            Some(result)
+            ))
         })
         .ok_or_else(|| {
             pyo3::exceptions::PyRuntimeError::new_err(
@@ -194,6 +203,26 @@ fn assert_snapshot_impl(
     let snapshot_name = if let Some(custom_name) = name {
         compute_named_snapshot(&test_name, custom_name)
     } else {
+        let counter = SNAPSHOT_CONTEXT
+            .with(|ctx| {
+                let mut ctx = ctx.borrow_mut();
+                let snapshot_ctx = ctx.as_mut()?;
+                let c = snapshot_ctx.counter;
+                snapshot_ctx.counter += 1;
+                Some(c)
+            })
+            .ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err(
+                    "assert_snapshot() called outside of a karva test context",
+                )
+            })?;
+
+        if counter > 0 && !is_allow_duplicates_active() {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "Multiple unnamed snapshots in one test. Use 'name=' for each, or wrap in 'karva.snapshot_settings(allow_duplicates=True)'",
+            ));
+        }
+
         compute_snapshot_name(&test_name, counter)
     };
 
