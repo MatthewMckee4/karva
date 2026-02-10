@@ -6,7 +6,9 @@ use crate::extensions::fixtures::python::{
     FixtureFunctionDefinition, FixtureFunctionMarker, InvalidFixtureError, fixture_decorator,
 };
 use crate::extensions::functions::raises::raises;
-use crate::extensions::functions::snapshot::{assert_snapshot, snapshot_settings};
+use crate::extensions::functions::snapshot::{
+    assert_json_snapshot, assert_snapshot, snapshot_settings,
+};
 use crate::extensions::functions::{
     ExceptionInfo, FailError, RaisesContext, SkipError, SnapshotMismatchError, SnapshotSettings,
     fail, param, skip,
@@ -20,6 +22,7 @@ pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(param, m)?)?;
     m.add_function(wrap_pyfunction!(raises, m)?)?;
     m.add_function(wrap_pyfunction!(assert_snapshot, m)?)?;
+    m.add_function(wrap_pyfunction!(assert_json_snapshot, m)?)?;
     m.add_function(wrap_pyfunction!(snapshot_settings, m)?)?;
 
     m.add_class::<FixtureFunctionMarker>()?;

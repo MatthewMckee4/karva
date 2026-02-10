@@ -21,32 +21,40 @@ karva snapshot accept
 
 On subsequent runs, the test passes as long as the output matches the stored snapshot.
 
-## Formats
+## JSON Snapshots
 
-By default, values are stored as strings using `str()`. You can choose a different format with the `format` parameter.
-
-### repr
-
-```python title="test.py"
-import karva
-
-def test_data():
-    karva.assert_snapshot({"a": 1}, format="repr")
-```
-
-Stores the value using Python's `repr()`.
-
-### json
+For structured data like dicts and lists, use `karva.assert_json_snapshot()` for readable, deterministic output. It serializes values using `json.dumps(value, sort_keys=True, indent=2)`.
 
 ```python title="test.py"
 import karva
 
 def test_data():
     data = {"users": ["Alice", "Bob"], "count": 2}
-    karva.assert_snapshot(data, format="json")
+    karva.assert_json_snapshot(data)
 ```
 
-Stores the value as pretty-printed JSON with sorted keys and 2-space indentation. This is useful for dictionaries and nested structures where you want a readable, deterministic output.
+The snapshot stores:
+
+```json
+{
+  "count": 2,
+  "users": [
+    "Alice",
+    "Bob"
+  ]
+}
+```
+
+`assert_json_snapshot` supports all the same features as `assert_snapshot`: inline snapshots, `--snapshot-update`, filters via `snapshot_settings`, and the pending/accept workflow.
+
+```python title="test.py"
+import karva
+
+def test_inline():
+    karva.assert_json_snapshot({"a": 1}, inline='{\n  "a": 1\n}')
+```
+
+If the value is not JSON-serializable (e.g., a custom object without a default serializer), Python's `json` module raises a `TypeError`.
 
 ## Named Snapshots
 

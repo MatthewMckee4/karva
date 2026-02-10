@@ -122,6 +122,37 @@ pub fn assert_snapshot(
     inline: Option<String>,
     name: Option<String>,
 ) -> PyResult<()> {
+    let serialized = serialize_value(py, &value)?;
+    let serialized = apply_active_filters(&serialized)?;
+    assert_snapshot_impl(py, &serialized, inline.as_deref(), name.as_deref())
+}
+
+/// Assert that a value matches a stored snapshot, serialized as JSON.
+///
+/// Uses `json.dumps(value, sort_keys=True, indent=2)` for deterministic,
+/// readable output. Supports all the same features as `assert_snapshot`:
+/// inline snapshots, `--snapshot-update`, filters, and the pending/accept workflow.
+#[pyfunction]
+#[pyo3(signature = (value, *, inline=None, name=None))]
+#[expect(clippy::needless_pass_by_value)]
+pub fn assert_json_snapshot(
+    py: Python<'_>,
+    value: Py<PyAny>,
+    inline: Option<String>,
+    name: Option<String>,
+) -> PyResult<()> {
+    let serialized = serialize_json(py, &value)?;
+    let serialized = apply_active_filters(&serialized)?;
+    assert_snapshot_impl(py, &serialized, inline.as_deref(), name.as_deref())
+}
+
+/// Shared implementation for snapshot assertions.
+fn assert_snapshot_impl(
+    py: Python<'_>,
+    serialized: &str,
+    inline: Option<&str>,
+    name: Option<&str>,
+) -> PyResult<()> {
     if inline.is_some() && name.is_some() {
         return Err(pyo3::exceptions::PyTypeError::new_err(
             "assert_snapshot() cannot use both 'inline' and 'name' arguments",
@@ -146,16 +177,13 @@ pub fn assert_snapshot(
             )
         })?;
 
-    let serialized = serialize_value(py, &value)?;
-    let serialized = apply_active_filters(&serialized)?;
-
     let update_mode =
         std::env::var(EnvVars::KARVA_SNAPSHOT_UPDATE).is_ok_and(|v| v == "1" || v == "true");
 
-    if let Some(ref inline_value) = inline {
+    if let Some(inline_value) = inline {
         return handle_inline_snapshot(
             py,
-            &serialized,
+            serialized,
             inline_value,
             &test_file,
             &test_name,
@@ -163,7 +191,7 @@ pub fn assert_snapshot(
         );
     }
 
-    let snapshot_name = if let Some(ref custom_name) = name {
+    let snapshot_name = if let Some(custom_name) = name {
         compute_named_snapshot(&test_name, custom_name)
     } else {
         compute_snapshot_name(&test_name, counter)
@@ -191,7 +219,7 @@ pub fn assert_snapshot(
             source: Some(source),
             ..Default::default()
         },
-        content: serialized.clone(),
+        content: serialized.to_string(),
     };
 
     if let Some(existing) = read_snapshot(&snap_path) {
@@ -211,7 +239,7 @@ pub fn assert_snapshot(
             SnapshotMismatchError::new_err(format!("Failed to write pending snapshot: {e}"))
         })?;
 
-        let diff = format_diff(&existing.content, &serialized);
+        let diff = format_diff(&existing.content, serialized);
         return Err(SnapshotMismatchError::new_err(format!(
             "Snapshot mismatch for '{snapshot_name}'.\nSnapshot file: {snap_path}\n{diff}"
         )));
@@ -366,6 +394,21 @@ fn compute_named_snapshot(test_name: &str, custom_name: &str) -> String {
 fn serialize_value(py: Python<'_>, value: &Py<PyAny>) -> PyResult<String> {
     let bound = value.bind(py);
     Ok(bound.str()?.to_string_lossy().into_owned())
+}
+
+/// Serialize a Python value to JSON using `json.dumps(value, sort_keys=True, indent=2)`.
+fn serialize_json(py: Python<'_>, value: &Py<PyAny>) -> PyResult<String> {
+    let json = py.import("json")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    kwargs.set_item("sort_keys", true)?;
+    kwargs.set_item("indent", 2)?;
+    json.call_method("dumps", (value,), Some(&kwargs))
+        .map_err(|_| {
+            pyo3::exceptions::PyTypeError::new_err(
+                "assert_json_snapshot() value is not JSON serializable",
+            )
+        })?
+        .extract::<String>()
 }
 
 #[cfg(test)]
