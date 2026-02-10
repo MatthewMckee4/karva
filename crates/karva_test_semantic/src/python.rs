@@ -6,9 +6,10 @@ use crate::extensions::fixtures::python::{
     FixtureFunctionDefinition, FixtureFunctionMarker, InvalidFixtureError, fixture_decorator,
 };
 use crate::extensions::functions::raises::raises;
-use crate::extensions::functions::snapshot::assert_snapshot;
+use crate::extensions::functions::snapshot::{assert_snapshot, snapshot_settings};
 use crate::extensions::functions::{
-    ExceptionInfo, FailError, RaisesContext, SkipError, SnapshotMismatchError, fail, param, skip,
+    ExceptionInfo, FailError, RaisesContext, SkipError, SnapshotMismatchError, SnapshotSettings,
+    fail, param, skip,
 };
 use crate::extensions::tags::python::{PyTags, PyTestFunction, tags};
 
@@ -19,6 +20,7 @@ pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(param, m)?)?;
     m.add_function(wrap_pyfunction!(raises, m)?)?;
     m.add_function(wrap_pyfunction!(assert_snapshot, m)?)?;
+    m.add_function(wrap_pyfunction!(snapshot_settings, m)?)?;
 
     m.add_class::<FixtureFunctionMarker>()?;
     m.add_class::<FixtureFunctionDefinition>()?;
@@ -27,6 +29,7 @@ pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MockEnv>()?;
     m.add_class::<ExceptionInfo>()?;
     m.add_class::<RaisesContext>()?;
+    m.add_class::<SnapshotSettings>()?;
 
     m.add_wrapped(wrap_pymodule!(tags))?;
 

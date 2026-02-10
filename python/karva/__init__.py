@@ -7,6 +7,7 @@ from karva._karva import (
     RaisesContext,
     SkipError,
     SnapshotMismatchError,
+    SnapshotSettings,
     assert_snapshot,
     fail,
     fixture,
@@ -14,6 +15,7 @@ from karva._karva import (
     param,
     raises,
     skip,
+    snapshot_settings,
     tags,
 )
 
@@ -26,6 +28,7 @@ __all__: list[str] = [
     "RaisesContext",
     "SkipError",
     "SnapshotMismatchError",
+    "SnapshotSettings",
     "assert_snapshot",
     "fail",
     "fixture",
@@ -33,5 +36,6 @@ __all__: list[str] = [
     "param",
     "raises",
     "skip",
+    "snapshot_settings",
     "tags",
 ]
