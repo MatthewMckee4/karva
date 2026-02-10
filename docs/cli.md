@@ -91,6 +91,7 @@ karva snapshot <COMMAND>
 <dt><a href="#karva-snapshot-pending"><code>karva snapshot pending</code></a></dt><dd><p>List pending snapshots</p></dd>
 <dt><a href="#karva-snapshot-review"><code>karva snapshot review</code></a></dt><dd><p>Interactively review pending snapshots</p></dd>
 <dt><a href="#karva-snapshot-prune"><code>karva snapshot prune</code></a></dt><dd><p>Remove snapshot files whose source test no longer exists</p></dd>
+<dt><a href="#karva-snapshot-delete"><code>karva snapshot delete</code></a></dt><dd><p>Delete all (or filtered) snapshot files (.snap and .snap.new)</p></dd>
 <dt><a href="#karva-snapshot-help"><code>karva snapshot help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
 </dl>
 
@@ -193,6 +194,27 @@ karva snapshot prune [OPTIONS] [PATH]...
 
 <dl class="cli-reference"><dt id="karva-snapshot-prune--dry-run"><a href="#karva-snapshot-prune--dry-run"><code>--dry-run</code></a></dt><dd><p>Show which snapshots would be removed without deleting them</p>
 </dd><dt id="karva-snapshot-prune--help"><a href="#karva-snapshot-prune--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+### karva snapshot delete
+
+Delete all (or filtered) snapshot files (.snap and .snap.new)
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva snapshot delete [OPTIONS] [PATH]...
+```
+
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-delete--paths"><a href="#karva-snapshot-delete--paths"><code>PATHS</code></a></dt><dd><p>Optional paths to filter which snapshot files are deleted</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-delete--dry-run"><a href="#karva-snapshot-delete--dry-run"><code>--dry-run</code></a></dt><dd><p>Show which snapshot files would be deleted without removing them</p>
+</dd><dt id="karva-snapshot-delete--help"><a href="#karva-snapshot-delete--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
 </dd></dl>
 
 ### karva snapshot help

@@ -1,6 +1,6 @@
 use std::io::{self, BufRead, Write};
 
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use colored::Colorize;
 use console::{Key, Term};
 
@@ -101,18 +101,18 @@ fn read_review_action(out: &mut impl Write) -> io::Result<ReviewAction> {
 /// Run an interactive review session for all pending snapshots under the given root.
 ///
 /// For each pending snapshot, displays the diff and prompts the user for an action.
-pub fn run_review(root: &Utf8Path, filter_paths: &[String]) -> io::Result<ReviewSummary> {
+pub fn run_review(root: &Utf8Path, resolved_filters: &[Utf8PathBuf]) -> io::Result<ReviewSummary> {
     let pending = find_pending_snapshots(root);
 
-    let filtered: Vec<_> = if filter_paths.is_empty() {
+    let filtered: Vec<_> = if resolved_filters.is_empty() {
         pending
     } else {
         pending
             .into_iter()
             .filter(|info| {
-                filter_paths
+                resolved_filters
                     .iter()
-                    .any(|f| info.pending_path.as_str().contains(f.as_str()))
+                    .any(|f| info.pending_path.as_str().starts_with(f.as_str()))
             })
             .collect()
     };

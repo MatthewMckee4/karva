@@ -5,7 +5,7 @@ use std::process::{ExitCode, Termination};
 use std::time::Instant;
 
 use anyhow::{Context, Result};
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use colored::Colorize;
 use karva_cache::AggregatedResults;
@@ -85,7 +85,11 @@ pub(crate) fn snapshot(args: SnapshotCommand) -> Result<ExitStatus> {
     match args.action {
         SnapshotAction::Accept(filter) => {
             let pending = karva_snapshot::storage::find_pending_snapshots(&cwd);
-            let filtered = filter_pending(&pending, &filter.paths);
+            let resolved = resolve_filter_paths(&filter.paths, &cwd);
+            let filtered: Vec<_> = pending
+                .iter()
+                .filter(|info| matches_filter(&info.pending_path, &resolved))
+                .collect();
             if filtered.is_empty() {
                 writeln!(stdout, "No pending snapshots found.")?;
                 return Ok(ExitStatus::Success);
@@ -101,7 +105,11 @@ pub(crate) fn snapshot(args: SnapshotCommand) -> Result<ExitStatus> {
         }
         SnapshotAction::Reject(filter) => {
             let pending = karva_snapshot::storage::find_pending_snapshots(&cwd);
-            let filtered = filter_pending(&pending, &filter.paths);
+            let resolved = resolve_filter_paths(&filter.paths, &cwd);
+            let filtered: Vec<_> = pending
+                .iter()
+                .filter(|info| matches_filter(&info.pending_path, &resolved))
+                .collect();
             if filtered.is_empty() {
                 writeln!(stdout, "No pending snapshots found.")?;
                 return Ok(ExitStatus::Success);
@@ -117,7 +125,11 @@ pub(crate) fn snapshot(args: SnapshotCommand) -> Result<ExitStatus> {
         }
         SnapshotAction::Pending(filter) => {
             let pending = karva_snapshot::storage::find_pending_snapshots(&cwd);
-            let filtered = filter_pending(&pending, &filter.paths);
+            let resolved = resolve_filter_paths(&filter.paths, &cwd);
+            let filtered: Vec<_> = pending
+                .iter()
+                .filter(|info| matches_filter(&info.pending_path, &resolved))
+                .collect();
             if filtered.is_empty() {
                 writeln!(stdout, "No pending snapshots.")?;
                 return Ok(ExitStatus::Success);
@@ -129,9 +141,10 @@ pub(crate) fn snapshot(args: SnapshotCommand) -> Result<ExitStatus> {
             Ok(ExitStatus::Success)
         }
         SnapshotAction::Review(filter) => {
+            let resolved = resolve_filter_paths(&filter.paths, &cwd);
             // Drop stdout lock before interactive review (it needs stdin/stdout)
             drop(stdout);
-            karva_snapshot::review::run_review(&cwd, &filter.paths)?;
+            karva_snapshot::review::run_review(&cwd, &resolved)?;
             Ok(ExitStatus::Success)
         }
         SnapshotAction::Prune(prune_args) => {
@@ -144,7 +157,11 @@ pub(crate) fn snapshot(args: SnapshotCommand) -> Result<ExitStatus> {
                 )?;
             }
             let unreferenced = karva_snapshot::storage::find_unreferenced_snapshots(&cwd);
-            let filtered = filter_unreferenced(&unreferenced, &prune_args.paths);
+            let resolved = resolve_filter_paths(&prune_args.paths, &cwd);
+            let filtered: Vec<_> = unreferenced
+                .iter()
+                .filter(|info| matches_filter(&info.snap_path, &resolved))
+                .collect();
             if filtered.is_empty() {
                 writeln!(stdout, "No unreferenced snapshots found.")?;
                 return Ok(ExitStatus::Success);
@@ -169,43 +186,52 @@ pub(crate) fn snapshot(args: SnapshotCommand) -> Result<ExitStatus> {
             }
             Ok(ExitStatus::Success)
         }
+        SnapshotAction::Delete(delete_args) => {
+            let all = karva_snapshot::storage::find_all_snapshots(&cwd);
+            let resolved = resolve_filter_paths(&delete_args.paths, &cwd);
+            let filtered: Vec<_> = all
+                .iter()
+                .filter(|info| matches_filter(&info.path, &resolved))
+                .collect();
+            if filtered.is_empty() {
+                writeln!(stdout, "No snapshot files found.")?;
+                return Ok(ExitStatus::Success);
+            }
+            if delete_args.dry_run {
+                for info in &filtered {
+                    writeln!(stdout, "Would delete: {}", info.path)?;
+                }
+                writeln!(
+                    stdout,
+                    "\n{} snapshot file(s) would be deleted.",
+                    filtered.len()
+                )?;
+            } else {
+                let mut deleted = 0;
+                for info in &filtered {
+                    karva_snapshot::storage::remove_snapshot(&info.path)?;
+                    writeln!(stdout, "Deleted: {}", info.path)?;
+                    deleted += 1;
+                }
+                writeln!(stdout, "\n{deleted} snapshot file(s) deleted.")?;
+            }
+            Ok(ExitStatus::Success)
+        }
     }
 }
 
-fn filter_pending<'a>(
-    pending: &'a [karva_snapshot::storage::PendingSnapshotInfo],
-    filter_paths: &[String],
-) -> Vec<&'a karva_snapshot::storage::PendingSnapshotInfo> {
-    if filter_paths.is_empty() {
-        pending.iter().collect()
-    } else {
-        pending
-            .iter()
-            .filter(|info| {
-                filter_paths
-                    .iter()
-                    .any(|f| info.pending_path.as_str().contains(f.as_str()))
-            })
-            .collect()
-    }
+/// Resolve user-provided filter strings to absolute paths.
+fn resolve_filter_paths(filter_paths: &[String], cwd: &Utf8Path) -> Vec<Utf8PathBuf> {
+    filter_paths.iter().map(|f| absolute(f, cwd)).collect()
 }
 
-fn filter_unreferenced<'a>(
-    unreferenced: &'a [karva_snapshot::storage::UnreferencedSnapshot],
-    filter_paths: &[String],
-) -> Vec<&'a karva_snapshot::storage::UnreferencedSnapshot> {
-    if filter_paths.is_empty() {
-        unreferenced.iter().collect()
-    } else {
-        unreferenced
+/// Check if a snapshot path matches any resolved filter (absolute path prefix match).
+/// Returns true if filters is empty (match all).
+fn matches_filter(snapshot_path: &Utf8Path, resolved_filters: &[Utf8PathBuf]) -> bool {
+    resolved_filters.is_empty()
+        || resolved_filters
             .iter()
-            .filter(|info| {
-                filter_paths
-                    .iter()
-                    .any(|f| info.snap_path.as_str().contains(f.as_str()))
-            })
-            .collect()
-    }
+            .any(|f| snapshot_path.as_str().starts_with(f.as_str()))
 }
 
 pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
