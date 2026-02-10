@@ -111,10 +111,17 @@ def raises(
             representation of the exception.
     """
 
+@overload
 def assert_snapshot(
     value: object,
     *,
     inline: str | None = None,
+) -> None: ...
+@overload
+def assert_snapshot(
+    value: object,
+    *,
+    name: str,
 ) -> None: ...
 
 class SnapshotSettings:

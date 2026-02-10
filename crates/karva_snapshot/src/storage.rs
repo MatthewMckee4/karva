@@ -178,6 +178,7 @@ pub fn parse_source(source: &str) -> Option<(&str, &str)> {
 /// and class prefix `TestClass::test_method` → `test_method`.
 pub fn base_function_name(name: &str) -> &str {
     let name = name.rsplit_once("::").map_or(name, |(_, method)| method);
+    let name = name.split_once("--").map_or(name, |(base, _)| base);
     let name = name.split_once('(').map_or(name, |(base, _)| base);
     let name = name.rsplit_once('-').map_or(name, |(base, suffix)| {
         if suffix.chars().all(|c| c.is_ascii_digit()) {
@@ -484,6 +485,12 @@ mod tests {
     #[test]
     fn test_base_function_name_class_prefix() {
         assert_eq!(base_function_name("TestClass::test_method"), "test_method");
+    }
+
+    #[test]
+    fn test_base_function_name_named() {
+        assert_eq!(base_function_name("test_foo--header"), "test_foo");
+        assert_eq!(base_function_name("test_foo--header(x=1)"), "test_foo");
     }
 
     #[test]

@@ -114,9 +114,20 @@ pub(crate) fn set_snapshot_context(test_file: String, test_name: String) {
 /// When `inline` is provided, the expected value lives in the test source file
 /// instead of a separate `.snap` file.
 #[pyfunction]
-#[pyo3(signature = (value, *, inline=None))]
+#[pyo3(signature = (value, *, inline=None, name=None))]
 #[expect(clippy::needless_pass_by_value)]
-pub fn assert_snapshot(py: Python<'_>, value: Py<PyAny>, inline: Option<String>) -> PyResult<()> {
+pub fn assert_snapshot(
+    py: Python<'_>,
+    value: Py<PyAny>,
+    inline: Option<String>,
+    name: Option<String>,
+) -> PyResult<()> {
+    if inline.is_some() && name.is_some() {
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "assert_snapshot() cannot use both 'inline' and 'name' arguments",
+        ));
+    }
+
     let (test_file, test_name, counter) = SNAPSHOT_CONTEXT
         .with(|ctx| {
             let mut ctx = ctx.borrow_mut();
@@ -152,7 +163,11 @@ pub fn assert_snapshot(py: Python<'_>, value: Py<PyAny>, inline: Option<String>)
         );
     }
 
-    let snapshot_name = compute_snapshot_name(&test_name, counter);
+    let snapshot_name = if let Some(ref custom_name) = name {
+        compute_named_snapshot(&test_name, custom_name)
+    } else {
+        compute_snapshot_name(&test_name, counter)
+    };
 
     let test_file_path = Utf8Path::new(&test_file);
     let module_name = test_file_path.file_stem().unwrap_or("unknown");
@@ -335,6 +350,18 @@ fn compute_snapshot_name(test_name: &str, counter: u32) -> String {
     }
 }
 
+/// Compute snapshot name with an explicit user-provided name.
+///
+/// Format: `test_name--custom_name` or `test_name--custom_name(params)` for parametrized tests.
+fn compute_named_snapshot(test_name: &str, custom_name: &str) -> String {
+    let (base_name, param_suffix) = if let Some(paren_idx) = test_name.find('(') {
+        (&test_name[..paren_idx], &test_name[paren_idx..])
+    } else {
+        (test_name, "")
+    };
+    format!("{base_name}--{custom_name}{param_suffix}")
+}
+
 /// Serialize a Python value to its string representation.
 fn serialize_value(py: Python<'_>, value: &Py<PyAny>) -> PyResult<String> {
     let bound = value.bind(py);
@@ -361,6 +388,22 @@ mod tests {
         assert_eq!(
             compute_snapshot_name("test_foo(a=1, b=2)", 0),
             "test_foo(a=1, b=2)"
+        );
+    }
+
+    #[test]
+    fn test_compute_named_snapshot() {
+        assert_eq!(
+            compute_named_snapshot("test_foo", "header"),
+            "test_foo--header"
+        );
+    }
+
+    #[test]
+    fn test_compute_named_snapshot_parametrized() {
+        assert_eq!(
+            compute_named_snapshot("test_foo(x=1)", "header"),
+            "test_foo--header(x=1)"
         );
     }
 }
