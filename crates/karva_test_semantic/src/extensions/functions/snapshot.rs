@@ -2,6 +2,7 @@ use std::cell::RefCell;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_snapshot::diff::format_diff;
+use karva_snapshot::filters::{SnapshotFilter, apply_filters};
 use karva_snapshot::format::{SnapshotFile, SnapshotMetadata};
 use karva_snapshot::storage::{
     read_snapshot, snapshot_path, write_pending_snapshot, write_snapshot,
@@ -21,8 +22,76 @@ struct SnapshotContext {
     counter: u32,
 }
 
+struct ActiveSettings {
+    filters: Vec<(String, String)>,
+}
+
 thread_local! {
     static SNAPSHOT_CONTEXT: RefCell<Option<SnapshotContext>> = const { RefCell::new(None) };
+    static SNAPSHOT_SETTINGS: RefCell<Vec<ActiveSettings>> = const { RefCell::new(Vec::new()) };
+}
+
+#[pyclass]
+pub struct SnapshotSettings {
+    filters: Vec<(String, String)>,
+}
+
+#[pymethods]
+impl SnapshotSettings {
+    #[new]
+    #[pyo3(signature = (*, filters=None))]
+    fn new(filters: Option<Vec<(String, String)>>) -> Self {
+        Self {
+            filters: filters.unwrap_or_default(),
+        }
+    }
+
+    fn __enter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        SNAPSHOT_SETTINGS.with(|stack| {
+            stack.borrow_mut().push(ActiveSettings {
+                filters: slf.filters.clone(),
+            });
+        });
+        slf
+    }
+
+    #[expect(clippy::unused_self)]
+    fn __exit__(&self, _exc_type: Py<PyAny>, _exc_val: Py<PyAny>, _exc_tb: Py<PyAny>) -> bool {
+        SNAPSHOT_SETTINGS.with(|stack| {
+            stack.borrow_mut().pop();
+        });
+        false
+    }
+}
+
+/// Create a `SnapshotSettings` context manager for scoped snapshot configuration.
+#[pyfunction]
+#[pyo3(signature = (*, filters=None))]
+pub fn snapshot_settings(filters: Option<Vec<(String, String)>>) -> SnapshotSettings {
+    SnapshotSettings::new(filters)
+}
+
+/// Collect all filters from the settings stack and apply them to the input.
+fn apply_active_filters(input: &str) -> PyResult<String> {
+    SNAPSHOT_SETTINGS.with(|stack| {
+        let stack = stack.borrow();
+        let mut compiled = Vec::new();
+        for settings in stack.iter() {
+            for (pattern, replacement) in &settings.filters {
+                let filter =
+                    SnapshotFilter::new(pattern, replacement.clone()).ok_or_else(|| {
+                        pyo3::exceptions::PyValueError::new_err(format!(
+                            "Invalid regex pattern in snapshot filter: {pattern}"
+                        ))
+                    })?;
+                compiled.push(filter);
+            }
+        }
+        if compiled.is_empty() {
+            return Ok(input.to_string());
+        }
+        Ok(apply_filters(input, &compiled))
+    })
 }
 
 /// Called by the test runner before each test to set snapshot context.
@@ -67,6 +136,7 @@ pub fn assert_snapshot(py: Python<'_>, value: Py<PyAny>, inline: Option<String>)
         })?;
 
     let serialized = serialize_value(py, &value)?;
+    let serialized = apply_active_filters(&serialized)?;
 
     let update_mode =
         std::env::var(EnvVars::KARVA_SNAPSHOT_UPDATE).is_ok_and(|v| v == "1" || v == "true");

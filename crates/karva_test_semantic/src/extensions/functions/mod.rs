@@ -1,5 +1,5 @@
 pub use self::raises::{ExceptionInfo, RaisesContext};
-pub use self::snapshot::SnapshotMismatchError;
+pub use self::snapshot::{SnapshotMismatchError, SnapshotSettings};
 use pyo3::prelude::*;
 pub use python::Param;
 

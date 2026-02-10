@@ -178,3 +178,64 @@ This creates:
 
 - `snapshots/test__test_translate--greeting(lang=en).snap`
 - `snapshots/test__test_translate--greeting(lang=fr).snap`
+
+## Filters
+
+Snapshot output often contains non-deterministic values like timestamps, UUIDs, or file paths that change between runs. Use `karva.snapshot_settings()` to replace these with stable placeholders before comparison.
+
+```python title="test.py"
+import karva
+
+def test_api_response():
+    with karva.snapshot_settings(filters=[
+        (r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", "[timestamp]"),
+        (r"[0-9a-f-]{36}", "[uuid]"),
+    ]):
+        karva.assert_snapshot(get_response())
+```
+
+Each filter is a `(regex_pattern, replacement)` tuple. Filters are applied sequentially to the serialized value before it is compared or stored in the snapshot file.
+
+### Multiple Filters
+
+When multiple filters are provided, they are applied in order. Earlier filters may affect what later filters see:
+
+```python title="test.py"
+import karva
+
+def test_log_entry():
+    with karva.snapshot_settings(filters=[
+        (r"\d{4}-\d{2}-\d{2}", "[date]"),
+        (r"\d+ms", "[duration]"),
+    ]):
+        karva.assert_snapshot("2024-01-15: request completed in 42ms")
+```
+
+The stored snapshot will contain: `[date]: request completed in [duration]`.
+
+### Nested Settings
+
+Settings can be nested. Inner filters are appended to outer filters, so all filters from the entire stack apply:
+
+```python title="test.py"
+import karva
+
+def test_complex_output():
+    with karva.snapshot_settings(filters=[(r"\d+ms", "[duration]")]):
+        with karva.snapshot_settings(filters=[(r"/tmp/\S+", "[path]")]):
+            karva.assert_snapshot("took 42ms at /tmp/abc123")
+```
+
+The stored snapshot will contain: `took [duration] at [path]`.
+
+### Inline Snapshots
+
+Filters also work with inline snapshots. The filtered value is what gets compared and stored:
+
+```python title="test.py"
+import karva
+
+def test_inline_filtered():
+    with karva.snapshot_settings(filters=[(r"\d{4}-\d{2}-\d{2}", "[date]")]):
+        karva.assert_snapshot("event on 2024-01-15", inline="event on [date]")
+```

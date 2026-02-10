@@ -117,6 +117,37 @@ def assert_snapshot(
     inline: str | None = None,
 ) -> None: ...
 
+class SnapshotSettings:
+    """Context manager for scoped snapshot configuration.
+
+    Filters are applied sequentially to the serialized snapshot value before
+    comparison/storage. Nesting accumulates filters from outer to inner scope.
+    """
+
+    def __init__(
+        self,
+        *,
+        filters: list[tuple[str, str]] | None = None,
+    ) -> None: ...
+    def __enter__(self) -> Self: ...
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> bool: ...
+
+def snapshot_settings(
+    *,
+    filters: list[tuple[str, str]] | None = None,
+) -> SnapshotSettings:
+    """Create a context manager for scoped snapshot configuration.
+
+    Args:
+        filters: List of (regex_pattern, replacement) pairs applied sequentially
+            to the serialized snapshot value before comparison/storage.
+    """
+
 class SkipError(Exception):
     """Raised when `karva.skip` is called."""
 
