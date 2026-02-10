@@ -123,6 +123,18 @@ def assert_snapshot(
     *,
     name: str,
 ) -> None: ...
+@overload
+def assert_json_snapshot(
+    value: object,
+    *,
+    inline: str | None = None,
+) -> None: ...
+@overload
+def assert_json_snapshot(
+    value: object,
+    *,
+    name: str,
+) -> None: ...
 
 class SnapshotSettings:
     """Context manager for scoped snapshot configuration.
