@@ -136,29 +136,6 @@ fn generate_command<'a>(output: &mut String, command: &'a Command, parents: &mut
     }
 
     // Display a list of child commands
-    let has_subcommands = generate_subcommands_list(output, command, &name);
-
-    // Do not display options for commands with children
-    if !has_subcommands {
-        let name_key = name.replace(' ', "-");
-        generate_positional_arguments(output, command, &name_key);
-        generate_options_section(output, command, &name_key);
-        output.push_str("\n\n");
-    }
-
-    parents.push(command);
-
-    // Recurse to all of the subcommands.
-    for subcommand in command.get_subcommands() {
-        generate_command(output, subcommand, parents);
-    }
-
-    parents.pop();
-}
-
-/// Generate the subcommands list. Returns whether any subcommands exist.
-#[expect(clippy::format_push_string)]
-fn generate_subcommands_list(output: &mut String, command: &Command, parent_name: &str) -> bool {
     let mut subcommands = command.get_subcommands().peekable();
     let has_subcommands = subcommands.peek().is_some();
     if has_subcommands {
@@ -169,7 +146,7 @@ fn generate_subcommands_list(output: &mut String, command: &Command, parent_name
             if subcommand.is_hide_set() {
                 continue;
             }
-            let subcommand_name = format!("{parent_name} {}", subcommand.get_name());
+            let subcommand_name = format!("{name} {}", subcommand.get_name());
             output.push_str(&format!(
                 "<dt><a href=\"#{}\"><code>{subcommand_name}</code></a></dt>",
                 subcommand_name.replace(' ', "-")
@@ -184,94 +161,105 @@ fn generate_subcommands_list(output: &mut String, command: &Command, parent_name
 
         output.push_str("</dl>\n\n");
     }
-    has_subcommands
-}
 
-#[expect(clippy::format_push_string)]
-fn generate_positional_arguments(output: &mut String, command: &Command, name_key: &str) {
-    let mut arguments = command
-        .get_positionals()
-        .filter(|arg| !arg.is_hide_set())
-        .peekable();
+    // Do not display options for commands with children
+    if !has_subcommands {
+        let name_key = name.replace(' ', "-");
 
-    if arguments.peek().is_some() {
-        output.push_str("<h3 class=\"cli-reference\">Arguments</h3>\n\n");
-        output.push_str("<dl class=\"cli-reference\">");
+        // Display positional arguments
+        let mut arguments = command
+            .get_positionals()
+            .filter(|arg| !arg.is_hide_set())
+            .peekable();
 
-        for arg in arguments {
-            let id = format!("{name_key}--{}", arg.get_id());
-            output.push_str(&format!("<dt id=\"{id}\">"));
-            output.push_str(&format!(
-                "<a href=\"#{id}\"><code>{}</code></a>",
-                arg.get_id().to_string().to_uppercase(),
-            ));
-            output.push_str("</dt>");
-            if let Some(help) = arg.get_long_help().or_else(|| arg.get_help()) {
-                output.push_str("<dd>");
-                output.push_str(&format!("{}\n", markdown::to_html(&help.to_string())));
-                output.push_str("</dd>");
-            }
-        }
+        if arguments.peek().is_some() {
+            output.push_str("<h3 class=\"cli-reference\">Arguments</h3>\n\n");
+            output.push_str("<dl class=\"cli-reference\">");
 
-        output.push_str("</dl>\n\n");
-    }
-}
-
-#[expect(clippy::format_push_string)]
-fn generate_options_section(output: &mut String, command: &Command, name_key: &str) {
-    let mut options = command
-        .get_arguments()
-        .filter(|arg| !arg.is_positional())
-        .filter(|arg| !arg.is_hide_set())
-        .sorted_by_key(|arg| arg.get_id())
-        .peekable();
-
-    if options.peek().is_some() {
-        output.push_str("<h3 class=\"cli-reference\">Options</h3>\n\n");
-        output.push_str("<dl class=\"cli-reference\">");
-        for opt in options {
-            let Some(long) = opt.get_long() else { continue };
-            let id = format!("{name_key}--{long}");
-
-            output.push_str(&format!("<dt id=\"{id}\">"));
-            output.push_str(&format!("<a href=\"#{id}\"><code>--{long}</code></a>"));
-            for long_alias in opt.get_all_aliases().into_iter().flatten() {
-                output.push_str(&format!(", <code>--{long_alias}</code>"));
-            }
-            if let Some(short) = opt.get_short() {
-                output.push_str(&format!(", <code>-{short}</code>"));
-            }
-            for short_alias in opt.get_all_short_aliases().into_iter().flatten() {
-                output.push_str(&format!(", <code>-{short_alias}</code>"));
-            }
-
-            // Re-implements private `Arg::is_takes_value_set` used in `Command::get_opts`
-            if opt
-                .get_num_args()
-                .unwrap_or_else(|| 1.into())
-                .takes_values()
-                && let Some(values) = opt.get_value_names()
-            {
-                for value in values {
-                    output.push_str(&format!(
-                        " <i>{}</i>",
-                        value.to_lowercase().replace('_', "-")
-                    ));
+            for arg in arguments {
+                let id = format!("{name_key}--{}", arg.get_id());
+                output.push_str(&format!("<dt id=\"{id}\">"));
+                output.push_str(&format!(
+                    "<a href=\"#{id}\"><code>{}</code></a>",
+                    arg.get_id().to_string().to_uppercase(),
+                ));
+                output.push_str("</dt>");
+                if let Some(help) = arg.get_long_help().or_else(|| arg.get_help()) {
+                    output.push_str("<dd>");
+                    output.push_str(&format!("{}\n", markdown::to_html(&help.to_string())));
+                    output.push_str("</dd>");
                 }
             }
-            output.push_str("</dt>");
-            if let Some(help) = opt.get_long_help().or_else(|| opt.get_help()) {
-                output.push_str("<dd>");
-                output.push_str(&format!("{}\n", markdown::to_html(&help.to_string())));
-                emit_env_option(opt, output);
-                emit_default_option(opt, output);
-                emit_possible_options(opt, output);
-                output.push_str("</dd>");
-            }
+
+            output.push_str("</dl>\n\n");
         }
 
-        output.push_str("</dl>");
+        // Display options and flags
+        let mut options = command
+            .get_arguments()
+            .filter(|arg| !arg.is_positional())
+            .filter(|arg| !arg.is_hide_set())
+            .sorted_by_key(|arg| arg.get_id())
+            .peekable();
+
+        if options.peek().is_some() {
+            output.push_str("<h3 class=\"cli-reference\">Options</h3>\n\n");
+            output.push_str("<dl class=\"cli-reference\">");
+            for opt in options {
+                let Some(long) = opt.get_long() else { continue };
+                let id = format!("{name_key}--{long}");
+
+                output.push_str(&format!("<dt id=\"{id}\">"));
+                output.push_str(&format!("<a href=\"#{id}\"><code>--{long}</code></a>"));
+                for long_alias in opt.get_all_aliases().into_iter().flatten() {
+                    output.push_str(&format!(", <code>--{long_alias}</code>"));
+                }
+                if let Some(short) = opt.get_short() {
+                    output.push_str(&format!(", <code>-{short}</code>"));
+                }
+                for short_alias in opt.get_all_short_aliases().into_iter().flatten() {
+                    output.push_str(&format!(", <code>-{short_alias}</code>"));
+                }
+
+                // Re-implements private `Arg::is_takes_value_set` used in `Command::get_opts`
+                if opt
+                    .get_num_args()
+                    .unwrap_or_else(|| 1.into())
+                    .takes_values()
+                    && let Some(values) = opt.get_value_names()
+                {
+                    for value in values {
+                        output.push_str(&format!(
+                            " <i>{}</i>",
+                            value.to_lowercase().replace('_', "-")
+                        ));
+                    }
+                }
+                output.push_str("</dt>");
+                if let Some(help) = opt.get_long_help().or_else(|| opt.get_help()) {
+                    output.push_str("<dd>");
+                    output.push_str(&format!("{}\n", markdown::to_html(&help.to_string())));
+                    emit_env_option(opt, output);
+                    emit_default_option(opt, output);
+                    emit_possible_options(opt, output);
+                    output.push_str("</dd>");
+                }
+            }
+
+            output.push_str("</dl>");
+        }
+
+        output.push_str("\n\n");
     }
+
+    parents.push(command);
+
+    // Recurse to all of the subcommands.
+    for subcommand in command.get_subcommands() {
+        generate_command(output, subcommand, parents);
+    }
+
+    parents.pop();
 }
 
 fn emit_env_option(opt: &clap::Arg, output: &mut String) {
