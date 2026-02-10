@@ -95,8 +95,23 @@ fn find_pending_recursive(dir: &Utf8Path, results: &mut Vec<PendingSnapshotInfo>
     }
 }
 
-/// Accept a pending snapshot by renaming `.snap.new` to `.snap`.
+/// Accept a pending snapshot.
+///
+/// For inline snapshots (with `inline_source`/`inline_line` metadata),
+/// rewrites the source file in-place and deletes the `.snap.new` file.
+/// For file-based snapshots, renames `.snap.new` to `.snap`.
 pub fn accept_pending(pending_path: &Utf8Path) -> io::Result<()> {
+    if let Some(snapshot) = read_snapshot(pending_path) {
+        if let (Some(source_file), Some(line)) = (
+            &snapshot.metadata.inline_source,
+            snapshot.metadata.inline_line,
+        ) {
+            let content = snapshot.content.trim_end();
+            crate::inline::rewrite_inline_snapshot(source_file, line, content)?;
+            return std::fs::remove_file(pending_path);
+        }
+    }
+
     let snap_path = pending_path
         .as_str()
         .strip_suffix(".new")
@@ -151,6 +166,7 @@ mod tests {
         let snapshot = SnapshotFile {
             metadata: crate::format::SnapshotMetadata {
                 source: Some("test.py:3::test_foo".to_string()),
+                ..Default::default()
             },
             content: "hello world\n".to_string(),
         };
