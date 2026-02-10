@@ -207,7 +207,7 @@ def test_multi():
     ----- stderr -----
     ");
 
-    let content_1 = context.read_file("snapshots/test__test_multi.snap");
+    let content_1 = context.read_file("snapshots/test__test_multi-0.snap");
     insta::assert_snapshot!(content_1, @r"
     ---
     source: test.py:6::test_multi
@@ -215,7 +215,7 @@ def test_multi():
     first
     ");
 
-    let content_2 = context.read_file("snapshots/test__test_multi-2.snap");
+    let content_2 = context.read_file("snapshots/test__test_multi-1.snap");
     insta::assert_snapshot!(content_2, @r"
     ---
     source: test.py:7::test_multi
@@ -223,7 +223,7 @@ def test_multi():
     second
     ");
 
-    let content_3 = context.read_file("snapshots/test__test_multi-3.snap");
+    let content_3 = context.read_file("snapshots/test__test_multi-2.snap");
     insta::assert_snapshot!(content_3, @r"
     ---
     source: test.py:8::test_multi
@@ -421,9 +421,9 @@ def test_mixed():
     assert!(
         context
             .root()
-            .join("snapshots/test__test_mixed.snap")
+            .join("snapshots/test__test_mixed-0.snap")
             .exists(),
-        "Expected first unnamed snapshot"
+        "Expected first unnamed snapshot with -0 suffix"
     );
     assert!(
         context
@@ -435,9 +435,9 @@ def test_mixed():
     assert!(
         context
             .root()
-            .join("snapshots/test__test_mixed-2.snap")
+            .join("snapshots/test__test_mixed-1.snap")
             .exists(),
-        "Expected third snapshot with -2 suffix (named snapshots don't consume counter)"
+        "Expected second unnamed snapshot with -1 suffix"
     );
 }
 
@@ -557,7 +557,7 @@ def test_multi():
     ----- stderr -----
     ");
 
-    let content_1 = context.read_file("snapshots/test__test_multi.snap");
+    let content_1 = context.read_file("snapshots/test__test_multi-0.snap");
     insta::assert_snapshot!(content_1, @r"
     ---
     source: test.py:6::test_multi
@@ -565,7 +565,7 @@ def test_multi():
     first
     ");
 
-    let content_2 = context.read_file("snapshots/test__test_multi-2.snap");
+    let content_2 = context.read_file("snapshots/test__test_multi-1.snap");
     insta::assert_snapshot!(content_2, @r"
     ---
     source: test.py:7::test_multi

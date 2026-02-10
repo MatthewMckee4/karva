@@ -82,7 +82,7 @@ This creates three separate snapshot files:
 - `snapshots/test__test_page--body.snap`
 - `snapshots/test__test_page--footer.snap`
 
-Alternatively, wrap the calls in `snapshot_settings(allow_duplicates=True)` to opt in to auto-numbered unnamed snapshots (`test_page`, `test_page-2`, `test_page-3`):
+Alternatively, wrap the calls in `snapshot_settings(allow_duplicates=True)` to opt in to auto-numbered unnamed snapshots (`test_page-0`, `test_page-1`, `test_page-2`):
 
 ```python title="test.py"
 import karva

@@ -217,13 +217,14 @@ fn assert_snapshot_impl(
                 )
             })?;
 
-        if counter > 0 && !is_allow_duplicates_active() {
+        let allow_duplicates = is_allow_duplicates_active();
+        if counter > 0 && !allow_duplicates {
             return Err(pyo3::exceptions::PyTypeError::new_err(
                 "Multiple unnamed snapshots in one test. Use 'name=' for each, or wrap in 'karva.snapshot_settings(allow_duplicates=True)'",
             ));
         }
 
-        compute_snapshot_name(&test_name, counter)
+        compute_snapshot_name(&test_name, counter, allow_duplicates)
     };
 
     let test_file_path = Utf8Path::new(&test_file);
@@ -385,25 +386,21 @@ fn caller_line_number(py: Python<'_>) -> Option<u32> {
 }
 
 /// Compute the snapshot name based on test name and counter.
-fn compute_snapshot_name(test_name: &str, counter: u32) -> String {
-    // Extract just the function name portion (before any parametrize params)
-    let base_name = if let Some(paren_idx) = test_name.find('(') {
-        &test_name[..paren_idx]
+///
+/// When `allow_duplicates` is true, every unnamed snapshot gets an explicit
+/// numeric suffix: `-0`, `-1`, `-2`, etc. When false (single unnamed snapshot),
+/// the bare test name is used with no suffix.
+fn compute_snapshot_name(test_name: &str, counter: u32, allow_duplicates: bool) -> String {
+    let (base_name, param_suffix) = if let Some(paren_idx) = test_name.find('(') {
+        (&test_name[..paren_idx], &test_name[paren_idx..])
     } else {
-        test_name
+        (test_name, "")
     };
 
-    // If there are parametrize params, include them
-    let param_suffix = if let Some(paren_idx) = test_name.find('(') {
-        &test_name[paren_idx..]
+    if allow_duplicates {
+        format!("{base_name}-{counter}{param_suffix}")
     } else {
-        ""
-    };
-
-    if counter == 0 {
         format!("{base_name}{param_suffix}")
-    } else {
-        format!("{base_name}-{}{param_suffix}", counter + 1)
     }
 }
 
@@ -445,21 +442,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_compute_snapshot_name_first() {
-        assert_eq!(compute_snapshot_name("test_foo", 0), "test_foo");
+    fn test_compute_snapshot_name_single() {
+        assert_eq!(compute_snapshot_name("test_foo", 0, false), "test_foo");
     }
 
     #[test]
-    fn test_compute_snapshot_name_counter() {
-        assert_eq!(compute_snapshot_name("test_foo", 1), "test_foo-2");
-        assert_eq!(compute_snapshot_name("test_foo", 2), "test_foo-3");
+    fn test_compute_snapshot_name_allow_duplicates() {
+        assert_eq!(compute_snapshot_name("test_foo", 0, true), "test_foo-0");
+        assert_eq!(compute_snapshot_name("test_foo", 1, true), "test_foo-1");
+        assert_eq!(compute_snapshot_name("test_foo", 2, true), "test_foo-2");
     }
 
     #[test]
     fn test_compute_snapshot_name_parametrized() {
         assert_eq!(
-            compute_snapshot_name("test_foo(a=1, b=2)", 0),
+            compute_snapshot_name("test_foo(a=1, b=2)", 0, false),
             "test_foo(a=1, b=2)"
+        );
+        assert_eq!(
+            compute_snapshot_name("test_foo(a=1, b=2)", 0, true),
+            "test_foo-0(a=1, b=2)"
         );
     }
 
