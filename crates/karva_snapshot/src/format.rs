@@ -4,6 +4,8 @@ use std::fmt::Write;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SnapshotMetadata {
     pub source: Option<String>,
+    pub inline_source: Option<String>,
+    pub inline_line: Option<u32>,
 }
 
 /// A parsed snapshot file containing metadata and content.
@@ -33,6 +35,10 @@ impl SnapshotFile {
         for line in frontmatter.lines() {
             if let Some(value) = line.strip_prefix("source: ") {
                 metadata.source = Some(value.to_string());
+            } else if let Some(value) = line.strip_prefix("inline_source: ") {
+                metadata.inline_source = Some(value.to_string());
+            } else if let Some(value) = line.strip_prefix("inline_line: ") {
+                metadata.inline_line = value.parse().ok();
             }
         }
 
@@ -49,6 +55,12 @@ impl SnapshotFile {
 
         if let Some(source) = &self.metadata.source {
             let _ = writeln!(output, "source: {source}");
+        }
+        if let Some(inline_source) = &self.metadata.inline_source {
+            let _ = writeln!(output, "inline_source: {inline_source}");
+        }
+        if let Some(inline_line) = self.metadata.inline_line {
+            let _ = writeln!(output, "inline_line: {inline_line}");
         }
 
         output.push_str("---\n");
@@ -82,6 +94,7 @@ mod tests {
         let snapshot = SnapshotFile {
             metadata: SnapshotMetadata {
                 source: Some("tests/test_example.py:5::test_example".to_string()),
+                ..Default::default()
             },
             content: "{'key': 'value'}\n".to_string(),
         };
@@ -96,6 +109,7 @@ mod tests {
         let snapshot = SnapshotFile {
             metadata: SnapshotMetadata {
                 source: Some("test.py:3::test_foo".to_string()),
+                ..Default::default()
             },
             content: "hello".to_string(),
         };

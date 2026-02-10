@@ -192,114 +192,6 @@ def test_hello():
 }
 
 #[test]
-fn test_snapshot_named() {
-    let context = TestContext::with_file(
-        "test.py",
-        r"
-import karva
-
-def test_hello():
-    karva.assert_snapshot('hello', name='greeting')
-        ",
-    );
-
-    let mut cmd = context.command_no_parallel();
-    cmd.arg("--snapshot-update");
-
-    assert_cmd_snapshot!(cmd, @r"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-    test test::test_hello ... ok
-
-    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
-
-    ----- stderr -----
-    ");
-
-    let content = context.read_file("snapshots/test__test_hello--greeting.snap");
-    insta::assert_snapshot!(content, @r"
-    ---
-    source: test.py:5::test_hello
-    ---
-    hello
-    ");
-}
-
-#[test]
-fn test_snapshot_format_repr() {
-    let context = TestContext::with_file(
-        "test.py",
-        r"
-import karva
-
-def test_hello():
-    karva.assert_snapshot({'a': 1}, format='repr')
-        ",
-    );
-
-    let mut cmd = context.command_no_parallel();
-    cmd.arg("--snapshot-update");
-
-    assert_cmd_snapshot!(cmd, @r"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-    test test::test_hello ... ok
-
-    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
-
-    ----- stderr -----
-    ");
-
-    let content = context.read_file("snapshots/test__test_hello.snap");
-    insta::assert_snapshot!(content, @r"
-    ---
-    source: test.py:5::test_hello
-    ---
-    {'a': 1}
-    ");
-}
-
-#[test]
-fn test_snapshot_format_json() {
-    let context = TestContext::with_file(
-        "test.py",
-        r"
-import karva
-
-def test_hello():
-    karva.assert_snapshot({'a': 1, 'b': 2}, format='json')
-        ",
-    );
-
-    let mut cmd = context.command_no_parallel();
-    cmd.arg("--snapshot-update");
-
-    assert_cmd_snapshot!(cmd, @r"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-    test test::test_hello ... ok
-
-    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
-
-    ----- stderr -----
-    ");
-
-    let content = context.read_file("snapshots/test__test_hello.snap");
-    insta::assert_snapshot!(content, @r#"
-    ---
-    source: test.py:5::test_hello
-    ---
-    {
-      "a": 1,
-      "b": 2
-    }
-    "#);
-}
-
-#[test]
 fn test_snapshot_multiple_per_test() {
     let context = TestContext::with_file(
         "test.py",
@@ -1347,51 +1239,6 @@ def test_ccc():
 }
 
 #[test]
-fn test_snapshot_multiple_named_in_one_test() {
-    let context = TestContext::with_file(
-        "test.py",
-        r"
-import karva
-
-def test_multi_named():
-    karva.assert_snapshot('header content', name='header')
-    karva.assert_snapshot('body\nwith\nmultiple lines', name='body')
-    karva.assert_snapshot('footer', name='footer')
-        ",
-    );
-
-    let mut cmd = context.command_no_parallel();
-    cmd.arg("--snapshot-update");
-    let _ = cmd.output();
-
-    let header = context.read_file("snapshots/test__test_multi_named--header.snap");
-    insta::assert_snapshot!(header, @r"
-    ---
-    source: test.py:5::test_multi_named
-    ---
-    header content
-    ");
-
-    let body = context.read_file("snapshots/test__test_multi_named--body.snap");
-    insta::assert_snapshot!(body, @r"
-    ---
-    source: test.py:6::test_multi_named
-    ---
-    body
-    with
-    multiple lines
-    ");
-
-    let footer = context.read_file("snapshots/test__test_multi_named--footer.snap");
-    insta::assert_snapshot!(footer, @r"
-    ---
-    source: test.py:7::test_multi_named
-    ---
-    footer
-    ");
-}
-
-#[test]
 fn test_snapshot_content_with_special_characters() {
     let context = TestContext::with_file(
         "test.py",
@@ -1446,78 +1293,6 @@ def test_dashes():
 }
 
 #[test]
-fn test_snapshot_multiline_json_format() {
-    let context = TestContext::with_file(
-        "test.py",
-        r"
-import karva
-
-def test_nested_json():
-    data = {'users': [{'name': 'Alice', 'age': 30}, {'name': 'Bob', 'age': 25}], 'count': 2}
-    karva.assert_snapshot(data, format='json')
-        ",
-    );
-
-    let mut cmd = context.command_no_parallel();
-    cmd.arg("--snapshot-update");
-    let _ = cmd.output();
-
-    let content = context.read_file("snapshots/test__test_nested_json.snap");
-    insta::assert_snapshot!(content, @r#"
-    ---
-    source: test.py:6::test_nested_json
-    ---
-    {
-      "count": 2,
-      "users": [
-        {
-          "age": 30,
-          "name": "Alice"
-        },
-        {
-          "age": 25,
-          "name": "Bob"
-        }
-      ]
-    }
-    "#);
-}
-
-#[test]
-fn test_snapshot_parametrized_with_named() {
-    let context = TestContext::with_file(
-        "test.py",
-        r"
-import karva
-
-@karva.tags.parametrize('greeting', ['hello', 'hi'])
-def test_greet(greeting):
-    karva.assert_snapshot(f'{greeting} world', name='output')
-        ",
-    );
-
-    let mut cmd = context.command_no_parallel();
-    cmd.arg("--snapshot-update");
-    let _ = cmd.output();
-
-    let hello = context.read_file("snapshots/test__test_greet--output(greeting=hello).snap");
-    insta::assert_snapshot!(hello, @r"
-    ---
-    source: test.py:6::test_greet(greeting=hello)
-    ---
-    hello world
-    ");
-
-    let hi = context.read_file("snapshots/test__test_greet--output(greeting=hi).snap");
-    insta::assert_snapshot!(hi, @r"
-    ---
-    source: test.py:6::test_greet(greeting=hi)
-    ---
-    hi world
-    ");
-}
-
-#[test]
 fn test_snapshot_multiple_files() {
     let context = TestContext::default();
     context.write_file(
@@ -1557,5 +1332,359 @@ def test_from_two():
     source: test_two.py:5::test_from_two
     ---
     from file two
+    ");
+}
+
+#[test]
+fn test_inline_snapshot_creates_value() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_hello():
+    karva.assert_snapshot("hello world", inline="")
+        "#,
+    );
+
+    // With --snapshot-update, should rewrite source and pass
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+
+    assert_cmd_snapshot!(cmd, @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_hello ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    // Verify the source file was rewritten
+    let source = context.read_file("test.py");
+    insta::assert_snapshot!(source, @r#"
+    import karva
+
+    def test_hello():
+        karva.assert_snapshot("hello world", inline="hello world")
+    "#);
+}
+
+#[test]
+fn test_inline_snapshot_matches() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_hello():
+    karva.assert_snapshot("hello world", inline="hello world")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_hello ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_inline_snapshot_mismatch_no_update() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_hello():
+    karva.assert_snapshot("goodbye", inline="hello")
+        "#,
+    );
+
+    // Without --snapshot-update, should fail with diff
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_hello ... FAILED
+
+    diagnostics:
+
+    error[test-failure]: Test `test_hello` failed
+     --> test.py:4:5
+      |
+    2 | import karva
+    3 |
+    4 | def test_hello():
+      |     ^^^^^^^^^^
+    5 |     karva.assert_snapshot("goodbye", inline="hello")
+      |
+    info: Test failed here
+     --> test.py:5:5
+      |
+    4 | def test_hello():
+    5 |     karva.assert_snapshot("goodbye", inline="hello")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Inline snapshot mismatch for 'test_hello'.
+          [LONG-LINE]┬[LONG-LINE]
+              1       | -hello
+                    1 | +goodbye
+          [LONG-LINE]┴[LONG-LINE]
+
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn test_inline_snapshot_mismatch_updates_source() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_hello():
+    karva.assert_snapshot("goodbye", inline="hello")
+        "#,
+    );
+
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+
+    assert_cmd_snapshot!(cmd, @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_hello ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let source = context.read_file("test.py");
+    insta::assert_snapshot!(source, @r#"
+    import karva
+
+    def test_hello():
+        karva.assert_snapshot("goodbye", inline="goodbye")
+    "#);
+}
+
+#[test]
+fn test_inline_snapshot_multiline() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_lines():
+    karva.assert_snapshot("line 1\nline 2\nline 3", inline="")
+        "#,
+    );
+
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+
+    assert_cmd_snapshot!(cmd, @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_lines ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let source = context.read_file("test.py");
+    insta::assert_snapshot!(source, @r#"
+
+    import karva
+
+    def test_lines():
+        karva.assert_snapshot("line 1/nline 2/nline 3", inline="""/
+            line 1
+            line 2
+            line 3
+        """)
+    "#);
+}
+
+#[test]
+fn test_inline_snapshot_multiline_matches() {
+    let context = TestContext::with_file(
+        "test.py",
+        "
+import karva
+
+def test_lines():
+    karva.assert_snapshot(\"line 1\\nline 2\", inline=\"\"\"\\\n        line 1\n        line 2\n    \"\"\")\n",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_lines ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_inline_snapshot_multiple_per_test() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_multi():
+    karva.assert_snapshot("first", inline="")
+    karva.assert_snapshot("second", inline="")
+        "#,
+    );
+
+    let mut cmd = context.command_no_parallel();
+    cmd.arg("--snapshot-update");
+
+    assert_cmd_snapshot!(cmd, @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_multi ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let source = context.read_file("test.py");
+    insta::assert_snapshot!(source, @r#"
+    import karva
+
+    def test_multi():
+        karva.assert_snapshot("first", inline="first")
+        karva.assert_snapshot("second", inline="second")
+    "#);
+}
+
+#[test]
+fn test_inline_snapshot_accept() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_hello():
+    karva.assert_snapshot("hello world", inline="")
+        "#,
+    );
+
+    // Run without update to create .snap.new
+    let _ = context.command_no_parallel().output();
+
+    // Source should be unchanged
+    let source_before = context.read_file("test.py");
+    assert!(
+        source_before.contains(r#"inline="""#),
+        "Expected source to still have empty inline"
+    );
+
+    // Run accept command
+    assert_cmd_snapshot!(context.snapshot("accept"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Accepted: <temp_dir>/snapshots/test__test_hello_inline_5.snap.new
+
+    1 snapshot(s) accepted.
+
+    ----- stderr -----
+    ");
+
+    // Verify source was rewritten
+    let source_after = context.read_file("test.py");
+    insta::assert_snapshot!(source_after, @r#"
+    import karva
+
+    def test_hello():
+        karva.assert_snapshot("hello world", inline="hello world")
+    "#);
+}
+
+#[test]
+fn test_inline_snapshot_reject() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_hello():
+    karva.assert_snapshot("hello world", inline="")
+        "#,
+    );
+
+    // Run without update to create .snap.new
+    let _ = context.command_no_parallel().output();
+
+    // Run reject command
+    assert_cmd_snapshot!(context.snapshot("reject"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Rejected: <temp_dir>/snapshots/test__test_hello_inline_5.snap.new
+
+    1 snapshot(s) rejected.
+
+    ----- stderr -----
+    ");
+
+    // Source should be unchanged
+    let source = context.read_file("test.py");
+    insta::assert_snapshot!(source, @r#"
+    import karva
+
+    def test_hello():
+        karva.assert_snapshot("hello world", inline="")
+    "#);
+}
+
+#[test]
+fn test_inline_snapshot_pending() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_hello():
+    karva.assert_snapshot("hello world", inline="")
+        "#,
+    );
+
+    // Run without update to create .snap.new
+    let _ = context.command_no_parallel().output();
+
+    // Run pending command
+    assert_cmd_snapshot!(context.snapshot("pending"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    <temp_dir>/snapshots/test__test_hello_inline_5.snap.new
+
+    1 pending snapshot(s).
+
+    ----- stderr -----
     ");
 }

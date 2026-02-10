@@ -9,4 +9,5 @@
 - ALWAYS run `prek run -a` at the end of a task
 - ALWAYS run `just test` to run all tests.
 - AVOID adding redundant comments throughout the codebase.
+- AVOID adding section separator comments (e.g., `// --- Section ---`) in test files.
 - PREFER function comments over inline comments.

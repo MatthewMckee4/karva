@@ -111,6 +111,12 @@ def raises(
             representation of the exception.
     """
 
+def assert_snapshot(
+    value: object,
+    *,
+    inline: str | None = None,
+) -> None: ...
+
 class SkipError(Exception):
     """Raised when `karva.skip` is called."""
 
