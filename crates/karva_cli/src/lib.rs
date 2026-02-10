@@ -111,6 +111,9 @@ pub enum SnapshotAction {
 
     /// Remove snapshot files whose source test no longer exists.
     Prune(SnapshotPruneArgs),
+
+    /// Delete all (or filtered) snapshot files (.snap and .snap.new).
+    Delete(SnapshotDeleteArgs),
 }
 
 #[derive(Debug, Parser, Default)]
@@ -127,6 +130,17 @@ pub struct SnapshotPruneArgs {
     pub paths: Vec<String>,
 
     /// Show which snapshots would be removed without deleting them.
+    #[clap(long)]
+    pub dry_run: bool,
+}
+
+#[derive(Debug, Parser, Default)]
+pub struct SnapshotDeleteArgs {
+    /// Optional paths to filter which snapshot files are deleted.
+    #[clap(value_name = "PATH")]
+    pub paths: Vec<String>,
+
+    /// Show which snapshot files would be deleted without removing them.
     #[clap(long)]
     pub dry_run: bool,
 }

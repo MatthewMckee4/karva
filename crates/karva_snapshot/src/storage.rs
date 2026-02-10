@@ -237,6 +237,47 @@ fn find_snapshots_recursive(dir: &Utf8Path, results: &mut Vec<SnapshotInfo>) {
     }
 }
 
+/// A snapshot file of any kind (`.snap` or `.snap.new`) found on disk.
+#[derive(Debug, Clone)]
+pub struct AnySnapshotInfo {
+    pub path: Utf8PathBuf,
+}
+
+/// Recursively find all snapshot files (`.snap` and `.snap.new`) under a root directory.
+pub fn find_all_snapshots(root: &Utf8Path) -> Vec<AnySnapshotInfo> {
+    let mut results = Vec::new();
+    find_all_snapshots_recursive(root, &mut results);
+    results.sort_by(|a, b| a.path.cmp(&b.path));
+    results
+}
+
+fn find_all_snapshots_recursive(dir: &Utf8Path, results: &mut Vec<AnySnapshotInfo>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+
+        if path.is_dir() {
+            if let Ok(utf8_path) = Utf8PathBuf::try_from(path) {
+                find_all_snapshots_recursive(&utf8_path, results);
+            }
+        } else if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            let is_snap_new = name.ends_with(".snap.new");
+            let is_snap = !is_snap_new
+                && std::path::Path::new(name)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("snap"));
+            if is_snap_new || is_snap {
+                if let Ok(utf8_path) = Utf8PathBuf::try_from(path) {
+                    results.push(AnySnapshotInfo { path: utf8_path });
+                }
+            }
+        }
+    }
+}
+
 /// Find all snapshot files whose source test no longer exists.
 pub fn find_unreferenced_snapshots(root: &Utf8Path) -> Vec<UnreferencedSnapshot> {
     let snapshots = find_snapshots(root);
