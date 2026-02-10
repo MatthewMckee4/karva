@@ -108,6 +108,9 @@ pub enum SnapshotAction {
 
     /// Interactively review pending snapshots.
     Review(SnapshotFilterArgs),
+
+    /// Remove snapshot files whose source test no longer exists.
+    Prune(SnapshotPruneArgs),
 }
 
 #[derive(Debug, Parser, Default)]
@@ -115,6 +118,17 @@ pub struct SnapshotFilterArgs {
     /// Optional paths to filter snapshots by directory or file.
     #[clap(value_name = "PATH")]
     pub paths: Vec<String>,
+}
+
+#[derive(Debug, Parser, Default)]
+pub struct SnapshotPruneArgs {
+    /// Optional paths to filter snapshots by directory or file.
+    #[clap(value_name = "PATH")]
+    pub paths: Vec<String>,
+
+    /// Show which snapshots would be removed without deleting them.
+    #[clap(long)]
+    pub dry_run: bool,
 }
 
 /// Shared test execution options that can be used by both main CLI and worker processes

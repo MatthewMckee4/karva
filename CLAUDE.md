@@ -11,3 +11,4 @@
 - AVOID adding redundant comments throughout the codebase.
 - AVOID adding section separator comments (e.g., `// --- Section ---`) in test files.
 - PREFER function comments over inline comments.
+- PREFER short imports over fully-qualified paths for readability.
