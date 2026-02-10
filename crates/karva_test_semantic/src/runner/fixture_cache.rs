@@ -25,40 +25,29 @@ pub struct FixtureCache {
 }
 
 impl FixtureCache {
+    fn scope_storage(&self, scope: FixtureScope) -> &RefCell<HashMap<String, Py<PyAny>>> {
+        match scope {
+            FixtureScope::Session => &self.session,
+            FixtureScope::Package => &self.package,
+            FixtureScope::Module => &self.module,
+            FixtureScope::Function => &self.function,
+        }
+    }
+
     /// Get a fixture value from the cache based on its scope
     pub(crate) fn get(&self, py: Python, name: &str, scope: FixtureScope) -> Option<Py<PyAny>> {
-        match scope {
-            FixtureScope::Session => self.session.borrow().get(name).map(|v| v.clone_ref(py)),
-            FixtureScope::Package => self.package.borrow().get(name).map(|v| v.clone_ref(py)),
-            FixtureScope::Module => self.module.borrow().get(name).map(|v| v.clone_ref(py)),
-            FixtureScope::Function => self.function.borrow().get(name).map(|v| v.clone_ref(py)),
-        }
+        self.scope_storage(scope)
+            .borrow()
+            .get(name)
+            .map(|v| v.clone_ref(py))
     }
 
     /// Insert a fixture value into the cache based on its scope
     pub(crate) fn insert(&self, name: String, value: Py<PyAny>, scope: FixtureScope) {
-        match scope {
-            FixtureScope::Session => {
-                self.session.borrow_mut().insert(name, value);
-            }
-            FixtureScope::Package => {
-                self.package.borrow_mut().insert(name, value);
-            }
-            FixtureScope::Module => {
-                self.module.borrow_mut().insert(name, value);
-            }
-            FixtureScope::Function => {
-                self.function.borrow_mut().insert(name, value);
-            }
-        }
+        self.scope_storage(scope).borrow_mut().insert(name, value);
     }
 
     pub(crate) fn clear_fixtures(&self, scope: FixtureScope) {
-        match scope {
-            FixtureScope::Function => self.function.borrow_mut().clear(),
-            FixtureScope::Module => self.module.borrow_mut().clear(),
-            FixtureScope::Package => self.package.borrow_mut().clear(),
-            FixtureScope::Session => self.session.borrow_mut().clear(),
-        }
+        self.scope_storage(scope).borrow_mut().clear();
     }
 }

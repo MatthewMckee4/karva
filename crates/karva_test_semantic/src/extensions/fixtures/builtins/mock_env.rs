@@ -1,7 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use pyo3::PyResult;
-use pyo3::exceptions::{PyAttributeError, PyTypeError};
+use pyo3::exceptions::{PyAttributeError, PyRuntimeError, PyTypeError};
 use pyo3::prelude::*;
 use pyo3::types::{PyString, PyType};
 
@@ -34,8 +34,10 @@ impl NotSetType {
     }
 }
 
-type SetAttr = Arc<Mutex<Vec<(Py<PyAny>, String, Py<PyAny>)>>>;
-type SetItem = Arc<Mutex<Vec<(Py<PyAny>, Py<PyAny>, Py<PyAny>)>>>;
+type SetAttrEntry = (Py<PyAny>, String, Py<PyAny>);
+type SetItemEntry = (Py<PyAny>, Py<PyAny>, Py<PyAny>);
+type SetAttr = Arc<Mutex<Vec<SetAttrEntry>>>;
+type SetItem = Arc<Mutex<Vec<SetItemEntry>>>;
 
 /// Helper to conveniently monkeypatch attributes/items/environment variables/syspath.
 #[pyclass]
@@ -44,6 +46,32 @@ pub struct MockEnv {
     setitem: SetItem,
     cwd: Arc<Mutex<Option<String>>>,
     savesyspath: Arc<Mutex<Option<Vec<String>>>>,
+}
+
+impl MockEnv {
+    fn lock_setattr(&self) -> PyResult<MutexGuard<'_, Vec<SetAttrEntry>>> {
+        self.setattr
+            .lock()
+            .map_err(|e| PyRuntimeError::new_err(format!("lock poisoned: {e}")))
+    }
+
+    fn lock_setitem(&self) -> PyResult<MutexGuard<'_, Vec<SetItemEntry>>> {
+        self.setitem
+            .lock()
+            .map_err(|e| PyRuntimeError::new_err(format!("lock poisoned: {e}")))
+    }
+
+    fn lock_cwd(&self) -> PyResult<MutexGuard<'_, Option<String>>> {
+        self.cwd
+            .lock()
+            .map_err(|e| PyRuntimeError::new_err(format!("lock poisoned: {e}")))
+    }
+
+    fn lock_savesyspath(&self) -> PyResult<MutexGuard<'_, Option<Vec<String>>>> {
+        self.savesyspath
+            .lock()
+            .map_err(|e| PyRuntimeError::new_err(format!("lock poisoned: {e}")))
+    }
 }
 
 #[pymethods]
@@ -141,7 +169,7 @@ impl MockEnv {
         };
 
         // Store for undo
-        self.setattr.lock().unwrap().push((
+        self.lock_setattr()?.push((
             actual_target.clone_ref(py),
             actual_name.clone(),
             final_oldval,
@@ -212,11 +240,8 @@ impl MockEnv {
         };
 
         // Store for undo
-        self.setattr.lock().unwrap().push((
-            actual_target.clone_ref(py),
-            actual_name.clone(),
-            oldval,
-        ));
+        self.lock_setattr()?
+            .push((actual_target.clone_ref(py), actual_name.clone(), oldval));
 
         // Delete attribute
         actual_target.bind(py).delattr(&actual_name)?;
@@ -242,9 +267,7 @@ impl MockEnv {
             .map_or_else(|| py.None(), std::convert::Into::into);
 
         // Store for undo
-        self.setitem
-            .lock()
-            .unwrap()
+        self.lock_setitem()?
             .push((dic.clone_ref(py), name.clone_ref(py), oldval));
 
         // Set new value
@@ -274,9 +297,7 @@ impl MockEnv {
 
         let oldval = bound_dic.get_item(&name)?.into();
 
-        self.setitem
-            .lock()
-            .unwrap()
+        self.lock_setitem()?
             .push((dic.clone_ref(py), name.clone_ref(py), oldval));
 
         bound_dic.del_item(&name)?;
@@ -317,11 +338,8 @@ impl MockEnv {
             .get_item(&name_key)
             .map_or_else(|_| py.None(), Into::into);
 
-        self.setitem.lock().unwrap().push((
-            environ.clone().unbind(),
-            name_key.clone_ref(py),
-            oldval,
-        ));
+        self.lock_setitem()?
+            .push((environ.clone().unbind(), name_key.clone_ref(py), oldval));
 
         environ.set_item(&name_key, value_obj)?;
 
@@ -346,11 +364,8 @@ impl MockEnv {
 
         let oldval = environ.get_item(&name_key)?.into();
 
-        self.setitem.lock().unwrap().push((
-            environ.clone().unbind(),
-            name_key.clone_ref(py),
-            oldval,
-        ));
+        self.lock_setitem()?
+            .push((environ.clone().unbind(), name_key.clone_ref(py), oldval));
 
         environ.del_item(&name_key)?;
 
@@ -363,7 +378,7 @@ impl MockEnv {
         let sys_path = sys_module.getattr("path")?;
 
         // Save original sys.path if not already saved
-        let mut save = self.savesyspath.lock().unwrap();
+        let mut save = self.lock_savesyspath()?;
         if save.is_none() {
             let saved: Vec<String> = sys_path.extract()?;
             *save = Some(saved);
@@ -384,7 +399,7 @@ impl MockEnv {
         let path_string = path.to_string();
 
         // Save current directory if not already saved
-        let mut cwd = self.cwd.lock().unwrap();
+        let mut cwd = self.lock_cwd()?;
         if cwd.is_none() {
             let current = os_module.call_method0("getcwd")?.extract::<String>()?;
             *cwd = Some(current);
@@ -400,7 +415,7 @@ impl MockEnv {
     fn undo(&mut self, py: Python<'_>) -> PyResult<()> {
         // Restore setattr changes in reverse order
         {
-            let mut setattr_list = self.setattr.lock().unwrap();
+            let mut setattr_list = self.lock_setattr()?;
             for (obj, name, value) in setattr_list.drain(..).rev() {
                 // Check if the value is Python's None (meaning the attribute didn't exist before)
                 if value.bind(py).is_none() {
@@ -413,7 +428,7 @@ impl MockEnv {
 
         // Restore setitem changes in reverse order
         {
-            let mut setitem_list = self.setitem.lock().unwrap();
+            let mut setitem_list = self.lock_setitem()?;
             for (dictionary, key, value) in setitem_list.drain(..).rev() {
                 let bound_dict = dictionary.bind(py);
                 let bound_value = value.bind(py);
@@ -429,7 +444,7 @@ impl MockEnv {
 
         // Restore sys.path
         {
-            let mut savesyspath = self.savesyspath.lock().unwrap();
+            let mut savesyspath = self.lock_savesyspath()?;
             if let Some(saved_path) = savesyspath.take() {
                 drop(savesyspath);
                 let sys_module = py.import("sys")?;
@@ -445,7 +460,7 @@ impl MockEnv {
 
         // Restore working directory
         {
-            let mut cwd = self.cwd.lock().unwrap();
+            let mut cwd = self.lock_cwd()?;
             if let Some(saved_cwd) = cwd.take() {
                 drop(cwd);
                 let os_module = py.import("os")?;

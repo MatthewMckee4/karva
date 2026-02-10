@@ -25,13 +25,19 @@ pub struct FinalizerCache {
 }
 
 impl FinalizerCache {
-    pub(crate) fn add_finalizer(&self, finalizer: Finalizer) {
-        match finalizer.scope {
-            FixtureScope::Session => self.session.borrow_mut().push(finalizer),
-            FixtureScope::Package => self.package.borrow_mut().push(finalizer),
-            FixtureScope::Module => self.module.borrow_mut().push(finalizer),
-            FixtureScope::Function => self.function.borrow_mut().push(finalizer),
+    fn scope_storage(&self, scope: FixtureScope) -> &RefCell<Vec<Finalizer>> {
+        match scope {
+            FixtureScope::Session => &self.session,
+            FixtureScope::Package => &self.package,
+            FixtureScope::Module => &self.module,
+            FixtureScope::Function => &self.function,
         }
+    }
+
+    pub(crate) fn add_finalizer(&self, finalizer: Finalizer) {
+        self.scope_storage(finalizer.scope)
+            .borrow_mut()
+            .push(finalizer);
     }
 
     pub(crate) fn run_and_clear_scope(
@@ -40,24 +46,7 @@ impl FinalizerCache {
         py: Python<'_>,
         scope: FixtureScope,
     ) {
-        let finalizers = match scope {
-            FixtureScope::Session => {
-                let mut guard = self.session.borrow_mut();
-                guard.drain(..).collect::<Vec<_>>()
-            }
-            FixtureScope::Package => {
-                let mut guard = self.package.borrow_mut();
-                guard.drain(..).collect::<Vec<_>>()
-            }
-            FixtureScope::Module => {
-                let mut guard = self.module.borrow_mut();
-                guard.drain(..).collect::<Vec<_>>()
-            }
-            FixtureScope::Function => {
-                let mut guard = self.function.borrow_mut();
-                guard.drain(..).collect::<Vec<_>>()
-            }
-        };
+        let finalizers: Vec<_> = self.scope_storage(scope).borrow_mut().drain(..).collect();
 
         // Run finalizers in reverse order (LIFO)
         finalizers
