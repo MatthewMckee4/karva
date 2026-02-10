@@ -90,6 +90,7 @@ karva snapshot <COMMAND>
 <dt><a href="#karva-snapshot-reject"><code>karva snapshot reject</code></a></dt><dd><p>Reject all (or filtered) pending snapshots</p></dd>
 <dt><a href="#karva-snapshot-pending"><code>karva snapshot pending</code></a></dt><dd><p>List pending snapshots</p></dd>
 <dt><a href="#karva-snapshot-review"><code>karva snapshot review</code></a></dt><dd><p>Interactively review pending snapshots</p></dd>
+<dt><a href="#karva-snapshot-prune"><code>karva snapshot prune</code></a></dt><dd><p>Remove snapshot files whose source test no longer exists</p></dd>
 <dt><a href="#karva-snapshot-help"><code>karva snapshot help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
 </dl>
 
@@ -171,6 +172,27 @@ karva snapshot review [PATH]...
 <h3 class="cli-reference">Options</h3>
 
 <dl class="cli-reference"><dt id="karva-snapshot-review--help"><a href="#karva-snapshot-review--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+### karva snapshot prune
+
+Remove snapshot files whose source test no longer exists
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva snapshot prune [OPTIONS] [PATH]...
+```
+
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-prune--paths"><a href="#karva-snapshot-prune--paths"><code>PATHS</code></a></dt><dd><p>Optional paths to filter snapshots by directory or file</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-prune--dry-run"><a href="#karva-snapshot-prune--dry-run"><code>--dry-run</code></a></dt><dd><p>Show which snapshots would be removed without deleting them</p>
+</dd><dt id="karva-snapshot-prune--help"><a href="#karva-snapshot-prune--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
 </dd></dl>
 
 ### karva snapshot help

@@ -134,6 +134,41 @@ pub(crate) fn snapshot(args: SnapshotCommand) -> Result<ExitStatus> {
             karva_snapshot::review::run_review(&cwd, &filter.paths)?;
             Ok(ExitStatus::Success)
         }
+        SnapshotAction::Prune(prune_args) => {
+            {
+                use std::io::Write;
+                writeln!(
+                    std::io::stderr(),
+                    "{} Prune uses static analysis and may not detect all unreferenced snapshots.",
+                    "warning:".yellow().bold()
+                )?;
+            }
+            let unreferenced = karva_snapshot::storage::find_unreferenced_snapshots(&cwd);
+            let filtered = filter_unreferenced(&unreferenced, &prune_args.paths);
+            if filtered.is_empty() {
+                writeln!(stdout, "No unreferenced snapshots found.")?;
+                return Ok(ExitStatus::Success);
+            }
+            if prune_args.dry_run {
+                for info in &filtered {
+                    writeln!(stdout, "Would remove: {} ({})", info.snap_path, info.reason)?;
+                }
+                writeln!(
+                    stdout,
+                    "\n{} unreferenced snapshot(s) would be removed.",
+                    filtered.len()
+                )?;
+            } else {
+                let mut removed = 0;
+                for info in &filtered {
+                    karva_snapshot::storage::remove_snapshot(&info.snap_path)?;
+                    writeln!(stdout, "Removed: {} ({})", info.snap_path, info.reason)?;
+                    removed += 1;
+                }
+                writeln!(stdout, "\n{removed} snapshot(s) pruned.")?;
+            }
+            Ok(ExitStatus::Success)
+        }
     }
 }
 
@@ -150,6 +185,24 @@ fn filter_pending<'a>(
                 filter_paths
                     .iter()
                     .any(|f| info.pending_path.as_str().contains(f.as_str()))
+            })
+            .collect()
+    }
+}
+
+fn filter_unreferenced<'a>(
+    unreferenced: &'a [karva_snapshot::storage::UnreferencedSnapshot],
+    filter_paths: &[String],
+) -> Vec<&'a karva_snapshot::storage::UnreferencedSnapshot> {
+    if filter_paths.is_empty() {
+        unreferenced.iter().collect()
+    } else {
+        unreferenced
+            .iter()
+            .filter(|info| {
+                filter_paths
+                    .iter()
+                    .any(|f| info.snap_path.as_str().contains(f.as_str()))
             })
             .collect()
     }
