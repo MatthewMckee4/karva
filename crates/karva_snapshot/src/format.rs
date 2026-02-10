@@ -119,6 +119,22 @@ mod tests {
     }
 
     #[test]
+    fn test_roundtrip_inline_metadata() {
+        let snapshot = SnapshotFile {
+            metadata: SnapshotMetadata {
+                source: Some("test.py:5::test_hello".to_string()),
+                inline_source: Some("/abs/path/to/test.py".to_string()),
+                inline_line: Some(5),
+            },
+            content: "hello world\n".to_string(),
+        };
+
+        let serialized = snapshot.serialize();
+        let reparsed = SnapshotFile::parse(&serialized).expect("should reparse");
+        assert_eq!(snapshot, reparsed);
+    }
+
+    #[test]
     fn test_parse_no_metadata() {
         let input = "---\n\n---\nsome content\n";
         let snapshot = SnapshotFile::parse(input).expect("should parse");

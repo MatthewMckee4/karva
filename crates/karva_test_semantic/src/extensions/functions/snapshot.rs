@@ -220,17 +220,10 @@ fn handle_inline_snapshot(
     )))
 }
 
-/// Get the line number of the Python caller using `sys._getframe(0)`.
+/// Get both the filename and line number of the Python caller using `sys._getframe(0)`.
 ///
 /// Since `assert_snapshot` is a `#[pyfunction]`, it doesn't create a Python frame,
 /// so depth 0 gives the test function's frame.
-fn caller_line_number(py: Python<'_>) -> Option<u32> {
-    let sys = py.import("sys").ok()?;
-    let frame = sys.call_method1("_getframe", (0,)).ok()?;
-    frame.getattr("f_lineno").ok()?.extract::<u32>().ok()
-}
-
-/// Get both the filename and line number of the Python caller.
 fn caller_source_info(py: Python<'_>) -> Option<(String, u32)> {
     let sys = py.import("sys").ok()?;
     let frame = sys.call_method1("_getframe", (0,)).ok()?;
@@ -243,6 +236,10 @@ fn caller_source_info(py: Python<'_>) -> Option<(String, u32)> {
         .extract::<String>()
         .ok()?;
     Some((filename, lineno))
+}
+
+fn caller_line_number(py: Python<'_>) -> Option<u32> {
+    caller_source_info(py).map(|(_, lineno)| lineno)
 }
 
 /// Compute the snapshot name based on test name and counter.

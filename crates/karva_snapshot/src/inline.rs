@@ -25,7 +25,7 @@ pub fn dedent(raw: &str) -> String {
         .min()
         .unwrap_or(0);
 
-    let mut result: Vec<&str> = lines
+    let dedented: Vec<&str> = lines
         .iter()
         .map(|line| {
             if line.len() >= min_indent {
@@ -36,17 +36,21 @@ pub fn dedent(raw: &str) -> String {
         })
         .collect();
 
-    // Trim trailing empty lines
-    while result.last().is_some_and(|l| l.trim().is_empty()) {
-        result.pop();
+    // Find the range excluding leading/trailing empty lines
+    let first_non_empty = dedented
+        .iter()
+        .position(|l| !l.trim().is_empty())
+        .unwrap_or(0);
+    let last_non_empty = dedented
+        .iter()
+        .rposition(|l| !l.trim().is_empty())
+        .map_or(0, |i| i + 1);
+
+    if first_non_empty >= last_non_empty {
+        return String::new();
     }
 
-    // Trim leading empty lines
-    while result.first().is_some_and(|l| l.trim().is_empty()) {
-        result.remove(0);
-    }
-
-    result.join("\n")
+    dedented[first_non_empty..last_non_empty].join("\n")
 }
 
 /// Generate a valid Python string literal for the given value.
@@ -58,12 +62,10 @@ pub fn generate_inline_literal(value: &str, indent: usize) -> String {
     let content_indent = " ".repeat(indent + 4);
 
     if !value.contains('\n') {
-        // Single-line: use simple double-quoted string
         let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
         return format!("\"{escaped}\"");
     }
 
-    // Multi-line: use triple-quoted string
     let mut result = String::from("\"\"\"\\");
     result.push('\n');
 
@@ -78,24 +80,18 @@ pub fn generate_inline_literal(value: &str, indent: usize) -> String {
         }
     }
 
-    // Handle trailing newline in value
-    if value.ends_with('\n') {
-        // Already have a trailing newline from the last line iteration
-    }
-
     result.push_str(&indent_str);
     result.push_str("\"\"\"");
 
     result
 }
 
-/// Find the inline= argument string literal starting from the given line.
+/// Find the `inline=` argument string literal within the `assert_snapshot()` call
+/// on or near the given line.
 ///
-/// Text-based scanner that:
-/// 1. Finds the line at `line_number` (1-based)
-/// 2. Searches forward for `inline=`
-/// 3. Parses the Python string literal that follows
-/// 4. Returns location info
+/// Searches for `assert_snapshot(` from the given line, then tracks parenthesis
+/// depth to find the call boundaries, and only looks for `inline=` within those
+/// bounds. This prevents matching `inline=` in unrelated calls further in the file.
 pub fn find_inline_argument(source: &str, line_number: u32) -> Option<InlineLocation> {
     let lines: Vec<&str> = source.lines().collect();
     let start_line_idx = (line_number as usize).checked_sub(1)?;
@@ -110,23 +106,25 @@ pub fn find_inline_argument(source: &str, line_number: u32) -> Option<InlineLoca
         line_byte_offset += line.len() + 1; // +1 for newline
     }
 
-    // Determine the indentation of the call site (first non-empty line from start_line_idx)
     let indent = lines[start_line_idx].len() - lines[start_line_idx].trim_start().len();
 
-    // Search forward from this line for `inline=`
+    // Find `assert_snapshot(` from the start line to locate the call
     let search_start = line_byte_offset;
-    let search_region = &source[search_start..];
+    let call_pattern = "assert_snapshot(";
+    let call_pos = source[search_start..].find(call_pattern)?;
+    let abs_open_paren = search_start + call_pos + call_pattern.len() - 1;
 
-    let inline_pos = search_region.find("inline=")?;
-    let abs_inline_pos = search_start + inline_pos;
+    // Track paren depth to find the matching close paren
+    let call_end = find_matching_close_paren(source, abs_open_paren)?;
 
-    // Skip past `inline=`
+    // Search for `inline=` only within the call bounds, skipping string literals
+    let abs_inline_pos = find_keyword_in_call(source, abs_open_paren, call_end, "inline=")?;
+
     let after_eq = abs_inline_pos + "inline=".len();
     if after_eq >= source.len() {
         return None;
     }
 
-    // Parse the string literal that follows
     let (literal_start, literal_end) = parse_string_literal(source, after_eq)?;
 
     Some(InlineLocation {
@@ -136,6 +134,95 @@ pub fn find_inline_argument(source: &str, line_number: u32) -> Option<InlineLoca
     })
 }
 
+/// Find the matching close parenthesis for an open paren at `open_pos`.
+///
+/// Tracks nesting depth and skips over string literals and comments
+/// to avoid matching parens inside them.
+fn find_matching_close_paren(source: &str, open_pos: usize) -> Option<usize> {
+    let bytes = source.as_bytes();
+    let mut depth = 0;
+    let mut i = open_pos;
+
+    while i < source.len() {
+        match bytes[i] {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            b'"' => {
+                if i + 2 < source.len() && bytes[i + 1] == b'"' && bytes[i + 2] == b'"' {
+                    i += 3;
+                    i = find_triple_quote_end(source, i, "\"\"\"").map(|end| end + 3)?;
+                    continue;
+                }
+                i += 1;
+                i = find_single_quote_end(source, i, '"').map(|end| end + 1)?;
+                continue;
+            }
+            b'\'' => {
+                if i + 2 < source.len() && bytes[i + 1] == b'\'' && bytes[i + 2] == b'\'' {
+                    i += 3;
+                    i = find_triple_quote_end(source, i, "'''").map(|end| end + 3)?;
+                    continue;
+                }
+                i += 1;
+                i = find_single_quote_end(source, i, '\'').map(|end| end + 1)?;
+                continue;
+            }
+            b'#' => {
+                while i < source.len() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+
+    None
+}
+
+/// Search for a keyword within a call expression, skipping string literals and comments.
+fn find_keyword_in_call(source: &str, start: usize, end: usize, keyword: &str) -> Option<usize> {
+    let bytes = source.as_bytes();
+    let mut i = start;
+
+    while i < end {
+        match bytes[i] {
+            b'"' => {
+                if i + 2 < end && bytes[i + 1] == b'"' && bytes[i + 2] == b'"' {
+                    i = find_triple_quote_end(source, i + 3, "\"\"\"").map(|p| p + 3)?;
+                } else {
+                    i = find_single_quote_end(source, i + 1, '"').map(|p| p + 1)?;
+                }
+            }
+            b'\'' => {
+                if i + 2 < end && bytes[i + 1] == b'\'' && bytes[i + 2] == b'\'' {
+                    i = find_triple_quote_end(source, i + 3, "'''").map(|p| p + 3)?;
+                } else {
+                    i = find_single_quote_end(source, i + 1, '\'').map(|p| p + 1)?;
+                }
+            }
+            b'#' => {
+                while i < end && bytes[i] != b'\n' {
+                    i += 1;
+                }
+            }
+            _ => {
+                if source[i..].starts_with(keyword) {
+                    return Some(i);
+                }
+                i += 1;
+            }
+        }
+    }
+
+    None
+}
+
 /// Parse a Python string literal at the given byte offset.
 /// Returns (start, end) byte offsets including quotes.
 fn parse_string_literal(source: &str, offset: usize) -> Option<(usize, usize)> {
@@ -143,24 +230,19 @@ fn parse_string_literal(source: &str, offset: usize) -> Option<(usize, usize)> {
     let rest = rest.trim_start();
     let trimmed_offset = offset + (source[offset..].len() - rest.len());
 
-    // Detect triple or single quote style
     if rest.starts_with("\"\"\"") {
-        // Triple double-quoted
         let content_start = trimmed_offset + 3;
         let end = find_triple_quote_end(source, content_start, "\"\"\"")?;
         Some((trimmed_offset, end + 3))
     } else if rest.starts_with("'''") {
-        // Triple single-quoted
         let content_start = trimmed_offset + 3;
         let end = find_triple_quote_end(source, content_start, "'''")?;
         Some((trimmed_offset, end + 3))
     } else if rest.starts_with('"') {
-        // Single double-quoted
         let content_start = trimmed_offset + 1;
         let end = find_single_quote_end(source, content_start, '"')?;
         Some((trimmed_offset, end + 1))
     } else if rest.starts_with('\'') {
-        // Single single-quoted
         let content_start = trimmed_offset + 1;
         let end = find_single_quote_end(source, content_start, '\'')?;
         Some((trimmed_offset, end + 1))
@@ -361,6 +443,26 @@ mod tests {
         let source = "import karva\n    karva.assert_snapshot('hello', inline=\"\")\n";
         let loc = find_inline_argument(source, 2).expect("should find");
         assert_eq!(&source[loc.start..loc.end], "\"\"");
+    }
+
+    #[test]
+    fn test_find_inline_does_not_match_later_call() {
+        let source = "\
+    karva.assert_snapshot('hello')
+    karva.assert_snapshot('world', inline=\"\")
+";
+        // Line 1 has no inline=, should NOT match line 2's inline=
+        assert!(find_inline_argument(source, 1).is_none());
+        // Line 2 should find it
+        let loc = find_inline_argument(source, 2).expect("should find on line 2");
+        assert_eq!(&source[loc.start..loc.end], "\"\"");
+    }
+
+    #[test]
+    fn test_find_inline_skips_string_containing_inline() {
+        let source = "    karva.assert_snapshot('inline=bad', inline=\"good\")\n";
+        let loc = find_inline_argument(source, 1).expect("should find");
+        assert_eq!(&source[loc.start..loc.end], "\"good\"");
     }
 
     #[test]
