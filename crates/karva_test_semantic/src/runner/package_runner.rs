@@ -5,7 +5,7 @@ use std::sync::Arc;
 type FixtureArguments = HashMap<String, Py<PyAny>>;
 
 use karva_diagnostic::IndividualTestResultKind;
-use karva_python_semantic::{FunctionKind, QualifiedTestName};
+use karva_python_semantic::{FunctionKind, QualifiedFunctionName, QualifiedTestName};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyIterator};
 use ruff_python_ast::StmtFunctionDef;
@@ -170,6 +170,187 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         passed
     }
 
+    /// Check if a test variant should be skipped based on filters and tags.
+    ///
+    /// Returns `Some(result)` if the test should be skipped (with the registered result),
+    /// or `None` if the test should proceed.
+    fn should_skip_variant(
+        &self,
+        name: &QualifiedFunctionName,
+        tags: &crate::extensions::tags::Tags,
+    ) -> Option<bool> {
+        let tag_filter = &self.context.settings().test().tag_filter;
+        if !tag_filter.is_empty() {
+            let custom_names = tags.custom_tag_names();
+            if !tag_filter.matches(&custom_names) {
+                return Some(self.context.register_test_case_result(
+                    &QualifiedTestName::new(name.clone(), None),
+                    IndividualTestResultKind::Skipped { reason: None },
+                    std::time::Duration::ZERO,
+                ));
+            }
+        }
+
+        let name_filter = &self.context.settings().test().name_filter;
+        if !name_filter.is_empty() {
+            let display_name = QualifiedTestName::new(name.clone(), None).to_string();
+            if !name_filter.matches(&display_name) {
+                return Some(self.context.register_test_case_result(
+                    &QualifiedTestName::new(name.clone(), None),
+                    IndividualTestResultKind::Skipped { reason: None },
+                    std::time::Duration::ZERO,
+                ));
+            }
+        }
+
+        if let (true, reason) = tags.should_skip() {
+            return Some(self.context.register_test_case_result(
+                &QualifiedTestName::new(name.clone(), None),
+                IndividualTestResultKind::Skipped { reason },
+                std::time::Duration::ZERO,
+            ));
+        }
+
+        None
+    }
+
+    /// Resolve fixture dependencies and parametrize params into function arguments.
+    fn setup_test_fixtures(
+        &self,
+        py: Python<'_>,
+        fixture_dependencies: &[Rc<NormalizedFixture>],
+        use_fixture_dependencies: &[Rc<NormalizedFixture>],
+        auto_use_fixtures: &[Rc<NormalizedFixture>],
+        params: HashMap<String, Arc<Py<PyAny>>>,
+    ) -> (FixtureArguments, Vec<FixtureCallError>, Vec<Finalizer>) {
+        let mut test_finalizers = Vec::new();
+        let mut fixture_call_errors = Vec::new();
+
+        let use_fixture_errors = self.run_fixtures(py, use_fixture_dependencies);
+        fixture_call_errors.extend(use_fixture_errors);
+
+        let mut function_arguments: FixtureArguments = HashMap::new();
+
+        for fixture in fixture_dependencies {
+            match self.run_fixture(py, fixture) {
+                Ok((value, finalizer)) => {
+                    function_arguments
+                        .insert(fixture.function_name().to_string(), value.clone_ref(py));
+
+                    if let Some(finalizer) = finalizer {
+                        test_finalizers.push(finalizer);
+                    }
+                }
+                Err(err) => {
+                    fixture_call_errors.push(err);
+                }
+            }
+        }
+
+        let auto_use_errors = self.run_fixtures(py, auto_use_fixtures);
+        fixture_call_errors.extend(auto_use_errors);
+
+        // Add parametrize params to function arguments
+        for (key, value) in params {
+            function_arguments.insert(
+                key,
+                Arc::try_unwrap(value).unwrap_or_else(|arc| (*arc).clone_ref(py)),
+            );
+        }
+
+        (function_arguments, fixture_call_errors, test_finalizers)
+    }
+
+    /// Classify a test result, handling `expect_fail` logic and error reporting.
+    #[expect(clippy::too_many_arguments)]
+    fn classify_test_result(
+        &self,
+        py: Python<'_>,
+        test_result: PyResult<Py<PyAny>>,
+        expect_fail: bool,
+        expect_fail_tag: Option<ExpectFailTag>,
+        qualified_test_name: &QualifiedTestName,
+        name: &QualifiedFunctionName,
+        test_module_path: &camino::Utf8PathBuf,
+        stmt_function_def: &StmtFunctionDef,
+        function_arguments: &FixtureArguments,
+        fixture_call_errors: Vec<FixtureCallError>,
+        start_time: std::time::Instant,
+    ) -> bool {
+        match test_result {
+            Ok(_) => {
+                if expect_fail {
+                    let reason = expect_fail_tag.and_then(|tag| tag.reason());
+
+                    report_test_pass_on_expect_failure(
+                        self.context,
+                        source_file(test_module_path),
+                        stmt_function_def,
+                        reason,
+                    );
+
+                    self.context.register_test_case_result(
+                        qualified_test_name,
+                        IndividualTestResultKind::Failed,
+                        start_time.elapsed(),
+                    )
+                } else {
+                    self.context.register_test_case_result(
+                        qualified_test_name,
+                        IndividualTestResultKind::Passed,
+                        start_time.elapsed(),
+                    )
+                }
+            }
+            Err(err) => {
+                if is_skip_exception(py, &err) {
+                    let reason = extract_skip_reason(py, &err);
+                    self.context.register_test_case_result(
+                        qualified_test_name,
+                        IndividualTestResultKind::Skipped { reason },
+                        start_time.elapsed(),
+                    )
+                } else if expect_fail {
+                    self.context.register_test_case_result(
+                        qualified_test_name,
+                        IndividualTestResultKind::Passed,
+                        start_time.elapsed(),
+                    )
+                } else {
+                    let missing_args =
+                        missing_arguments_from_error(name.function_name(), &err.to_string());
+
+                    if missing_args.is_empty() {
+                        report_test_failure(
+                            self.context,
+                            py,
+                            source_file(test_module_path),
+                            stmt_function_def,
+                            function_arguments,
+                            &err,
+                        );
+                    } else {
+                        report_missing_fixtures(
+                            self.context,
+                            py,
+                            source_file(test_module_path),
+                            stmt_function_def,
+                            &missing_args,
+                            FunctionKind::Test,
+                            fixture_call_errors,
+                        );
+                    }
+
+                    self.context.register_test_case_result(
+                        qualified_test_name,
+                        IndividualTestResultKind::Failed,
+                        start_time.elapsed(),
+                    )
+                }
+            }
+        }
+    }
+
     /// Run a test variant (a specific combination of parametrize values and fixtures).
     fn execute_test_variant(&self, py: Python<'_>, variant: TestVariant) -> bool {
         let tags = variant.resolved_tags();
@@ -188,36 +369,8 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let function = test.py_function.clone_ref(py);
         let stmt_function_def = Rc::clone(&test.stmt_function_def);
 
-        let tag_filter = &self.context.settings().test().tag_filter;
-        if !tag_filter.is_empty() {
-            let custom_names = tags.custom_tag_names();
-            if !tag_filter.matches(&custom_names) {
-                return self.context.register_test_case_result(
-                    &QualifiedTestName::new(name, None),
-                    IndividualTestResultKind::Skipped { reason: None },
-                    std::time::Duration::ZERO,
-                );
-            }
-        }
-
-        let name_filter = &self.context.settings().test().name_filter;
-        if !name_filter.is_empty() {
-            let display_name = QualifiedTestName::new(name.clone(), None).to_string();
-            if !name_filter.matches(&display_name) {
-                return self.context.register_test_case_result(
-                    &QualifiedTestName::new(name, None),
-                    IndividualTestResultKind::Skipped { reason: None },
-                    std::time::Duration::ZERO,
-                );
-            }
-        }
-
-        if let (true, reason) = tags.should_skip() {
-            return self.context.register_test_case_result(
-                &QualifiedTestName::new(name, None),
-                IndividualTestResultKind::Skipped { reason },
-                std::time::Duration::ZERO,
-            );
+        if let Some(result) = self.should_skip_variant(&name, &tags) {
+            return result;
         }
 
         let start_time = std::time::Instant::now();
@@ -227,42 +380,13 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             .as_ref()
             .is_some_and(ExpectFailTag::should_expect_fail);
 
-        let mut test_finalizers = Vec::new();
-
-        let mut fixture_call_errors = Vec::new();
-
-        let use_fixture_errors = self.run_fixtures(py, &use_fixture_dependencies);
-
-        fixture_call_errors.extend(use_fixture_errors);
-
-        let mut function_arguments: FixtureArguments = HashMap::new();
-
-        for fixture in &fixture_dependencies {
-            match self.run_fixture(py, fixture) {
-                Ok((value, finalizer)) => {
-                    function_arguments
-                        .insert(fixture.function_name().to_string(), value.clone_ref(py));
-
-                    if let Some(finalizer) = finalizer {
-                        test_finalizers.push(finalizer);
-                    }
-                }
-                Err(err) => {
-                    fixture_call_errors.push(err);
-                }
-            }
-        }
-
-        let auto_use_errors = self.run_fixtures(py, &auto_use_fixtures);
-        fixture_call_errors.extend(auto_use_errors);
-
-        // Add parametrize params to function arguments
-        for (key, value) in params {
-            function_arguments.insert(
-                key,
-                Arc::try_unwrap(value).unwrap_or_else(|arc| (*arc).clone_ref(py)),
-            );
-        }
+        let (function_arguments, fixture_call_errors, test_finalizers) = self.setup_test_fixtures(
+            py,
+            &fixture_dependencies,
+            &use_fixture_dependencies,
+            &auto_use_fixtures,
+            params,
+        );
 
         let computed_full_test_name = full_test_name(py, name.to_string(), &function_arguments);
 
@@ -307,78 +431,19 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             test_result = run_test();
         }
 
-        let passed = match test_result {
-            Ok(_) => {
-                if expect_fail {
-                    let reason = expect_fail_tag.and_then(|tag| tag.reason());
-
-                    report_test_pass_on_expect_failure(
-                        self.context,
-                        source_file(&test_module_path),
-                        &stmt_function_def,
-                        reason,
-                    );
-
-                    self.context.register_test_case_result(
-                        &qualified_test_name,
-                        IndividualTestResultKind::Failed,
-                        start_time.elapsed(),
-                    )
-                } else {
-                    self.context.register_test_case_result(
-                        &qualified_test_name,
-                        IndividualTestResultKind::Passed,
-                        start_time.elapsed(),
-                    )
-                }
-            }
-            Err(err) => {
-                if is_skip_exception(py, &err) {
-                    let reason = extract_skip_reason(py, &err);
-                    self.context.register_test_case_result(
-                        &qualified_test_name,
-                        IndividualTestResultKind::Skipped { reason },
-                        start_time.elapsed(),
-                    )
-                } else if expect_fail {
-                    self.context.register_test_case_result(
-                        &qualified_test_name,
-                        IndividualTestResultKind::Passed,
-                        start_time.elapsed(),
-                    )
-                } else {
-                    let missing_args =
-                        missing_arguments_from_error(name.function_name(), &err.to_string());
-
-                    if missing_args.is_empty() {
-                        report_test_failure(
-                            self.context,
-                            py,
-                            source_file(&test_module_path),
-                            &stmt_function_def,
-                            &function_arguments,
-                            &err,
-                        );
-                    } else {
-                        report_missing_fixtures(
-                            self.context,
-                            py,
-                            source_file(&test_module_path),
-                            &stmt_function_def,
-                            &missing_args,
-                            FunctionKind::Test,
-                            fixture_call_errors,
-                        );
-                    }
-
-                    self.context.register_test_case_result(
-                        &qualified_test_name,
-                        IndividualTestResultKind::Failed,
-                        start_time.elapsed(),
-                    )
-                }
-            }
-        };
+        let passed = self.classify_test_result(
+            py,
+            test_result,
+            expect_fail,
+            expect_fail_tag,
+            &qualified_test_name,
+            &name,
+            &test_module_path,
+            &stmt_function_def,
+            &function_arguments,
+            fixture_call_errors,
+            start_time,
+        );
 
         for finalizer in test_finalizers.into_iter().rev() {
             finalizer.run(self.context, py);

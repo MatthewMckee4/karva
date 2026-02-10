@@ -220,25 +220,19 @@ pub mod tags {
         })
     }
 
-    #[pyfunction]
-    #[pyo3(signature = (*conditions, reason = None))]
-    pub fn skip(
+    fn parse_conditional_tag(
         py: Python<'_>,
         conditions: &Bound<'_, PyTuple>,
         reason: Option<String>,
+        make_tag: impl Fn(Vec<bool>, Option<String>) -> PyTag,
     ) -> PyResult<Py<PyAny>> {
-        let mut bool_conditions = Vec::new();
-
         // Check if the first argument is a function (decorator without parentheses)
         if conditions.len() == 1 {
             if let Ok(first_item) = conditions.get_item(0) {
                 if first_item.is_callable() {
                     return PyTestFunction {
                         tags: PyTags {
-                            inner: vec![PyTag::Skip {
-                                conditions: vec![],
-                                reason: None,
-                            }],
+                            inner: vec![make_tag(vec![], None)],
                         },
                         function: first_item.unbind(),
                     }
@@ -247,10 +241,7 @@ pub mod tags {
                 // Check if the first argument is a string (reason passed as positional arg)
                 if let Ok(reason_str) = first_item.extract::<String>() {
                     return PyTags {
-                        inner: vec![PyTag::Skip {
-                            conditions: vec![],
-                            reason: Some(reason_str),
-                        }],
+                        inner: vec![make_tag(vec![], Some(reason_str))],
                     }
                     .into_py_any(py);
                 }
@@ -258,6 +249,7 @@ pub mod tags {
         }
 
         // Parse boolean conditions from positional arguments
+        let mut bool_conditions = Vec::new();
         for item in conditions.iter() {
             if let Ok(bool_val) = item.extract::<bool>() {
                 bool_conditions.push(bool_val);
@@ -269,12 +261,22 @@ pub mod tags {
         }
 
         PyTags {
-            inner: vec![PyTag::Skip {
-                conditions: bool_conditions,
-                reason,
-            }],
+            inner: vec![make_tag(bool_conditions, reason)],
         }
         .into_py_any(py)
+    }
+
+    #[pyfunction]
+    #[pyo3(signature = (*conditions, reason = None))]
+    pub fn skip(
+        py: Python<'_>,
+        conditions: &Bound<'_, PyTuple>,
+        reason: Option<String>,
+    ) -> PyResult<Py<PyAny>> {
+        parse_conditional_tag(py, conditions, reason, |conditions, reason| PyTag::Skip {
+            conditions,
+            reason,
+        })
     }
 
     #[pyfunction]
@@ -284,54 +286,9 @@ pub mod tags {
         conditions: &Bound<'_, PyTuple>,
         reason: Option<String>,
     ) -> PyResult<Py<PyAny>> {
-        let mut bool_conditions = Vec::new();
-
-        // Check if the first argument is a function (decorator without parentheses)
-        if conditions.len() == 1 {
-            if let Ok(first_item) = conditions.get_item(0) {
-                if first_item.is_callable() {
-                    return PyTestFunction {
-                        tags: PyTags {
-                            inner: vec![PyTag::ExpectFail {
-                                conditions: vec![],
-                                reason: None,
-                            }],
-                        },
-                        function: first_item.unbind(),
-                    }
-                    .into_py_any(py);
-                }
-                // Check if the first argument is a string (reason passed as positional arg)
-                if let Ok(reason_str) = first_item.extract::<String>() {
-                    return PyTags {
-                        inner: vec![PyTag::ExpectFail {
-                            conditions: vec![],
-                            reason: Some(reason_str),
-                        }],
-                    }
-                    .into_py_any(py);
-                }
-            }
-        }
-
-        // Parse boolean conditions from positional arguments
-        for item in conditions.iter() {
-            if let Ok(bool_val) = item.extract::<bool>() {
-                bool_conditions.push(bool_val);
-            } else {
-                return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                    "Expected boolean values for conditions",
-                ));
-            }
-        }
-
-        PyTags {
-            inner: vec![PyTag::ExpectFail {
-                conditions: bool_conditions,
-                reason,
-            }],
-        }
-        .into_py_any(py)
+        parse_conditional_tag(py, conditions, reason, |conditions, reason| {
+            PyTag::ExpectFail { conditions, reason }
+        })
     }
 }
 

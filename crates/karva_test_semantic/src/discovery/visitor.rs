@@ -133,119 +133,128 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
     fn find_extra_fixtures(&mut self) {
         self.try_import_module();
 
-        let Some(py_module) = self.py_module.as_ref() else {
+        let Some(py_module) = self.py_module.clone() else {
             return;
         };
 
         let symbols =
             find_imported_symbols(self.module.source_text(), self.context.python_version());
 
-        'outer: for ImportedSymbol { name } in symbols {
-            let Ok(value) = py_module.getattr(&name) else {
-                continue;
+        for ImportedSymbol { name } in symbols {
+            self.try_process_imported_symbol(&py_module, &name);
+        }
+    }
+
+    fn try_process_imported_symbol(&mut self, py_module: &Bound<'_, PyModule>, name: &str) {
+        let Ok(value) = py_module.getattr(name) else {
+            return;
+        };
+
+        if !value.is_callable() {
+            return;
+        }
+
+        if self
+            .module
+            .fixtures()
+            .iter()
+            .any(|f| f.name().function_name() == name)
+        {
+            return;
+        }
+
+        if self
+            .module
+            .test_functions()
+            .iter()
+            .any(|f| f.name.function_name() == name)
+        {
+            return;
+        }
+
+        let Ok(module_name_attr) = value.getattr("__module__") else {
+            return;
+        };
+
+        let Ok(mut module_name) = module_name_attr.extract::<String>() else {
+            return;
+        };
+
+        if module_name == "builtins" {
+            let Ok(function) = value.getattr("function") else {
+                return;
             };
 
-            if !value.is_callable() {
-                continue;
-            }
-
-            for fixture in self.module.fixtures() {
-                if fixture.name().function_name() == name {
-                    continue 'outer;
-                }
-            }
-
-            for function in self.module.test_functions() {
-                if function.name.function_name() == name {
-                    continue 'outer;
-                }
-            }
-
-            let Ok(module_name) = value.getattr("__module__") else {
-                continue;
+            let Ok(function_module_name) = function.getattr("__module__") else {
+                return;
             };
 
-            let Ok(mut module_name) = module_name.extract::<String>() else {
-                continue;
+            let Ok(actual_module_name) = function_module_name.extract::<String>() else {
+                return;
             };
 
-            if module_name == "builtins" {
-                let Ok(function) = value.getattr("function") else {
-                    continue;
-                };
+            module_name = actual_module_name;
+        }
 
-                let Ok(function_module_name) = function.getattr("__module__") else {
-                    continue;
-                };
+        let Ok(imported_module) = self.py.import(&module_name) else {
+            return;
+        };
 
-                if let Ok(actual_module_name) = function_module_name.extract::<String>() {
-                    module_name = actual_module_name;
-                } else {
-                    continue;
-                }
-            }
+        let Ok(file_name) = imported_module.getattr("__file__") else {
+            return;
+        };
 
-            let Ok(py_module) = self.py.import(&module_name) else {
-                continue;
-            };
+        let Ok(file_name) = file_name.extract::<String>() else {
+            return;
+        };
 
-            let Ok(file_name) = py_module.getattr("__file__") else {
-                continue;
-            };
+        let std_path = Path::new(&file_name);
 
-            let Ok(file_name) = file_name.extract::<String>() else {
-                continue;
-            };
+        let Some(utf8_file_name) = Utf8Path::from_path(std_path) else {
+            return;
+        };
 
-            let std_path = Path::new(&file_name);
+        let Some(module_path) = ModulePath::new(utf8_file_name, &self.context.cwd().to_path_buf())
+        else {
+            return;
+        };
 
-            let Some(utf8_file_name) = Utf8Path::from_path(std_path) else {
-                continue;
-            };
+        let Ok(source_text) = std::fs::read_to_string(utf8_file_name) else {
+            return;
+        };
 
-            let Some(module_path) =
-                ModulePath::new(utf8_file_name, &self.context.cwd().to_path_buf())
-            else {
-                continue;
-            };
+        let Some(stmt_function_def) =
+            find_function_statement(name, &source_text, self.context.python_version())
+        else {
+            return;
+        };
 
-            let Ok(source_text) = std::fs::read_to_string(utf8_file_name) else {
-                continue;
-            };
+        if !is_fixture_function(&stmt_function_def) {
+            return;
+        }
 
-            let Some(stmt_function_def) =
-                find_function_statement(&name, &source_text, self.context.python_version())
-            else {
-                continue;
-            };
+        let mut generator_function_visitor = GeneratorFunctionVisitor::default();
 
-            if !is_fixture_function(&stmt_function_def) {
-                continue;
-            }
+        source_order::walk_body(&mut generator_function_visitor, &stmt_function_def.body);
 
-            let mut generator_function_visitor = GeneratorFunctionVisitor::default();
+        let is_generator_function = generator_function_visitor.is_generator;
 
-            source_order::walk_body(&mut generator_function_visitor, &stmt_function_def.body);
-
-            let is_generator_function = generator_function_visitor.is_generator;
-
-            match DiscoveredFixture::try_from_function(
-                self.py,
-                stmt_function_def.clone(),
-                &py_module,
-                &module_path,
-                is_generator_function,
-            ) {
-                Ok(fixture_def) => self.module.add_fixture(fixture_def),
-                Err(e) => {
-                    report_invalid_fixture(
-                        self.context,
-                        self.py,
-                        SourceFileBuilder::new(utf8_file_name.as_str(), source_text).finish(),
-                        stmt_function_def.as_ref(),
-                        &e,
-                    );
-                }
+        match DiscoveredFixture::try_from_function(
+            self.py,
+            stmt_function_def.clone(),
+            &imported_module,
+            &module_path,
+            is_generator_function,
+        ) {
+            Ok(fixture_def) => self.module.add_fixture(fixture_def),
+            Err(e) => {
+                report_invalid_fixture(
+                    self.context,
+                    self.py,
+                    SourceFileBuilder::new(utf8_file_name.as_str(), source_text).finish(),
+                    stmt_function_def.as_ref(),
+                    &e,
+                );
             }
         }
     }

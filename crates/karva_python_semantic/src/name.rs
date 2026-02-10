@@ -58,15 +58,7 @@ impl<'de> Deserialize<'de> for QualifiedFunctionName {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-
-        // Split on the last "::" to separate module_path from function_name
-        let (module_str, function_name) = s
-            .rsplit_once("::")
-            .ok_or_else(|| serde::de::Error::custom("Invalid qualified function name format"))?;
-
-        let module_path = module_str.parse().map_err(serde::de::Error::custom)?;
-
-        Ok(Self::new(function_name.to_string(), module_path))
+        s.parse().map_err(serde::de::Error::custom)
     }
 }
 
@@ -162,15 +154,8 @@ impl<'de> Deserialize<'de> for ModulePath {
     where
         D: Deserializer<'de>,
     {
-        let module_name = String::deserialize(deserializer)?;
-
-        // Convert module name back to path (e.g., "foo.bar.baz" -> "foo/bar/baz.py")
-        let path = module_name.replace('.', "/") + ".py";
-
-        Ok(Self {
-            path: path.into(),
-            module_name,
-        })
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
     }
 }
 
