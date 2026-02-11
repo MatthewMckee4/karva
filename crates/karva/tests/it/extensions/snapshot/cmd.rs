@@ -348,10 +348,9 @@ fn test_cmd_snapshot_inline_matching() {
         "test.py",
         r#"
 import karva
-import sys
 
 def test_inline():
-    cmd = karva.Command(sys.executable).args(["-c", "print('hi')"])
+    cmd = karva.Command("echo").arg("hi")
     karva.assert_cmd_snapshot(cmd, inline="""\
         success: true
         exit_code: 0
