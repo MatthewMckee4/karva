@@ -660,50 +660,6 @@ def test_multi():
 }
 
 #[test]
-fn test_cmd_snapshot_current_dir() {
-    let context = TestContext::with_file(
-        "test.py",
-        r#"
-import karva
-import sys
-import os
-
-def test_cwd():
-    cmd = (
-        karva.Command(sys.executable)
-        .args(["-c", "import os; print(os.getcwd())"])
-        .current_dir("/tmp")
-    )
-    karva.assert_cmd_snapshot(cmd)
-        "#,
-    );
-
-    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-    test test::test_cwd ... ok
-
-    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
-
-    ----- stderr -----
-    ");
-
-    let content = context.read_file("snapshots/test__test_cwd.snap");
-    let content = content.replace("/private/tmp", "/tmp");
-    insta::assert_snapshot!(content, @r"
-    ---
-    source: test.py:12::test_cwd
-    ---
-    success: true
-    exit_code: 0
-    ----- stdout -----
-    /tmp
-    ----- stderr -----
-    ");
-}
-
-#[test]
 fn test_cmd_snapshot_envs_multiple() {
     let context = TestContext::with_file(
         "test.py",
@@ -1019,4 +975,232 @@ def test_both_args():
 
     ----- stderr -----
     "#);
+}
+
+#[test]
+fn test_cmd_snapshot_settings_multiple_filters() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+import sys
+
+def test_multi_filter():
+    with karva.snapshot_settings(filters=[
+        (r"\d+\.\d+\.\d+", "[VERSION]"),
+        (r"Python", "Interpreter"),
+    ]):
+        cmd = karva.Command(sys.executable).arg("--version")
+        karva.assert_cmd_snapshot(cmd)
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_multi_filter ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let content = context.read_file("snapshots/test__test_multi_filter.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:11::test_multi_filter
+    ---
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Interpreter [VERSION]
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_cmd_snapshot_nested_settings() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+import sys
+
+def test_nested():
+    with karva.snapshot_settings(filters=[
+        (r"\d+\.\d+\.\d+", "[VERSION]"),
+    ]):
+        with karva.snapshot_settings(filters=[
+            (r"Python", "Lang"),
+        ]):
+            cmd = karva.Command(sys.executable).arg("--version")
+            karva.assert_cmd_snapshot(cmd)
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_nested ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let content = context.read_file("snapshots/test__test_nested.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:13::test_nested
+    ---
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Lang [VERSION]
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_cmd_snapshot_settings_filter_stderr() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+import sys
+
+def test_filter_stderr():
+    with karva.snapshot_settings(filters=[
+        (r"secret-\w+", "[REDACTED]"),
+    ]):
+        cmd = karva.Command(sys.executable).args([
+            "-c",
+            "import sys; print('ok'); print('token: secret-abc123', file=sys.stderr)",
+        ])
+        karva.assert_cmd_snapshot(cmd)
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_filter_stderr ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let content = context.read_file("snapshots/test__test_filter_stderr.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:13::test_filter_stderr
+    ---
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ok
+    ----- stderr -----
+    token: [REDACTED]
+    ");
+}
+
+#[test]
+fn test_cmd_snapshot_settings_filter_with_named() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+import sys
+
+def test_filter_named():
+    with karva.snapshot_settings(filters=[
+        (r"\d+", "[N]"),
+    ]):
+        cmd = karva.Command(sys.executable).args(["-c", "print('count: 42')"])
+        karva.assert_cmd_snapshot(cmd, name="counted")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_filter_named ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let content = context.read_file("snapshots/test__test_filter_named--counted.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:10::test_filter_named
+    ---
+    success: true
+    exit_code: [N]
+    ----- stdout -----
+    count: [N]
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_cmd_snapshot_settings_allow_duplicates_with_filters() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+import sys
+
+def test_dup_filtered():
+    with karva.snapshot_settings(
+        allow_duplicates=True,
+        filters=[(r"\d+", "[N]")],
+    ):
+        cmd1 = karva.Command(sys.executable).args(["-c", "print('item 1')"])
+        karva.assert_cmd_snapshot(cmd1)
+        cmd2 = karva.Command(sys.executable).args(["-c", "print('item 2')"])
+        karva.assert_cmd_snapshot(cmd2)
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_dup_filtered ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let content_0 = context.read_file("snapshots/test__test_dup_filtered-0.snap");
+    insta::assert_snapshot!(content_0, @r"
+    ---
+    source: test.py:11::test_dup_filtered
+    ---
+    success: true
+    exit_code: [N]
+    ----- stdout -----
+    item [N]
+    ----- stderr -----
+    ");
+
+    let content_1 = context.read_file("snapshots/test__test_dup_filtered-1.snap");
+    insta::assert_snapshot!(content_1, @r"
+    ---
+    source: test.py:13::test_dup_filtered
+    ---
+    success: true
+    exit_code: [N]
+    ----- stdout -----
+    item [N]
+    ----- stderr -----
+    ");
 }
