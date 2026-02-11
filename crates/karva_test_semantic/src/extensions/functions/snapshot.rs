@@ -11,6 +11,7 @@ use karva_snapshot::storage::{
     read_snapshot, snapshot_path, write_pending_snapshot, write_snapshot,
 };
 use karva_static::EnvVars;
+use pyo3::exceptions::PyOSError;
 use pyo3::prelude::*;
 
 pyo3::create_exception!(
@@ -147,22 +148,26 @@ fn run_command(cmd: &mut Command) -> PyResult<CommandOutput> {
 
     let output = if let Some(ref stdin_data) = cmd.stdin_data {
         let mut child = cmd.inner.spawn().map_err(|e| {
-            pyo3::exceptions::PyOSError::new_err(format!("Failed to spawn command: {e}"))
+            tracing::debug!("Failed to spawn command: {e}");
+            PyOSError::new_err("Failed to spawn command")
         })?;
 
         if let Some(ref mut stdin_pipe) = child.stdin.take() {
             use std::io::Write;
             stdin_pipe.write_all(stdin_data.as_bytes()).map_err(|e| {
-                pyo3::exceptions::PyOSError::new_err(format!("Failed to write to stdin: {e}"))
+                tracing::debug!("Failed to write to stdin: {e}");
+                PyOSError::new_err("Failed to write to stdin")
             })?;
         }
 
         child.wait_with_output().map_err(|e| {
-            pyo3::exceptions::PyOSError::new_err(format!("Failed to wait for command: {e}"))
+            tracing::debug!("Failed to wait for command: {e}");
+            PyOSError::new_err("Failed to wait for command")
         })?
     } else {
         cmd.inner.output().map_err(|e| {
-            pyo3::exceptions::PyOSError::new_err(format!("Failed to run command: {e}"))
+            tracing::debug!("Failed to run command: {e}");
+            PyOSError::new_err("Failed to run command")
         })?
     };
 

@@ -598,7 +598,7 @@ def test_bad_cmd():
     6 |     karva.assert_cmd_snapshot(cmd)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
-    info: Failed to run command: No such file or directory (os error 2)
+    info: Failed to run command
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
