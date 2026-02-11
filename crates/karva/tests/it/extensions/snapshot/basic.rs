@@ -170,10 +170,10 @@ def test_hello():
       |
     info: Snapshot mismatch for 'test_hello'.
           Snapshot file: <temp_dir>/snapshots/test__test_hello.snap
-          [LONG-LINE]┬[LONG-LINE]
-              1       | -hello world
-                    1 | +goodbye world
-          [LONG-LINE]┴[LONG-LINE]
+          ────────────┬───────────────────────────
+              1       │ -hello world
+                    1 │ +goodbye world
+          ────────────┴───────────────────────────
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
@@ -354,7 +354,7 @@ def test_two():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -381,10 +381,10 @@ def test_two():
       |
     info: Snapshot mismatch for 'test_two'.
           Snapshot file: <temp_dir>/snapshots/test__test_two.snap
-          [LONG-LINE]┬[LONG-LINE]
-              1       | -second
-                    1 | +changed
-          [LONG-LINE]┴[LONG-LINE]
+          ────────────┬───────────────────────────
+              1       │ -second
+                    1 │ +changed
+          ────────────┴───────────────────────────
 
     test result: FAILED. 1 passed; 1 failed; 0 skipped; finished in [TIME]
 

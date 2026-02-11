@@ -219,7 +219,7 @@ def test_poem():
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -245,12 +245,12 @@ def test_poem():
       |
     info: Snapshot mismatch for 'test_poem'.
           Snapshot file: <temp_dir>/snapshots/test__test_poem.snap
-          [LONG-LINE]┬[LONG-LINE]
-              1     1 |  roses are red
-              2       | -violets are blue
-                    2 | +violets are purple
-                    3 | +sugar is sweet
-          [LONG-LINE]┴[LONG-LINE]
+          ────────────┬───────────────────────────
+              1     1 │  roses are red
+              2       │ -violets are blue
+                    2 │ +violets are purple
+                    3 │ +sugar is sweet
+          ────────────┴───────────────────────────
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 

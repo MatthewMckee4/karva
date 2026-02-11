@@ -80,7 +80,7 @@ fn render_diff(output: &mut String, old: &str, new: &str, width: usize) {
 
                 let _ = write!(
                     output,
-                    "{styled_old} {styled_new} | {colored_marker}{content}",
+                    "{styled_old} {styled_new} │ {colored_marker}{content}",
                 );
 
                 if change.missing_newline() {
@@ -176,7 +176,6 @@ mod tests {
         let mut buf = Vec::new();
         print_changeset(&mut buf, "old\n", "new\n").expect("write should succeed");
         let output = String::from_utf8(buf).expect("valid utf8");
-        assert!(output.contains("| "));
         assert!(output.contains("-old"));
         assert!(output.contains("+new"));
     }

@@ -1,4 +1,5 @@
 mod basic;
+mod cmd;
 mod commands;
 mod content;
 mod delete;

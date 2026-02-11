@@ -28,9 +28,9 @@ def test_hello():
     File: <temp_dir>/snapshots/test__test_hello.snap.new
     Source: test.py:5::test_hello
 
-    [LONG-LINE]┬[LONG-LINE]
-              1 | +hello world
-    [LONG-LINE]┴[LONG-LINE]
+    ────────────┬[LONG-LINE]
+              1 │ +hello world
+    ────────────┴[LONG-LINE]
 
       a accept     keep the new snapshot
       r reject     retain the old snapshot
@@ -79,9 +79,9 @@ def test_hello():
     File: <temp_dir>/snapshots/test__test_hello.snap.new
     Source: test.py:5::test_hello
 
-    [LONG-LINE]┬[LONG-LINE]
-              1 | +hello world
-    [LONG-LINE]┴[LONG-LINE]
+    ────────────┬[LONG-LINE]
+              1 │ +hello world
+    ────────────┴[LONG-LINE]
 
       a accept     keep the new snapshot
       r reject     retain the old snapshot
@@ -130,9 +130,9 @@ def test_hello():
     File: <temp_dir>/snapshots/test__test_hello.snap.new
     Source: test.py:5::test_hello
 
-    [LONG-LINE]┬[LONG-LINE]
-              1 | +hello world
-    [LONG-LINE]┴[LONG-LINE]
+    ────────────┬[LONG-LINE]
+              1 │ +hello world
+    ────────────┴[LONG-LINE]
 
       a accept     keep the new snapshot
       r reject     retain the old snapshot
@@ -182,9 +182,9 @@ def test_two():
     File: <temp_dir>/snapshots/test__test_one.snap.new
     Source: test.py:5::test_one
 
-    [LONG-LINE]┬[LONG-LINE]
-              1 | +first
-    [LONG-LINE]┴[LONG-LINE]
+    ────────────┬[LONG-LINE]
+              1 │ +first
+    ────────────┴[LONG-LINE]
 
       a accept     keep the new snapshot
       r reject     retain the old snapshot

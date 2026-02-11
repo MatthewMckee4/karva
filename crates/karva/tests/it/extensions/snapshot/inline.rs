@@ -95,10 +95,10 @@ def test_hello():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
     info: Inline snapshot mismatch for 'test_hello'.
-          [LONG-LINE]┬[LONG-LINE]
-              1       | -hello
-                    1 | +goodbye
-          [LONG-LINE]┴[LONG-LINE]
+          ────────────┬───────────────────────────
+              1       │ -hello
+                    1 │ +goodbye
+          ────────────┴───────────────────────────
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
