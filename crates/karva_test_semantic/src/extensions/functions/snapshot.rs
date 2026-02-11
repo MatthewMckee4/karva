@@ -1,6 +1,9 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
+use std::process;
 
 use camino::{Utf8Path, Utf8PathBuf};
+use karva_snapshot::cmd::{CommandOutput, format_cmd_output};
 use karva_snapshot::diff::format_diff;
 use karva_snapshot::filters::{SnapshotFilter, apply_filters};
 use karva_snapshot::format::{SnapshotFile, SnapshotMetadata};
@@ -76,6 +79,122 @@ pub fn snapshot_settings(
     allow_duplicates: bool,
 ) -> SnapshotSettings {
     SnapshotSettings::new(filters, allow_duplicates)
+}
+
+#[pyclass]
+pub struct Command {
+    inner: process::Command,
+    stdin_data: Option<String>,
+}
+
+#[pymethods]
+impl Command {
+    #[new]
+    fn new(program: String) -> Self {
+        Self {
+            inner: process::Command::new(program),
+            stdin_data: None,
+        }
+    }
+
+    /// Append a single argument.
+    fn arg(mut slf: PyRefMut<'_, Self>, value: String) -> PyRefMut<'_, Self> {
+        slf.inner.arg(value);
+        slf
+    }
+
+    /// Append multiple arguments.
+    fn args(mut slf: PyRefMut<'_, Self>, values: Vec<String>) -> PyRefMut<'_, Self> {
+        slf.inner.args(values);
+        slf
+    }
+
+    /// Set a single environment variable.
+    fn env(mut slf: PyRefMut<'_, Self>, key: String, value: String) -> PyRefMut<'_, Self> {
+        slf.inner.env(key, value);
+        slf
+    }
+
+    /// Set multiple environment variables.
+    fn envs(mut slf: PyRefMut<'_, Self>, vars: HashMap<String, String>) -> PyRefMut<'_, Self> {
+        slf.inner.envs(vars);
+        slf
+    }
+
+    /// Set the working directory for the command.
+    fn current_dir(mut slf: PyRefMut<'_, Self>, path: String) -> PyRefMut<'_, Self> {
+        slf.inner.current_dir(path);
+        slf
+    }
+
+    /// Set data to pass to the command's stdin.
+    fn stdin(mut slf: PyRefMut<'_, Self>, data: String) -> PyRefMut<'_, Self> {
+        slf.stdin_data = Some(data);
+        slf
+    }
+}
+
+/// Run a command via Rust's `std::process::Command` and return the captured output.
+fn run_command(cmd: &mut Command) -> PyResult<CommandOutput> {
+    if cmd.stdin_data.is_some() {
+        cmd.inner.stdin(process::Stdio::piped());
+    } else {
+        cmd.inner.stdin(process::Stdio::null());
+    }
+
+    cmd.inner.stdout(process::Stdio::piped());
+    cmd.inner.stderr(process::Stdio::piped());
+
+    let output = if let Some(ref stdin_data) = cmd.stdin_data {
+        let mut child = cmd.inner.spawn().map_err(|e| {
+            pyo3::exceptions::PyOSError::new_err(format!("Failed to spawn command: {e}"))
+        })?;
+
+        if let Some(ref mut stdin_pipe) = child.stdin.take() {
+            use std::io::Write;
+            stdin_pipe.write_all(stdin_data.as_bytes()).map_err(|e| {
+                pyo3::exceptions::PyOSError::new_err(format!("Failed to write to stdin: {e}"))
+            })?;
+        }
+
+        child.wait_with_output().map_err(|e| {
+            pyo3::exceptions::PyOSError::new_err(format!("Failed to wait for command: {e}"))
+        })?
+    } else {
+        cmd.inner.output().map_err(|e| {
+            pyo3::exceptions::PyOSError::new_err(format!("Failed to run command: {e}"))
+        })?
+    };
+
+    let exit_code = output.status.code().unwrap_or(-1);
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+
+    Ok(CommandOutput {
+        success: output.status.success(),
+        exit_code,
+        stdout,
+        stderr,
+    })
+}
+
+/// Assert that a command's output matches a stored snapshot.
+///
+/// Runs the command, captures stdout/stderr/exit code, and formats
+/// the output in insta-cmd style before comparing against the snapshot.
+#[pyfunction]
+#[pyo3(signature = (cmd, *, inline=None, name=None))]
+#[expect(clippy::needless_pass_by_value)]
+pub fn assert_cmd_snapshot(
+    py: Python<'_>,
+    cmd: &mut Command,
+    inline: Option<String>,
+    name: Option<String>,
+) -> PyResult<()> {
+    let output = run_command(cmd)?;
+    let serialized = format_cmd_output(&output);
+    let serialized = apply_active_filters(&serialized)?;
+    assert_snapshot_impl(py, &serialized, inline.as_deref(), name.as_deref())
 }
 
 /// Check if any active settings scope has `allow_duplicates` enabled.

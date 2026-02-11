@@ -1,6 +1,7 @@
 """Karva is a Python test runner, written in Rust."""
 
 from karva._karva import (
+    Command,
     ExceptionInfo,
     FailError,
     MockEnv,
@@ -8,6 +9,7 @@ from karva._karva import (
     SkipError,
     SnapshotMismatchError,
     SnapshotSettings,
+    assert_cmd_snapshot,
     assert_json_snapshot,
     assert_snapshot,
     fail,
@@ -23,6 +25,7 @@ from karva._karva import (
 __version__ = "0.0.1-alpha.3"
 
 __all__: list[str] = [
+    "Command",
     "ExceptionInfo",
     "FailError",
     "MockEnv",
@@ -30,6 +33,7 @@ __all__: list[str] = [
     "SkipError",
     "SnapshotMismatchError",
     "SnapshotSettings",
+    "assert_cmd_snapshot",
     "assert_json_snapshot",
     "assert_snapshot",
     "fail",

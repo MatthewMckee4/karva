@@ -116,10 +116,10 @@ def test_hello():
       |
     info: Snapshot mismatch for 'test_hello--greeting'.
           Snapshot file: <temp_dir>/snapshots/test__test_hello--greeting.snap
-          [LONG-LINE]┬[LONG-LINE]
-              1       | -hello world
-                    1 | +goodbye world
-          [LONG-LINE]┴[LONG-LINE]
+          ────────────┬───────────────────────────
+              1       │ -hello world
+                    1 │ +goodbye world
+          ────────────┴───────────────────────────
 
     test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 

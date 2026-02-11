@@ -108,20 +108,8 @@ pub fn find_inline_argument(source: &str, line_number: u32) -> Option<InlineLoca
 
     let indent = lines[start_line_idx].len() - lines[start_line_idx].trim_start().len();
 
-    // Find `assert_snapshot(` or `assert_json_snapshot(` from the start line
     let search_start = line_byte_offset;
-    let candidates = [
-        source[search_start..]
-            .find("assert_snapshot(")
-            .map(|p| (p, "assert_snapshot(")),
-        source[search_start..]
-            .find("assert_json_snapshot(")
-            .map(|p| (p, "assert_json_snapshot(")),
-    ];
-    let (call_pos, call_pattern) = candidates
-        .into_iter()
-        .flatten()
-        .min_by_key(|(pos, _)| *pos)?;
+    let (call_pos, call_pattern) = find_snapshot_call(&source[search_start..])?;
     let abs_open_paren = search_start + call_pos + call_pattern.len() - 1;
 
     // Track paren depth to find the matching close paren
@@ -142,6 +130,22 @@ pub fn find_inline_argument(source: &str, line_number: u32) -> Option<InlineLoca
         end: literal_end,
         indent,
     })
+}
+
+const SNAPSHOT_CALL_PATTERNS: &[&str] = &[
+    "assert_snapshot(",
+    "assert_json_snapshot(",
+    "assert_cmd_snapshot(",
+];
+
+/// Find the first snapshot assertion call in the given source slice.
+///
+/// Returns `(position, pattern)` of the earliest match.
+fn find_snapshot_call(source: &str) -> Option<(usize, &'static str)> {
+    SNAPSHOT_CALL_PATTERNS
+        .iter()
+        .filter_map(|pattern| source.find(pattern).map(|pos| (pos, *pattern)))
+        .min_by_key(|(pos, _)| *pos)
 }
 
 /// Find the matching close parenthesis for an open paren at `open_pos`.
