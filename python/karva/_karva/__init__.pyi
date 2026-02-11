@@ -136,6 +136,35 @@ def assert_json_snapshot(
     name: str,
 ) -> None: ...
 
+class Command:
+    """Builder for running external commands in snapshot tests.
+
+    Wraps a command with its arguments, environment, stdin, and working
+    directory. Passed to `assert_cmd_snapshot` to capture and snapshot
+    the command's stdout, stderr, and exit code.
+    """
+
+    def __init__(self, program: str) -> None: ...
+    def arg(self, value: str) -> Self: ...
+    def args(self, values: Sequence[str]) -> Self: ...
+    def env(self, key: str, value: str) -> Self: ...
+    def envs(self, vars: dict[str, str]) -> Self: ...
+    def current_dir(self, path: str) -> Self: ...
+    def stdin(self, data: str) -> Self: ...
+
+@overload
+def assert_cmd_snapshot(
+    cmd: Command,
+    *,
+    inline: str | None = None,
+) -> None: ...
+@overload
+def assert_cmd_snapshot(
+    cmd: Command,
+    *,
+    name: str,
+) -> None: ...
+
 class SnapshotSettings:
     """Context manager for scoped snapshot configuration.
 
