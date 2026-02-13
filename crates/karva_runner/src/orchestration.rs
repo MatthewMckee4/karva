@@ -8,7 +8,7 @@ use crossbeam_channel::{Receiver, TryRecvError};
 use crate::shutdown::shutdown_receiver;
 use karva_cache::{AggregatedResults, CACHE_DIR, Cache, RunHash, read_recent_durations};
 use karva_cli::SubTestCommand;
-use karva_collector::CollectionSettings;
+use karva_collector::{CollectedPackage, CollectionSettings};
 use karva_logging::time::format_duration;
 use karva_metadata::ProjectSettings;
 use karva_project::Project;
@@ -182,11 +182,8 @@ fn spawn_workers(
     Ok(worker_manager)
 }
 
-pub fn run_parallel_tests(
-    project: &Project,
-    config: &ParallelTestConfig,
-    args: &SubTestCommand,
-) -> Result<AggregatedResults> {
+/// Collect tests from the project without executing them.
+pub fn collect_tests(project: &Project) -> Result<CollectedPackage> {
     let mut test_paths = Vec::new();
 
     for path in project.test_paths() {
@@ -215,6 +212,16 @@ pub fn run_parallel_tests(
         "Collected all tests in {}",
         format_duration(collection_start_time.elapsed())
     );
+
+    Ok(collected)
+}
+
+pub fn run_parallel_tests(
+    project: &Project,
+    config: &ParallelTestConfig,
+    args: &SubTestCommand,
+) -> Result<AggregatedResults> {
+    let collected = collect_tests(project)?;
 
     let total_tests = collected.test_count();
     let max_useful_workers = total_tests.div_ceil(MIN_TESTS_PER_WORKER).max(1);

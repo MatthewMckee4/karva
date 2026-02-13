@@ -1138,6 +1138,7 @@ dependencies = [
  "insta-cmd",
  "karva_cache",
  "karva_cli",
+ "karva_collector",
  "karva_logging",
  "karva_metadata",
  "karva_project",

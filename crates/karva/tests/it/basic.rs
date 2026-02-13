@@ -1118,3 +1118,80 @@ def test_3(): pass",
     INFO All workers completed
     ");
 }
+
+#[test]
+fn test_dry_run() {
+    let context = TestContext::with_files([
+        (
+            "test_file1.py",
+            r"
+def test_alpha(): pass
+def test_beta(): pass
+",
+        ),
+        (
+            "test_file2.py",
+            r"
+def test_gamma(): pass
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command().arg("--dry-run"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    <test> test_file1::test_alpha
+    <test> test_file1::test_beta
+    <test> test_file2::test_gamma
+
+    3 tests collected
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_dry_run_empty() {
+    let context = TestContext::new();
+
+    assert_cmd_snapshot!(context.command().arg("--dry-run"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    0 tests collected
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_dry_run_with_path_filter() {
+    let context = TestContext::with_files([
+        (
+            "test_file1.py",
+            r"
+def test_alpha(): pass
+def test_beta(): pass
+",
+        ),
+        (
+            "test_file2.py",
+            r"
+def test_gamma(): pass
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command().args(["--dry-run", "test_file1.py"]), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    <test> test_file1::test_alpha
+    <test> test_file1::test_beta
+
+    2 tests collected
+
+    ----- stderr -----
+    ");
+}

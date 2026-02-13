@@ -45,7 +45,8 @@ karva test [OPTIONS] [PATH]...
 <li><code>never</code>:  Never display colors</li>
 </ul></dd><dt id="karva-test--config-file"><a href="#karva-test--config-file"><code>--config-file</code></a> <i>path</i></dt><dd><p>The path to a <code>karva.toml</code> file to use for configuration.</p>
 <p>While karva configuration can be included in a <code>pyproject.toml</code> file, it is not allowed in this context.</p>
-<p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-test--fail-fast"><a href="#karva-test--fail-fast"><code>--fail-fast</code></a></dt><dd><p>When set, the test will fail immediately if any test fails.</p>
+<p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-test--dry-run"><a href="#karva-test--dry-run"><code>--dry-run</code></a></dt><dd><p>Print discovered tests without executing them</p>
+</dd><dt id="karva-test--fail-fast"><a href="#karva-test--fail-fast"><code>--fail-fast</code></a></dt><dd><p>When set, the test will fail immediately if any test fails.</p>
 <p>This only works when running tests in parallel.</p>
 </dd><dt id="karva-test--help"><a href="#karva-test--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help (see a summary with '-h')</p>
 </dd><dt id="karva-test--match"><a href="#karva-test--match"><code>--match</code></a>, <code>-m</code> <i>name-patterns</i></dt><dd><p>Filter tests by name using a regular expression.</p>
