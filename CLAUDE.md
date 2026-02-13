@@ -1,14 +1,15 @@
 - ALWAYS read CONTRIBUTING.md for guidelines on how to run tools
-- ALWAYS attempt to add a test case for changed behavior
+- ALWAYS attempt to add a test case for changed behavior. Get your tests to pass — if you didn't run the tests, your code does not work.
 - PREFER integration tests, e.g., at `it/...` over unit tests
 - PREFER running specific tests over running the entire test suite
-- AVOID using `panic!`, `unreachable!`, `.unwrap()`, unsafe code, and clippy rule ignores
+- ALWAYS run `just test` to run all tests.
+- ALWAYS run `uvx prek run -a` at the end of a task.
+- FOLLOW existing code style. Check neighboring files for patterns.
+- AVOID writing significant amounts of new code. Look for existing methods and utilities first.
+- AVOID using `panic!`, `unreachable!`, `.unwrap()`, unsafe code, and clippy rule ignores. Encode constraints in the type system instead.
 - PREFER patterns like `if let` to handle fallibility
 - PREFER `#[expect()]` over `[allow()]` if clippy must be disabled
 - PREFER let chains (`if let` combined with `&&`) over nested `if let` statements
-- ALWAYS run `prek run -a` at the end of a task
-- ALWAYS run `just test` to run all tests.
-- AVOID adding redundant comments throughout the codebase.
-- AVOID adding section separator comments (e.g., `// --- Section ---`) in test files.
-- PREFER function comments over inline comments.
 - PREFER short imports over fully-qualified paths for readability.
+- AVOID redundant comments and section separators (e.g., `// --- Section ---`) in test files. Use comments to explain invariants and why something unusual was done, not to narrate code.
+- PREFER function comments over inline comments.
