@@ -248,6 +248,10 @@ pub struct TestCommand {
     /// Disable reading the karva cache for test duration history
     #[clap(long, default_missing_value = "true", num_args=0..1)]
     pub no_cache: Option<bool>,
+
+    /// Print discovered tests without executing them.
+    #[clap(long)]
+    pub dry_run: bool,
 }
 
 impl TestCommand {

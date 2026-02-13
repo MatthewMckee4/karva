@@ -10,6 +10,7 @@ use clap::Parser;
 use colored::Colorize;
 use karva_cache::AggregatedResults;
 use karva_cli::{Args, Command, OutputFormat, SnapshotAction, SnapshotCommand, TestCommand};
+use karva_collector::CollectedPackage;
 use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::filter::{NameFilterSet, TagFilterSet};
 use karva_metadata::{ProjectMetadata, ProjectOptionsOverrides};
@@ -271,11 +272,18 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let no_parallel = args.no_parallel.unwrap_or(false);
     let no_cache = args.no_cache.unwrap_or(false);
     let num_workers = args.num_workers;
+    let dry_run = args.dry_run;
 
     let project_options_overrides = ProjectOptionsOverrides::new(config_file, args.into_options());
     project_metadata.apply_overrides(&project_options_overrides);
 
     let project = Project::from_metadata(project_metadata);
+
+    if dry_run {
+        let collected = karva_runner::collect_tests(&project)?;
+        print_collected_tests(printer, &collected)?;
+        return Ok(ExitStatus::Success);
+    }
 
     let num_workers = if no_parallel {
         1
@@ -358,6 +366,40 @@ fn print_test_output(
     let mut result_stdout = printer.stream_for_failure_summary().lock();
 
     write!(result_stdout, "{}", result.stats.display(start_time))?;
+
+    Ok(())
+}
+
+/// Recursively collect test names from a `CollectedPackage` as `(module_name, function_name)` pairs.
+fn collect_test_names(package: &CollectedPackage, tests: &mut Vec<(String, String)>) {
+    for module in package.modules.values() {
+        let module_name = module.path.module_name().to_string();
+        for func in &module.test_function_defs {
+            tests.push((module_name.clone(), func.name.to_string()));
+        }
+    }
+    for sub_package in package.packages.values() {
+        collect_test_names(sub_package, tests);
+    }
+}
+
+/// Print collected tests in dry-run mode.
+fn print_collected_tests(printer: Printer, collected: &CollectedPackage) -> Result<()> {
+    let mut tests = Vec::new();
+    collect_test_names(collected, &mut tests);
+    tests.sort();
+
+    let mut stdout = printer.stream_for_requested_summary().lock();
+
+    for (module_name, function_name) in &tests {
+        writeln!(stdout, "<test> {module_name}::{function_name}")?;
+    }
+
+    if !tests.is_empty() {
+        writeln!(stdout)?;
+    }
+
+    writeln!(stdout, "{} tests collected", tests.len())?;
 
     Ok(())
 }
