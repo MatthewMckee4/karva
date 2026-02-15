@@ -52,7 +52,7 @@ itertools = { version = "0.14.0" }
 markdown = { version = "1.0.0" }
 pretty_assertions = { version = "1.4.1" }
 proc-macro2 = { version = "1.0.106" }
-pyo3 = { version = "0.27.2", features = ["abi3-py310"] }
+pyo3 = { version = "0.28.0", features = ["abi3-py310"] }
 quote = { version = "1.0.44" }
 regex = { version = "1.12.2" }
 rstest = { version = "0.26" }
