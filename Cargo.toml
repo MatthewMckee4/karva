@@ -54,7 +54,7 @@ pretty_assertions = { version = "1.4.1" }
 proc-macro2 = { version = "1.0.106" }
 pyo3 = { version = "0.27.2", features = ["abi3-py310"] }
 quote = { version = "1.0.44" }
-regex = { version = "1.12.2" }
+regex = { version = "1.12.3" }
 rstest = { version = "0.26" }
 ruff_db = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_macros = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
