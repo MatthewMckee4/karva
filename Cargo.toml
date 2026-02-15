@@ -36,7 +36,7 @@ chrono = { version = "0.4.43", default-features = false, features = ["clock"] }
 clap = { version = "4.5.56", features = ["derive", "wrap_help"] }
 codspeed-criterion-compat = { version = "4.2.1", default-features = false }
 colored = { version = "3.1.1" }
-console = { version = "0.15" }
+console = { version = "0.16" }
 
 crossbeam-channel = "0.5.15"
 ctrlc = { version = "3.5.1" }
