@@ -56,6 +56,73 @@ def test_inline():
 
 If the value is not JSON-serializable (e.g., a custom object without a default serializer), Python's `json` module raises a `TypeError`.
 
+## Command Snapshots
+
+Use `karva.Command` to capture the stdout, stderr, and exit code of an external command as a snapshot.
+
+```python title="test.py"
+import sys
+import karva
+
+def test_echo():
+    cmd = karva.Command(sys.executable).args(["-c", "print('hello world')"])
+    karva.assert_cmd_snapshot(cmd)
+```
+
+The snapshot stores:
+
+```text
+success: true
+exit_code: 0
+----- stdout -----
+hello world
+----- stderr -----
+```
+
+### Builder API
+
+`karva.Command` uses a builder pattern. All methods return `self` for chaining:
+
+```python title="test.py"
+import sys
+import karva
+
+def test_command():
+    cmd = (
+        karva.Command(sys.executable)
+        .arg("-c")
+        .arg("import os; print(os.environ['GREETING'])")
+        .env("GREETING", "hi")
+    )
+    karva.assert_cmd_snapshot(cmd)
+```
+
+Available methods:
+
+- `arg(value)` — append a single argument
+- `args(values)` — append a list of arguments
+- `env(key, value)` — set an environment variable
+- `envs(vars)` — set multiple environment variables from a dict
+- `current_dir(path)` — set the working directory
+- `stdin(data)` — pass a string to the command's stdin
+
+### stdin
+
+```python title="test.py"
+import sys
+import karva
+
+def test_stdin():
+    cmd = (
+        karva.Command(sys.executable)
+        .args(["-c", "import sys; print(sys.stdin.read().strip())"])
+        .stdin("hello from stdin")
+    )
+    karva.assert_cmd_snapshot(cmd)
+```
+
+`assert_cmd_snapshot` supports `name=`, `inline=`, filters via `snapshot_settings`, and the pending/accept workflow, just like `assert_snapshot`.
+
 ## Named Snapshots
 
 By default, each snapshot is named after the test function. If a test contains more than one unnamed `assert_snapshot()` call, karva raises an error:
@@ -108,6 +175,57 @@ hello world
 The `source` field records the file, line number, and test name that produced the snapshot.
 
 When a test produces a new or changed snapshot, a `.snap.new` file is created alongside the existing `.snap` file. This pending file must be explicitly accepted or rejected before the test will pass.
+
+## Inline Snapshots
+
+Instead of storing expected values in separate `.snap` files, inline snapshots embed them directly in your test source file using the `inline=` parameter.
+
+```python title="test.py"
+import karva
+
+def test_greeting():
+    karva.assert_snapshot("hello world", inline="hello world")
+```
+
+To create a new inline snapshot, pass an empty string and run with `--snapshot-update`:
+
+```python title="test.py"
+import karva
+
+def test_greeting():
+    karva.assert_snapshot("hello world", inline="")
+```
+
+```bash
+karva test --snapshot-update
+```
+
+Karva rewrites your source file, replacing `inline=""` with the actual value.
+
+### Multiline Values
+
+For multiline values, Karva generates a triple-quoted string:
+
+```python title="test.py"
+import karva
+
+def test_lines():
+    karva.assert_snapshot("line 1\nline 2\nline 3", inline="""\
+        line 1
+        line 2
+        line 3
+    """)
+```
+
+### Accept Workflow
+
+When a pending inline snapshot is accepted with `karva snapshot accept`, Karva rewrites the `inline=` argument in your source file in place. No separate `.snap` file is created.
+
+All three assertion functions support `inline=`:
+
+- `karva.assert_snapshot(value, inline="")`
+- `karva.assert_json_snapshot(value, inline="")`
+- `karva.assert_cmd_snapshot(cmd, inline="")`
 
 ## Updating Snapshots
 
@@ -170,6 +288,41 @@ All commands accept optional path arguments to filter which snapshots are affect
 ```bash
 karva snapshot accept tests/api/
 karva snapshot review tests/test_output.py
+```
+
+### prune
+
+Remove snapshot files whose source test no longer exists. This uses static analysis to detect deleted or renamed test functions and files.
+
+```bash
+karva snapshot prune
+```
+
+Use `--dry-run` to preview what would be removed:
+
+```bash
+karva snapshot prune --dry-run
+```
+
+### delete
+
+Delete all snapshot files (both `.snap` and `.snap.new`):
+
+```bash
+karva snapshot delete
+```
+
+Use `--dry-run` to preview what would be deleted:
+
+```bash
+karva snapshot delete --dry-run
+```
+
+Both `prune` and `delete` accept optional path arguments to limit their scope:
+
+```bash
+karva snapshot prune tests/api/
+karva snapshot delete tests/old_module/
 ```
 
 ## Parametrized Tests
