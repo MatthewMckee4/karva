@@ -412,7 +412,7 @@ def test_inline_empty():
             ----- stdout -----
             created
             ----- stderr -----
-        """)
+            """)
     "#);
 }
 

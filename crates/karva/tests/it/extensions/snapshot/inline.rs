@@ -174,7 +174,7 @@ def test_lines():
             line 1
             line 2
             line 3
-        """)
+            """)
     "#);
 }
 
@@ -186,7 +186,7 @@ fn test_inline_snapshot_multiline_matches() {
 import karva
 
 def test_lines():
-    karva.assert_snapshot(\"line 1\\nline 2\", inline=\"\"\"\\\n        line 1\n        line 2\n    \"\"\")\n",
+    karva.assert_snapshot(\"line 1\\nline 2\", inline=\"\"\"\\\n        line 1\n        line 2\n        \"\"\")\n",
     );
 
     assert_cmd_snapshot!(context.command_no_parallel(), @r"
@@ -199,6 +199,40 @@ def test_lines():
 
     ----- stderr -----
     ");
+}
+
+#[test]
+fn test_inline_snapshot_multiline_closing_indent() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_closing():
+    karva.assert_snapshot("line 1\nline 2", inline="")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_closing ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let source = context.read_file("test.py");
+    assert!(
+        source.contains("        \"\"\""),
+        "Expected closing triple-quote at 8-space indent (content level), got:\n{source}"
+    );
+    assert!(
+        !source.contains("\n    \"\"\""),
+        "Closing triple-quote should NOT be at 4-space indent (call level), got:\n{source}"
+    );
 }
 
 #[test]

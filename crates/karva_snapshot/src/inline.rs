@@ -58,7 +58,6 @@ pub fn dedent(raw: &str) -> String {
 /// - Single-line, no problematic chars: `"value"`
 /// - Multi-line: `"""\\\n{indented lines}\n{indent}"""`
 pub fn generate_inline_literal(value: &str, indent: usize) -> String {
-    let indent_str = " ".repeat(indent);
     let content_indent = " ".repeat(indent + 4);
 
     if !value.contains('\n') {
@@ -80,7 +79,7 @@ pub fn generate_inline_literal(value: &str, indent: usize) -> String {
         }
     }
 
-    result.push_str(&indent_str);
+    result.push_str(&content_indent);
     result.push_str("\"\"\"");
 
     result
@@ -441,7 +440,7 @@ mod tests {
         let result = generate_inline_literal("line 1\nline 2\n", 4);
         assert_eq!(
             result,
-            "\"\"\"\\\n        line 1\n        line 2\n    \"\"\""
+            "\"\"\"\\\n        line 1\n        line 2\n        \"\"\""
         );
     }
 
@@ -450,7 +449,7 @@ mod tests {
         let result = generate_inline_literal("line 1\nline 2", 4);
         assert_eq!(
             result,
-            "\"\"\"\\\n        line 1\n        line 2\n    \"\"\""
+            "\"\"\"\\\n        line 1\n        line 2\n        \"\"\""
         );
     }
 
