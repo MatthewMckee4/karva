@@ -30,7 +30,7 @@ karva_test_semantic = { path = "crates/karva_test_semantic" }
 karva_worker = { path = "crates/karva_worker" }
 
 anyhow = { version = "1.0.101" }
-argfile = { version = "0.2.1" }
+argfile = { version = "1.0.0" }
 camino = { version = "1.2", features = ["serde1"] }
 chrono = { version = "0.4.43", default-features = false, features = ["clock"] }
 clap = { version = "4.5.59", features = ["derive", "wrap_help"] }
