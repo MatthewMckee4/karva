@@ -807,3 +807,202 @@ def test_third():
         "Third inline not rewritten by review! Got:\n{source}"
     );
 }
+
+/// Batch-accept 6 multiline inline snapshots in a single file.
+/// Each empty inline expands to a triple-quoted multiline literal, shifting
+/// line numbers for subsequent calls. Without reverse-order batch processing,
+/// later accepts would use stale line numbers and corrupt the file.
+#[test]
+fn test_inline_batch_accept_many_multiline() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_a():
+    karva.assert_snapshot("a1\na2", inline="")
+
+def test_b():
+    karva.assert_snapshot("b1\nb2", inline="")
+
+def test_c():
+    karva.assert_snapshot("c1\nc2", inline="")
+
+def test_d():
+    karva.assert_snapshot("d1\nd2", inline="")
+
+def test_e():
+    karva.assert_snapshot("e1\ne2", inline="")
+
+def test_f():
+    karva.assert_snapshot("f1\nf2", inline="")
+        "#,
+    );
+
+    let _ = context.command_no_parallel().output();
+
+    let output = context.snapshot("accept").output().expect("accept failed");
+    assert!(output.status.success(), "Expected accept to succeed");
+
+    let source = context.read_file("test.py");
+    insta::assert_snapshot!(source, @r#"
+
+    import karva
+
+    def test_a():
+        karva.assert_snapshot("a1/na2", inline="""/
+            a1
+            a2
+            """)
+
+    def test_b():
+        karva.assert_snapshot("b1/nb2", inline="""/
+            b1
+            b2
+            """)
+
+    def test_c():
+        karva.assert_snapshot("c1/nc2", inline="""/
+            c1
+            c2
+            """)
+
+    def test_d():
+        karva.assert_snapshot("d1/nd2", inline="""/
+            d1
+            d2
+            """)
+
+    def test_e():
+        karva.assert_snapshot("e1/ne2", inline="""/
+            e1
+            e2
+            """)
+
+    def test_f():
+        karva.assert_snapshot("f1/nf2", inline="""/
+            f1
+            f2
+            """)
+    "#);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_a ... ok
+    test test::test_b ... ok
+    test test::test_c ... ok
+    test test::test_d ... ok
+    test test::test_e ... ok
+    test test::test_f ... ok
+
+    test result: ok. 6 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+/// Same as batch accept, but via `--snapshot-update` which rewrites inline
+/// snapshots during test execution rather than via a separate accept step.
+#[test]
+fn test_inline_batch_update_many_multiline() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_a():
+    karva.assert_snapshot("a1\na2", inline="")
+
+def test_b():
+    karva.assert_snapshot("b1\nb2", inline="")
+
+def test_c():
+    karva.assert_snapshot("c1\nc2", inline="")
+
+def test_d():
+    karva.assert_snapshot("d1\nd2", inline="")
+
+def test_e():
+    karva.assert_snapshot("e1\ne2", inline="")
+
+def test_f():
+    karva.assert_snapshot("f1\nf2", inline="")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_a ... ok
+    test test::test_b ... ok
+    test test::test_c ... ok
+    test test::test_d ... ok
+    test test::test_e ... ok
+    test test::test_f ... ok
+
+    test result: ok. 6 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let source = context.read_file("test.py");
+    insta::assert_snapshot!(source, @r#"
+
+    import karva
+
+    def test_a():
+        karva.assert_snapshot("a1/na2", inline="""/
+            a1
+            a2
+            """)
+
+    def test_b():
+        karva.assert_snapshot("b1/nb2", inline="""/
+            b1
+            b2
+            """)
+
+    def test_c():
+        karva.assert_snapshot("c1/nc2", inline="""/
+            c1
+            c2
+            """)
+
+    def test_d():
+        karva.assert_snapshot("d1/nd2", inline="""/
+            d1
+            d2
+            """)
+
+    def test_e():
+        karva.assert_snapshot("e1/ne2", inline="""/
+            e1
+            e2
+            """)
+
+    def test_f():
+        karva.assert_snapshot("f1/nf2", inline="""/
+            f1
+            f2
+            """)
+    "#);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_a ... ok
+    test test::test_b ... ok
+    test test::test_c ... ok
+    test test::test_d ... ok
+    test test::test_e ... ok
+    test test::test_f ... ok
+
+    test result: ok. 6 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}

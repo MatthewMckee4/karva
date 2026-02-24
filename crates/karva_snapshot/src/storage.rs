@@ -126,6 +126,78 @@ pub fn accept_pending(pending_path: &Utf8Path) -> io::Result<()> {
     std::fs::rename(pending_path, snap_path)
 }
 
+/// Accept multiple pending snapshots, processing inline snapshots in reverse
+/// line order within each source file.
+///
+/// When multiple inline snapshots target the same source file, each multiline
+/// expansion shifts line numbers for subsequent snapshots. By processing in
+/// descending line order (bottom-to-top), edits at higher lines don't affect
+/// line numbers above.
+pub fn accept_pending_batch(pending: &[&PendingSnapshotInfo]) -> io::Result<()> {
+    struct InlineInfo<'a> {
+        pending_path: &'a Utf8Path,
+        source_file: String,
+        line: u32,
+        content: String,
+        function_name: Option<String>,
+    }
+
+    let mut inline_by_source: std::collections::HashMap<String, Vec<InlineInfo<'_>>> =
+        std::collections::HashMap::new();
+    let mut file_based: Vec<&Utf8Path> = Vec::new();
+
+    for info in pending {
+        if let Some(snapshot) = read_snapshot(&info.pending_path) {
+            if let (Some(source_file), Some(line)) = (
+                &snapshot.metadata.inline_source,
+                snapshot.metadata.inline_line,
+            ) {
+                let function_name = snapshot
+                    .metadata
+                    .source
+                    .as_deref()
+                    .and_then(|s| s.rsplit("::").next())
+                    .and_then(|s| s.split('(').next())
+                    .map(String::from);
+                inline_by_source
+                    .entry(source_file.clone())
+                    .or_default()
+                    .push(InlineInfo {
+                        pending_path: &info.pending_path,
+                        source_file: source_file.clone(),
+                        line,
+                        content: snapshot.content,
+                        function_name,
+                    });
+                continue;
+            }
+        }
+        file_based.push(&info.pending_path);
+    }
+
+    // Process each source file's inline snapshots in descending line order
+    for group in inline_by_source.values_mut() {
+        group.sort_by(|a, b| b.line.cmp(&a.line));
+        for item in group.iter() {
+            let content = item.content.trim_end();
+            crate::inline::rewrite_inline_snapshot(
+                &item.source_file,
+                item.line,
+                content,
+                item.function_name.as_deref(),
+            )?;
+            std::fs::remove_file(item.pending_path)?;
+        }
+    }
+
+    // File-based snapshots don't have ordering issues
+    for path in file_based {
+        accept_pending(path)?;
+    }
+
+    Ok(())
+}
+
 /// Reject a pending snapshot by deleting the `.snap.new` file.
 pub fn reject_pending(pending_path: &Utf8Path) -> io::Result<()> {
     std::fs::remove_file(pending_path)

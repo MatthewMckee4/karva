@@ -114,13 +114,24 @@ pub fn find_inline_argument(
         line_byte_offset += line.len() + 1; // +1 for newline
     }
 
-    let indent = lines[start_line_idx].len() - lines[start_line_idx].trim_start().len();
-
     let mut search_offset = line_byte_offset;
     loop {
         let (call_pos, call_pattern) = find_snapshot_call(&source[search_offset..])?;
         let abs_call_start = search_offset + call_pos;
         let abs_open_paren = abs_call_start + call_pattern.len() - 1;
+
+        // Derive indent from the actual line containing the call, not the
+        // (possibly stale) line_number parameter. After a prior multiline
+        // expansion shifts lines, line_number may point into a triple-quoted
+        // string body and yield wrong indentation.
+        let call_line_start = source[..abs_call_start]
+            .rfind('\n')
+            .map_or(0, |pos| pos + 1);
+        let call_line_end = source[abs_call_start..]
+            .find('\n')
+            .map_or(source.len(), |p| abs_call_start + p);
+        let call_line_content = &source[call_line_start..call_line_end];
+        let indent = call_line_content.len() - call_line_content.trim_start().len();
 
         // Track paren depth to find the matching close paren
         let call_end = find_matching_close_paren(source, abs_open_paren)?;

@@ -444,7 +444,11 @@ fn handle_inline_snapshot(
     }
 
     if update_mode {
-        karva_snapshot::inline::rewrite_inline_snapshot(&source_file, lineno, actual, None)
+        let fn_name = test_name
+            .rsplit("::")
+            .next()
+            .and_then(|s| s.split('(').next());
+        karva_snapshot::inline::rewrite_inline_snapshot(&source_file, lineno, actual, fn_name)
             .map_err(|e| {
                 SnapshotMismatchError::new_err(format!("Failed to update inline snapshot: {e}"))
             })?;
