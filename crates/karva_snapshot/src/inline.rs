@@ -169,9 +169,23 @@ pub fn find_inline_argument(
 }
 
 /// Find the name of the nearest enclosing function definition before the given byte position.
+///
+/// Skips inner `def` statements (e.g. nested class methods like `__repr__`)
+/// that are at the same or deeper indentation than the call site.
 fn containing_function_name(source: &str, byte_pos: usize) -> Option<&str> {
     let before = &source[..byte_pos];
+
+    let call_line_start = before.rfind('\n').map_or(0, |pos| pos + 1);
+    let call_indent = source[call_line_start..]
+        .bytes()
+        .take_while(|&b| b == b' ' || b == b'\t')
+        .count();
+
     for line in before.lines().rev() {
+        let line_indent = line.len() - line.trim_start().len();
+        if line_indent >= call_indent {
+            continue;
+        }
         let trimmed = line.trim_start();
         if let Some(after_def) = trimmed
             .strip_prefix("def ")
@@ -600,5 +614,34 @@ def test_right():
         let source = "async def test_hello():\n    karva.assert_snapshot('hello', inline=\"\")";
         let name = containing_function_name(source, source.len());
         assert_eq!(name, Some("test_hello"));
+    }
+
+    #[test]
+    fn test_containing_function_name_skips_inner_def() {
+        let source = "\
+def test_outer():
+    class Custom:
+        def __repr__(self) -> str:
+            return \"CustomRepr\"
+
+    karva.assert_snapshot(Custom(), inline=\"\")";
+        // byte_pos should be on the assert_snapshot line, not after __repr__
+        let call_pos = source.find("karva.assert_snapshot").expect("call found");
+        let name = containing_function_name(source, call_pos);
+        assert_eq!(name, Some("test_outer"));
+    }
+
+    #[test]
+    fn test_find_inline_with_inner_class_def() {
+        let source = "\
+def test_custom():
+    class Custom:
+        def __repr__(self) -> str:
+            return \"CustomRepr\"
+
+    karva.assert_snapshot(Custom(), inline=\"\")
+";
+        let loc = find_inline_argument(source, 1, Some("test_custom")).expect("should find");
+        assert_eq!(&source[loc.start..loc.end], "\"\"");
     }
 }

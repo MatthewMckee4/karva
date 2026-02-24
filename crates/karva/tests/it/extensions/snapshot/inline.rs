@@ -903,6 +903,42 @@ def test_f():
     ");
 }
 
+/// Inner class definitions (e.g. `def __repr__`) must not confuse the
+/// function-name verification that prevents cross-function corruption.
+#[test]
+fn test_inline_snapshot_with_inner_class_def() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_custom():
+    class Custom:
+        def __repr__(self) -> str:
+            return "CustomRepr(x=1)"
+
+    karva.assert_snapshot(repr(Custom()), inline="")
+        "#,
+    );
+
+    let _ = context.command_no_parallel().output();
+
+    let output = context.snapshot("accept").output().expect("accept failed");
+    assert!(output.status.success(), "Expected accept to succeed");
+
+    let source = context.read_file("test.py");
+    insta::assert_snapshot!(source, @r#"
+    import karva
+
+    def test_custom():
+        class Custom:
+            def __repr__(self) -> str:
+                return "CustomRepr(x=1)"
+
+        karva.assert_snapshot(repr(Custom()), inline="CustomRepr(x=1)")
+    "#);
+}
+
 /// Same as batch accept, but via `--snapshot-update` which rewrites inline
 /// snapshots during test execution rather than via a separate accept step.
 #[test]
