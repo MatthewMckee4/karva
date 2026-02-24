@@ -72,7 +72,7 @@ syn = { version = "2.0.116" }
 tempfile = "3.25"
 terminal_size = { version = "0.4" }
 thiserror = { version = "2.0.18" }
-toml = { version = "0.9.12" }
+toml = { version = "1.0.1" }
 tracing = { version = "0.1.44", features = ["release_max_level_debug"] }
 tracing-flame = { version = "0.2.0" }
 tracing-subscriber = { version = "0.3.22", default-features = false, features = [
