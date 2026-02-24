@@ -58,7 +58,6 @@ pub fn dedent(raw: &str) -> String {
 /// - Single-line, no problematic chars: `"value"`
 /// - Multi-line: `"""\\\n{indented lines}\n{indent}"""`
 pub fn generate_inline_literal(value: &str, indent: usize) -> String {
-    let indent_str = " ".repeat(indent);
     let content_indent = " ".repeat(indent + 4);
 
     if !value.contains('\n') {
@@ -80,7 +79,7 @@ pub fn generate_inline_literal(value: &str, indent: usize) -> String {
         }
     }
 
-    result.push_str(&indent_str);
+    result.push_str(&content_indent);
     result.push_str("\"\"\"");
 
     result
@@ -115,13 +114,24 @@ pub fn find_inline_argument(
         line_byte_offset += line.len() + 1; // +1 for newline
     }
 
-    let indent = lines[start_line_idx].len() - lines[start_line_idx].trim_start().len();
-
     let mut search_offset = line_byte_offset;
     loop {
         let (call_pos, call_pattern) = find_snapshot_call(&source[search_offset..])?;
         let abs_call_start = search_offset + call_pos;
         let abs_open_paren = abs_call_start + call_pattern.len() - 1;
+
+        // Derive indent from the actual line containing the call, not the
+        // (possibly stale) line_number parameter. After a prior multiline
+        // expansion shifts lines, line_number may point into a triple-quoted
+        // string body and yield wrong indentation.
+        let call_line_start = source[..abs_call_start]
+            .rfind('\n')
+            .map_or(0, |pos| pos + 1);
+        let call_line_end = source[abs_call_start..]
+            .find('\n')
+            .map_or(source.len(), |p| abs_call_start + p);
+        let call_line_content = &source[call_line_start..call_line_end];
+        let indent = call_line_content.len() - call_line_content.trim_start().len();
 
         // Track paren depth to find the matching close paren
         let call_end = find_matching_close_paren(source, abs_open_paren)?;
@@ -159,9 +169,23 @@ pub fn find_inline_argument(
 }
 
 /// Find the name of the nearest enclosing function definition before the given byte position.
+///
+/// Skips inner `def` statements (e.g. nested class methods like `__repr__`)
+/// that are at the same or deeper indentation than the call site.
 fn containing_function_name(source: &str, byte_pos: usize) -> Option<&str> {
     let before = &source[..byte_pos];
+
+    let call_line_start = before.rfind('\n').map_or(0, |pos| pos + 1);
+    let call_indent = source[call_line_start..]
+        .bytes()
+        .take_while(|&b| b == b' ' || b == b'\t')
+        .count();
+
     for line in before.lines().rev() {
+        let line_indent = line.len() - line.trim_start().len();
+        if line_indent >= call_indent {
+            continue;
+        }
         let trimmed = line.trim_start();
         if let Some(after_def) = trimmed
             .strip_prefix("def ")
@@ -441,7 +465,7 @@ mod tests {
         let result = generate_inline_literal("line 1\nline 2\n", 4);
         assert_eq!(
             result,
-            "\"\"\"\\\n        line 1\n        line 2\n    \"\"\""
+            "\"\"\"\\\n        line 1\n        line 2\n        \"\"\""
         );
     }
 
@@ -450,7 +474,7 @@ mod tests {
         let result = generate_inline_literal("line 1\nline 2", 4);
         assert_eq!(
             result,
-            "\"\"\"\\\n        line 1\n        line 2\n    \"\"\""
+            "\"\"\"\\\n        line 1\n        line 2\n        \"\"\""
         );
     }
 
@@ -590,5 +614,34 @@ def test_right():
         let source = "async def test_hello():\n    karva.assert_snapshot('hello', inline=\"\")";
         let name = containing_function_name(source, source.len());
         assert_eq!(name, Some("test_hello"));
+    }
+
+    #[test]
+    fn test_containing_function_name_skips_inner_def() {
+        let source = "\
+def test_outer():
+    class Custom:
+        def __repr__(self) -> str:
+            return \"CustomRepr\"
+
+    karva.assert_snapshot(Custom(), inline=\"\")";
+        // byte_pos should be on the assert_snapshot line, not after __repr__
+        let call_pos = source.find("karva.assert_snapshot").expect("call found");
+        let name = containing_function_name(source, call_pos);
+        assert_eq!(name, Some("test_outer"));
+    }
+
+    #[test]
+    fn test_find_inline_with_inner_class_def() {
+        let source = "\
+def test_custom():
+    class Custom:
+        def __repr__(self) -> str:
+            return \"CustomRepr\"
+
+    karva.assert_snapshot(Custom(), inline=\"\")
+";
+        let loc = find_inline_argument(source, 1, Some("test_custom")).expect("should find");
+        assert_eq!(&source[loc.start..loc.end], "\"\"");
     }
 }

@@ -6,7 +6,8 @@ use console::{Key, Term};
 
 use crate::diff::print_changeset;
 use crate::storage::{
-    PendingSnapshotInfo, accept_pending, find_pending_snapshots, read_snapshot, reject_pending,
+    PendingSnapshotInfo, accept_pending, accept_pending_batch, find_pending_snapshots,
+    read_snapshot, reject_pending,
 };
 
 /// Result of reviewing all pending snapshots.
@@ -177,11 +178,10 @@ pub fn run_review(root: &Utf8Path, resolved_filters: &[Utf8PathBuf]) -> io::Resu
                     break;
                 }
                 ReviewAction::AcceptAll => {
-                    accept_pending(&info.pending_path)?;
-                    summary.accepted.push(info.pending_path.to_string());
-                    for remaining in &filtered[i + 1..] {
-                        accept_pending(&remaining.pending_path)?;
-                        summary.accepted.push(remaining.pending_path.to_string());
+                    let to_accept: Vec<&PendingSnapshotInfo> = filtered[i..].iter().collect();
+                    accept_pending_batch(&to_accept)?;
+                    for item in &filtered[i..] {
+                        summary.accepted.push(item.pending_path.to_string());
                     }
                     break 'outer;
                 }

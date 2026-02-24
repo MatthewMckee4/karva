@@ -383,7 +383,10 @@ import sys
 
 def test_inline_empty():
     cmd = karva.Command(sys.executable).args(["-c", "print('created')"])
-    karva.assert_cmd_snapshot(cmd, inline="")
+    karva.assert_cmd_snapshot(
+        cmd,
+        inline="",
+    )
         "#,
     );
 
@@ -406,13 +409,16 @@ def test_inline_empty():
 
     def test_inline_empty():
         cmd = karva.Command(sys.executable).args(["-c", "print('created')"])
-        karva.assert_cmd_snapshot(cmd, inline="""/
+        karva.assert_cmd_snapshot(
+            cmd,
+            inline="""/
             success: true
             exit_code: 0
             ----- stdout -----
             created
             ----- stderr -----
-        """)
+            """,
+        )
     "#);
 }
 

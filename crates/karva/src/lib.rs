@@ -96,13 +96,11 @@ pub(crate) fn snapshot(args: SnapshotCommand) -> Result<ExitStatus> {
                 writeln!(stdout, "No pending snapshots found.")?;
                 return Ok(ExitStatus::Success);
             }
-            let mut accepted = 0;
+            karva_snapshot::storage::accept_pending_batch(&filtered)?;
             for info in &filtered {
-                karva_snapshot::storage::accept_pending(&info.pending_path)?;
                 writeln!(stdout, "Accepted: {}", info.pending_path)?;
-                accepted += 1;
             }
-            writeln!(stdout, "\n{accepted} snapshot(s) accepted.")?;
+            writeln!(stdout, "\n{} snapshot(s) accepted.", filtered.len())?;
             Ok(ExitStatus::Success)
         }
         SnapshotAction::Reject(filter) => {
