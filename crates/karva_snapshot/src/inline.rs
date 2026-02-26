@@ -407,174 +407,173 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_dedent_single_line() {
-        assert_eq!(dedent("hello"), "hello");
+    fn dedent_single_line() {
+        insta::assert_snapshot!(dedent("hello"), @"hello");
     }
 
     #[test]
-    fn test_dedent_multi_line() {
-        assert_eq!(dedent("    line 1\n    line 2\n"), "line 1\nline 2");
+    fn dedent_multi_line() {
+        insta::assert_snapshot!(dedent("    line 1\n    line 2\n"), @r"
+        line 1
+        line 2
+        ");
     }
 
     #[test]
-    fn test_dedent_mixed_indent() {
-        assert_eq!(
-            dedent("    line 1\n        line 2\n    line 3\n"),
-            "line 1\n    line 2\nline 3"
-        );
+    fn dedent_mixed_indent() {
+        insta::assert_snapshot!(dedent("    line 1\n        line 2\n    line 3\n"), @r"
+        line 1
+            line 2
+        line 3
+        ");
     }
 
     #[test]
-    fn test_dedent_empty() {
-        assert_eq!(dedent(""), "");
+    fn dedent_empty() {
+        insta::assert_snapshot!(dedent(""), @"");
     }
 
     #[test]
-    fn test_dedent_only_whitespace() {
-        assert_eq!(dedent("   \n   \n"), "");
+    fn dedent_only_whitespace() {
+        insta::assert_snapshot!(dedent("   \n   \n"), @"");
     }
 
     #[test]
-    fn test_dedent_with_empty_lines() {
-        assert_eq!(dedent("    line 1\n\n    line 2\n"), "line 1\n\nline 2");
+    fn dedent_with_empty_lines() {
+        insta::assert_snapshot!(dedent("    line 1\n\n    line 2\n"), @r"
+        line 1
+
+        line 2
+        ");
     }
 
     #[test]
-    fn test_generate_literal_single_line() {
-        assert_eq!(generate_inline_literal("hello", 4), "\"hello\"");
+    fn generate_literal_single_line() {
+        insta::assert_snapshot!(generate_inline_literal("hello", 4), @r#""hello""#);
     }
 
     #[test]
-    fn test_generate_literal_with_quotes() {
-        assert_eq!(
-            generate_inline_literal("say \"hi\"", 4),
-            "\"say \\\"hi\\\"\""
-        );
+    fn generate_literal_with_quotes() {
+        insta::assert_snapshot!(generate_inline_literal("say \"hi\"", 4), @r#""say \"hi\"""#);
     }
 
     #[test]
-    fn test_generate_literal_with_backslash() {
-        assert_eq!(
-            generate_inline_literal("path\\to\\file", 4),
-            "\"path\\\\to\\\\file\""
-        );
+    fn generate_literal_with_backslash() {
+        insta::assert_snapshot!(generate_inline_literal("path\\to\\file", 4), @r#""path\\to\\file""#);
     }
 
     #[test]
-    fn test_generate_literal_multi_line() {
-        let result = generate_inline_literal("line 1\nline 2\n", 4);
-        assert_eq!(
-            result,
-            "\"\"\"\\\n        line 1\n        line 2\n        \"\"\""
-        );
+    fn generate_literal_multi_line() {
+        insta::assert_snapshot!(generate_inline_literal("line 1\nline 2\n", 4), @r#"
+        """\
+                line 1
+                line 2
+                """
+        "#);
     }
 
     #[test]
-    fn test_generate_literal_multi_line_no_trailing_newline() {
-        let result = generate_inline_literal("line 1\nline 2", 4);
-        assert_eq!(
-            result,
-            "\"\"\"\\\n        line 1\n        line 2\n        \"\"\""
-        );
+    fn generate_literal_multi_line_no_trailing_newline() {
+        insta::assert_snapshot!(generate_inline_literal("line 1\nline 2", 4), @r#"
+        """\
+                line 1
+                line 2
+                """
+        "#);
     }
 
     #[test]
-    fn test_find_inline_simple() {
+    fn find_inline_simple() {
         let source = "    karva.assert_snapshot('hello', inline=\"\")\n";
         let loc = find_inline_argument(source, 1, None).expect("should find");
-        assert_eq!(&source[loc.start..loc.end], "\"\"");
+        insta::assert_snapshot!(&source[loc.start..loc.end], @r#""""#);
         assert_eq!(loc.indent, 4);
     }
 
     #[test]
-    fn test_find_inline_with_content() {
+    fn find_inline_with_content() {
         let source = "    karva.assert_snapshot('hello', inline=\"hello world\")\n";
         let loc = find_inline_argument(source, 1, None).expect("should find");
-        assert_eq!(&source[loc.start..loc.end], "\"hello world\"");
+        insta::assert_snapshot!(&source[loc.start..loc.end], @r#""hello world""#);
     }
 
     #[test]
-    fn test_find_inline_triple_quoted() {
+    fn find_inline_triple_quoted() {
         let source = "    karva.assert_snapshot('hello', inline=\"\"\"hello world\"\"\")\n";
         let loc = find_inline_argument(source, 1, None).expect("should find");
-        assert_eq!(&source[loc.start..loc.end], "\"\"\"hello world\"\"\"");
+        insta::assert_snapshot!(&source[loc.start..loc.end], @r#""""hello world""""#);
     }
 
     #[test]
-    fn test_find_inline_single_quoted() {
+    fn find_inline_single_quoted() {
         let source = "    karva.assert_snapshot('hello', inline='')\n";
         let loc = find_inline_argument(source, 1, None).expect("should find");
-        assert_eq!(&source[loc.start..loc.end], "''");
+        insta::assert_snapshot!(&source[loc.start..loc.end], @"''");
     }
 
     #[test]
-    fn test_find_inline_multiline_call() {
+    fn find_inline_multiline_call() {
         let source = "    karva.assert_snapshot(\n        'hello',\n        inline=\"\"\n    )\n";
         let loc = find_inline_argument(source, 1, None).expect("should find");
-        assert_eq!(&source[loc.start..loc.end], "\"\"");
+        insta::assert_snapshot!(&source[loc.start..loc.end], @r#""""#);
         assert_eq!(loc.indent, 4);
     }
 
     #[test]
-    fn test_find_inline_not_found() {
+    fn find_inline_not_found() {
         let source = "    karva.assert_snapshot('hello')\n";
         assert!(find_inline_argument(source, 1, None).is_none());
     }
 
     #[test]
-    fn test_find_inline_line_2() {
+    fn find_inline_line_2() {
         let source = "import karva\n    karva.assert_snapshot('hello', inline=\"\")\n";
         let loc = find_inline_argument(source, 2, None).expect("should find");
-        assert_eq!(&source[loc.start..loc.end], "\"\"");
+        insta::assert_snapshot!(&source[loc.start..loc.end], @r#""""#);
     }
 
     #[test]
-    fn test_find_inline_does_not_match_later_call() {
+    fn find_inline_does_not_match_later_call() {
         let source = "\
     karva.assert_snapshot('hello')
     karva.assert_snapshot('world', inline=\"\")
 ";
-        // Line 1 has no inline=, should NOT match line 2's inline=
         assert!(find_inline_argument(source, 1, None).is_none());
-        // Line 2 should find it
         let loc = find_inline_argument(source, 2, None).expect("should find on line 2");
-        assert_eq!(&source[loc.start..loc.end], "\"\"");
+        insta::assert_snapshot!(&source[loc.start..loc.end], @r#""""#);
     }
 
     #[test]
-    fn test_find_inline_json_snapshot() {
+    fn find_inline_json_snapshot() {
         let source = "    karva.assert_json_snapshot({'a': 1}, inline=\"\")\n";
         let loc = find_inline_argument(source, 1, None).expect("should find");
-        assert_eq!(&source[loc.start..loc.end], "\"\"");
+        insta::assert_snapshot!(&source[loc.start..loc.end], @r#""""#);
     }
 
     #[test]
-    fn test_find_inline_skips_string_containing_inline() {
+    fn find_inline_skips_string_containing_inline() {
         let source = "    karva.assert_snapshot('inline=bad', inline=\"good\")\n";
         let loc = find_inline_argument(source, 1, None).expect("should find");
-        assert_eq!(&source[loc.start..loc.end], "\"good\"");
+        insta::assert_snapshot!(&source[loc.start..loc.end], @r#""good""#);
     }
 
     #[test]
-    fn test_apply_edit_simple() {
-        assert_eq!(apply_edit("hello world", 6, 11, "rust"), "hello rust");
+    fn apply_edit_simple() {
+        insta::assert_snapshot!(apply_edit("hello world", 6, 11, "rust"), @"hello rust");
     }
 
     #[test]
-    fn test_apply_edit_empty_to_content() {
-        assert_eq!(
-            apply_edit("inline=\"\"", 7, 9, "\"hello\""),
-            "inline=\"hello\""
-        );
+    fn apply_edit_empty_to_content() {
+        insta::assert_snapshot!(apply_edit("inline=\"\"", 7, 9, "\"hello\""), @r#"inline="hello""#);
     }
 
     #[test]
-    fn test_apply_edit_beginning() {
-        assert_eq!(apply_edit("hello", 0, 5, "world"), "world");
+    fn apply_edit_beginning() {
+        insta::assert_snapshot!(apply_edit("hello", 0, 5, "world"), @"world");
     }
 
     #[test]
-    fn test_find_inline_skips_wrong_function() {
+    fn find_inline_skips_wrong_function() {
         let source = "\
 def test_wrong():
     karva.assert_snapshot('wrong', inline=\"wrong_value\")
@@ -582,14 +581,13 @@ def test_wrong():
 def test_right():
     karva.assert_snapshot('right', inline=\"\")
 ";
-        // Searching from line 1 with function_name=test_right should skip test_wrong's call
         let loc =
             find_inline_argument(source, 1, Some("test_right")).expect("should find test_right");
-        assert_eq!(&source[loc.start..loc.end], "\"\"");
+        insta::assert_snapshot!(&source[loc.start..loc.end], @r#""""#);
     }
 
     #[test]
-    fn test_find_inline_no_function_name_returns_first() {
+    fn find_inline_no_function_name_returns_first() {
         let source = "\
 def test_wrong():
     karva.assert_snapshot('wrong', inline=\"wrong_value\")
@@ -597,27 +595,26 @@ def test_wrong():
 def test_right():
     karva.assert_snapshot('right', inline=\"\")
 ";
-        // Without function_name, returns the first call's inline
         let loc = find_inline_argument(source, 1, None).expect("should find first");
-        assert_eq!(&source[loc.start..loc.end], "\"wrong_value\"");
+        insta::assert_snapshot!(&source[loc.start..loc.end], @r#""wrong_value""#);
     }
 
     #[test]
-    fn test_containing_function_name_simple() {
+    fn containing_function_name_simple() {
         let source = "def test_hello():\n    karva.assert_snapshot('hello', inline=\"\")";
         let name = containing_function_name(source, source.len());
-        assert_eq!(name, Some("test_hello"));
+        insta::assert_snapshot!(name.unwrap(), @"test_hello");
     }
 
     #[test]
-    fn test_containing_function_name_async() {
+    fn containing_function_name_async() {
         let source = "async def test_hello():\n    karva.assert_snapshot('hello', inline=\"\")";
         let name = containing_function_name(source, source.len());
-        assert_eq!(name, Some("test_hello"));
+        insta::assert_snapshot!(name.unwrap(), @"test_hello");
     }
 
     #[test]
-    fn test_containing_function_name_skips_inner_def() {
+    fn containing_function_name_skips_inner_def() {
         let source = "\
 def test_outer():
     class Custom:
@@ -625,14 +622,13 @@ def test_outer():
             return \"CustomRepr\"
 
     karva.assert_snapshot(Custom(), inline=\"\")";
-        // byte_pos should be on the assert_snapshot line, not after __repr__
         let call_pos = source.find("karva.assert_snapshot").expect("call found");
         let name = containing_function_name(source, call_pos);
-        assert_eq!(name, Some("test_outer"));
+        insta::assert_snapshot!(name.unwrap(), @"test_outer");
     }
 
     #[test]
-    fn test_find_inline_with_inner_class_def() {
+    fn find_inline_with_inner_class_def() {
         let source = "\
 def test_custom():
     class Custom:
@@ -642,6 +638,6 @@ def test_custom():
     karva.assert_snapshot(Custom(), inline=\"\")
 ";
         let loc = find_inline_argument(source, 1, Some("test_custom")).expect("should find");
-        assert_eq!(&source[loc.start..loc.end], "\"\"");
+        insta::assert_snapshot!(&source[loc.start..loc.end], @r#""""#);
     }
 }

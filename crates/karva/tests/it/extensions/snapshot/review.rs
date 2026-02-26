@@ -379,3 +379,70 @@ def test_beta():
     assert!(!pending_alpha.exists(), "Expected alpha .snap.new removed");
     assert!(!pending_beta.exists(), "Expected beta .snap.new removed");
 }
+
+#[test]
+fn test_snapshot_review_shows_diff_for_mismatch() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_hello():
+    karva.assert_snapshot('hello world')
+        ",
+    );
+
+    let _ = context
+        .command_no_parallel()
+        .arg("--snapshot-update")
+        .output();
+
+    context.write_file(
+        "test.py",
+        r"
+import karva
+
+def test_hello():
+    karva.assert_snapshot('goodbye world')
+        ",
+    );
+
+    let _ = context.command_no_parallel().output();
+
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/1
+    File: <temp_dir>/snapshots/test__test_hello.snap.new
+    Source: test.py:5::test_hello
+
+    ────────────┬[LONG-LINE]
+        1       │ -hello world
+              1 │ +goodbye world
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    > 
+    review finished
+    accepted:
+      <temp_dir>/snapshots/test__test_hello.snap.new
+
+    ----- stderr -----
+    ");
+
+    let content = context.read_file("snapshots/test__test_hello.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:5::test_hello
+    ---
+    goodbye world
+    ");
+}

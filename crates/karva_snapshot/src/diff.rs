@@ -131,8 +131,13 @@ enum Style {
 mod tests {
     use super::*;
 
+    fn strip_ansi(s: &str) -> String {
+        let re = regex::Regex::new(r"\x1b\[[0-9;]*m").expect("valid regex");
+        re.replace_all(s, "").into_owned()
+    }
+
     #[test]
-    fn test_no_diff() {
+    fn no_diff() {
         let result = format_diff("hello\n", "hello\n");
         assert!(
             result.is_empty(),
@@ -141,19 +146,29 @@ mod tests {
     }
 
     #[test]
-    fn test_addition() {
-        let result = format_diff("a\n", "a\nb\n");
-        assert!(result.contains("+b"));
+    fn addition() {
+        let result = strip_ansi(&format_diff("a\n", "a\nb\n"));
+        insta::assert_snapshot!(result, @r"
+        ────────────┬───────────────────────────
+            1     1 │  a
+                  2 │ +b
+        ────────────┴───────────────────────────
+        ");
     }
 
     #[test]
-    fn test_deletion() {
-        let result = format_diff("a\nb\n", "a\n");
-        assert!(result.contains("-b"));
+    fn deletion() {
+        let result = strip_ansi(&format_diff("a\nb\n", "a\n"));
+        insta::assert_snapshot!(result, @r"
+        ────────────┬───────────────────────────
+            1     1 │  a
+            2       │ -b
+        ────────────┴───────────────────────────
+        ");
     }
 
     #[test]
-    fn test_context_separator() {
+    fn context_separator() {
         let mut lines_old = String::new();
         let mut lines_new = String::new();
         for i in 1..=20 {
@@ -164,19 +179,33 @@ mod tests {
                 let _ = writeln!(lines_new, "line {i}");
             }
         }
-        let result = format_diff(&lines_old, &lines_new);
-        assert!(
-            result.contains("┈┈┈┈┼"),
-            "Expected context separator in diff:\n{result}"
-        );
+        let result = strip_ansi(&format_diff(&lines_old, &lines_new));
+        insta::assert_snapshot!(result, @r"
+        ────────────┬───────────────────────────
+            1       │ -line 1
+                  1 │ +CHANGED 1
+            2     2 │  line 2
+            3     3 │  line 3
+            4     4 │  line 4
+            5     5 │  line 5
+                ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+           16    16 │  line 16
+           17    17 │  line 17
+           18    18 │  line 18
+           19    19 │  line 19
+           20       │ -line 20
+                 20 │ +CHANGED 20
+        ────────────┴───────────────────────────
+        ");
     }
 
     #[test]
-    fn test_print_changeset() {
+    fn print_changeset_writes_diff() {
         let mut buf = Vec::new();
         print_changeset(&mut buf, "old\n", "new\n").expect("write should succeed");
         let output = String::from_utf8(buf).expect("valid utf8");
-        assert!(output.contains("-old"));
-        assert!(output.contains("+new"));
+        let output = strip_ansi(&output);
+        assert!(output.contains("-old"), "expected deletion marker");
+        assert!(output.contains("+new"), "expected insertion marker");
     }
 }

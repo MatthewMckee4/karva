@@ -31,110 +31,104 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_format_success_with_stdout() {
+    fn success_with_stdout() {
         let output = CommandOutput {
             success: true,
             exit_code: 0,
             stdout: "hello\n".to_string(),
             stderr: String::new(),
         };
-        assert_eq!(
-            format_cmd_output(&output),
-            "success: true\n\
-             exit_code: 0\n\
-             ----- stdout -----\n\
-             hello\n\
-             ----- stderr -----\n"
-        );
+        insta::assert_snapshot!(format_cmd_output(&output), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        hello
+        ----- stderr -----
+        ");
     }
 
     #[test]
-    fn test_format_failure_with_stderr() {
+    fn failure_with_stderr() {
         let output = CommandOutput {
             success: false,
             exit_code: 1,
             stdout: String::new(),
             stderr: "error occurred\n".to_string(),
         };
-        assert_eq!(
-            format_cmd_output(&output),
-            "success: false\n\
-             exit_code: 1\n\
-             ----- stdout -----\n\
-             ----- stderr -----\n\
-             error occurred\n"
-        );
+        insta::assert_snapshot!(format_cmd_output(&output), @r"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+        ----- stderr -----
+        error occurred
+        ");
     }
 
     #[test]
-    fn test_format_both_stdout_and_stderr() {
+    fn both_stdout_and_stderr() {
         let output = CommandOutput {
             success: true,
             exit_code: 0,
             stdout: "output\n".to_string(),
             stderr: "warnings\n".to_string(),
         };
-        assert_eq!(
-            format_cmd_output(&output),
-            "success: true\n\
-             exit_code: 0\n\
-             ----- stdout -----\n\
-             output\n\
-             ----- stderr -----\n\
-             warnings\n"
-        );
+        insta::assert_snapshot!(format_cmd_output(&output), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        output
+        ----- stderr -----
+        warnings
+        ");
     }
 
     #[test]
-    fn test_format_empty_output() {
+    fn empty_output() {
         let output = CommandOutput {
             success: true,
             exit_code: 0,
             stdout: String::new(),
             stderr: String::new(),
         };
-        assert_eq!(
-            format_cmd_output(&output),
-            "success: true\n\
-             exit_code: 0\n\
-             ----- stdout -----\n\
-             ----- stderr -----\n"
-        );
+        insta::assert_snapshot!(format_cmd_output(&output), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        ----- stderr -----
+        ");
     }
 
     #[test]
-    fn test_format_stdout_no_trailing_newline() {
+    fn stdout_no_trailing_newline() {
         let output = CommandOutput {
             success: true,
             exit_code: 0,
             stdout: "no newline".to_string(),
             stderr: String::new(),
         };
-        assert_eq!(
-            format_cmd_output(&output),
-            "success: true\n\
-             exit_code: 0\n\
-             ----- stdout -----\n\
-             no newline\n\
-             ----- stderr -----\n"
-        );
+        insta::assert_snapshot!(format_cmd_output(&output), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        no newline
+        ----- stderr -----
+        ");
     }
 
     #[test]
-    fn test_format_nonzero_exit_code() {
+    fn nonzero_exit_code() {
         let output = CommandOutput {
             success: false,
             exit_code: 42,
             stdout: String::new(),
             stderr: "exit 42\n".to_string(),
         };
-        assert_eq!(
-            format_cmd_output(&output),
-            "success: false\n\
-             exit_code: 42\n\
-             ----- stdout -----\n\
-             ----- stderr -----\n\
-             exit 42\n"
-        );
+        insta::assert_snapshot!(format_cmd_output(&output), @r"
+        success: false
+        exit_code: 42
+        ----- stdout -----
+        ----- stderr -----
+        exit 42
+        ");
     }
 }
