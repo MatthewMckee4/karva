@@ -421,10 +421,15 @@ pub fn remove_snapshot(path: &Utf8Path) -> io::Result<()> {
 mod tests {
     use super::*;
 
+    /// Normalize path separators for cross-platform snapshot stability.
+    fn normalize_path(path: &Utf8Path) -> String {
+        path.as_str().replace('\\', "/")
+    }
+
     #[test]
     fn snapshot_dir_for_test_file() {
         insta::assert_snapshot!(
-            snapshot_dir(Utf8Path::new("tests/test_example.py")),
+            normalize_path(&snapshot_dir(Utf8Path::new("tests/test_example.py"))),
             @"tests/snapshots"
         );
     }
@@ -432,7 +437,7 @@ mod tests {
     #[test]
     fn snapshot_path_for_module_and_name() {
         insta::assert_snapshot!(
-            snapshot_path(Utf8Path::new("tests/test_example.py"), "test_example", "test_foo"),
+            normalize_path(&snapshot_path(Utf8Path::new("tests/test_example.py"), "test_example", "test_foo")),
             @"tests/snapshots/test_example__test_foo.snap"
         );
     }
@@ -440,7 +445,7 @@ mod tests {
     #[test]
     fn pending_path_appends_new() {
         insta::assert_snapshot!(
-            pending_path(Utf8Path::new("tests/snapshots/test_example__test_foo.snap")),
+            normalize_path(&pending_path(Utf8Path::new("tests/snapshots/test_example__test_foo.snap"))),
             @"tests/snapshots/test_example__test_foo.snap.new"
         );
     }
