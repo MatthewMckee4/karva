@@ -21,7 +21,7 @@ def main() -> None:
     plt.style.use("dark_background")
 
     labels = ["pytest", "pytest-xdist", "karva"]
-    means = [6.8, 3.3, 1.1]
+    means = [92.2, 60.5, 2.6]
 
     y_pos = np.arange(len(labels))
 
