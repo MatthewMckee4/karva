@@ -62,7 +62,9 @@ fn test_project(project: &Project) {
         ..SubTestCommand::default()
     };
 
-    karva_runner::run_parallel_tests(project, &config, &args).unwrap();
+    let result = karva_runner::run_parallel_tests(project, &config, &args).unwrap();
+
+    assert!(result.stats.total() > 0);
 }
 
 pub fn bench_project(bencher: Bencher, benchmark: &ProjectBenchmark) {
