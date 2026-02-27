@@ -193,6 +193,56 @@ pub fn read_recent_durations(cache_dir: &Utf8PathBuf) -> Result<HashMap<String, 
     Ok(aggregated_durations)
 }
 
+/// Result of a cache prune operation.
+pub struct PruneResult {
+    /// Names of the removed run directories.
+    pub removed: Vec<String>,
+}
+
+/// Removes all but the most recent `run-*` directory from the cache.
+pub fn prune_cache(cache_dir: &Utf8Path) -> Result<PruneResult> {
+    let mut run_dirs = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(cache_dir) {
+        for entry in entries {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
+                    if dir_name.starts_with("run-") {
+                        run_dirs.push(dir_name.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    run_dirs.sort_by_key(|hash| RunHash::from_existing(hash).sort_key());
+
+    let to_remove = run_dirs.len().saturating_sub(1);
+    let mut removed = Vec::with_capacity(to_remove);
+
+    for dir_name in run_dirs.iter().take(to_remove) {
+        let path = cache_dir.join(dir_name);
+        fs::remove_dir_all(&path)?;
+        removed.push(dir_name.clone());
+    }
+
+    Ok(PruneResult { removed })
+}
+
+/// Removes the entire cache directory.
+///
+/// Returns `true` if the directory existed and was removed.
+pub fn clean_cache(cache_dir: &Utf8Path) -> Result<bool> {
+    if cache_dir.exists() {
+        fs::remove_dir_all(cache_dir)?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
