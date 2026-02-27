@@ -776,60 +776,89 @@ fn test_failfast() {
 }
 
 #[test]
-fn test_failfast_across_files() {
-    let context = TestContext::with_files([
-        (
-            "test_a.py",
-            r"
+fn test_failfast_multiple_threads() {
+    let context = TestContext::with_file(
+        "test_a.py",
+        r"
 import time
 
-def test_first():
-    time.sleep(0.5)
-    assert True
-
-def test_second():
-    time.sleep(0.5)
-    assert True
-",
-        ),
-        (
-            "test_b.py",
-            r"
 def test_fail():
-    assert False, 'This test fails'
-",
-        ),
-    ]);
+    assert False
 
-    assert_cmd_snapshot!(context.command().arg("--fail-fast").arg("--num-workers").arg("2"), @"
+def test_1():
+    time.sleep(0.5)
+    assert True
+
+def test_2():
+    time.sleep(0.5)
+    assert True
+
+def test_3():
+    time.sleep(0.5)
+    assert True
+
+def test_4():
+    time.sleep(0.5)
+    assert True
+
+def test_5():
+    time.sleep(0.5)
+    assert True
+
+def test_6():
+    time.sleep(0.5)
+    assert True
+
+def test_7():
+    time.sleep(0.5)
+    assert True
+
+def test_8():
+    time.sleep(0.5)
+    assert True
+
+def test_9():
+    time.sleep(0.5)
+    assert True
+    ",
+    );
+
+    assert_cmd_snapshot!(context.command().arg("--fail-fast").arg("--num-workers").arg("2").arg("-v"), @r"
     success: false
     exit_code: 1
     ----- stdout -----
-    test test_a::test_first ... ok
-    test test_a::test_second ... ok
-    test test_b::test_fail ... FAILED
+    test test_a::test_fail ... FAILED
 
     diagnostics:
 
     error[test-failure]: Test `test_fail` failed
-     --> test_b.py:2:5
+     --> test_a.py:4:5
       |
-    2 | def test_fail():
+    2 | import time
+    3 |
+    4 | def test_fail():
       |     ^^^^^^^^^
-    3 |     assert False, 'This test fails'
+    5 |     assert False
       |
     info: Test failed here
-     --> test_b.py:3:5
+     --> test_a.py:5:5
       |
-    2 | def test_fail():
-    3 |     assert False, 'This test fails'
-      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    4 | def test_fail():
+    5 |     assert False
+      |     ^^^^^^^^^^^^
+    6 |
+    7 | def test_1():
       |
-    info: This test fails
 
-    test result: FAILED. 2 passed; 1 failed; 0 skipped; finished in [TIME]
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
+    INFO Collected all tests in [TIME]
+    INFO Spawning 2 workers
+    INFO Worker 0 spawned with 5 tests
+    INFO Worker 1 spawned with 5 tests
+    INFO Waiting for 2 workers to complete (Ctrl+C to cancel)
+    INFO Fail-fast signal received — stopping remaining workers
     ");
 }
 
