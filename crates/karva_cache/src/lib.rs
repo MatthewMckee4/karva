@@ -11,6 +11,7 @@ pub(crate) const STATS_FILE: &str = "stats.json";
 pub(crate) const DIAGNOSTICS_FILE: &str = "diagnostics.txt";
 pub(crate) const DISCOVER_DIAGNOSTICS_FILE: &str = "discover_diagnostics.txt";
 pub(crate) const DURATIONS_FILE: &str = "durations.json";
+const FAIL_FAST_SIGNAL_FILE: &str = "fail-fast";
 
 pub(crate) fn worker_folder(worker_id: usize) -> String {
     format!("worker-{worker_id}")
