@@ -573,3 +573,69 @@ def test_multi():
     second
     ");
 }
+
+#[test]
+fn test_snapshot_in_subdirectory() {
+    let context = TestContext::default();
+    context.write_file(
+        "sub/test_nested.py",
+        r"
+import karva
+
+def test_in_sub():
+    karva.assert_snapshot('sub value')
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update").arg("sub/test_nested.py"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test sub.test_nested::test_in_sub ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let content = context.read_file("sub/snapshots/test_nested__test_in_sub.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test_nested.py:5::test_in_sub
+    ---
+    sub value
+    ");
+}
+
+#[test]
+fn test_snapshot_single_unnamed_gets_bare_name() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_single():
+    karva.assert_snapshot('only one')
+        ",
+    );
+
+    let _ = context
+        .command_no_parallel()
+        .arg("--snapshot-update")
+        .output();
+
+    assert!(
+        context
+            .root()
+            .join("snapshots/test__test_single.snap")
+            .exists(),
+        "Expected bare snapshot name without numeric suffix"
+    );
+    assert!(
+        !context
+            .root()
+            .join("snapshots/test__test_single-0.snap")
+            .exists(),
+        "Should NOT have -0 suffix for single unnamed snapshot"
+    );
+}

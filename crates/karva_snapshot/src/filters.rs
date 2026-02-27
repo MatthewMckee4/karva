@@ -38,8 +38,7 @@ mod tests {
         let filters = vec![
             SnapshotFilter::new(r"\d{4}-\d{2}-\d{2}", "[date]".to_string()).expect("valid regex"),
         ];
-        let result = apply_filters("created on 2024-01-15", &filters);
-        assert_eq!(result, "created on [date]");
+        insta::assert_snapshot!(apply_filters("created on 2024-01-15", &filters), @"created on [date]");
     }
 
     #[test]
@@ -48,25 +47,22 @@ mod tests {
             SnapshotFilter::new(r"\d{4}-\d{2}-\d{2}", "[date]".to_string()).expect("valid regex"),
             SnapshotFilter::new(r"[0-9a-f-]{36}", "[uuid]".to_string()).expect("valid regex"),
         ];
-        let result = apply_filters(
-            "id=550e8400-e29b-41d4-a716-446655440000 date=2024-01-15",
-            &filters,
+        insta::assert_snapshot!(
+            apply_filters("id=550e8400-e29b-41d4-a716-446655440000 date=2024-01-15", &filters),
+            @"id=[uuid] date=[date]"
         );
-        assert_eq!(result, "id=[uuid] date=[date]");
     }
 
     #[test]
     fn no_match_leaves_input_unchanged() {
         let filters =
             vec![SnapshotFilter::new(r"ZZZZZ", "[never]".to_string()).expect("valid regex")];
-        let result = apply_filters("hello world", &filters);
-        assert_eq!(result, "hello world");
+        insta::assert_snapshot!(apply_filters("hello world", &filters), @"hello world");
     }
 
     #[test]
     fn empty_filters_returns_input() {
-        let result = apply_filters("hello world", &[]);
-        assert_eq!(result, "hello world");
+        insta::assert_snapshot!(apply_filters("hello world", &[]), @"hello world");
     }
 
     #[test]

@@ -421,36 +421,37 @@ pub fn remove_snapshot(path: &Utf8Path) -> io::Result<()> {
 mod tests {
     use super::*;
 
+    /// Normalize path separators for cross-platform snapshot stability.
+    fn normalize_path(path: &Utf8Path) -> String {
+        path.as_str().replace('\\', "/")
+    }
+
     #[test]
-    fn test_snapshot_dir() {
-        let test_file = Utf8Path::new("tests/test_example.py");
-        assert_eq!(
-            snapshot_dir(test_file),
-            Utf8PathBuf::from("tests/snapshots")
+    fn snapshot_dir_for_test_file() {
+        insta::assert_snapshot!(
+            normalize_path(&snapshot_dir(Utf8Path::new("tests/test_example.py"))),
+            @"tests/snapshots"
         );
     }
 
     #[test]
-    fn test_snapshot_path() {
-        let test_file = Utf8Path::new("tests/test_example.py");
-        let path = snapshot_path(test_file, "test_example", "test_foo");
-        assert_eq!(
-            path,
-            Utf8PathBuf::from("tests/snapshots/test_example__test_foo.snap")
+    fn snapshot_path_for_module_and_name() {
+        insta::assert_snapshot!(
+            normalize_path(&snapshot_path(Utf8Path::new("tests/test_example.py"), "test_example", "test_foo")),
+            @"tests/snapshots/test_example__test_foo.snap"
         );
     }
 
     #[test]
-    fn test_pending_path() {
-        let snap = Utf8Path::new("tests/snapshots/test_example__test_foo.snap");
-        assert_eq!(
-            pending_path(snap),
-            Utf8PathBuf::from("tests/snapshots/test_example__test_foo.snap.new")
+    fn pending_path_appends_new() {
+        insta::assert_snapshot!(
+            normalize_path(&pending_path(Utf8Path::new("tests/snapshots/test_example__test_foo.snap"))),
+            @"tests/snapshots/test_example__test_foo.snap.new"
         );
     }
 
     #[test]
-    fn test_write_and_read_snapshot() {
+    fn write_and_read_snapshot() {
         let dir = tempfile::tempdir().expect("temp dir");
         let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
         let snap_path = dir_path.join("snapshots").join("mod__test.snap");
@@ -469,7 +470,7 @@ mod tests {
     }
 
     #[test]
-    fn test_accept_pending() {
+    fn accept_pending_renames_file() {
         let dir = tempfile::tempdir().expect("temp dir");
         let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
         let snap_path = dir_path.join("test.snap");
@@ -485,7 +486,7 @@ mod tests {
     }
 
     #[test]
-    fn test_reject_pending() {
+    fn reject_pending_deletes_file() {
         let dir = tempfile::tempdir().expect("temp dir");
         let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
         let pending = dir_path.join("test.snap.new");
@@ -498,7 +499,7 @@ mod tests {
     }
 
     #[test]
-    fn test_find_pending_snapshots() {
+    fn find_pending_excludes_committed() {
         let dir = tempfile::tempdir().expect("temp dir");
         let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
         let snap_dir = dir_path.join("snapshots");
@@ -513,73 +514,73 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_source_with_line_number() {
+    fn parse_source_with_line_number() {
         let (file, name) = parse_source("test.py:5::test_foo").expect("parse");
-        assert_eq!(file, "test.py");
-        assert_eq!(name, "test_foo");
+        insta::assert_snapshot!(file, @"test.py");
+        insta::assert_snapshot!(name, @"test_foo");
     }
 
     #[test]
-    fn test_parse_source_without_line_number() {
+    fn parse_source_without_line_number() {
         let (file, name) = parse_source("test.py::test_foo").expect("parse");
-        assert_eq!(file, "test.py");
-        assert_eq!(name, "test_foo");
+        insta::assert_snapshot!(file, @"test.py");
+        insta::assert_snapshot!(name, @"test_foo");
     }
 
     #[test]
-    fn test_parse_source_parametrized() {
+    fn parse_source_parametrized() {
         let (file, name) = parse_source("test.py:6::test_param(x=1)").expect("parse");
-        assert_eq!(file, "test.py");
-        assert_eq!(name, "test_param(x=1)");
+        insta::assert_snapshot!(file, @"test.py");
+        insta::assert_snapshot!(name, @"test_param(x=1)");
     }
 
     #[test]
-    fn test_parse_source_invalid() {
+    fn parse_source_invalid() {
         assert!(parse_source("no_separator").is_none());
         assert!(parse_source("::name_only").is_none());
         assert!(parse_source("file::").is_none());
     }
 
     #[test]
-    fn test_base_function_name_simple() {
-        assert_eq!(base_function_name("test_foo"), "test_foo");
+    fn base_function_name_simple() {
+        insta::assert_snapshot!(base_function_name("test_foo"), @"test_foo");
     }
 
     #[test]
-    fn test_base_function_name_parametrized() {
-        assert_eq!(base_function_name("test_foo(x=1)"), "test_foo");
+    fn base_function_name_parametrized() {
+        insta::assert_snapshot!(base_function_name("test_foo(x=1)"), @"test_foo");
     }
 
     #[test]
-    fn test_base_function_name_numbered() {
-        assert_eq!(base_function_name("test_foo-2"), "test_foo");
-        assert_eq!(base_function_name("test_foo-13"), "test_foo");
+    fn base_function_name_numbered() {
+        insta::assert_snapshot!(base_function_name("test_foo-2"), @"test_foo");
+        insta::assert_snapshot!(base_function_name("test_foo-13"), @"test_foo");
     }
 
     #[test]
-    fn test_base_function_name_inline() {
-        assert_eq!(base_function_name("test_foo_inline_5"), "test_foo");
+    fn base_function_name_inline() {
+        insta::assert_snapshot!(base_function_name("test_foo_inline_5"), @"test_foo");
     }
 
     #[test]
-    fn test_base_function_name_inline_multi_digit() {
-        assert_eq!(base_function_name("test_foo_inline_15"), "test_foo");
-        assert_eq!(base_function_name("test_foo_inline_123"), "test_foo");
+    fn base_function_name_inline_multi_digit() {
+        insta::assert_snapshot!(base_function_name("test_foo_inline_15"), @"test_foo");
+        insta::assert_snapshot!(base_function_name("test_foo_inline_123"), @"test_foo");
     }
 
     #[test]
-    fn test_base_function_name_class_prefix() {
-        assert_eq!(base_function_name("TestClass::test_method"), "test_method");
+    fn base_function_name_class_prefix() {
+        insta::assert_snapshot!(base_function_name("TestClass::test_method"), @"test_method");
     }
 
     #[test]
-    fn test_base_function_name_named() {
-        assert_eq!(base_function_name("test_foo--header"), "test_foo");
-        assert_eq!(base_function_name("test_foo--header(x=1)"), "test_foo");
+    fn base_function_name_named() {
+        insta::assert_snapshot!(base_function_name("test_foo--header"), @"test_foo");
+        insta::assert_snapshot!(base_function_name("test_foo--header(x=1)"), @"test_foo");
     }
 
     #[test]
-    fn test_find_snapshots_excludes_snap_new() {
+    fn find_snapshots_excludes_snap_new() {
         let dir = tempfile::tempdir().expect("temp dir");
         let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
         let snap_dir = dir_path.join("snapshots");
@@ -594,7 +595,7 @@ mod tests {
     }
 
     #[test]
-    fn test_find_unreferenced_file_not_found() {
+    fn unreferenced_file_not_found() {
         let dir = tempfile::tempdir().expect("temp dir");
         let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
         let snap_dir = dir_path.join("snapshots");
@@ -611,14 +612,11 @@ mod tests {
 
         let unreferenced = find_unreferenced_snapshots(dir_path);
         assert_eq!(unreferenced.len(), 1);
-        assert_eq!(
-            unreferenced[0].reason,
-            UnreferencedReason::TestFileNotFound("test.py".to_string())
-        );
+        insta::assert_snapshot!(unreferenced[0].reason, @"test file not found: test.py");
     }
 
     #[test]
-    fn test_find_unreferenced_function_not_found() {
+    fn unreferenced_function_not_found() {
         let dir = tempfile::tempdir().expect("temp dir");
         let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
         let snap_dir = dir_path.join("snapshots");
@@ -637,17 +635,11 @@ mod tests {
 
         let unreferenced = find_unreferenced_snapshots(dir_path);
         assert_eq!(unreferenced.len(), 1);
-        assert_eq!(
-            unreferenced[0].reason,
-            UnreferencedReason::FunctionNotFound {
-                file: "test.py".to_string(),
-                function: "test_foo".to_string(),
-            }
-        );
+        insta::assert_snapshot!(unreferenced[0].reason, @"function `test_foo` not found in test.py");
     }
 
     #[test]
-    fn test_find_unreferenced_function_exists() {
+    fn referenced_function_exists() {
         let dir = tempfile::tempdir().expect("temp dir");
         let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
         let snap_dir = dir_path.join("snapshots");
@@ -669,7 +661,7 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_snapshot_cleans_empty_dir() {
+    fn remove_snapshot_cleans_empty_dir() {
         let dir = tempfile::tempdir().expect("temp dir");
         let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
         let snap_dir = dir_path.join("snapshots");

@@ -939,6 +939,68 @@ def test_custom():
     "#);
 }
 
+#[test]
+fn test_inline_snapshot_single_quoted_argument() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_single_quote():
+    karva.assert_snapshot('hello', inline='')
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_single_quote ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let source = context.read_file("test.py");
+    assert!(
+        source.contains("inline='hello'") || source.contains(r#"inline="hello""#),
+        "Expected inline value rewritten, got:\n{source}"
+    );
+}
+
+#[test]
+fn test_inline_snapshot_empty_string_value() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_empty():
+    karva.assert_snapshot("", inline="")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_empty ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let source = context.read_file("test.py");
+    insta::assert_snapshot!(source, @r#"
+    import karva
+
+    def test_empty():
+        karva.assert_snapshot("", inline="")
+    "#);
+}
+
 /// Same as batch accept, but via `--snapshot-update` which rewrites inline
 /// snapshots during test execution rather than via a separate accept step.
 #[test]

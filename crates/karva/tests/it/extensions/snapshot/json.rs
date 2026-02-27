@@ -327,3 +327,107 @@ def test_not_json():
     ----- stderr -----
     ");
 }
+
+#[test]
+fn test_json_snapshot_mismatch() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_json():
+    karva.assert_json_snapshot({"key": "original"})
+        "#,
+    );
+
+    let _ = context
+        .command_no_parallel()
+        .arg("--snapshot-update")
+        .output();
+
+    context.write_file(
+        "test.py",
+        r#"
+import karva
+
+def test_json():
+    karva.assert_json_snapshot({"key": "changed"})
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test::test_json ... FAILED
+
+    diagnostics:
+
+    error[test-failure]: Test `test_json` failed
+     --> test.py:4:5
+      |
+    2 | import karva
+    3 |
+    4 | def test_json():
+      |     ^^^^^^^^^
+    5 |     karva.assert_json_snapshot({"key": "changed"})
+      |
+    info: Test failed here
+     --> test.py:5:5
+      |
+    4 | def test_json():
+    5 |     karva.assert_json_snapshot({"key": "changed"})
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Snapshot mismatch for 'test_json'.
+          Snapshot file: <temp_dir>/snapshots/test__test_json.snap
+          ────────────┬───────────────────────────
+              1     1 │  {
+              2       │ -  "key": "original"
+              3       │ -}
+                    2 │ +  "key": "changed"
+                    3 │ +}
+          ────────────┴───────────────────────────
+
+    test result: FAILED. 0 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn test_json_snapshot_list_values() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_list():
+    karva.assert_json_snapshot([1, "two", True, None])
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_list ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+
+    let content = context.read_file("snapshots/test__test_list.snap");
+    insta::assert_snapshot!(content, @r#"
+    ---
+    source: test.py:5::test_list
+    ---
+    [
+      1,
+      "two",
+      true,
+      null
+    ]
+    "#);
+}

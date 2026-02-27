@@ -19,6 +19,7 @@ similar = { workspace = true }
 terminal_size = { workspace = true }
 
 [dev-dependencies]
+insta = { workspace = true, features = ["filters"] }
 tempfile = { workspace = true }
 
 [lints]

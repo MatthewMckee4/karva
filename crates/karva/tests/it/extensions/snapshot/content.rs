@@ -257,3 +257,101 @@ def test_poem():
     ----- stderr -----
     ");
 }
+
+#[test]
+fn test_snapshot_content_with_blank_lines() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_blanks():
+    karva.assert_snapshot('line one\n\n\nline four')
+        ",
+    );
+
+    let _ = context
+        .command_no_parallel()
+        .arg("--snapshot-update")
+        .output();
+
+    let content = context.read_file("snapshots/test__test_blanks.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:5::test_blanks
+    ---
+    line one
+
+
+    line four
+    ");
+}
+
+#[test]
+fn test_snapshot_content_roundtrip_after_accept() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_roundtrip():
+    karva.assert_snapshot('hello world')
+        ",
+    );
+
+    let _ = context.command_no_parallel().output();
+
+    assert_cmd_snapshot!(context.snapshot("accept"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Accepted: <temp_dir>/snapshots/test__test_roundtrip.snap.new
+
+    1 snapshot(s) accepted.
+
+    ----- stderr -----
+    ");
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_roundtrip ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_snapshot_content_very_long_line() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_long():
+    karva.assert_snapshot('A' * 500)
+        ",
+    );
+
+    let _ = context
+        .command_no_parallel()
+        .arg("--snapshot-update")
+        .output();
+
+    let content = context.read_file("snapshots/test__test_long.snap");
+    assert!(content.contains(&"A".repeat(500)));
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test test::test_long ... ok
+
+    test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}

@@ -18,18 +18,22 @@ fn render_diff(output: &mut String, old: &str, new: &str, width: usize) {
         return;
     }
 
-    let content_width = width.saturating_sub(13);
-    let _ = writeln!(output, "────────────┬{:─<content_width$}", "");
+    let max_line = old.lines().count().max(new.lines().count());
+    let num_width = max_line.to_string().len().max(5);
+    let gutter_width = 2 * num_width + 2;
+    let content_width = width.saturating_sub(gutter_width + 1);
+    let separator_pad = gutter_width.saturating_sub(4);
+    let _ = writeln!(output, "{:─<gutter_width$}┬{:─<content_width$}", "", "");
 
     for (group_idx, group) in ops.iter().enumerate() {
         if group_idx > 0 {
-            let _ = writeln!(output, "        ┈┈┈┈┼{:┈<content_width$}", "");
+            let _ = writeln!(output, "{:separator_pad$}┈┈┈┈┼{:┈<content_width$}", "", "");
         }
 
         for op in group {
             for change in diff.iter_inline_changes(op) {
-                let old_num = format_line_num(change.old_index());
-                let new_num = format_line_num(change.new_index());
+                let old_num = format_line_num(change.old_index(), num_width);
+                let new_num = format_line_num(change.new_index(), num_width);
 
                 let (marker, style) = match change.tag() {
                     ChangeTag::Delete => ("-", Style::Delete),
@@ -90,7 +94,7 @@ fn render_diff(output: &mut String, old: &str, new: &str, width: usize) {
         }
     }
 
-    let _ = writeln!(output, "────────────┴{:─<content_width$}", "");
+    let _ = writeln!(output, "{:─<gutter_width$}┴{:─<content_width$}", "", "");
 }
 
 /// Format a diff for use in error messages.
@@ -114,10 +118,10 @@ pub fn print_changeset(out: &mut impl io::Write, old: &str, new: &str) -> io::Re
     write!(out, "{output}")
 }
 
-fn format_line_num(num: Option<usize>) -> String {
+fn format_line_num(num: Option<usize>, width: usize) -> String {
     match num {
-        Some(n) => format!("{:>5}", n + 1),
-        None => "     ".to_string(),
+        Some(n) => format!("{:>width$}", n + 1),
+        None => " ".repeat(width),
     }
 }
 
@@ -131,8 +135,15 @@ enum Style {
 mod tests {
     use super::*;
 
+    fn settings() -> insta::Settings {
+        let mut settings = insta::Settings::clone_current();
+        settings.add_filter(r"\x1b\[[0-9;]*m", "");
+        settings.add_filter(r"[-─]{30,}", "[LONG-LINE]");
+        settings
+    }
+
     #[test]
-    fn test_no_diff() {
+    fn no_diff() {
         let result = format_diff("hello\n", "hello\n");
         assert!(
             result.is_empty(),
@@ -141,19 +152,31 @@ mod tests {
     }
 
     #[test]
-    fn test_addition() {
-        let result = format_diff("a\n", "a\nb\n");
-        assert!(result.contains("+b"));
+    fn addition() {
+        settings().bind(|| {
+            insta::assert_snapshot!(format_diff("a\n", "a\nb\n"), @r"
+            ────────────┬───────────────────────────
+                1     1 │  a
+                      2 │ +b
+            ────────────┴───────────────────────────
+            ");
+        });
     }
 
     #[test]
-    fn test_deletion() {
-        let result = format_diff("a\nb\n", "a\n");
-        assert!(result.contains("-b"));
+    fn deletion() {
+        settings().bind(|| {
+            insta::assert_snapshot!(format_diff("a\nb\n", "a\n"), @r"
+            ────────────┬───────────────────────────
+                1     1 │  a
+                2       │ -b
+            ────────────┴───────────────────────────
+            ");
+        });
     }
 
     #[test]
-    fn test_context_separator() {
+    fn context_separator() {
         let mut lines_old = String::new();
         let mut lines_new = String::new();
         for i in 1..=20 {
@@ -164,19 +187,94 @@ mod tests {
                 let _ = writeln!(lines_new, "line {i}");
             }
         }
-        let result = format_diff(&lines_old, &lines_new);
-        assert!(
-            result.contains("┈┈┈┈┼"),
-            "Expected context separator in diff:\n{result}"
-        );
+        settings().bind(|| {
+            insta::assert_snapshot!(format_diff(&lines_old, &lines_new), @r"
+            ────────────┬───────────────────────────
+                1       │ -line 1
+                      1 │ +CHANGED 1
+                2     2 │  line 2
+                3     3 │  line 3
+                4     4 │  line 4
+                5     5 │  line 5
+                    ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+               16    16 │  line 16
+               17    17 │  line 17
+               18    18 │  line 18
+               19    19 │  line 19
+               20       │ -line 20
+                     20 │ +CHANGED 20
+            ────────────┴───────────────────────────
+            ");
+        });
     }
 
     #[test]
-    fn test_print_changeset() {
+    fn large_file_changes_at_boundaries() {
+        let mut old = String::new();
+        let mut new = String::new();
+        for i in 1..=100_000 {
+            let _ = writeln!(old, "line {i}");
+            if i == 1 || i == 1_000 || i == 10_000 || i == 100_000 {
+                let _ = writeln!(new, "CHANGED {i}");
+            } else {
+                let _ = writeln!(new, "line {i}");
+            }
+        }
+        settings().bind(|| {
+            insta::assert_snapshot!(format_diff(&old, &new), @r"
+            ──────────────┬─────────────────────────
+                 1        │ -line 1
+                        1 │ +CHANGED 1
+                 2      2 │  line 2
+                 3      3 │  line 3
+                 4      4 │  line 4
+                 5      5 │  line 5
+                      ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+               996    996 │  line 996
+               997    997 │  line 997
+               998    998 │  line 998
+               999    999 │  line 999
+              1000        │ -line 1000
+                     1000 │ +CHANGED 1000
+              1001   1001 │  line 1001
+              1002   1002 │  line 1002
+              1003   1003 │  line 1003
+              1004   1004 │  line 1004
+                      ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+              9996   9996 │  line 9996
+              9997   9997 │  line 9997
+              9998   9998 │  line 9998
+              9999   9999 │  line 9999
+             10000        │ -line 10000
+                    10000 │ +CHANGED 10000
+             10001  10001 │  line 10001
+             10002  10002 │  line 10002
+             10003  10003 │  line 10003
+             10004  10004 │  line 10004
+                      ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+             99996  99996 │  line 99996
+             99997  99997 │  line 99997
+             99998  99998 │  line 99998
+             99999  99999 │  line 99999
+            100000        │ -line 100000
+                   100000 │ +CHANGED 100000
+            ──────────────┴─────────────────────────
+            ");
+        });
+    }
+
+    #[test]
+    fn print_changeset_writes_diff() {
         let mut buf = Vec::new();
         print_changeset(&mut buf, "old\n", "new\n").expect("write should succeed");
         let output = String::from_utf8(buf).expect("valid utf8");
-        assert!(output.contains("-old"));
-        assert!(output.contains("+new"));
+        settings().bind(|| {
+            insta::assert_snapshot!(output, @r"
+            ────────────┬[LONG-LINE]
+                1       │ -old
+                      1 │ +new
+            ────────────┴[LONG-LINE]
+            ");
+        });
     }
 }
