@@ -80,12 +80,20 @@ mod tests {
 
     #[test]
     fn parse_snapshot_file() {
-        let input = "---\nsource: tests/test_example.py:5::test_example\n---\n{'key': 'value'}\n";
+        let input = "---\nsource: tests/test_example.py:5::test_example\n---\n{'key': 'value'}";
         let snapshot = SnapshotFile::parse(input).expect("should parse");
-        insta::assert_snapshot!(snapshot.metadata.source.as_deref().unwrap(), @"tests/test_example.py:5::test_example");
-        insta::assert_snapshot!(snapshot.content, @r"
-        {'key': 'value'}
-        ");
+        insta::assert_debug_snapshot!(snapshot, @r#"
+        SnapshotFile {
+            metadata: SnapshotMetadata {
+                source: Some(
+                    "tests/test_example.py:5::test_example",
+                ),
+                inline_source: None,
+                inline_line: None,
+            },
+            content: "{'key': 'value'}",
+        }
+        "#);
     }
 
     #[test]
