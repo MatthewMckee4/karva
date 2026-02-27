@@ -359,7 +359,7 @@ pub static KARVA_BENCHMARK_PROJECT: RealWorldProject<'static> = RealWorldProject
     repository: "https://github.com/karva-dev/karva-benchmark-1",
     commit: "89791b99d8b13a1e104af7a0b55b3741e315268a",
     paths: &["tests"],
-    dependencies: &[],
+    dependencies: &["pytest"],
     max_dep_date: "2026-12-01",
     python_version: PythonVersion::PY313,
     install_root: true,
