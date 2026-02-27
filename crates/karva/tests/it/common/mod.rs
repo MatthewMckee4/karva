@@ -63,6 +63,7 @@ impl TestContext {
         settings.add_filter(r#"\\(\w\w|\s|\.|")"#, "/$1");
         settings.add_filter(r"\x1b\[[0-9;]*m", "");
         settings.add_filter(r"(\s|\()(\d+m )?(\d+\.)?\d+(ms|s)", "$1[TIME]");
+        settings.add_filter(r"run-\d+", "run-[TIMESTAMP]");
         settings.add_filter(r"[-─]{30,}", "[LONG-LINE]");
 
         let settings_scope = settings.bind_to_scope();
@@ -147,6 +148,15 @@ impl TestContext {
         let mut command = Command::new(self.venv_binary("karva"));
         command
             .arg("snapshot")
+            .arg(subcommand)
+            .current_dir(self.root());
+        command
+    }
+
+    pub fn cache(&self, subcommand: &str) -> Command {
+        let mut command = Command::new(self.venv_binary("karva"));
+        command
+            .arg("cache")
             .arg(subcommand)
             .current_dir(self.root());
         command

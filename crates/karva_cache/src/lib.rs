@@ -1,7 +1,9 @@
 pub(crate) mod cache;
 pub(crate) mod hash;
 
-pub use cache::{AggregatedResults, Cache, read_recent_durations};
+pub use cache::{
+    AggregatedResults, Cache, PruneResult, clean_cache, prune_cache, read_recent_durations,
+};
 pub use hash::RunHash;
 
 pub const CACHE_DIR: &str = ".karva_cache";

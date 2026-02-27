@@ -9,7 +9,10 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use colored::Colorize;
 use karva_cache::AggregatedResults;
-use karva_cli::{Args, Command, OutputFormat, SnapshotAction, SnapshotCommand, TestCommand};
+use karva_cli::{
+    Args, CacheAction, CacheCommand, Command, OutputFormat, SnapshotAction, SnapshotCommand,
+    TestCommand,
+};
 use karva_collector::CollectedPackage;
 use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::filter::{NameFilterSet, TagFilterSet};
@@ -55,6 +58,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     match args.command {
         Command::Test(test_args) => test(test_args),
         Command::Snapshot(snapshot_args) => snapshot(snapshot_args),
+        Command::Cache(cache_args) => cache(&cache_args),
         Command::Version => version().map(|()| ExitStatus::Success),
     }
 }
@@ -214,6 +218,46 @@ pub(crate) fn snapshot(args: SnapshotCommand) -> Result<ExitStatus> {
                     deleted += 1;
                 }
                 writeln!(stdout, "\n{deleted} snapshot file(s) deleted.")?;
+            }
+            Ok(ExitStatus::Success)
+        }
+    }
+}
+
+pub(crate) fn cache(args: &CacheCommand) -> Result<ExitStatus> {
+    let cwd = {
+        let cwd = std::env::current_dir().context("Failed to get the current working directory")?;
+        Utf8PathBuf::from_path_buf(cwd).map_err(|path| {
+            anyhow::anyhow!(
+                "The current working directory `{}` contains non-Unicode characters.",
+                path.display()
+            )
+        })?
+    };
+
+    let printer = Printer::default();
+    let mut stdout = printer.stream_for_requested_summary().lock();
+
+    match args.action {
+        CacheAction::Prune => {
+            let cache_dir = cwd.join(karva_cache::CACHE_DIR);
+            let result = karva_cache::prune_cache(&cache_dir)?;
+            for dir_name in &result.removed {
+                writeln!(stdout, "Removed: {dir_name}")?;
+            }
+            if result.removed.is_empty() {
+                writeln!(stdout, "No cache runs to prune.")?;
+            } else {
+                writeln!(stdout, "\n{} run(s) pruned.", result.removed.len())?;
+            }
+            Ok(ExitStatus::Success)
+        }
+        CacheAction::Clean => {
+            let cache_dir = cwd.join(karva_cache::CACHE_DIR);
+            if karva_cache::clean_cache(&cache_dir)? {
+                writeln!(stdout, "Cache directory removed.")?;
+            } else {
+                writeln!(stdout, "No cache directory found.")?;
             }
             Ok(ExitStatus::Success)
         }

@@ -85,6 +85,9 @@ pub enum Command {
     /// Manage snapshots created by `karva.assert_snapshot()`.
     Snapshot(SnapshotCommand),
 
+    /// Manage the karva cache.
+    Cache(CacheCommand),
+
     /// Display Karva's version
     Version,
 }
@@ -143,6 +146,21 @@ pub struct SnapshotDeleteArgs {
     /// Show which snapshot files would be deleted without removing them.
     #[clap(long)]
     pub dry_run: bool,
+}
+
+#[derive(Debug, Parser)]
+pub struct CacheCommand {
+    #[command(subcommand)]
+    pub action: CacheAction,
+}
+
+#[derive(Debug, clap::Subcommand)]
+pub enum CacheAction {
+    /// Remove all but the most recent test run from the cache.
+    Prune,
+
+    /// Remove the entire cache directory.
+    Clean,
 }
 
 /// Shared test execution options that can be used by both main CLI and worker processes

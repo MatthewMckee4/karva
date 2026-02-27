@@ -16,6 +16,7 @@ karva <COMMAND>
 
 <dl class="cli-reference"><dt><a href="#karva-test"><code>karva test</code></a></dt><dd><p>Run tests</p></dd>
 <dt><a href="#karva-snapshot"><code>karva snapshot</code></a></dt><dd><p>Manage snapshots created by <code>karva.assert_snapshot()</code></p></dd>
+<dt><a href="#karva-cache"><code>karva cache</code></a></dt><dd><p>Manage the karva cache</p></dd>
 <dt><a href="#karva-version"><code>karva version</code></a></dt><dd><p>Display Karva's version</p></dd>
 <dt><a href="#karva-help"><code>karva help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
 </dl>
@@ -227,6 +228,63 @@ Print this message or the help of the given subcommand(s)
 
 ```
 karva snapshot help [COMMAND]
+```
+
+## karva cache
+
+Manage the karva cache
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva cache <COMMAND>
+```
+
+<h3 class="cli-reference">Commands</h3>
+
+<dl class="cli-reference"><dt><a href="#karva-cache-prune"><code>karva cache prune</code></a></dt><dd><p>Remove all but the most recent test run from the cache</p></dd>
+<dt><a href="#karva-cache-clean"><code>karva cache clean</code></a></dt><dd><p>Remove the entire cache directory</p></dd>
+<dt><a href="#karva-cache-help"><code>karva cache help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
+</dl>
+
+### karva cache prune
+
+Remove all but the most recent test run from the cache
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva cache prune
+```
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-cache-prune--help"><a href="#karva-cache-prune--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+### karva cache clean
+
+Remove the entire cache directory
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva cache clean
+```
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-cache-clean--help"><a href="#karva-cache-clean--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+### karva cache help
+
+Print this message or the help of the given subcommand(s)
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva cache help [COMMAND]
 ```
 
 ## karva version
