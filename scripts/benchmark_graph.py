@@ -72,7 +72,7 @@ def main() -> None:
         )
 
     plt.title(
-        "Running benchmark tests (14 cores)",
+        "Running benchmark tests (~250,000 tests) (14 cores)",
         fontsize=18,
         pad=20,
         color="grey",
