@@ -179,6 +179,10 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     cache.write_result(args.worker_id, &result, &diagnostic_resolver, &config)?;
 
+    if settings.fail_fast() && !result.stats().is_success() {
+        cache.write_fail_fast_signal()?;
+    }
+
     Ok(ExitStatus::Success)
 }
 

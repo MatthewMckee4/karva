@@ -48,8 +48,9 @@ impl WorkerManager {
     }
 
     /// Wait for all workers to complete.
-    /// Returns early if a message is received on `shutdown_rx`.
-    fn wait_for_completion(&mut self, shutdown_rx: Option<&Receiver<()>>) {
+    /// Returns early if a message is received on `shutdown_rx` or if the cache
+    /// contains a fail-fast signal indicating a worker encountered a test failure.
+    fn wait_for_completion(&mut self, shutdown_rx: Option<&Receiver<()>>, cache: Option<&Cache>) {
         if self.workers.is_empty() {
             return;
         }
@@ -67,6 +68,13 @@ impl WorkerManager {
                         break;
                     }
                     Err(TryRecvError::Empty) => {}
+                }
+            }
+
+            if let Some(cache) = cache {
+                if cache.has_fail_fast_signal() {
+                    tracing::info!("Fail-fast signal received — stopping remaining workers");
+                    break;
                 }
             }
 
@@ -268,10 +276,17 @@ pub fn run_parallel_tests(
         None
     };
 
-    worker_manager.wait_for_completion(shutdown_rx);
+    let cache = Cache::new(&cache_dir, &run_hash);
+
+    let fail_fast_cache = if project.settings().fail_fast() {
+        Some(&cache)
+    } else {
+        None
+    };
+
+    worker_manager.wait_for_completion(shutdown_rx, fail_fast_cache);
     worker_manager.kill_remaining();
 
-    let cache = Cache::new(&cache_dir, &run_hash);
     let result = cache.aggregate_results()?;
 
     Ok(result)

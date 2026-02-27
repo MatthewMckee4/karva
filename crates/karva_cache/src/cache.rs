@@ -8,7 +8,8 @@ use karva_diagnostic::{TestResultStats, TestRunResult};
 use ruff_db::diagnostic::{DisplayDiagnosticConfig, DisplayDiagnostics, FileResolver};
 
 use crate::{
-    DIAGNOSTICS_FILE, DISCOVER_DIAGNOSTICS_FILE, DURATIONS_FILE, RunHash, STATS_FILE, worker_folder,
+    DIAGNOSTICS_FILE, DISCOVER_DIAGNOSTICS_FILE, DURATIONS_FILE, FAIL_FAST_SIGNAL_FILE, RunHash,
+    STATS_FILE, worker_folder,
 };
 
 /// Aggregated test results collected from all worker processes.
@@ -28,6 +29,19 @@ impl Cache {
     pub fn new(cache_dir: &Utf8PathBuf, run_hash: &RunHash) -> Self {
         let run_dir = cache_dir.join(run_hash.to_string());
         Self { run_dir }
+    }
+
+    /// Writes a fail-fast signal file to indicate a worker encountered a test failure.
+    pub fn write_fail_fast_signal(&self) -> Result<()> {
+        fs::create_dir_all(&self.run_dir)?;
+        let signal_path = self.run_dir.join(FAIL_FAST_SIGNAL_FILE);
+        fs::write(signal_path, "")?;
+        Ok(())
+    }
+
+    /// Checks whether any worker has written a fail-fast signal file.
+    pub fn has_fail_fast_signal(&self) -> bool {
+        self.run_dir.join(FAIL_FAST_SIGNAL_FILE).exists()
     }
 
     /// Reads and merges test results from all worker directories for this run.
