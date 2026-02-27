@@ -357,7 +357,7 @@ fn cargo_target_directory() -> Option<&'static PathBuf> {
 pub static KARVA_BENCHMARK_PROJECT: RealWorldProject<'static> = RealWorldProject {
     name: "karva-benchmark-1",
     repository: "https://github.com/karva-dev/karva-benchmark-1",
-    commit: "f099028b217f15311eae16f726ac12dabbeb87e9",
+    commit: "89791b99d8b13a1e104af7a0b55b3741e315268a",
     paths: &["tests"],
     dependencies: &[],
     max_dep_date: "2026-12-01",
