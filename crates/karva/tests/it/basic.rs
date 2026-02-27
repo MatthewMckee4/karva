@@ -776,6 +776,64 @@ fn test_failfast() {
 }
 
 #[test]
+fn test_failfast_across_files() {
+    let context = TestContext::with_files([
+        (
+            "test_a.py",
+            r"
+import time
+
+def test_first():
+    time.sleep(0.5)
+    assert True
+
+def test_second():
+    time.sleep(0.5)
+    assert True
+",
+        ),
+        (
+            "test_b.py",
+            r"
+def test_fail():
+    assert False, 'This test fails'
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command().arg("--fail-fast").arg("--num-workers").arg("2"), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test test_a::test_first ... ok
+    test test_a::test_second ... ok
+    test test_b::test_fail ... FAILED
+
+    diagnostics:
+
+    error[test-failure]: Test `test_fail` failed
+     --> test_b.py:2:5
+      |
+    2 | def test_fail():
+      |     ^^^^^^^^^
+    3 |     assert False, 'This test fails'
+      |
+    info: Test failed here
+     --> test_b.py:3:5
+      |
+    2 | def test_fail():
+    3 |     assert False, 'This test fails'
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: This test fails
+
+    test result: FAILED. 2 passed; 1 failed; 0 skipped; finished in [TIME]
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_test_prefix() {
     let context = TestContext::with_file(
         "test_fail.py",
