@@ -415,7 +415,7 @@ pub(crate) fn print_test_output(
     }
 
     if let Some(n) = durations {
-        if !result.durations.is_empty() {
+        if n > 0 && !result.durations.is_empty() {
             let mut sorted: Vec<_> = result.durations.iter().collect();
             sorted.sort_by(|a, b| b.1.cmp(a.1));
             let count = n.min(sorted.len());
@@ -430,11 +430,13 @@ pub(crate) fn print_test_output(
                     karva_logging::time::format_duration(*duration)
                 )?;
             }
+            writeln!(stdout)?;
         }
     }
 
+    let durations_printed = durations.is_some_and(|n| n > 0 && !result.durations.is_empty());
     if (result.diagnostics.is_empty() && result.discovery_diagnostics.is_empty())
-        && durations.is_none()
+        && !durations_printed
         && result.stats.total() > 0
         && stdout.is_enabled()
     {

@@ -31,6 +31,7 @@ def test_slow():
     2 slowest tests:
       test_durations::test_slow ([TIME])
       test_durations::test_medium ([TIME])
+
     test result: ok. 3 passed; 0 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
@@ -62,6 +63,7 @@ def test_slow():
     2 slowest tests:
       test_durations::test_slow ([TIME])
       test_durations::test_fast ([TIME])
+
     test result: ok. 2 passed; 0 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
@@ -84,7 +86,6 @@ def test_a():
     ----- stdout -----
     test test_durations::test_a ... ok
 
-    0 slowest tests:
     test result: ok. 1 passed; 0 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
@@ -128,6 +129,7 @@ fn durations_with_failing_tests() {
     2 slowest tests:
       test_durations::test_fail ([TIME])
       test_durations::test_pass ([TIME])
+
     test result: FAILED. 1 passed; 1 failed; 0 skipped; finished in [TIME]
 
     ----- stderr -----
