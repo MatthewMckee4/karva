@@ -318,6 +318,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let dry_run = args.dry_run;
     let watch = args.watch;
     let last_failed = args.last_failed;
+    let durations = args.durations;
 
     if watch && dry_run {
         anyhow::bail!("`--watch` and `--dry-run` cannot be used together");
@@ -351,7 +352,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     };
 
     if watch {
-        watch::run_watch_loop(&project, &config, &sub_command, printer)?;
+        watch::run_watch_loop(&project, &config, &sub_command, printer, durations)?;
         return Ok(ExitStatus::Success);
     }
 
@@ -364,6 +365,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         start_time,
         &result,
         sub_command.output_format.as_ref(),
+        durations,
     )?;
 
     if result.stats.is_success() && result.discovery_diagnostics.is_empty() {
@@ -379,6 +381,7 @@ pub(crate) fn print_test_output(
     start_time: Instant,
     result: &AggregatedResults,
     output_format: Option<&OutputFormat>,
+    durations: Option<usize>,
 ) -> Result<()> {
     let mut stdout = printer.stream_for_details().lock();
 
@@ -411,7 +414,29 @@ pub(crate) fn print_test_output(
         }
     }
 
+    if let Some(n) = durations {
+        if n > 0 && !result.durations.is_empty() {
+            let mut sorted: Vec<_> = result.durations.iter().collect();
+            sorted.sort_by(|a, b| b.1.cmp(a.1));
+            let count = n.min(sorted.len());
+
+            writeln!(stdout)?;
+            writeln!(stdout, "{count} slowest tests:")?;
+            for (name, duration) in sorted.into_iter().take(n) {
+                writeln!(
+                    stdout,
+                    "  {} ({})",
+                    name,
+                    karva_logging::time::format_duration(*duration)
+                )?;
+            }
+            writeln!(stdout)?;
+        }
+    }
+
+    let durations_printed = durations.is_some_and(|n| n > 0 && !result.durations.is_empty());
     if (result.diagnostics.is_empty() && result.discovery_diagnostics.is_empty())
+        && !durations_printed
         && result.stats.total() > 0
         && stdout.is_enabled()
     {

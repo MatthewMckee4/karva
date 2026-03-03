@@ -265,6 +265,10 @@ pub struct TestCommand {
     #[clap(long, default_missing_value = "true", num_args=0..1)]
     pub no_cache: Option<bool>,
 
+    /// Show the N slowest tests after the run completes.
+    #[clap(long, value_name = "N")]
+    pub durations: Option<usize>,
+
     /// Print discovered tests without executing them.
     #[clap(long)]
     pub dry_run: bool,

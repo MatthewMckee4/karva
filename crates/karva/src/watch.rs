@@ -20,6 +20,7 @@ fn run_and_print(
     config: &ParallelTestConfig,
     sub_command: &SubTestCommand,
     printer: Printer,
+    durations: Option<usize>,
 ) {
     let start_time = Instant::now();
     match karva_runner::run_parallel_tests(project, config, sub_command) {
@@ -29,6 +30,7 @@ fn run_and_print(
                 start_time,
                 &result,
                 sub_command.output_format.as_ref(),
+                durations,
             ) {
                 tracing::error!("Failed to print test output: {err}");
             }
@@ -57,8 +59,9 @@ pub(crate) fn run_watch_loop(
     config: &ParallelTestConfig,
     sub_command: &SubTestCommand,
     printer: Printer,
+    durations: Option<usize>,
 ) -> Result<()> {
-    run_and_print(project, config, sub_command, printer);
+    run_and_print(project, config, sub_command, printer, durations);
 
     let (tx, file_rx) = unbounded::<Vec<PathBuf>>();
     let mut debouncer = new_debouncer(
@@ -120,7 +123,7 @@ pub(crate) fn run_watch_loop(
                     writeln!(stdout)?;
                 }
 
-                run_and_print(project, config, sub_command, printer);
+                run_and_print(project, config, sub_command, printer, durations);
 
                 print_watching_message(printer)?;
             }
