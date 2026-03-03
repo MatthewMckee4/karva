@@ -1,10 +1,12 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 /// Test metadata used for partitioning decisions
 #[derive(Debug, Clone)]
 struct TestInfo {
     module_name: String,
+    /// The qualified name of the test (e.g., `test_a::test_1`), used for last-failed filtering.
+    qualified_name: String,
     path: String,
     /// Actual runtime from previous test run (if available)
     duration: Option<Duration>,
@@ -94,9 +96,14 @@ pub fn partition_collected_tests(
     package: &karva_collector::CollectedPackage,
     num_workers: usize,
     previous_durations: &HashMap<String, Duration>,
+    last_failed: &HashSet<String>,
 ) -> Vec<Partition> {
     let mut test_infos = Vec::new();
     collect_test_paths_recursive(package, &mut test_infos, previous_durations);
+
+    if !last_failed.is_empty() {
+        test_infos.retain(|info| last_failed.contains(&info.qualified_name));
+    }
 
     // Shuffle tests without durations so they distribute randomly across partitions
     shuffle_tests_without_durations(&mut test_infos);
@@ -214,11 +221,12 @@ fn collect_test_paths_recursive(
 ) {
     for module in package.modules.values() {
         for test_fn_def in &module.test_function_defs {
-            let path = format!("{}::{}", module.path.module_name(), test_fn_def.name);
-            let duration = previous_durations.get(&path).copied();
+            let qualified_name = format!("{}::{}", module.path.module_name(), test_fn_def.name);
+            let duration = previous_durations.get(&qualified_name).copied();
 
             test_infos.push(TestInfo {
                 module_name: module.path.module_name().to_string(),
+                qualified_name,
                 path: format!("{}::{}", module.path.path(), test_fn_def.name),
                 duration,
             });

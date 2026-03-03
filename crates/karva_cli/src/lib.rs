@@ -272,6 +272,10 @@ pub struct TestCommand {
     /// Re-run tests when Python source files change.
     #[clap(long)]
     pub watch: bool,
+
+    /// Re-run only the tests that failed in the previous run.
+    #[clap(long, alias = "lf")]
+    pub last_failed: bool,
 }
 
 impl TestCommand {

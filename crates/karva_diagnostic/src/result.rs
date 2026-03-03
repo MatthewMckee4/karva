@@ -26,6 +26,9 @@ pub struct TestRunResult {
     stats: TestResultStats,
 
     durations: HashMap<QualifiedFunctionName, std::time::Duration>,
+
+    /// Names of tests that failed during this run.
+    failed_tests: Vec<QualifiedFunctionName>,
 }
 
 impl TestRunResult {
@@ -72,6 +75,11 @@ impl TestRunResult {
     ) {
         self.stats.add(result.clone().into());
 
+        if matches!(result, IndividualTestResultKind::Failed) {
+            self.failed_tests
+                .push(test_case_name.function_name().clone());
+        }
+
         if let Some(reporter) = reporter {
             reporter.report_test_case_result(test_case_name, result);
         }
@@ -90,6 +98,10 @@ impl TestRunResult {
 
     pub const fn durations(&self) -> &HashMap<QualifiedFunctionName, std::time::Duration> {
         &self.durations
+    }
+
+    pub fn failed_tests(&self) -> &[QualifiedFunctionName] {
+        &self.failed_tests
     }
 }
 
