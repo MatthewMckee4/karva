@@ -18,6 +18,7 @@ pub struct AggregatedResults {
     pub diagnostics: String,
     pub discovery_diagnostics: String,
     pub failed_tests: Vec<String>,
+    pub durations: HashMap<String, Duration>,
 }
 
 /// Reads and writes test results in the cache directory for a specific run.
@@ -51,6 +52,7 @@ impl Cache {
         let mut all_diagnostics = String::new();
         let mut all_discovery_diagnostics = String::new();
         let mut all_failed_tests = Vec::new();
+        let mut all_durations = HashMap::new();
 
         if self.run_dir.exists() {
             let mut worker_dirs: Vec<Utf8PathBuf> = fs::read_dir(&self.run_dir)?
@@ -77,6 +79,7 @@ impl Cache {
                     &mut all_diagnostics,
                     &mut all_discovery_diagnostics,
                     &mut all_failed_tests,
+                    &mut all_durations,
                 )?;
             }
         }
@@ -86,6 +89,7 @@ impl Cache {
             diagnostics: all_diagnostics,
             discovery_diagnostics: all_discovery_diagnostics,
             failed_tests: all_failed_tests,
+            durations: all_durations,
         })
     }
 
@@ -142,6 +146,7 @@ fn read_worker_results(
     all_diagnostics: &mut String,
     all_discovery_diagnostics: &mut String,
     all_failed_tests: &mut Vec<String>,
+    all_durations: &mut HashMap<String, Duration>,
 ) -> Result<()> {
     let stats_path = worker_dir.join(STATS_FILE);
 
@@ -168,6 +173,13 @@ fn read_worker_results(
         let content = fs::read_to_string(&failed_tests_path)?;
         let failed_tests: Vec<String> = serde_json::from_str(&content)?;
         all_failed_tests.extend(failed_tests);
+    }
+
+    let durations_path = worker_dir.join(DURATIONS_FILE);
+    if durations_path.exists() {
+        let content = fs::read_to_string(&durations_path)?;
+        let durations: HashMap<String, Duration> = serde_json::from_str(&content)?;
+        all_durations.extend(durations);
     }
 
     Ok(())
