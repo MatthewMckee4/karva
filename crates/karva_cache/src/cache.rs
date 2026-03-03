@@ -8,8 +8,8 @@ use karva_diagnostic::{TestResultStats, TestRunResult};
 use ruff_db::diagnostic::{DisplayDiagnosticConfig, DisplayDiagnostics, FileResolver};
 
 use crate::{
-    DIAGNOSTICS_FILE, DISCOVER_DIAGNOSTICS_FILE, DURATIONS_FILE, FAIL_FAST_SIGNAL_FILE, RunHash,
-    STATS_FILE, worker_folder,
+    DIAGNOSTICS_FILE, DISCOVER_DIAGNOSTICS_FILE, DURATIONS_FILE, FAIL_FAST_SIGNAL_FILE,
+    FAILED_TESTS_FILE, LAST_FAILED_FILE, RunHash, STATS_FILE, worker_folder,
 };
 
 /// Aggregated test results collected from all worker processes.
@@ -17,6 +17,7 @@ pub struct AggregatedResults {
     pub stats: TestResultStats,
     pub diagnostics: String,
     pub discovery_diagnostics: String,
+    pub failed_tests: Vec<String>,
 }
 
 /// Reads and writes test results in the cache directory for a specific run.
@@ -49,6 +50,7 @@ impl Cache {
         let mut test_stats = TestResultStats::default();
         let mut all_diagnostics = String::new();
         let mut all_discovery_diagnostics = String::new();
+        let mut all_failed_tests = Vec::new();
 
         if self.run_dir.exists() {
             let mut worker_dirs: Vec<Utf8PathBuf> = fs::read_dir(&self.run_dir)?
@@ -74,6 +76,7 @@ impl Cache {
                     &mut test_stats,
                     &mut all_diagnostics,
                     &mut all_discovery_diagnostics,
+                    &mut all_failed_tests,
                 )?;
             }
         }
@@ -82,6 +85,7 @@ impl Cache {
             stats: test_stats,
             diagnostics: all_diagnostics,
             discovery_diagnostics: all_discovery_diagnostics,
+            failed_tests: all_failed_tests,
         })
     }
 
@@ -116,6 +120,17 @@ impl Cache {
         let json = serde_json::to_string_pretty(result.durations())?;
         fs::write(&durations_path, json)?;
 
+        if !result.failed_tests().is_empty() {
+            let failed_tests: Vec<String> = result
+                .failed_tests()
+                .iter()
+                .map(ToString::to_string)
+                .collect();
+            let failed_path = worker_dir.join(FAILED_TESTS_FILE);
+            let json = serde_json::to_string_pretty(&failed_tests)?;
+            fs::write(failed_path, json)?;
+        }
+
         Ok(())
     }
 }
@@ -126,6 +141,7 @@ fn read_worker_results(
     aggregated_stats: &mut TestResultStats,
     all_diagnostics: &mut String,
     all_discovery_diagnostics: &mut String,
+    all_failed_tests: &mut Vec<String>,
 ) -> Result<()> {
     let stats_path = worker_dir.join(STATS_FILE);
 
@@ -147,7 +163,38 @@ fn read_worker_results(
         all_discovery_diagnostics.push_str(&content);
     }
 
+    let failed_tests_path = worker_dir.join(FAILED_TESTS_FILE);
+    if failed_tests_path.exists() {
+        let content = fs::read_to_string(&failed_tests_path)?;
+        let failed_tests: Vec<String> = serde_json::from_str(&content)?;
+        all_failed_tests.extend(failed_tests);
+    }
+
     Ok(())
+}
+
+/// Writes the list of failed tests to the cache directory root.
+///
+/// This overwrites any previous last-failed list.
+pub fn write_last_failed(cache_dir: &Utf8Path, failed_tests: &[String]) -> Result<()> {
+    fs::create_dir_all(cache_dir)?;
+    let path = cache_dir.join(LAST_FAILED_FILE);
+    let json = serde_json::to_string_pretty(failed_tests)?;
+    fs::write(path, json)?;
+    Ok(())
+}
+
+/// Reads the list of previously failed tests from the cache directory root.
+///
+/// Returns an empty list if the file does not exist.
+pub fn read_last_failed(cache_dir: &Utf8Path) -> Result<Vec<String>> {
+    let path = cache_dir.join(LAST_FAILED_FILE);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let content = fs::read_to_string(&path)?;
+    let failed_tests: Vec<String> = serde_json::from_str(&content)?;
+    Ok(failed_tests)
 }
 
 /// Reads durations from the most recent test run.

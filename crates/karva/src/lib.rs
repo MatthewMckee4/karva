@@ -317,6 +317,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
     let num_workers = args.num_workers;
     let dry_run = args.dry_run;
     let watch = args.watch;
+    let last_failed = args.last_failed;
 
     if watch && dry_run {
         anyhow::bail!("`--watch` and `--dry-run` cannot be used together");
@@ -346,6 +347,7 @@ pub(crate) fn test(args: TestCommand) -> Result<ExitStatus> {
         num_workers,
         no_cache,
         create_ctrlc_handler: true,
+        last_failed,
     };
 
     if watch {

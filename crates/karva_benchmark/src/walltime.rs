@@ -53,6 +53,7 @@ fn test_project(project: &Project) {
         num_workers,
         no_cache: false,
         create_ctrlc_handler: false,
+        last_failed: false,
     };
 
     let args = SubTestCommand {

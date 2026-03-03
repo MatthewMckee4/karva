@@ -49,6 +49,7 @@ karva test [OPTIONS] [PATH]...
 <p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-test--dry-run"><a href="#karva-test--dry-run"><code>--dry-run</code></a></dt><dd><p>Print discovered tests without executing them</p>
 </dd><dt id="karva-test--fail-fast"><a href="#karva-test--fail-fast"><code>--fail-fast</code></a></dt><dd><p>When set, the test will fail immediately if any test fails</p>
 </dd><dt id="karva-test--help"><a href="#karva-test--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help (see a summary with '-h')</p>
+</dd><dt id="karva-test--last-failed"><a href="#karva-test--last-failed"><code>--last-failed</code></a>, <code>--lf</code></dt><dd><p>Re-run only the tests that failed in the previous run</p>
 </dd><dt id="karva-test--match"><a href="#karva-test--match"><code>--match</code></a>, <code>-m</code> <i>name-patterns</i></dt><dd><p>Filter tests by name using a regular expression.</p>
 <p>Only tests whose fully qualified name matches the pattern will run. Uses partial matching (the pattern can match anywhere in the name). When specified multiple times, a test runs if it matches any of the patterns.</p>
 <p>Examples: <code>-m auth</code>, <code>-m '^test::test_login'</code>, <code>-m 'slow|fast'</code>.</p>
