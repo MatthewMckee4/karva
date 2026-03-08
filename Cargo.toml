@@ -32,7 +32,7 @@ karva_worker = { path = "crates/karva_worker" }
 anyhow = { version = "1.0.102" }
 argfile = { version = "1.0.0" }
 camino = { version = "1.2", features = ["serde1"] }
-chrono = { version = "0.4.43", default-features = false, features = ["clock"] }
+chrono = { version = "0.4.44", default-features = false, features = ["clock"] }
 clap = { version = "4.5.60", features = ["derive", "wrap_help"] }
 codspeed-criterion-compat = { version = "4.3.0", default-features = false }
 colored = { version = "3.1.1" }
