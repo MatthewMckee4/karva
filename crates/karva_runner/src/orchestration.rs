@@ -16,7 +16,7 @@ use karva_cache::{
 use karva_cli::{PartitionSelection, SubTestCommand};
 use karva_collector::{CollectedPackage, CollectionSettings};
 use karva_logging::Printer;
-use karva_logging::time::format_duration;
+use karva_logging::time::{format_duration, format_duration_bracketed};
 use karva_project::Project;
 
 use crate::binary::find_karva_worker_binary;
@@ -24,19 +24,40 @@ use crate::collection::ParallelCollector;
 use crate::partition::{Partition, partition_collected_tests};
 use crate::worker_args::{WorkerSpawn, worker_command};
 
+/// Width that result labels (`PASS`, `FAIL`, `SIGINT`) are right-padded to so
+/// columns align. Mirrors the constant in `karva_diagnostic::reporter`.
+const LABEL_COLUMN_WIDTH: usize = 12;
+
+/// How `wait_for_completion` exited.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WaitOutcome {
+    /// Every worker exited on its own.
+    AllCompleted,
+    /// Ctrl+C was received; remaining workers must be killed.
+    Cancelled,
+    /// A worker hit the fail-fast budget; remaining workers must be killed.
+    FailFast,
+}
+
 #[derive(Debug)]
 struct Worker {
     id: usize,
     child: Child,
     start_time: Instant,
+    /// Number of tests assigned to this worker. Used to give a useful count in
+    /// the cancellation summary; the orchestrator can't see worker progress
+    /// (workers only flush results to the cache on exit), so this is an upper
+    /// bound on the tests still running in the worker.
+    test_count: usize,
 }
 
 impl Worker {
-    fn new(id: usize, child: Child) -> Self {
+    fn new(id: usize, child: Child, test_count: usize) -> Self {
         Self {
             id,
             child,
             start_time: Instant::now(),
+            test_count,
         }
     }
 
@@ -51,8 +72,8 @@ struct WorkerManager {
 }
 
 impl WorkerManager {
-    fn spawn(&mut self, worker_id: usize, child: Child) {
-        self.workers.push(Worker::new(worker_id, child));
+    fn spawn(&mut self, worker_id: usize, child: Child, test_count: usize) {
+        self.workers.push(Worker::new(worker_id, child, test_count));
     }
 
     /// Wait for all workers to complete.
@@ -62,9 +83,9 @@ impl WorkerManager {
         &mut self,
         shutdown_rx: Option<&Receiver<()>>,
         cache: Option<&RunCache>,
-    ) {
+    ) -> WaitOutcome {
         if self.workers.is_empty() {
-            return;
+            return WaitOutcome::AllCompleted;
         }
 
         tracing::info!(
@@ -77,7 +98,7 @@ impl WorkerManager {
                 match rx.try_recv() {
                     Ok(()) | Err(TryRecvError::Disconnected) => {
                         tracing::info!("Shutdown requested — stopping remaining workers");
-                        break;
+                        return WaitOutcome::Cancelled;
                     }
                     Err(TryRecvError::Empty) => {}
                 }
@@ -87,7 +108,7 @@ impl WorkerManager {
                 && cache.has_fail_fast_signal()
             {
                 tracing::info!("Fail-fast signal received — stopping remaining workers");
-                break;
+                return WaitOutcome::FailFast;
             }
 
             self.workers
@@ -118,11 +139,26 @@ impl WorkerManager {
 
             if self.workers.is_empty() {
                 tracing::info!("All workers completed");
-                break;
+                return WaitOutcome::AllCompleted;
             }
 
             std::thread::sleep(WORKER_POLL_INTERVAL);
         }
+    }
+
+    /// Print a nextest-style cancellation banner naming the number of tests
+    /// still running across all live workers.
+    fn report_cancellation(&self, printer: Printer) {
+        if self.workers.is_empty() {
+            return;
+        }
+        let total: usize = self.workers.iter().map(|w| w.test_count).sum();
+        let label = "Cancelling".red().bold();
+        let mut stdout = printer.stream_for_test_result().lock();
+        let _ = writeln!(
+            stdout,
+            "  {label} due to interrupt: {total} tests still running"
+        );
     }
 
     /// Kill and wait on any remaining worker processes.
@@ -130,7 +166,30 @@ impl WorkerManager {
     /// Uses two separate loops: the first sends kill signals to all workers
     /// immediately, and the second reaps them. This ensures every worker
     /// receives the signal without waiting for earlier ones to exit first.
-    fn kill_remaining(&mut self) {
+    ///
+    /// When `print_sigint` is `true`, emit a `SIGINT [duration] worker N`
+    /// line per remaining worker before killing it, mirroring nextest's
+    /// per-test cancellation output (we don't track individual tests at the
+    /// orchestrator level, so the line is per-worker).
+    fn kill_remaining(&mut self, printer: Printer, print_sigint: bool) {
+        if print_sigint && !self.workers.is_empty() {
+            let mut stdout = printer.stream_for_test_result().lock();
+            for worker in &self.workers {
+                let label = "SIGINT".red().bold();
+                let padding = " ".repeat(LABEL_COLUMN_WIDTH.saturating_sub("SIGINT".len()));
+                let duration_str = format_duration_bracketed(worker.duration());
+                let test_label = if worker.test_count == 1 {
+                    "test"
+                } else {
+                    "tests"
+                };
+                let _ = writeln!(
+                    stdout,
+                    "{padding}{label} {duration_str} worker {} ({} {test_label})",
+                    worker.id, worker.test_count
+                );
+            }
+        }
         for worker in &mut self.workers {
             let _ = worker.child.kill();
         }
@@ -183,7 +242,7 @@ fn spawn_workers(spawn: &WorkerSpawn, partitions: &[Partition]) -> Result<Worker
             partition.tests().len()
         );
 
-        worker_manager.spawn(worker_id, child);
+        worker_manager.spawn(worker_id, child, partition.tests().len());
     }
 
     Ok(worker_manager)
@@ -240,6 +299,16 @@ pub fn run_parallel_tests(
     args: &SubTestCommand,
     printer: Printer,
 ) -> Result<RunOutput> {
+    // Install the Ctrl+C handler before any potentially long-running work
+    // (collection, partitioning, worker spawn). Otherwise an early SIGINT
+    // hits the default disposition and the run terminates silently with no
+    // cancellation banner.
+    let shutdown_rx = if config.create_ctrlc_handler {
+        Some(shutdown_receiver())
+    } else {
+        None
+    };
+
     let collected = collect_tests(project)?;
 
     let total_tests = collected.test_count();
@@ -327,16 +396,13 @@ pub fn run_parallel_tests(
     };
     let mut worker_manager = spawn_workers(&spawn, &partitions)?;
 
-    let shutdown_rx = if config.create_ctrlc_handler {
-        Some(shutdown_receiver())
-    } else {
-        None
-    };
-
     let max_fail_cache = project.settings().max_fail().has_limit().then_some(&cache);
 
-    worker_manager.wait_for_completion(shutdown_rx, max_fail_cache);
-    worker_manager.kill_remaining();
+    let outcome = worker_manager.wait_for_completion(shutdown_rx, max_fail_cache);
+    if outcome == WaitOutcome::Cancelled {
+        worker_manager.report_cancellation(printer);
+    }
+    worker_manager.kill_remaining(printer, outcome == WaitOutcome::Cancelled);
 
     let results = cache.aggregate_results()?;
 
