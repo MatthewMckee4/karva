@@ -3,8 +3,8 @@ pub(crate) mod cache;
 pub(crate) mod hash;
 
 pub use cache::{
-    AggregatedResults, PruneResult, RunCache, clean_cache, prune_cache, read_last_failed,
-    read_recent_durations, write_last_failed,
+    AggregatedResults, CurrentTest, PruneResult, RunCache, clean_cache, prune_cache,
+    read_last_failed, read_recent_durations, write_last_failed,
 };
 pub use hash::RunHash;
 pub use karva_diagnostic::{DisplayFlakyTests, FlakyTest};

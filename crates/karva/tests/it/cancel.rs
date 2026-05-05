@@ -57,11 +57,12 @@ def test_slow_e(): time.sleep(60)
         .expect("Failed to wait on karva process");
 
     let mut stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    // The five fast tests can complete in any order across the two
-    // workers, so sort the PASS lines for a deterministic snapshot. The
-    // ordering of every other line (Starting / Cancelling / SIGINT /
-    // summary / error) is deterministic.
-    sort_pass_lines(&mut stdout);
+    // Worker scheduling means PASS and SIGINT lines can appear in any
+    // order. Sort each block independently for a deterministic snapshot.
+    // The ordering of every other line (Starting / Cancelling / summary
+    // / error) is deterministic.
+    sort_block_starting_with(&mut stdout, "PASS");
+    sort_block_starting_with(&mut stdout, "SIGINT");
 
     assert_snapshot!(stdout, @r"
         Starting 10 tests across 2 workers
@@ -71,8 +72,8 @@ def test_slow_e(): time.sleep(60)
             PASS [TIME] test_mixed::test_fast_d
             PASS [TIME] test_mixed::test_fast_e
       Cancelling due to interrupt: 10 tests still running
-          SIGINT [TIME] worker 0 (5 tests)
-          SIGINT [TIME] worker 1 (5 tests)
+          SIGINT [TIME] test_mixed::test_slow_a
+          SIGINT [TIME] test_mixed::test_slow_b
     ────────────
          Summary [TIME] 0 tests run: 0 passed, 0 skipped
     error: no tests to run
@@ -80,20 +81,18 @@ def test_slow_e(): time.sleep(60)
     ");
 }
 
-/// Sort the contiguous block of `PASS` lines in `stdout` so the snapshot
-/// is deterministic. Workers run in parallel so the PASS-line ordering
-/// is racy, but every other line is emitted by the orchestrator in a
-/// fixed order.
-fn sort_pass_lines(stdout: &mut String) {
+/// Sort the contiguous block of lines whose first token is `label` so
+/// the snapshot is deterministic. Workers run in parallel so PASS- and
+/// SIGINT-line ordering is racy, but every other line is emitted by
+/// the orchestrator in a fixed order.
+fn sort_block_starting_with(stdout: &mut String, label: &str) {
     let lines: Vec<&str> = stdout.lines().collect();
-    let first_pass = lines
-        .iter()
-        .position(|l| l.trim_start().starts_with("PASS"));
-    let Some(start) = first_pass else { return };
+    let first = lines.iter().position(|l| l.trim_start().starts_with(label));
+    let Some(start) = first else { return };
     let end = start
         + lines[start..]
             .iter()
-            .take_while(|l| l.trim_start().starts_with("PASS"))
+            .take_while(|l| l.trim_start().starts_with(label))
             .count();
     let mut sorted: Vec<String> = lines[start..end].iter().map(ToString::to_string).collect();
     sorted.sort();

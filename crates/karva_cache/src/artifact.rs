@@ -32,6 +32,10 @@ pub enum CacheFile {
     FailFastSignal,
     /// Cache-root JSON: list of last-run failed test names.
     LastFailed,
+    /// Per-worker JSON: name + start time of the test currently executing,
+    /// or absent when the worker is between tests. Used by the orchestrator
+    /// to render per-test `SIGINT` lines on Ctrl+C.
+    CurrentTest,
 }
 
 impl CacheFile {
@@ -46,6 +50,7 @@ impl CacheFile {
             Self::Coverage => "coverage.json",
             Self::FailFastSignal => "fail-fast",
             Self::LastFailed => "last-failed.json",
+            Self::CurrentTest => "current_test.json",
         }
     }
 

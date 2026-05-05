@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::fmt::Write;
 use std::process::{Child, Stdio};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
@@ -162,20 +162,40 @@ impl WorkerManager {
 
     /// Stop remaining workers and emit nextest-style cancellation lines.
     ///
-    /// Workers are killed first (and reaped) so any in-flight `PASS`/`FAIL`
-    /// lines they were writing to the inherited stdout land before our
-    /// banner — otherwise the cancellation block interleaves with worker
-    /// output. A short settle pause lets any kernel-buffered writes drain
-    /// for the same reason.
+    /// Each worker writes a `current_test.json` file at the start of every
+    /// test and removes it when the test finishes. We read those files
+    /// *before* killing — once we kill the worker, that file may be removed
+    /// by an in-flight finalizer or simply lost — and remember a
+    /// `(worker_id, test name, test start time)` snapshot for each.
     ///
-    /// We emit a `SIGINT [duration] worker N (M tests)` line per remaining
-    /// worker, mirroring nextest's per-test cancellation output. We don't
-    /// track individual tests at the orchestrator level, so the line is
-    /// per-worker.
-    fn cancel_and_kill(&mut self, printer: Printer) {
+    /// Workers are killed and reaped before we print so any in-flight
+    /// `PASS`/`FAIL` lines they were writing to the inherited stdout land
+    /// before our banner; otherwise the cancellation block interleaves
+    /// with worker output. A short settle pause lets any kernel-buffered
+    /// writes drain.
+    fn cancel_and_kill(&mut self, printer: Printer, cache: &RunCache) {
         if self.workers.is_empty() {
             return;
         }
+
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+            .unwrap_or(0);
+
+        let in_flight: Vec<_> = self
+            .workers
+            .iter()
+            .map(|worker| {
+                let current = cache.read_current_test(worker.id);
+                let elapsed = current.as_ref().and_then(|c| {
+                    now_ms
+                        .checked_sub(c.start_unix_ms)
+                        .map(Duration::from_millis)
+                });
+                (worker.id, current.map(|c| c.name), elapsed)
+            })
+            .collect();
 
         let total_tests: usize = self.workers.iter().map(|w| w.test_count).sum();
 
@@ -194,21 +214,37 @@ impl WorkerManager {
             stdout,
             "  {cancel_label} due to {interrupt_label}: {total_tests} tests still running"
         );
-        for worker in &self.workers {
-            let label = "SIGINT".yellow().bold();
-            let padding = " ".repeat(LABEL_COLUMN_WIDTH.saturating_sub("SIGINT".len()));
-            let duration_str = format_duration_bracketed(worker.duration());
-            let test_label = if worker.test_count == 1 {
-                "test"
-            } else {
-                "tests"
-            };
-            let _ = writeln!(
-                stdout,
-                "{padding}{label} {duration_str} worker {} ({} {test_label})",
-                worker.id, worker.test_count
-            );
+
+        let label = "SIGINT".yellow().bold();
+        let padding = " ".repeat(LABEL_COLUMN_WIDTH.saturating_sub("SIGINT".len()));
+        for (worker_id, test_name, elapsed) in in_flight {
+            let duration_str = format_duration_bracketed(elapsed.unwrap_or_default());
+            match test_name {
+                Some(name) => {
+                    let colored = format_in_flight_test(&name);
+                    let _ = writeln!(stdout, "{padding}{label} {duration_str} {colored}");
+                }
+                None => {
+                    let _ = writeln!(
+                        stdout,
+                        "{padding}{label} {duration_str} worker {worker_id} (between tests)"
+                    );
+                }
+            }
         }
+    }
+}
+
+/// Render a `module::function[params]` test name as it was serialised by
+/// the worker (`QualifiedTestName::Display`), colouring the module cyan
+/// and the function blue+bold to match the per-test result line format.
+fn format_in_flight_test(name: &str) -> String {
+    if let Some((module, rest)) = name.split_once("::") {
+        let module = module.cyan();
+        let rest = rest.blue().bold();
+        format!("{module}::{rest}")
+    } else {
+        name.blue().bold().to_string()
     }
 }
 
@@ -413,7 +449,7 @@ pub fn run_parallel_tests(
 
     let outcome = worker_manager.wait_for_completion(shutdown_rx, max_fail_cache);
     if outcome == WaitOutcome::Cancelled {
-        worker_manager.cancel_and_kill(printer);
+        worker_manager.cancel_and_kill(printer, &cache);
     } else {
         worker_manager.kill_remaining();
     }
