@@ -3,6 +3,8 @@
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+use insta::assert_snapshot;
+
 use crate::common::TestContext;
 
 #[test]
@@ -19,6 +21,7 @@ def test_slow():
 
     let child = context
         .command()
+        .arg("--no-parallel")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -26,7 +29,7 @@ def test_slow():
 
     let pid = child.id();
 
-    // Wait long enough for karva to launch its workers and reach the
+    // Wait long enough for karva to launch its worker and reach the
     // wait-for-completion loop. The slow test sleeps for 60s so karva will
     // still be running when we send the signal.
     std::thread::sleep(Duration::from_secs(5));
@@ -43,12 +46,13 @@ def test_slow():
 
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    assert!(
-        stdout.contains("Cancelling due to interrupt"),
-        "expected cancellation banner in stdout, got:\n{stdout}"
-    );
-    assert!(
-        stdout.contains("SIGINT"),
-        "expected SIGINT line in stdout, got:\n{stdout}"
-    );
+    assert_snapshot!(stdout, @r"
+        Starting 1 test across 1 worker
+      Cancelling due to interrupt: 1 tests still running
+          SIGINT [TIME] worker 0 (1 test)
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+    error: no tests to run
+    (hint: use `--no-tests` to customize)
+    ");
 }
