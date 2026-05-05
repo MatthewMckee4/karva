@@ -146,55 +146,67 @@ impl WorkerManager {
         }
     }
 
-    /// Print a nextest-style cancellation banner naming the number of tests
-    /// still running across all live workers.
-    fn report_cancellation(&self, printer: Printer) {
-        if self.workers.is_empty() {
-            return;
-        }
-        let total: usize = self.workers.iter().map(|w| w.test_count).sum();
-        let label = "Cancelling".red().bold();
-        let mut stdout = printer.stream_for_test_result().lock();
-        let _ = writeln!(
-            stdout,
-            "  {label} due to interrupt: {total} tests still running"
-        );
-    }
-
     /// Kill and wait on any remaining worker processes.
     ///
     /// Uses two separate loops: the first sends kill signals to all workers
     /// immediately, and the second reaps them. This ensures every worker
     /// receives the signal without waiting for earlier ones to exit first.
-    ///
-    /// When `print_sigint` is `true`, emit a `SIGINT [duration] worker N`
-    /// line per remaining worker before killing it, mirroring nextest's
-    /// per-test cancellation output (we don't track individual tests at the
-    /// orchestrator level, so the line is per-worker).
-    fn kill_remaining(&mut self, printer: Printer, print_sigint: bool) {
-        if print_sigint && !self.workers.is_empty() {
-            let mut stdout = printer.stream_for_test_result().lock();
-            for worker in &self.workers {
-                let label = "SIGINT".red().bold();
-                let padding = " ".repeat(LABEL_COLUMN_WIDTH.saturating_sub("SIGINT".len()));
-                let duration_str = format_duration_bracketed(worker.duration());
-                let test_label = if worker.test_count == 1 {
-                    "test"
-                } else {
-                    "tests"
-                };
-                let _ = writeln!(
-                    stdout,
-                    "{padding}{label} {duration_str} worker {} ({} {test_label})",
-                    worker.id, worker.test_count
-                );
-            }
-        }
+    fn kill_remaining(&mut self) {
         for worker in &mut self.workers {
             let _ = worker.child.kill();
         }
         for worker in &mut self.workers {
             let _ = worker.child.wait();
+        }
+    }
+
+    /// Stop remaining workers and emit nextest-style cancellation lines.
+    ///
+    /// Workers are killed first (and reaped) so any in-flight `PASS`/`FAIL`
+    /// lines they were writing to the inherited stdout land before our
+    /// banner — otherwise the cancellation block interleaves with worker
+    /// output. A short settle pause lets any kernel-buffered writes drain
+    /// for the same reason.
+    ///
+    /// We emit a `SIGINT [duration] worker N (M tests)` line per remaining
+    /// worker, mirroring nextest's per-test cancellation output. We don't
+    /// track individual tests at the orchestrator level, so the line is
+    /// per-worker.
+    fn cancel_and_kill(&mut self, printer: Printer) {
+        if self.workers.is_empty() {
+            return;
+        }
+
+        let total_tests: usize = self.workers.iter().map(|w| w.test_count).sum();
+
+        for worker in &mut self.workers {
+            let _ = worker.child.kill();
+        }
+        for worker in &mut self.workers {
+            let _ = worker.child.wait();
+        }
+        std::thread::sleep(STDOUT_SETTLE);
+
+        let mut stdout = printer.stream_for_test_result().lock();
+        let cancel_label = "Cancelling".red().bold();
+        let _ = writeln!(
+            stdout,
+            "  {cancel_label} due to interrupt: {total_tests} tests still running"
+        );
+        for worker in &self.workers {
+            let label = "SIGINT".red().bold();
+            let padding = " ".repeat(LABEL_COLUMN_WIDTH.saturating_sub("SIGINT".len()));
+            let duration_str = format_duration_bracketed(worker.duration());
+            let test_label = if worker.test_count == 1 {
+                "test"
+            } else {
+                "tests"
+            };
+            let _ = writeln!(
+                stdout,
+                "{padding}{label} {duration_str} worker {} ({} {test_label})",
+                worker.id, worker.test_count
+            );
         }
     }
 }
@@ -400,9 +412,10 @@ pub fn run_parallel_tests(
 
     let outcome = worker_manager.wait_for_completion(shutdown_rx, max_fail_cache);
     if outcome == WaitOutcome::Cancelled {
-        worker_manager.report_cancellation(printer);
+        worker_manager.cancel_and_kill(printer);
+    } else {
+        worker_manager.kill_remaining();
     }
-    worker_manager.kill_remaining(printer, outcome == WaitOutcome::Cancelled);
 
     let results = cache.aggregate_results()?;
 
@@ -424,3 +437,6 @@ pub fn run_parallel_tests(
 
 const MIN_TESTS_PER_WORKER: usize = 5;
 const WORKER_POLL_INTERVAL: Duration = Duration::from_millis(10);
+/// Pause after killing workers to let kernel-buffered output drain to
+/// stdout before we emit the cancellation banner.
+const STDOUT_SETTLE: Duration = Duration::from_millis(50);
