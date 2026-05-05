@@ -188,13 +188,14 @@ impl WorkerManager {
         std::thread::sleep(STDOUT_SETTLE);
 
         let mut stdout = printer.stream_for_test_result().lock();
-        let cancel_label = "Cancelling".red().bold();
+        let cancel_label = "Cancelling".yellow().bold();
+        let interrupt_label = "interrupt".yellow().bold();
         let _ = writeln!(
             stdout,
-            "  {cancel_label} due to interrupt: {total_tests} tests still running"
+            "  {cancel_label} due to {interrupt_label}: {total_tests} tests still running"
         );
         for worker in &self.workers {
-            let label = "SIGINT".red().bold();
+            let label = "SIGINT".yellow().bold();
             let padding = " ".repeat(LABEL_COLUMN_WIDTH.saturating_sub("SIGINT".len()));
             let duration_str = format_duration_bracketed(worker.duration());
             let test_label = if worker.test_count == 1 {
