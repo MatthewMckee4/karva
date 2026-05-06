@@ -1,4 +1,7 @@
 use std::fmt::Write;
+use std::fs::OpenOptions;
+use std::io::Write as _;
+use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use camino::Utf8PathBuf;
@@ -55,6 +58,16 @@ pub trait Reporter: Send + Sync {
     /// reporter can clear any in-flight state recorded by
     /// [`Self::report_test_started`]. Default no-op.
     fn report_test_finished(&self, test_name: &QualifiedTestName) {
+        let _ = test_name;
+    }
+
+    /// Notify that a test has fully completed for accounting purposes.
+    ///
+    /// Called exactly once per test (after every attempt has run for retried
+    /// tests, after the single attempt for non-retried tests). Reporters
+    /// that drive a progress display use this hook so the count advances
+    /// once per test rather than once per attempt. Default no-op.
+    fn notify_test_completed(&self, test_name: &QualifiedTestName) {
         let _ = test_name;
     }
 }
@@ -215,6 +228,77 @@ impl Reporter for TestCaseReporter {
         if let Some(path) = self.progress_file.as_ref() {
             let _ = std::fs::remove_file(path);
         }
+    }
+}
+
+/// Wraps another reporter and appends one byte to a file each time a test
+/// completes (counted once per test, regardless of retries).
+///
+/// The orchestrator polls the file's length to drive a live progress
+/// display without coordinating with workers via a richer protocol. The
+/// append uses `O_APPEND`, which is atomic on POSIX, so the orchestrator
+/// can read the length concurrently without locking.
+pub struct ProgressTrackingReporter<R: Reporter> {
+    inner: R,
+    progress_file: PathBuf,
+}
+
+impl<R: Reporter> ProgressTrackingReporter<R> {
+    pub fn new(inner: R, progress_file: PathBuf) -> Self {
+        Self {
+            inner,
+            progress_file,
+        }
+    }
+
+    fn append_tick(&self) {
+        if let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.progress_file)
+        {
+            let _ = file.write_all(b"\x01");
+        }
+    }
+}
+
+impl<R: Reporter> Reporter for ProgressTrackingReporter<R> {
+    fn report_test_case_result(
+        &self,
+        test_name: &QualifiedTestName,
+        result_kind: IndividualTestResultKind,
+        duration: Duration,
+    ) {
+        self.inner
+            .report_test_case_result(test_name, result_kind, duration);
+    }
+
+    fn report_test_attempt(
+        &self,
+        test_name: &QualifiedTestName,
+        attempt: u32,
+        result_kind: IndividualTestResultKind,
+        duration: Duration,
+    ) {
+        self.inner
+            .report_test_attempt(test_name, attempt, result_kind, duration);
+    }
+
+    fn report_test_slow(&self, test_name: &QualifiedTestName, duration: Duration) {
+        self.inner.report_test_slow(test_name, duration);
+    }
+
+    fn report_test_started(&self, test_name: &QualifiedTestName) {
+        self.inner.report_test_started(test_name);
+    }
+
+    fn report_test_finished(&self, test_name: &QualifiedTestName) {
+        self.inner.report_test_finished(test_name);
+    }
+
+    fn notify_test_completed(&self, test_name: &QualifiedTestName) {
+        self.inner.notify_test_completed(test_name);
+        self.append_tick();
     }
 }
 

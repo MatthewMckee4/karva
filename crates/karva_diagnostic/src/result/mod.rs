@@ -65,6 +65,7 @@ impl TestRunResult {
 
         if let Some(reporter) = reporter {
             reporter.report_test_case_result(test_case_name, result, duration);
+            reporter.notify_test_completed(test_case_name);
         }
 
         self.durations
@@ -90,7 +91,7 @@ impl TestRunResult {
         duration: std::time::Duration,
         passed_on: u32,
         total_attempts: u32,
-        _reporter: Option<&dyn Reporter>,
+        reporter: Option<&dyn Reporter>,
     ) {
         self.stats.add(result.clone().into());
 
@@ -106,6 +107,10 @@ impl TestRunResult {
                 total_attempts,
                 duration,
             ));
+        }
+
+        if let Some(reporter) = reporter {
+            reporter.notify_test_completed(test_case_name);
         }
 
         self.durations

@@ -22,6 +22,7 @@ use karva_project::Project;
 use crate::binary::find_karva_worker_binary;
 use crate::collection::ParallelCollector;
 use crate::partition::{Partition, partition_collected_tests};
+use crate::progress::ProgressDisplay;
 use crate::worker_args::{WorkerSpawn, worker_command};
 
 /// Width that result labels (`PASS`, `FAIL`, `SIGINT`) are right-padded to so
@@ -480,7 +481,18 @@ pub fn run_parallel_tests(
 
     let max_fail_cache = project.settings().max_fail().has_limit().then_some(&cache);
 
+    let progress = ProgressDisplay::start(
+        project.settings().terminal().show_progress,
+        total_tests as u64,
+        cache.clone(),
+    );
+
     let outcome = worker_manager.wait_for_completion(shutdown_rx, max_fail_cache);
+
+    if let Some(progress) = progress {
+        progress.finish();
+    }
+
     let interrupted_tests = if outcome == WaitOutcome::Cancelled {
         worker_manager.cancel_and_kill(printer, &cache)
     } else {

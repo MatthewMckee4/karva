@@ -2,6 +2,7 @@ mod binary;
 mod collection;
 mod orchestration;
 mod partition;
+mod progress;
 mod shutdown;
 mod worker_args;
 
