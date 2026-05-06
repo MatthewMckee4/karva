@@ -57,6 +57,13 @@ def test_slow_e(): time.sleep(60)
         .expect("Failed to wait on karva process");
 
     let mut stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    // Which two of the five slow tests are in flight when SIGINT arrives
+    // depends on partitioning and timing, so collapse the suffix to keep
+    // the snapshot stable across runs.
+    stdout = regex::Regex::new(r"test_slow_[a-e]")
+        .unwrap()
+        .replace_all(&stdout, "test_slow_X")
+        .into_owned();
     // Worker scheduling means PASS and SIGINT lines can appear in any
     // order. Sort each block independently for a deterministic snapshot.
     // The ordering of every other line (Starting / Cancelling / summary
@@ -72,8 +79,8 @@ def test_slow_e(): time.sleep(60)
             PASS [TIME] test_mixed::test_fast_d
             PASS [TIME] test_mixed::test_fast_e
       Cancelling due to interrupt: 10 tests still running
-          SIGINT [TIME] test_mixed::test_slow_a
-          SIGINT [TIME] test_mixed::test_slow_b
+          SIGINT [TIME] test_mixed::test_slow_X
+          SIGINT [TIME] test_mixed::test_slow_X
     ────────────
          Summary [TIME] 0 tests run: 0 passed, 0 skipped
     error: no tests to run
