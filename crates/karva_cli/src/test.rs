@@ -4,8 +4,8 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use karva_logging::{FinalStatusLevel, StatusLevel, TerminalColor};
 use karva_metadata::{
-    CovFailUnder, CoverageOptions, MaxFail, Options, SlowTimeoutSecs, SrcOptions, TerminalOptions,
-    TestOptions, TestTimeoutSecs,
+    CovFailUnder, CoverageOptions, MaxFail, Options, OverrideOptions, SlowTimeoutSecs, SrcOptions,
+    TerminalOptions, TestOptions, TestTimeoutSecs,
 };
 
 use crate::enums::{CovReport, NoTests, OutputFormat, RunIgnored};
@@ -220,6 +220,21 @@ pub struct SubTestCommand {
     /// for direct use.
     #[clap(long, hide = true, value_name = "PATH")]
     pub cov_data_file: Option<Utf8PathBuf>,
+
+    /// Internal: a single per-test override entry, encoded as JSON.
+    ///
+    /// Workers receive overrides from the main process via this flag, one
+    /// entry per occurrence. Users configure overrides via
+    /// `[[profile.<name>.overrides]]` in `karva.toml` rather than this
+    /// flag.
+    #[clap(
+        long = "override-json",
+        hide = true,
+        value_name = "JSON",
+        action = clap::ArgAction::Append,
+        value_parser = parse_override_json,
+    )]
+    pub override_json: Vec<OverrideOptions>,
 }
 
 #[derive(Debug, Parser)]
@@ -363,6 +378,7 @@ impl SubTestCommand {
                 fail_under: self.cov_fail_under.map(CovFailUnder),
                 disabled: self.no_cov.then_some(true),
             }),
+            overrides: self.override_json,
         }
     }
 }
@@ -375,6 +391,15 @@ impl TestCommand {
         }
         sub_command.into_options()
     }
+}
+
+/// Parse a `--override-json` argument from its JSON encoding.
+///
+/// The main process forwards each `[[profile.<name>.overrides]]` entry to
+/// the worker via this flag, so the JSON must round-trip the
+/// [`OverrideOptions`] schema (including filter validation).
+fn parse_override_json(raw: &str) -> Result<OverrideOptions, String> {
+    serde_json::from_str(raw).map_err(|err| err.to_string())
 }
 
 /// Parse and validate a `--cov-fail-under=N` argument.

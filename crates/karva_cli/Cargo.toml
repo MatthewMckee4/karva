@@ -17,6 +17,7 @@ karva_version = { workspace = true }
 camino = { workspace = true }
 clap = { workspace = true, features = ["wrap_help", "string", "env"] }
 ruff_db = { workspace = true }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

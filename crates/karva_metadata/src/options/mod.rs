@@ -12,16 +12,14 @@ pub use config::{
 };
 pub use overrides::ProjectOptionsOverrides;
 
-use crate::filter::FiltersetSet;
+use crate::filter::{FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
 use crate::settings::{
-    CovFailUnder, CoverageSettings, NoTestsMode, ProjectSettings, RunIgnoredMode, SlowTimeoutSecs,
-    SrcSettings, TerminalSettings, TestSettings, TestTimeoutSecs,
+    CovFailUnder, CoverageSettings, NoTestsMode, OverrideSettings, ProjectSettings, RunIgnoredMode,
+    SlowTimeoutSecs, SrcSettings, TerminalSettings, TestSettings, TestTimeoutSecs,
 };
 
-#[derive(
-    Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata, Combine,
-)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Options {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -36,6 +34,29 @@ pub struct Options {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option_group]
     pub coverage: Option<CoverageOptions>,
+
+    /// Per-test configuration overrides.
+    ///
+    /// Each entry pairs a [filter expression](#filter) with one or more
+    /// option overrides. The first override whose filter matches the
+    /// running test wins for any given option. Fields left unset on a
+    /// matching override fall through to the next match (or the
+    /// profile-level default).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub overrides: Vec<OverrideOptions>,
+}
+
+impl Combine for Options {
+    fn combine_with(&mut self, other: Self) {
+        Combine::combine_with(&mut self.src, other.src);
+        Combine::combine_with(&mut self.terminal, other.terminal);
+        Combine::combine_with(&mut self.test, other.test);
+        Combine::combine_with(&mut self.coverage, other.coverage);
+        // Overrides obey "first match wins"; higher-precedence entries
+        // (i.e. those from `self`) must come first, so prepend rather
+        // than using the default `Vec::combine_with` which appends.
+        self.overrides.extend(other.overrides);
+    }
 }
 
 impl Options {
@@ -45,6 +66,54 @@ impl Options {
             src: self.src.clone().unwrap_or_default().to_settings(),
             test: self.test.clone().unwrap_or_default().to_settings(),
             coverage: self.coverage.clone().unwrap_or_default().to_settings(),
+            overrides: self
+                .overrides
+                .iter()
+                .map(OverrideOptions::to_settings)
+                .collect(),
+        }
+    }
+}
+
+/// A single per-test override entry.
+///
+/// Mirrors `[[profile.<name>.overrides]]` in `karva.toml`. Each override
+/// pairs a filter expression with one or more option fields to apply when
+/// the filter matches a given test.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct OverrideOptions {
+    /// A filter expression evaluated against each test. Tests whose name
+    /// or tags match the expression pick up this override's settings.
+    pub filter: ValidatedFilter,
+
+    /// Number of times to retry a matching test before giving up. Mirrors
+    /// the profile-level [`retry`](#retry) field.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retries: Option<u32>,
+
+    /// Hard per-test timeout, in seconds, applied to matching tests.
+    /// Mirrors the profile-level [`timeout`](#timeout) field. A value of
+    /// `0` (or any non-positive value) disables the hard timeout for the
+    /// matching test.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout: Option<TestTimeoutSecs>,
+
+    /// Threshold (in seconds) above which a matching test is flagged as
+    /// slow. Mirrors the profile-level
+    /// [`slow-timeout`](#slow-timeout) field. A non-positive value
+    /// disables slow tracking for the matching test.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slow_timeout: Option<SlowTimeoutSecs>,
+}
+
+impl OverrideOptions {
+    pub(crate) fn to_settings(&self) -> OverrideSettings {
+        OverrideSettings {
+            filter: self.filter.clone(),
+            retries: self.retries,
+            timeout: self.timeout,
+            slow_timeout: self.slow_timeout,
         }
     }
 }
@@ -1111,6 +1180,207 @@ nonsense = 1
           | ^^^^^^^^
         unknown field `nonsense`, expected one of `sources`, `report`, `report-path`, `fail-under`
         "
+        );
+    }
+
+    #[test]
+    fn parse_overrides_section() {
+        let toml = r#"
+[[profile.default.overrides]]
+filter = "tag(network)"
+retries = 5
+
+[[profile.default.overrides]]
+filter = "tag(unit)"
+retries = 0
+"#;
+        let resolved = Config::from_toml_str(toml)
+            .expect("parse")
+            .resolve_profile(None)
+            .expect("resolves");
+        let overrides = resolved.overrides;
+        assert_eq!(overrides.len(), 2);
+        assert_eq!(overrides[0].filter.as_str(), "tag(network)");
+        assert_eq!(overrides[0].retries, Some(5));
+        assert_eq!(overrides[1].filter.as_str(), "tag(unit)");
+        assert_eq!(overrides[1].retries, Some(0));
+    }
+
+    /// Named profile entries layer on top of the default profile's
+    /// overrides — both lists end up in the resolved options.
+    #[test]
+    fn resolve_profile_appends_named_overrides_on_top_of_default() {
+        let toml = r#"
+[[profile.default.overrides]]
+filter = "tag(network)"
+retries = 3
+
+[[profile.ci.overrides]]
+filter = "tag(slow)"
+retries = 1
+"#;
+        let resolved = Config::from_toml_str(toml)
+            .expect("parse")
+            .resolve_profile(Some("ci"))
+            .expect("resolves");
+        let raw: Vec<&str> = resolved
+            .overrides
+            .iter()
+            .map(|o| o.filter.as_str())
+            .collect();
+        assert_eq!(raw, vec!["tag(slow)", "tag(network)"]);
+    }
+
+    #[test]
+    fn from_toml_str_rejects_invalid_override_filter() {
+        let toml = r#"
+[[profile.default.overrides]]
+filter = "tag("
+retries = 1
+"#;
+        let err = Config::from_toml_str(toml).expect_err("invalid filter");
+        assert!(
+            err.to_string().contains("expected a matcher body"),
+            "expected filter parse error in: {err}"
+        );
+    }
+
+    #[test]
+    fn to_settings_compiles_overrides() {
+        let toml = r#"
+[[profile.default.overrides]]
+filter = "tag(network)"
+retries = 5
+"#;
+        let resolved = Config::from_toml_str(toml)
+            .expect("parse")
+            .resolve_profile(None)
+            .expect("resolves");
+        let settings = resolved.to_settings();
+        let overrides = settings.overrides();
+        assert_eq!(overrides.len(), 1);
+        assert_eq!(overrides[0].retries, Some(5));
+        let ctx = crate::filter::EvalContext {
+            test_name: "test::foo",
+            tags: &["network"],
+        };
+        assert!(overrides[0].matches(&ctx));
+        let other = crate::filter::EvalContext {
+            test_name: "test::bar",
+            tags: &["unit"],
+        };
+        assert!(!overrides[0].matches(&other));
+    }
+
+    #[test]
+    fn retry_for_picks_first_matching_override() {
+        let toml = r#"
+[profile.default.test]
+retry = 1
+
+[[profile.default.overrides]]
+filter = "tag(network)"
+retries = 5
+
+[[profile.default.overrides]]
+filter = "tag(unit)"
+retries = 0
+"#;
+        let resolved = Config::from_toml_str(toml)
+            .expect("parse")
+            .resolve_profile(None)
+            .expect("resolves");
+        let settings = resolved.to_settings();
+        let net = crate::filter::EvalContext {
+            test_name: "test::a",
+            tags: &["network"],
+        };
+        let unit = crate::filter::EvalContext {
+            test_name: "test::b",
+            tags: &["unit"],
+        };
+        let other = crate::filter::EvalContext {
+            test_name: "test::c",
+            tags: &[],
+        };
+        assert_eq!(settings.retry_for(&net), 5);
+        assert_eq!(settings.retry_for(&unit), 0);
+        assert_eq!(settings.retry_for(&other), 1);
+    }
+
+    #[test]
+    fn timeout_for_picks_first_matching_override() {
+        let toml = r#"
+[profile.default.test]
+timeout = 30.0
+
+[[profile.default.overrides]]
+filter = "tag(slow)"
+timeout = 300.0
+
+[[profile.default.overrides]]
+filter = "tag(unit)"
+timeout = 0
+"#;
+        let resolved = Config::from_toml_str(toml)
+            .expect("parse")
+            .resolve_profile(None)
+            .expect("resolves");
+        let settings = resolved.to_settings();
+        let slow = crate::filter::EvalContext {
+            test_name: "test::a",
+            tags: &["slow"],
+        };
+        let unit = crate::filter::EvalContext {
+            test_name: "test::b",
+            tags: &["unit"],
+        };
+        let other = crate::filter::EvalContext {
+            test_name: "test::c",
+            tags: &[],
+        };
+        assert_eq!(
+            settings.timeout_for(&slow),
+            Some(std::time::Duration::from_mins(5))
+        );
+        // `timeout = 0` on a matching override disables the hard limit.
+        assert_eq!(settings.timeout_for(&unit), None);
+        assert_eq!(
+            settings.timeout_for(&other),
+            Some(std::time::Duration::from_secs(30))
+        );
+    }
+
+    #[test]
+    fn slow_timeout_for_picks_first_matching_override() {
+        let toml = r#"
+[profile.default.test]
+slow-timeout = 1.0
+
+[[profile.default.overrides]]
+filter = "tag(integration)"
+slow-timeout = 30.0
+"#;
+        let resolved = Config::from_toml_str(toml)
+            .expect("parse")
+            .resolve_profile(None)
+            .expect("resolves");
+        let settings = resolved.to_settings();
+        let integration = crate::filter::EvalContext {
+            test_name: "test::a",
+            tags: &["integration"],
+        };
+        let other = crate::filter::EvalContext {
+            test_name: "test::b",
+            tags: &[],
+        };
+        assert_eq!(
+            settings.slow_timeout_for(&integration),
+            Some(std::time::Duration::from_secs(30))
+        );
+        assert_eq!(
+            settings.slow_timeout_for(&other),
+            Some(std::time::Duration::from_secs(1))
         );
     }
 }
