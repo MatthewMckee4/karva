@@ -47,10 +47,10 @@ pub struct OutputDrain {
 impl OutputDrain {
     /// Start the drain.
     ///
-    /// `mode` selects the bar style; `total_tests` is the initial estimate
-    /// of test cases (parametrize-aware counts aren't known up front, so
-    /// the bar grows its length dynamically when ticks overrun the estimate).
-    /// `num_workers` is the number of worker output files to poll.
+    /// `mode` selects the bar style; `total_tests` is the count of test
+    /// function definitions (matching the per-function tick semantics in
+    /// `notify_test_completed`). `num_workers` is the number of worker
+    /// output files to poll.
     pub fn start(
         mode: ProgressMode,
         total_tests: u64,
@@ -78,7 +78,7 @@ impl OutputDrain {
             let bar = bar.clone();
             let stop = Arc::clone(&stop);
             thread::spawn(move || {
-                drain_loop(&output_paths, &cache, total_tests, bar.as_ref(), &stop);
+                drain_loop(&output_paths, &cache, bar.as_ref(), &stop);
             })
         };
 
@@ -191,7 +191,6 @@ impl WorkerStream {
 fn drain_loop(
     output_paths: &[Utf8PathBuf],
     cache: &RunCache,
-    initial_total: u64,
     bar: Option<&ProgressBar>,
     stop: &AtomicBool,
 ) {
@@ -200,7 +199,6 @@ fn drain_loop(
         .cloned()
         .map(WorkerStream::new)
         .collect();
-    let mut current_total = initial_total;
 
     loop {
         let mut lines: Vec<String> = Vec::new();
@@ -213,15 +211,7 @@ fn drain_loop(
         emit_lines(&lines, bar);
 
         if let Some(bar) = bar {
-            let completed = cache.completed_count();
-            // `initial_total` counts test function definitions; workers tick
-            // once per parametrized case, so completion can overrun the
-            // estimate. Grow the bar's length to keep position <= len.
-            if completed > current_total {
-                current_total = completed;
-                bar.set_length(current_total);
-            }
-            bar.set_position(completed);
+            bar.set_position(cache.completed_count());
         }
 
         if stop.load(Ordering::SeqCst) {
