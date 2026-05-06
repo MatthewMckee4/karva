@@ -45,6 +45,9 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         Command::Test(test_args) => commands::test::test(*test_args),
         Command::Snapshot(snapshot_args) => commands::snapshot::snapshot(snapshot_args),
         Command::Cache(cache_args) => commands::cache::cache(&cache_args),
+        Command::ShowConfig(show_config_args) => {
+            commands::show_config::show_config(show_config_args)
+        }
         Command::Version => commands::version::version().map(|()| ExitStatus::Success),
     }
 }

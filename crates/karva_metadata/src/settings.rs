@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::filter::FiltersetSet;
 use crate::max_fail::MaxFail;
-use crate::options::{CovReport, OutputFormat};
+use crate::options::{
+    CovReport, CoverageOptions, Options, OutputFormat, SrcOptions, TerminalOptions, TestOptions,
+};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunIgnoredMode {
@@ -156,6 +158,50 @@ impl ProjectSettings {
 
     pub fn set_run_ignored(&mut self, mode: RunIgnoredMode) {
         self.test.run_ignored = mode;
+    }
+
+    /// Round-trip the resolved settings back to a fully-populated [`Options`].
+    ///
+    /// Every field is `Some(...)` so a serialized form reflects the values
+    /// karva is actually running with, including defaults. Runtime-only
+    /// fields (`filter`, `run_ignored`, coverage `disabled`) are excluded:
+    /// they do not come from configuration files. `fail_fast` is also
+    /// omitted since `max_fail` is the canonical form.
+    pub fn to_options(&self) -> Options {
+        Options {
+            src: Some(SrcOptions {
+                respect_ignore_files: Some(self.src.respect_ignore_files),
+                include: Some(self.src.include_paths.clone()),
+            }),
+            terminal: Some(TerminalOptions {
+                output_format: Some(self.terminal.output_format),
+                show_python_output: Some(self.terminal.show_python_output),
+                status_level: Some(self.terminal.status_level),
+                final_status_level: Some(self.terminal.final_status_level),
+            }),
+            test: Some(TestOptions {
+                test_function_prefix: Some(self.test.test_function_prefix.clone()),
+                fail_fast: None,
+                // `MaxFail::unlimited()` wraps `None`, which TOML cannot
+                // represent. Omit the field in that case so the TOML matches
+                // "no limit set".
+                max_fail: self.test.max_fail.has_limit().then_some(self.test.max_fail),
+                try_import_fixtures: Some(self.test.try_import_fixtures),
+                retry: Some(self.test.retry),
+                no_tests: Some(self.test.no_tests),
+                slow_timeout: self
+                    .test
+                    .slow_timeout
+                    .map(|d| SlowTimeoutSecs(d.as_secs_f64())),
+                timeout: self.test.timeout.map(|d| TestTimeoutSecs(d.as_secs_f64())),
+            }),
+            coverage: Some(CoverageOptions {
+                sources: Some(self.coverage.sources.clone()),
+                report: Some(self.coverage.report),
+                fail_under: self.coverage.fail_under.map(CovFailUnder),
+                disabled: None,
+            }),
+        }
     }
 }
 
