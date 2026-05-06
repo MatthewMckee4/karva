@@ -114,6 +114,16 @@ impl RunCache {
         CacheFile::Progress.path_in(&self.worker_dir(worker_id))
     }
 
+    /// Path to the per-worker output file.
+    ///
+    /// Workers append newline-delimited result lines to this file via
+    /// `FileLineSink`. The orchestrator's drain reads new bytes since the
+    /// last poll, splits on `\n`, and prints whole lines to its own stdout —
+    /// keeping worker output from interleaving on a shared terminal.
+    pub fn output_file(&self, worker_id: usize) -> Utf8PathBuf {
+        CacheFile::Output.path_in(&self.worker_dir(worker_id))
+    }
+
     /// Sum of completed-test counts across every worker for this run.
     ///
     /// Each worker's progress file is one byte per completed test, so the
