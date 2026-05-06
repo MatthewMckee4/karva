@@ -23,7 +23,7 @@ pub fn show_config(args: ShowConfigCommand) -> Result<ExitStatus> {
     let config_file = args.config_file.as_ref().map(|path| absolute(path, &cwd));
 
     let mut project_metadata = if let Some(config_file) = &config_file {
-        ProjectMetadata::from_config_file(config_file.clone(), &cwd, python_version)?
+        ProjectMetadata::from_config_file(config_file, &cwd, python_version)?
     } else {
         ProjectMetadata::discover(&cwd, python_version)?
     };
@@ -35,9 +35,9 @@ pub fn show_config(args: ShowConfigCommand) -> Result<ExitStatus> {
         .map_err(|err| anyhow::anyhow!("{err}"))?;
 
     let project = Project::from_metadata(project_metadata);
-    let resolved = project.settings().to_options();
 
-    let serialized = toml::to_string(&resolved).context("failed to serialize configuration")?;
+    let serialized =
+        toml::to_string(project.settings()).context("failed to serialize configuration")?;
 
     let mut stdout = Printer::default().stream_for_message().lock();
     write!(stdout, "{serialized}")?;
