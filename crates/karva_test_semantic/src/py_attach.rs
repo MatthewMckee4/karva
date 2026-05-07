@@ -4,6 +4,8 @@
 //! and optional suppression of `sys.stdout` / `sys.stderr` to `/dev/null`
 //! for the duration of the callback.
 
+use std::ffi::CString;
+
 use pyo3::prelude::*;
 
 /// Initialize the Python interpreter (idempotent) and attach to it for the
@@ -27,6 +29,15 @@ where
 {
     attach(|py| {
         if show_output {
+            // The worker's stdout is a pipe to the orchestrator (see
+            // `karva_runner::progress::OutputDrain`). Python defaults to
+            // block-buffering when sys.stdout isn't a TTY, which delays
+            // every `print()` until the buffer fills or the interpreter
+            // shuts down — so the orchestrator only sees test output at
+            // worker exit, after the reporter has already emitted result
+            // lines. Forcing line-buffering here keeps prints flowing
+            // alongside reporter output in real time.
+            let _ = enable_line_buffering(py);
             return f(py);
         }
 
@@ -39,6 +50,24 @@ where
         let _ = flush_and_mute(py, &null_file);
         result
     })
+}
+
+/// Reconfigure `sys.stdout` and `sys.stderr` to line-buffer their writes.
+///
+/// Best-effort: silently no-ops if either stream isn't a `TextIOWrapper`
+/// (e.g. when something earlier in the run replaced them with a custom
+/// object that lacks `reconfigure`).
+fn enable_line_buffering(py: Python<'_>) -> PyResult<()> {
+    let code = CString::new(
+        "import sys\n\
+         for s in (sys.stdout, sys.stderr):\n\
+         \x20   try:\n\
+         \x20       s.reconfigure(line_buffering=True)\n\
+         \x20   except (AttributeError, ValueError):\n\
+         \x20       pass\n",
+    )
+    .expect("hardcoded code has no nul bytes");
+    py.run(code.as_c_str(), None, None)
 }
 
 fn open_devnull(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
