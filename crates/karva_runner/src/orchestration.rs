@@ -182,8 +182,7 @@ impl WorkerManager {
             .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
             .unwrap_or(0);
 
-        self
-            .workers
+        self.workers
             .iter()
             .map(|worker| {
                 let current = match cache.read_current_test(worker.id) {
@@ -242,7 +241,7 @@ fn print_cancellation(printer: Printer, in_flight: &[InFlightTest]) {
                     test.worker_id
                 );
             }
-        };
+        }
     }
 }
 
