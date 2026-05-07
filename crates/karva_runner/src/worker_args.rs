@@ -91,10 +91,22 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
     cli_args.push("--final-status-level".to_string());
     cli_args.push(settings.terminal().final_status_level.as_str().to_string());
 
-    if let Some(color) = args.color {
-        cli_args.push("--color".to_string());
-        cli_args.push(color.as_str().to_string());
-    }
+    // Worker stdout is a pipe to the orchestrator's drain, so the worker's
+    // own TTY-based auto-detection would always strip ANSI. Forward an
+    // explicit color choice that matches what the orchestrator decided for
+    // its own stdout — the drain copies the worker's bytes through verbatim,
+    // so the orchestrator-side TTY check is the one that actually matters.
+    cli_args.push("--color".to_string());
+    cli_args.push(match args.color {
+        Some(color) => color.as_str().to_string(),
+        None => {
+            if colored::control::SHOULD_COLORIZE.should_colorize() {
+                "always".to_string()
+            } else {
+                "never".to_string()
+            }
+        }
+    });
 
     if settings.test().try_import_fixtures {
         cli_args.push("--try-import-fixtures".to_string());
