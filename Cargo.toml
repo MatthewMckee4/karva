@@ -67,7 +67,7 @@ ruff_python_parser = { git = "https://github.com/astral-sh/ruff/", branch = "mai
 ruff_python_trivia = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_source_file = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_text_size = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
-semver = { version = "1.0.27", features = ["serde"] }
+semver = { version = "1.0.28", features = ["serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.149" }
 similar = { version = "3.0", features = ["inline"] }
