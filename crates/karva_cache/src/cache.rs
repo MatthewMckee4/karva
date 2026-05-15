@@ -6,9 +6,23 @@ use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_diagnostic::{FlakyTest, TestResultStats, TestRunResult};
 use ruff_db::diagnostic::{DisplayDiagnosticConfig, DisplayDiagnostics, FileResolver};
+use serde::{Deserialize, Serialize};
 
 use crate::artifact::{CacheFile, read_json, read_text, write_json, write_json_if_nonempty};
 use crate::{RUN_PREFIX, RunHash, WORKER_PREFIX, worker_folder};
+
+/// Snapshot of the test a worker is currently executing.
+///
+/// Workers update this file at the start of each test and remove it on
+/// completion; the orchestrator reads it on Ctrl+C to render per-test
+/// `SIGINT` lines.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CurrentTest {
+    /// Fully qualified test name (`module::function[params]`).
+    pub name: String,
+    /// Wall-clock start of the test, milliseconds since the Unix epoch.
+    pub start_unix_ms: u64,
+}
 
 /// Aggregated test results collected from all worker processes.
 #[derive(Default)]
@@ -65,6 +79,19 @@ impl RunCache {
     /// coverage session ends.
     pub fn coverage_data_file(&self, worker_id: usize) -> Utf8PathBuf {
         CacheFile::Coverage.path_in(&self.worker_dir(worker_id))
+    }
+
+    /// Path to the per-worker file describing the test currently executing.
+    pub fn current_test_file(&self, worker_id: usize) -> Utf8PathBuf {
+        CacheFile::CurrentTest.path_in(&self.worker_dir(worker_id))
+    }
+
+    /// Reads the snapshot of which test the worker is currently running.
+    /// Returns `None` if the worker is between tests or hasn't started yet.
+    pub fn read_current_test(&self, worker_id: usize) -> Option<CurrentTest> {
+        read_json::<CurrentTest>(&self.worker_dir(worker_id), CacheFile::CurrentTest)
+            .ok()
+            .flatten()
     }
 
     /// Returns paths to every per-worker coverage file that exists for this
