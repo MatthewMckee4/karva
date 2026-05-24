@@ -48,6 +48,15 @@ impl MaxFail {
         self.0.is_some()
     }
 
+    /// Returns `true` when no failure limit is configured.
+    ///
+    /// `MaxFail::unlimited()` wraps `None`, which serializers like TOML
+    /// cannot represent — this is exposed primarily so `serde`'s
+    /// `skip_serializing_if` can omit the field.
+    pub fn is_unlimited(&self) -> bool {
+        self.0.is_none()
+    }
+
     /// Returns `true` when the configuration would stop after a single failure.
     ///
     /// This is how the legacy `--fail-fast` boolean is surfaced internally.

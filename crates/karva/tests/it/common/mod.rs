@@ -190,6 +190,12 @@ impl TestContext {
         command.arg("version").current_dir(self.root());
         command
     }
+
+    pub fn show_config(&self) -> Command {
+        let mut command = self.karva_command();
+        command.arg("show-config").current_dir(self.root());
+        command
+    }
 }
 
 impl Default for TestContext {

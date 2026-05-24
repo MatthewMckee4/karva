@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use karva_combine::Combine;
 use karva_logging::{FinalStatusLevel, StatusLevel};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
 use crate::filter::FiltersetSet;
 use crate::max_fail::MaxFail;
@@ -121,10 +121,11 @@ impl Combine for CovFailUnder {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct ProjectSettings {
-    pub(crate) terminal: TerminalSettings,
     pub(crate) src: SrcSettings,
+    pub(crate) terminal: TerminalSettings,
     pub(crate) test: TestSettings,
     pub(crate) coverage: CoverageSettings,
 }
@@ -159,7 +160,24 @@ impl ProjectSettings {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+/// Serialize a `Duration` field as fractional seconds. Unset fields are
+/// guarded by `skip_serializing_if = "Option::is_none"`; the `None` arm is
+/// preserved so the function is sound when called directly.
+///
+/// The `&Option<T>` signature is dictated by serde's `serialize_with`.
+#[expect(clippy::ref_option)]
+fn serialize_duration_secs<S: Serializer>(
+    value: &Option<Duration>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match value {
+        Some(d) => serializer.serialize_f64(d.as_secs_f64()),
+        None => serializer.serialize_none(),
+    }
+}
+
+#[derive(Default, Debug, Clone, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct TerminalSettings {
     pub output_format: OutputFormat,
     pub show_python_output: bool,
@@ -167,36 +185,56 @@ pub struct TerminalSettings {
     pub final_status_level: FinalStatusLevel,
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct SrcSettings {
     pub respect_ignore_files: bool,
+    #[serde(rename = "include")]
     pub include_paths: Vec<String>,
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct CoverageSettings {
     pub sources: Vec<String>,
     pub report: CovReport,
     /// Minimum total coverage percentage (`0..=100`). When set and the
     /// reported `TOTAL` coverage is below this value, the test command
     /// exits with a non-zero status even if every test passed.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub fail_under: Option<f64>,
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct TestSettings {
     pub test_function_prefix: String,
+    /// `MaxFail::unlimited()` wraps `None`, which TOML cannot represent —
+    /// omit the field when no limit is configured.
+    #[serde(skip_serializing_if = "MaxFail::is_unlimited")]
     pub max_fail: MaxFail,
     pub try_import_fixtures: bool,
     pub retry: u32,
+    /// Runtime-only: filters are sourced from CLI flags, never config files.
+    #[serde(skip)]
     pub filter: FiltersetSet,
+    /// Runtime-only: run-ignored mode is sourced from CLI flags.
+    #[serde(skip)]
     pub run_ignored: RunIgnoredMode,
     pub no_tests: NoTestsMode,
     /// Threshold after which a test is flagged as slow. `None` disables
     /// slow-test detection entirely.
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_duration_secs"
+    )]
     pub slow_timeout: Option<Duration>,
     /// Hard per-test timeout. Tests that run longer than this duration are
     /// killed and reported as failures. `None` disables the hard timeout
     /// (tests may still set their own limit via `@karva.tags.timeout`).
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_duration_secs"
+    )]
     pub timeout: Option<Duration>,
 }

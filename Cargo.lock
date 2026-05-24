@@ -1070,6 +1070,7 @@ dependencies = [
  "rstest",
  "ruff_python_trivia",
  "tempfile",
+ "toml",
  "tracing",
  "wild",
 ]
