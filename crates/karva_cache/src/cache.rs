@@ -21,6 +21,7 @@ pub struct AggregatedResults {
 }
 
 /// Reads and writes test results in the cache directory for a specific run.
+#[derive(Clone)]
 pub struct RunCache {
     run_dir: Utf8PathBuf,
 }
@@ -65,6 +66,44 @@ impl RunCache {
     /// coverage session ends.
     pub fn coverage_data_file(&self, worker_id: usize) -> Utf8PathBuf {
         CacheFile::Coverage.path_in(&self.worker_dir(worker_id))
+    }
+
+    /// Path to the per-worker progress file.
+    ///
+    /// The worker appends one byte to this file each time a test completes;
+    /// the orchestrator polls the file lengths of every worker to drive a
+    /// progress display. The append is atomic on POSIX, so readers can use
+    /// the file length without locking.
+    pub fn progress_file(&self, worker_id: usize) -> Utf8PathBuf {
+        CacheFile::Progress.path_in(&self.worker_dir(worker_id))
+    }
+
+    /// Path to the per-worker output file.
+    ///
+    /// Workers append newline-delimited result lines to this file via
+    /// `FileLineSink`. The orchestrator's drain reads new bytes since the
+    /// last poll, splits on `\n`, and prints whole lines to its own stdout —
+    /// keeping worker output from interleaving on a shared terminal.
+    pub fn output_file(&self, worker_id: usize) -> Utf8PathBuf {
+        CacheFile::Output.path_in(&self.worker_dir(worker_id))
+    }
+
+    /// Sum of completed-test counts across every worker for this run.
+    ///
+    /// Each worker's progress file is one byte per completed test, so the
+    /// per-worker count is exactly the file length. Missing files (worker
+    /// hasn't started yet, or no tests completed) contribute zero.
+    pub fn completed_count(&self) -> u64 {
+        let Ok(worker_dirs) = list_worker_dirs(&self.run_dir) else {
+            return 0;
+        };
+        worker_dirs
+            .iter()
+            .map(|dir| {
+                let path = CacheFile::Progress.path_in(dir);
+                fs::metadata(&path).map(|m| m.len()).unwrap_or(0)
+            })
+            .sum()
     }
 
     /// Returns paths to every per-worker coverage file that exists for this

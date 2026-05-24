@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::fmt::Write;
-use std::process::{Child, Stdio};
+use std::process::{Child, ChildStdout, Stdio};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -22,6 +22,7 @@ use karva_project::Project;
 use crate::binary::find_karva_worker_binary;
 use crate::collection::ParallelCollector;
 use crate::partition::{Partition, partition_collected_tests};
+use crate::progress::{OutputDrain, WorkerPipes};
 use crate::worker_args::{WorkerSpawn, worker_command};
 
 #[derive(Debug)]
@@ -162,8 +163,12 @@ pub struct ParallelTestConfig {
 ///
 /// Creates a worker process for each non-empty partition, passing the appropriate
 /// subset of tests and command-line arguments to each worker.
-fn spawn_workers(spawn: &WorkerSpawn, partitions: &[Partition]) -> Result<WorkerManager> {
+fn spawn_workers(
+    spawn: &WorkerSpawn,
+    partitions: &[Partition],
+) -> Result<(WorkerManager, Vec<WorkerPipes>)> {
     let mut worker_manager = WorkerManager::default();
+    let mut pipes: Vec<WorkerPipes> = Vec::new();
 
     for (worker_id, partition) in partitions.iter().enumerate() {
         if partition.tests().is_empty() {
@@ -171,11 +176,13 @@ fn spawn_workers(spawn: &WorkerSpawn, partitions: &[Partition]) -> Result<Worker
             continue;
         }
 
-        let child = worker_command(spawn, worker_id, partition)
-            .stdout(Stdio::inherit())
+        let mut child = worker_command(spawn, worker_id, partition)
+            .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
             .context("Failed to spawn karva-worker process")?;
+
+        let stdout: Option<ChildStdout> = child.stdout.take();
 
         tracing::info!(
             "Worker {} spawned with {} tests",
@@ -184,9 +191,10 @@ fn spawn_workers(spawn: &WorkerSpawn, partitions: &[Partition]) -> Result<Worker
         );
 
         worker_manager.spawn(worker_id, child);
+        pipes.push(WorkerPipes { stdout });
     }
 
-    Ok(worker_manager)
+    Ok((worker_manager, pipes))
 }
 
 /// Collect tests from the project without executing them.
@@ -325,7 +333,7 @@ pub fn run_parallel_tests(
         worker_binary: &worker_binary,
         coverage_enabled: !project.settings().coverage().sources.is_empty(),
     };
-    let mut worker_manager = spawn_workers(&spawn, &partitions)?;
+    let (mut worker_manager, pipes) = spawn_workers(&spawn, &partitions)?;
 
     let shutdown_rx = if config.create_ctrlc_handler {
         Some(shutdown_receiver())
@@ -335,8 +343,18 @@ pub fn run_parallel_tests(
 
     let max_fail_cache = project.settings().max_fail().has_limit().then_some(&cache);
 
+    let drain = OutputDrain::start(
+        project.settings().terminal().show_progress,
+        total_tests as u64,
+        num_workers,
+        cache.clone(),
+        pipes,
+    );
+
     worker_manager.wait_for_completion(shutdown_rx, max_fail_cache);
     worker_manager.kill_remaining();
+
+    drain.finish();
 
     let results = cache.aggregate_results()?;
 

@@ -114,7 +114,14 @@ karva test [OPTIONS] [PATH]...
 <li><code>only</code>:  Run only ignored tests</li>
 <li><code>all</code>:  Run both ignored and non-ignored tests</li>
 </ul></dd><dt id="karva-test--show-output"><a href="#karva-test--show-output"><code>--show-output</code></a>, <code>-s</code></dt><dd><p>Show Python stdout during test execution</p>
-</dd><dt id="karva-test--slow-timeout"><a href="#karva-test--slow-timeout"><code>--slow-timeout</code></a> <i>seconds</i></dt><dd><p>Threshold in seconds after which a test is flagged as slow.</p>
+</dd><dt id="karva-test--show-progress"><a href="#karva-test--show-progress"><code>--show-progress</code></a> <i>mode</i></dt><dd><p>Live progress display while tests run &#91;default: none&#93;</p>
+<p><code>none</code> leaves output untouched. <code>counter</code> prints a refreshing <code>N/M tests</code> line on stderr. <code>bar</code> renders a visual progress bar. Stderr is used so the display does not interfere with per-test result lines on stdout.</p>
+<p>May also be set with the <code>KARVA_SHOW_PROGRESS</code> environment variable.</p><p>Possible values:</p>
+<ul>
+<li><code>none</code>:  No live progress display (default)</li>
+<li><code>counter</code>:  Print a one-line <code>N/M tests</code> counter, refreshed periodically</li>
+<li><code>bar</code>:  Render a visual progress bar with completion stats</li>
+</ul></dd><dt id="karva-test--slow-timeout"><a href="#karva-test--slow-timeout"><code>--slow-timeout</code></a> <i>seconds</i></dt><dd><p>Threshold in seconds after which a test is flagged as slow.</p>
 <p>When a test takes longer than this duration, it is reported with a <code>SLOW</code> status line (gated on <code>--status-level=slow</code> or higher) and counted in the run summary. Pass a positive number such as <code>--slow-timeout=60</code> or <code>--slow-timeout=0.5</code>.</p>
 </dd><dt id="karva-test--snapshot-update"><a href="#karva-test--snapshot-update"><code>--snapshot-update</code></a></dt><dd><p>Update snapshots directly instead of creating pending <code>.snap.new</code> files.</p>
 <p>When set, <code>karva.assert_snapshot()</code> will write directly to <code>.snap</code> files, accepting any changes automatically.</p>

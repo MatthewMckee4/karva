@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 
 use camino::Utf8PathBuf;
 use clap::Parser;
-use karva_logging::{FinalStatusLevel, StatusLevel, TerminalColor};
+use karva_logging::{FinalStatusLevel, ProgressMode, StatusLevel, TerminalColor};
 use karva_metadata::{
     CovFailUnder, CoverageOptions, MaxFail, Options, SlowTimeoutSecs, SrcOptions, TerminalOptions,
     TestOptions, TestTimeoutSecs,
@@ -157,6 +157,20 @@ pub struct SubTestCommand {
         help_heading = "Reporter options"
     )]
     pub final_status_level: Option<FinalStatusLevel>,
+
+    /// Live progress display while tests run [default: none]
+    ///
+    /// `none` leaves output untouched. `counter` prints a refreshing
+    /// `N/M tests` line on stderr. `bar` renders a visual progress bar.
+    /// Stderr is used so the display does not interfere with per-test
+    /// result lines on stdout.
+    #[arg(
+        long,
+        value_name = "MODE",
+        env = "KARVA_SHOW_PROGRESS",
+        help_heading = "Reporter options"
+    )]
+    pub show_progress: Option<ProgressMode>,
 
     /// Measure code coverage for the given source path.
     ///
@@ -338,6 +352,7 @@ impl SubTestCommand {
                 show_python_output: self.show_output,
                 status_level: self.status_level,
                 final_status_level: self.final_status_level,
+                show_progress: self.show_progress,
             }),
             test: Some(TestOptions {
                 test_function_prefix: self.test_prefix,

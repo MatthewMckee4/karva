@@ -11,11 +11,13 @@ use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields};
 use tracing_subscriber::registry::LookupSpan;
 
 mod printer;
+mod progress;
 mod status_level;
 pub mod time;
 mod verbosity;
 
 pub use printer::{Printer, Stdout};
+pub use progress::ProgressMode;
 pub use status_level::{FinalStatusLevel, StatusLevel};
 pub use verbosity::VerbosityLevel;
 

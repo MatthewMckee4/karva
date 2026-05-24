@@ -185,6 +185,31 @@ output-format = "concise"
 
 ---
 
+### `show-progress`
+
+Live progress display rendered while tests run.
+
+`none` (the default) leaves output untouched. `counter` prints a
+`N/M tests` line on stderr that refreshes periodically. `bar` shows
+a visual progress bar with completion stats. The display is rendered
+on stderr so it does not interfere with per-test result lines on
+stdout (gated by [`status_level`](#status-level)).
+
+Defaults to `none`.
+
+**Default value**: `none`
+
+**Type**: `none | counter | bar`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.terminal]
+show-progress = "bar"
+```
+
+---
+
 ### `show-python-output`
 
 Whether to show the python output.

@@ -90,7 +90,6 @@ impl TestRunResult {
         duration: std::time::Duration,
         passed_on: u32,
         total_attempts: u32,
-        _reporter: Option<&dyn Reporter>,
     ) {
         self.stats.add(result.clone().into());
 

@@ -146,9 +146,16 @@ impl<'a> Context<'a> {
             duration,
             passed_on,
             total_attempts,
-            Some(self.reporter),
         );
         passed
+    }
+
+    /// Notify the reporter that a test function has fully completed —
+    /// fired once per function definition regardless of how many parametrize
+    /// variants it expanded into. Drives the orchestrator's progress bar
+    /// (which is sized by `test_count()` = function defs).
+    pub fn notify_test_function_completed(&self, function_name: &QualifiedTestName) {
+        self.reporter.notify_test_completed(function_name);
     }
 
     pub(crate) fn report_diagnostic<'ctx>(

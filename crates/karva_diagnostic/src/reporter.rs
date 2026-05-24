@@ -1,4 +1,7 @@
-use std::fmt::Write;
+use std::fs::{File, OpenOptions};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::Duration;
 
 use colored::Colorize;
@@ -41,6 +44,16 @@ pub trait Reporter: Send + Sync {
     fn report_test_slow(&self, test_name: &QualifiedTestName, duration: Duration) {
         let _ = (test_name, duration);
     }
+
+    /// Notify that a test has fully completed for accounting purposes.
+    ///
+    /// Called exactly once per test (after every attempt has run for retried
+    /// tests, after the single attempt for non-retried tests). Reporters
+    /// that drive a progress display use this hook so the count advances
+    /// once per test rather than once per attempt. Default no-op.
+    fn notify_test_completed(&self, test_name: &QualifiedTestName) {
+        let _ = test_name;
+    }
 }
 
 fn show_for_status_level(level: StatusLevel, kind: &IndividualTestResultKind) -> bool {
@@ -74,14 +87,69 @@ impl Reporter for DummyReporter {
     }
 }
 
-/// A reporter that outputs test results to stdout as they complete.
+/// Sink for preformatted reporter result lines.
+///
+/// Each `write_line` call must emit exactly one line (a `\n` is appended by
+/// the implementation). Lines from one sink are serialized; the orchestrator
+/// merges across sinks. Used to keep worker output from interleaving on
+/// stdout — workers write to a [`FileLineSink`] backed by a per-worker file
+/// and the orchestrator drains those files line by line.
+pub trait LineSink: Send + Sync {
+    fn write_line(&self, line: &str);
+}
+
+/// Writes lines straight to the process stdout (locked per call).
+///
+/// Suitable when the reporter runs in the same process that owns stdout.
+/// Cross-process workers should use [`FileLineSink`] instead — multiple
+/// processes locking stdout independently does not actually serialize their
+/// writes.
+pub struct StdoutLineSink;
+
+impl LineSink for StdoutLineSink {
+    fn write_line(&self, line: &str) {
+        let mut out = std::io::stdout().lock();
+        let _ = writeln!(out, "{line}");
+    }
+}
+
+/// Appends lines to a file opened with `O_APPEND`.
+///
+/// A `Mutex` guards against intra-process races (the reporter is shared
+/// across worker threads). Each `write_line` issues a single `writeln!` so
+/// the orchestrator's drain — which reads from the file and splits on `\n` —
+/// either sees a complete line or buffers a trailing partial line for the
+/// next read.
+pub struct FileLineSink {
+    file: Mutex<File>,
+}
+
+impl FileLineSink {
+    pub fn open(path: &Path) -> std::io::Result<Self> {
+        let file = OpenOptions::new().create(true).append(true).open(path)?;
+        Ok(Self {
+            file: Mutex::new(file),
+        })
+    }
+}
+
+impl LineSink for FileLineSink {
+    fn write_line(&self, line: &str) {
+        if let Ok(mut file) = self.file.lock() {
+            let _ = writeln!(file, "{line}");
+        }
+    }
+}
+
+/// A reporter that emits one line per result to a [`LineSink`].
 pub struct TestCaseReporter {
     printer: Printer,
+    sink: Box<dyn LineSink>,
 }
 
 impl TestCaseReporter {
-    pub fn new(printer: Printer) -> Self {
-        Self { printer }
+    pub fn new(printer: Printer, sink: Box<dyn LineSink>) -> Self {
+        Self { printer, sink }
     }
 }
 
@@ -109,12 +177,9 @@ impl Reporter for TestCaseReporter {
             _ => String::new(),
         };
 
-        let mut stdout = self.printer.stream_for_test_result().lock();
-        writeln!(
-            stdout,
+        self.sink.write_line(&format!(
             "{padding}{colored_label} {duration_str} {test_path}{suffix}"
-        )
-        .ok();
+        ));
     }
 
     fn report_test_slow(&self, test_name: &QualifiedTestName, duration: Duration) {
@@ -128,12 +193,9 @@ impl Reporter for TestCaseReporter {
         let duration_str = format_duration_bracketed(duration);
         let test_path = format_test_path(test_name);
 
-        let mut stdout = self.printer.stream_for_test_result().lock();
-        writeln!(
-            stdout,
+        self.sink.write_line(&format!(
             "{padding}{colored_label} {duration_str} {test_path}"
-        )
-        .ok();
+        ));
     }
 
     fn report_test_attempt(
@@ -156,12 +218,72 @@ impl Reporter for TestCaseReporter {
         let duration_str = format_duration_bracketed(duration);
         let test_path = format_test_path(test_name);
 
-        let mut stdout = self.printer.stream_for_test_result().lock();
-        writeln!(
-            stdout,
+        self.sink.write_line(&format!(
             "{padding}TRY {attempt} {colored_status} {duration_str} {test_path}"
-        )
-        .ok();
+        ));
+    }
+}
+
+/// Wraps another reporter and appends one byte to a file each time a test
+/// completes (counted once per test, regardless of retries).
+///
+/// The orchestrator polls the file's length to drive a live progress
+/// display without coordinating with workers via a richer protocol. The
+/// append uses `O_APPEND`, which is atomic on POSIX, so the orchestrator
+/// can read the length concurrently without locking.
+pub struct ProgressTrackingReporter<R: Reporter> {
+    inner: R,
+    progress_file: PathBuf,
+}
+
+impl<R: Reporter> ProgressTrackingReporter<R> {
+    pub fn new(inner: R, progress_file: PathBuf) -> Self {
+        Self {
+            inner,
+            progress_file,
+        }
+    }
+
+    fn append_tick(&self) {
+        if let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.progress_file)
+        {
+            let _ = file.write_all(b"\x01");
+        }
+    }
+}
+
+impl<R: Reporter> Reporter for ProgressTrackingReporter<R> {
+    fn report_test_case_result(
+        &self,
+        test_name: &QualifiedTestName,
+        result_kind: IndividualTestResultKind,
+        duration: Duration,
+    ) {
+        self.inner
+            .report_test_case_result(test_name, result_kind, duration);
+    }
+
+    fn report_test_attempt(
+        &self,
+        test_name: &QualifiedTestName,
+        attempt: u32,
+        result_kind: IndividualTestResultKind,
+        duration: Duration,
+    ) {
+        self.inner
+            .report_test_attempt(test_name, attempt, result_kind, duration);
+    }
+
+    fn report_test_slow(&self, test_name: &QualifiedTestName, duration: Duration) {
+        self.inner.report_test_slow(test_name, duration);
+    }
+
+    fn notify_test_completed(&self, test_name: &QualifiedTestName) {
+        self.inner.notify_test_completed(test_name);
+        self.append_tick();
     }
 }
 

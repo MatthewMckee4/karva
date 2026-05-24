@@ -164,6 +164,15 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 }
             }
 
+            // Tick once per test function (parametrize variants don't each
+            // tick — `total_tests` counts function defs, so per-variant ticks
+            // would overrun the bar).
+            self.context
+                .notify_test_function_completed(&QualifiedTestName::new(
+                    test_function.name.clone(),
+                    None,
+                ));
+
             if self.max_fail_reached() {
                 break;
             }

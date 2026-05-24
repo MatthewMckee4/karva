@@ -1798,6 +1798,81 @@ def test_3(): pass
     ");
 }
 
+/// `--show-progress=bar` is accepted and does not corrupt stdout. The bar
+/// itself is rendered on stderr and gated on stderr being a TTY, so in the
+/// test harness (where stderr is captured) it produces no visible output.
+#[test]
+fn test_show_progress_bar_does_not_alter_stdout() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+def test_1(): pass
+def test_2(): pass
+",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--show-progress=bar"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test::test_1
+            PASS [TIME] test::test_2
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+/// `--show-progress=counter` is accepted; the counter is rendered on stderr
+/// and gated on TTY, so it produces no visible output in tests.
+#[test]
+fn test_show_progress_counter_does_not_alter_stdout() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+def test_1(): pass
+",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--show-progress=counter"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_1
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+/// `--show-progress=none` is the default and matches the run with the flag
+/// omitted.
+#[test]
+fn test_show_progress_none_matches_default() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+def test_1(): pass
+",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--show-progress=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_1
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
 /// `--no-progress` still emits diagnostics for failing tests.
 #[test]
 fn test_no_progress_with_failure_shows_diagnostics() {

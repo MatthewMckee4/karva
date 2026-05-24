@@ -28,6 +28,17 @@ pub enum CacheFile {
     FlakyTests,
     /// Per-worker JSON: line-coverage data for sources tracked during the run.
     Coverage,
+    /// Per-worker append-only file: one byte per completed test.
+    ///
+    /// Used by [`crate::RunCache::progress_file`] so the orchestrator can
+    /// poll completion counts mid-run without coordinating with workers.
+    Progress,
+    /// Per-worker append-only file: newline-delimited preformatted result
+    /// lines (PASS/FAIL/SKIP/SLOW/TRY). The orchestrator drains these files
+    /// and prints whole lines to its stdout to prevent worker output from
+    /// interleaving — multiple processes locking their own stdouts does not
+    /// actually serialize writes. See [`crate::RunCache::output_file`].
+    Output,
     /// Per-run empty sentinel marking that fail-fast was triggered.
     FailFastSignal,
     /// Cache-root JSON: list of last-run failed test names.
@@ -44,6 +55,8 @@ impl CacheFile {
             Self::FailedTests => "failed_tests.json",
             Self::FlakyTests => "flaky_tests.json",
             Self::Coverage => "coverage.json",
+            Self::Progress => "progress",
+            Self::Output => "output",
             Self::FailFastSignal => "fail-fast",
             Self::LastFailed => "last-failed.json",
         }
