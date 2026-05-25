@@ -1052,7 +1052,7 @@ disabled = true
           |
         3 | disabled = true
           | ^^^^^^^^
-        unknown field `disabled`, expected one of `sources`, `report`, `fail-under`
+        unknown field `disabled`, expected one of `sources`, `report`, `report-path`, `fail-under`
         "
         );
     }
@@ -1071,7 +1071,7 @@ nonsense = 1
           |
         4 | nonsense = 1
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `sources`, `report`, `fail-under`
+        unknown field `nonsense`, expected one of `sources`, `report`, `report-path`, `fail-under`
         "
         );
     }
