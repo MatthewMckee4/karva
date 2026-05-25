@@ -194,7 +194,7 @@ pub struct SubTestCommand {
     #[clap(
         long = "cov-report",
         value_name = "TYPE",
-        value_enum,
+        value_parser = parse_cov_report,
         help_heading = "Coverage options"
     )]
     pub cov_report: Option<CovReport>,
@@ -312,6 +312,7 @@ impl TestCommand {
 
 impl SubTestCommand {
     pub fn into_options(self) -> Options {
+        let cov_report = self.cov_report.clone();
         // `--no-fail-fast` forces `fail_fast = false` and clears any
         // `max-fail` limit from config. `overrides_with` guarantees
         // `--fail-fast` and `--no-fail-fast` cannot both be active.
@@ -351,7 +352,11 @@ impl SubTestCommand {
             }),
             coverage: Some(CoverageOptions {
                 sources: (!self.cov.is_empty()).then(|| self.cov.clone()),
-                report: self.cov_report.map(Into::into),
+                report: cov_report.clone().map(Into::into),
+                report_path: cov_report.as_ref().and_then(|report| match report {
+                    CovReport::Xml { path } => path.as_ref().map(|path| path.to_string()),
+                    CovReport::Term | CovReport::TermMissing => None,
+                }),
                 fail_under: self.cov_fail_under.map(CovFailUnder),
                 disabled: self.no_cov.then_some(true),
             }),
@@ -380,4 +385,30 @@ fn parse_cov_fail_under(raw: &str) -> Result<f64, String> {
         return Err(format!("must be between 0 and 100, got `{raw}`"));
     }
     Ok(value)
+}
+
+fn parse_cov_report(raw: &str) -> Result<CovReport, String> {
+    raw.parse()
+}
+
+#[cfg(test)]
+mod tests {
+    use camino::Utf8PathBuf;
+
+    use super::{CovReport, parse_cov_report};
+
+    #[test]
+    fn parse_xml_cov_report_without_path() {
+        assert_eq!(parse_cov_report("xml"), Ok(CovReport::Xml { path: None }));
+    }
+
+    #[test]
+    fn parse_xml_cov_report_with_path() {
+        assert_eq!(
+            parse_cov_report("xml:build/coverage.xml"),
+            Ok(CovReport::Xml {
+                path: Some(Utf8PathBuf::from("build/coverage.xml")),
+            })
+        );
+    }
 }

@@ -177,6 +177,7 @@ pub struct SrcSettings {
 pub struct CoverageSettings {
     pub sources: Vec<String>,
     pub report: CovReport,
+    pub report_path: Option<String>,
     /// Minimum total coverage percentage (`0..=100`). When set and the
     /// reported `TOTAL` coverage is below this value, the test command
     /// exits with a non-zero status even if every test passed.

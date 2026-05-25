@@ -5,6 +5,7 @@ use std::fmt::Write;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result};
+use camino::Utf8PathBuf;
 use karva_cache::{AggregatedResults, DisplayFlakyTests};
 use karva_cli::TestCommand;
 use karva_logging::{Printer, Stdout, set_colored_override, setup_tracing};
@@ -97,8 +98,24 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     let coverage_total = if coverage_files.is_empty() {
         None
     } else {
-        let show_missing = matches!(project.settings().coverage().report, CovReport::TermMissing);
-        match karva_coverage::combine_and_report(project.cwd(), &coverage_files, show_missing) {
+        let coverage = project.settings().coverage();
+        let coverage_result = match coverage.report {
+            CovReport::Term => {
+                karva_coverage::combine_and_report(project.cwd(), &coverage_files, false)
+            }
+            CovReport::TermMissing => {
+                karva_coverage::combine_and_report(project.cwd(), &coverage_files, true)
+            }
+            CovReport::Xml => {
+                let output = coverage
+                    .report_path
+                    .clone()
+                    .map(Utf8PathBuf::from)
+                    .unwrap_or_else(|| Utf8PathBuf::from("coverage.xml"));
+                karva_coverage::write_cobertura_xml(project.cwd(), &coverage_files, &output)
+            }
+        };
+        match coverage_result {
             Ok(total) => total,
             Err(err) => {
                 tracing::error!("Coverage report failed: {err:#}");

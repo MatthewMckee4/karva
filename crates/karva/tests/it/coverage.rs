@@ -326,6 +326,99 @@ def test_only_covered():
 }
 
 #[test]
+fn test_cov_report_xml_writes_default_file() {
+    let context = TestContext::with_file(
+        "test_partial.py",
+        r"
+def covered():
+    return 1
+
+def uncovered():
+    return 2
+
+def test_only_covered():
+    assert covered() == 1
+",
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--cov")
+            .arg("--cov-report=xml")
+            .arg("--status-level=none")
+            .arg("test_partial.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let xml = context.read_file("coverage.xml");
+    assert!(xml.starts_with("<?xml version=\"1.0\" ?>\n<coverage version=\"1.0\" timestamp=\""));
+    assert!(xml.contains("lines-valid=\"6\" lines-covered=\"5\" line-rate=\"0.8333\""));
+    assert!(xml.contains("<sources>\n    <source>"));
+    assert!(xml.contains(
+        "<class name=\"test_partial.py\" filename=\"test_partial.py\" line-rate=\"0.8333\""
+    ));
+    assert!(xml.contains("<line number=\"6\" hits=\"0\" branch=\"false\"/>"));
+}
+
+#[test]
+fn test_cov_report_xml_with_custom_path_from_config() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.coverage]
+sources = [""]
+report = "xml"
+report-path = "build/coverage.xml"
+"#,
+        ),
+        (
+            "test_partial.py",
+            r"
+def covered():
+    return 1
+
+def uncovered():
+    return 2
+
+def test_only_covered():
+    assert covered() == 1
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--status-level=none")
+            .arg("test_partial.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let xml = context.read_file("build/coverage.xml");
+    assert!(xml.contains("<coverage version=\"1.0\""));
+    assert!(xml.contains("filename=\"test_partial.py\""));
+    assert!(xml.contains("<line number=\"6\" hits=\"0\" branch=\"false\"/>"));
+}
+
+#[test]
 fn test_cov_skips_docstrings() {
     let context = TestContext::with_file(
         "test_docstrings.py",

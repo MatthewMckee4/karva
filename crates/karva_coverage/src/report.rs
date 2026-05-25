@@ -1,4 +1,4 @@
-//! Combine per-worker JSON files and produce a terminal report.
+//! Combine per-worker JSON files and produce terminal or XML reports.
 //!
 //! Pure Rust — runs in the main process, never touches Python. Reads each
 //! per-worker JSON file written by the [`tracer`](crate::tracer), unions the
@@ -6,7 +6,9 @@
 //! sorted alphabetically with a `TOTAL` row.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 use std::io::Write;
+use std::time::UNIX_EPOCH;
 
 use anyhow::{Context, Result};
 use camino::Utf8Path;
@@ -67,6 +69,34 @@ fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String, CombinedFi
     Ok(combined)
 }
 
+pub fn write_cobertura_xml(
+    cwd: &Utf8Path,
+    files: &[impl AsRef<Utf8Path>],
+    output: &Utf8Path,
+) -> Result<Option<f64>> {
+    let combined = combine(files)?;
+    if combined.is_empty() {
+        return Ok(None);
+    }
+
+    let cwd_real = std::fs::canonicalize(cwd.as_std_path()).unwrap_or_else(|_| cwd.into());
+    let rows = build_rows(&cwd_real, &combined, false);
+    let total_pct = total_percent(&rows);
+
+    if let Some(parent) = output.parent()
+        && !parent.as_str().is_empty()
+    {
+        std::fs::create_dir_all(parent.as_std_path())
+            .with_context(|| format!("failed to create coverage output directory {parent}"))?;
+    }
+
+    let xml = build_cobertura_xml(cwd, &cwd_real, &rows);
+    std::fs::write(output.as_std_path(), xml)
+        .with_context(|| format!("failed to write coverage xml {output}"))?;
+
+    Ok(Some(total_pct))
+}
+
 struct Row<'a> {
     name: &'a str,
     stmts: &'a str,
@@ -77,9 +107,13 @@ struct Row<'a> {
 
 struct FileRow {
     name: String,
+    absolute_name: String,
     stmts: u32,
+    hit: u32,
     miss: u32,
     missing: String,
+    executable: Vec<u32>,
+    executed: Vec<u32>,
 }
 
 fn print_report(
@@ -90,30 +124,7 @@ fn print_report(
 ) -> Result<f64> {
     let cwd_real = std::fs::canonicalize(cwd.as_std_path()).unwrap_or_else(|_| cwd.into());
 
-    let rows: Vec<FileRow> = combined
-        .iter()
-        .map(|(filename, data)| {
-            let stmts = u32::try_from(data.executable.len()).unwrap_or(u32::MAX);
-            let hit = u32::try_from(data.executed.len()).unwrap_or(u32::MAX);
-            let miss = stmts.saturating_sub(hit);
-            let missing = if show_missing {
-                let uncovered: BTreeSet<u32> = data
-                    .executable
-                    .difference(&data.executed)
-                    .copied()
-                    .collect();
-                collapse_ranges(&uncovered)
-            } else {
-                String::new()
-            };
-            FileRow {
-                name: display_path(filename, &cwd_real),
-                stmts,
-                miss,
-                missing,
-            }
-        })
-        .collect();
+    let rows = build_rows(&cwd_real, combined, show_missing);
 
     let name_width = rows
         .iter()
@@ -189,6 +200,138 @@ fn print_report(
     )?;
 
     Ok(total_pct)
+}
+
+fn build_rows(
+    cwd_real: &std::path::Path,
+    combined: &BTreeMap<String, CombinedFile>,
+    show_missing: bool,
+) -> Vec<FileRow> {
+    combined
+        .iter()
+        .map(|(filename, data)| {
+            let executable: Vec<u32> = data.executable.iter().copied().collect();
+            let executed: Vec<u32> = data.executed.iter().copied().collect();
+            let stmts = u32::try_from(executable.len()).unwrap_or(u32::MAX);
+            let hit = u32::try_from(executed.len()).unwrap_or(u32::MAX);
+            let miss = stmts.saturating_sub(hit);
+            let missing = if show_missing {
+                let uncovered: BTreeSet<u32> = data
+                    .executable
+                    .difference(&data.executed)
+                    .copied()
+                    .collect();
+                collapse_ranges(&uncovered)
+            } else {
+                String::new()
+            };
+            FileRow {
+                name: display_path(filename, cwd_real),
+                absolute_name: filename.clone(),
+                stmts,
+                hit,
+                miss,
+                missing,
+                executable,
+                executed,
+            }
+        })
+        .collect()
+}
+
+fn total_percent(rows: &[FileRow]) -> f64 {
+    let total_stmts = rows
+        .iter()
+        .fold(0_u32, |acc, row| acc.saturating_add(row.stmts));
+    let total_miss = rows
+        .iter()
+        .fold(0_u32, |acc, row| acc.saturating_add(row.miss));
+    percent(total_stmts, total_miss)
+}
+
+fn build_cobertura_xml(cwd: &Utf8Path, cwd_real: &std::path::Path, rows: &[FileRow]) -> String {
+    let total_stmts = rows
+        .iter()
+        .fold(0_u32, |acc, row| acc.saturating_add(row.stmts));
+    let total_hit = rows
+        .iter()
+        .fold(0_u32, |acc, row| acc.saturating_add(row.hit));
+    let line_rate = rate(total_hit, total_stmts);
+    let timestamp = std::fs::metadata(cwd.as_std_path())
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .map_or(0, |duration| duration.as_secs());
+    let source_root = cwd_real.to_string_lossy().trim_end_matches('/').to_string();
+
+    let mut xml = String::new();
+    xml.push_str("<?xml version=\"1.0\" ?>\n");
+    let _ = writeln!(
+        xml,
+        "<coverage version=\"1.0\" timestamp=\"{timestamp}\" lines-valid=\"{total_stmts}\" lines-covered=\"{total_hit}\" line-rate=\"{line_rate:.4}\" branches-covered=\"0\" branches-valid=\"0\" branch-rate=\"0.0000\" complexity=\"0.0\">"
+    );
+    xml.push_str("  <sources>\n");
+    let _ = writeln!(xml, "    <source>{}</source>", escape_xml(&source_root));
+    xml.push_str("  </sources>\n");
+    xml.push_str("  <packages>\n");
+    xml.push_str(
+        "    <package name=\".\" line-rate=\"0.0000\" branch-rate=\"0.0000\" complexity=\"0.0\">\n",
+    );
+    xml.push_str("      <classes>\n");
+
+    for row in rows {
+        let filename = class_filename(row, cwd_real);
+        let _ = writeln!(
+            xml,
+            "        <class name=\"{}\" filename=\"{}\" line-rate=\"{:.4}\" branch-rate=\"0.0000\" complexity=\"0.0\">",
+            escape_xml(&row.name),
+            escape_xml(&filename),
+            rate(row.hit, row.stmts)
+        );
+        xml.push_str("          <methods/>\n");
+        xml.push_str("          <lines>\n");
+        let executed: BTreeSet<u32> = row.executed.iter().copied().collect();
+        for line in &row.executable {
+            let hits = i32::from(executed.contains(line));
+            let _ = writeln!(
+                xml,
+                "            <line number=\"{line}\" hits=\"{hits}\" branch=\"false\"/>"
+            );
+        }
+        xml.push_str("          </lines>\n");
+        xml.push_str("        </class>\n");
+    }
+
+    xml.push_str("      </classes>\n");
+    xml.push_str("    </package>\n");
+    xml.push_str("  </packages>\n");
+    xml.push_str("</coverage>\n");
+    xml
+}
+
+fn class_filename(row: &FileRow, cwd_real: &std::path::Path) -> String {
+    if let Ok(relative) = std::path::Path::new(&row.absolute_name).strip_prefix(cwd_real) {
+        relative.to_string_lossy().replace('\\', "/")
+    } else {
+        row.absolute_name.replace('\\', "/")
+    }
+}
+
+fn rate(hit: u32, total: u32) -> f64 {
+    if total == 0 {
+        1.0
+    } else {
+        f64::from(hit) / f64::from(total)
+    }
+}
+
+fn escape_xml(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
 }
 
 fn format_row(name_width: usize, show_missing: bool, row: &Row<'_>) -> String {
