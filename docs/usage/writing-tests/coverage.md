@@ -52,6 +52,36 @@ test_missing.py      10      4     60%   6, 9-11
 TOTAL                10      4     60%
 ```
 
+`--cov-report=xml[:PATH]` writes Cobertura XML for CI integrations. If `PATH` is omitted, karva writes `coverage.xml` in the project root:
+
+```bash
+karva test --cov=src --cov-report=xml
+karva test --cov=src --cov-report=xml:build/coverage.xml
+```
+
+Equivalent configuration:
+
+```toml
+[tool.karva.profile.ci.coverage]
+sources = ["src"]
+report = "xml"
+report-path = "build/coverage.xml"
+```
+
+`--cov-report=json[:PATH]` writes a machine-readable JSON report. If `PATH` is omitted, karva writes `coverage.json` in the project root:
+
+```bash
+karva test --cov=src --cov-report=json
+karva test --cov=src --cov-report=json:build/coverage.json
+```
+
+`--cov-report=html[:DIR]` writes a simple browsable HTML report. If `DIR` is omitted, karva writes `htmlcov/` in the project root:
+
+```bash
+karva test --cov=src --cov-report=html
+karva test --cov=src --cov-report=html:build/htmlcov
+```
+
 Files that were never imported during the run still appear, at `0%`, so dead modules under your source root show up rather than silently inflating the total.
 
 ## Failing on low coverage
@@ -114,6 +144,19 @@ A typical CI invocation pins a minimum and prints the missing lines:
 
 ```bash
 karva test --cov=src --cov-report=term-missing --cov-fail-under=85
+```
+
+For XML-consuming tools such as SonarQube or Codecov:
+
+```bash
+karva test --cov=src --cov-report=xml:build/coverage.xml --cov-fail-under=85
+```
+
+For machine-readable JSON or a browsable HTML summary:
+
+```bash
+karva test --cov=src --cov-report=json:build/coverage.json --cov-fail-under=85
+karva test --cov=src --cov-report=html:build/htmlcov --cov-fail-under=85
 ```
 
 Or, equivalently, in `pyproject.toml`:
