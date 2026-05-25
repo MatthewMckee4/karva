@@ -511,6 +511,57 @@ def test_only_covered():
 }
 
 #[test]
+fn test_cov_report_path_warns_for_term_report_from_config() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.coverage]
+sources = [""]
+report = "term"
+report-path = "build/coverage.xml"
+"#,
+        ),
+        (
+            "test_partial.py",
+            r"
+def covered():
+    return 1
+
+def uncovered():
+    return 2
+
+def test_only_covered():
+    assert covered() == 1
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--status-level=none")
+            .arg("test_partial.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+    warning: `coverage.report-path` is ignored when `coverage.report` is `term`
+
+    Name              Stmts   Miss   Cover
+    [LONG-LINE]
+    test_partial.py       6      1     83%
+    [LONG-LINE]
+    TOTAL                 6      1     83%
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
 fn test_cov_skips_docstrings() {
     let context = TestContext::with_file(
         "test_docstrings.py",

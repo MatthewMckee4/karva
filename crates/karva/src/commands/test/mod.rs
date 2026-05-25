@@ -99,6 +99,16 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         None
     } else {
         let coverage = project.settings().coverage();
+        if coverage.report_path.is_some()
+            && matches!(coverage.report, CovReport::Term | CovReport::TermMissing)
+        {
+            let mut stdout = printer.stream_for_message().lock();
+            writeln!(
+                stdout,
+                "warning: `coverage.report-path` is ignored when `coverage.report` is `{}`",
+                coverage.report.as_str()
+            )?;
+        }
         let coverage_result = match coverage.report {
             CovReport::Term => {
                 karva_coverage::combine_and_report(project.cwd(), &coverage_files, false)

@@ -447,6 +447,18 @@ impl Combine for CovReport {
     }
 }
 
+impl CovReport {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Term => "term",
+            Self::TermMissing => "term-missing",
+            Self::Xml => "xml",
+            Self::Json => "json",
+            Self::Html => "html",
+        }
+    }
+}
+
 /// The diagnostic output format.
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
