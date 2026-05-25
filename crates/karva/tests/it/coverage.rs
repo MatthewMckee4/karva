@@ -2,6 +2,22 @@ use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
 
+fn normalize_xml_report(xml: &str) -> String {
+    let start = xml.find("<coverage version=\"1.0\" timestamp=\"").unwrap();
+    let end = xml[start..]
+        .find(" lines-valid=")
+        .map(|offset| start + offset)
+        .unwrap();
+
+    let mut normalized = xml.to_string();
+    normalized.replace_range(
+        start..end,
+        "<coverage version=\"1.0\" timestamp=\"[TIMESTAMP]\"",
+    );
+    normalized
+}
+
+
 #[test]
 fn test_no_cov_no_coverage_table() {
     let context = TestContext::with_file(
@@ -359,14 +375,32 @@ def test_only_covered():
     "
     );
 
-    let xml = context.read_file("coverage.xml");
-    assert!(xml.starts_with("<?xml version=\"1.0\" ?>\n<coverage version=\"1.0\" timestamp=\""));
-    assert!(xml.contains("lines-valid=\"6\" lines-covered=\"5\" line-rate=\"0.8333\""));
-    assert!(xml.contains("<sources>\n    <source>"));
-    assert!(xml.contains(
-        "<class name=\"test_partial.py\" filename=\"test_partial.py\" line-rate=\"0.8333\""
-    ));
-    assert!(xml.contains("<line number=\"6\" hits=\"0\" branch=\"false\"/>"));
+    let xml = normalize_xml_report(&context.read_file("coverage.xml"));
+    insta::assert_snapshot!(xml, @r#"
+    <?xml version="1.0" ?>
+    <coverage version="1.0" timestamp="[TIMESTAMP]" lines-valid="6" lines-covered="5" line-rate="0.8333" branches-covered="0" branches-valid="0" branch-rate="0.0000" complexity="0.0">
+      <sources>
+        <source><temp_dir>/</source>
+      </sources>
+      <packages>
+        <package name="." line-rate="0.0000" branch-rate="0.0000" complexity="0.0">
+          <classes>
+            <class name="test_partial.py" filename="test_partial.py" line-rate="0.8333" branch-rate="0.0000" complexity="0.0">
+              <methods/>
+              <lines>
+                <line number="2" hits="1" branch="false"/>
+                <line number="3" hits="1" branch="false"/>
+                <line number="5" hits="1" branch="false"/>
+                <line number="6" hits="0" branch="false"/>
+                <line number="8" hits="1" branch="false"/>
+                <line number="9" hits="1" branch="false"/>
+              </lines>
+            </class>
+          </classes>
+        </package>
+      </packages>
+    </coverage>
+    "#);
 }
 
 #[test]
@@ -412,10 +446,32 @@ def test_only_covered():
     "
     );
 
-    let xml = context.read_file("build/coverage.xml");
-    assert!(xml.contains("<coverage version=\"1.0\""));
-    assert!(xml.contains("filename=\"test_partial.py\""));
-    assert!(xml.contains("<line number=\"6\" hits=\"0\" branch=\"false\"/>"));
+    let xml = normalize_xml_report(&context.read_file("build/coverage.xml"));
+    insta::assert_snapshot!(xml, @r#"
+    <?xml version="1.0" ?>
+    <coverage version="1.0" timestamp="[TIMESTAMP]" lines-valid="6" lines-covered="5" line-rate="0.8333" branches-covered="0" branches-valid="0" branch-rate="0.0000" complexity="0.0">
+      <sources>
+        <source><temp_dir>/</source>
+      </sources>
+      <packages>
+        <package name="." line-rate="0.0000" branch-rate="0.0000" complexity="0.0">
+          <classes>
+            <class name="test_partial.py" filename="test_partial.py" line-rate="0.8333" branch-rate="0.0000" complexity="0.0">
+              <methods/>
+              <lines>
+                <line number="2" hits="1" branch="false"/>
+                <line number="3" hits="1" branch="false"/>
+                <line number="5" hits="1" branch="false"/>
+                <line number="6" hits="0" branch="false"/>
+                <line number="8" hits="1" branch="false"/>
+                <line number="9" hits="1" branch="false"/>
+              </lines>
+            </class>
+          </classes>
+        </package>
+      </packages>
+    </coverage>
+    "#);
 }
 
 #[test]
@@ -453,11 +509,45 @@ def test_only_covered():
     );
 
     let json = context.read_file("coverage.json");
-    assert!(json.contains("\"format\": 2"));
-    assert!(json.contains("\"version\": \"karva\""));
-    assert!(json.contains("\"test_partial.py\""));
-    assert!(json.contains("\"percent_covered\": 83.33333333333334"));
-    assert!(json.contains("\"missing_lines\": [\n        6\n      ]"));
+    insta::assert_snapshot!(json, @r#"
+    {
+      "meta": {
+        "format": 2,
+        "version": "karva"
+      },
+      "files": {
+        "test_partial.py": {
+          "executed_lines": [
+            2,
+            3,
+            5,
+            8,
+            9
+          ],
+          "summary": {
+            "covered_lines": 5,
+            "num_statements": 6,
+            "percent_covered": 83.33333333333334,
+            "missing_lines": [
+              6
+            ],
+            "excluded_lines": []
+          },
+          "missing_lines": [
+            6
+          ],
+          "excluded_lines": []
+        }
+      },
+      "totals": {
+        "covered_lines": 5,
+        "num_statements": 6,
+        "percent_covered": 83.33333333333334,
+        "missing_lines": [],
+        "excluded_lines": []
+      }
+    }
+    "#);
 }
 
 #[test]
@@ -504,10 +594,30 @@ def test_only_covered():
     );
 
     let html = context.read_file("build/htmlcov/index.html");
-    assert!(html.contains("<title>Coverage report</title>"));
-    assert!(html.contains("<code>test_partial.py</code>"));
-    assert!(html.contains("<strong>83%</strong> (5/6)"));
-    assert!(html.contains("<code>6</code>"));
+    insta::assert_snapshot!(html, @r#"
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Coverage report</title>
+      <style>body{font-family:system-ui,sans-serif;margin:2rem;}table{border-collapse:collapse;width:100%;}th,td{padding:.5rem;border-bottom:1px solid #ddd;text-align:left;}td.num{text-align:right;font-variant-numeric:tabular-nums;}code{font-family:ui-monospace,SFMono-Regular,monospace;}thead{background:#f5f5f5;}h1{margin-top:0;}</style>
+    </head>
+    <body>
+      <h1>Coverage report</h1>
+      <p>Total coverage: <strong>83%</strong> (5/6)</p>
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Stmts</th><th>Miss</th><th>Cover</th><th>Missing</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>test_partial.py</code></td><td class="num">6</td><td class="num">1</td><td class="num">83%</td><td><code>6</code></td></tr>
+          <tr><td><strong>TOTAL</strong></td><td class="num"><strong>6</strong></td><td class="num"><strong>1</strong></td><td class="num"><strong>83%</strong></td><td></td></tr>
+        </tbody>
+      </table>
+    </body>
+    </html>
+    "#);
 }
 
 #[test]
