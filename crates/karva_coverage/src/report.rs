@@ -13,6 +13,7 @@ use std::time::UNIX_EPOCH;
 use anyhow::{Context, Result};
 use camino::Utf8Path;
 use colored::Colorize;
+use serde::Serialize;
 
 use crate::data::WorkerFile;
 
@@ -97,6 +98,59 @@ pub fn write_cobertura_xml(
     Ok(Some(total_pct))
 }
 
+pub fn write_json_report(
+    cwd: &Utf8Path,
+    files: &[impl AsRef<Utf8Path>],
+    output: &Utf8Path,
+) -> Result<Option<f64>> {
+    let combined = combine(files)?;
+    if combined.is_empty() {
+        return Ok(None);
+    }
+
+    let cwd_real = std::fs::canonicalize(cwd.as_std_path()).unwrap_or_else(|_| cwd.into());
+    let rows = build_rows(&cwd_real, &combined, false);
+    let total_pct = total_percent(&rows);
+
+    if let Some(parent) = output.parent()
+        && !parent.as_str().is_empty()
+    {
+        std::fs::create_dir_all(parent.as_std_path())
+            .with_context(|| format!("failed to create coverage output directory {parent}"))?;
+    }
+
+    let json = build_json_report(&rows)?;
+    std::fs::write(output.as_std_path(), json)
+        .with_context(|| format!("failed to write coverage json {output}"))?;
+
+    Ok(Some(total_pct))
+}
+
+pub fn write_html_report(
+    cwd: &Utf8Path,
+    files: &[impl AsRef<Utf8Path>],
+    output_dir: &Utf8Path,
+) -> Result<Option<f64>> {
+    let combined = combine(files)?;
+    if combined.is_empty() {
+        return Ok(None);
+    }
+
+    let cwd_real = std::fs::canonicalize(cwd.as_std_path()).unwrap_or_else(|_| cwd.into());
+    let rows = build_rows(&cwd_real, &combined, true);
+    let total_pct = total_percent(&rows);
+
+    std::fs::create_dir_all(output_dir.as_std_path())
+        .with_context(|| format!("failed to create coverage html directory {output_dir}"))?;
+
+    let html = build_html_report(&rows);
+    let output_file = output_dir.join("index.html");
+    std::fs::write(output_file.as_std_path(), html)
+        .with_context(|| format!("failed to write coverage html {output_file}"))?;
+
+    Ok(Some(total_pct))
+}
+
 struct Row<'a> {
     name: &'a str,
     stmts: &'a str,
@@ -114,6 +168,36 @@ struct FileRow {
     missing: String,
     executable: Vec<u32>,
     executed: Vec<u32>,
+}
+
+#[derive(Serialize)]
+struct JsonSummary {
+    covered_lines: u32,
+    num_statements: u32,
+    percent_covered: f64,
+    missing_lines: Vec<u32>,
+    excluded_lines: Vec<u32>,
+}
+
+#[derive(Serialize)]
+struct JsonFileReport {
+    executed_lines: Vec<u32>,
+    summary: JsonSummary,
+    missing_lines: Vec<u32>,
+    excluded_lines: Vec<u32>,
+}
+
+#[derive(Serialize)]
+struct JsonReport {
+    meta: JsonMeta,
+    files: BTreeMap<String, JsonFileReport>,
+    totals: JsonSummary,
+}
+
+#[derive(Serialize)]
+struct JsonMeta {
+    format: u32,
+    version: &'static str,
 }
 
 fn print_report(
@@ -307,6 +391,126 @@ fn build_cobertura_xml(cwd: &Utf8Path, cwd_real: &std::path::Path, rows: &[FileR
     xml.push_str("  </packages>\n");
     xml.push_str("</coverage>\n");
     xml
+}
+
+fn build_json_report(rows: &[FileRow]) -> Result<String> {
+    let files = rows
+        .iter()
+        .map(|row| {
+            (
+                row.name.clone(),
+                JsonFileReport {
+                    executed_lines: row.executed.clone(),
+                    summary: json_summary(row),
+                    missing_lines: missing_lines(row),
+                    excluded_lines: Vec::new(),
+                },
+            )
+        })
+        .collect();
+
+    let totals_row = totals_row(rows);
+    let report = JsonReport {
+        meta: JsonMeta {
+            format: 2,
+            version: "karva",
+        },
+        files,
+        totals: json_summary(&totals_row),
+    };
+
+    serde_json::to_string_pretty(&report).context("failed to serialize coverage json")
+}
+
+fn build_html_report(rows: &[FileRow]) -> String {
+    let mut html = String::new();
+    html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
+    html.push_str("  <meta charset=\"utf-8\">\n");
+    html.push_str("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
+    html.push_str("  <title>Coverage report</title>\n");
+    html.push_str("  <style>body{font-family:system-ui,sans-serif;margin:2rem;}table{border-collapse:collapse;width:100%;}th,td{padding:.5rem;border-bottom:1px solid #ddd;text-align:left;}td.num{text-align:right;font-variant-numeric:tabular-nums;}code{font-family:ui-monospace,SFMono-Regular,monospace;}thead{background:#f5f5f5;}h1{margin-top:0;}</style>\n");
+    html.push_str("</head>\n<body>\n");
+    html.push_str("  <h1>Coverage report</h1>\n");
+    let total = totals_row(rows);
+    let _ = writeln!(
+        html,
+        "  <p>Total coverage: <strong>{}</strong> ({}/{})</p>",
+        format_percent(total.stmts, total.miss),
+        total.hit,
+        total.stmts
+    );
+    html.push_str("  <table>\n    <thead>\n      <tr><th>Name</th><th>Stmts</th><th>Miss</th><th>Cover</th><th>Missing</th></tr>\n    </thead>\n    <tbody>\n");
+    for row in rows {
+        let _ = writeln!(
+            html,
+            "      <tr><td><code>{}</code></td><td class=\"num\">{}</td><td class=\"num\">{}</td><td class=\"num\">{}</td><td><code>{}</code></td></tr>",
+            escape_html(&row.name),
+            row.stmts,
+            row.miss,
+            format_percent(row.stmts, row.miss),
+            escape_html(&row.missing)
+        );
+    }
+    let _ = writeln!(
+        html,
+        "      <tr><td><strong>TOTAL</strong></td><td class=\"num\"><strong>{}</strong></td><td class=\"num\"><strong>{}</strong></td><td class=\"num\"><strong>{}</strong></td><td></td></tr>",
+        total.stmts,
+        total.miss,
+        format_percent(total.stmts, total.miss)
+    );
+    html.push_str("    </tbody>\n  </table>\n</body>\n</html>\n");
+    html
+}
+
+fn totals_row(rows: &[FileRow]) -> FileRow {
+    let stmts = rows
+        .iter()
+        .fold(0_u32, |acc, row| acc.saturating_add(row.stmts));
+    let hit = rows
+        .iter()
+        .fold(0_u32, |acc, row| acc.saturating_add(row.hit));
+    let miss = rows
+        .iter()
+        .fold(0_u32, |acc, row| acc.saturating_add(row.miss));
+    let missing = rows.iter().flat_map(missing_lines).collect::<Vec<_>>();
+    FileRow {
+        name: "TOTAL".to_string(),
+        absolute_name: String::new(),
+        stmts,
+        hit,
+        miss,
+        missing: collapse_ranges(&missing.iter().copied().collect()),
+        executable: Vec::new(),
+        executed: Vec::new(),
+    }
+}
+
+fn json_summary(row: &FileRow) -> JsonSummary {
+    JsonSummary {
+        covered_lines: row.hit,
+        num_statements: row.stmts,
+        percent_covered: percent(row.stmts, row.miss),
+        missing_lines: missing_lines(row),
+        excluded_lines: Vec::new(),
+    }
+}
+
+fn missing_lines(row: &FileRow) -> Vec<u32> {
+    let executed: BTreeSet<u32> = row.executed.iter().copied().collect();
+    row.executable
+        .iter()
+        .copied()
+        .filter(|line| !executed.contains(line))
+        .collect()
+}
+
+fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
 fn class_filename(row: &FileRow, cwd_real: &std::path::Path) -> String {

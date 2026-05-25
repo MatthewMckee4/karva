@@ -114,6 +114,22 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
                     .unwrap_or_else(|| Utf8PathBuf::from("coverage.xml"));
                 karva_coverage::write_cobertura_xml(project.cwd(), &coverage_files, &output)
             }
+            CovReport::Json => {
+                let output = coverage
+                    .report_path
+                    .clone()
+                    .map(Utf8PathBuf::from)
+                    .unwrap_or_else(|| Utf8PathBuf::from("coverage.json"));
+                karva_coverage::write_json_report(project.cwd(), &coverage_files, &output)
+            }
+            CovReport::Html => {
+                let output = coverage
+                    .report_path
+                    .clone()
+                    .map(Utf8PathBuf::from)
+                    .unwrap_or_else(|| Utf8PathBuf::from("htmlcov"));
+                karva_coverage::write_html_report(project.cwd(), &coverage_files, &output)
+            }
         };
         match coverage_result {
             Ok(total) => total,

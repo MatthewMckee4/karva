@@ -419,6 +419,98 @@ def test_only_covered():
 }
 
 #[test]
+fn test_cov_report_json_writes_default_file() {
+    let context = TestContext::with_file(
+        "test_partial.py",
+        r"
+def covered():
+    return 1
+
+def uncovered():
+    return 2
+
+def test_only_covered():
+    assert covered() == 1
+",
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--cov")
+            .arg("--cov-report=json")
+            .arg("--status-level=none")
+            .arg("test_partial.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let json = context.read_file("coverage.json");
+    assert!(json.contains("\"format\": 2"));
+    assert!(json.contains("\"version\": \"karva\""));
+    assert!(json.contains("\"test_partial.py\""));
+    assert!(json.contains("\"percent_covered\": 83.33333333333334"));
+    assert!(json.contains("\"missing_lines\": [\n        6\n      ]"));
+}
+
+#[test]
+fn test_cov_report_html_with_custom_dir_from_config() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.coverage]
+sources = [""]
+report = "html"
+report-path = "build/htmlcov"
+"#,
+        ),
+        (
+            "test_partial.py",
+            r"
+def covered():
+    return 1
+
+def uncovered():
+    return 2
+
+def test_only_covered():
+    assert covered() == 1
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--status-level=none")
+            .arg("test_partial.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let html = context.read_file("build/htmlcov/index.html");
+    assert!(html.contains("<title>Coverage report</title>"));
+    assert!(html.contains("<code>test_partial.py</code>"));
+    assert!(html.contains("<strong>83%</strong> (5/6)"));
+    assert!(html.contains("<code>6</code>"));
+}
+
+#[test]
 fn test_cov_skips_docstrings() {
     let context = TestContext::with_file(
         "test_docstrings.py",

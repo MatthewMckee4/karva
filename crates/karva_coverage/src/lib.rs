@@ -8,7 +8,7 @@
 //!   lines via the AST, and writes a per-worker JSON file.
 //! * [`report`] runs in the main process. It reads each worker's JSON
 //!   file, unions the line sets per source file, and prints a terminal
-//!   `Name / Stmts / Miss / Cover` table or writes Cobertura XML.
+//!   `Name / Stmts / Miss / Cover` table or writes machine-readable reports.
 //!
 //! The two halves communicate only through the JSON file format, defined
 //! in [`data`].
@@ -18,5 +18,5 @@ pub mod executable;
 pub mod report;
 pub mod tracer;
 
-pub use report::{combine_and_report, write_cobertura_xml};
+pub use report::{combine_and_report, write_cobertura_xml, write_html_report, write_json_report};
 pub use tracer::{CoverageConfig, CoverageSession};

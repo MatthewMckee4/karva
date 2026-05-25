@@ -16,6 +16,12 @@ pub enum CovReport {
 
     /// Cobertura XML written to disk, optionally to a custom path.
     Xml { path: Option<Utf8PathBuf> },
+
+    /// JSON coverage report written to disk, optionally to a custom path.
+    Json { path: Option<Utf8PathBuf> },
+
+    /// HTML coverage report written to disk, optionally to a custom directory.
+    Html { path: Option<Utf8PathBuf> },
 }
 
 impl Default for CovReport {
@@ -33,16 +39,26 @@ impl FromStr for CovReport {
                 "term" => Ok(Self::Term),
                 "term-missing" => Ok(Self::TermMissing),
                 "xml" => Ok(Self::Xml { path: None }),
+                "json" => Ok(Self::Json { path: None }),
+                "html" => Ok(Self::Html { path: None }),
                 _ => Err(format!(
-                    "invalid value `{raw}`; expected one of `term`, `term-missing`, or `xml[:PATH]`"
+                    "invalid value `{raw}`; expected one of `term`, `term-missing`, `xml[:PATH]`, `json[:PATH]`, or `html[:PATH]`"
                 )),
             },
             Some(("xml", path)) if !path.is_empty() => Ok(Self::Xml {
                 path: Some(Utf8PathBuf::from(path)),
             }),
+            Some(("json", path)) if !path.is_empty() => Ok(Self::Json {
+                path: Some(Utf8PathBuf::from(path)),
+            }),
+            Some(("html", path)) if !path.is_empty() => Ok(Self::Html {
+                path: Some(Utf8PathBuf::from(path)),
+            }),
             Some(("xml", _)) => Err("`xml` report path cannot be empty".to_string()),
+            Some(("json", _)) => Err("`json` report path cannot be empty".to_string()),
+            Some(("html", _)) => Err("`html` report path cannot be empty".to_string()),
             Some((kind, _)) => Err(format!(
-                "report `{kind}` does not accept a path; expected `term`, `term-missing`, or `xml[:PATH]`"
+                "report `{kind}` does not accept a path; expected `term`, `term-missing`, `xml[:PATH]`, `json[:PATH]`, or `html[:PATH]`"
             )),
         }
     }
@@ -85,6 +101,8 @@ impl From<CovReport> for karva_metadata::CovReport {
             CovReport::Term => Self::Term,
             CovReport::TermMissing => Self::TermMissing,
             CovReport::Xml { .. } => Self::Xml,
+            CovReport::Json { .. } => Self::Json,
+            CovReport::Html { .. } => Self::Html,
         }
     }
 }

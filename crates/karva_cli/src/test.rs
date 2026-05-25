@@ -186,11 +186,12 @@ pub struct SubTestCommand {
     )]
     pub no_cov: bool,
 
-    /// Coverage terminal report type.
+    /// Coverage report type.
     ///
     /// `term` (default) prints a compact terminal table.
     /// `term-missing` extends it with a `Missing` column listing the
     /// uncovered line numbers per file.
+    /// `xml[:PATH]`, `json[:PATH]`, and `html[:DIR]` write reports to disk.
     #[clap(
         long = "cov-report",
         value_name = "TYPE",
@@ -354,7 +355,9 @@ impl SubTestCommand {
                 sources: (!self.cov.is_empty()).then(|| self.cov.clone()),
                 report: cov_report.clone().map(Into::into),
                 report_path: cov_report.as_ref().and_then(|report| match report {
-                    CovReport::Xml { path } => path.as_ref().map(|path| path.to_string()),
+                    CovReport::Xml { path }
+                    | CovReport::Json { path }
+                    | CovReport::Html { path } => path.as_ref().map(|path| path.to_string()),
                     CovReport::Term | CovReport::TermMissing => None,
                 }),
                 fail_under: self.cov_fail_under.map(CovFailUnder),
@@ -403,11 +406,41 @@ mod tests {
     }
 
     #[test]
+    fn parse_json_cov_report_without_path() {
+        assert_eq!(parse_cov_report("json"), Ok(CovReport::Json { path: None }));
+    }
+
+    #[test]
+    fn parse_html_cov_report_without_path() {
+        assert_eq!(parse_cov_report("html"), Ok(CovReport::Html { path: None }));
+    }
+
+    #[test]
     fn parse_xml_cov_report_with_path() {
         assert_eq!(
             parse_cov_report("xml:build/coverage.xml"),
             Ok(CovReport::Xml {
                 path: Some(Utf8PathBuf::from("build/coverage.xml")),
+            })
+        );
+    }
+
+    #[test]
+    fn parse_json_cov_report_with_path() {
+        assert_eq!(
+            parse_cov_report("json:build/coverage.json"),
+            Ok(CovReport::Json {
+                path: Some(Utf8PathBuf::from("build/coverage.json")),
+            })
+        );
+    }
+
+    #[test]
+    fn parse_html_cov_report_with_path() {
+        assert_eq!(
+            parse_cov_report("html:build/htmlcov"),
+            Ok(CovReport::Html {
+                path: Some(Utf8PathBuf::from("build/htmlcov")),
             })
         );
     }
