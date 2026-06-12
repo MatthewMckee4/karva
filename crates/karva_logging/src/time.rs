@@ -39,7 +39,7 @@ mod tests {
     /// including the exact one-second boundary and values like 1999 ms.
     #[test]
     fn format_duration_sub_two_seconds_uses_milliseconds() {
-        assert_snapshot!(format_duration(Duration::from_millis(1000)), @"1000ms");
+        assert_snapshot!(format_duration(Duration::from_secs(1)), @"1000ms");
         assert_snapshot!(format_duration(Duration::from_millis(1999)), @"1999ms");
     }
 

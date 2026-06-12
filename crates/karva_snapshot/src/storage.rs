@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::io;
 
@@ -194,7 +195,7 @@ fn process_inline_snapshots(
     inline_by_source: &mut HashMap<String, Vec<InlineInfo<'_>>>,
 ) -> io::Result<()> {
     for (source_file, group) in inline_by_source.iter_mut() {
-        group.sort_by(|a, b| b.line.cmp(&a.line));
+        group.sort_by_key(|info| Reverse(info.line));
         for item in group.iter() {
             let content = item.content.trim_end();
             crate::inline::rewrite_inline_snapshot(
