@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
-use karva_diagnostic::{FlakyTest, TestResultStats, TestRunResult};
+use karva_diagnostic::{FlakyTest, TestResultKind, TestResultStats, TestRunResult};
 use ruff_db::diagnostic::{DisplayDiagnosticConfig, DisplayDiagnostics, FileResolver};
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +32,17 @@ pub struct AggregatedResults {
     pub failed_tests: Vec<String>,
     pub flaky_tests: Vec<FlakyTest>,
     pub durations: HashMap<String, Duration>,
+}
+
+impl AggregatedResults {
+    pub fn register_interrupted_test(&mut self, name: &str, duration: Duration) {
+        let function_name = name
+            .split_once('[')
+            .map_or_else(|| name.to_string(), |(base, _)| base.to_string());
+        self.stats.add(TestResultKind::Failed);
+        self.failed_tests.push(function_name.clone());
+        self.durations.insert(function_name, duration);
+    }
 }
 
 /// Reads and writes test results in the cache directory for a specific run.
@@ -88,10 +99,8 @@ impl RunCache {
 
     /// Reads the snapshot of which test the worker is currently running.
     /// Returns `None` if the worker is between tests or hasn't started yet.
-    pub fn read_current_test(&self, worker_id: usize) -> Option<CurrentTest> {
+    pub fn read_current_test(&self, worker_id: usize) -> Result<Option<CurrentTest>> {
         read_json::<CurrentTest>(&self.worker_dir(worker_id), CacheFile::CurrentTest)
-            .ok()
-            .flatten()
     }
 
     /// Returns paths to every per-worker coverage file that exists for this
@@ -609,6 +618,25 @@ mod tests {
                 20ms,
             ),
         ]
+        "#);
+    }
+
+    #[test]
+    fn interrupted_tests_count_as_failures() {
+        let mut results = AggregatedResults::default();
+
+        results.register_interrupted_test("mod::test_slow[param]", Duration::from_millis(42));
+
+        assert_eq!(results.stats.failed(), 1);
+        assert_debug_snapshot!(results.failed_tests, @r#"
+        [
+            "mod::test_slow",
+        ]
+        "#);
+        assert_debug_snapshot!(results.durations, @r#"
+        {
+            "mod::test_slow": 42ms,
+        }
         "#);
     }
 

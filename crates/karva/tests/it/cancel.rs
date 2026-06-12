@@ -65,11 +65,11 @@ def test_slow_e(): time.sleep(60)
         .replace_all(&stdout, "test_slow_X")
         .into_owned();
     // Worker scheduling means PASS and SIGINT lines can appear in any
-    // order. Sort each block independently for a deterministic snapshot.
-    // The ordering of every other line (Starting / Cancelling / summary
-    // / error) is deterministic.
-    sort_block_starting_with(&mut stdout, "PASS");
-    sort_block_starting_with(&mut stdout, "SIGINT");
+    // order. Sort each status independently for a deterministic snapshot.
+    // The ordering of every other line (Starting / Cancelling / summary)
+    // is deterministic.
+    sort_lines_starting_with(&mut stdout, "PASS");
+    sort_lines_starting_with(&mut stdout, "SIGINT");
 
     assert_snapshot!(stdout, @r"
         Starting 10 tests across 2 workers
@@ -78,38 +78,33 @@ def test_slow_e(): time.sleep(60)
             PASS [TIME] test_mixed::test_fast_c
             PASS [TIME] test_mixed::test_fast_d
             PASS [TIME] test_mixed::test_fast_e
-      Cancelling due to interrupt: 10 tests still running
+      Cancelling due to interrupt: 2 tests still running
           SIGINT [TIME] test_mixed::test_slow_X
           SIGINT [TIME] test_mixed::test_slow_X
     ────────────
-         Summary [TIME] 0 tests run: 0 passed, 0 skipped
-    error: no tests to run
-    (hint: use `--no-tests` to customize)
+         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
     ");
 }
 
-/// Sort the contiguous block of lines whose first token is `label` so
-/// the snapshot is deterministic. Workers run in parallel so PASS- and
-/// SIGINT-line ordering is racy, but every other line is emitted by
-/// the orchestrator in a fixed order.
-fn sort_block_starting_with(stdout: &mut String, label: &str) {
-    let lines: Vec<&str> = stdout.lines().collect();
-    let first = lines.iter().position(|l| l.trim_start().starts_with(label));
-    let Some(start) = first else { return };
-    let end = start
-        + lines[start..]
-            .iter()
-            .take_while(|l| l.trim_start().starts_with(label))
-            .count();
-    let mut sorted: Vec<String> = lines[start..end].iter().map(ToString::to_string).collect();
+/// Sort all lines whose first token is `label` so the snapshot is deterministic.
+fn sort_lines_starting_with(stdout: &mut String, label: &str) {
+    let mut lines: Vec<String> = stdout.lines().map(ToString::to_string).collect();
+    let positions: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| line.trim_start().starts_with(label).then_some(index))
+        .collect();
+    let mut sorted: Vec<String> = positions
+        .iter()
+        .map(|index| lines[*index].clone())
+        .collect();
     sorted.sort();
-    let mut rebuilt = lines[..start].join("\n");
-    if !rebuilt.is_empty() {
-        rebuilt.push('\n');
+
+    for (position, line) in positions.into_iter().zip(sorted) {
+        lines[position] = line;
     }
-    rebuilt.push_str(&sorted.join("\n"));
-    rebuilt.push('\n');
-    rebuilt.push_str(&lines[end..].join("\n"));
+
+    let mut rebuilt = lines.join("\n");
     if stdout.ends_with('\n') {
         rebuilt.push('\n');
     }

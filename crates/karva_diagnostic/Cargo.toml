@@ -23,10 +23,10 @@ ruff_db = { workspace = true }
 ruff_source_file = { workspace = true }
 ruff_text_size = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
-serde_json = { workspace = true }
 
 [lints]
 workspace = true

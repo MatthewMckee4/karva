@@ -2717,7 +2717,7 @@ fn test_slow_timeout_emits_slow_line_and_counter() {
 import time
 
 def test_slow():
-    time.sleep(0.05)
+    time.sleep(0.3)
 
 def test_fast():
     pass
@@ -2726,7 +2726,7 @@ def test_fast():
 
     assert_cmd_snapshot!(
         context.command_no_parallel().args([
-            "--slow-timeout=0.001",
+            "--slow-timeout=0.1",
             "--status-level=slow",
         ]),
         @"
@@ -2754,13 +2754,13 @@ fn test_slow_timeout_counter_visible_below_slow_status_level() {
 import time
 
 def test_slow():
-    time.sleep(0.05)
+    time.sleep(0.3)
 ",
     );
 
     assert_cmd_snapshot!(
         context.command_no_parallel().args([
-            "--slow-timeout=0.001",
+            "--slow-timeout=0.1",
             "--status-level=fail",
         ]),
         @"

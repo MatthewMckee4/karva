@@ -44,20 +44,14 @@ struct Worker {
     id: usize,
     child: Child,
     start_time: Instant,
-    /// Number of tests assigned to this worker. Used to give a useful count in
-    /// the cancellation summary; the orchestrator can't see worker progress
-    /// (workers only flush results to the cache on exit), so this is an upper
-    /// bound on the tests still running in the worker.
-    test_count: usize,
 }
 
 impl Worker {
-    fn new(id: usize, child: Child, test_count: usize) -> Self {
+    fn new(id: usize, child: Child) -> Self {
         Self {
             id,
             child,
             start_time: Instant::now(),
-            test_count,
         }
     }
 
@@ -71,9 +65,20 @@ struct WorkerManager {
     workers: Vec<Worker>,
 }
 
+struct InFlightTest {
+    worker_id: usize,
+    name: Option<String>,
+    elapsed: Duration,
+}
+
+struct InterruptedTest {
+    name: String,
+    duration: Duration,
+}
+
 impl WorkerManager {
-    fn spawn(&mut self, worker_id: usize, child: Child, test_count: usize) {
-        self.workers.push(Worker::new(worker_id, child, test_count));
+    fn spawn(&mut self, worker_id: usize, child: Child) {
+        self.workers.push(Worker::new(worker_id, child));
     }
 
     /// Wait for all workers to complete.
@@ -173,9 +178,9 @@ impl WorkerManager {
     /// before our banner; otherwise the cancellation block interleaves
     /// with worker output. A short settle pause lets any kernel-buffered
     /// writes drain.
-    fn cancel_and_kill(&mut self, printer: Printer, cache: &RunCache) {
+    fn cancel_and_kill(&mut self, printer: Printer, cache: &RunCache) -> Vec<InterruptedTest> {
         if self.workers.is_empty() {
-            return;
+            return Vec::new();
         }
 
         let now_ms = SystemTime::now()
@@ -187,17 +192,34 @@ impl WorkerManager {
             .workers
             .iter()
             .map(|worker| {
-                let current = cache.read_current_test(worker.id);
-                let elapsed = current.as_ref().and_then(|c| {
-                    now_ms
-                        .checked_sub(c.start_unix_ms)
-                        .map(Duration::from_millis)
-                });
-                (worker.id, current.map(|c| c.name), elapsed)
+                let current = match cache.read_current_test(worker.id) {
+                    Ok(current) => current,
+                    Err(err) => {
+                        tracing::warn!(
+                            worker_id = worker.id,
+                            "failed to read in-flight test state: {err}"
+                        );
+                        None
+                    }
+                };
+                let elapsed = current
+                    .as_ref()
+                    .and_then(|c| {
+                        now_ms
+                            .checked_sub(c.start_unix_ms)
+                            .map(Duration::from_millis)
+                    })
+                    .unwrap_or_default();
+                InFlightTest {
+                    worker_id: worker.id,
+                    name: current.map(|c| c.name),
+                    elapsed,
+                }
             })
             .collect();
 
-        let total_tests: usize = self.workers.iter().map(|w| w.test_count).sum();
+        let running_tests = in_flight.iter().filter(|test| test.name.is_some()).count();
+        let test_label = if running_tests == 1 { "test" } else { "tests" };
 
         for worker in &mut self.workers {
             let _ = worker.child.kill();
@@ -212,26 +234,37 @@ impl WorkerManager {
         let interrupt_label = "interrupt".yellow().bold();
         let _ = writeln!(
             stdout,
-            "  {cancel_label} due to {interrupt_label}: {total_tests} tests still running"
+            "  {cancel_label} due to {interrupt_label}: {running_tests} {test_label} still running"
         );
 
         let label = "SIGINT".yellow().bold();
         let padding = " ".repeat(LABEL_COLUMN_WIDTH.saturating_sub("SIGINT".len()));
-        for (worker_id, test_name, elapsed) in in_flight {
-            let duration_str = format_duration_bracketed(elapsed.unwrap_or_default());
-            match test_name {
+        for test in &in_flight {
+            let duration_str = format_duration_bracketed(test.elapsed);
+            match &test.name {
                 Some(name) => {
-                    let colored = format_in_flight_test(&name);
+                    let colored = format_in_flight_test(name);
                     let _ = writeln!(stdout, "{padding}{label} {duration_str} {colored}");
                 }
                 None => {
                     let _ = writeln!(
                         stdout,
-                        "{padding}{label} {duration_str} worker {worker_id} (between tests)"
+                        "{padding}{label} {duration_str} worker {} (between tests)",
+                        test.worker_id
                     );
                 }
             }
         }
+
+        in_flight
+            .into_iter()
+            .filter_map(|test| {
+                test.name.map(|name| InterruptedTest {
+                    name,
+                    duration: test.elapsed,
+                })
+            })
+            .collect()
     }
 }
 
@@ -291,7 +324,7 @@ fn spawn_workers(spawn: &WorkerSpawn, partitions: &[Partition]) -> Result<Worker
             partition.tests().len()
         );
 
-        worker_manager.spawn(worker_id, child, partition.tests().len());
+        worker_manager.spawn(worker_id, child);
     }
 
     Ok(worker_manager)
@@ -448,13 +481,17 @@ pub fn run_parallel_tests(
     let max_fail_cache = project.settings().max_fail().has_limit().then_some(&cache);
 
     let outcome = worker_manager.wait_for_completion(shutdown_rx, max_fail_cache);
-    if outcome == WaitOutcome::Cancelled {
-        worker_manager.cancel_and_kill(printer, &cache);
+    let interrupted_tests = if outcome == WaitOutcome::Cancelled {
+        worker_manager.cancel_and_kill(printer, &cache)
     } else {
         worker_manager.kill_remaining();
-    }
+        Vec::new()
+    };
 
-    let results = cache.aggregate_results()?;
+    let mut results = cache.aggregate_results()?;
+    for test in interrupted_tests {
+        results.register_interrupted_test(&test.name, test.duration);
+    }
 
     if !config.no_cache {
         let _ = write_last_failed(&cache_dir, &results.failed_tests);

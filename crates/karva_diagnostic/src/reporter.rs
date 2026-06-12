@@ -204,13 +204,11 @@ impl Reporter for TestCaseReporter {
             .duration_since(UNIX_EPOCH)
             .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
             .unwrap_or(0);
-        // Avoid pulling in `karva_cache::CurrentTest` here (would be a
-        // circular dep). The cache crate deserialises the same JSON shape.
-        let body = format!(
-            "{{\"name\":{},\"start_unix_ms\":{start_unix_ms}}}",
-            json_string(&test_name.to_string()),
-        );
-        let _ = std::fs::write(path, body);
+        let body = serde_json::json!({
+            "name": test_name.to_string(),
+            "start_unix_ms": start_unix_ms,
+        });
+        let _ = std::fs::write(path, body.to_string());
     }
 
     fn report_test_finished(&self, _test_name: &QualifiedTestName) {
@@ -218,28 +216,6 @@ impl Reporter for TestCaseReporter {
             let _ = std::fs::remove_file(path);
         }
     }
-}
-
-/// Quote a string for JSON. Stays in this crate so we don't take a hard
-/// dependency on `serde_json` just for one field.
-fn json_string(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for ch in s.chars() {
-        match ch {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => {
-                let _ = write!(out, "\\u{:04x}", c as u32);
-            }
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
 }
 
 /// The width that result labels (`PASS`, `FAIL`, `SKIP`, `SLOW`, `TRY N PASS`,
