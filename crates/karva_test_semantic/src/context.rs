@@ -72,6 +72,19 @@ impl<'a> Context<'a> {
         self.result.borrow().clone().into_sorted()
     }
 
+    /// Record the start of a test execution. Forwarded to the reporter
+    /// so cancellation logic can render per-test `SIGINT` lines naming
+    /// the in-flight test.
+    pub fn report_test_started(&self, test_case_name: &QualifiedTestName) {
+        self.reporter.report_test_started(test_case_name);
+    }
+
+    /// Pair to [`Self::report_test_started`]: clears the in-flight marker
+    /// once the test completes (passed, failed, or skipped).
+    pub fn report_test_finished(&self, test_case_name: &QualifiedTestName) {
+        self.reporter.report_test_finished(test_case_name);
+    }
+
     pub fn register_test_case_result(
         &self,
         test_case_name: &QualifiedTestName,

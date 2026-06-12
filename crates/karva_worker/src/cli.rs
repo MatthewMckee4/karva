@@ -167,10 +167,16 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     let cache = RunCache::new(&args.cache_dir, &run_hash);
 
+    let progress_file = cache.current_test_file(args.worker_id);
+    // Make sure the worker dir exists so the reporter can write the
+    // progress file before the worker has otherwise touched it.
+    if let Some(parent) = progress_file.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
     let reporter: Box<dyn Reporter> = if matches!(printer.status_level(), StatusLevel::None) {
         Box::new(DummyReporter)
     } else {
-        Box::new(TestCaseReporter::new(printer))
+        Box::new(TestCaseReporter::new(printer).with_progress_file(progress_file))
     };
 
     let result = karva_test_semantic::run_tests(

@@ -551,12 +551,14 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         };
 
         let configured_retries = self.context.settings().test().retry;
+        self.context.report_test_started(&qualified_test_name);
         let RetryOutcome {
             test_result,
             attempt,
             max_attempts,
             was_retried,
         } = self.run_with_retries(py, &qualified_test_name, configured_retries, run_test);
+        self.context.report_test_finished(&qualified_test_name);
 
         let report_ctx = VariantReportCtx {
             name: &name,

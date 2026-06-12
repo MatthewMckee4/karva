@@ -1,6 +1,7 @@
 use std::fmt::Write;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use camino::Utf8PathBuf;
 use colored::Colorize;
 use karva_logging::time::format_duration_bracketed;
 use karva_logging::{Printer, StatusLevel};
@@ -41,6 +42,21 @@ pub trait Reporter: Send + Sync {
     fn report_test_slow(&self, test_name: &QualifiedTestName, duration: Duration) {
         let _ = (test_name, duration);
     }
+
+    /// Called immediately before a test starts executing.
+    ///
+    /// Used by reporters that track in-flight tests for cancellation
+    /// reporting; default is a no-op.
+    fn report_test_started(&self, test_name: &QualifiedTestName) {
+        let _ = test_name;
+    }
+
+    /// Called when a test finishes (passed, failed, or skipped) so the
+    /// reporter can clear any in-flight state recorded by
+    /// [`Self::report_test_started`]. Default no-op.
+    fn report_test_finished(&self, test_name: &QualifiedTestName) {
+        let _ = test_name;
+    }
 }
 
 fn show_for_status_level(level: StatusLevel, kind: &IndividualTestResultKind) -> bool {
@@ -77,11 +93,27 @@ impl Reporter for DummyReporter {
 /// A reporter that outputs test results to stdout as they complete.
 pub struct TestCaseReporter {
     printer: Printer,
+    /// Optional path to a JSON file describing the test currently
+    /// executing. The orchestrator reads this on Ctrl+C to render
+    /// per-test `SIGINT` lines.
+    progress_file: Option<Utf8PathBuf>,
 }
 
 impl TestCaseReporter {
     pub fn new(printer: Printer) -> Self {
-        Self { printer }
+        Self {
+            printer,
+            progress_file: None,
+        }
+    }
+
+    /// Direct the reporter to write the currently running test's name and
+    /// start time to `path` whenever a test begins, and remove the file
+    /// when it ends.
+    #[must_use]
+    pub fn with_progress_file(mut self, path: Utf8PathBuf) -> Self {
+        self.progress_file = Some(path);
+        self
     }
 }
 
@@ -162,6 +194,27 @@ impl Reporter for TestCaseReporter {
             "{padding}TRY {attempt} {colored_status} {duration_str} {test_path}"
         )
         .ok();
+    }
+
+    fn report_test_started(&self, test_name: &QualifiedTestName) {
+        let Some(path) = self.progress_file.as_ref() else {
+            return;
+        };
+        let start_unix_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+            .unwrap_or(0);
+        let body = serde_json::json!({
+            "name": test_name.to_string(),
+            "start_unix_ms": start_unix_ms,
+        });
+        let _ = std::fs::write(path, body.to_string());
+    }
+
+    fn report_test_finished(&self, _test_name: &QualifiedTestName) {
+        if let Some(path) = self.progress_file.as_ref() {
+            let _ = std::fs::remove_file(path);
+        }
     }
 }
 

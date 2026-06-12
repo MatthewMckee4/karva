@@ -3,6 +3,7 @@ pub(crate) mod common;
 mod r#async;
 mod basic;
 mod cache;
+mod cancel;
 mod configuration;
 mod coverage;
 mod discovery;
