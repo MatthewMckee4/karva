@@ -110,7 +110,9 @@ karva test [OPTIONS] [PATH]...
 <ul>
 <li><code>only</code>:  Run only ignored tests</li>
 <li><code>all</code>:  Run both ignored and non-ignored tests</li>
-</ul></dd><dt id="karva-test--show-output"><a href="#karva-test--show-output"><code>--show-output</code></a>, <code>-s</code></dt><dd><p>Show Python stdout during test execution</p>
+</ul></dd><dt id="karva-test--run-timeout"><a href="#karva-test--run-timeout"><code>--run-timeout</code></a> <i>seconds</i></dt><dd><p>Wall-clock limit for the whole run, in seconds.</p>
+<p>When the run takes longer than this duration, karva stops the remaining workers and exits with a failure status. Accepts fractional seconds such as <code>--run-timeout=1800</code> or <code>--run-timeout=0.5</code>.</p>
+</dd><dt id="karva-test--show-output"><a href="#karva-test--show-output"><code>--show-output</code></a>, <code>-s</code></dt><dd><p>Show Python stdout during test execution</p>
 </dd><dt id="karva-test--slow-timeout"><a href="#karva-test--slow-timeout"><code>--slow-timeout</code></a> <i>seconds</i></dt><dd><p>Threshold in seconds after which a test is flagged as slow.</p>
 <p>When a test takes longer than this duration, it is reported with a <code>SLOW</code> status line (gated on <code>--status-level=slow</code> or higher) and counted in the run summary. Pass a positive number such as <code>--slow-timeout=60</code> or <code>--slow-timeout=0.5</code>.</p>
 </dd><dt id="karva-test--snapshot-update"><a href="#karva-test--snapshot-update"><code>--snapshot-update</code></a></dt><dd><p>Update snapshots directly instead of creating pending <code>.snap.new</code> files.</p>

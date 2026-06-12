@@ -95,9 +95,16 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     let karva_runner::RunOutput {
         results: result,
         coverage_files,
+        timed_out,
     } = karva_runner::run_parallel_tests(&project, &config, &sub_command, printer)?;
 
     print_test_output(printer, start_time, &result, durations)?;
+
+    if timed_out {
+        let mut stdout = printer.stream_for_message().lock();
+        writeln!(stdout, "\nerror: run timed out before all tests completed")?;
+        return Ok(ExitStatus::Failure);
+    }
 
     let coverage_total = if coverage_files.is_empty() {
         None

@@ -13,6 +13,7 @@ mod filterset;
 mod last_failed;
 mod partition;
 mod run_ignored;
+mod run_timeout;
 mod show_config;
 mod version;
 mod watch;

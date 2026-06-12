@@ -16,7 +16,7 @@ use crate::filter::{FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
 use crate::settings::{
     CovFailUnder, CoverageSettings, NoTestsMode, OverrideSettings, ProjectSettings, RunIgnoredMode,
-    SlowTimeoutSecs, SrcSettings, TerminalSettings, TestSettings, TestTimeoutSecs,
+    RunTimeoutSecs, SlowTimeoutSecs, SrcSettings, TerminalSettings, TestSettings, TestTimeoutSecs,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata)]
@@ -367,6 +367,24 @@ pub struct TestOptions {
         "#
     )]
     pub timeout: Option<TestTimeoutSecs>,
+
+    /// Wall-clock limit (in seconds) for the entire run.
+    ///
+    /// When the run takes longer than this duration, karva stops the
+    /// remaining workers and exits with a failure status. This is a safety
+    /// net for CI to bound runaway suites; it does not affect individual
+    /// test results that already completed.
+    ///
+    /// Defaults to unset, which lets the run take as long as it needs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"null"#,
+        value_type = "float (seconds)",
+        example = r#"
+            run-timeout = 1800.0
+        "#
+    )]
+    pub run_timeout: Option<RunTimeoutSecs>,
 }
 
 impl TestOptions {
@@ -389,6 +407,7 @@ impl TestOptions {
             no_tests: self.no_tests.unwrap_or_default(),
             slow_timeout: self.slow_timeout.and_then(SlowTimeoutSecs::as_duration),
             timeout: self.timeout.and_then(TestTimeoutSecs::as_duration),
+            run_timeout: self.run_timeout.and_then(RunTimeoutSecs::as_duration),
         }
     }
 }
@@ -656,7 +675,7 @@ nonsense = 42
           |
         4 | nonsense = 42
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `test-function-prefix`, `fail-fast`, `max-fail`, `try-import-fixtures`, `retry`, `no-tests`, `slow-timeout`, `timeout`
+        unknown field `nonsense`, expected one of `test-function-prefix`, `fail-fast`, `max-fail`, `try-import-fixtures`, `retry`, `no-tests`, `slow-timeout`, `timeout`, `run-timeout`
         "
         );
     }
@@ -756,6 +775,7 @@ max-fail = 0
             no_tests: None,
             slow_timeout: None,
             timeout: None,
+            run_timeout: None,
         }
         "#);
     }
@@ -785,6 +805,7 @@ max-fail = 0
             no_tests: None,
             slow_timeout: None,
             timeout: None,
+            run_timeout: None,
         }
         "#);
     }
@@ -847,6 +868,7 @@ retry = 2
                 no_tests: None,
                 slow_timeout: None,
                 timeout: None,
+                run_timeout: None,
             },
         )
         "#);
@@ -903,6 +925,7 @@ retry = 5
                 no_tests: None,
                 slow_timeout: None,
                 timeout: None,
+                run_timeout: None,
             },
         )
         "#);
