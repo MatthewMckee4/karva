@@ -31,8 +31,9 @@ pub fn build_cobertura_xml(cwd: &Utf8Path, cwd_real: &std::path::Path, rows: &[F
     let _ = writeln!(xml, "    <source>{}</source>", escape_xml(&source_root));
     xml.push_str("  </sources>\n");
     xml.push_str("  <packages>\n");
-    xml.push_str(
-        "    <package name=\".\" line-rate=\"0.0000\" branch-rate=\"0.0000\" complexity=\"0.0\">\n",
+    let _ = writeln!(
+        xml,
+        "    <package name=\".\" line-rate=\"{line_rate:.4}\" branch-rate=\"0.0000\" complexity=\"0.0\">",
     );
     xml.push_str("      <classes>\n");
 

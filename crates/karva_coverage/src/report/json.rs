@@ -6,7 +6,7 @@ use serde::Serialize;
 use super::shared::{FileRow, missing_lines, percent, totals_row};
 
 #[derive(Serialize)]
-struct JsonSummary {
+struct JsonFileSummary {
     covered_lines: u32,
     num_statements: u32,
     percent_covered: f64,
@@ -17,16 +17,23 @@ struct JsonSummary {
 #[derive(Serialize)]
 struct JsonFileReport {
     executed_lines: Vec<u32>,
-    summary: JsonSummary,
+    summary: JsonFileSummary,
     missing_lines: Vec<u32>,
     excluded_lines: Vec<u32>,
+}
+
+#[derive(Serialize)]
+struct JsonTotalsSummary {
+    covered_lines: u32,
+    num_statements: u32,
+    percent_covered: f64,
 }
 
 #[derive(Serialize)]
 struct JsonReport {
     meta: JsonMeta,
     files: BTreeMap<String, JsonFileReport>,
-    totals: JsonSummary,
+    totals: JsonTotalsSummary,
 }
 
 #[derive(Serialize)]
@@ -58,18 +65,26 @@ pub fn build_json_report(rows: &[FileRow]) -> Result<String> {
             version: "karva",
         },
         files,
-        totals: json_summary(&totals_row),
+        totals: json_totals_summary(&totals_row),
     };
 
     serde_json::to_string_pretty(&report).context("failed to serialize coverage json")
 }
 
-fn json_summary(row: &FileRow) -> JsonSummary {
-    JsonSummary {
+fn json_summary(row: &FileRow) -> JsonFileSummary {
+    JsonFileSummary {
         covered_lines: row.hit,
         num_statements: row.stmts,
         percent_covered: percent(row.stmts, row.miss),
         missing_lines: missing_lines(row),
         excluded_lines: Vec::new(),
+    }
+}
+
+fn json_totals_summary(row: &FileRow) -> JsonTotalsSummary {
+    JsonTotalsSummary {
+        covered_lines: row.hit,
+        num_statements: row.stmts,
+        percent_covered: percent(row.stmts, row.miss),
     }
 }

@@ -50,6 +50,7 @@ pub fn build_rows(
     combined
         .iter()
         .map(|(filename, data)| {
+            let absolute_name = simplify_path(filename);
             let executable: Vec<u32> = data.executable.iter().copied().collect();
             let executed: Vec<u32> = data.executed.iter().copied().collect();
             let stmts = u32::try_from(executable.len()).unwrap_or(u32::MAX);
@@ -66,8 +67,8 @@ pub fn build_rows(
                 String::new()
             };
             FileRow {
-                name: display_path(filename, cwd_real),
-                absolute_name: filename.clone(),
+                name: display_path(&absolute_name, cwd_real),
+                absolute_name,
                 stmts,
                 hit,
                 miss,
@@ -123,9 +124,9 @@ pub fn missing_lines(row: &FileRow) -> Vec<u32> {
 
 pub fn class_filename(row: &FileRow, cwd_real: &std::path::Path) -> String {
     if let Ok(relative) = std::path::Path::new(&row.absolute_name).strip_prefix(cwd_real) {
-        relative.to_string_lossy().replace('\\', "/")
+        normalize_report_path(&relative.to_string_lossy())
     } else {
-        row.absolute_name.replace('\\', "/")
+        normalize_report_path(&row.absolute_name)
     }
 }
 
@@ -176,12 +177,23 @@ fn format_range(start: u32, end: u32) -> String {
     }
 }
 
+fn simplify_path(path: &str) -> String {
+    dunce::simplified(std::path::Path::new(path))
+        .to_string_lossy()
+        .into_owned()
+}
+
 fn display_path(absolute: &str, cwd: &std::path::Path) -> String {
-    if let Ok(rel) = std::path::Path::new(absolute).strip_prefix(cwd) {
+    let path = if let Ok(rel) = std::path::Path::new(absolute).strip_prefix(cwd) {
         rel.to_string_lossy().into_owned()
     } else {
         absolute.to_string()
-    }
+    };
+    normalize_report_path(&path)
+}
+
+fn normalize_report_path(path: &str) -> String {
+    path.replace('\\', "/")
 }
 
 pub fn escape_xml(value: &str) -> String {
@@ -200,4 +212,87 @@ pub fn escape_html(value: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn percent_full_coverage() {
+        assert_eq!(format_percent(10, 0), "100%");
+    }
+
+    #[test]
+    fn percent_partial() {
+        assert_eq!(format_percent(10, 3), "70%");
+    }
+
+    #[test]
+    fn percent_zero_stmts() {
+        assert_eq!(format_percent(0, 0), "100%");
+    }
+
+    #[test]
+    fn collapse_empty() {
+        let set: BTreeSet<u32> = BTreeSet::new();
+        assert_eq!(collapse_ranges(&set), "");
+    }
+
+    #[test]
+    fn collapse_singletons() {
+        let set: BTreeSet<u32> = [3, 7, 12].into_iter().collect();
+        assert_eq!(collapse_ranges(&set), "3, 7, 12");
+    }
+
+    #[test]
+    fn collapse_mixed_ranges() {
+        let set: BTreeSet<u32> = [26, 87, 94, 95, 119, 120, 121, 157].into_iter().collect();
+        assert_eq!(collapse_ranges(&set), "26, 87, 94-95, 119-121, 157");
+    }
+
+    #[test]
+    fn collapse_single_contiguous_range() {
+        let set: BTreeSet<u32> = [10, 11, 12, 13].into_iter().collect();
+        assert_eq!(collapse_ranges(&set), "10-13");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn simplify_path_strips_windows_verbatim_prefix() {
+        assert_eq!(
+            simplify_path(r"\\?\C:\Users\runneradmin\project\test.py"),
+            r"C:\Users\runneradmin\project\test.py"
+        );
+    }
+
+    #[test]
+    fn display_path_uses_forward_slashes() {
+        assert_eq!(
+            display_path(
+                "/project/tests\\test_partial.py",
+                std::path::Path::new("/project")
+            ),
+            "tests/test_partial.py"
+        );
+    }
+
+    #[test]
+    fn class_filename_uses_forward_slashes() {
+        let row = FileRow {
+            name: "tests\\test_partial.py".to_string(),
+            absolute_name: "/project/tests\\test_partial.py".to_string(),
+            stmts: 0,
+            hit: 0,
+            miss: 0,
+            missing: String::new(),
+            executable: Vec::new(),
+            executed: Vec::new(),
+        };
+
+        assert_eq!(
+            class_filename(&row, std::path::Path::new("/project")),
+            "tests/test_partial.py"
+        );
+    }
 }

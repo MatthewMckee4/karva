@@ -193,3 +193,49 @@ fn format_row(name_width: usize, show_missing: bool, row: &Row<'_>) -> String {
         base
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(name: &str, stmts: u32, hit: u32, miss: u32, missing: &str) -> FileRow {
+        FileRow {
+            name: name.to_string(),
+            absolute_name: format!("/proj/{name}"),
+            stmts,
+            hit,
+            miss,
+            missing: missing.to_string(),
+            executable: Vec::new(),
+            executed: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn report_contains_total_row() {
+        let rows = [row("a.py", 4, 2, 2, ""), row("b.py", 2, 2, 0, "")];
+
+        let mut buf: Vec<u8> = Vec::new();
+        let total = print_report(&rows, false, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+
+        assert!(out.contains("a.py"));
+        assert!(out.contains("b.py"));
+        assert!(out.contains("TOTAL"));
+        assert!(out.contains("67%"));
+        assert!(!out.contains("Missing"));
+        assert!(total > 66.0 && total < 67.0);
+    }
+
+    #[test]
+    fn report_with_missing_shows_uncovered_lines() {
+        let rows = [row("a.py", 9, 3, 6, "2-4, 6-8")];
+
+        let mut buf: Vec<u8> = Vec::new();
+        print_report(&rows, true, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+
+        assert!(out.contains("Missing"));
+        assert!(out.contains("2-4, 6-8"));
+    }
+}

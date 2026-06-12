@@ -324,9 +324,7 @@ impl TestOptions {
     }
 }
 
-#[derive(
-    Debug, Default, Clone, Eq, PartialEq, Combine, Serialize, Deserialize, OptionsMetadata,
-)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize, OptionsMetadata)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CoverageOptions {
     /// Source paths to measure coverage for.
@@ -398,6 +396,22 @@ pub struct CoverageOptions {
     /// set from a configuration file.
     #[serde(skip)]
     pub disabled: Option<bool>,
+}
+
+impl Combine for CoverageOptions {
+    fn combine_with(&mut self, other: Self) {
+        let report_overridden = self.report.is_some();
+
+        self.sources = self.sources.take().combine(other.sources);
+        self.report = self.report.combine(other.report);
+        self.report_path = if report_overridden && self.report_path.is_none() {
+            None
+        } else {
+            self.report_path.take().combine(other.report_path)
+        };
+        self.fail_under = self.fail_under.combine(other.fail_under);
+        self.disabled = self.disabled.combine(other.disabled);
+    }
 }
 
 impl CoverageOptions {
@@ -1019,6 +1033,30 @@ report-path = "build/coverage.xml"
         Some(
             "cli.xml",
         )
+        "#);
+    }
+
+    #[test]
+    fn combine_cli_coverage_report_without_path_clears_file_path() {
+        let cli = CoverageOptions {
+            report: Some(CovReport::Json),
+            ..CoverageOptions::default()
+        };
+        let file = CoverageOptions {
+            report: Some(CovReport::Xml),
+            report_path: Some("build/coverage.xml".to_string()),
+            ..CoverageOptions::default()
+        };
+        assert_debug_snapshot!(cli.combine(file), @r#"
+        CoverageOptions {
+            sources: None,
+            report: Some(
+                Json,
+            ),
+            report_path: None,
+            fail_under: None,
+            disabled: None,
+        }
         "#);
     }
 

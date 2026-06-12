@@ -117,27 +117,24 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
                 karva_coverage::combine_and_report(project.cwd(), &coverage_files, true)
             }
             CovReport::Xml => {
-                let output = coverage
-                    .report_path
-                    .clone()
-                    .map(Utf8PathBuf::from)
-                    .unwrap_or_else(|| Utf8PathBuf::from("coverage.xml"));
+                let output = coverage_report_path(
+                    coverage.report_path.as_deref(),
+                    "coverage.xml",
+                    project.cwd(),
+                );
                 karva_coverage::write_cobertura_xml(project.cwd(), &coverage_files, &output)
             }
             CovReport::Json => {
-                let output = coverage
-                    .report_path
-                    .clone()
-                    .map(Utf8PathBuf::from)
-                    .unwrap_or_else(|| Utf8PathBuf::from("coverage.json"));
+                let output = coverage_report_path(
+                    coverage.report_path.as_deref(),
+                    "coverage.json",
+                    project.cwd(),
+                );
                 karva_coverage::write_json_report(project.cwd(), &coverage_files, &output)
             }
             CovReport::Html => {
-                let output = coverage
-                    .report_path
-                    .clone()
-                    .map(Utf8PathBuf::from)
-                    .unwrap_or_else(|| Utf8PathBuf::from("htmlcov"));
+                let output =
+                    coverage_report_path(coverage.report_path.as_deref(), "htmlcov", project.cwd());
                 karva_coverage::write_html_report(project.cwd(), &coverage_files, &output)
             }
         };
@@ -188,6 +185,14 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     } else {
         Ok(ExitStatus::Failure)
     }
+}
+
+fn coverage_report_path(
+    configured: Option<&str>,
+    default: &str,
+    project_root: &camino::Utf8Path,
+) -> Utf8PathBuf {
+    absolute(configured.unwrap_or(default), project_root)
 }
 
 fn no_tests_collected(result: &AggregatedResults) -> bool {

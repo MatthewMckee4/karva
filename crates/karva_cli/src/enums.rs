@@ -6,9 +6,10 @@ use ruff_db::diagnostic::DiagnosticFormat;
 use karva_metadata::{NoTestsMode, RunIgnoredMode};
 
 /// Coverage report selection parsed from `--cov-report`.
-#[derive(Clone, Hash, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum CovReport {
     /// Compact terminal table (default).
+    #[default]
     Term,
 
     /// Terminal table with a `Missing` column listing uncovered line numbers.
@@ -22,12 +23,6 @@ pub enum CovReport {
 
     /// HTML coverage report written to disk, optionally to a custom directory.
     Html { path: Option<Utf8PathBuf> },
-}
-
-impl Default for CovReport {
-    fn default() -> Self {
-        Self::Term
-    }
 }
 
 impl FromStr for CovReport {

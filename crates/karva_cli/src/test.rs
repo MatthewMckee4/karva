@@ -357,7 +357,7 @@ impl SubTestCommand {
                 report_path: cov_report.as_ref().and_then(|report| match report {
                     CovReport::Xml { path }
                     | CovReport::Json { path }
-                    | CovReport::Html { path } => path.as_ref().map(|path| path.to_string()),
+                    | CovReport::Html { path } => path.as_ref().map(ToString::to_string),
                     CovReport::Term | CovReport::TermMissing => None,
                 }),
                 fail_under: self.cov_fail_under.map(CovFailUnder),
