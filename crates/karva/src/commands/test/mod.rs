@@ -5,6 +5,7 @@ use std::fmt::Write;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result};
+use camino::Utf8PathBuf;
 use karva_cache::{AggregatedResults, DisplayFlakyTests};
 use karva_cli::TestCommand;
 use karva_logging::{Printer, Stdout, set_colored_override, setup_tracing};
@@ -97,8 +98,47 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     let coverage_total = if coverage_files.is_empty() {
         None
     } else {
-        let show_missing = matches!(project.settings().coverage().report, CovReport::TermMissing);
-        match karva_coverage::combine_and_report(project.cwd(), &coverage_files, show_missing) {
+        let coverage = project.settings().coverage();
+        if coverage.report_path.is_some()
+            && matches!(coverage.report, CovReport::Term | CovReport::TermMissing)
+        {
+            let mut stdout = printer.stream_for_message().lock();
+            writeln!(
+                stdout,
+                "warning: `coverage.report-path` is ignored when `coverage.report` is `{}`",
+                coverage.report.as_str()
+            )?;
+        }
+        let coverage_result = match coverage.report {
+            CovReport::Term => {
+                karva_coverage::combine_and_report(project.cwd(), &coverage_files, false)
+            }
+            CovReport::TermMissing => {
+                karva_coverage::combine_and_report(project.cwd(), &coverage_files, true)
+            }
+            CovReport::Xml => {
+                let output = coverage_report_path(
+                    coverage.report_path.as_deref(),
+                    "coverage.xml",
+                    project.cwd(),
+                );
+                karva_coverage::write_cobertura_xml(project.cwd(), &coverage_files, &output)
+            }
+            CovReport::Json => {
+                let output = coverage_report_path(
+                    coverage.report_path.as_deref(),
+                    "coverage.json",
+                    project.cwd(),
+                );
+                karva_coverage::write_json_report(project.cwd(), &coverage_files, &output)
+            }
+            CovReport::Html => {
+                let output =
+                    coverage_report_path(coverage.report_path.as_deref(), "htmlcov", project.cwd());
+                karva_coverage::write_html_report(project.cwd(), &coverage_files, &output)
+            }
+        };
+        match coverage_result {
             Ok(total) => total,
             Err(err) => {
                 tracing::error!("Coverage report failed: {err:#}");
@@ -145,6 +185,14 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     } else {
         Ok(ExitStatus::Failure)
     }
+}
+
+fn coverage_report_path(
+    configured: Option<&str>,
+    default: &str,
+    project_root: &camino::Utf8Path,
+) -> Utf8PathBuf {
+    absolute(configured.unwrap_or(default), project_root)
 }
 
 fn no_tests_collected(result: &AggregatedResults) -> bool {

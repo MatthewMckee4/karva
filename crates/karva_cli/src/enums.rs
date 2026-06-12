@@ -1,18 +1,62 @@
+use std::str::FromStr;
+
+use camino::Utf8PathBuf;
 use ruff_db::diagnostic::DiagnosticFormat;
 
 use karva_metadata::{NoTestsMode, RunIgnoredMode};
 
-/// Coverage terminal report type.
-#[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Default, clap::ValueEnum)]
+/// Coverage report selection parsed from `--cov-report`.
+#[derive(Clone, Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum CovReport {
     /// Compact terminal table (default).
     #[default]
-    #[value(name = "term")]
     Term,
 
     /// Terminal table with a `Missing` column listing uncovered line numbers.
-    #[value(name = "term-missing")]
     TermMissing,
+
+    /// Cobertura XML written to disk, optionally to a custom path.
+    Xml { path: Option<Utf8PathBuf> },
+
+    /// JSON coverage report written to disk, optionally to a custom path.
+    Json { path: Option<Utf8PathBuf> },
+
+    /// HTML coverage report written to disk, optionally to a custom directory.
+    Html { path: Option<Utf8PathBuf> },
+}
+
+impl FromStr for CovReport {
+    type Err = String;
+
+    fn from_str(raw: &str) -> Result<Self, Self::Err> {
+        match raw.split_once(':') {
+            None => match raw {
+                "term" => Ok(Self::Term),
+                "term-missing" => Ok(Self::TermMissing),
+                "xml" => Ok(Self::Xml { path: None }),
+                "json" => Ok(Self::Json { path: None }),
+                "html" => Ok(Self::Html { path: None }),
+                _ => Err(format!(
+                    "invalid value `{raw}`; expected one of `term`, `term-missing`, `xml[:PATH]`, `json[:PATH]`, or `html[:PATH]`"
+                )),
+            },
+            Some(("xml", path)) if !path.is_empty() => Ok(Self::Xml {
+                path: Some(Utf8PathBuf::from(path)),
+            }),
+            Some(("json", path)) if !path.is_empty() => Ok(Self::Json {
+                path: Some(Utf8PathBuf::from(path)),
+            }),
+            Some(("html", path)) if !path.is_empty() => Ok(Self::Html {
+                path: Some(Utf8PathBuf::from(path)),
+            }),
+            Some(("xml", _)) => Err("`xml` report path cannot be empty".to_string()),
+            Some(("json", _)) => Err("`json` report path cannot be empty".to_string()),
+            Some(("html", _)) => Err("`html` report path cannot be empty".to_string()),
+            Some((kind, _)) => Err(format!(
+                "report `{kind}` does not accept a path; expected `term`, `term-missing`, `xml[:PATH]`, `json[:PATH]`, or `html[:PATH]`"
+            )),
+        }
+    }
 }
 
 /// The diagnostic output format.
@@ -51,6 +95,9 @@ impl From<CovReport> for karva_metadata::CovReport {
         match value {
             CovReport::Term => Self::Term,
             CovReport::TermMissing => Self::TermMissing,
+            CovReport::Xml { .. } => Self::Xml,
+            CovReport::Json { .. } => Self::Json,
+            CovReport::Html { .. } => Self::Html,
         }
     }
 }

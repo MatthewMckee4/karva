@@ -324,9 +324,7 @@ impl TestOptions {
     }
 }
 
-#[derive(
-    Debug, Default, Clone, Eq, PartialEq, Combine, Serialize, Deserialize, OptionsMetadata,
-)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize, OptionsMetadata)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CoverageOptions {
     /// Source paths to measure coverage for.
@@ -344,7 +342,7 @@ pub struct CoverageOptions {
     )]
     pub sources: Option<Vec<String>>,
 
-    /// Coverage terminal report type.
+    /// Coverage report type.
     ///
     /// `term` (default) prints a compact terminal table.
     /// `term-missing` extends it with a `Missing` column listing the
@@ -352,12 +350,28 @@ pub struct CoverageOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
         default = r#"term"#,
-        value_type = "term | term-missing",
+        value_type = r#"term | term-missing | xml | json | html"#,
         example = r#"
             report = "term-missing"
         "#
     )]
     pub report: Option<CovReport>,
+
+    /// Optional output path for machine-readable coverage reports.
+    ///
+    /// When `report = "xml"` or `report = "json"`, this path controls where
+    /// the file is written. When `report = "html"`, it controls the output
+    /// directory. If omitted, karva writes to `coverage.xml`,
+    /// `coverage.json`, or `htmlcov/` in the project root.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"null"#,
+        value_type = r#"path"#,
+        example = r#"
+            report-path = "build/coverage.xml"
+        "#
+    )]
+    pub report_path: Option<String>,
 
     /// Minimum total coverage percentage required for the run to succeed.
     ///
@@ -384,6 +398,22 @@ pub struct CoverageOptions {
     pub disabled: Option<bool>,
 }
 
+impl Combine for CoverageOptions {
+    fn combine_with(&mut self, other: Self) {
+        let report_overridden = self.report.is_some();
+
+        self.sources = self.sources.take().combine(other.sources);
+        self.report = self.report.combine(other.report);
+        self.report_path = if report_overridden && self.report_path.is_none() {
+            None
+        } else {
+            self.report_path.take().combine(other.report_path)
+        };
+        self.fail_under = self.fail_under.combine(other.fail_under);
+        self.disabled = self.disabled.combine(other.disabled);
+    }
+}
+
 impl CoverageOptions {
     pub fn to_settings(&self) -> CoverageSettings {
         let sources = if self.disabled.unwrap_or(false) {
@@ -394,12 +424,13 @@ impl CoverageOptions {
         CoverageSettings {
             sources,
             report: self.report.unwrap_or_default(),
+            report_path: self.report_path.clone(),
             fail_under: self.fail_under.map(|t| t.0),
         }
     }
 }
 
-/// Coverage terminal report type.
+/// Coverage report type.
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum CovReport {
@@ -409,6 +440,15 @@ pub enum CovReport {
 
     /// Terminal table with a `Missing` column listing uncovered line numbers.
     TermMissing,
+
+    /// Cobertura XML written to disk for CI integrations.
+    Xml,
+
+    /// JSON written to disk for machine-readable coverage consumption.
+    Json,
+
+    /// HTML written to disk for interactive browsing.
+    Html,
 }
 
 impl Combine for CovReport {
@@ -418,6 +458,18 @@ impl Combine for CovReport {
     #[inline]
     fn combine(self, _other: Self) -> Self {
         self
+    }
+}
+
+impl CovReport {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Term => "term",
+            Self::TermMissing => "term-missing",
+            Self::Xml => "xml",
+            Self::Json => "json",
+            Self::Html => "html",
+        }
     }
 }
 
@@ -890,6 +942,7 @@ retry = 5
 [profile.default.coverage]
 sources = ["src", "tests"]
 report = "term-missing"
+report-path = "build/coverage.xml"
 "#;
         let resolved = Config::from_toml_str(toml)
             .expect("parse")
@@ -906,6 +959,9 @@ report = "term-missing"
                 ),
                 report: Some(
                     TermMissing,
+                ),
+                report_path: Some(
+                    "build/coverage.xml",
                 ),
                 fail_under: None,
                 disabled: None,
@@ -938,6 +994,7 @@ report = "term-missing"
             report: Some(
                 TermMissing,
             ),
+            report_path: None,
             fail_under: None,
             disabled: None,
         }
@@ -960,6 +1017,47 @@ report = "term-missing"
             Term,
         )
         ");
+    }
+
+    #[test]
+    fn combine_cli_coverage_report_path_wins_over_file() {
+        let cli = CoverageOptions {
+            report_path: Some("cli.xml".to_string()),
+            ..CoverageOptions::default()
+        };
+        let file = CoverageOptions {
+            report_path: Some("config.xml".to_string()),
+            ..CoverageOptions::default()
+        };
+        assert_debug_snapshot!(cli.combine(file).report_path, @r#"
+        Some(
+            "cli.xml",
+        )
+        "#);
+    }
+
+    #[test]
+    fn combine_cli_coverage_report_without_path_clears_file_path() {
+        let cli = CoverageOptions {
+            report: Some(CovReport::Json),
+            ..CoverageOptions::default()
+        };
+        let file = CoverageOptions {
+            report: Some(CovReport::Xml),
+            report_path: Some("build/coverage.xml".to_string()),
+            ..CoverageOptions::default()
+        };
+        assert_debug_snapshot!(cli.combine(file), @r#"
+        CoverageOptions {
+            sources: None,
+            report: Some(
+                Json,
+            ),
+            report_path: None,
+            fail_under: None,
+            disabled: None,
+        }
+        "#);
     }
 
     /// `--no-cov` (CLI sets `disabled = Some(true)`) overrides any sources
@@ -992,7 +1090,7 @@ disabled = true
           |
         3 | disabled = true
           | ^^^^^^^^
-        unknown field `disabled`, expected one of `sources`, `report`, `fail-under`
+        unknown field `disabled`, expected one of `sources`, `report`, `report-path`, `fail-under`
         "
         );
     }
@@ -1011,7 +1109,7 @@ nonsense = 1
           |
         4 | nonsense = 1
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `sources`, `report`, `fail-under`
+        unknown field `nonsense`, expected one of `sources`, `report`, `report-path`, `fail-under`
         "
         );
     }

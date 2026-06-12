@@ -59,7 +59,7 @@ fail-under = 90
 
 ### `report`
 
-Coverage terminal report type.
+Coverage report type.
 
 `term` (default) prints a compact terminal table.
 `term-missing` extends it with a `Missing` column listing the
@@ -67,13 +67,35 @@ uncovered line numbers per file.
 
 **Default value**: `term`
 
-**Type**: `term | term-missing`
+**Type**: `term | term-missing | xml | json | html`
 
 **Example usage** (`pyproject.toml`):
 
 ```toml
 [tool.karva.profile.default.coverage]
 report = "term-missing"
+```
+
+---
+
+### `report-path`
+
+Optional output path for machine-readable coverage reports.
+
+When `report = "xml"` or `report = "json"`, this path controls where
+the file is written. When `report = "html"`, it controls the output
+directory. If omitted, karva writes to `coverage.xml`,
+`coverage.json`, or `htmlcov/` in the project root.
+
+**Default value**: `null`
+
+**Type**: `path`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.coverage]
+report-path = "build/coverage.xml"
 ```
 
 ---

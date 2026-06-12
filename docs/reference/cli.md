@@ -50,13 +50,9 @@ karva test [OPTIONS] [PATH]...
 <p>May be passed multiple times to measure several sources. Pass without a value (<code>--cov</code>) to measure the current working directory.</p>
 </dd><dt id="karva-test--cov-fail-under"><a href="#karva-test--cov-fail-under"><code>--cov-fail-under</code></a> <i>percent</i></dt><dd><p>Fail the run if total coverage is below the given percentage.</p>
 <p>Accepts any value in <code>0..=100</code> (fractional values such as <code>90.5</code> are allowed). When the reported <code>TOTAL</code> percentage is below the threshold, the test command exits with a non-zero status even if every test passed. Has no effect when tests have already failed.</p>
-</dd><dt id="karva-test--cov-report"><a href="#karva-test--cov-report"><code>--cov-report</code></a> <i>type</i></dt><dd><p>Coverage terminal report type.</p>
-<p><code>term</code> (default) prints a compact terminal table. <code>term-missing</code> extends it with a <code>Missing</code> column listing the uncovered line numbers per file.</p>
-<p>Possible values:</p>
-<ul>
-<li><code>term</code>:  Compact terminal table (default)</li>
-<li><code>term-missing</code>:  Terminal table with a <code>Missing</code> column listing uncovered line numbers</li>
-</ul></dd><dt id="karva-test--durations"><a href="#karva-test--durations"><code>--durations</code></a> <i>n</i></dt><dd><p>Show the N slowest tests after the run completes</p>
+</dd><dt id="karva-test--cov-report"><a href="#karva-test--cov-report"><code>--cov-report</code></a> <i>type</i></dt><dd><p>Coverage report type.</p>
+<p><code>term</code> (default) prints a compact terminal table. <code>term-missing</code> extends it with a <code>Missing</code> column listing the uncovered line numbers per file. <code>xml&#91;:PATH&#93;</code>, <code>json&#91;:PATH&#93;</code>, and <code>html&#91;:DIR&#93;</code> write reports to disk.</p>
+</dd><dt id="karva-test--durations"><a href="#karva-test--durations"><code>--durations</code></a> <i>n</i></dt><dd><p>Show the N slowest tests after the run completes</p>
 </dd><dt id="karva-test--fail-fast"><a href="#karva-test--fail-fast"><code>--fail-fast</code></a></dt><dd><p>Stop scheduling new tests after the first failure.</p>
 <p>Equivalent to <code>--max-fail=1</code>. Use <code>--no-fail-fast</code> to keep running after failures.</p>
 </dd><dt id="karva-test--filter"><a href="#karva-test--filter"><code>--filter</code></a>, <code>-E</code> <i>filter-expressions</i></dt><dd><p>Filter tests using a filterset expression.</p>

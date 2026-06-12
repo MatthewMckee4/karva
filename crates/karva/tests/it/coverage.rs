@@ -2,6 +2,21 @@ use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
 
+fn normalize_xml_report(xml: &str) -> String {
+    let start = xml.find("<coverage version=\"1.0\" timestamp=\"").unwrap();
+    let end = xml[start..]
+        .find(" lines-valid=")
+        .map(|offset| start + offset)
+        .unwrap();
+
+    let mut normalized = xml.to_string();
+    normalized.replace_range(
+        start..end,
+        "<coverage version=\"1.0\" timestamp=\"[TIMESTAMP]\"",
+    );
+    normalized
+}
+
 #[test]
 fn test_no_cov_no_coverage_table() {
     let context = TestContext::with_file(
@@ -313,6 +328,587 @@ def test_only_covered():
     ----- stdout -----
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    Name              Stmts   Miss   Cover
+    [LONG-LINE]
+    test_partial.py       6      1     83%
+    [LONG-LINE]
+    TOTAL                 6      1     83%
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn test_cov_report_xml_writes_default_file() {
+    let context = TestContext::with_file(
+        "test_partial.py",
+        r"
+def covered():
+    return 1
+
+def uncovered():
+    return 2
+
+def test_only_covered():
+    assert covered() == 1
+",
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--cov")
+            .arg("--cov-report=xml")
+            .arg("--status-level=none")
+            .arg("test_partial.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let xml = normalize_xml_report(&context.read_file("coverage.xml"));
+    insta::assert_snapshot!(xml, @r#"
+    <?xml version="1.0" ?>
+    <coverage version="1.0" timestamp="[TIMESTAMP]" lines-valid="6" lines-covered="5" line-rate="0.8333" branches-covered="0" branches-valid="0" branch-rate="0.0000" complexity="0.0">
+      <sources>
+        <source><temp_dir>/</source>
+      </sources>
+      <packages>
+        <package name="." line-rate="0.8333" branch-rate="0.0000" complexity="0.0">
+          <classes>
+            <class name="test_partial.py" filename="test_partial.py" line-rate="0.8333" branch-rate="0.0000" complexity="0.0">
+              <methods/>
+              <lines>
+                <line number="2" hits="1" branch="false"/>
+                <line number="3" hits="1" branch="false"/>
+                <line number="5" hits="1" branch="false"/>
+                <line number="6" hits="0" branch="false"/>
+                <line number="8" hits="1" branch="false"/>
+                <line number="9" hits="1" branch="false"/>
+              </lines>
+            </class>
+          </classes>
+        </package>
+      </packages>
+    </coverage>
+    "#);
+}
+
+#[test]
+fn test_cov_report_xml_with_custom_path_from_config() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.coverage]
+sources = [""]
+report = "xml"
+report-path = "build/coverage.xml"
+"#,
+        ),
+        (
+            "test_partial.py",
+            r"
+def covered():
+    return 1
+
+def uncovered():
+    return 2
+
+def test_only_covered():
+    assert covered() == 1
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--status-level=none")
+            .arg("test_partial.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let xml = normalize_xml_report(&context.read_file("build/coverage.xml"));
+    insta::assert_snapshot!(xml, @r#"
+    <?xml version="1.0" ?>
+    <coverage version="1.0" timestamp="[TIMESTAMP]" lines-valid="6" lines-covered="5" line-rate="0.8333" branches-covered="0" branches-valid="0" branch-rate="0.0000" complexity="0.0">
+      <sources>
+        <source><temp_dir>/</source>
+      </sources>
+      <packages>
+        <package name="." line-rate="0.8333" branch-rate="0.0000" complexity="0.0">
+          <classes>
+            <class name="test_partial.py" filename="test_partial.py" line-rate="0.8333" branch-rate="0.0000" complexity="0.0">
+              <methods/>
+              <lines>
+                <line number="2" hits="1" branch="false"/>
+                <line number="3" hits="1" branch="false"/>
+                <line number="5" hits="1" branch="false"/>
+                <line number="6" hits="0" branch="false"/>
+                <line number="8" hits="1" branch="false"/>
+                <line number="9" hits="1" branch="false"/>
+              </lines>
+            </class>
+          </classes>
+        </package>
+      </packages>
+    </coverage>
+    "#);
+}
+
+#[test]
+fn test_cov_report_json_writes_default_file() {
+    let context = TestContext::with_file(
+        "test_partial.py",
+        r"
+def covered():
+    return 1
+
+def uncovered():
+    return 2
+
+def test_only_covered():
+    assert covered() == 1
+",
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--cov")
+            .arg("--cov-report=json")
+            .arg("--status-level=none")
+            .arg("test_partial.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let json = context.read_file("coverage.json");
+    insta::assert_snapshot!(json, @r#"
+    {
+      "meta": {
+        "format": 2,
+        "version": "karva"
+      },
+      "files": {
+        "test_partial.py": {
+          "executed_lines": [
+            2,
+            3,
+            5,
+            8,
+            9
+          ],
+          "summary": {
+            "covered_lines": 5,
+            "num_statements": 6,
+            "percent_covered": 83.33333333333334,
+            "missing_lines": [
+              6
+            ],
+            "excluded_lines": []
+          },
+          "missing_lines": [
+            6
+          ],
+          "excluded_lines": []
+        }
+      },
+      "totals": {
+        "covered_lines": 5,
+        "num_statements": 6,
+        "percent_covered": 83.33333333333334
+      }
+    }
+    "#);
+}
+
+#[test]
+fn test_cov_report_cli_override_uses_default_path_when_config_path_is_stale() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.coverage]
+sources = [""]
+report = "xml"
+report-path = "build/coverage.xml"
+"#,
+        ),
+        (
+            "test_partial.py",
+            r"
+def covered():
+    return 1
+
+def uncovered():
+    return 2
+
+def test_only_covered():
+    assert covered() == 1
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--cov-report=json")
+            .arg("--status-level=none")
+            .arg("test_partial.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let json = context.read_file("coverage.json");
+    insta::assert_snapshot!(json, @r#"
+    {
+      "meta": {
+        "format": 2,
+        "version": "karva"
+      },
+      "files": {
+        "test_partial.py": {
+          "executed_lines": [
+            2,
+            3,
+            5,
+            8,
+            9
+          ],
+          "summary": {
+            "covered_lines": 5,
+            "num_statements": 6,
+            "percent_covered": 83.33333333333334,
+            "missing_lines": [
+              6
+            ],
+            "excluded_lines": []
+          },
+          "missing_lines": [
+            6
+          ],
+          "excluded_lines": []
+        }
+      },
+      "totals": {
+        "covered_lines": 5,
+        "num_statements": 6,
+        "percent_covered": 83.33333333333334
+      }
+    }
+    "#);
+    assert!(!context.root().join("build/coverage.xml").exists());
+}
+
+#[test]
+fn test_cov_report_default_path_is_project_root_from_subdirectory() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.coverage]
+sources = [""]
+report = "json"
+"#,
+        ),
+        (
+            "tests/test_partial.py",
+            r"
+def covered():
+    return 1
+
+def uncovered():
+    return 2
+
+def test_only_covered():
+    assert covered() == 1
+",
+        ),
+    ]);
+
+    let mut command = context.karva_command_in(context.root().join("tests"));
+    command
+        .arg("test")
+        .arg("--no-parallel")
+        .arg("--status-level=none")
+        .arg("tests/test_partial.py");
+
+    assert_cmd_snapshot!(command, @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    let json = context.read_file("coverage.json");
+    insta::assert_snapshot!(json, @r#"
+    {
+      "meta": {
+        "format": 2,
+        "version": "karva"
+      },
+      "files": {
+        "tests/test_partial.py": {
+          "executed_lines": [
+            2,
+            3,
+            5,
+            8,
+            9
+          ],
+          "summary": {
+            "covered_lines": 5,
+            "num_statements": 6,
+            "percent_covered": 83.33333333333334,
+            "missing_lines": [
+              6
+            ],
+            "excluded_lines": []
+          },
+          "missing_lines": [
+            6
+          ],
+          "excluded_lines": []
+        }
+      },
+      "totals": {
+        "covered_lines": 5,
+        "num_statements": 6,
+        "percent_covered": 83.33333333333334
+      }
+    }
+    "#);
+    assert!(!context.root().join("tests/coverage.json").exists());
+}
+
+#[test]
+fn test_cov_report_cli_path_is_project_root_relative_from_subdirectory() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.coverage]
+sources = [""]
+"#,
+        ),
+        (
+            "tests/test_partial.py",
+            r"
+def covered():
+    return 1
+
+def uncovered():
+    return 2
+
+def test_only_covered():
+    assert covered() == 1
+",
+        ),
+    ]);
+
+    let mut command = context.karva_command_in(context.root().join("tests"));
+    command
+        .arg("test")
+        .arg("--no-parallel")
+        .arg("--cov-report=json:build/coverage.json")
+        .arg("--status-level=none")
+        .arg("tests/test_partial.py");
+
+    assert_cmd_snapshot!(command, @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    let json = context.read_file("build/coverage.json");
+    insta::assert_snapshot!(json, @r#"
+    {
+      "meta": {
+        "format": 2,
+        "version": "karva"
+      },
+      "files": {
+        "tests/test_partial.py": {
+          "executed_lines": [
+            2,
+            3,
+            5,
+            8,
+            9
+          ],
+          "summary": {
+            "covered_lines": 5,
+            "num_statements": 6,
+            "percent_covered": 83.33333333333334,
+            "missing_lines": [
+              6
+            ],
+            "excluded_lines": []
+          },
+          "missing_lines": [
+            6
+          ],
+          "excluded_lines": []
+        }
+      },
+      "totals": {
+        "covered_lines": 5,
+        "num_statements": 6,
+        "percent_covered": 83.33333333333334
+      }
+    }
+    "#);
+    assert!(!context.root().join("tests/build/coverage.json").exists());
+}
+
+#[test]
+fn test_cov_report_html_with_custom_dir_from_config() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.coverage]
+sources = [""]
+report = "html"
+report-path = "build/htmlcov"
+"#,
+        ),
+        (
+            "test_partial.py",
+            r"
+def covered():
+    return 1
+
+def uncovered():
+    return 2
+
+def test_only_covered():
+    assert covered() == 1
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--status-level=none")
+            .arg("test_partial.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let html = context.read_file("build/htmlcov/index.html");
+    insta::assert_snapshot!(html, @r#"
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Coverage report</title>
+      <style>body{font-family:system-ui,sans-serif;margin:2rem;}table{border-collapse:collapse;width:100%;}th,td{padding:.5rem;border-bottom:1px solid #ddd;text-align:left;}td.num{text-align:right;font-variant-numeric:tabular-nums;}code{font-family:ui-monospace,SFMono-Regular,monospace;}thead{background:#f5f5f5;}h1{margin-top:0;}</style>
+    </head>
+    <body>
+      <h1>Coverage report</h1>
+      <p>Total coverage: <strong>83%</strong> (5/6)</p>
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Stmts</th><th>Miss</th><th>Cover</th><th>Missing</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>test_partial.py</code></td><td class="num">6</td><td class="num">1</td><td class="num">83%</td><td><code>6</code></td></tr>
+          <tr><td><strong>TOTAL</strong></td><td class="num"><strong>6</strong></td><td class="num"><strong>1</strong></td><td class="num"><strong>83%</strong></td><td></td></tr>
+        </tbody>
+      </table>
+    </body>
+    </html>
+    "#);
+}
+
+#[test]
+fn test_cov_report_path_warns_for_term_report_from_config() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.coverage]
+sources = [""]
+report = "term"
+report-path = "build/coverage.xml"
+"#,
+        ),
+        (
+            "test_partial.py",
+            r"
+def covered():
+    return 1
+
+def uncovered():
+    return 2
+
+def test_only_covered():
+    assert covered() == 1
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--status-level=none")
+            .arg("test_partial.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+    warning: `coverage.report-path` is ignored when `coverage.report` is `term`
 
     Name              Stmts   Miss   Cover
     [LONG-LINE]
