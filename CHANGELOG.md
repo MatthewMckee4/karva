@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.0.1-alpha.6
+
+### Bug Fixes
+
+- Make CoverageTracer thread-safe to fix --cov panic on threaded code ([#761](https://github.com/MatthewMckee4/karva/pull/761))
+
+### CLI
+
+- Add per-test hard timeout configuration ([#768](https://github.com/MatthewMckee4/karva/pull/768))
+- Add --partition slice:M/N for round-robin test slicing ([#767](https://github.com/MatthewMckee4/karva/pull/767))
+- Add `--no-cov` to disable coverage for a single run ([#733](https://github.com/MatthewMckee4/karva/pull/733))
+- Add `--cov-report=term-missing` to show uncovered lines per file ([#716](https://github.com/MatthewMckee4/karva/pull/716))
+
+### Configuration
+
+- Add required-version field to configuration ([#771](https://github.com/MatthewMckee4/karva/pull/771))
+- Expose coverage configuration via `[coverage]` ([#730](https://github.com/MatthewMckee4/karva/pull/730))
+
+### Coverage
+
+- Support `# pragma: no cover` exclusion comments in coverage ([#736](https://github.com/MatthewMckee4/karva/pull/736))
+- Include never-imported source files at 0% in coverage report ([#735](https://github.com/MatthewMckee4/karva/pull/735))
+- Add `--cov-fail-under` to gate the run on a coverage threshold ([#734](https://github.com/MatthewMckee4/karva/pull/734))
+
+### Diagnostics
+
+- Print nextest-style cancellation banner on Ctrl+C ([#764](https://github.com/MatthewMckee4/karva/pull/764))
+- Make context window size 0 for diagnostics ([#758](https://github.com/MatthewMckee4/karva/pull/758))
+- Add `--slow-timeout` and SLOW reporting ([#731](https://github.com/MatthewMckee4/karva/pull/731))
+
+### Documentation
+
+- Fix zensical build warnings and bump zensical to 0.0.38 ([#746](https://github.com/MatthewMckee4/karva/pull/746))
+- Add docs pages for coverage, parallelism, retries, watch, slow tests, fail-fast, cache, timeout tag ([#738](https://github.com/MatthewMckee4/karva/pull/738))
+- Expose `KARVA`, `KARVA_WORKER_ID`, `KARVA_RUN_ID`, `KARVA_WORKSPACE_ROOT`, and `KARVA_TEST_NAME` to tests ([#728](https://github.com/MatthewMckee4/karva/pull/728))
+
+### Test Running
+
+- Expose KARVA_PROFILE, KARVA_TEST_THREADS, and KARVA_VERSION to tests ([#741](https://github.com/MatthewMckee4/karva/pull/741))
+- Expose `KARVA_ATTEMPT` and `KARVA_TOTAL_ATTEMPTS` to tests ([#715](https://github.com/MatthewMckee4/karva/pull/715))
+
+### Contributors
+
+- [@MatthewMckee4](https://github.com/MatthewMckee4)
+- [@tyanochkuby](https://github.com/tyanochkuby)
+
 ## 0.0.1-alpha.5
 
 ### Bug Fixes
