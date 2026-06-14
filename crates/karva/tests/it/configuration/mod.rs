@@ -1548,6 +1548,25 @@ fn test_config_file_flag_nonexistent_unix() {
 }
 
 #[test]
+#[cfg(unix)]
+fn test_discovered_karva_toml_read_error_unix() {
+    let context = TestContext::with_file("test.py", "def test_a(): pass");
+    std::fs::create_dir(context.root().join("karva.toml")).expect("create directory config path");
+
+    assert_cmd_snapshot!(context.command(), @r"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    Karva failed
+      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`: Failed to read `<temp_dir>/karva.toml`: Is a directory (os error 21)
+      Cause: Failed to read `<temp_dir>/karva.toml`: Is a directory (os error 21)
+      Cause: Is a directory (os error 21)
+    ");
+}
+
+#[test]
 #[cfg(windows)]
 fn test_config_file_flag_nonexistent_windows() {
     let context = TestContext::with_file("test.py", "def test_a(): pass");

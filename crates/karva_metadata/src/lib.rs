@@ -225,8 +225,18 @@ impl ProjectMetadata {
 fn try_load_karva_toml(dir: &Utf8Path) -> Result<Option<Config>, ProjectMetadataError> {
     let path = dir.join("karva.toml");
 
-    let Ok(content) = std::fs::read_to_string(&path) else {
-        return Ok(None);
+    let content = match std::fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(source) => {
+            return Err(ProjectMetadataError::InvalidKarvaToml {
+                source: Box::new(KarvaTomlError::FileReadError {
+                    source,
+                    path: path.clone(),
+                }),
+                path,
+            });
+        }
     };
 
     let config = Config::from_toml_str(&content).map_err(|error| {
@@ -243,8 +253,15 @@ fn try_load_karva_toml(dir: &Utf8Path) -> Result<Option<Config>, ProjectMetadata
 fn try_load_pyproject(dir: &Utf8Path) -> Result<Option<PyProject>, ProjectMetadataError> {
     let path = dir.join("pyproject.toml");
 
-    let Ok(content) = std::fs::read_to_string(&path) else {
-        return Ok(None);
+    let content = match std::fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(source) => {
+            return Err(ProjectMetadataError::InvalidPyProject {
+                path: path.clone(),
+                source: Box::new(PyProjectError::FileReadError { source, path }),
+            });
+        }
     };
 
     let pyproject = PyProject::from_toml_str(&content).map_err(|error| {
@@ -255,6 +272,47 @@ fn try_load_pyproject(dir: &Utf8Path) -> Result<Option<PyProject>, ProjectMetada
     })?;
 
     Ok(Some(pyproject))
+}
+
+#[cfg(test)]
+mod tests {
+    use camino::Utf8Path;
+
+    use super::*;
+
+    fn temp_path(dir: &tempfile::TempDir) -> &Utf8Path {
+        Utf8Path::from_path(dir.path()).expect("temp path should be UTF-8")
+    }
+
+    #[test]
+    fn karva_toml_read_errors_are_reported() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let root = temp_path(&temp_dir);
+        std::fs::create_dir(root.join("karva.toml")).expect("create directory config path");
+
+        let err = try_load_karva_toml(root).expect_err("directory config path should fail");
+
+        assert!(matches!(
+            err,
+            ProjectMetadataError::InvalidKarvaToml { ref source, .. }
+                if matches!(source.as_ref(), KarvaTomlError::FileReadError { .. })
+        ));
+    }
+
+    #[test]
+    fn pyproject_read_errors_are_reported() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let root = temp_path(&temp_dir);
+        std::fs::create_dir(root.join("pyproject.toml")).expect("create directory config path");
+
+        let err = try_load_pyproject(root).expect_err("directory config path should fail");
+
+        assert!(matches!(
+            err,
+            ProjectMetadataError::InvalidPyProject { ref source, .. }
+                if matches!(source.as_ref(), PyProjectError::FileReadError { .. })
+        ));
+    }
 }
 
 /// Returns `true` if the pyproject contains a `[tool.karva]` section.

@@ -1240,6 +1240,7 @@ dependencies = [
  "ruff_python_ast",
  "semver",
  "serde",
+ "tempfile",
  "thiserror",
  "toml",
  "tracing",
