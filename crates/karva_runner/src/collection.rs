@@ -8,6 +8,7 @@ use std::thread;
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use crossbeam_channel::unbounded;
+use ignore::types::Types;
 use ignore::{WalkBuilder, WalkState};
 use karva_project::path::{TestPath, TestPathFunction};
 
@@ -167,12 +168,18 @@ impl<'a> ParallelCollector<'a> {
             .parents(true)
             .follow_links(true)
             .git_ignore(self.settings.respect_ignore_files)
-            .types({
-                let mut types = ignore::types::TypesBuilder::new();
-                types.add("python", "*.py").expect("static pattern");
-                types.select("python");
-                types.build().expect("finalize file types")
-            })
+            .types(python_file_types()?)
             .build_parallel())
     }
+}
+
+fn python_file_types() -> Result<Types> {
+    let mut types = ignore::types::TypesBuilder::new();
+    types
+        .add("python", "*.py")
+        .context("failed to register Python file pattern")?;
+    types.select("python");
+    types
+        .build()
+        .context("failed to build Python file type matcher")
 }
