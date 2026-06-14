@@ -30,13 +30,25 @@ where
             return f(py);
         }
 
-        let Ok(null_file) = open_devnull(py) else {
-            return f(py);
+        let null_file = match open_devnull(py) {
+            Ok(null_file) => null_file,
+            Err(err) => {
+                tracing::warn!(
+                    "failed to open Python output sink; Python output will not be muted: {err}"
+                );
+                return f(py);
+            }
         };
 
-        let _ = redirect_stdio(py, &null_file);
+        if let Err(err) = redirect_stdio(py, &null_file) {
+            tracing::warn!(
+                "failed to redirect Python stdout and stderr; Python output may not be fully muted: {err}"
+            );
+        }
         let result = f(py);
-        let _ = flush_and_mute(py, &null_file);
+        if let Err(err) = flush_and_mute(py, &null_file) {
+            tracing::warn!("failed to flush muted Python stdout and stderr: {err}");
+        }
         result
     })
 }

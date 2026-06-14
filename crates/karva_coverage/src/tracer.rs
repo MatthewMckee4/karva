@@ -259,15 +259,49 @@ fn install_monitoring(py: Python<'_>, tracer: &Py<CoverageTracer>) -> PyResult<(
             )
         })?;
 
-    let callback = tracer.bind(py).getattr("line_cb")?;
-    mon.call_method1("register_callback", (tool_id, &line_event, callback))?;
-    mon.call_method1("set_events", (tool_id, line_event))?;
-    {
-        let bound = tracer.bind(py).borrow();
-        let _ = bound.monitoring_tool_id.set(tool_id);
-        let _ = bound.monitoring_disable.set(disable);
+    let install_result = (|| -> PyResult<()> {
+        let callback = tracer.bind(py).getattr("line_cb")?;
+        mon.call_method1("register_callback", (tool_id, &line_event, callback))?;
+        mon.call_method1("set_events", (tool_id, &line_event))?;
+        {
+            let bound = tracer.bind(py).borrow();
+            bound.monitoring_tool_id.set(tool_id).map_err(|_| {
+                pyo3::exceptions::PyRuntimeError::new_err(
+                    "coverage monitoring tool id was already initialized",
+                )
+            })?;
+            bound.monitoring_disable.set(disable).map_err(|_| {
+                pyo3::exceptions::PyRuntimeError::new_err(
+                    "coverage monitoring disable sentinel was already initialized",
+                )
+            })?;
+        }
+        Ok(())
+    })();
+
+    if let Err(err) = install_result {
+        release_monitoring_tool(py, &mon, &line_event, tool_id);
+        return Err(err);
     }
+
     Ok(())
+}
+
+fn release_monitoring_tool(
+    py: Python<'_>,
+    mon: &Bound<'_, PyAny>,
+    line_event: &Bound<'_, PyAny>,
+    tool_id: u8,
+) {
+    if let Err(err) = mon.call_method1("set_events", (tool_id, 0u32)) {
+        tracing::warn!("failed to disable sys.monitoring events during cleanup: {err}");
+    }
+    if let Err(err) = mon.call_method1("register_callback", (tool_id, line_event, py.None())) {
+        tracing::warn!("failed to unregister sys.monitoring callback during cleanup: {err}");
+    }
+    if let Err(err) = mon.call_method1("free_tool_id", (tool_id,)) {
+        tracing::warn!("failed to free sys.monitoring tool id during cleanup: {err}");
+    }
 }
 
 fn install_settrace(py: Python<'_>, tracer: &Py<CoverageTracer>) -> PyResult<()> {
@@ -284,8 +318,15 @@ fn walk_source_files(roots: &[PathBuf]) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut seen: HashSet<PathBuf> = HashSet::new();
     for root in roots {
-        let Ok(metadata) = std::fs::symlink_metadata(root) else {
-            continue;
+        let metadata = match std::fs::symlink_metadata(root) {
+            Ok(metadata) => metadata,
+            Err(err) => {
+                tracing::warn!(
+                    path = %root.display(),
+                    "failed to inspect coverage source root: {err}"
+                );
+                continue;
+            }
         };
         if metadata.file_type().is_symlink() {
             continue;
@@ -302,12 +343,36 @@ fn walk_source_files(roots: &[PathBuf]) -> Vec<PathBuf> {
 }
 
 fn walk_dir(dir: &Path, out: &mut Vec<PathBuf>, seen: &mut HashSet<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(err) => {
+            tracing::warn!(
+                path = %dir.display(),
+                "failed to read coverage source directory: {err}"
+            );
+            return;
+        }
     };
-    for entry in entries.flatten() {
-        let Ok(file_type) = entry.file_type() else {
-            continue;
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => {
+                tracing::warn!(
+                    path = %dir.display(),
+                    "failed to read coverage source directory entry: {err}"
+                );
+                continue;
+            }
+        };
+        let file_type = match entry.file_type() {
+            Ok(file_type) => file_type,
+            Err(err) => {
+                tracing::warn!(
+                    path = %entry.path().display(),
+                    "failed to inspect coverage source path: {err}"
+                );
+                continue;
+            }
         };
         if file_type.is_symlink() {
             continue;

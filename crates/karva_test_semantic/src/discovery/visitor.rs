@@ -91,6 +91,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             stmt_function_def.clone(),
             py_module,
             self.module.module_path(),
+            self.module.source_file(),
             is_generator_function,
         ) {
             Ok(fixture_def) => self.module.add_fixture(fixture_def),
@@ -211,12 +212,14 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             find_function_statement(&func_name, &source_text, self.context.python_version())?;
 
         let is_generator_function = is_generator(&stmt_function_def);
+        let source_file = SourceFileBuilder::new(utf8_file_name.as_str(), source_text).finish();
 
         match DiscoveredFixture::try_from_function(
             self.py,
             stmt_function_def.clone(),
             &imported_module,
             &module_path,
+            source_file.clone(),
             is_generator_function,
         ) {
             Ok(fixture_def) => self.module.add_fixture(fixture_def),
@@ -224,7 +227,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                 report_invalid_fixture(
                     self.context,
                     self.py,
-                    SourceFileBuilder::new(utf8_file_name.as_str(), source_text).finish(),
+                    source_file,
                     stmt_function_def.as_ref(),
                     &e,
                 );

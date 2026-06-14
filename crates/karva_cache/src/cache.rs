@@ -5,10 +5,11 @@ use std::time::Duration;
 use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_diagnostic::{FlakyTest, TestResultKind, TestResultStats, TestRunResult};
-use ruff_db::diagnostic::{DisplayDiagnosticConfig, DisplayDiagnostics, FileResolver};
+use ruff_db::diagnostic::DisplayDiagnosticConfig;
 use serde::{Deserialize, Serialize};
 
 use crate::artifact::{CacheFile, read_json, read_text, write_json, write_json_if_nonempty};
+use crate::diagnostics::write_diagnostics;
 use crate::{RUN_PREFIX, RunHash, WORKER_PREFIX, worker_folder};
 
 /// Snapshot of the test a worker is currently executing.
@@ -121,13 +122,13 @@ impl RunCache {
         &self,
         worker_id: usize,
         result: &TestRunResult,
-        resolver: &dyn FileResolver,
+        cwd: &Utf8Path,
         config: &DisplayDiagnosticConfig,
     ) -> Result<()> {
         let worker_dir = self.worker_dir(worker_id);
         fs::create_dir_all(&worker_dir)?;
 
-        write_diagnostics(&worker_dir, result, resolver, config)?;
+        write_diagnostics(&worker_dir, result, cwd, config)?;
         write_json(&worker_dir, CacheFile::Stats, result.stats())?;
         write_json(&worker_dir, CacheFile::Durations, result.durations())?;
 
@@ -141,28 +142,6 @@ impl RunCache {
 
         Ok(())
     }
-}
-
-/// Renders diagnostics into the worker directory.
-///
-/// Diagnostics use the ruff `DisplayDiagnostics` formatter rather than JSON,
-/// so they don't share the [`write_json`] path; the file is skipped entirely
-/// when there are no diagnostics.
-fn write_diagnostics(
-    worker_dir: &Utf8Path,
-    result: &TestRunResult,
-    resolver: &dyn FileResolver,
-    config: &DisplayDiagnosticConfig,
-) -> Result<()> {
-    if result.diagnostics().is_empty() {
-        return Ok(());
-    }
-    let output = DisplayDiagnostics::new(resolver, config, result.diagnostics());
-    fs::write(
-        CacheFile::Diagnostics.path_in(worker_dir),
-        output.to_string(),
-    )?;
-    Ok(())
 }
 
 /// Reads results from a single worker directory into the accumulator.
@@ -256,9 +235,9 @@ fn collect_run_dirs(cache_dir: &Utf8Path) -> Result<Vec<String>> {
 /// all durations from all worker directories within it.
 pub fn read_recent_durations(cache_dir: &Utf8Path) -> Result<HashMap<String, Duration>> {
     let run_dirs = collect_run_dirs(cache_dir)?;
-    let most_recent = run_dirs
-        .last()
-        .ok_or_else(|| anyhow::anyhow!("No run directories found"))?;
+    let Some(most_recent) = run_dirs.last() else {
+        return Ok(HashMap::new());
+    };
     let run_dir = cache_dir.join(most_recent);
 
     let mut aggregated_durations = HashMap::new();
@@ -363,12 +342,12 @@ mod tests {
     }
 
     #[test]
-    fn read_recent_durations_errors_when_no_runs() {
+    fn read_recent_durations_returns_empty_when_no_runs() {
         let tmp = tempfile::tempdir().unwrap();
         let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
 
-        let result = read_recent_durations(&cache_dir);
-        assert!(result.is_err());
+        let result = read_recent_durations(&cache_dir).unwrap();
+        assert!(result.is_empty());
     }
 
     #[test]

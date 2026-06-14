@@ -4,6 +4,7 @@ use karva_python_semantic::{ModulePath, QualifiedFunctionName};
 use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
+use ruff_source_file::SourceFile;
 
 mod finalizer;
 mod normalized_fixture;
@@ -35,6 +36,9 @@ pub struct DiscoveredFixture {
     /// AST representation of the fixture function definition.
     stmt_function_def: Rc<StmtFunctionDef>,
 
+    /// Source code captured during discovery for diagnostic reporting.
+    source_file: SourceFile,
+
     /// The scope at which this fixture's value is cached.
     scope: FixtureScope,
 
@@ -54,6 +58,7 @@ impl DiscoveredFixture {
     pub(crate) fn new(
         name: QualifiedFunctionName,
         stmt_function_def: Rc<StmtFunctionDef>,
+        source_file: SourceFile,
         scope: FixtureScope,
         auto_use: bool,
         function: Py<PyAny>,
@@ -62,6 +67,7 @@ impl DiscoveredFixture {
         Self {
             name,
             stmt_function_def,
+            source_file,
             scope,
             auto_use,
             function: Rc::new(function),
@@ -93,11 +99,16 @@ impl DiscoveredFixture {
         &self.stmt_function_def
     }
 
+    pub(crate) fn source_file(&self) -> &SourceFile {
+        &self.source_file
+    }
+
     pub(crate) fn try_from_function(
         py: Python<'_>,
         stmt_function_def: Rc<StmtFunctionDef>,
         py_module: &Bound<'_, PyModule>,
         module_path: &ModulePath,
+        source_file: SourceFile,
         is_generator_function: bool,
     ) -> PyResult<Self> {
         tracing::debug!("Trying to parse `{}` as a fixture", stmt_function_def.name);
@@ -109,6 +120,7 @@ impl DiscoveredFixture {
             stmt_function_def.clone(),
             &function,
             module_path.clone(),
+            source_file.clone(),
             is_generator_function,
         );
 
@@ -125,6 +137,7 @@ impl DiscoveredFixture {
             stmt_function_def,
             &function,
             module_path.clone(),
+            source_file,
             is_generator_function,
         );
 
@@ -142,6 +155,7 @@ impl DiscoveredFixture {
         stmt_function_def: Rc<StmtFunctionDef>,
         function: &Bound<'_, PyAny>,
         module_name: ModulePath,
+        source_file: SourceFile,
         is_generator_function: bool,
     ) -> PyResult<Self> {
         let fixture_function_marker = get_fixture_function_marker(function)?;
@@ -166,8 +180,9 @@ impl DiscoveredFixture {
         Ok(Self::new(
             QualifiedFunctionName::new(name, module_name),
             stmt_function_def,
+            source_file,
             fixture_scope,
-            auto_use.extract::<bool>().unwrap_or(false),
+            auto_use.extract::<bool>()?,
             fixture_function.into(),
             is_generator_function,
         ))
@@ -178,6 +193,7 @@ impl DiscoveredFixture {
         stmt_function_def: Rc<StmtFunctionDef>,
         function: &Bound<'_, PyAny>,
         module_path: ModulePath,
+        source_file: SourceFile,
         is_generator_function: bool,
     ) -> PyResult<Self> {
         let py_function = function
@@ -196,6 +212,7 @@ impl DiscoveredFixture {
         Ok(Self::new(
             QualifiedFunctionName::new(name, module_path),
             stmt_function_def,
+            source_file,
             fixture_scope,
             auto_use,
             py_function.into(),

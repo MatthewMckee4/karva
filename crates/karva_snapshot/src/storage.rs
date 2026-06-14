@@ -30,10 +30,19 @@ pub fn pending_path(snap_path: &Utf8Path) -> Utf8PathBuf {
     Utf8PathBuf::from(format!("{snap_path}.new"))
 }
 
-/// Read and parse a snapshot file, returning `None` if it doesn't exist or can't be parsed.
-pub fn read_snapshot(path: &Utf8Path) -> Option<SnapshotFile> {
-    let content = std::fs::read_to_string(path).ok()?;
+/// Read and parse a snapshot file.
+///
+/// Returns `Ok(None)` when the file does not exist.
+pub fn read_snapshot(path: &Utf8Path) -> io::Result<Option<SnapshotFile>> {
+    let content = match std::fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(err),
+    };
+
     SnapshotFile::parse(&content)
+        .map(Some)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Malformed snapshot file"))
 }
 
 /// Write a snapshot file, creating parent directories as needed.
@@ -72,17 +81,15 @@ fn find_recursive<T>(
     filter: &impl Fn(&str) -> bool,
     map: &impl Fn(Utf8PathBuf) -> Option<T>,
     results: &mut Vec<T>,
-) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-
-    for entry in entries.flatten() {
+) -> io::Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
         let path = entry.path();
+        let file_type = entry.file_type()?;
 
-        if path.is_dir() {
+        if file_type.is_dir() {
             if let Ok(utf8_path) = Utf8PathBuf::try_from(path) {
-                find_recursive(&utf8_path, filter, map, results);
+                find_recursive(&utf8_path, filter, map, results)?;
             }
         } else if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
             if filter(name) {
@@ -94,10 +101,12 @@ fn find_recursive<T>(
             }
         }
     }
+
+    Ok(())
 }
 
 /// Recursively find all pending snapshot files (`.snap.new`) under a root directory.
-pub fn find_pending_snapshots(root: &Utf8Path) -> Vec<PendingSnapshotInfo> {
+pub fn find_pending_snapshots(root: &Utf8Path) -> io::Result<Vec<PendingSnapshotInfo>> {
     let mut results = Vec::new();
     find_recursive(
         root,
@@ -110,9 +119,9 @@ pub fn find_pending_snapshots(root: &Utf8Path) -> Vec<PendingSnapshotInfo> {
             })
         },
         &mut results,
-    );
+    )?;
     results.sort_by(|a, b| a.pending_path.cmp(&b.pending_path));
-    results
+    Ok(results)
 }
 
 /// Extract the bare function name from a snapshot's `source` metadata.
@@ -131,7 +140,7 @@ fn extract_function_name(source: Option<&str>) -> Option<&str> {
 /// rewrites the source file in-place and deletes the `.snap.new` file.
 /// For file-based snapshots, renames `.snap.new` to `.snap`.
 pub fn accept_pending(pending_path: &Utf8Path) -> io::Result<()> {
-    if let Some(snapshot) = read_snapshot(pending_path)
+    if let Some(snapshot) = read_snapshot(pending_path)?
         && let Some(source_file) = &snapshot.metadata.inline_source
         && let Some(line) = snapshot.metadata.inline_line
     {
@@ -156,15 +165,17 @@ struct InlineInfo<'a> {
     function_name: Option<String>,
 }
 
+type ClassifiedPendingSnapshots<'a> = (HashMap<String, Vec<InlineInfo<'a>>>, Vec<&'a Utf8Path>);
+
 /// Classify pending snapshots into inline (grouped by source file) and file-based.
 fn classify_pending_snapshots<'a>(
     pending: &'a [&PendingSnapshotInfo],
-) -> (HashMap<String, Vec<InlineInfo<'a>>>, Vec<&'a Utf8Path>) {
+) -> io::Result<ClassifiedPendingSnapshots<'a>> {
     let mut inline_by_source: HashMap<String, Vec<InlineInfo<'_>>> = HashMap::new();
     let mut file_based: Vec<&Utf8Path> = Vec::new();
 
     for info in pending {
-        if let Some(snapshot) = read_snapshot(&info.pending_path)
+        if let Some(snapshot) = read_snapshot(&info.pending_path)?
             && let Some(source_file) = snapshot.metadata.inline_source.clone()
             && let Some(line) = snapshot.metadata.inline_line
         {
@@ -184,7 +195,7 @@ fn classify_pending_snapshots<'a>(
         file_based.push(&info.pending_path);
     }
 
-    (inline_by_source, file_based)
+    Ok((inline_by_source, file_based))
 }
 
 /// Process inline snapshots in descending line order within each source file.
@@ -226,7 +237,7 @@ fn process_file_based_snapshots(file_based: &[&Utf8Path]) -> io::Result<()> {
 /// descending line order (bottom-to-top), edits at higher lines don't affect
 /// line numbers above.
 pub fn accept_pending_batch(pending: &[&PendingSnapshotInfo]) -> io::Result<()> {
-    let (mut inline_by_source, file_based) = classify_pending_snapshots(pending);
+    let (mut inline_by_source, file_based) = classify_pending_snapshots(pending)?;
     process_inline_snapshots(&mut inline_by_source)?;
     process_file_based_snapshots(&file_based)
 }
@@ -317,7 +328,7 @@ pub fn function_exists_in_file(path: &Utf8Path, name: &str) -> bool {
 }
 
 /// Recursively find all committed snapshot files (`.snap`, not `.snap.new`).
-pub fn find_snapshots(root: &Utf8Path) -> Vec<SnapshotInfo> {
+pub fn find_snapshots(root: &Utf8Path) -> io::Result<Vec<SnapshotInfo>> {
     let mut results = Vec::new();
     find_recursive(
         root,
@@ -329,9 +340,9 @@ pub fn find_snapshots(root: &Utf8Path) -> Vec<SnapshotInfo> {
         },
         &|snap_path| Some(SnapshotInfo { snap_path }),
         &mut results,
-    );
+    )?;
     results.sort_by(|a, b| a.snap_path.cmp(&b.snap_path));
-    results
+    Ok(results)
 }
 
 /// A snapshot file of any kind (`.snap` or `.snap.new`) found on disk.
@@ -341,7 +352,7 @@ pub struct AnySnapshotInfo {
 }
 
 /// Recursively find all snapshot files (`.snap` and `.snap.new`) under a root directory.
-pub fn find_all_snapshots(root: &Utf8Path) -> Vec<AnySnapshotInfo> {
+pub fn find_all_snapshots(root: &Utf8Path) -> io::Result<Vec<AnySnapshotInfo>> {
     let mut results = Vec::new();
     find_recursive(
         root,
@@ -353,18 +364,18 @@ pub fn find_all_snapshots(root: &Utf8Path) -> Vec<AnySnapshotInfo> {
         },
         &|path| Some(AnySnapshotInfo { path }),
         &mut results,
-    );
+    )?;
     results.sort_by(|a, b| a.path.cmp(&b.path));
-    results
+    Ok(results)
 }
 
 /// Find all snapshot files whose source test no longer exists.
-pub fn find_unreferenced_snapshots(root: &Utf8Path) -> Vec<UnreferencedSnapshot> {
-    let snapshots = find_snapshots(root);
+pub fn find_unreferenced_snapshots(root: &Utf8Path) -> io::Result<Vec<UnreferencedSnapshot>> {
+    let snapshots = find_snapshots(root)?;
     let mut unreferenced = Vec::new();
 
     for info in &snapshots {
-        let reason = check_snapshot_reference(info);
+        let reason = check_snapshot_reference(info)?;
         if let Some(reason) = reason {
             unreferenced.push(UnreferencedSnapshot {
                 snap_path: info.snap_path.clone(),
@@ -373,37 +384,45 @@ pub fn find_unreferenced_snapshots(root: &Utf8Path) -> Vec<UnreferencedSnapshot>
         }
     }
 
-    unreferenced
+    Ok(unreferenced)
 }
 
-fn check_snapshot_reference(info: &SnapshotInfo) -> Option<UnreferencedReason> {
-    let snapshot = read_snapshot(&info.snap_path)?;
+fn check_snapshot_reference(info: &SnapshotInfo) -> io::Result<Option<UnreferencedReason>> {
+    let Some(snapshot) = read_snapshot(&info.snap_path)? else {
+        return Ok(None);
+    };
 
     let Some(source) = &snapshot.metadata.source else {
-        return Some(UnreferencedReason::NoSource);
+        return Ok(Some(UnreferencedReason::NoSource));
     };
 
     let Some((file_name, snapshot_name)) = parse_source(source) else {
-        return Some(UnreferencedReason::NoSource);
+        return Ok(Some(UnreferencedReason::NoSource));
     };
 
-    let snapshots_dir = info.snap_path.parent()?;
-    let test_dir = snapshots_dir.parent()?;
+    let Some(snapshots_dir) = info.snap_path.parent() else {
+        return Ok(None);
+    };
+    let Some(test_dir) = snapshots_dir.parent() else {
+        return Ok(None);
+    };
     let test_file = test_dir.join(file_name);
 
     if !test_file.exists() {
-        return Some(UnreferencedReason::TestFileNotFound(file_name.to_string()));
+        return Ok(Some(UnreferencedReason::TestFileNotFound(
+            file_name.to_string(),
+        )));
     }
 
     let func_name = base_function_name(snapshot_name);
     if !function_exists_in_file(&test_file, func_name) {
-        return Some(UnreferencedReason::FunctionNotFound {
+        return Ok(Some(UnreferencedReason::FunctionNotFound {
             file: file_name.to_string(),
             function: func_name.to_string(),
-        });
+        }));
     }
 
-    None
+    Ok(None)
 }
 
 /// Remove a snapshot file. Also removes the parent directory if it becomes empty.
@@ -411,7 +430,15 @@ pub fn remove_snapshot(path: &Utf8Path) -> io::Result<()> {
     std::fs::remove_file(path)?;
     if let Some(parent) = path.parent() {
         if parent.file_name().is_some_and(|name| name == "snapshots") {
-            let _ = std::fs::remove_dir(parent);
+            match std::fs::remove_dir(parent) {
+                Ok(()) => {}
+                Err(err)
+                    if matches!(
+                        err.kind(),
+                        io::ErrorKind::NotFound | io::ErrorKind::DirectoryNotEmpty
+                    ) => {}
+                Err(err) => return Err(err),
+            }
         }
     }
     Ok(())
@@ -465,8 +492,23 @@ mod tests {
         };
 
         write_snapshot(&snap_path, &snapshot).expect("write");
-        let read_back = read_snapshot(&snap_path).expect("read");
+        let read_back = read_snapshot(&snap_path).expect("read").expect("snapshot");
         assert_eq!(read_back, snapshot);
+    }
+
+    #[test]
+    fn read_snapshot_reports_malformed_files() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
+        let snap_path = dir_path.join("snapshots").join("mod__test.snap");
+
+        if let Some(parent) = snap_path.parent() {
+            std::fs::create_dir_all(parent).expect("mkdir");
+        }
+        std::fs::write(&snap_path, "not a snapshot").expect("write");
+
+        let err = read_snapshot(&snap_path).expect_err("malformed snapshot should fail");
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
     }
 
     #[test]
@@ -475,8 +517,12 @@ mod tests {
         let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
         let snap_path = dir_path.join("test.snap");
         let pending = pending_path(&snap_path);
+        let snapshot = SnapshotFile {
+            metadata: crate::format::SnapshotMetadata::default(),
+            content: "content\n".to_string(),
+        };
 
-        std::fs::write(&pending, "content").expect("write pending");
+        write_pending_snapshot(&snap_path, &snapshot).expect("write pending");
         assert!(pending.exists());
         assert!(!snap_path.exists());
 
@@ -509,8 +555,19 @@ mod tests {
         std::fs::write(snap_dir.join("mod__test2.snap.new"), "b").expect("write");
         std::fs::write(snap_dir.join("mod__test3.snap"), "c").expect("write");
 
-        let pending = find_pending_snapshots(dir_path);
+        let pending = find_pending_snapshots(dir_path).expect("find pending");
         assert_eq!(pending.len(), 2);
+    }
+
+    #[test]
+    fn find_pending_reports_walk_errors() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
+        let root_file = dir_path.join("not-a-directory");
+        std::fs::write(&root_file, "").expect("write");
+
+        let err = find_pending_snapshots(&root_file).expect_err("walk should fail");
+        assert_eq!(err.kind(), io::ErrorKind::NotADirectory);
     }
 
     #[test]
@@ -590,7 +647,7 @@ mod tests {
         std::fs::write(snap_dir.join("mod__test2.snap.new"), "b").expect("write");
         std::fs::write(snap_dir.join("mod__test3.snap"), "c").expect("write");
 
-        let snaps = find_snapshots(dir_path);
+        let snaps = find_snapshots(dir_path).expect("find snapshots");
         assert_eq!(snaps.len(), 2);
     }
 
@@ -610,7 +667,7 @@ mod tests {
         };
         write_snapshot(&snap_dir.join("test__test_foo.snap"), &snapshot).expect("write");
 
-        let unreferenced = find_unreferenced_snapshots(dir_path);
+        let unreferenced = find_unreferenced_snapshots(dir_path).expect("find unreferenced");
         assert_eq!(unreferenced.len(), 1);
         insta::assert_snapshot!(unreferenced[0].reason, @"test file not found: test.py");
     }
@@ -633,7 +690,7 @@ mod tests {
         };
         write_snapshot(&snap_dir.join("test__test_foo.snap"), &snapshot).expect("write");
 
-        let unreferenced = find_unreferenced_snapshots(dir_path);
+        let unreferenced = find_unreferenced_snapshots(dir_path).expect("find unreferenced");
         assert_eq!(unreferenced.len(), 1);
         insta::assert_snapshot!(unreferenced[0].reason, @"function `test_foo` not found in test.py");
     }
@@ -656,7 +713,7 @@ mod tests {
         };
         write_snapshot(&snap_dir.join("test__test_foo.snap"), &snapshot).expect("write");
 
-        let unreferenced = find_unreferenced_snapshots(dir_path);
+        let unreferenced = find_unreferenced_snapshots(dir_path).expect("find unreferenced");
         assert!(unreferenced.is_empty());
     }
 
@@ -673,5 +730,23 @@ mod tests {
         remove_snapshot(&snap_path).expect("remove");
         assert!(!snap_path.exists());
         assert!(!snap_dir.exists());
+    }
+
+    #[test]
+    fn remove_snapshot_leaves_non_empty_dir() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
+        let snap_dir = dir_path.join("snapshots");
+        std::fs::create_dir_all(&snap_dir).expect("mkdir");
+
+        let snap_path = snap_dir.join("test__test_foo.snap");
+        let other_path = snap_dir.join("test__test_bar.snap");
+        std::fs::write(&snap_path, "content").expect("write");
+        std::fs::write(&other_path, "content").expect("write");
+
+        remove_snapshot(&snap_path).expect("remove");
+        assert!(!snap_path.exists());
+        assert!(other_path.exists());
+        assert!(snap_dir.exists());
     }
 }

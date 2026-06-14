@@ -1,4 +1,4 @@
-use std::io::StdoutLock;
+use std::io::{self, StdoutLock, Write};
 
 use crate::status_level::{FinalStatusLevel, StatusLevel};
 
@@ -82,7 +82,7 @@ impl Stdout {
         self
     }
 
-    fn handle(&mut self) -> Box<dyn std::io::Write + '_> {
+    fn handle(&mut self) -> Box<dyn Write + '_> {
         if let Some(lock) = self.lock.as_mut() {
             Box::new(lock)
         } else {
@@ -95,12 +95,21 @@ impl Stdout {
     }
 }
 
-impl std::fmt::Write for Stdout {
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+impl Write for Stdout {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         if self.enabled {
-            let _ = write!(self.handle(), "{s}");
+            self.handle().write(buf)
+        } else {
+            Ok(buf.len())
         }
-        Ok(())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        if self.enabled {
+            self.handle().flush()
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -111,5 +120,24 @@ impl From<Stdout> for std::process::Stdio {
         } else {
             Self::null()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write as _;
+
+    use super::Stdout;
+
+    #[test]
+    fn disabled_stdout_accepts_writes() {
+        let mut stdout = Stdout::new(false).lock();
+
+        stdout
+            .write_all(b"suppressed output")
+            .expect("disabled stdout should discard writes");
+        stdout
+            .flush()
+            .expect("disabled stdout should flush as a no-op");
     }
 }

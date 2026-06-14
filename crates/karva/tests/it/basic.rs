@@ -215,6 +215,48 @@ fn test_one_test_fail() {
 }
 
 #[test]
+fn test_failure_diagnostic_uses_discovered_source_after_file_is_deleted() {
+    let context = TestContext::with_file(
+        "test_deleted_source.py",
+        r"
+        from pathlib import Path
+
+        def test_failure_after_source_deleted():
+            Path(__file__).unlink()
+            assert False
+    ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test_deleted_source::test_failure_after_source_deleted
+
+    diagnostics:
+
+    error[test-failure]: Test `test_failure_after_source_deleted` failed
+     --> test_deleted_source.py:4:5
+      |
+    4 | def test_failure_after_source_deleted():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Test failed here
+     --> test_deleted_source.py:6:5
+      |
+    6 |     assert False
+      |     ^^^^^^^^^^^^
+      |
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_fail_concise_output() {
     let context = TestContext::with_file(
         "test_fail.py",
@@ -2417,6 +2459,23 @@ fn test_num_workers_invalid_value() {
     error: invalid value 'abc' for '--num-workers <NUM_WORKERS>': invalid digit found in string
 
     For more information, try '--help'.
+    ");
+}
+
+#[test]
+fn test_max_parallelism_env_invalid_value() {
+    let context = TestContext::with_file("test.py", "def test_1(): pass");
+
+    assert_cmd_snapshot!(context.command().env("KARVA_MAX_PARALLELISM", "0"), @r"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    Karva failed
+      Cause: Failed to determine default worker count
+      Cause: invalid KARVA_MAX_PARALLELISM value `0`; expected a positive integer
+      Cause: number would be zero for non-zero type
     ");
 }
 

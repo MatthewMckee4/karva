@@ -3,19 +3,19 @@ use std::fmt::Write;
 
 use camino::Utf8Path;
 use karva_static::WorkerEnvVars;
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAnyMethods, PyDict};
 use pyo3::{PyResult, Python};
-use ruff_source_file::{SourceFile, SourceFileBuilder};
 
-/// Get the source file for the given utf8 path.
-pub(crate) fn source_file(path: &Utf8Path) -> SourceFile {
-    SourceFileBuilder::new(
-        path.as_str(),
-        std::fs::read_to_string(path).expect("Failed to read source file"),
-    )
-    .finish()
-}
+const MAKE_SYNC_CODE: &std::ffi::CStr = c"
+def _make_sync(async_fn):
+    import asyncio, functools
+    @functools.wraps(async_fn)
+    def wrapper(*args, **kwargs):
+        return asyncio.run(async_fn(*args, **kwargs))
+    return wrapper
+";
 
 /// Runs a Python coroutine to completion using `asyncio.run()`.
 pub(crate) fn run_coroutine(py: Python<'_>, coroutine: Py<PyAny>) -> PyResult<Py<PyAny>> {
@@ -109,12 +109,22 @@ fn rebrand_timeout_error(
 ) -> PyResult<Py<PyAny>> {
     match result {
         Ok(v) => Ok(v),
-        Err(err) if err.matches(py, timeout_class).unwrap_or(false) => {
-            Err(pyo3::exceptions::PyTimeoutError::new_err(format!(
-                "Test exceeded timeout of {seconds} seconds"
-            )))
+        Err(err) => {
+            let is_timeout = match err.matches(py, timeout_class) {
+                Ok(is_timeout) => is_timeout,
+                Err(match_err) => {
+                    tracing::warn!("Failed to classify timeout exception: {match_err}");
+                    false
+                }
+            };
+            if is_timeout {
+                Err(pyo3::exceptions::PyTimeoutError::new_err(format!(
+                    "Test exceeded timeout of {seconds} seconds"
+                )))
+            } else {
+                Err(err)
+            }
         }
-        Err(err) => Err(err),
     }
 }
 
@@ -160,23 +170,11 @@ pub(crate) fn patch_async_test_function(py: Python<'_>, function: &Py<PyAny>) ->
     // Replace inner_test with a sync wrapper that uses asyncio.run().
     // Uses inline Python because PyCFunction closures lack the signature metadata and
     // calling conventions that Hypothesis requires to introspect and invoke inner_test.
-    let code = r"
-def _make_sync(async_fn):
-    import asyncio, functools
-    @functools.wraps(async_fn)
-    def wrapper(*args, **kwargs):
-        return asyncio.run(async_fn(*args, **kwargs))
-    return wrapper
-";
     let locals = pyo3::types::PyDict::new(py);
-    py.run(
-        &std::ffi::CString::new(code).expect("valid CString"),
-        None,
-        Some(&locals),
-    )?;
-    let make_sync = locals
-        .get_item("_make_sync")?
-        .expect("_make_sync defined in code");
+    py.run(MAKE_SYNC_CODE, None, Some(&locals))?;
+    let make_sync = locals.get_item("_make_sync")?.ok_or_else(|| {
+        PyRuntimeError::new_err("failed to load async test wrapper from inline Python")
+    })?;
     let sync_wrapper = make_sync.call1((inner_test,))?;
     hypothesis_attr.setattr(py, "inner_test", sync_wrapper)?;
 

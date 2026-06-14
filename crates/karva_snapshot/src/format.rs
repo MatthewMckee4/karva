@@ -38,7 +38,7 @@ impl SnapshotFile {
             } else if let Some(value) = line.strip_prefix("inline_source: ") {
                 metadata.inline_source = Some(value.to_string());
             } else if let Some(value) = line.strip_prefix("inline_line: ") {
-                metadata.inline_line = value.parse().ok();
+                metadata.inline_line = Some(value.parse().ok()?);
             }
         }
 
@@ -53,6 +53,9 @@ impl SnapshotFile {
         let mut output = String::new();
         output.push_str("---\n");
 
+        let has_metadata = self.metadata.source.is_some()
+            || self.metadata.inline_source.is_some()
+            || self.metadata.inline_line.is_some();
         if let Some(source) = &self.metadata.source {
             let _ = writeln!(output, "source: {source}");
         }
@@ -61,6 +64,9 @@ impl SnapshotFile {
         }
         if let Some(inline_line) = self.metadata.inline_line {
             let _ = writeln!(output, "inline_line: {inline_line}");
+        }
+        if !has_metadata {
+            output.push('\n');
         }
 
         output.push_str("---\n");
@@ -213,6 +219,17 @@ mod tests {
     }
 
     #[test]
+    fn serialize_empty_metadata_roundtrip() {
+        let snapshot = SnapshotFile {
+            metadata: SnapshotMetadata::default(),
+            content: "hello\n".to_string(),
+        };
+        let serialized = snapshot.serialize();
+        let reparsed = SnapshotFile::parse(&serialized).expect("should reparse");
+        assert_eq!(snapshot, reparsed);
+    }
+
+    #[test]
     fn parse_malformed_no_closing_separator() {
         assert!(SnapshotFile::parse("---\nsource: test.py::test\nno closing").is_none());
     }
@@ -246,5 +263,12 @@ mod tests {
         );
         assert_eq!(snapshot.metadata.inline_line, Some(5));
         assert_eq!(snapshot.content, "hello world\n");
+    }
+
+    #[test]
+    fn parse_invalid_inline_line_fails() {
+        let input = "---\nsource: test.py:5::test_hello\ninline_source: /abs/path/to/test.py\ninline_line: nope\n---\nhello world\n";
+
+        assert!(SnapshotFile::parse(input).is_none());
     }
 }

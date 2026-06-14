@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 
+use karva_collector::CollectionError;
 use karva_diagnostic::Traceback;
 use karva_python_semantic::FunctionKind;
 use pyo3::{Py, PyAny, PyErr, Python};
@@ -22,6 +23,18 @@ pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
 use crate::runner::{FixtureCallError, FixtureChainEntry};
 use crate::utils::truncate_string;
 use crate::{Context, declare_diagnostic_type};
+
+declare_diagnostic_type! {
+    /// ## Failed to collect module
+    ///
+    /// Raised when karva cannot read a Python file during collection. This is
+    /// distinct from import failures: the file could not be parsed or imported
+    /// because its source text was unavailable.
+    pub static FAILED_TO_COLLECT_MODULE = {
+        summary: "Failed to collect python module",
+        severity: Severity::Error,
+    }
+}
 
 declare_diagnostic_type! {
     /// ## Failed to import module
@@ -138,6 +151,12 @@ fn report_dependency_chain(
     }
 }
 
+pub fn report_collection_error(context: &Context, error: &CollectionError) {
+    let builder = context.report_diagnostic(&FAILED_TO_COLLECT_MODULE);
+
+    builder.into_diagnostic(format!("Failed to collect python module: {error}"));
+}
+
 pub fn report_failed_to_import_module(context: &Context, module_name: &str, error: &str) {
     let builder = context.report_diagnostic(&FAILED_TO_IMPORT_MODULE);
 
@@ -206,7 +225,7 @@ pub fn report_fixture_failure(context: &Context, py: Python, error: FixtureCallE
     handle_failed_function_call(
         &mut diagnostic,
         py,
-        source_file,
+        &source_file,
         &stmt_function_def,
         &arguments,
         FunctionKind::Fixture,
@@ -250,6 +269,7 @@ pub fn report_missing_fixtures(
     for FixtureCallError {
         error,
         fixture_name,
+        source_file,
         dependency_chain,
         ..
     } in fixture_call_errors
@@ -260,7 +280,7 @@ pub fn report_missing_fixtures(
             lines: _,
             error_source_file,
             location,
-        }) = Traceback::from_error(py, &error)
+        }) = Traceback::from_error_with_source(py, &error, &source_file)
         {
             let mut sub = SubDiagnostic::new(
                 SubDiagnosticSeverity::Info,
@@ -305,7 +325,7 @@ pub fn report_test_pass_on_expect_failure(
 pub fn report_test_failure(
     context: &Context,
     py: Python,
-    source_file: SourceFile,
+    source_file: &SourceFile,
     stmt_function_def: &StmtFunctionDef,
     arguments: &HashMap<String, Py<PyAny>>,
     error: &PyErr,
@@ -329,13 +349,13 @@ pub fn report_test_failure(
 fn handle_failed_function_call(
     diagnostic: &mut Diagnostic,
     py: Python,
-    source_file: SourceFile,
+    source_file: &SourceFile,
     stmt_function_def: &StmtFunctionDef,
     arguments: &HashMap<String, Py<PyAny>>,
     function_kind: FunctionKind,
     error: &PyErr,
 ) {
-    annotate_function_name(diagnostic, source_file, stmt_function_def);
+    annotate_function_name(diagnostic, source_file.clone(), stmt_function_def);
 
     if !arguments.is_empty() {
         diagnostic.info(format!(
@@ -358,7 +378,7 @@ fn handle_failed_function_call(
         lines: _,
         error_source_file,
         location,
-    }) = Traceback::from_error(py, error)
+    }) = Traceback::from_error_with_source(py, error, source_file)
     {
         let mut sub = SubDiagnostic::new(
             SubDiagnosticSeverity::Info,

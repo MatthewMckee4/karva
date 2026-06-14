@@ -389,7 +389,10 @@ fn assert_snapshot_impl(
         content: serialized.to_string(),
     };
 
-    if let Some(existing) = read_snapshot(&snap_path) {
+    let existing = read_snapshot(&snap_path)
+        .map_err(|err| SnapshotMismatchError::new_err(format!("Failed to read snapshot: {err}")))?;
+
+    if let Some(existing) = existing {
         if existing.content.trim_end() == serialized.trim_end() {
             return Ok(());
         }

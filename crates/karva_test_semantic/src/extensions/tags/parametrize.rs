@@ -220,12 +220,19 @@ pub(super) fn handle_custom_parametrize_param(
         return default_parametrization();
     };
 
-    let is_parameter_set = bound_param
-        .get_type()
-        .name()
-        .ok()
-        .and_then(|n| n.to_str().ok().map(|s| s.contains("ParameterSet")))
-        .unwrap_or(false);
+    let is_parameter_set = match bound_param.get_type().name() {
+        Ok(type_name) => match type_name.to_str() {
+            Ok(type_name) => type_name.contains("ParameterSet"),
+            Err(err) => {
+                tracing::warn!("Failed to inspect parametrized value type name: {err}");
+                false
+            }
+        },
+        Err(err) => {
+            tracing::warn!("Failed to inspect parametrized value type: {err}");
+            false
+        }
+    };
 
     if is_parameter_set {
         let values: Vec<Arc<Py<PyAny>>> = bound_param

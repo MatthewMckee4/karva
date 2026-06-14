@@ -1,6 +1,7 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use ruff_python_ast::{PythonVersion, Stmt};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
+use thiserror::Error;
 
 use karva_python_semantic::ModulePath;
 use karva_python_semantic::is_fixture_function;
@@ -8,6 +9,16 @@ use karva_python_semantic::is_fixture_function;
 mod models;
 
 pub use models::{CollectedModule, CollectedPackage, ModuleType};
+
+#[derive(Debug, Error)]
+pub enum CollectionError {
+    #[error("failed to read Python source file `{path}`: {source}")]
+    ReadSource {
+        path: Utf8PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+}
 
 /// Settings that control how test files are collected and parsed.
 pub struct CollectionSettings<'a> {
@@ -31,10 +42,16 @@ pub fn collect_file(
     cwd: &Utf8Path,
     settings: &CollectionSettings,
     function_names: &[String],
-) -> Option<CollectedModule> {
-    let module_path = ModulePath::new(path, &cwd.to_path_buf())?;
+) -> Result<Option<CollectedModule>, CollectionError> {
+    let Some(module_path) = ModulePath::new(path, &cwd.to_path_buf()) else {
+        return Ok(None);
+    };
 
-    let source_text = std::fs::read_to_string(path).ok()?;
+    let source_text =
+        std::fs::read_to_string(path).map_err(|source| CollectionError::ReadSource {
+            path: path.clone(),
+            source,
+        })?;
 
     let module_type: ModuleType = path.into();
 
@@ -42,7 +59,9 @@ pub fn collect_file(
 
     parse_options = parse_options.with_target_version(settings.python_version);
 
-    let parsed = parse_unchecked(&source_text, parse_options).try_into_module()?;
+    let Some(parsed) = parse_unchecked(&source_text, parse_options).try_into_module() else {
+        return Ok(None);
+    };
 
     let mut collected_module = CollectedModule::new(module_path, module_type, source_text);
 
@@ -63,7 +82,7 @@ pub fn collect_file(
         }
     }
 
-    Some(collected_module)
+    Ok(Some(collected_module))
 }
 
 /// Returns `true` if a function should be collected as a test.
@@ -76,5 +95,36 @@ fn is_test_function_to_collect(name: &str, explicit_names: &[String], prefix: &s
         name.starts_with(prefix)
     } else {
         explicit_names.iter().any(|n| n == name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ruff_python_ast::PythonVersion;
+
+    use super::*;
+
+    fn settings() -> CollectionSettings<'static> {
+        CollectionSettings {
+            python_version: PythonVersion::PY312,
+            test_function_prefix: "test_",
+            respect_ignore_files: true,
+            collect_fixtures: false,
+        }
+    }
+
+    #[test]
+    fn collect_file_reports_read_errors() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let cwd = Utf8Path::from_path(temp_dir.path()).expect("temp dir should be UTF-8");
+        let path = cwd.join("test_unreadable.py");
+        std::fs::create_dir(&path).expect("create directory at Python file path");
+
+        let error = collect_file(&path, cwd, &settings(), &[]).expect_err("read should fail");
+
+        assert!(matches!(
+            error,
+            CollectionError::ReadSource { path: error_path, .. } if error_path == path
+        ));
     }
 }

@@ -118,6 +118,45 @@ def test_hello():
 }
 
 #[test]
+fn test_snapshot_malformed_existing_file_fails_without_pending_snapshot() {
+    let context = TestContext::with_files([
+        (
+            "test.py",
+            r"
+import karva
+
+def test_hello():
+    karva.assert_snapshot('hello world')
+            ",
+        ),
+        ("snapshots/test__test_hello.snap", "not a snapshot"),
+    ]);
+
+    let output = context
+        .command_no_parallel()
+        .arg("--no-cache")
+        .output()
+        .expect("run karva");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(!output.status.success());
+    assert!(
+        stdout.contains("Failed to read snapshot: Malformed snapshot file"),
+        "{stdout}"
+    );
+    assert!(
+        !context
+            .root()
+            .join("snapshots/test__test_hello.snap.new")
+            .exists()
+    );
+    assert_eq!(
+        context.read_file("snapshots/test__test_hello.snap").trim(),
+        "not a snapshot"
+    );
+}
+
+#[test]
 fn test_snapshot_mismatch() {
     let context = TestContext::with_file(
         "test.py",

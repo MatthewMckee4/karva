@@ -107,7 +107,7 @@ fn read_review_action(out: &mut impl Write) -> io::Result<ReviewAction> {
 ///
 /// For each pending snapshot, displays the diff and prompts the user for an action.
 pub fn run_review(root: &Utf8Path, resolved_filters: &[Utf8PathBuf]) -> io::Result<ReviewSummary> {
-    let pending = find_pending_snapshots(root);
+    let pending = find_pending_snapshots(root)?;
 
     let filtered: Vec<_> = if resolved_filters.is_empty() {
         pending
@@ -145,7 +145,7 @@ pub fn run_review(root: &Utf8Path, resolved_filters: &[Utf8PathBuf]) -> io::Resu
             if show_info {
                 writeln!(out, "File: {}", info.pending_path)?;
                 if let Some(source) =
-                    read_snapshot(&info.pending_path).and_then(|s| s.metadata.source)
+                    read_snapshot(&info.pending_path)?.and_then(|s| s.metadata.source)
                 {
                     writeln!(out, "Source: {source}")?;
                 }
@@ -232,16 +232,42 @@ fn print_summary_section(out: &mut impl Write, label: &str, paths: &[String]) ->
 }
 
 fn print_snapshot_diff(out: &mut impl Write, info: &PendingSnapshotInfo) -> io::Result<()> {
-    let old_content = read_snapshot(&info.snap_path)
+    let old_content = read_snapshot(&info.snap_path)?
         .map(|s| s.content)
         .unwrap_or_default();
 
-    let new_content = read_snapshot(&info.pending_path)
-        .map(|s| s.content)
-        .unwrap_or_default();
+    let new_content = read_required_snapshot_content(&info.pending_path)?;
 
     writeln!(out)?;
     print_changeset(out, &old_content, &new_content)?;
 
     Ok(())
+}
+
+fn read_required_snapshot_content(path: &Utf8Path) -> io::Result<String> {
+    read_snapshot(path)?
+        .map(|snapshot| snapshot.content)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("Pending snapshot `{path}` no longer exists"),
+            )
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use camino::Utf8Path;
+
+    use super::read_required_snapshot_content;
+
+    #[test]
+    fn required_snapshot_content_reports_missing_file() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
+        let missing = dir_path.join("snapshots/test__test_foo.snap.new");
+
+        let err = read_required_snapshot_content(&missing).expect_err("missing pending snapshot");
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+    }
 }

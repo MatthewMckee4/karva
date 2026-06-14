@@ -55,9 +55,14 @@ pub fn is_skip_exception(py: Python<'_>, err: &PyErr) -> bool {
     // Check for pytest skip exception
     if let Ok(pytest_module) = py.import("_pytest.outcomes")
         && let Ok(skipped) = pytest_module.getattr("Skipped")
-        && err.matches(py, skipped).unwrap_or(false)
     {
-        return true;
+        return match err.matches(py, &skipped) {
+            Ok(is_skipped) => is_skipped,
+            Err(match_err) => {
+                tracing::warn!("Failed to classify pytest skip exception: {match_err}");
+                false
+            }
+        };
     }
 
     false

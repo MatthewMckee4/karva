@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::io::Write;
 
 use anyhow::Result;
 
@@ -7,7 +7,7 @@ use crate::ExitStatus;
 
 pub fn delete(filter_paths: &[String], dry_run: bool) -> Result<ExitStatus> {
     let (mut stdout, cwd, resolved) = snapshot_setup(filter_paths)?;
-    let all = karva_snapshot::storage::find_all_snapshots(&cwd);
+    let all = karva_snapshot::storage::find_all_snapshots(&cwd)?;
     let Some(filtered) = filter_or_empty(
         &all,
         &resolved,

@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::io::Write;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -30,9 +30,10 @@ fn run_and_print(
             }
         }
         Err(err) => {
-            use std::io::Write as _;
             let mut stderr = std::io::stderr().lock();
-            let _ = writeln!(stderr, "{} {err}", "error:".red().bold());
+            if let Err(write_err) = writeln!(stderr, "{} {err}", "error:".red().bold()) {
+                tracing::error!("Failed to print test runner error: {write_err}");
+            }
         }
     }
 }
@@ -67,8 +68,12 @@ pub fn run_watch_loop(
                     .filter(|e| e.path.extension().is_some_and(|ext| ext == "py"))
                     .map(|e| e.path)
                     .collect();
-                if !py_paths.is_empty() {
-                    let _ = tx.send(py_paths);
+                if !py_paths.is_empty()
+                    && let Err(err) = tx.send(py_paths)
+                {
+                    tracing::debug!(
+                        "watch event receiver closed before file changes were sent: {err}"
+                    );
                 }
             }
         },
@@ -102,8 +107,9 @@ pub fn run_watch_loop(
 
                 // Clear screen
                 {
-                    use std::io::Write as _;
-                    let _ = std::io::stdout().write_all(b"\x1B[2J\x1B[1;1H");
+                    if let Err(err) = std::io::stdout().write_all(b"\x1B[2J\x1B[1;1H") {
+                        tracing::warn!("Failed to clear terminal before watch rerun: {err}");
+                    }
                 }
 
                 {

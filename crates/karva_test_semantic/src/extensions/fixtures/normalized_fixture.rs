@@ -5,6 +5,7 @@ use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use ruff_python_ast::StmtFunctionDef;
+use ruff_source_file::SourceFile;
 
 use crate::extensions::fixtures::FixtureScope;
 use crate::extensions::tags::Tags;
@@ -37,6 +38,9 @@ pub struct NormalizedFixture {
 
     /// AST representation of the fixture function definition.
     pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
+
+    /// Source code captured during discovery for diagnostic reporting.
+    pub(crate) source_file: SourceFile,
 }
 
 impl NormalizedFixture {

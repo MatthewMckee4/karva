@@ -15,7 +15,9 @@ pub fn shutdown_receiver() -> &'static Receiver<()> {
 
         let handler_tx = tx.clone();
         if let Err(err) = ctrlc::set_handler(move || {
-            let _ = handler_tx.send(());
+            if let Err(err) = handler_tx.send(()) {
+                tracing::debug!("shutdown receiver dropped before Ctrl+C signal was sent: {err}");
+            }
         }) {
             tracing::warn!("Failed to set Ctrl+C handler: {err}");
         }

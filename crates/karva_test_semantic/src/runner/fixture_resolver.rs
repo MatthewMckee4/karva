@@ -65,6 +65,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
             is_generator: fixture.is_generator(),
             py_function: Rc::new(fixture.function().clone_ref(py)),
             stmt_function_def: Rc::clone(fixture.stmt_function_def()),
+            source_file: fixture.source_file().clone(),
         });
 
         if fixture.scope() != FixtureScope::Function {

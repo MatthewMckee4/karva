@@ -1,14 +1,14 @@
 use std::rc::Rc;
 
-use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
 use ruff_python_ast::StmtFunctionDef;
+use ruff_source_file::SourceFile;
 
 use crate::Context;
 use crate::diagnostic::report_invalid_fixture_finalizer;
 use crate::extensions::fixtures::FixtureScope;
-use crate::utils::{run_coroutine, source_file};
+use crate::utils::run_coroutine;
 
 /// Represents the teardown portion of a generator fixture.
 ///
@@ -33,11 +33,11 @@ pub struct Finalizer {
     /// The scope determines when this finalizer runs.
     pub(crate) scope: FixtureScope,
 
-    /// Optional name of the fixture for error reporting.
-    pub(crate) fixture_name: Option<QualifiedFunctionName>,
-
     /// Optional AST definition for error reporting.
     pub(crate) stmt_function_def: Option<Rc<StmtFunctionDef>>,
+
+    /// Optional source code for error reporting.
+    pub(crate) source_file: Option<SourceFile>,
 }
 
 impl Finalizer {
@@ -50,14 +50,9 @@ impl Finalizer {
 
         if let Some(reason) = invalid_finalizer_reason
             && let Some(stmt_function_def) = self.stmt_function_def
-            && let Some(fixture_name) = self.fixture_name
+            && let Some(source_file) = self.source_file
         {
-            report_invalid_fixture_finalizer(
-                context,
-                source_file(fixture_name.module_path().path()),
-                &stmt_function_def,
-                &reason,
-            );
+            report_invalid_fixture_finalizer(context, source_file, &stmt_function_def, &reason);
         }
     }
 

@@ -1,4 +1,5 @@
-use std::fmt::Write;
+use std::io::ErrorKind;
+use std::io::Write;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use camino::Utf8PathBuf;
@@ -142,11 +143,12 @@ impl Reporter for TestCaseReporter {
         };
 
         let mut stdout = self.printer.stream_for_test_result().lock();
-        writeln!(
+        if let Err(err) = writeln!(
             stdout,
             "{padding}{colored_label} {duration_str} {test_path}{suffix}"
-        )
-        .ok();
+        ) {
+            tracing::warn!("failed to write test result line: {err}");
+        }
     }
 
     fn report_test_slow(&self, test_name: &QualifiedTestName, duration: Duration) {
@@ -161,11 +163,12 @@ impl Reporter for TestCaseReporter {
         let test_path = format_test_path(test_name);
 
         let mut stdout = self.printer.stream_for_test_result().lock();
-        writeln!(
+        if let Err(err) = writeln!(
             stdout,
             "{padding}{colored_label} {duration_str} {test_path}"
-        )
-        .ok();
+        ) {
+            tracing::warn!("failed to write slow test line: {err}");
+        }
     }
 
     fn report_test_attempt(
@@ -189,11 +192,12 @@ impl Reporter for TestCaseReporter {
         let test_path = format_test_path(test_name);
 
         let mut stdout = self.printer.stream_for_test_result().lock();
-        writeln!(
+        if let Err(err) = writeln!(
             stdout,
             "{padding}TRY {attempt} {colored_status} {duration_str} {test_path}"
-        )
-        .ok();
+        ) {
+            tracing::warn!("failed to write test attempt line: {err}");
+        }
     }
 
     fn report_test_started(&self, test_name: &QualifiedTestName) {
@@ -208,12 +212,19 @@ impl Reporter for TestCaseReporter {
             "name": test_name.to_string(),
             "start_unix_ms": start_unix_ms,
         });
-        let _ = std::fs::write(path, body.to_string());
+        if let Err(err) = std::fs::write(path, body.to_string()) {
+            tracing::warn!(path = %path, "failed to write test progress file: {err}");
+        }
     }
 
     fn report_test_finished(&self, _test_name: &QualifiedTestName) {
-        if let Some(path) = self.progress_file.as_ref() {
-            let _ = std::fs::remove_file(path);
+        let Some(path) = self.progress_file.as_ref() else {
+            return;
+        };
+        match std::fs::remove_file(path) {
+            Ok(()) => {}
+            Err(err) if err.kind() == ErrorKind::NotFound => {}
+            Err(err) => tracing::warn!(path = %path, "failed to remove test progress file: {err}"),
         }
     }
 }
@@ -276,5 +287,55 @@ impl From<&IndividualTestResultKind> for ResultLabel {
             IndividualTestResultKind::Failed => Self::Fail,
             IndividualTestResultKind::Skipped { .. } => Self::Skip,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use camino::Utf8PathBuf;
+    use karva_logging::Printer;
+    use karva_python_semantic::{ModulePath, QualifiedFunctionName};
+
+    use super::*;
+
+    fn qualified_test_name() -> QualifiedTestName {
+        QualifiedTestName::new(
+            QualifiedFunctionName::new(
+                "test_example".to_string(),
+                ModulePath::new_with_name("test_module.py", "test_module".to_string()),
+            ),
+            None,
+        )
+    }
+
+    #[test]
+    fn progress_file_is_written_and_removed() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let path = Utf8PathBuf::try_from(temp_dir.path().join("current-test.json"))
+            .expect("temp path should be UTF-8");
+        let reporter = TestCaseReporter::new(Printer::default()).with_progress_file(path.clone());
+        let test_name = qualified_test_name();
+
+        reporter.report_test_started(&test_name);
+
+        let body = std::fs::read_to_string(&path).expect("progress file should exist");
+        let progress: serde_json::Value =
+            serde_json::from_str(&body).expect("progress file should be valid JSON");
+        assert_eq!(progress["name"], "test_module::test_example");
+        assert!(progress["start_unix_ms"].as_u64().is_some());
+
+        reporter.report_test_finished(&test_name);
+
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn progress_file_cleanup_allows_missing_marker() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let path = Utf8PathBuf::try_from(temp_dir.path().join("current-test.json"))
+            .expect("temp path should be UTF-8");
+        let reporter = TestCaseReporter::new(Printer::default()).with_progress_file(path);
+
+        reporter.report_test_finished(&qualified_test_name());
     }
 }

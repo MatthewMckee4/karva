@@ -1,6 +1,7 @@
 use std::fmt;
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{self, BufWriter};
+use std::path::Path;
 
 use colored::Colorize;
 use tracing::{Event, Subscriber};
@@ -19,6 +20,27 @@ pub use printer::{Printer, Stdout};
 pub use status_level::{FinalStatusLevel, StatusLevel};
 pub use verbosity::VerbosityLevel;
 
+pub fn error_chain_contains_broken_pipe<'a>(
+    causes: impl IntoIterator<Item = &'a (dyn std::error::Error + 'static)>,
+) -> bool {
+    causes.into_iter().any(|cause| {
+        cause
+            .downcast_ref::<io::Error>()
+            .is_some_and(|err| err.kind() == io::ErrorKind::BrokenPipe)
+    })
+}
+
+pub fn write_error_chain<'a>(
+    writer: &mut impl io::Write,
+    causes: impl IntoIterator<Item = &'a (dyn std::error::Error + 'static)>,
+) -> io::Result<()> {
+    writeln!(writer, "{}", "Karva failed".red().bold())?;
+    for cause in causes {
+        writeln!(writer, "  {} {cause}", "Cause:".bold())?;
+    }
+    Ok(())
+}
+
 pub fn setup_tracing(level: VerbosityLevel) -> TracingGuard {
     use tracing_subscriber::prelude::*;
 
@@ -33,7 +55,11 @@ pub fn setup_tracing(level: VerbosityLevel) -> TracingGuard {
         )
     };
 
-    let (profiling_layer, guard) = setup_profile();
+    let ProfileSetup {
+        layer: profiling_layer,
+        guard,
+        warning: profile_warning,
+    } = setup_profile();
 
     let registry = tracing_subscriber::registry()
         .with(filter)
@@ -66,25 +92,55 @@ pub fn setup_tracing(level: VerbosityLevel) -> TracingGuard {
         subscriber.init();
     }
 
+    if let Some(warning) = profile_warning {
+        tracing::warn!("{warning}");
+    }
+
     TracingGuard {
         _flame_guard: guard,
     }
 }
 
-#[expect(clippy::type_complexity)]
-fn setup_profile<S>() -> (
-    Option<tracing_flame::FlameLayer<S, BufWriter<File>>>,
-    Option<tracing_flame::FlushGuard<BufWriter<File>>>,
-)
+struct ProfileSetup<S> {
+    layer: Option<tracing_flame::FlameLayer<S, BufWriter<File>>>,
+    guard: Option<tracing_flame::FlushGuard<BufWriter<File>>>,
+    warning: Option<String>,
+}
+
+fn setup_profile<S>() -> ProfileSetup<S>
 where
     S: Subscriber + for<'span> LookupSpan<'span>,
 {
     if let Ok("1" | "true") = std::env::var("KARVA_LOG_PROFILE").as_deref() {
-        let (layer, guard) = tracing_flame::FlameLayer::with_file("tracing.folded")
-            .expect("Flame layer to be created");
-        (Some(layer), Some(guard))
+        setup_profile_file("tracing.folded")
     } else {
-        (None, None)
+        ProfileSetup {
+            layer: None,
+            guard: None,
+            warning: None,
+        }
+    }
+}
+
+fn setup_profile_file<S>(path: impl AsRef<Path>) -> ProfileSetup<S>
+where
+    S: Subscriber + for<'span> LookupSpan<'span>,
+{
+    let path = path.as_ref();
+    match tracing_flame::FlameLayer::with_file(path) {
+        Ok((layer, guard)) => ProfileSetup {
+            layer: Some(layer),
+            guard: Some(guard),
+            warning: None,
+        },
+        Err(err) => ProfileSetup {
+            layer: None,
+            guard: None,
+            warning: Some(format!(
+                "failed to create tracing profile file `{}`; profiling disabled: {err}",
+                path.display()
+            )),
+        },
     }
 }
 
@@ -207,5 +263,75 @@ impl TerminalColor {
             Self::Always => "always",
             Self::Never => "never",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use super::{error_chain_contains_broken_pipe, setup_profile_file, write_error_chain};
+
+    struct FailingWriter {
+        kind: io::ErrorKind,
+    }
+
+    impl io::Write for FailingWriter {
+        fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+            Err(io::Error::from(self.kind))
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn profile_setup_disables_profiling_when_file_cannot_be_created() {
+        let setup = setup_profile_file::<tracing_subscriber::Registry>(".");
+
+        assert!(setup.layer.is_none());
+        assert!(setup.guard.is_none());
+        assert!(matches!(
+            setup.warning.as_deref(),
+            Some(warning) if warning.contains("profiling disabled")
+        ));
+    }
+
+    #[test]
+    fn write_error_chain_writes_header_and_causes() {
+        let first = io::Error::other("first");
+        let second = io::Error::other("second");
+        let causes: [&dyn std::error::Error; 2] = [&first, &second];
+
+        let mut output = Vec::new();
+        write_error_chain(&mut output, causes).expect("write should succeed");
+
+        let output = String::from_utf8(output).expect("valid UTF-8");
+        assert!(output.contains("Karva failed"));
+        assert!(output.contains("Cause:"));
+        assert!(output.contains("first"));
+        assert!(output.contains("second"));
+    }
+
+    #[test]
+    fn write_error_chain_propagates_write_failures() {
+        let cause = io::Error::other("cause");
+        let causes: [&dyn std::error::Error; 1] = [&cause];
+        let mut writer = FailingWriter {
+            kind: io::ErrorKind::PermissionDenied,
+        };
+
+        let err = write_error_chain(&mut writer, causes).expect_err("write should fail");
+
+        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+    }
+
+    #[test]
+    fn error_chain_contains_broken_pipe_detects_io_cause() {
+        let cause = io::Error::from(io::ErrorKind::BrokenPipe);
+        let causes: [&dyn std::error::Error; 1] = [&cause];
+
+        assert!(error_chain_contains_broken_pipe(causes));
     }
 }

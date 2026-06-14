@@ -1,5 +1,5 @@
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyTuple};
+use pyo3::types::{PyDict, PyString, PyTuple};
 
 /// Marker object created when `@fixture(...)` is called with arguments.
 ///
@@ -27,8 +27,7 @@ impl FixtureFunctionMarker {
         name: Option<String>,
         auto_use: bool,
     ) -> Self {
-        let scope =
-            scope.unwrap_or_else(|| "function".to_string().into_pyobject(py).unwrap().into());
+        let scope = scope.unwrap_or_else(|| PyString::new(py, "function").into_any().unbind());
 
         Self {
             scope,

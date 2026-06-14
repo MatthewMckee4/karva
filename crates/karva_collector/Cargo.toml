@@ -15,6 +15,10 @@ karva_python_semantic = { workspace = true }
 camino = { workspace = true }
 ruff_python_ast = { workspace = true }
 ruff_python_parser = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

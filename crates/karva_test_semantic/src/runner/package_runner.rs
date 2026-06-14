@@ -31,7 +31,6 @@ use crate::runner::test_iterator::{TestVariant, TestVariantIterator};
 use crate::runner::{FinalizerCache, FixtureCache};
 use crate::utils::{
     full_test_name, run_coroutine, run_test_with_timeout, set_attempt_env, set_test_name_env,
-    source_file,
 };
 
 /// Executes discovered tests within a package hierarchy.
@@ -346,7 +345,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 let reason = ctx.expect_fail_tag.as_ref().and_then(ExpectFailTag::reason);
                 report_test_pass_on_expect_failure(
                     self.context,
-                    source_file(ctx.test_module_path),
+                    ctx.source_file.clone(),
                     ctx.stmt_function_def,
                     reason,
                 );
@@ -372,7 +371,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             report_test_failure(
                 self.context,
                 py,
-                source_file(ctx.test_module_path),
+                ctx.source_file,
                 ctx.stmt_function_def,
                 ctx.function_arguments,
                 &err,
@@ -381,7 +380,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             report_missing_fixtures(
                 self.context,
                 py,
-                source_file(ctx.test_module_path),
+                ctx.source_file.clone(),
                 ctx.stmt_function_def,
                 &missing_args,
                 FunctionKind::Test,
@@ -405,11 +404,12 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         mut run_test: impl FnMut() -> PyResult<Py<PyAny>>,
     ) -> RetryOutcome {
         let max_attempts = configured_retries.saturating_add(1);
+        let mut run_attempt =
+            |attempt| set_attempt_env(py, attempt, max_attempts).and_then(|()| run_test());
 
         let mut attempt: u32 = 1;
-        let _ = set_attempt_env(py, attempt, max_attempts);
         let mut attempt_start = std::time::Instant::now();
-        let mut test_result = run_test();
+        let mut test_result = run_attempt(attempt);
 
         let mut retry_count = configured_retries;
         let mut was_retried = false;
@@ -431,9 +431,8 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             tracing::debug!("Retrying test `{}`", qualified_test_name);
             retry_count -= 1;
             attempt += 1;
-            let _ = set_attempt_env(py, attempt, max_attempts);
             attempt_start = std::time::Instant::now();
-            test_result = run_test();
+            test_result = run_attempt(attempt);
             final_attempt_duration = attempt_start.elapsed();
         }
 
@@ -481,6 +480,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let name = test.name.clone();
         let function = test.py_function.clone_ref(py);
         let stmt_function_def = Rc::clone(&test.stmt_function_def);
+        let source_file = test.source_file.clone();
 
         if let Some(result) = self.should_skip_variant(&name, &tags) {
             return result;
@@ -504,7 +504,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
         tracing::debug!("Running test `{}`", qualified_test_name);
 
-        let _ = set_test_name_env(py, &qualified_test_name.to_string());
+        let test_name_env_result = set_test_name_env(py, &qualified_test_name.to_string());
 
         // Set snapshot context so `karva.assert_snapshot()` can determine the current test.
         // Use `function_name()` (not `qualified_test_name`) to avoid doubling the module prefix,
@@ -523,8 +523,12 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             tags: &custom_tag_names,
         };
 
-        let is_async = stmt_function_def.is_async
-            && !crate::utils::patch_async_test_function(py, &function).unwrap_or(false);
+        let async_patch_result = if stmt_function_def.is_async {
+            crate::utils::patch_async_test_function(py, &function)
+        } else {
+            Ok(false)
+        };
+        let is_async = stmt_function_def.is_async && matches!(&async_patch_result, Ok(false));
         let timeout_seconds = tags.timeout_tag().map(TimeoutTag::seconds).or_else(|| {
             self.context
                 .settings()
@@ -532,6 +536,12 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 .map(|d| d.as_secs_f64())
         });
         let run_test = || {
+            if let Err(err) = &test_name_env_result {
+                return Err(err.clone_ref(py));
+            }
+            if let Err(err) = &async_patch_result {
+                return Err(err.clone_ref(py));
+            }
             if let Some(seconds) = timeout_seconds {
                 return run_test_with_timeout(
                     py,
@@ -569,7 +579,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
         let report_ctx = VariantReportCtx {
             name: &name,
-            test_module_path: &test_module_path,
+            source_file: &source_file,
             stmt_function_def: &stmt_function_def,
             function_arguments: &function_arguments,
             expect_fail_tag,
@@ -642,7 +652,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 Err(mut err) => {
                     err.dependency_chain.push(FixtureChainEntry {
                         name: fixture.name.function_name().to_string(),
-                        source_file: source_file(fixture.name.module_path().path()),
+                        source_file: fixture.source_file.clone(),
                         stmt_function_def: fixture.stmt_function_def.clone(),
                     });
                     return Err(err);
@@ -657,7 +667,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                     fixture_name: fixture.name.function_name().to_string(),
                     error: err,
                     stmt_function_def: fixture.stmt_function_def.clone(),
-                    source_file: source_file(fixture.name.module_path().path()),
+                    source_file: fixture.source_file.clone(),
                     arguments: function_arguments,
                     dependency_chain: Vec::new(),
                 })?;
@@ -667,7 +677,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             fixture_name: fixture.name.function_name().to_string(),
             error: err,
             stmt_function_def: fixture.stmt_function_def.clone(),
-            source_file: source_file(fixture.name.module_path().path()),
+            source_file: fixture.source_file.clone(),
             arguments: HashMap::new(),
             dependency_chain: Vec::new(),
         })?;
@@ -746,8 +756,8 @@ fn get_value_and_finalizer(
             fixture_return: fixture_call_result,
             is_async: true,
             scope: fixture.scope(),
-            fixture_name: Some(fixture.name.clone()),
             stmt_function_def: Some(fixture.stmt_function_def.clone()),
+            source_file: Some(fixture.source_file.clone()),
         };
 
         Ok((value, Some(finalizer)))
@@ -764,8 +774,8 @@ fn get_value_and_finalizer(
                     fixture_return: bound_iterator.clone().unbind().into_any(),
                     is_async: false,
                     scope: fixture.scope(),
-                    fixture_name: Some(fixture.name.clone()),
                     stmt_function_def: Some(fixture.stmt_function_def.clone()),
+                    source_file: Some(fixture.source_file.clone()),
                 };
 
                 Ok((value.unbind(), Some(finalizer)))
@@ -794,7 +804,7 @@ struct RetryOutcome {
 /// Immutable per-variant state threaded into [`PackageRunner::classify_test_result`].
 struct VariantReportCtx<'a> {
     name: &'a QualifiedFunctionName,
-    test_module_path: &'a camino::Utf8Path,
+    source_file: &'a SourceFile,
     stmt_function_def: &'a StmtFunctionDef,
     function_arguments: &'a FixtureArguments,
     expect_fail_tag: Option<ExpectFailTag>,
