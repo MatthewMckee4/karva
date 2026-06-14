@@ -264,34 +264,58 @@ def test_1():
     }
 }
 
-#[rstest]
-fn test_skip_with_condition_without_reason(#[values("pytest", "karva")] framework: &str) {
+#[test]
+fn test_skip_with_condition_without_reason_karva() {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
-            r"
-import {framework}
+        r"
+import karva
 
-@{decorator}(True)
+@karva.tags.skip(True)
 def test_1():
     assert False
         ",
-            decorator = get_skip_decorator(framework)
-        ),
     );
 
-    allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @"
-        success: true
-        exit_code: 0
-        ----- stdout -----
-            Starting 1 test across 1 worker
-        ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 skipped
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
 
-        ----- stderr -----
-        ");
-    }
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_pytest_skipif_boolean_condition_without_reason_rejected() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+@pytest.mark.skipif(False)
+def test_1():
+    assert True
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: pytest skipif mark requires a reason when using boolean conditions
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 }
 
 #[rstest]
@@ -472,36 +496,31 @@ def test_1():
     ");
 }
 
-#[rstest]
-fn test_skipif_true_and_false_conditions(#[values("pytest", "karva")] framework: &str) {
+#[test]
+fn test_skipif_true_and_false_conditions_karva() {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
-            r"
-import {framework}
+        r"
+import karva
 
-@{decorator}(True)
-@{decorator}(False)
+@karva.tags.skip(True)
+@karva.tags.skip(False)
 def test_skip_with_true():
     assert False
 
         ",
-            decorator = get_skip_decorator(framework)
-        ),
     );
 
-    allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @"
-        success: true
-        exit_code: 0
-        ----- stdout -----
-            Starting 1 test across 1 worker
-        ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 skipped
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
 
-        ----- stderr -----
-        ");
-    }
+    ----- stderr -----
+    ");
 }
 
 #[test]

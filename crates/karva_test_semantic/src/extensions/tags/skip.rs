@@ -59,6 +59,12 @@ impl SkipTag {
                 parsed.reason
             };
 
+        if parsed.requires_reason && reason.is_none() {
+            return Err(PyValueError::new_err(
+                "pytest skipif mark requires a reason when using boolean conditions",
+            ));
+        }
+
         Ok(Some(Self {
             conditions: parsed.conditions,
             reason,

@@ -28,6 +28,7 @@ use use_fixtures::UseFixturesTag;
 pub struct ParsedMarkArgs {
     pub conditions: Vec<bool>,
     pub reason: Option<String>,
+    pub requires_reason: bool,
 }
 
 /// Extract conditions and reason from a pytest mark object.
@@ -44,6 +45,7 @@ pub fn parse_pytest_mark_args(
 
     let mut conditions = Vec::new();
     let mut condition_reason = None;
+    let mut requires_reason = false;
     if let Ok(args_tuple) = args.extract::<Bound<'_, pyo3::types::PyTuple>>() {
         for i in 0..args_tuple.len() {
             let item = args_tuple.get_item(i)?;
@@ -58,6 +60,7 @@ pub fn parse_pytest_mark_args(
                 conditions.push(condition);
                 continue;
             }
+            requires_reason = true;
             conditions.push(item.is_truthy()?);
         }
     }
@@ -75,7 +78,11 @@ pub fn parse_pytest_mark_args(
         condition_reason
     };
 
-    Ok(ParsedMarkArgs { conditions, reason })
+    Ok(ParsedMarkArgs {
+        conditions,
+        reason,
+        requires_reason,
+    })
 }
 
 fn evaluate_pytest_condition(expression: &str, globals: &Bound<'_, PyDict>) -> PyResult<bool> {

@@ -1,3 +1,4 @@
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -48,6 +49,13 @@ impl ExpectFailTag {
         } else {
             parsed.reason
         };
+
+        if parsed.requires_reason && reason.is_none() {
+            return Err(PyValueError::new_err(
+                "pytest xfail mark requires a reason when using boolean conditions",
+            ));
+        }
+
         Ok(Some(Self {
             conditions: parsed.conditions,
             reason,
