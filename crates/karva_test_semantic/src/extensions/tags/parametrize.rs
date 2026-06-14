@@ -4,6 +4,7 @@ use std::sync::Arc;
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 
 use crate::extensions::functions::Param;
 use crate::extensions::tags::Tags;
@@ -88,6 +89,7 @@ fn normalize_arg_names(arg_names: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
 pub(super) fn parse_parametrize_args(
     arg_names: &Bound<'_, PyAny>,
     arg_values: &Bound<'_, PyAny>,
+    globals: Option<&Bound<'_, PyDict>>,
 ) -> PyResult<(Vec<String>, Vec<Parametrization>)> {
     let py = arg_values.py();
     let names = normalize_arg_names(arg_names)?;
@@ -97,7 +99,7 @@ pub(super) fn parse_parametrize_args(
     let expect_multiple = names.len() > 1;
     let parametrizations = values
         .into_iter()
-        .map(|param| handle_custom_parametrize_param(py, param, expect_multiple))
+        .map(|param| handle_custom_parametrize_param(py, param, expect_multiple, globals))
         .collect::<PyResult<Vec<_>>>()?;
     Ok((names, parametrizations))
 }
@@ -175,10 +177,14 @@ impl ParametrizeTag {
         )
     }
 
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
+    pub(crate) fn try_from_pytest_mark(
+        py_mark: &Bound<'_, PyAny>,
+        globals: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Option<Self>> {
         let (arg_names, arg_values) = extract_parametrize_args(py_mark)?;
 
-        let (arg_names, parametrizations) = parse_parametrize_args(&arg_names, &arg_values)?;
+        let (arg_names, parametrizations) =
+            parse_parametrize_args(&arg_names, &arg_values, globals)?;
 
         Ok(Some(Self::new(arg_names, parametrizations)))
     }
@@ -211,6 +217,7 @@ pub(super) fn handle_custom_parametrize_param(
     py: Python,
     param: Py<PyAny>,
     expect_multiple: bool,
+    globals: Option<&Bound<'_, PyDict>>,
 ) -> PyResult<Parametrization> {
     let param_arc = Arc::new(param);
     let default_parametrization = || Parametrization {
@@ -251,7 +258,7 @@ pub(super) fn handle_custom_parametrize_param(
         let tags = match bound_param.getattr("marks") {
             Ok(m) => {
                 let marks = m.into_py_any(py)?;
-                Tags::from_pytest_marks(py, &marks)?.unwrap_or_default()
+                Tags::from_pytest_marks(py, &marks, globals)?.unwrap_or_default()
             }
             Err(err) => {
                 tracing::warn!("Failed to inspect pytest.param marks: {err}");

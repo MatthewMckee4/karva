@@ -632,6 +632,38 @@ def test_with_skip_reason(x):
 }
 
 #[test]
+fn test_parametrize_with_pytest_param_skipif_string_condition_uses_module_globals() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r#"
+import pytest
+
+SHOULD_SKIP = False
+
+@pytest.mark.parametrize("x", [
+    pytest.param(1),
+    pytest.param(2, marks=pytest.mark.skipif("SHOULD_SKIP", reason="module global")),
+])
+def test_with_skipif(x):
+    assert x > 0
+"#,
+    );
+
+    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_with_skipif(x=1)
+            PASS [TIME] test::test_with_skipif(x=2)
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_parametrize_kwargs() {
     let test_context = TestContext::with_file(
         "test.py",

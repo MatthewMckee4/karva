@@ -1,6 +1,8 @@
-use std::{ops::Deref, sync::Arc};
+use std::{ffi::CString, ops::Deref, sync::Arc};
 
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::extensions::tags::python::{PyTag, PyTags, PyTestFunction};
@@ -31,9 +33,12 @@ pub struct ParsedMarkArgs {
 /// Extract conditions and reason from a pytest mark object.
 ///
 /// Pytest marks store truthy/falsy conditions as positional args and an optional
-/// `reason` as a keyword argument. A string in the first positional arg
-/// is treated as an old-style positional reason.
-pub fn parse_pytest_mark_args(py_mark: &Bound<'_, PyAny>) -> PyResult<ParsedMarkArgs> {
+/// `reason` as a keyword argument. String conditions are evaluated with the
+/// owning function's globals when available.
+pub fn parse_pytest_mark_args(
+    py_mark: &Bound<'_, PyAny>,
+    globals: Option<&Bound<'_, PyDict>>,
+) -> PyResult<ParsedMarkArgs> {
     let kwargs = py_mark.getattr("kwargs")?;
     let args = py_mark.getattr("args")?;
 
@@ -41,8 +46,12 @@ pub fn parse_pytest_mark_args(py_mark: &Bound<'_, PyAny>) -> PyResult<ParsedMark
     if let Ok(args_tuple) = args.extract::<Bound<'_, pyo3::types::PyTuple>>() {
         for i in 0..args_tuple.len() {
             let item = args_tuple.get_item(i)?;
-            if item.extract::<String>().is_ok() {
-                break;
+            if let Ok(expression) = item.extract::<String>() {
+                let Some(globals) = globals else {
+                    break;
+                };
+                conditions.push(evaluate_pytest_condition(&expression, globals)?);
+                continue;
             }
             conditions.push(item.is_truthy()?);
         }
@@ -51,7 +60,8 @@ pub fn parse_pytest_mark_args(py_mark: &Bound<'_, PyAny>) -> PyResult<ParsedMark
     let reason = if let Ok(reason_item) = kwargs.get_item("reason") {
         reason_item.extract::<String>().ok()
     } else if conditions.is_empty() {
-        // Fall back to first positional arg as reason
+        // Fall back to first positional arg as reason when no globals were
+        // available for evaluating legacy pytest string conditions.
         args.extract::<Bound<'_, pyo3::types::PyTuple>>()
             .ok()
             .and_then(|t| t.get_item(0).ok())
@@ -61,6 +71,16 @@ pub fn parse_pytest_mark_args(py_mark: &Bound<'_, PyAny>) -> PyResult<ParsedMark
     };
 
     Ok(ParsedMarkArgs { conditions, reason })
+}
+
+fn evaluate_pytest_condition(expression: &str, globals: &Bound<'_, PyDict>) -> PyResult<bool> {
+    let expression = CString::new(expression).map_err(|_| {
+        PyValueError::new_err("pytest mark string condition cannot contain a null byte")
+    })?;
+    globals
+        .py()
+        .eval(expression.as_c_str(), Some(globals), None)?
+        .is_truthy()
 }
 
 /// Represents a decorator/marker that modifies test behavior.
@@ -81,7 +101,10 @@ impl Tag {
     /// Converts a Pytest mark into an Karva Tag.
     ///
     /// This is used to allow Pytest marks to be used as Karva tags.
-    fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
+    fn try_from_pytest_mark(
+        py_mark: &Bound<'_, PyAny>,
+        globals: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Option<Self>> {
         let Some(name) = py_mark
             .getattr("name")
             .ok()
@@ -91,18 +114,16 @@ impl Tag {
         };
 
         match name.as_str() {
-            "parametrize" => {
-                ParametrizeTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::Parametrize))
-            }
+            "parametrize" => ParametrizeTag::try_from_pytest_mark(py_mark, globals)
+                .map(|tag| tag.map(Self::Parametrize)),
             "usefixtures" => {
                 UseFixturesTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::UseFixtures))
             }
             "skip" | "skipif" => {
-                SkipTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::Skip))
+                SkipTag::try_from_pytest_mark(py_mark, globals).map(|tag| tag.map(Self::Skip))
             }
-            "xfail" => {
-                ExpectFailTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::ExpectFail))
-            }
+            "xfail" => ExpectFailTag::try_from_pytest_mark(py_mark, globals)
+                .map(|tag| tag.map(Self::ExpectFail)),
             "timeout" => {
                 TimeoutTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::Timeout))
             }
@@ -227,8 +248,13 @@ impl Tags {
             ));
         }
 
+        let bound_function = py_function.bind(py);
+        let globals = bound_function
+            .getattr("__globals__")
+            .ok()
+            .and_then(|globals| globals.cast_into::<PyDict>().ok());
         if let Ok(marks) = py_function.getattr(py, "pytestmark")
-            && let Some(tags) = Self::from_pytest_marks(py, &marks)?
+            && let Some(tags) = Self::from_pytest_marks(py, &marks, globals.as_ref())?
         {
             return Ok(tags);
         }
@@ -236,11 +262,15 @@ impl Tags {
         Ok(Self::default())
     }
 
-    pub(crate) fn from_pytest_marks(py: Python<'_>, marks: &Py<PyAny>) -> PyResult<Option<Self>> {
+    pub(crate) fn from_pytest_marks(
+        py: Python<'_>,
+        marks: &Py<PyAny>,
+        globals: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Option<Self>> {
         let mut tags = Vec::new();
         if let Ok(marks_list) = marks.extract::<Vec<Bound<'_, PyAny>>>(py) {
             for mark in marks_list {
-                if let Some(tag) = Tag::try_from_pytest_mark(&mark)? {
+                if let Some(tag) = Tag::try_from_pytest_mark(&mark, globals)? {
                     tags.push(tag);
                 }
             }

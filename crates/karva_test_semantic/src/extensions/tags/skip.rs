@@ -1,6 +1,6 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::PyTuple;
+use pyo3::types::{PyDict, PyTuple};
 
 use super::parse_pytest_mark_args;
 use crate::extensions::functions::SkipError;
@@ -38,14 +38,17 @@ impl SkipTag {
         }
     }
 
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
+    pub(crate) fn try_from_pytest_mark(
+        py_mark: &Bound<'_, PyAny>,
+        globals: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Option<Self>> {
         let name = py_mark.getattr("name")?.extract::<String>()?;
 
         if name == "skip" {
             return parse_pytest_skip_mark(py_mark).map(Some);
         }
 
-        let parsed = parse_pytest_mark_args(py_mark)?;
+        let parsed = parse_pytest_mark_args(py_mark, globals)?;
         let kwargs = py_mark.getattr("kwargs")?;
         let reason =
             if let Ok(reason_item) = kwargs.get_item("reason") {

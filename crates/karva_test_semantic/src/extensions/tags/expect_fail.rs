@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 
 use super::parse_pytest_mark_args;
 
@@ -36,8 +37,11 @@ impl ExpectFailTag {
         }
     }
 
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
-        let parsed = parse_pytest_mark_args(py_mark)?;
+    pub(crate) fn try_from_pytest_mark(
+        py_mark: &Bound<'_, PyAny>,
+        globals: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Option<Self>> {
+        let parsed = parse_pytest_mark_args(py_mark, globals)?;
         Ok(Some(Self {
             conditions: parsed.conditions,
             reason: parsed.reason,
