@@ -36,6 +36,7 @@ clap = { workspace = true, features = ["wrap_help", "string", "env"] }
 colored = { workspace = true }
 crossbeam-channel = { workspace = true }
 notify-debouncer-mini = { workspace = true }
+toml = { workspace = true }
 tracing = { workspace = true, features = ["release_max_level_debug"] }
 wild = { workspace = true }
 

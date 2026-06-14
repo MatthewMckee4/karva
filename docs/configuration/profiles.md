@@ -73,6 +73,18 @@ highest to lowest priority. The first source that defines the field wins.
 Selecting a profile that is not defined in the configuration produces an
 error that lists the profiles that are available.
 
+## Inspecting the resolved configuration
+
+Use `karva show-config` to print the configuration Karva would actually run
+with for a given profile, formatted as TOML. This is helpful when debugging
+precedence between built-in defaults, `[profile.default]`, the selected
+profile, and any CLI overrides.
+
+```bash
+karva show-config              # default profile
+karva show-config --profile ci
+```
+
 ## See also
 
 - [Configuration](configuration.md) — reference for every supported field.

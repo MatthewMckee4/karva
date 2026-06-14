@@ -2653,11 +2653,12 @@ fn test_no_subcommand_prints_help() {
     Usage: karva <COMMAND>
 
     Commands:
-      test      Run tests
-      snapshot  Manage snapshots created by `karva.assert_snapshot()`
-      cache     Manage the karva cache
-      version   Display Karva's version
-      help      Print this message or the help of the given subcommand(s)
+      test         Run tests
+      snapshot     Manage snapshots created by `karva.assert_snapshot()`
+      cache        Manage the karva cache
+      show-config  Print the resolved configuration karva would run with
+      version      Display Karva's version
+      help         Print this message or the help of the given subcommand(s)
 
     Options:
       -h, --help     Print help
