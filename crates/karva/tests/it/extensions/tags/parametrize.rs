@@ -756,3 +756,34 @@ def test_invalid(x):
     ----- stderr -----
     ");
 }
+
+#[test]
+fn test_pytest_param_invalid_mark_is_rejected() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+@pytest.mark.parametrize('x', [
+    pytest.param(1, marks=pytest.mark.timeout(0)),
+])
+def test_invalid(x):
+    assert True
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: pytest timeout mark seconds must be a finite, positive number
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}

@@ -98,7 +98,7 @@ pub(super) fn parse_parametrize_args(
     let parametrizations = values
         .into_iter()
         .map(|param| handle_custom_parametrize_param(py, param, expect_multiple))
-        .collect();
+        .collect::<PyResult<Vec<_>>>()?;
     Ok((names, parametrizations))
 }
 
@@ -211,7 +211,7 @@ pub(super) fn handle_custom_parametrize_param(
     py: Python,
     param: Py<PyAny>,
     expect_multiple: bool,
-) -> Parametrization {
+) -> PyResult<Parametrization> {
     let param_arc = Arc::new(param);
     let default_parametrization = || Parametrization {
         values: vec![Arc::clone(&param_arc)],
@@ -220,11 +220,11 @@ pub(super) fn handle_custom_parametrize_param(
 
     if let Ok(param_bound) = param_arc.cast_bound::<Param>(py) {
         let param_ref = param_bound.borrow();
-        return Parametrization::from(param_ref);
+        return Ok(Parametrization::from(param_ref));
     }
 
     let Ok(bound_param) = param_arc.clone_ref(py).into_bound_py_any(py) else {
-        return default_parametrization();
+        return Ok(default_parametrization());
     };
 
     let is_parameter_set = match bound_param.get_type().name() {
@@ -248,20 +248,24 @@ pub(super) fn handle_custom_parametrize_param(
             .map(|v| v.into_iter().map(Arc::new).collect())
             .unwrap_or_else(|_| vec![Arc::clone(&param_arc)]);
 
-        let tags = bound_param
-            .getattr("marks")
-            .ok()
-            .and_then(|m| m.into_py_any(py).ok())
-            .and_then(|m| Tags::from_pytest_marks(py, &m).ok().flatten())
-            .unwrap_or_default();
+        let tags = match bound_param.getattr("marks") {
+            Ok(m) => {
+                let marks = m.into_py_any(py)?;
+                Tags::from_pytest_marks(py, &marks)?.unwrap_or_default()
+            }
+            Err(err) => {
+                tracing::warn!("Failed to inspect pytest.param marks: {err}");
+                Tags::default()
+            }
+        };
 
-        Parametrization { values, tags }
+        Ok(Parametrization { values, tags })
     } else if expect_multiple && let Ok(params) = bound_param.extract::<Vec<Py<PyAny>>>() {
-        Parametrization {
+        Ok(Parametrization {
             values: params.into_iter().map(Arc::new).collect(),
             tags: Tags::default(),
-        }
+        })
     } else {
-        default_parametrization()
+        Ok(default_parametrization())
     }
 }
