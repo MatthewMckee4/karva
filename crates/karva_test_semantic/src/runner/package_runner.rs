@@ -83,8 +83,9 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         &self,
         test_name: &QualifiedTestName,
         total_duration: std::time::Duration,
+        threshold: Option<std::time::Duration>,
     ) {
-        if let Some(threshold) = self.context.settings().test().slow_timeout
+        if let Some(threshold) = threshold
             && total_duration > threshold
         {
             self.context.register_slow_test(test_name, total_duration);
@@ -515,13 +516,19 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             snapshot_test_name,
         );
 
+        let custom_tag_names = tags.custom_tag_names();
+        let qualified_name_str = qualified_test_name.to_string();
+        let eval_ctx = karva_metadata::filter::EvalContext {
+            test_name: &qualified_name_str,
+            tags: &custom_tag_names,
+        };
+
         let is_async = stmt_function_def.is_async
             && !crate::utils::patch_async_test_function(py, &function).unwrap_or(false);
         let timeout_seconds = tags.timeout_tag().map(TimeoutTag::seconds).or_else(|| {
             self.context
                 .settings()
-                .test()
-                .timeout
+                .timeout_for(&eval_ctx)
                 .map(|d| d.as_secs_f64())
         });
         let run_test = || {
@@ -550,7 +557,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             }
         };
 
-        let configured_retries = self.context.settings().test().retry;
+        let configured_retries = self.context.settings().retry_for(&eval_ctx);
         self.context.report_test_started(&qualified_test_name);
         let RetryOutcome {
             test_result,
@@ -569,7 +576,11 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         };
 
         let total_duration = start_time.elapsed();
-        self.maybe_register_slow(&qualified_test_name, total_duration);
+        self.maybe_register_slow(
+            &qualified_test_name,
+            total_duration,
+            self.context.settings().slow_timeout_for(&eval_ctx),
+        );
 
         let passed = if was_retried {
             let passed_on = attempt;

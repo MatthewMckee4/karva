@@ -25,6 +25,37 @@ karva test --retry 3 --status-level=retry --final-status-level=retry
 
 The summary line then includes a `N retried` counter so flake patterns are visible at a glance.
 
+## Per-test retry overrides
+
+Profile-level `retry` applies to every test. To grant a flakier subset more attempts (or fewer) without changing the global default, define one or more `[[profile.<name>.overrides]]` entries. Each entry pairs a [filter expression](../../configuration/configuration.md) with one or more option fields; the first matching override wins.
+
+```toml
+[profile.default.test]
+retry = 1
+
+[[profile.default.overrides]]
+filter = "tag(network)"
+retries = 5
+
+[[profile.default.overrides]]
+filter = "tag(unit)"
+retries = 0
+```
+
+In this example tests tagged `network` retry up to five times, tests tagged `unit` never retry, and everything else falls back to `retry = 1`. Overrides defined in a named profile (`[[profile.ci.overrides]]`) take precedence over those defined under `default`.
+
+The same `[[profile.<name>.overrides]]` block also supports `timeout` and `slow-timeout` fields, mirroring the [profile-level timeout](../../configuration/configuration.md) and slow-test threshold. A matching override with a non-positive value disables the corresponding limit for that test, even when the profile sets one.
+
+```toml
+[profile.default.test]
+timeout = 30.0
+
+[[profile.default.overrides]]
+filter = "tag(integration)"
+timeout = 300.0
+slow-timeout = 30.0
+```
+
 ## Detecting attempts from inside a test
 
 Tests can read `KARVA_ATTEMPT` (1-indexed) and `KARVA_TOTAL_ATTEMPTS` (`retries + 1`) from the environment:

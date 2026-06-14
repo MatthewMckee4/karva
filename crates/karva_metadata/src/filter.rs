@@ -2,6 +2,7 @@ use std::fmt;
 
 use globset::{Glob, GlobMatcher};
 use regex::Regex;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 /// How the body of a predicate should be compared against the value it's
@@ -89,6 +90,64 @@ impl Filterset {
 
     pub fn matches(&self, ctx: &EvalContext<'_>) -> bool {
         self.expr.matches(ctx)
+    }
+}
+
+/// A filter expression that has been validated at construction time.
+///
+/// Wraps the raw string and a compiled [`Filterset`] so callers can
+/// evaluate the filter without re-parsing or risking a panic. Equality
+/// is defined on the raw string so structural comparisons (used by the
+/// `Options` derive) remain meaningful.
+#[derive(Debug, Clone)]
+pub struct ValidatedFilter {
+    raw: String,
+    compiled: Filterset,
+}
+
+impl ValidatedFilter {
+    pub fn new(raw: String) -> Result<Self, FilterError> {
+        let compiled = Filterset::new(&raw)?;
+        Ok(Self { raw, compiled })
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.raw
+    }
+
+    pub fn matches(&self, ctx: &EvalContext<'_>) -> bool {
+        self.compiled.matches(ctx)
+    }
+
+    pub fn filterset(&self) -> &Filterset {
+        &self.compiled
+    }
+}
+
+impl PartialEq for ValidatedFilter {
+    fn eq(&self, other: &Self) -> bool {
+        self.raw == other.raw
+    }
+}
+
+impl Eq for ValidatedFilter {}
+
+impl Serialize for ValidatedFilter {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.raw.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ValidatedFilter {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        Self::new(raw).map_err(serde::de::Error::custom)
     }
 }
 

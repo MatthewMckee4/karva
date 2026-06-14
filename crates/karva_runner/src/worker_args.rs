@@ -132,5 +132,16 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
         cli_args.push(format!("--cov={source}"));
     }
 
+    for ovr in settings.overrides() {
+        let json = serde_json::json!({
+            "filter": ovr.filter.as_str(),
+            "retries": ovr.retries,
+            "timeout": ovr.timeout.map(|t| t.0),
+            "slow-timeout": ovr.slow_timeout.map(|t| t.0),
+        });
+        cli_args.push("--override-json".to_string());
+        cli_args.push(json.to_string());
+    }
+
     cli_args
 }

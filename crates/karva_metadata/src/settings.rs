@@ -4,7 +4,7 @@ use karva_combine::Combine;
 use karva_logging::{FinalStatusLevel, StatusLevel};
 use serde::{Deserialize, Serialize};
 
-use crate::filter::FiltersetSet;
+use crate::filter::{EvalContext, FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
 use crate::options::{CovReport, OutputFormat};
 
@@ -127,6 +127,23 @@ pub struct ProjectSettings {
     pub(crate) src: SrcSettings,
     pub(crate) test: TestSettings,
     pub(crate) coverage: CoverageSettings,
+    pub(crate) overrides: Vec<OverrideSettings>,
+}
+
+/// A compiled per-test override applied when its [filter](Self::filter)
+/// matches the running test.
+#[derive(Debug, Clone)]
+pub struct OverrideSettings {
+    pub filter: ValidatedFilter,
+    pub retries: Option<u32>,
+    pub timeout: Option<TestTimeoutSecs>,
+    pub slow_timeout: Option<SlowTimeoutSecs>,
+}
+
+impl OverrideSettings {
+    pub fn matches(&self, ctx: &EvalContext<'_>) -> bool {
+        self.filter.matches(ctx)
+    }
 }
 
 impl ProjectSettings {
@@ -148,6 +165,55 @@ impl ProjectSettings {
 
     pub fn max_fail(&self) -> MaxFail {
         self.test.max_fail
+    }
+
+    pub fn overrides(&self) -> &[OverrideSettings] {
+        &self.overrides
+    }
+
+    /// Find the first matching override that sets a value for `field`.
+    fn first_matching_override<T>(
+        &self,
+        ctx: &EvalContext<'_>,
+        field: impl Fn(&OverrideSettings) -> Option<T>,
+    ) -> Option<T> {
+        self.overrides
+            .iter()
+            .find_map(|ovr| ovr.matches(ctx).then(|| field(ovr)).flatten())
+    }
+
+    /// Resolve the retry budget for a single test.
+    ///
+    /// Walks through the configured overrides in order; the first match
+    /// with `retries` set wins. Falls back to the profile-level
+    /// [`TestSettings::retry`] when no override matches.
+    pub fn retry_for(&self, ctx: &EvalContext<'_>) -> u32 {
+        self.first_matching_override(ctx, |ovr| ovr.retries)
+            .unwrap_or(self.test.retry)
+    }
+
+    /// Resolve the hard per-test timeout for a single test.
+    ///
+    /// First match wins. A matching override with a non-positive
+    /// `timeout` disables the hard limit for that test even when the
+    /// profile sets one.
+    pub fn timeout_for(&self, ctx: &EvalContext<'_>) -> Option<Duration> {
+        if let Some(secs) = self.first_matching_override(ctx, |ovr| ovr.timeout) {
+            return secs.as_duration();
+        }
+        self.test.timeout
+    }
+
+    /// Resolve the slow-test threshold for a single test.
+    ///
+    /// First match wins. A matching override with a non-positive value
+    /// disables slow tracking for that test even when the profile sets a
+    /// threshold.
+    pub fn slow_timeout_for(&self, ctx: &EvalContext<'_>) -> Option<Duration> {
+        if let Some(secs) = self.first_matching_override(ctx, |ovr| ovr.slow_timeout) {
+            return secs.as_duration();
+        }
+        self.test.slow_timeout
     }
 
     pub fn set_filter(&mut self, filter: FiltersetSet) {
