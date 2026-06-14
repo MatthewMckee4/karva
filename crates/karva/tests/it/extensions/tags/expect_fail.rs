@@ -639,3 +639,29 @@ def test_param(x):
         ");
     }
 }
+
+#[test]
+fn test_pytest_expect_fail_empty_list_condition_does_not_expect_fail() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+@pytest.mark.xfail([], reason='empty list is false')
+def test_1():
+    assert True
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_1
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}

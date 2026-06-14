@@ -45,9 +45,7 @@ impl SkipTag {
             return parse_pytest_skip_mark(py_mark).map(Some);
         }
 
-        let parsed = parse_pytest_mark_args(py_mark).ok_or_else(|| {
-            PyValueError::new_err("pytest skipif mark has invalid args or kwargs")
-        })?;
+        let parsed = parse_pytest_mark_args(py_mark)?;
         let kwargs = py_mark.getattr("kwargs")?;
         let reason =
             if let Ok(reason_item) = kwargs.get_item("reason") {

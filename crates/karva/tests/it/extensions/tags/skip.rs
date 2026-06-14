@@ -590,3 +590,29 @@ def test_1():
     ----- stderr -----
     ");
 }
+
+#[test]
+fn test_pytest_skipif_empty_list_condition_does_not_skip() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+@pytest.mark.skipif([], reason='empty list is false')
+def test_1():
+    assert True
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_1
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}

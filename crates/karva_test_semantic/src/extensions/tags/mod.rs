@@ -30,23 +30,21 @@ pub struct ParsedMarkArgs {
 
 /// Extract conditions and reason from a pytest mark object.
 ///
-/// Pytest marks store boolean conditions as positional args and an optional
+/// Pytest marks store truthy/falsy conditions as positional args and an optional
 /// `reason` as a keyword argument. A string in the first positional arg
-/// (when no booleans were found) is treated as an old-style positional reason.
-pub fn parse_pytest_mark_args(py_mark: &Bound<'_, PyAny>) -> Option<ParsedMarkArgs> {
-    let kwargs = py_mark.getattr("kwargs").ok()?;
-    let args = py_mark.getattr("args").ok()?;
+/// is treated as an old-style positional reason.
+pub fn parse_pytest_mark_args(py_mark: &Bound<'_, PyAny>) -> PyResult<ParsedMarkArgs> {
+    let kwargs = py_mark.getattr("kwargs")?;
+    let args = py_mark.getattr("args")?;
 
     let mut conditions = Vec::new();
     if let Ok(args_tuple) = args.extract::<Bound<'_, pyo3::types::PyTuple>>() {
         for i in 0..args_tuple.len() {
-            if let Ok(item) = args_tuple.get_item(i) {
-                if let Ok(bool_val) = item.extract::<bool>() {
-                    conditions.push(bool_val);
-                } else if item.extract::<String>().is_ok() {
-                    break;
-                }
+            let item = args_tuple.get_item(i)?;
+            if item.extract::<String>().is_ok() {
+                break;
             }
+            conditions.push(item.is_truthy()?);
         }
     }
 
@@ -62,7 +60,7 @@ pub fn parse_pytest_mark_args(py_mark: &Bound<'_, PyAny>) -> Option<ParsedMarkAr
         None
     };
 
-    Some(ParsedMarkArgs { conditions, reason })
+    Ok(ParsedMarkArgs { conditions, reason })
 }
 
 /// Represents a decorator/marker that modifies test behavior.
@@ -102,7 +100,9 @@ impl Tag {
             "skip" | "skipif" => {
                 SkipTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::Skip))
             }
-            "xfail" => Ok(ExpectFailTag::try_from_pytest_mark(py_mark).map(Self::ExpectFail)),
+            "xfail" => {
+                ExpectFailTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::ExpectFail))
+            }
             "timeout" => {
                 TimeoutTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::Timeout))
             }

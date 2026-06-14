@@ -36,11 +36,11 @@ impl ExpectFailTag {
         }
     }
 
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
+    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
         let parsed = parse_pytest_mark_args(py_mark)?;
-        Some(Self {
+        Ok(Some(Self {
             conditions: parsed.conditions,
             reason: parsed.reason,
-        })
+        }))
     }
 }
