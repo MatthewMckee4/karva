@@ -1,38 +1,31 @@
 #![cfg(unix)]
 
 use std::process::{Command, Stdio};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use camino::Utf8Path;
 use insta::assert_snapshot;
 
 use crate::common::TestContext;
 
 #[test]
 fn test_ctrlc_emits_cancellation_banner() {
-    // Mix of fast tests (which complete and print PASS lines) and slow
-    // tests (which keep workers busy when SIGINT arrives) so the snapshot
-    // exercises both code paths and shows non-trivial output.
     let context = TestContext::with_file(
-        "test_mixed.py",
+        "test_slow.py",
         r"
+from pathlib import Path
 import time
 
-def test_fast_a(): pass
-def test_fast_b(): pass
-def test_fast_c(): pass
-def test_fast_d(): pass
-def test_fast_e(): pass
-def test_slow_a(): time.sleep(60)
-def test_slow_b(): time.sleep(60)
-def test_slow_c(): time.sleep(60)
-def test_slow_d(): time.sleep(60)
-def test_slow_e(): time.sleep(60)
+def test_slow():
+    Path('started').write_text('1')
+    time.sleep(60)
 ",
     );
+    let started_file = context.root().join("started");
 
-    let child = context
+    let mut child = context
         .command()
-        .args(["--num-workers", "2"])
+        .args(["--num-workers", "1"])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -40,11 +33,17 @@ def test_slow_e(): time.sleep(60)
 
     let pid = child.id();
 
-    // Wait long enough for karva to launch its workers, run the fast
-    // tests, and reach the wait-for-completion loop blocked on the slow
-    // tests. The slow tests sleep for 60s so karva will still be running
-    // when we send the signal.
-    std::thread::sleep(Duration::from_secs(5));
+    if let Err(message) = wait_for_file(&started_file, Duration::from_secs(20)) {
+        let _ = child.kill();
+        let output = child
+            .wait_with_output()
+            .expect("Failed to wait on karva process");
+        panic!(
+            "{message}\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 
     let status = Command::new("kill")
         .args(["-s", "INT", &pid.to_string()])
@@ -56,57 +55,27 @@ def test_slow_e(): time.sleep(60)
         .wait_with_output()
         .expect("Failed to wait on karva process");
 
-    let mut stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    // Which two of the five slow tests are in flight when SIGINT arrives
-    // depends on partitioning and timing, so collapse the suffix to keep
-    // the snapshot stable across runs.
-    stdout = regex::Regex::new(r"test_slow_[a-e]")
-        .unwrap()
-        .replace_all(&stdout, "test_slow_X")
-        .into_owned();
-    // Worker scheduling means PASS and SIGINT lines can appear in any
-    // order. Sort each status independently for a deterministic snapshot.
-    // The ordering of every other line (Starting / Cancelling / summary)
-    // is deterministic.
-    sort_lines_starting_with(&mut stdout, "PASS");
-    sort_lines_starting_with(&mut stdout, "SIGINT");
+    let stdout = String::from_utf8_lossy(&output.stdout);
 
     assert_snapshot!(stdout, @r"
-        Starting 10 tests across 2 workers
-            PASS [TIME] test_mixed::test_fast_a
-            PASS [TIME] test_mixed::test_fast_b
-            PASS [TIME] test_mixed::test_fast_c
-            PASS [TIME] test_mixed::test_fast_d
-            PASS [TIME] test_mixed::test_fast_e
-      Cancelling due to interrupt: 2 tests still running
-          SIGINT [TIME] test_mixed::test_slow_X
-          SIGINT [TIME] test_mixed::test_slow_X
+        Starting 1 test across 1 worker
+      Cancelling due to interrupt: 1 test still running
+          SIGINT [TIME] test_slow::test_slow
     ────────────
-         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
     ");
 }
 
-/// Sort all lines whose first token is `label` so the snapshot is deterministic.
-fn sort_lines_starting_with(stdout: &mut String, label: &str) {
-    let mut lines: Vec<String> = stdout.lines().map(ToString::to_string).collect();
-    let positions: Vec<usize> = lines
-        .iter()
-        .enumerate()
-        .filter_map(|(index, line)| line.trim_start().starts_with(label).then_some(index))
-        .collect();
-    let mut sorted: Vec<String> = positions
-        .iter()
-        .map(|index| lines[*index].clone())
-        .collect();
-    sorted.sort();
+fn wait_for_file(path: &Utf8Path, timeout: Duration) -> Result<(), String> {
+    let start = Instant::now();
 
-    for (position, line) in positions.into_iter().zip(sorted) {
-        lines[position] = line;
+    while start.elapsed() < timeout {
+        if path.exists() {
+            return Ok(());
+        }
+
+        std::thread::sleep(Duration::from_millis(25));
     }
 
-    let mut rebuilt = lines.join("\n");
-    if stdout.ends_with('\n') {
-        rebuilt.push('\n');
-    }
-    *stdout = rebuilt;
+    Err(format!("Timed out waiting for `{path}`"))
 }
