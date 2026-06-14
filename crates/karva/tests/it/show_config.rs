@@ -169,6 +169,53 @@ fail-under = 90
 }
 
 #[test]
+fn show_config_emits_per_test_overrides() {
+    let context = TestContext::with_file(
+        "karva.toml",
+        r#"
+[[profile.default.overrides]]
+filter = "tag(network)"
+retries = 2
+timeout = 30
+slow-timeout = 1.5
+"#,
+    );
+
+    assert_cmd_snapshot!(context.show_config(), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    [src]
+    respect-ignore-files = true
+    include = []
+
+    [terminal]
+    output-format = "full"
+    show-python-output = false
+    status-level = "pass"
+    final-status-level = "pass"
+
+    [test]
+    test-function-prefix = "test"
+    try-import-fixtures = false
+    retry = 0
+    no-tests = "auto"
+
+    [coverage]
+    sources = []
+    report = "term"
+
+    [[overrides]]
+    filter = "tag(network)"
+    retries = 2
+    timeout = 30.0
+    slow-timeout = 1.5
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
 fn show_config_unknown_profile_errors() {
     let context = TestContext::with_file(
         "karva.toml",
