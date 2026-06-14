@@ -50,16 +50,28 @@ impl SkipTag {
 
         let parsed = parse_pytest_mark_args(py_mark, globals)?;
         let kwargs = py_mark.getattr("kwargs")?;
-        let reason =
-            if let Ok(reason_item) = kwargs.get_item("reason") {
-                Some(reason_item.extract::<String>().map_err(|_| {
-                    PyValueError::new_err("pytest skipif mark reason must be a string")
-                })?)
-            } else {
-                parsed.reason
-            };
+        let reason_item = kwargs.get_item("reason").ok();
+        let has_reason = reason_item.is_some() || parsed.reason.is_some();
+        let should_skip = if parsed.conditions.is_empty() {
+            true
+        } else {
+            parsed.conditions.iter().any(|&condition| condition)
+        };
+        let reason = if let Some(reason_item) = reason_item {
+            match reason_item.extract::<String>() {
+                Ok(reason) => Some(reason),
+                Err(_) if should_skip => {
+                    return Err(PyValueError::new_err(
+                        "pytest skipif mark reason must be a string",
+                    ));
+                }
+                Err(_) => None,
+            }
+        } else {
+            parsed.reason
+        };
 
-        if parsed.requires_reason && reason.is_none() {
+        if parsed.requires_reason && !has_reason {
             return Err(PyValueError::new_err(
                 "pytest skipif mark requires a reason when using boolean conditions",
             ));
