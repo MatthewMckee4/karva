@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::fmt::{self, Write};
 
 /// Metadata stored in the YAML frontmatter of a snapshot file.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -15,6 +15,31 @@ pub struct SnapshotFile {
     pub content: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParseSnapshotError {
+    MissingOpeningSeparator,
+    MissingClosingSeparator,
+    InvalidInlineLine { value: String },
+}
+
+impl fmt::Display for ParseSnapshotError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MissingOpeningSeparator => {
+                write!(f, "missing opening frontmatter separator `---`")
+            }
+            Self::MissingClosingSeparator => {
+                write!(f, "missing closing frontmatter separator `---`")
+            }
+            Self::InvalidInlineLine { value } => {
+                write!(f, "invalid inline_line metadata `{value}`")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ParseSnapshotError {}
+
 impl SnapshotFile {
     /// Parse a snapshot file from its string representation.
     ///
@@ -26,9 +51,13 @@ impl SnapshotFile {
     /// ---
     /// snapshot content here
     /// ```
-    pub fn parse(input: &str) -> Option<Self> {
-        let input = input.strip_prefix("---\n")?;
-        let (frontmatter, content) = input.split_once("\n---\n")?;
+    pub fn parse(input: &str) -> Result<Self, ParseSnapshotError> {
+        let input = input
+            .strip_prefix("---\n")
+            .ok_or(ParseSnapshotError::MissingOpeningSeparator)?;
+        let (frontmatter, content) = input
+            .split_once("\n---\n")
+            .ok_or(ParseSnapshotError::MissingClosingSeparator)?;
 
         let mut metadata = SnapshotMetadata::default();
 
@@ -38,11 +67,18 @@ impl SnapshotFile {
             } else if let Some(value) = line.strip_prefix("inline_source: ") {
                 metadata.inline_source = Some(value.to_string());
             } else if let Some(value) = line.strip_prefix("inline_line: ") {
-                metadata.inline_line = Some(value.parse().ok()?);
+                metadata.inline_line =
+                    Some(
+                        value
+                            .parse()
+                            .map_err(|_| ParseSnapshotError::InvalidInlineLine {
+                                value: value.to_string(),
+                            })?,
+                    );
             }
         }
 
-        Some(Self {
+        Ok(Self {
             metadata,
             content: content.to_string(),
         })
@@ -231,12 +267,17 @@ mod tests {
 
     #[test]
     fn parse_malformed_no_closing_separator() {
-        assert!(SnapshotFile::parse("---\nsource: test.py::test\nno closing").is_none());
+        let err = SnapshotFile::parse("---\nsource: test.py::test\nno closing")
+            .expect_err("missing closing separator");
+
+        assert_eq!(err, ParseSnapshotError::MissingClosingSeparator);
     }
 
     #[test]
     fn parse_malformed_no_opening() {
-        assert!(SnapshotFile::parse("just content").is_none());
+        let err = SnapshotFile::parse("just content").expect_err("missing opening separator");
+
+        assert_eq!(err, ParseSnapshotError::MissingOpeningSeparator);
     }
 
     #[test]
@@ -269,6 +310,13 @@ mod tests {
     fn parse_invalid_inline_line_fails() {
         let input = "---\nsource: test.py:5::test_hello\ninline_source: /abs/path/to/test.py\ninline_line: nope\n---\nhello world\n";
 
-        assert!(SnapshotFile::parse(input).is_none());
+        let err = SnapshotFile::parse(input).expect_err("invalid inline line");
+
+        assert_eq!(
+            err,
+            ParseSnapshotError::InvalidInlineLine {
+                value: "nope".to_string()
+            }
+        );
     }
 }

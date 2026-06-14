@@ -40,9 +40,12 @@ pub fn read_snapshot(path: &Utf8Path) -> io::Result<Option<SnapshotFile>> {
         Err(err) => return Err(err),
     };
 
-    SnapshotFile::parse(&content)
-        .map(Some)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Malformed snapshot file"))
+    SnapshotFile::parse(&content).map(Some).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("malformed snapshot file `{path}`: {err}"),
+        )
+    })
 }
 
 /// Write a snapshot file, creating parent directories as needed.
@@ -509,6 +512,11 @@ mod tests {
 
         let err = read_snapshot(&snap_path).expect_err("malformed snapshot should fail");
         assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(
+            err.to_string()
+                .contains("missing opening frontmatter separator"),
+            "{err}"
+        );
     }
 
     #[test]

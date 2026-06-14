@@ -141,7 +141,8 @@ def test_hello():
 
     assert!(!output.status.success());
     assert!(
-        stdout.contains("Failed to read snapshot: Malformed snapshot file"),
+        stdout.contains("Failed to read snapshot: malformed snapshot file")
+            && stdout.contains("missing opening frontmatter separator"),
         "{stdout}"
     );
     assert!(
