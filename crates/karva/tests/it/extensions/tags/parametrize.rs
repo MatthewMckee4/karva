@@ -572,6 +572,37 @@ def test_square(input, expected):
 }
 
 #[test]
+fn test_parametrize_with_karva_param_invalid_tag_reports_value() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize("value", [
+    karva.param(1, tags=[123]),
+])
+def test_value(value):
+    assert value == 1
+"#,
+    );
+
+    assert_cmd_snapshot!(test_context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: Invalid tag `123` of type `int`; expected a karva tag or callable returning one
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_parametrize_with_pytest_param_marks_list() {
     let test_context = TestContext::with_file(
         "test.py",
