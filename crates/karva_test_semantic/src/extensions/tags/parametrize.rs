@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use pyo3::IntoPyObjectExt;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use crate::extensions::functions::Param;
@@ -64,14 +65,16 @@ impl ParametrizationArgs {
 /// Handles both input formats for parameter names:
 /// - A list of strings: `["arg1", "arg2"]`
 /// - A single comma-separated string: `"arg1, arg2"` or just `"arg1"`
-fn normalize_arg_names(arg_names: &Bound<'_, PyAny>) -> Option<Vec<String>> {
+fn normalize_arg_names(arg_names: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
     if let Ok(names) = arg_names.extract::<Vec<String>>() {
-        return Some(names);
+        return Ok(names);
     }
     if let Ok(name) = arg_names.extract::<String>() {
-        return Some(name.split(',').map(|s| s.trim().to_string()).collect());
+        return Ok(name.split(',').map(|s| s.trim().to_string()).collect());
     }
-    None
+    Err(PyValueError::new_err(
+        "pytest parametrize mark argnames must be a string or list of strings",
+    ))
 }
 
 /// Parse parametrize arguments from Python objects.
@@ -85,16 +88,18 @@ fn normalize_arg_names(arg_names: &Bound<'_, PyAny>) -> Option<Vec<String>> {
 pub(super) fn parse_parametrize_args(
     arg_names: &Bound<'_, PyAny>,
     arg_values: &Bound<'_, PyAny>,
-) -> Option<(Vec<String>, Vec<Parametrization>)> {
+) -> PyResult<(Vec<String>, Vec<Parametrization>)> {
     let py = arg_values.py();
     let names = normalize_arg_names(arg_names)?;
-    let values = arg_values.extract::<Vec<Py<PyAny>>>().ok()?;
+    let values = arg_values.extract::<Vec<Py<PyAny>>>().map_err(|_| {
+        PyValueError::new_err("pytest parametrize mark argvalues must be an iterable")
+    })?;
     let expect_multiple = names.len() > 1;
     let parametrizations = values
         .into_iter()
         .map(|param| handle_custom_parametrize_param(py, param, expect_multiple))
         .collect();
-    Some((names, parametrizations))
+    Ok((names, parametrizations))
 }
 
 /// Represents different argument names and values that can be given to a test.
@@ -127,7 +132,8 @@ fn extract_parametrize_args<'py>(
             py_mark
                 .getattr("kwargs")
                 .and_then(|kwargs| kwargs.get_item("argnames"))
-        })?;
+        })
+        .map_err(|_| PyValueError::new_err("pytest parametrize mark requires argnames"))?;
 
     // Try to get argvalues from positional args second position, then kwargs
     let arg_values = py_mark
@@ -137,7 +143,8 @@ fn extract_parametrize_args<'py>(
             py_mark
                 .getattr("kwargs")
                 .and_then(|kwargs| kwargs.get_item("argvalues"))
-        })?;
+        })
+        .map_err(|_| PyValueError::new_err("pytest parametrize mark requires argvalues"))?;
 
     Ok((arg_names, arg_values))
 }
@@ -168,12 +175,12 @@ impl ParametrizeTag {
         )
     }
 
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
-        let (arg_names, arg_values) = extract_parametrize_args(py_mark).ok()?;
+    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
+        let (arg_names, arg_values) = extract_parametrize_args(py_mark)?;
 
         let (arg_names, parametrizations) = parse_parametrize_args(&arg_names, &arg_values)?;
 
-        Some(Self::new(arg_names, parametrizations))
+        Ok(Some(Self::new(arg_names, parametrizations)))
     }
 
     /// Returns each parameterize case.

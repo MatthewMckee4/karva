@@ -94,7 +94,7 @@ impl Tag {
 
         match name.as_str() {
             "parametrize" => {
-                Ok(ParametrizeTag::try_from_pytest_mark(py_mark).map(Self::Parametrize))
+                ParametrizeTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::Parametrize))
             }
             "usefixtures" => {
                 UseFixturesTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::UseFixtures))
