@@ -128,16 +128,21 @@ pub struct ProjectSettings {
     pub(crate) terminal: TerminalSettings,
     pub(crate) test: TestSettings,
     pub(crate) coverage: CoverageSettings,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) overrides: Vec<OverrideSettings>,
 }
 
 /// A compiled per-test override applied when its [filter](Self::filter)
 /// matches the running test.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct OverrideSettings {
     pub filter: ValidatedFilter,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub retries: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout: Option<TestTimeoutSecs>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub slow_timeout: Option<SlowTimeoutSecs>,
 }
 
