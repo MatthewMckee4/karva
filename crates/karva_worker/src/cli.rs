@@ -139,16 +139,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         .map(RunIgnoredMode::from)
         .unwrap_or_default();
 
-    let coverage = match (
-        args.sub_command.cov.is_empty(),
-        args.sub_command.cov_data_file.clone(),
-    ) {
-        (false, Some(data_file)) => Some(karva_test_semantic::CoverageConfig {
-            sources: args.sub_command.cov.clone(),
-            data_file,
-        }),
-        _ => None,
-    };
+    let coverage = worker_coverage_config(&args.sub_command)?;
 
     let mut settings = args.sub_command.into_options().to_settings();
     settings.set_filter(filter);
@@ -210,4 +201,71 @@ fn cwd() -> anyhow::Result<Utf8PathBuf> {
             path.display()
         )
     })
+}
+
+fn worker_coverage_config(
+    sub_command: &SubTestCommand,
+) -> anyhow::Result<Option<karva_test_semantic::CoverageConfig>> {
+    if sub_command.cov.is_empty() {
+        return Ok(None);
+    }
+
+    let Some(data_file) = sub_command.cov_data_file.clone() else {
+        anyhow::bail!("karva-worker requires `--cov-data-file` when `--cov` is set");
+    };
+
+    Ok(Some(karva_test_semantic::CoverageConfig {
+        sources: sub_command.cov.clone(),
+        data_file,
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use camino::Utf8PathBuf;
+    use karva_cli::SubTestCommand;
+
+    use super::worker_coverage_config;
+
+    #[test]
+    fn coverage_config_is_absent_without_sources() {
+        let sub_command = SubTestCommand::default();
+
+        let coverage = worker_coverage_config(&sub_command).expect("coverage config");
+
+        assert!(coverage.is_none());
+    }
+
+    #[test]
+    fn coverage_config_requires_data_file_when_sources_are_set() {
+        let sub_command = SubTestCommand {
+            cov: vec!["src".to_string()],
+            ..SubTestCommand::default()
+        };
+
+        let err = worker_coverage_config(&sub_command)
+            .expect_err("missing worker coverage data file should be rejected");
+
+        assert_eq!(
+            err.to_string(),
+            "karva-worker requires `--cov-data-file` when `--cov` is set"
+        );
+    }
+
+    #[test]
+    fn coverage_config_preserves_sources_and_data_file() {
+        let data_file = Utf8PathBuf::from(".coverage.worker-0");
+        let sub_command = SubTestCommand {
+            cov: vec![String::new(), "pkg".to_string()],
+            cov_data_file: Some(data_file.clone()),
+            ..SubTestCommand::default()
+        };
+
+        let coverage = worker_coverage_config(&sub_command)
+            .expect("coverage config")
+            .expect("coverage should be enabled");
+
+        assert_eq!(coverage.sources, vec![String::new(), "pkg".to_string()]);
+        assert_eq!(coverage.data_file, data_file);
+    }
 }
