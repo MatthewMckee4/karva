@@ -115,12 +115,21 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
         };
 
         if let Ok(py_function) = py_module.getattr(stmt_function_def.name.to_string()) {
-            self.module.add_test_function(DiscoveredTestFunction::new(
+            match DiscoveredTestFunction::new(
                 self.py,
                 self.module,
                 Rc::new(stmt_function_def),
                 py_function.unbind(),
-            ));
+            ) {
+                Ok(test_function) => self.module.add_test_function(test_function),
+                Err(error) => {
+                    report_failed_to_import_module(
+                        self.context,
+                        self.module.name(),
+                        &error.value(self.py).to_string(),
+                    );
+                }
+            }
         }
     }
 

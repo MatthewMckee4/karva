@@ -1,3 +1,4 @@
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
@@ -21,19 +22,24 @@ impl TimeoutTag {
     }
 
     /// Parse `@pytest.mark.timeout(seconds)`.
-    ///
-    /// Drops the tag silently if the first positional arg is missing or not a
-    /// finite, positive number — keeps behavior consistent with the
-    /// Python-side `karva.tags.timeout` validator and avoids passing
-    /// nonsensical values into `future.result()` / `asyncio.wait_for`.
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
-        let args = py_mark.getattr("args").ok()?;
-        let tuple = args.extract::<Bound<'_, PyTuple>>().ok()?;
-        let first = tuple.get_item(0).ok()?;
-        let seconds = first.extract::<f64>().ok()?;
-        if !(seconds.is_finite() && seconds > 0.0) {
-            return None;
+    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
+        let args = py_mark.getattr("args")?;
+        let tuple = args.extract::<Bound<'_, PyTuple>>()?;
+        if tuple.is_empty() {
+            return Err(PyValueError::new_err(
+                "pytest timeout mark requires a seconds argument",
+            ));
         }
-        Some(Self { seconds })
+
+        let first = tuple.get_item(0)?;
+        let seconds = first.extract::<f64>().map_err(|_| {
+            PyValueError::new_err("pytest timeout mark seconds must be a finite, positive number")
+        })?;
+        if !(seconds.is_finite() && seconds > 0.0) {
+            return Err(PyValueError::new_err(
+                "pytest timeout mark seconds must be a finite, positive number",
+            ));
+        }
+        Ok(Some(Self { seconds }))
     }
 }

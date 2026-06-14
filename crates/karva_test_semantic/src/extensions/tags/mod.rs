@@ -83,16 +83,29 @@ impl Tag {
     /// Converts a Pytest mark into an Karva Tag.
     ///
     /// This is used to allow Pytest marks to be used as Karva tags.
-    fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
-        let name = py_mark.getattr("name").ok()?.extract::<String>().ok()?;
+    fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
+        let Some(name) = py_mark
+            .getattr("name")
+            .ok()
+            .and_then(|name| name.extract::<String>().ok())
+        else {
+            return Ok(None);
+        };
+
         match name.as_str() {
-            "parametrize" => ParametrizeTag::try_from_pytest_mark(py_mark).map(Self::Parametrize),
-            "usefixtures" => UseFixturesTag::try_from_pytest_mark(py_mark).map(Self::UseFixtures),
-            "skip" | "skipif" => SkipTag::try_from_pytest_mark(py_mark).map(Self::Skip),
-            "xfail" => ExpectFailTag::try_from_pytest_mark(py_mark).map(Self::ExpectFail),
-            "timeout" => TimeoutTag::try_from_pytest_mark(py_mark).map(Self::Timeout),
+            "parametrize" => {
+                Ok(ParametrizeTag::try_from_pytest_mark(py_mark).map(Self::Parametrize))
+            }
+            "usefixtures" => {
+                Ok(UseFixturesTag::try_from_pytest_mark(py_mark).map(Self::UseFixtures))
+            }
+            "skip" | "skipif" => Ok(SkipTag::try_from_pytest_mark(py_mark).map(Self::Skip)),
+            "xfail" => Ok(ExpectFailTag::try_from_pytest_mark(py_mark).map(Self::ExpectFail)),
+            "timeout" => {
+                TimeoutTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::Timeout))
+            }
             // Any other marker is treated as a custom marker
-            _ => CustomTag::try_from_pytest_mark(py_mark).map(Self::Custom),
+            _ => Ok(CustomTag::try_from_pytest_mark(py_mark).map(Self::Custom)),
         }
     }
 
@@ -193,40 +206,46 @@ impl Tags {
         py: Python<'_>,
         py_function: &Py<PyAny>,
         function_definition: Option<&StmtFunctionDef>,
-    ) -> Self {
+    ) -> PyResult<Self> {
         if function_definition.is_some_and(|def| def.decorator_list.is_empty()) {
-            return Self::default();
+            return Ok(Self::default());
         }
 
         if let Ok(py_test_function) = py_function.extract::<Py<PyTestFunction>>(py) {
-            return Self::from_py_test_function(py, &py_test_function.borrow(py));
+            return Ok(Self::from_py_test_function(
+                py,
+                &py_test_function.borrow(py),
+            ));
         } else if let Ok(wrapped) = py_function.getattr(py, "__wrapped__")
             && let Ok(py_wrapped_function) = wrapped.extract::<Py<PyTestFunction>>(py)
         {
-            return Self::from_py_test_function(py, &py_wrapped_function.borrow(py));
+            return Ok(Self::from_py_test_function(
+                py,
+                &py_wrapped_function.borrow(py),
+            ));
         }
 
         if let Ok(marks) = py_function.getattr(py, "pytestmark")
-            && let Some(tags) = Self::from_pytest_marks(py, &marks)
+            && let Some(tags) = Self::from_pytest_marks(py, &marks)?
         {
-            return tags;
+            return Ok(tags);
         }
 
-        Self::default()
+        Ok(Self::default())
     }
 
-    pub(crate) fn from_pytest_marks(py: Python<'_>, marks: &Py<PyAny>) -> Option<Self> {
+    pub(crate) fn from_pytest_marks(py: Python<'_>, marks: &Py<PyAny>) -> PyResult<Option<Self>> {
         let mut tags = Vec::new();
         if let Ok(marks_list) = marks.extract::<Vec<Bound<'_, PyAny>>>(py) {
             for mark in marks_list {
-                if let Some(tag) = Tag::try_from_pytest_mark(&mark) {
+                if let Some(tag) = Tag::try_from_pytest_mark(&mark)? {
                     tags.push(tag);
                 }
             }
         } else {
-            return None;
+            return Ok(None);
         }
-        Some(Self { inner: tags })
+        Ok(Some(Self { inner: tags }))
     }
 
     /// Return all parametrizations

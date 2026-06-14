@@ -245,7 +245,7 @@ pub(super) fn handle_custom_parametrize_param(
             .getattr("marks")
             .ok()
             .and_then(|m| m.into_py_any(py).ok())
-            .and_then(|m| Tags::from_pytest_marks(py, &m))
+            .and_then(|m| Tags::from_pytest_marks(py, &m).ok().flatten())
             .unwrap_or_default();
 
         Parametrization { values, tags }

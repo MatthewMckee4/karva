@@ -37,20 +37,20 @@ impl DiscoveredTestFunction {
         module: &DiscoveredModule,
         stmt_function_def: Rc<StmtFunctionDef>,
         py_function: Py<PyAny>,
-    ) -> Self {
+    ) -> PyResult<Self> {
         let name = QualifiedFunctionName::new(
             stmt_function_def.name.to_string(),
             module.module_path().clone(),
         );
 
-        let tags = Tags::from_py_any(py, &py_function, Some(&stmt_function_def));
+        let tags = Tags::from_py_any(py, &py_function, Some(&stmt_function_def))?;
 
-        Self {
+        Ok(Self {
             name,
             stmt_function_def,
             source_file: module.source_file(),
             py_function,
             tags,
-        }
+        })
     }
 }
