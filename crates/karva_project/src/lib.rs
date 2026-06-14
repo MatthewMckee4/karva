@@ -19,41 +19,48 @@ pub fn find_karva_wheel() -> anyhow::Result<Utf8PathBuf> {
 
     let wheels_dir = karva_root.join("target").join("wheels");
 
-    let entries = std::fs::read_dir(&wheels_dir)
+    find_karva_wheel_in(&wheels_dir)
+}
+
+fn find_karva_wheel_in(wheels_dir: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
+    let entries = std::fs::read_dir(wheels_dir)
         .with_context(|| format!("Could not read wheels directory: {wheels_dir}"))?;
 
-    let mut newest: Option<(std::time::SystemTime, std::path::PathBuf)> = None;
+    let mut newest: Option<(std::time::SystemTime, Utf8PathBuf)> = None;
 
     for entry in entries {
-        let entry = entry?;
+        let entry = entry
+            .with_context(|| format!("Could not read entry in wheels directory: {wheels_dir}"))?;
         let file_name = entry.file_name();
         let Some(name) = file_name.to_str() else {
             continue;
         };
-        if !name.starts_with("karva-")
-            || !Utf8Path::new(name)
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("whl"))
-        {
+        if !is_karva_wheel_name(name) {
             continue;
         }
 
+        let path = wheels_dir.join(name);
         let mtime = entry
             .metadata()
-            .and_then(|m| m.modified())
-            .unwrap_or(std::time::UNIX_EPOCH);
+            .with_context(|| format!("Could not read wheel metadata: {path}"))?
+            .modified()
+            .with_context(|| format!("Could not read wheel modification time: {path}"))?;
 
         if newest.as_ref().is_none_or(|(t, _)| mtime > *t) {
-            newest = Some((mtime, entry.path()));
+            newest = Some((mtime, path));
         }
     }
 
-    let path = newest
+    newest
         .map(|(_, p)| p)
-        .ok_or_else(|| anyhow::anyhow!("Could not find karva wheel in target/wheels directory"))?;
+        .ok_or_else(|| anyhow::anyhow!("Could not find karva wheel in {wheels_dir}"))
+}
 
-    Utf8PathBuf::from_path_buf(path)
-        .map_err(|p| anyhow::anyhow!("Wheel path is not valid UTF-8: {}", p.display()))
+fn is_karva_wheel_name(name: &str) -> bool {
+    name.starts_with("karva-")
+        && Utf8Path::new(name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("whl"))
 }
 
 #[derive(Debug, Clone)]
@@ -100,5 +107,56 @@ impl Project {
 
     pub fn metadata(&self) -> &ProjectMetadata {
         &self.metadata
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs::{File, FileTimes};
+    use std::time::{Duration, UNIX_EPOCH};
+
+    use camino::Utf8Path;
+
+    use super::find_karva_wheel_in;
+
+    fn temp_path(dir: &tempfile::TempDir) -> &Utf8Path {
+        Utf8Path::from_path(dir.path()).expect("temp path should be UTF-8")
+    }
+
+    fn write_wheel(root: &Utf8Path, name: &str, modified_after_epoch: u64) -> camino::Utf8PathBuf {
+        let path = root.join(name);
+        let file = File::create(&path).expect("create wheel");
+        file.set_times(
+            FileTimes::new().set_modified(UNIX_EPOCH + Duration::from_secs(modified_after_epoch)),
+        )
+        .expect("set wheel modified time");
+        path
+    }
+
+    #[test]
+    fn find_karva_wheel_returns_newest_matching_wheel() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let root = temp_path(&temp_dir);
+        write_wheel(root, "karva-0.1.0-py3-none-any.whl", 10);
+        write_wheel(root, "not-karva-9.9.9-py3-none-any.whl", 30);
+        let newest = write_wheel(root, "karva-0.2.0-py3-none-any.WHL", 20);
+
+        let wheel = find_karva_wheel_in(root).expect("find wheel");
+
+        assert_eq!(wheel, newest);
+    }
+
+    #[test]
+    fn find_karva_wheel_reports_missing_matching_wheel() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let root = temp_path(&temp_dir);
+        write_wheel(root, "karva-0.1.0.tar.gz", 10);
+
+        let err = find_karva_wheel_in(root).expect_err("missing wheel should fail");
+
+        assert!(
+            err.to_string().contains("Could not find karva wheel"),
+            "{err:?}"
+        );
     }
 }
