@@ -97,7 +97,7 @@ impl Tag {
                 Ok(ParametrizeTag::try_from_pytest_mark(py_mark).map(Self::Parametrize))
             }
             "usefixtures" => {
-                Ok(UseFixturesTag::try_from_pytest_mark(py_mark).map(Self::UseFixtures))
+                UseFixturesTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::UseFixtures))
             }
             "skip" | "skipif" => Ok(SkipTag::try_from_pytest_mark(py_mark).map(Self::Skip)),
             "xfail" => Ok(ExpectFailTag::try_from_pytest_mark(py_mark).map(Self::ExpectFail)),
