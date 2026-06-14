@@ -99,7 +99,9 @@ impl Tag {
             "usefixtures" => {
                 UseFixturesTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::UseFixtures))
             }
-            "skip" | "skipif" => Ok(SkipTag::try_from_pytest_mark(py_mark).map(Self::Skip)),
+            "skip" | "skipif" => {
+                SkipTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::Skip))
+            }
             "xfail" => Ok(ExpectFailTag::try_from_pytest_mark(py_mark).map(Self::ExpectFail)),
             "timeout" => {
                 TimeoutTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::Timeout))

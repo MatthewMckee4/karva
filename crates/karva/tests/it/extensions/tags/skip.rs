@@ -503,3 +503,90 @@ def test_skip_with_true():
         ");
     }
 }
+
+#[test]
+fn test_pytest_skip_non_string_positional_reason_rejected() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+@pytest.mark.skip(123)
+def test_1():
+    assert False
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: pytest skip mark reason must be a string
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_pytest_skip_non_string_keyword_reason_rejected() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+@pytest.mark.skip(reason=123)
+def test_1():
+    assert False
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: pytest skip mark reason must be a string
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_pytest_skipif_non_string_keyword_reason_rejected() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+@pytest.mark.skipif(True, reason=123)
+def test_1():
+    assert False
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: pytest skipif mark reason must be a string
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}

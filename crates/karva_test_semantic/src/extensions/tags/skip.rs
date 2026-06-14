@@ -1,4 +1,6 @@
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyTuple;
 
 use super::parse_pytest_mark_args;
 use crate::extensions::functions::SkipError;
@@ -36,13 +38,58 @@ impl SkipTag {
         }
     }
 
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
-        let parsed = parse_pytest_mark_args(py_mark)?;
-        Some(Self {
+    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
+        let name = py_mark.getattr("name")?.extract::<String>()?;
+
+        if name == "skip" {
+            return parse_pytest_skip_mark(py_mark).map(Some);
+        }
+
+        let parsed = parse_pytest_mark_args(py_mark).ok_or_else(|| {
+            PyValueError::new_err("pytest skipif mark has invalid args or kwargs")
+        })?;
+        let kwargs = py_mark.getattr("kwargs")?;
+        let reason =
+            if let Ok(reason_item) = kwargs.get_item("reason") {
+                Some(reason_item.extract::<String>().map_err(|_| {
+                    PyValueError::new_err("pytest skipif mark reason must be a string")
+                })?)
+            } else {
+                parsed.reason
+            };
+
+        Ok(Some(Self {
             conditions: parsed.conditions,
-            reason: parsed.reason,
-        })
+            reason,
+        }))
     }
+}
+
+fn parse_pytest_skip_mark(py_mark: &Bound<'_, PyAny>) -> PyResult<SkipTag> {
+    let kwargs = py_mark.getattr("kwargs")?;
+    let args = py_mark.getattr("args")?;
+
+    let reason =
+        if let Ok(reason_item) = kwargs.get_item("reason") {
+            Some(
+                reason_item.extract::<String>().map_err(|_| {
+                    PyValueError::new_err("pytest skip mark reason must be a string")
+                })?,
+            )
+        } else {
+            let args = args.extract::<Bound<'_, PyTuple>>()?;
+            match args.get_item(0) {
+                Ok(reason_item) => Some(reason_item.extract::<String>().map_err(|_| {
+                    PyValueError::new_err("pytest skip mark reason must be a string")
+                })?),
+                Err(_) => None,
+            }
+        };
+
+    Ok(SkipTag {
+        conditions: Vec::new(),
+        reason,
+    })
 }
 
 /// Check if the given `PyErr` is a skip exception.
