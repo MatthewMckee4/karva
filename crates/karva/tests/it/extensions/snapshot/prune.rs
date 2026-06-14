@@ -159,6 +159,31 @@ def test_hello():
 }
 
 #[test]
+fn test_snapshot_prune_reports_source_read_errors() {
+    let context = TestContext::default();
+    std::fs::create_dir(context.root().join("test.py")).expect("create source directory");
+    context.write_file(
+        "snapshots/test__test_hello.snap",
+        "---\nsource: test.py:5::test_hello\n---\nhello\n",
+    );
+
+    let output = context.snapshot("prune").output().expect("run prune");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(
+        stderr.contains("failed to read source file") && stderr.contains("test.py"),
+        "{stderr}"
+    );
+    assert!(
+        context
+            .root()
+            .join("snapshots/test__test_hello.snap")
+            .exists()
+    );
+}
+
+#[test]
 fn test_snapshot_prune_parametrized() {
     let context = TestContext::with_file(
         "test.py",

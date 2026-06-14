@@ -322,12 +322,15 @@ pub fn base_function_name(name: &str) -> &str {
 }
 
 /// Check whether a function definition `def {name}(` exists in a file.
-pub fn function_exists_in_file(path: &Utf8Path, name: &str) -> bool {
-    let Ok(content) = std::fs::read_to_string(path) else {
-        return false;
-    };
+pub fn function_exists_in_file(path: &Utf8Path, name: &str) -> io::Result<bool> {
+    let content = std::fs::read_to_string(path).map_err(|err| {
+        io::Error::new(
+            err.kind(),
+            format!("failed to read source file `{path}`: {err}"),
+        )
+    })?;
     let pattern = format!("def {name}(");
-    content.contains(&pattern)
+    Ok(content.contains(&pattern))
 }
 
 /// Recursively find all committed snapshot files (`.snap`, not `.snap.new`).
@@ -418,7 +421,7 @@ fn check_snapshot_reference(info: &SnapshotInfo) -> io::Result<Option<Unreferenc
     }
 
     let func_name = base_function_name(snapshot_name);
-    if !function_exists_in_file(&test_file, func_name) {
+    if !function_exists_in_file(&test_file, func_name)? {
         return Ok(Some(UnreferencedReason::FunctionNotFound {
             file: file_name.to_string(),
             function: func_name.to_string(),
@@ -701,6 +704,32 @@ mod tests {
         let unreferenced = find_unreferenced_snapshots(dir_path).expect("find unreferenced");
         assert_eq!(unreferenced.len(), 1);
         insta::assert_snapshot!(unreferenced[0].reason, @"function `test_foo` not found in test.py");
+    }
+
+    #[test]
+    fn unreferenced_source_read_errors_are_reported() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
+        let snap_dir = dir_path.join("snapshots");
+        std::fs::create_dir_all(&snap_dir).expect("mkdir");
+        std::fs::create_dir(dir_path.join("test.py")).expect("create source directory");
+
+        let snapshot = SnapshotFile {
+            metadata: crate::format::SnapshotMetadata {
+                source: Some("test.py:5::test_foo".to_string()),
+                ..Default::default()
+            },
+            content: "hello\n".to_string(),
+        };
+        write_snapshot(&snap_dir.join("test__test_foo.snap"), &snapshot).expect("write");
+
+        let err = find_unreferenced_snapshots(dir_path).expect_err("source read should fail");
+
+        assert!(
+            err.to_string().contains("failed to read source file"),
+            "{err}"
+        );
+        assert!(err.to_string().contains("test.py"), "{err}");
     }
 
     #[test]
