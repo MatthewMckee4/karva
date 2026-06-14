@@ -214,12 +214,11 @@ fn apply_active_filters(input: &str) -> PyResult<String> {
         let mut compiled = Vec::new();
         for settings in stack.iter() {
             for (pattern, replacement) in &settings.filters {
-                let filter =
-                    SnapshotFilter::new(pattern, replacement.clone()).ok_or_else(|| {
-                        pyo3::exceptions::PyValueError::new_err(format!(
-                            "Invalid regex pattern in snapshot filter: {pattern}"
-                        ))
-                    })?;
+                let filter = SnapshotFilter::new(pattern, replacement.clone()).map_err(|err| {
+                    pyo3::exceptions::PyValueError::new_err(format!(
+                        "Invalid regex pattern in snapshot filter `{pattern}`: {err}"
+                    ))
+                })?;
                 compiled.push(filter);
             }
         }
