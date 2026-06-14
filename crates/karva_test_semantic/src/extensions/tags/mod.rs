@@ -43,6 +43,7 @@ pub fn parse_pytest_mark_args(
     let args = py_mark.getattr("args")?;
 
     let mut conditions = Vec::new();
+    let mut condition_reason = None;
     if let Ok(args_tuple) = args.extract::<Bound<'_, pyo3::types::PyTuple>>() {
         for i in 0..args_tuple.len() {
             let item = args_tuple.get_item(i)?;
@@ -50,7 +51,11 @@ pub fn parse_pytest_mark_args(
                 let Some(globals) = globals else {
                     break;
                 };
-                conditions.push(evaluate_pytest_condition(&expression, globals)?);
+                let condition = evaluate_pytest_condition(&expression, globals)?;
+                if condition && condition_reason.is_none() {
+                    condition_reason = Some(format!("condition: {expression}"));
+                }
+                conditions.push(condition);
                 continue;
             }
             conditions.push(item.is_truthy()?);
@@ -67,7 +72,7 @@ pub fn parse_pytest_mark_args(
             .and_then(|t| t.get_item(0).ok())
             .and_then(|a| a.extract::<String>().ok())
     } else {
-        None
+        condition_reason
     };
 
     Ok(ParsedMarkArgs { conditions, reason })
