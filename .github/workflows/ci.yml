@@ -257,7 +257,7 @@ jobs:
       matrix:
         include:
           - project: karva-benchmark-1
-            benchmark: karva_benchmark_walltime::karva_benchmark
+            benchmark: karva_benchmark_walltime::karva_benchmark_1
           - project: packaging
             benchmark: karva_benchmark_walltime::packaging
           - project: parse

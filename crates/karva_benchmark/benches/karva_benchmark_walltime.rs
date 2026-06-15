@@ -1,7 +1,7 @@
 use divan::{Bencher, bench};
 
 #[bench(sample_size = 2, sample_count = 1)]
-fn karva_benchmark(bencher: Bencher) {
+fn karva_benchmark_1(bencher: Bencher) {
     karva_benchmark::bench_project(bencher, &karva_benchmark::SYNTHETIC_PROJECT);
 }
 

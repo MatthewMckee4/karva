@@ -228,21 +228,6 @@ pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
     OUTCOME_PROJECT,
 ];
 
-pub const PROJECT_NAME: &str = SYNTHETIC_PROJECT.name;
-pub const REPOSITORY: &str = SYNTHETIC_PROJECT.repository;
-pub const COMMIT: &str = SYNTHETIC_PROJECT.commit;
-pub const PYTHON_VERSION: PythonVersion = SYNTHETIC_PROJECT.python_version;
-
-/// Clone or update the default synthetic benchmark project and return a Karva
-/// project ready to benchmark.
-pub fn setup_project() -> Project {
-    prepare_project().expect("Failed to prepare benchmark project")
-}
-
-pub fn prepare_project() -> Result<Project> {
-    prepare_benchmark_project(&SYNTHETIC_PROJECT)
-}
-
 pub fn prepare_benchmark_project(config: &BenchmarkProject) -> Result<Project> {
     let project_root = ensure_checkout(config).context("Failed to checkout benchmark project")?;
     install_dependencies(config, &project_root)
@@ -268,15 +253,6 @@ pub fn prepare_benchmark_project(config: &BenchmarkProject) -> Result<Project> {
     };
 
     Ok(Project::from_metadata(metadata))
-}
-
-/// Run Karva tests against the default synthetic benchmark project once.
-pub fn run_karva(project: &Project) {
-    try_run_karva(project).expect("Karva benchmark run failed");
-}
-
-pub fn try_run_karva(project: &Project) -> Result<RunOutput> {
-    try_run_project(project)
 }
 
 pub fn try_run_project(project: &Project) -> Result<RunOutput> {
@@ -319,11 +295,6 @@ pub fn try_run_project(project: &Project) -> Result<RunOutput> {
 
 pub fn clean_project_cache(project_root: &Utf8Path) -> Result<bool> {
     clean_cache(&project_root.join(CACHE_DIR)).context("Failed to remove Karva benchmark cache")
-}
-
-/// Divan bencher entry point for the default synthetic benchmark.
-pub fn bench(bencher: Bencher) {
-    bench_project(bencher, &SYNTHETIC_PROJECT);
 }
 
 pub fn bench_project(bencher: Bencher, config: &'static BenchmarkProject) {
