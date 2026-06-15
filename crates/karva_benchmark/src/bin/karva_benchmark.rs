@@ -101,6 +101,13 @@ struct Measurement {
     median_secs: f64,
 }
 
+#[derive(Debug, Default)]
+struct ReportSummary {
+    faster: usize,
+    slower: usize,
+    unchanged: usize,
+}
+
 struct Subject<'a> {
     label: &'a str,
     wheel: &'a Utf8Path,
@@ -406,14 +413,34 @@ fn create_parent_dir(path: &Utf8Path) -> Result<()> {
 fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std::fmt::Error> {
     use std::fmt::Write as _;
 
+    let summary = ReportSummary::new(&report.projects);
     let mut body = String::from("<!-- karva-benchmark-comparison -->\n");
-    body.push_str("### Karva benchmark comparison\n\n");
+    writeln!(body, "### {}", verdict(&summary))?;
+    writeln!(body)?;
     writeln!(
         body,
-        "Baseline: `{}`. Candidate: `{}`. Each row is a median CLI wall-time measurement on one runner, alternating install order. Runs are configured per project. Lower is better. Karva runs with one worker and no cache. Only projects with at least {:.1}% median change are shown.",
-        report.baseline_label, report.candidate_label, MATERIAL_CHANGE_PERCENT
+        "Baseline: `{}`. Candidate: `{}`. Each benchmark compares median CLI wall time on one GitHub Actions runner, alternating install order. Runs are configured per project. Lower is better.",
+        report.baseline_label, report.candidate_label
     )?;
     writeln!(body)?;
+    write_summary_line(&mut body, ":zap:", summary.faster, "improved benchmark")?;
+    write_summary_line(&mut body, ":x:", summary.slower, "regressed benchmark")?;
+    write_summary_line(
+        &mut body,
+        ":white_check_mark:",
+        summary.unchanged,
+        "unchanged benchmark",
+    )?;
+    writeln!(body)?;
+
+    if summary.slower > 0 {
+        writeln!(body, "> [!WARNING]")?;
+        writeln!(
+            body,
+            "> Benchmark regressions were detected. Review the wall-time changes before merging."
+        )?;
+        writeln!(body)?;
+    }
 
     let visible_projects = report
         .projects
@@ -429,23 +456,62 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
         return Ok(body);
     }
 
-    body.push_str("| Project | Runs | Baseline | Candidate | Change | Result |\n");
-    body.push_str("| --- | ---: | ---: | ---: | ---: | --- |\n");
+    body.push_str("#### Performance Changes\n\n");
+    body.push_str("|  | Mode | Benchmark | Base | Head | Change | Runs |\n");
+    body.push_str("| --- | --- | --- | ---: | ---: | ---: | ---: |\n");
 
     for project in visible_projects {
         writeln!(
             body,
-            "| {} | {} | {} | {} | {} | {} |",
+            "| {} | WallTime | `{}` | {} | {} | {} | {} |",
+            trend_marker(project.percent_change),
             project.name,
-            project.iterations,
             format_seconds(project.baseline.median_secs),
             format_seconds(project.candidate.median_secs),
             format_percent(project.percent_change),
-            trend(project.percent_change),
+            project.iterations,
         )?;
     }
 
     Ok(body)
+}
+
+impl ReportSummary {
+    fn new(projects: &[ProjectComparison]) -> Self {
+        let mut summary = Self::default();
+
+        for project in projects {
+            match trend(project.percent_change) {
+                "faster" => summary.faster += 1,
+                "slower" => summary.slower += 1,
+                _ => summary.unchanged += 1,
+            }
+        }
+
+        summary
+    }
+}
+
+fn verdict(summary: &ReportSummary) -> &'static str {
+    if summary.slower > 0 {
+        "Merging this PR may alter performance"
+    } else if summary.faster > 0 {
+        "Merging this PR improves performance"
+    } else {
+        "Merging this PR will not alter performance"
+    }
+}
+
+fn write_summary_line(
+    body: &mut String,
+    marker: &str,
+    count: usize,
+    singular_label: &str,
+) -> std::result::Result<(), std::fmt::Error> {
+    use std::fmt::Write as _;
+
+    let suffix = if count == 1 { "" } else { "s" };
+    writeln!(body, "{marker} **{count}** {singular_label}{suffix}")
 }
 
 fn matrix_iterations(project_name: &str) -> usize {
@@ -468,6 +534,14 @@ fn trend(percent_change: f64) -> &'static str {
 
 fn is_material_change(percent_change: f64) -> bool {
     percent_change.abs() >= MATERIAL_CHANGE_PERCENT
+}
+
+fn trend_marker(percent_change: f64) -> &'static str {
+    match trend(percent_change) {
+        "faster" => ":zap:",
+        "slower" => ":x:",
+        _ => ":white_check_mark:",
+    }
 }
 
 fn median(values: &[f64]) -> f64 {
@@ -549,8 +623,19 @@ mod tests {
         let markdown = markdown_report(&report).expect("report should render");
 
         assert!(!markdown.contains("flat-project"));
-        assert!(markdown.contains("| faster-project | 21 | 1.000 s | 990.0 ms | -1.0% | faster |"));
-        assert!(markdown.contains("| slower-project | 15 | 1.000 s | 1.012 s | +1.2% | slower |"));
+        assert!(markdown.contains(":zap: **1** improved benchmark"));
+        assert!(markdown.contains(":x: **1** regressed benchmark"));
+        assert!(markdown.contains(":white_check_mark: **1** unchanged benchmark"));
+        assert!(markdown.contains("> [!WARNING]"));
+        assert!(
+            markdown.contains(
+                "| :zap: | WallTime | `faster-project` | 1.000 s | 990.0 ms | -1.0% | 21 |"
+            )
+        );
+        assert!(
+            markdown
+                .contains("| :x: | WallTime | `slower-project` | 1.000 s | 1.012 s | +1.2% | 15 |")
+        );
     }
 
     #[test]
@@ -560,7 +645,9 @@ mod tests {
         let markdown = markdown_report(&report).expect("report should render");
 
         assert!(markdown.contains("No project changed by at least 1.0%."));
-        assert!(!markdown.contains("| Project | Runs | Baseline | Candidate | Change | Result |"));
+        assert!(markdown.contains("Merging this PR will not alter performance"));
+        assert!(!markdown.contains("|  | Mode | Benchmark | Base | Head | Change | Runs |"));
+        assert!(!markdown.contains("> [!WARNING]"));
         assert!(!markdown.contains("flat-project"));
     }
 
