@@ -113,10 +113,12 @@ just test
 ### Benchmarks
 
 Karva has a pinned wall-time benchmark suite for CI. It includes the synthetic
-`karva-benchmark-1` project plus selected open-source projects that Karva can
-run cleanly today. CI shards the suite by benchmark project so independent
-projects can run in parallel, and each shard runs one exact Divan benchmark
-through CodSpeed.
+`karva-benchmark-1` project plus selected open-source projects that the
+installed Karva CLI can run cleanly today. Pull requests build both the base
+commit and the PR commit as wheels, then run each CLI-compatible open-source
+benchmark project as a separate matrix job. Each matrix job compares base and PR
+wheels on the same GitHub Actions runner, and the benchmark workflow posts one
+sticky PR comment with the merged median CLI wall-time results.
 
 ### Documentation
 

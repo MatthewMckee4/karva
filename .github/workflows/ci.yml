@@ -13,7 +13,6 @@ permissions: {}
 
 env:
   PYTHON_VERSION: "3.14"
-  BENCHMARK_PYTHON_VERSION: "3.13"
   NEXTEST_PROFILE: ci
 
 jobs:
@@ -243,85 +242,3 @@ jobs:
 
       - name: Build docs
         run: uv run --isolated --only-group docs zensical build
-
-  benchmarks-walltime:
-    name: "walltime benchmarks (${{ matrix.project }})"
-
-    runs-on: ubuntu-latest
-
-    needs: determine_changes
-    if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - project: karva-benchmark-1
-            benchmark: karva_benchmark_walltime::karva_benchmark_1
-          - project: packaging
-            benchmark: karva_benchmark_walltime::packaging
-          - project: parse
-            benchmark: karva_benchmark_walltime::parse
-          - project: h11
-            benchmark: karva_benchmark_walltime::h11
-          - project: markupsafe
-            benchmark: karva_benchmark_walltime::markupsafe
-          - project: sniffio
-            benchmark: karva_benchmark_walltime::sniffio
-          - project: itsdangerous
-            benchmark: karva_benchmark_walltime::itsdangerous
-          - project: pyparsing
-            benchmark: karva_benchmark_walltime::pyparsing
-          - project: blinker
-            benchmark: karva_benchmark_walltime::blinker
-          - project: jinja
-            benchmark: karva_benchmark_walltime::jinja
-          - project: installer
-            benchmark: karva_benchmark_walltime::installer
-          - project: tomlkit
-            benchmark: karva_benchmark_walltime::tomlkit
-          - project: outcome
-            benchmark: karva_benchmark_walltime::outcome
-
-    steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-        with:
-          persist-credentials: false
-
-      - name: "Install Rust toolchain"
-        run: rustup update && rustup show
-
-      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
-
-      - name: "Install cargo codspeed"
-        uses: taiki-e/install-action@a416ddeedbd372e614cc1386e8b642692f66865e # v2.57.1
-        with:
-          tool: cargo-codspeed
-
-      - name: Setup Python
-        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
-        id: setup-python
-        with:
-          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
-
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
-        with:
-          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
-
-      - name: Build wheels
-        run: |
-          uv run --no-project --with maturin maturin build
-
-      - name: Build benchmarks
-        env:
-          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
-        run: cargo codspeed build -m walltime
-
-      - name: Run benchmarks
-        continue-on-error: true
-        uses: CodSpeedHQ/action@972e3437949c89e1357ebd1a2dbc852fcbc57245 # v4.5.1
-        env:
-          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
-        with:
-          run: cargo codspeed run --bench karva_benchmark_walltime -- --exact ${{ matrix.benchmark }}
-          mode: walltime

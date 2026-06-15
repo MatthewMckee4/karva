@@ -11,9 +11,14 @@ documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
 
+[[bin]]
+name = "karva-benchmark"
+path = "src/bin/karva_benchmark.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 camino = { workspace = true }
+clap = { workspace = true }
 divan = { workspace = true }
 karva_cache = { workspace = true }
 karva_cli = { workspace = true }
