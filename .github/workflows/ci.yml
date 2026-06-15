@@ -257,11 +257,11 @@ jobs:
       matrix:
         include:
           - project: karva-benchmark-1
-            benchmark: karva_benchmark
+            benchmark: karva_benchmark_walltime::karva_benchmark
           - project: packaging
-            benchmark: packaging
+            benchmark: karva_benchmark_walltime::packaging
           - project: parse
-            benchmark: parse
+            benchmark: karva_benchmark_walltime::parse
 
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -292,21 +292,6 @@ jobs:
         run: |
           uv run --no-project --with maturin maturin build
 
-      - name: Run benchmark report
-        env:
-          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
-        run: |
-          cargo run --release -p karva_benchmark -- \
-            --project ${{ matrix.project }} \
-            --samples 3 \
-            --output target/benchmark-results/karva-benchmark-${{ matrix.project }}.json
-
-      - name: Upload benchmark report
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        with:
-          name: karva-benchmark-report-${{ matrix.project }}
-          path: target/benchmark-results/karva-benchmark-${{ matrix.project }}.json
-
       - name: Build benchmarks
         env:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
@@ -318,5 +303,5 @@ jobs:
         env:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         with:
-          run: cargo codspeed run --bench karva_benchmark_walltime ${{ matrix.benchmark }}
+          run: cargo codspeed run --bench karva_benchmark_walltime -- --exact ${{ matrix.benchmark }}
           mode: walltime
