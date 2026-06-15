@@ -2,11 +2,10 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-static RE_MULTI: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"missing \d+ required positional arguments?: (.+)").unwrap());
-
-static RE_SINGLE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"missing 1 required positional argument: '([^']+)'").unwrap());
+static MISSING_POSITIONAL_ARGS: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"missing \d+ required positional arguments?: (?P<args>.+)")
+        .expect("missing-arguments regex is valid")
+});
 
 /// Extract missing arguments from a test function error.
 ///
@@ -19,25 +18,25 @@ pub fn missing_arguments_from_error(test_name: &str, err: &str) -> Vec<String> {
         return Vec::new();
     }
 
-    RE_MULTI.captures(err).map_or_else(
-        || {
-            RE_SINGLE.captures(err).map_or_else(Vec::new, |caps| {
-                vec![caps.get(1).unwrap().as_str().to_string()]
-            })
-        },
-        |caps| {
-            let args_str = caps.get(1).unwrap().as_str();
-            let args_str = args_str.replace(" and ", ", ");
-            let mut result = Vec::new();
-            for part in args_str.split(',') {
-                let trimmed = part.trim();
-                if trimmed.len() > 2 && trimmed.starts_with('\'') && trimmed.ends_with('\'') {
-                    result.push(trimmed[1..trimmed.len() - 1].to_string());
-                }
-            }
-            result
-        },
-    )
+    let Some(args) = MISSING_POSITIONAL_ARGS
+        .captures(err)
+        .and_then(|captures| captures.name("args"))
+    else {
+        return Vec::new();
+    };
+
+    parse_quoted_argument_list(args.as_str())
+}
+
+fn parse_quoted_argument_list(arguments: &str) -> Vec<String> {
+    arguments
+        .replace(" and ", ", ")
+        .split(',')
+        .filter_map(|part| {
+            let argument = part.trim().strip_prefix('\'')?.strip_suffix('\'')?;
+            (!argument.is_empty()).then(|| argument.to_string())
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -59,9 +58,26 @@ mod tests {
     }
 
     #[test]
+    fn test_missing_arguments_from_comma_list() {
+        let err = "test_func() missing 3 required positional arguments: 'a', 'b', and 'c'";
+        let missing_args = missing_arguments_from_error("test_func", err);
+        assert_eq!(
+            missing_args,
+            vec![String::from("a"), String::from("b"), String::from("c")]
+        );
+    }
+
+    #[test]
     fn test_missing_arguments_from_different_function() {
         let err = "test_func() missing 1 required positional argument: 'a'";
         let missing_args = missing_arguments_from_error("test_funca", err);
+        assert!(missing_args.is_empty());
+    }
+
+    #[test]
+    fn test_missing_arguments_from_unrecognized_message() {
+        let err = "test_func() missing required keyword-only argument: 'a'";
+        let missing_args = missing_arguments_from_error("test_func", err);
         assert!(missing_args.is_empty());
     }
 }

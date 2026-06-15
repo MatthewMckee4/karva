@@ -1,4 +1,6 @@
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyTuple};
 
 use super::parse_pytest_mark_args;
 use crate::extensions::functions::SkipError;
@@ -36,13 +38,77 @@ impl SkipTag {
         }
     }
 
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
-        let parsed = parse_pytest_mark_args(py_mark)?;
-        Some(Self {
+    pub(crate) fn try_from_pytest_mark(
+        py_mark: &Bound<'_, PyAny>,
+        globals: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Option<Self>> {
+        let name = py_mark.getattr("name")?.extract::<String>()?;
+
+        if name == "skip" {
+            return parse_pytest_skip_mark(py_mark).map(Some);
+        }
+
+        let parsed = parse_pytest_mark_args(py_mark, globals)?;
+        let kwargs = py_mark.getattr("kwargs")?;
+        let reason_item = kwargs.get_item("reason").ok();
+        let has_reason = reason_item.is_some() || parsed.reason.is_some();
+        let should_skip = if parsed.conditions.is_empty() {
+            true
+        } else {
+            parsed.conditions.iter().any(|&condition| condition)
+        };
+        let reason = if let Some(reason_item) = reason_item {
+            match reason_item.extract::<String>() {
+                Ok(reason) => Some(reason),
+                Err(_) if should_skip => {
+                    return Err(PyValueError::new_err(
+                        "pytest skipif mark reason must be a string",
+                    ));
+                }
+                Err(_) => None,
+            }
+        } else {
+            parsed.reason
+        };
+
+        if parsed.requires_reason && !has_reason {
+            return Err(PyValueError::new_err(
+                "pytest skipif mark requires a reason when using boolean conditions",
+            ));
+        }
+
+        Ok(Some(Self {
             conditions: parsed.conditions,
-            reason: parsed.reason,
-        })
+            reason,
+        }))
     }
+}
+
+fn parse_pytest_skip_mark(py_mark: &Bound<'_, PyAny>) -> PyResult<SkipTag> {
+    let kwargs = py_mark.getattr("kwargs")?;
+    let args = py_mark.getattr("args")?;
+
+    let reason =
+        if let Ok(reason_item) = kwargs.get_item("reason") {
+            Some(
+                reason_item.extract::<String>().map_err(|_| {
+                    PyValueError::new_err("pytest skip mark reason must be a string")
+                })?,
+            )
+        } else {
+            let args = args.extract::<Bound<'_, PyTuple>>()?;
+            match args.get_item(0) {
+                Ok(reason_item) => Some(reason_item.extract::<String>().map_err(|_| {
+                    PyValueError::new_err("pytest skip mark reason must be a string")
+                })?),
+                Err(_) => None,
+            }
+        };
+
+    Ok(SkipTag {
+        conditions: Vec::new(),
+        reason,
+    })
 }
 
 /// Check if the given `PyErr` is a skip exception.
@@ -55,9 +121,14 @@ pub fn is_skip_exception(py: Python<'_>, err: &PyErr) -> bool {
     // Check for pytest skip exception
     if let Ok(pytest_module) = py.import("_pytest.outcomes")
         && let Ok(skipped) = pytest_module.getattr("Skipped")
-        && err.matches(py, skipped).unwrap_or(false)
     {
-        return true;
+        return match err.matches(py, &skipped) {
+            Ok(is_skipped) => is_skipped,
+            Err(match_err) => {
+                tracing::warn!("Failed to classify pytest skip exception: {match_err}");
+                false
+            }
+        };
     }
 
     false

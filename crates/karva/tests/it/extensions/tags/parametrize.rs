@@ -572,6 +572,37 @@ def test_square(input, expected):
 }
 
 #[test]
+fn test_parametrize_with_karva_param_invalid_tag_reports_value() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize("value", [
+    karva.param(1, tags=[123]),
+])
+def test_value(value):
+    assert value == 1
+"#,
+    );
+
+    assert_cmd_snapshot!(test_context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: Invalid tag `123` of type `int`; expected a karva tag or callable returning one
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_parametrize_with_pytest_param_marks_list() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -626,6 +657,38 @@ def test_with_skip_reason(x):
             PASS [TIME] test::test_with_skip_reason(x=1)
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_parametrize_with_pytest_param_skipif_string_condition_uses_module_globals() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r#"
+import pytest
+
+SHOULD_SKIP = False
+
+@pytest.mark.parametrize("x", [
+    pytest.param(1),
+    pytest.param(2, marks=pytest.mark.skipif("SHOULD_SKIP", reason="module global")),
+])
+def test_with_skipif(x):
+    assert x > 0
+"#,
+    );
+
+    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_with_skipif(x=1)
+            PASS [TIME] test::test_with_skipif(x=2)
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
     ----- stderr -----
     ");
@@ -691,6 +754,95 @@ def test_invalid(x):
     diagnostics:
 
     error[failed-to-import-module]: Failed to import python module `test`: Expected a string or a list of strings for the arg_names, and a list of lists of objects for the arg_values
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_pytest_parametrize_invalid_arg_names() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+@pytest.mark.parametrize(123, [1, 2])
+def test_invalid(x):
+    assert True
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: pytest parametrize mark argnames must be a string or list of strings
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_pytest_parametrize_missing_argvalues() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import pytest
+
+@pytest.mark.parametrize("x")
+def test_invalid(x):
+    assert True
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: pytest parametrize mark requires argvalues
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_pytest_param_invalid_mark_is_rejected() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+@pytest.mark.parametrize('x', [
+    pytest.param(1, marks=pytest.mark.timeout(0)),
+])
+def test_invalid(x):
+    assert True
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: pytest timeout mark seconds must be a finite, positive number
 
     ────────────
          Summary [TIME] 0 tests run: 0 passed, 0 skipped

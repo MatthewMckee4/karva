@@ -1,11 +1,9 @@
 use std::ffi::OsString;
-use std::io;
 use std::process::{ExitCode, Termination};
 
 use anyhow::Context as _;
 use camino::Utf8PathBuf;
 use clap::Parser;
-use colored::Colorize;
 use karva_cache::{RunCache, RunHash};
 use karva_cli::{SubTestCommand, Verbosity};
 use karva_diagnostic::{DummyReporter, Reporter, TestCaseReporter};
@@ -15,9 +13,7 @@ use karva_metadata::filter::FiltersetSet;
 use karva_project::path::{TestPath, TestPathError, absolute};
 use karva_python_semantic::current_python_version;
 use karva_static::EnvVars;
-use ruff_db::diagnostic::{DisplayDiagnosticConfig, FileResolver, Input, UnifiedFile};
-use ruff_db::files::File;
-use ruff_notebook::NotebookIndex;
+use ruff_db::diagnostic::DisplayDiagnosticConfig;
 
 /// Command-line arguments for the `karva_worker` process.
 ///
@@ -75,21 +71,16 @@ impl ExitStatus {
 }
 pub fn karva_worker_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> ExitStatus {
     run(f).unwrap_or_else(|error| {
-        use std::io::Write;
-
-        let mut stderr = std::io::stderr().lock();
-
-        writeln!(stderr, "{}", "Karva failed".red().bold()).ok();
-        for cause in error.chain() {
-            if let Some(ioerr) = cause.downcast_ref::<io::Error>() {
-                if ioerr.kind() == io::ErrorKind::BrokenPipe {
-                    return ExitStatus::Success;
-                }
-            }
-
-            writeln!(stderr, "  {} {cause}", "Cause:".bold()).ok();
+        if karva_logging::error_chain_contains_broken_pipe(error.chain()) {
+            return ExitStatus::Success;
         }
 
+        let mut stderr = std::io::stderr().lock();
+        if let Err(err) = karva_logging::write_error_chain(&mut stderr, error.chain()) {
+            if err.kind() == std::io::ErrorKind::BrokenPipe {
+                return ExitStatus::Success;
+            }
+        }
         ExitStatus::Error
     })
 }
@@ -148,22 +139,13 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         .map(RunIgnoredMode::from)
         .unwrap_or_default();
 
-    let coverage = match (
-        args.sub_command.cov.is_empty(),
-        args.sub_command.cov_data_file.clone(),
-    ) {
-        (false, Some(data_file)) => Some(karva_test_semantic::CoverageConfig {
-            sources: args.sub_command.cov.clone(),
-            data_file,
-        }),
-        _ => None,
-    };
+    let coverage = worker_coverage_config(&args.sub_command)?;
 
     let mut settings = args.sub_command.into_options().to_settings();
     settings.set_filter(filter);
     settings.set_run_ignored(run_ignored);
 
-    let run_hash = RunHash::from_existing(&args.run_id);
+    let run_hash = RunHash::parse_existing(&args.run_id).context("Invalid run id")?;
 
     let cache = RunCache::new(&args.cache_dir, &run_hash);
 
@@ -171,7 +153,8 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     // Make sure the worker dir exists so the reporter can write the
     // progress file before the worker has otherwise touched it.
     if let Some(parent) = progress_file.parent() {
-        let _ = std::fs::create_dir_all(parent);
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create worker progress directory `{parent}`"))?;
     }
     let reporter: Box<dyn Reporter> = if matches!(printer.status_level(), StatusLevel::None) {
         Box::new(DummyReporter)
@@ -195,9 +178,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         .color(colored::control::SHOULD_COLORIZE.should_colorize())
         .context(0);
 
-    let diagnostic_resolver = DiagnosticFileResolver::new(&cwd);
-
-    cache.write_result(args.worker_id, &result, &diagnostic_resolver, &config)?;
+    cache.write_result(args.worker_id, &result, &cwd, &config)?;
 
     // Propagate the stop signal to sibling workers whenever this worker has
     // reached (or exceeded) its configured max-fail budget. The budget is
@@ -211,42 +192,6 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     Ok(ExitStatus::Success)
 }
 
-/// Resolves file paths for diagnostic messages.
-///
-/// Implements the `FileResolver` trait to provide file path information
-/// when rendering diagnostic error messages to the user.
-struct DiagnosticFileResolver<'a> {
-    cwd: &'a Utf8PathBuf,
-}
-
-impl<'a> DiagnosticFileResolver<'a> {
-    fn new(cwd: &'a Utf8PathBuf) -> Self {
-        Self { cwd }
-    }
-}
-
-impl FileResolver for DiagnosticFileResolver<'_> {
-    fn path(&self, _file: File) -> &str {
-        unimplemented!("karva does not resolve file paths via ruff_db");
-    }
-
-    fn input(&self, _file: File) -> Input {
-        unimplemented!("karva does not resolve file inputs via ruff_db");
-    }
-
-    fn notebook_index(&self, _file: &UnifiedFile) -> Option<NotebookIndex> {
-        None
-    }
-
-    fn is_notebook(&self, _file: &UnifiedFile) -> bool {
-        false
-    }
-
-    fn current_directory(&self) -> &std::path::Path {
-        self.cwd.as_std_path()
-    }
-}
-
 /// Get the current working directory as a UTF-8 path.
 fn cwd() -> anyhow::Result<Utf8PathBuf> {
     let cwd = std::env::current_dir().context("Failed to get the current working directory")?;
@@ -256,4 +201,71 @@ fn cwd() -> anyhow::Result<Utf8PathBuf> {
             path.display()
         )
     })
+}
+
+fn worker_coverage_config(
+    sub_command: &SubTestCommand,
+) -> anyhow::Result<Option<karva_test_semantic::CoverageConfig>> {
+    if sub_command.cov.is_empty() {
+        return Ok(None);
+    }
+
+    let Some(data_file) = sub_command.cov_data_file.clone() else {
+        anyhow::bail!("karva-worker requires `--cov-data-file` when `--cov` is set");
+    };
+
+    Ok(Some(karva_test_semantic::CoverageConfig {
+        sources: sub_command.cov.clone(),
+        data_file,
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use camino::Utf8PathBuf;
+    use karva_cli::SubTestCommand;
+
+    use super::worker_coverage_config;
+
+    #[test]
+    fn coverage_config_is_absent_without_sources() {
+        let sub_command = SubTestCommand::default();
+
+        let coverage = worker_coverage_config(&sub_command).expect("coverage config");
+
+        assert!(coverage.is_none());
+    }
+
+    #[test]
+    fn coverage_config_requires_data_file_when_sources_are_set() {
+        let sub_command = SubTestCommand {
+            cov: vec!["src".to_string()],
+            ..SubTestCommand::default()
+        };
+
+        let err = worker_coverage_config(&sub_command)
+            .expect_err("missing worker coverage data file should be rejected");
+
+        assert_eq!(
+            err.to_string(),
+            "karva-worker requires `--cov-data-file` when `--cov` is set"
+        );
+    }
+
+    #[test]
+    fn coverage_config_preserves_sources_and_data_file() {
+        let data_file = Utf8PathBuf::from(".coverage.worker-0");
+        let sub_command = SubTestCommand {
+            cov: vec![String::new(), "pkg".to_string()],
+            cov_data_file: Some(data_file.clone()),
+            ..SubTestCommand::default()
+        };
+
+        let coverage = worker_coverage_config(&sub_command)
+            .expect("coverage config")
+            .expect("coverage should be enabled");
+
+        assert_eq!(coverage.sources, vec![String::new(), "pkg".to_string()]);
+        assert_eq!(coverage.data_file, data_file);
+    }
 }

@@ -1101,6 +1101,9 @@ dependencies = [
  "insta",
  "karva_diagnostic",
  "ruff_db",
+ "ruff_notebook",
+ "ruff_source_file",
+ "ruff_text_size",
  "serde",
  "serde_json",
  "tempfile",
@@ -1128,6 +1131,8 @@ dependencies = [
  "karva_python_semantic",
  "ruff_python_ast",
  "ruff_python_parser",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -1153,6 +1158,7 @@ dependencies = [
  "ruff_text_size",
  "serde",
  "serde_json",
+ "tempfile",
  "tracing",
 ]
 
@@ -1187,6 +1193,8 @@ dependencies = [
  "ruff_text_size",
  "serde",
  "serde_json",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -1233,6 +1241,7 @@ dependencies = [
  "ruff_python_ast",
  "semver",
  "serde",
+ "tempfile",
  "thiserror",
  "toml",
  "tracing",
@@ -1293,6 +1302,7 @@ dependencies = [
  "karva_static",
  "karva_version",
  "serde_json",
+ "tempfile",
  "tracing",
  "which",
 ]
@@ -1362,7 +1372,6 @@ dependencies = [
  "karva_static",
  "karva_test_semantic",
  "ruff_db",
- "ruff_notebook",
  "wild",
 ]
 

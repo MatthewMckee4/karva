@@ -1,4 +1,6 @@
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyTuple;
 
 /// Represents required fixtures that should be called before a test function is run.
 ///
@@ -19,9 +21,19 @@ impl UseFixturesTag {
         &self.fixture_names
     }
 
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
-        let args = py_mark.getattr("args").ok()?;
-        args.extract::<Vec<String>>()
-            .map_or(None, |fixture_names| Some(Self::new(fixture_names)))
+    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
+        let args = py_mark.getattr("args")?;
+        let tuple = args.extract::<Bound<'_, PyTuple>>()?;
+        let fixture_names = tuple
+            .iter()
+            .map(|item| {
+                item.extract::<String>().map_err(|_| {
+                    PyValueError::new_err(
+                        "pytest usefixtures mark arguments must be fixture name strings",
+                    )
+                })
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        Ok(Some(Self::new(fixture_names)))
     }
 }

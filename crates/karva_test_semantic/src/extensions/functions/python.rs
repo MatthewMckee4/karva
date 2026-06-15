@@ -28,8 +28,7 @@ impl Param {
 
         for tag in tags {
             new_tags.push(
-                Tag::try_from_py_any(py, &tag)
-                    .ok_or_else(|| PyTypeError::new_err("Invalid tag"))?,
+                Tag::try_from_py_any(py, &tag).ok_or_else(|| invalid_param_tag_error(py, &tag))?,
             );
         }
 
@@ -42,6 +41,29 @@ impl Param {
     pub(crate) fn from_parametrization(Parametrization { values, tags }: Parametrization) -> Self {
         Self { values, tags }
     }
+}
+
+fn invalid_param_tag_error(py: Python<'_>, tag: &Py<PyAny>) -> PyErr {
+    let bound = tag.bind(py);
+    let repr = bound
+        .repr()
+        .map(|repr| repr.to_string())
+        .unwrap_or_else(|err| {
+            tracing::warn!("Failed to render invalid parameter tag: {err}");
+            "<unrepresentable>".to_string()
+        });
+    let type_name = bound
+        .get_type()
+        .name()
+        .map(|name| name.to_string())
+        .unwrap_or_else(|err| {
+            tracing::warn!("Failed to inspect invalid parameter tag type: {err}");
+            "<unknown>".to_string()
+        });
+
+    PyTypeError::new_err(format!(
+        "Invalid tag `{repr}` of type `{type_name}`; expected a karva tag or callable returning one"
+    ))
 }
 
 /// Skip the current test at runtime with an optional reason.

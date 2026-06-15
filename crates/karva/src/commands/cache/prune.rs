@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::io::Write;
 
 use anyhow::Result;
 use camino::Utf8Path;

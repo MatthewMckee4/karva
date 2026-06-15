@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use pyo3::IntoPyObjectExt;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 
 use crate::extensions::functions::Param;
 use crate::extensions::tags::Tags;
@@ -64,14 +66,16 @@ impl ParametrizationArgs {
 /// Handles both input formats for parameter names:
 /// - A list of strings: `["arg1", "arg2"]`
 /// - A single comma-separated string: `"arg1, arg2"` or just `"arg1"`
-fn normalize_arg_names(arg_names: &Bound<'_, PyAny>) -> Option<Vec<String>> {
+fn normalize_arg_names(arg_names: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
     if let Ok(names) = arg_names.extract::<Vec<String>>() {
-        return Some(names);
+        return Ok(names);
     }
     if let Ok(name) = arg_names.extract::<String>() {
-        return Some(name.split(',').map(|s| s.trim().to_string()).collect());
+        return Ok(name.split(',').map(|s| s.trim().to_string()).collect());
     }
-    None
+    Err(PyValueError::new_err(
+        "pytest parametrize mark argnames must be a string or list of strings",
+    ))
 }
 
 /// Parse parametrize arguments from Python objects.
@@ -85,16 +89,19 @@ fn normalize_arg_names(arg_names: &Bound<'_, PyAny>) -> Option<Vec<String>> {
 pub(super) fn parse_parametrize_args(
     arg_names: &Bound<'_, PyAny>,
     arg_values: &Bound<'_, PyAny>,
-) -> Option<(Vec<String>, Vec<Parametrization>)> {
+    globals: Option<&Bound<'_, PyDict>>,
+) -> PyResult<(Vec<String>, Vec<Parametrization>)> {
     let py = arg_values.py();
     let names = normalize_arg_names(arg_names)?;
-    let values = arg_values.extract::<Vec<Py<PyAny>>>().ok()?;
+    let values = arg_values.extract::<Vec<Py<PyAny>>>().map_err(|_| {
+        PyValueError::new_err("pytest parametrize mark argvalues must be an iterable")
+    })?;
     let expect_multiple = names.len() > 1;
     let parametrizations = values
         .into_iter()
-        .map(|param| handle_custom_parametrize_param(py, param, expect_multiple))
-        .collect();
-    Some((names, parametrizations))
+        .map(|param| handle_custom_parametrize_param(py, param, expect_multiple, globals))
+        .collect::<PyResult<Vec<_>>>()?;
+    Ok((names, parametrizations))
 }
 
 /// Represents different argument names and values that can be given to a test.
@@ -127,7 +134,8 @@ fn extract_parametrize_args<'py>(
             py_mark
                 .getattr("kwargs")
                 .and_then(|kwargs| kwargs.get_item("argnames"))
-        })?;
+        })
+        .map_err(|_| PyValueError::new_err("pytest parametrize mark requires argnames"))?;
 
     // Try to get argvalues from positional args second position, then kwargs
     let arg_values = py_mark
@@ -137,7 +145,8 @@ fn extract_parametrize_args<'py>(
             py_mark
                 .getattr("kwargs")
                 .and_then(|kwargs| kwargs.get_item("argvalues"))
-        })?;
+        })
+        .map_err(|_| PyValueError::new_err("pytest parametrize mark requires argvalues"))?;
 
     Ok((arg_names, arg_values))
 }
@@ -168,12 +177,16 @@ impl ParametrizeTag {
         )
     }
 
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
-        let (arg_names, arg_values) = extract_parametrize_args(py_mark).ok()?;
+    pub(crate) fn try_from_pytest_mark(
+        py_mark: &Bound<'_, PyAny>,
+        globals: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Option<Self>> {
+        let (arg_names, arg_values) = extract_parametrize_args(py_mark)?;
 
-        let (arg_names, parametrizations) = parse_parametrize_args(&arg_names, &arg_values)?;
+        let (arg_names, parametrizations) =
+            parse_parametrize_args(&arg_names, &arg_values, globals)?;
 
-        Some(Self::new(arg_names, parametrizations))
+        Ok(Some(Self::new(arg_names, parametrizations)))
     }
 
     /// Returns each parameterize case.
@@ -204,7 +217,8 @@ pub(super) fn handle_custom_parametrize_param(
     py: Python,
     param: Py<PyAny>,
     expect_multiple: bool,
-) -> Parametrization {
+    globals: Option<&Bound<'_, PyDict>>,
+) -> PyResult<Parametrization> {
     let param_arc = Arc::new(param);
     let default_parametrization = || Parametrization {
         values: vec![Arc::clone(&param_arc)],
@@ -213,19 +227,26 @@ pub(super) fn handle_custom_parametrize_param(
 
     if let Ok(param_bound) = param_arc.cast_bound::<Param>(py) {
         let param_ref = param_bound.borrow();
-        return Parametrization::from(param_ref);
+        return Ok(Parametrization::from(param_ref));
     }
 
     let Ok(bound_param) = param_arc.clone_ref(py).into_bound_py_any(py) else {
-        return default_parametrization();
+        return Ok(default_parametrization());
     };
 
-    let is_parameter_set = bound_param
-        .get_type()
-        .name()
-        .ok()
-        .and_then(|n| n.to_str().ok().map(|s| s.contains("ParameterSet")))
-        .unwrap_or(false);
+    let is_parameter_set = match bound_param.get_type().name() {
+        Ok(type_name) => match type_name.to_str() {
+            Ok(type_name) => type_name.contains("ParameterSet"),
+            Err(err) => {
+                tracing::warn!("Failed to inspect parametrized value type name: {err}");
+                false
+            }
+        },
+        Err(err) => {
+            tracing::warn!("Failed to inspect parametrized value type: {err}");
+            false
+        }
+    };
 
     if is_parameter_set {
         let values: Vec<Arc<Py<PyAny>>> = bound_param
@@ -234,20 +255,24 @@ pub(super) fn handle_custom_parametrize_param(
             .map(|v| v.into_iter().map(Arc::new).collect())
             .unwrap_or_else(|_| vec![Arc::clone(&param_arc)]);
 
-        let tags = bound_param
-            .getattr("marks")
-            .ok()
-            .and_then(|m| m.into_py_any(py).ok())
-            .and_then(|m| Tags::from_pytest_marks(py, &m))
-            .unwrap_or_default();
+        let tags = match bound_param.getattr("marks") {
+            Ok(m) => {
+                let marks = m.into_py_any(py)?;
+                Tags::from_pytest_marks(py, &marks, globals)?.unwrap_or_default()
+            }
+            Err(err) => {
+                tracing::warn!("Failed to inspect pytest.param marks: {err}");
+                Tags::default()
+            }
+        };
 
-        Parametrization { values, tags }
+        Ok(Parametrization { values, tags })
     } else if expect_multiple && let Ok(params) = bound_param.extract::<Vec<Py<PyAny>>>() {
-        Parametrization {
+        Ok(Parametrization {
             values: params.into_iter().map(Arc::new).collect(),
             tags: Tags::default(),
-        }
+        })
     } else {
-        default_parametrization()
+        Ok(default_parametrization())
     }
 }

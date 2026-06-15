@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::io::Write;
 
 use anyhow::Result;
 use colored::Colorize;
@@ -8,7 +8,6 @@ use crate::ExitStatus;
 
 pub fn prune(filter_paths: &[String], dry_run: bool) -> Result<ExitStatus> {
     {
-        use std::io::Write;
         writeln!(
             std::io::stderr(),
             "{} Prune uses static analysis and may not detect all unreferenced snapshots.",
@@ -16,7 +15,7 @@ pub fn prune(filter_paths: &[String], dry_run: bool) -> Result<ExitStatus> {
         )?;
     }
     let (mut stdout, cwd, resolved) = snapshot_setup(filter_paths)?;
-    let unreferenced = karva_snapshot::storage::find_unreferenced_snapshots(&cwd);
+    let unreferenced = karva_snapshot::storage::find_unreferenced_snapshots(&cwd)?;
     let Some(filtered) = filter_or_empty(
         &unreferenced,
         &resolved,

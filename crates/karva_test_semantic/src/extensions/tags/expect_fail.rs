@@ -1,4 +1,6 @@
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 
 use super::parse_pytest_mark_args;
 
@@ -36,11 +38,27 @@ impl ExpectFailTag {
         }
     }
 
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
-        let parsed = parse_pytest_mark_args(py_mark)?;
-        Some(Self {
+    pub(crate) fn try_from_pytest_mark(
+        py_mark: &Bound<'_, PyAny>,
+        globals: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Option<Self>> {
+        let parsed = parse_pytest_mark_args(py_mark, globals)?;
+        let kwargs = py_mark.getattr("kwargs")?;
+        let reason = if let Ok(reason_item) = kwargs.get_item("reason") {
+            Some(reason_item.str()?.to_string_lossy().into_owned())
+        } else {
+            parsed.reason
+        };
+
+        if parsed.requires_reason && reason.is_none() {
+            return Err(PyValueError::new_err(
+                "pytest xfail mark requires a reason when using boolean conditions",
+            ));
+        }
+
+        Ok(Some(Self {
             conditions: parsed.conditions,
-            reason: parsed.reason,
-        })
+            reason,
+        }))
     }
 }

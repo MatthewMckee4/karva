@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use camino::Utf8PathBuf;
+
 use crate::options::Config;
 
 /// A `pyproject.toml` as specified in PEP 517.
@@ -21,6 +23,12 @@ impl PyProject {
 pub enum PyProjectError {
     #[error(transparent)]
     TomlSyntax(#[from] toml::de::Error),
+    #[error("Failed to read `{path}`: {source}")]
+    FileReadError {
+        #[source]
+        source: std::io::Error,
+        path: Utf8PathBuf,
+    },
 }
 
 impl PyProject {

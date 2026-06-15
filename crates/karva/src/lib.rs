@@ -1,10 +1,8 @@
 use std::ffi::OsString;
-use std::io;
 use std::process::{ExitCode, Termination};
 
 use anyhow::Context;
 use clap::Parser;
-use colored::Colorize;
 use karva_cli::{Args, Command};
 
 mod commands;
@@ -12,21 +10,16 @@ mod utils;
 
 pub fn karva_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> ExitStatus {
     run(f).unwrap_or_else(|error| {
-        use std::io::Write;
-
-        let mut stderr = std::io::stderr().lock();
-
-        writeln!(stderr, "{}", "Karva failed".red().bold()).ok();
-        for cause in error.chain() {
-            if let Some(ioerr) = cause.downcast_ref::<io::Error>() {
-                if ioerr.kind() == io::ErrorKind::BrokenPipe {
-                    return ExitStatus::Success;
-                }
-            }
-
-            writeln!(stderr, "  {} {cause}", "Cause:".bold()).ok();
+        if karva_logging::error_chain_contains_broken_pipe(error.chain()) {
+            return ExitStatus::Success;
         }
 
+        let mut stderr = std::io::stderr().lock();
+        if let Err(err) = karva_logging::write_error_chain(&mut stderr, error.chain()) {
+            if err.kind() == std::io::ErrorKind::BrokenPipe {
+                return ExitStatus::Success;
+            }
+        }
         ExitStatus::Error
     })
 }

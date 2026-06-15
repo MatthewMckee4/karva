@@ -11,6 +11,7 @@ use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 
 use crate::Context;
 use crate::collection::TestFunctionCollector;
+use crate::diagnostic::report_collection_error;
 use crate::discovery::visitor::{discover, is_generator};
 use crate::discovery::{DiscoveredModule, DiscoveredPackage};
 use crate::extensions::fixtures::DiscoveredFixture;
@@ -55,7 +56,13 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
         let collector =
             TestFunctionCollector::new(self.context.cwd(), self.context.collection_settings());
 
-        let collected_package = collector.collect_all(test_paths);
+        let collected_package = match collector.collect_all(test_paths) {
+            Ok(package) => package,
+            Err(error) => {
+                report_collection_error(self.context, &error);
+                return DiscoveredPackage::new(cwd.to_path_buf());
+            }
+        };
 
         let mut session_package = self.convert_package(py, collected_package);
 
@@ -201,6 +208,7 @@ fn discover_framework_fixtures(
             stmt_rc,
             &builtins_module,
             &module_path,
+            framework_module.source_file(),
             is_gen,
         ) {
             Ok(fixture) => framework_module.add_fixture(fixture),

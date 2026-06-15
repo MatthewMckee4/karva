@@ -5,7 +5,7 @@ mod prune;
 mod reject;
 mod review;
 
-use std::fmt::Write;
+use std::io::Write;
 
 use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -47,7 +47,7 @@ fn snapshot_setup(filter_paths: &[String]) -> Result<(Stdout, Utf8PathBuf, Vec<U
 /// snapshots match the filter, otherwise `Ok(Some((stdout, filtered)))`.
 fn pending_setup(filter_paths: &[String]) -> Result<Option<(Stdout, Vec<PendingSnapshotInfo>)>> {
     let (mut stdout, cwd, resolved) = snapshot_setup(filter_paths)?;
-    let pending = find_pending_snapshots(&cwd);
+    let pending = find_pending_snapshots(&cwd)?;
     let filtered: Vec<_> = pending
         .into_iter()
         .filter(|info| matches_filter(&info.pending_path, &resolved))

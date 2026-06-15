@@ -486,3 +486,32 @@ def test_1():
     ----- stderr -----
     ");
 }
+
+#[test]
+fn test_pytest_mark_usefixtures_non_string_arg() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+@pytest.mark.usefixtures(123)
+def test_1():
+    assert True
+",
+    );
+
+    assert_cmd_snapshot!(test_context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: pytest usefixtures mark arguments must be fixture name strings
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}

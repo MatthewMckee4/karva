@@ -3,6 +3,7 @@ use std::rc::Rc;
 use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
+use ruff_source_file::SourceFile;
 
 use crate::discovery::DiscoveredModule;
 use crate::extensions::tags::Tags;
@@ -20,6 +21,9 @@ pub struct DiscoveredTestFunction {
     /// AST representation of the function definition.
     pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
 
+    /// Source code captured during discovery for diagnostic reporting.
+    pub(crate) source_file: SourceFile,
+
     /// Reference to the actual Python callable object.
     pub(crate) py_function: Py<PyAny>,
 
@@ -33,19 +37,20 @@ impl DiscoveredTestFunction {
         module: &DiscoveredModule,
         stmt_function_def: Rc<StmtFunctionDef>,
         py_function: Py<PyAny>,
-    ) -> Self {
+    ) -> PyResult<Self> {
         let name = QualifiedFunctionName::new(
             stmt_function_def.name.to_string(),
             module.module_path().clone(),
         );
 
-        let tags = Tags::from_py_any(py, &py_function, Some(&stmt_function_def));
+        let tags = Tags::from_py_any(py, &py_function, Some(&stmt_function_def))?;
 
-        Self {
+        Ok(Self {
             name,
             stmt_function_def,
+            source_file: module.source_file(),
             py_function,
             tags,
-        }
+        })
     }
 }

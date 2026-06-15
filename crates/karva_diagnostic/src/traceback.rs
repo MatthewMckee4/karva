@@ -1,4 +1,4 @@
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use pyo3::prelude::*;
 use ruff_source_file::{OneIndexed, SourceFile, SourceFileBuilder};
 use ruff_text_size::{TextRange, TextSize};
@@ -21,8 +21,30 @@ struct TracebackLocation {
 
 impl Traceback {
     pub fn from_error(py: Python, error: &PyErr) -> Option<Self> {
+        Self::from_error_with_fallback(py, error, None)
+    }
+
+    pub fn from_error_with_source(
+        py: Python,
+        error: &PyErr,
+        source_file: &SourceFile,
+    ) -> Option<Self> {
+        Self::from_error_with_fallback(py, error, Some(source_file))
+    }
+
+    fn from_error_with_fallback(
+        py: Python,
+        error: &PyErr,
+        source_file: Option<&SourceFile>,
+    ) -> Option<Self> {
         if let Some(traceback) = error.traceback(py) {
-            let traceback_str = traceback.format().unwrap_or_default();
+            let traceback_str = match traceback.format() {
+                Ok(traceback_str) => traceback_str,
+                Err(err) => {
+                    tracing::warn!("failed to format Python traceback: {err}");
+                    return None;
+                }
+            };
             if traceback_str.is_empty() {
                 return None;
             }
@@ -31,7 +53,8 @@ impl Traceback {
                 .map(|line| format!(" | {line}"))
                 .collect::<Vec<_>>();
 
-            let (error_source_file, location) = get_source_file_and_range(&traceback_str)?;
+            let (error_source_file, location) =
+                get_source_file_and_range(&traceback_str, source_file)?;
 
             Some(Self {
                 lines,
@@ -44,8 +67,19 @@ impl Traceback {
     }
 }
 
-fn get_source_file_and_range(traceback: &str) -> Option<(SourceFile, TextRange)> {
+fn get_source_file_and_range(
+    traceback: &str,
+    fallback_source_file: Option<&SourceFile>,
+) -> Option<(SourceFile, TextRange)> {
     let traceback_location = get_traceback_location(traceback)?;
+
+    if let Some(source_file) = fallback_source_file
+        && source_file_matches_path(source_file, &traceback_location.file_path)
+    {
+        let text_range =
+            calculate_line_range(source_file.source_text(), traceback_location.line_number)?;
+        return Some((source_file.clone(), text_range));
+    }
 
     let source_text = std::fs::read_to_string(&traceback_location.file_path).ok()?;
 
@@ -56,6 +90,13 @@ fn get_source_file_and_range(traceback: &str) -> Option<(SourceFile, TextRange)>
     let text_range = calculate_line_range(&source_text, traceback_location.line_number)?;
 
     Some((source_file, text_range))
+}
+
+fn source_file_matches_path(source_file: &SourceFile, traceback_path: &Utf8Path) -> bool {
+    let source_path = Utf8Path::new(source_file.name());
+    source_path == traceback_path
+        || source_path.ends_with(traceback_path)
+        || traceback_path.ends_with(source_path)
 }
 
 fn get_traceback_location(traceback: &str) -> Option<TracebackLocation> {
@@ -345,6 +386,44 @@ ValueError: Invalid value"#;
                 0..11,
             )
             ");
+        }
+    }
+
+    mod source_file_range_tests {
+        use super::*;
+
+        #[test]
+        fn uses_matching_fallback_source_file() {
+            let traceback = r#"Traceback (most recent call last):
+  File "/tmp/project/tests/test_example.py", line 2, in test_example
+    assert False
+AssertionError"#;
+            let source_file = SourceFileBuilder::new(
+                "tests/test_example.py",
+                "def test_example():\n    assert False\n",
+            )
+            .finish();
+
+            let (resolved_source_file, range) =
+                get_source_file_and_range(traceback, Some(&source_file)).unwrap();
+
+            assert_eq!(resolved_source_file, source_file);
+            assert_eq!(resolved_source_file.slice(range), "assert False");
+        }
+
+        #[test]
+        fn ignores_fallback_source_file_for_different_path() {
+            let traceback = r#"Traceback (most recent call last):
+  File "/tmp/project/tests/test_example.py", line 2, in test_example
+    assert False
+AssertionError"#;
+            let source_file = SourceFileBuilder::new(
+                "tests/test_other.py",
+                "def test_other():\n    assert False\n",
+            )
+            .finish();
+
+            assert!(get_source_file_and_range(traceback, Some(&source_file)).is_none());
         }
     }
 }

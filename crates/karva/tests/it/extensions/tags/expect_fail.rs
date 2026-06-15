@@ -639,3 +639,162 @@ def test_param(x):
         ");
     }
 }
+
+#[test]
+fn test_pytest_expect_fail_empty_list_condition_does_not_expect_fail() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+@pytest.mark.xfail([], reason='empty list is false')
+def test_1():
+    assert True
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_1
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_pytest_expect_fail_boolean_condition_without_reason_rejected() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+@pytest.mark.xfail(False)
+def test_1():
+    assert True
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: pytest xfail mark requires a reason when using boolean conditions
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_pytest_expect_fail_non_string_reason_is_preserved() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+@pytest.mark.xfail(reason=123)
+def test_1():
+    assert True
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_1
+
+    diagnostics:
+
+    error[test-pass-on-expect-failure]: Test `test_1` passes when expected to fail
+     --> test.py:5:5
+      |
+    5 | def test_1():
+      |     ^^^^^^
+      |
+    info: Reason: 123
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_pytest_expect_fail_string_condition_uses_module_globals() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+SHOULD_EXPECT_FAIL = False
+
+@pytest.mark.xfail('SHOULD_EXPECT_FAIL', reason='module global')
+def test_1():
+    assert True
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_1
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_pytest_expect_fail_string_condition_without_reason_reports_condition() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+SHOULD_EXPECT_FAIL = True
+
+@pytest.mark.xfail('SHOULD_EXPECT_FAIL')
+def test_1():
+    assert True
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_1
+
+    diagnostics:
+
+    error[test-pass-on-expect-failure]: Test `test_1` passes when expected to fail
+     --> test.py:7:5
+      |
+    7 | def test_1():
+      |     ^^^^^^
+      |
+    info: Reason: condition: SHOULD_EXPECT_FAIL
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}

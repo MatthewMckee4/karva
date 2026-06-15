@@ -39,7 +39,7 @@ pub fn write_cobertura_xml(
             .with_context(|| format!("failed to create coverage output directory {parent}"))?;
     }
 
-    let xml = build_cobertura_xml(cwd, &cwd_real, &rows);
+    let xml = build_cobertura_xml(cwd, &cwd_real, &rows)?;
     std::fs::write(output.as_std_path(), xml)
         .with_context(|| format!("failed to write coverage xml {output}"))?;
 

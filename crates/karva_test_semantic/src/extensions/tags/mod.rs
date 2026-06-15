@@ -1,6 +1,8 @@
-use std::{ops::Deref, sync::Arc};
+use std::{ffi::CString, ops::Deref, sync::Arc};
 
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::extensions::tags::python::{PyTag, PyTags, PyTestFunction};
@@ -26,43 +28,71 @@ use use_fixtures::UseFixturesTag;
 pub struct ParsedMarkArgs {
     pub conditions: Vec<bool>,
     pub reason: Option<String>,
+    pub requires_reason: bool,
 }
 
 /// Extract conditions and reason from a pytest mark object.
 ///
-/// Pytest marks store boolean conditions as positional args and an optional
-/// `reason` as a keyword argument. A string in the first positional arg
-/// (when no booleans were found) is treated as an old-style positional reason.
-pub fn parse_pytest_mark_args(py_mark: &Bound<'_, PyAny>) -> Option<ParsedMarkArgs> {
-    let kwargs = py_mark.getattr("kwargs").ok()?;
-    let args = py_mark.getattr("args").ok()?;
+/// Pytest marks store truthy/falsy conditions as positional args and an optional
+/// `reason` as a keyword argument. String conditions are evaluated with the
+/// owning function's globals when available.
+pub fn parse_pytest_mark_args(
+    py_mark: &Bound<'_, PyAny>,
+    globals: Option<&Bound<'_, PyDict>>,
+) -> PyResult<ParsedMarkArgs> {
+    let kwargs = py_mark.getattr("kwargs")?;
+    let args = py_mark.getattr("args")?;
 
     let mut conditions = Vec::new();
+    let mut condition_reason = None;
+    let mut requires_reason = false;
     if let Ok(args_tuple) = args.extract::<Bound<'_, pyo3::types::PyTuple>>() {
         for i in 0..args_tuple.len() {
-            if let Ok(item) = args_tuple.get_item(i) {
-                if let Ok(bool_val) = item.extract::<bool>() {
-                    conditions.push(bool_val);
-                } else if item.extract::<String>().is_ok() {
+            let item = args_tuple.get_item(i)?;
+            if let Ok(expression) = item.extract::<String>() {
+                let Some(globals) = globals else {
                     break;
+                };
+                let condition = evaluate_pytest_condition(&expression, globals)?;
+                if condition && condition_reason.is_none() {
+                    condition_reason = Some(format!("condition: {expression}"));
                 }
+                conditions.push(condition);
+                continue;
             }
+            requires_reason = true;
+            conditions.push(item.is_truthy()?);
         }
     }
 
     let reason = if let Ok(reason_item) = kwargs.get_item("reason") {
         reason_item.extract::<String>().ok()
     } else if conditions.is_empty() {
-        // Fall back to first positional arg as reason
+        // Fall back to first positional arg as reason when no globals were
+        // available for evaluating legacy pytest string conditions.
         args.extract::<Bound<'_, pyo3::types::PyTuple>>()
             .ok()
             .and_then(|t| t.get_item(0).ok())
             .and_then(|a| a.extract::<String>().ok())
     } else {
-        None
+        condition_reason
     };
 
-    Some(ParsedMarkArgs { conditions, reason })
+    Ok(ParsedMarkArgs {
+        conditions,
+        reason,
+        requires_reason,
+    })
+}
+
+fn evaluate_pytest_condition(expression: &str, globals: &Bound<'_, PyDict>) -> PyResult<bool> {
+    let expression = CString::new(expression).map_err(|_| {
+        PyValueError::new_err("pytest mark string condition cannot contain a null byte")
+    })?;
+    globals
+        .py()
+        .eval(expression.as_c_str(), Some(globals), None)?
+        .is_truthy()
 }
 
 /// Represents a decorator/marker that modifies test behavior.
@@ -83,16 +113,34 @@ impl Tag {
     /// Converts a Pytest mark into an Karva Tag.
     ///
     /// This is used to allow Pytest marks to be used as Karva tags.
-    fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
-        let name = py_mark.getattr("name").ok()?.extract::<String>().ok()?;
+    fn try_from_pytest_mark(
+        py_mark: &Bound<'_, PyAny>,
+        globals: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Option<Self>> {
+        let Some(name) = py_mark
+            .getattr("name")
+            .ok()
+            .and_then(|name| name.extract::<String>().ok())
+        else {
+            return Ok(None);
+        };
+
         match name.as_str() {
-            "parametrize" => ParametrizeTag::try_from_pytest_mark(py_mark).map(Self::Parametrize),
-            "usefixtures" => UseFixturesTag::try_from_pytest_mark(py_mark).map(Self::UseFixtures),
-            "skip" | "skipif" => SkipTag::try_from_pytest_mark(py_mark).map(Self::Skip),
-            "xfail" => ExpectFailTag::try_from_pytest_mark(py_mark).map(Self::ExpectFail),
-            "timeout" => TimeoutTag::try_from_pytest_mark(py_mark).map(Self::Timeout),
+            "parametrize" => ParametrizeTag::try_from_pytest_mark(py_mark, globals)
+                .map(|tag| tag.map(Self::Parametrize)),
+            "usefixtures" => {
+                UseFixturesTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::UseFixtures))
+            }
+            "skip" | "skipif" => {
+                SkipTag::try_from_pytest_mark(py_mark, globals).map(|tag| tag.map(Self::Skip))
+            }
+            "xfail" => ExpectFailTag::try_from_pytest_mark(py_mark, globals)
+                .map(|tag| tag.map(Self::ExpectFail)),
+            "timeout" => {
+                TimeoutTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::Timeout))
+            }
             // Any other marker is treated as a custom marker
-            _ => CustomTag::try_from_pytest_mark(py_mark).map(Self::Custom),
+            _ => Ok(CustomTag::try_from_pytest_mark(py_mark).map(Self::Custom)),
         }
     }
 
@@ -193,40 +241,55 @@ impl Tags {
         py: Python<'_>,
         py_function: &Py<PyAny>,
         function_definition: Option<&StmtFunctionDef>,
-    ) -> Self {
+    ) -> PyResult<Self> {
         if function_definition.is_some_and(|def| def.decorator_list.is_empty()) {
-            return Self::default();
+            return Ok(Self::default());
         }
 
         if let Ok(py_test_function) = py_function.extract::<Py<PyTestFunction>>(py) {
-            return Self::from_py_test_function(py, &py_test_function.borrow(py));
+            return Ok(Self::from_py_test_function(
+                py,
+                &py_test_function.borrow(py),
+            ));
         } else if let Ok(wrapped) = py_function.getattr(py, "__wrapped__")
             && let Ok(py_wrapped_function) = wrapped.extract::<Py<PyTestFunction>>(py)
         {
-            return Self::from_py_test_function(py, &py_wrapped_function.borrow(py));
+            return Ok(Self::from_py_test_function(
+                py,
+                &py_wrapped_function.borrow(py),
+            ));
         }
 
+        let bound_function = py_function.bind(py);
+        let globals = bound_function
+            .getattr("__globals__")
+            .ok()
+            .and_then(|globals| globals.cast_into::<PyDict>().ok());
         if let Ok(marks) = py_function.getattr(py, "pytestmark")
-            && let Some(tags) = Self::from_pytest_marks(py, &marks)
+            && let Some(tags) = Self::from_pytest_marks(py, &marks, globals.as_ref())?
         {
-            return tags;
+            return Ok(tags);
         }
 
-        Self::default()
+        Ok(Self::default())
     }
 
-    pub(crate) fn from_pytest_marks(py: Python<'_>, marks: &Py<PyAny>) -> Option<Self> {
+    pub(crate) fn from_pytest_marks(
+        py: Python<'_>,
+        marks: &Py<PyAny>,
+        globals: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Option<Self>> {
         let mut tags = Vec::new();
         if let Ok(marks_list) = marks.extract::<Vec<Bound<'_, PyAny>>>(py) {
             for mark in marks_list {
-                if let Some(tag) = Tag::try_from_pytest_mark(&mark) {
+                if let Some(tag) = Tag::try_from_pytest_mark(&mark, globals)? {
                     tags.push(tag);
                 }
             }
         } else {
-            return None;
+            return Ok(None);
         }
-        Some(Self { inner: tags })
+        Ok(Some(Self { inner: tags }))
     }
 
     /// Return all parametrizations

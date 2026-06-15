@@ -176,8 +176,11 @@ fn show_config_emits_per_test_overrides() {
 [[profile.default.overrides]]
 filter = "tag(network)"
 retries = 2
+
+[[profile.default.overrides]]
+filter = "tag(slow)"
 timeout = 30
-slow-timeout = 1.5
+slow-timeout = 0.5
 "#,
     );
 
@@ -208,8 +211,11 @@ slow-timeout = 1.5
     [[overrides]]
     filter = "tag(network)"
     retries = 2
+
+    [[overrides]]
+    filter = "tag(slow)"
     timeout = 30.0
-    slow-timeout = 1.5
+    slow-timeout = 0.5
 
     ----- stderr -----
     "#);

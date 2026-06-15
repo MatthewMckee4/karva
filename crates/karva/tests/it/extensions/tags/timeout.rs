@@ -174,6 +174,41 @@ def test_1():
     }
 }
 
+#[rstest]
+fn test_pytest_timeout_invalid_seconds_rejected(
+    #[values("0", "-1", "float('nan')", "float('inf')", "'slow'")] arg: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import pytest
+
+@pytest.mark.timeout({arg})
+def test_1():
+    assert True
+        "
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+        diagnostics:
+
+        error[failed-to-import-module]: Failed to import python module `test`: pytest timeout mark seconds must be a finite, positive number
+
+        ────────────
+             Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
 #[test]
 fn test_timeout_with_parametrize_each_case_gets_fresh_window() {
     let context = TestContext::with_file(

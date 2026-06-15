@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::io;
 use std::process;
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -147,28 +148,25 @@ fn run_command(cmd: &mut Command) -> PyResult<CommandOutput> {
     cmd.inner.stderr(process::Stdio::piped());
 
     let output = if let Some(ref stdin_data) = cmd.stdin_data {
-        let mut child = cmd.inner.spawn().map_err(|e| {
-            tracing::debug!("Failed to spawn command: {e}");
-            PyOSError::new_err("Failed to spawn command")
-        })?;
+        let mut child = cmd
+            .inner
+            .spawn()
+            .map_err(|e| command_error("spawn", &cmd.inner, &e))?;
 
         if let Some(ref mut stdin_pipe) = child.stdin.take() {
             use std::io::Write;
-            stdin_pipe.write_all(stdin_data.as_bytes()).map_err(|e| {
-                tracing::debug!("Failed to write to stdin: {e}");
-                PyOSError::new_err("Failed to write to stdin")
-            })?;
+            stdin_pipe
+                .write_all(stdin_data.as_bytes())
+                .map_err(|e| command_error("write to stdin for", &cmd.inner, &e))?;
         }
 
-        child.wait_with_output().map_err(|e| {
-            tracing::debug!("Failed to wait for command: {e}");
-            PyOSError::new_err("Failed to wait for command")
-        })?
+        child
+            .wait_with_output()
+            .map_err(|e| command_error("wait for", &cmd.inner, &e))?
     } else {
-        cmd.inner.output().map_err(|e| {
-            tracing::debug!("Failed to run command: {e}");
-            PyOSError::new_err("Failed to run command")
-        })?
+        cmd.inner
+            .output()
+            .map_err(|e| command_error("run", &cmd.inner, &e))?
     };
 
     let exit_code = output.status.code().unwrap_or(-1);
@@ -181,6 +179,15 @@ fn run_command(cmd: &mut Command) -> PyResult<CommandOutput> {
         stdout,
         stderr,
     })
+}
+
+fn command_error(action: &str, cmd: &process::Command, err: &io::Error) -> PyErr {
+    let program = cmd.get_program().to_string_lossy();
+    tracing::debug!("Failed to {action} command `{program}`: {err}");
+    PyOSError::new_err(format!(
+        "Failed to {action} command `{program}` ({:?})",
+        err.kind()
+    ))
 }
 
 /// Assert that a command's output matches a stored snapshot.
@@ -214,12 +221,11 @@ fn apply_active_filters(input: &str) -> PyResult<String> {
         let mut compiled = Vec::new();
         for settings in stack.iter() {
             for (pattern, replacement) in &settings.filters {
-                let filter =
-                    SnapshotFilter::new(pattern, replacement.clone()).ok_or_else(|| {
-                        pyo3::exceptions::PyValueError::new_err(format!(
-                            "Invalid regex pattern in snapshot filter: {pattern}"
-                        ))
-                    })?;
+                let filter = SnapshotFilter::new(pattern, replacement.clone()).map_err(|err| {
+                    pyo3::exceptions::PyValueError::new_err(format!(
+                        "Invalid regex pattern in snapshot filter `{pattern}`: {err}"
+                    ))
+                })?;
                 compiled.push(filter);
             }
         }
@@ -389,7 +395,10 @@ fn assert_snapshot_impl(
         content: serialized.to_string(),
     };
 
-    if let Some(existing) = read_snapshot(&snap_path) {
+    let existing = read_snapshot(&snap_path)
+        .map_err(|err| SnapshotMismatchError::new_err(format!("Failed to read snapshot: {err}")))?;
+
+    if let Some(existing) = existing {
         if existing.content.trim_end() == serialized.trim_end() {
             return Ok(());
         }

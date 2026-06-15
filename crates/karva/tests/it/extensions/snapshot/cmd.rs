@@ -640,7 +640,7 @@ def test_bad_cmd():
     6 |     karva.assert_cmd_snapshot(cmd)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
-    info: Failed to run command
+    info: Failed to run command `nonexistent_program_xyz_12345` (NotFound)
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

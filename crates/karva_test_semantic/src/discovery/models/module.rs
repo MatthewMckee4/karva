@@ -20,17 +20,18 @@ pub struct DiscoveredModule {
     /// Fixture definitions discovered in this module.
     fixtures: Vec<DiscoveredFixture>,
 
-    /// Original source code text for diagnostic reporting.
-    source_text: String,
+    /// Original source code for diagnostic reporting.
+    source_file: SourceFile,
 }
 
 impl DiscoveredModule {
     pub(crate) fn new_with_source(path: ModulePath, source_text: String) -> Self {
+        let source_file = SourceFileBuilder::new(path.path().as_str(), source_text).finish();
         Self {
             path,
             test_functions: Vec::new(),
             fixtures: Vec::new(),
-            source_text,
+            source_file,
         }
     }
 
@@ -62,12 +63,8 @@ impl DiscoveredModule {
         self.fixtures.push(fixture);
     }
 
-    pub(crate) fn source_text(&self) -> &str {
-        &self.source_text
-    }
-
     pub(crate) fn source_file(&self) -> SourceFile {
-        SourceFileBuilder::new(self.path().as_str(), self.source_text()).finish()
+        self.source_file.clone()
     }
 
     pub(crate) fn is_empty(&self) -> bool {

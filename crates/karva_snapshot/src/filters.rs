@@ -1,6 +1,7 @@
 use regex::Regex;
 
 /// A compiled snapshot filter that replaces regex matches with a fixed string.
+#[derive(Debug)]
 pub struct SnapshotFilter {
     regex: Regex,
     replacement: String,
@@ -8,12 +9,9 @@ pub struct SnapshotFilter {
 
 impl SnapshotFilter {
     /// Compile a new filter from a regex pattern and replacement string.
-    ///
-    /// Returns `None` if the pattern is not a valid regex.
-    pub fn new(pattern: &str, replacement: String) -> Option<Self> {
-        Regex::new(pattern)
-            .ok()
-            .map(|regex| Self { regex, replacement })
+    pub fn new(pattern: &str, replacement: String) -> Result<Self, regex::Error> {
+        let regex = Regex::new(pattern)?;
+        Ok(Self { regex, replacement })
     }
 }
 
@@ -66,7 +64,15 @@ mod tests {
     }
 
     #[test]
-    fn invalid_regex_returns_none() {
-        assert!(SnapshotFilter::new(r"(unclosed", "x".to_string()).is_none());
+    fn invalid_regex_returns_error() {
+        let err = SnapshotFilter::new(r"(unclosed", "x".to_string())
+            .expect_err("invalid regex should fail");
+
+        insta::assert_snapshot!(err.to_string(), @r"
+        regex parse error:
+            (unclosed
+            ^
+        error: unclosed group
+        ");
     }
 }

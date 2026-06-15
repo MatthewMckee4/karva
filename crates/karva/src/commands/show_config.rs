@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::io::Write;
 
 use anyhow::{Context as _, Result};
 use karva_cli::ShowConfigCommand;

@@ -139,11 +139,10 @@ pub mod tags {
         arg_names: &Bound<'_, PyAny>,
         arg_values: &Bound<'_, PyAny>,
     ) -> PyResult<PyTags> {
-        let Some((names, parametrization)) = parse_parametrize_args(arg_names, arg_values) else {
-            return Err(PyErr::new::<PyTypeError, _>(
-                "Expected a string or a list of strings for the arg_names, and a list of lists of objects for the arg_values",
-            ));
-        };
+        const PARAMETRIZE_TYPE_ERROR: &str = "Expected a string or a list of strings for the arg_names, and a list of lists of objects for the arg_values";
+
+        let (names, parametrization) = parse_parametrize_args(arg_names, arg_values, None)
+            .map_err(|_| PyErr::new::<PyTypeError, _>(PARAMETRIZE_TYPE_ERROR))?;
 
         Ok(PyTags {
             inner: vec![PyTag::Parametrize {

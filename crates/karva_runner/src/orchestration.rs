@@ -1,17 +1,17 @@
-use std::collections::HashSet;
-use std::fmt::Write;
+use std::collections::{HashMap, HashSet};
+use std::io::Write;
 use std::process::{Child, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use colored::Colorize;
 use crossbeam_channel::{Receiver, TryRecvError};
 
 use crate::shutdown::shutdown_receiver;
 use karva_cache::{
     AggregatedResults, CACHE_DIR, RunCache, RunHash, read_last_failed, read_recent_durations,
-    write_last_failed,
+    write_last_failed as persist_last_failed,
 };
 use karva_cli::{PartitionSelection, SubTestCommand};
 use karva_collector::{CollectedPackage, CollectionSettings};
@@ -158,10 +158,20 @@ impl WorkerManager {
     /// receives the signal without waiting for earlier ones to exit first.
     fn kill_remaining(&mut self) {
         for worker in &mut self.workers {
-            let _ = worker.child.kill();
+            if let Err(err) = worker.child.kill() {
+                tracing::warn!(
+                    worker_id = worker.id,
+                    "failed to kill worker process: {err}"
+                );
+            }
         }
         for worker in &mut self.workers {
-            let _ = worker.child.wait();
+            if let Err(err) = worker.child.wait() {
+                tracing::warn!(
+                    worker_id = worker.id,
+                    "failed to wait for worker process: {err}"
+                );
+            }
         }
     }
 
@@ -204,12 +214,8 @@ impl WorkerManager {
                 };
                 let elapsed = current
                     .as_ref()
-                    .and_then(|c| {
-                        now_ms
-                            .checked_sub(c.start_unix_ms)
-                            .map(Duration::from_millis)
-                    })
-                    .unwrap_or_default();
+                    .map(|current| elapsed_since_start(now_ms, current.start_unix_ms, worker.id))
+                    .unwrap_or(Duration::ZERO);
                 InFlightTest {
                     worker_id: worker.id,
                     name: current.map(|c| c.name),
@@ -222,20 +228,32 @@ impl WorkerManager {
         let test_label = if running_tests == 1 { "test" } else { "tests" };
 
         for worker in &mut self.workers {
-            let _ = worker.child.kill();
+            if let Err(err) = worker.child.kill() {
+                tracing::warn!(
+                    worker_id = worker.id,
+                    "failed to kill worker process: {err}"
+                );
+            }
         }
         for worker in &mut self.workers {
-            let _ = worker.child.wait();
+            if let Err(err) = worker.child.wait() {
+                tracing::warn!(
+                    worker_id = worker.id,
+                    "failed to wait for worker process: {err}"
+                );
+            }
         }
         std::thread::sleep(STDOUT_SETTLE);
 
         let mut stdout = printer.stream_for_test_result().lock();
         let cancel_label = "Cancelling".yellow().bold();
         let interrupt_label = "interrupt".yellow().bold();
-        let _ = writeln!(
+        if let Err(err) = writeln!(
             stdout,
             "  {cancel_label} due to {interrupt_label}: {running_tests} {test_label} still running"
-        );
+        ) {
+            tracing::warn!("failed to write cancellation banner: {err}");
+        }
 
         let label = "SIGINT".yellow().bold();
         let padding = " ".repeat(LABEL_COLUMN_WIDTH.saturating_sub("SIGINT".len()));
@@ -244,14 +262,19 @@ impl WorkerManager {
             match &test.name {
                 Some(name) => {
                     let colored = format_in_flight_test(name);
-                    let _ = writeln!(stdout, "{padding}{label} {duration_str} {colored}");
+                    if let Err(err) = writeln!(stdout, "{padding}{label} {duration_str} {colored}")
+                    {
+                        tracing::warn!("failed to write interrupted test line: {err}");
+                    }
                 }
                 None => {
-                    let _ = writeln!(
+                    if let Err(err) = writeln!(
                         stdout,
                         "{padding}{label} {duration_str} worker {} (between tests)",
                         test.worker_id
-                    );
+                    ) {
+                        tracing::warn!("failed to write interrupted worker line: {err}");
+                    }
                 }
             }
         }
@@ -266,6 +289,19 @@ impl WorkerManager {
             })
             .collect()
     }
+}
+
+fn elapsed_since_start(now_ms: u64, start_ms: u64, worker_id: usize) -> Duration {
+    let Some(elapsed_ms) = now_ms.checked_sub(start_ms) else {
+        tracing::warn!(
+            worker_id,
+            start_unix_ms = start_ms,
+            now_unix_ms = now_ms,
+            "in-flight test start time is in the future"
+        );
+        return Duration::ZERO;
+    };
+    Duration::from_millis(elapsed_ms)
 }
 
 /// Render a `module::function[params]` test name as it was serialised by
@@ -417,23 +453,19 @@ pub fn run_parallel_tests(
         };
         let total_tests_bold = total_tests.to_string().bold();
         let num_workers_bold = num_workers.to_string().bold();
-        writeln!(
+        if let Err(err) = writeln!(
             stdout,
             "{label} {total_tests_bold} {test_label} across {num_workers_bold} {worker_label}"
-        )
-        .ok();
+        ) {
+            tracing::warn!("failed to write test start line: {err}");
+        }
     }
 
     tracing::debug!(num_workers, "Partitioning tests");
 
     let cache_dir = project.cwd().join(CACHE_DIR);
 
-    // Read durations from the most recent run to optimize partitioning
-    let previous_durations = if config.no_cache {
-        std::collections::HashMap::new()
-    } else {
-        read_recent_durations(&cache_dir).unwrap_or_default()
-    };
+    let previous_durations = previous_durations(&cache_dir, config.no_cache);
 
     if !previous_durations.is_empty() {
         tracing::debug!(
@@ -442,14 +474,7 @@ pub fn run_parallel_tests(
         );
     }
 
-    let last_failed_set: HashSet<String> = if config.last_failed {
-        read_last_failed(&cache_dir)
-            .unwrap_or_default()
-            .into_iter()
-            .collect()
-    } else {
-        HashSet::new()
-    };
+    let last_failed_set = last_failed_set(&cache_dir, config.last_failed);
 
     let partitions = partition_collected_tests(
         &collected,
@@ -494,7 +519,7 @@ pub fn run_parallel_tests(
     }
 
     if !config.no_cache {
-        let _ = write_last_failed(&cache_dir, &results.failed_tests);
+        write_last_failed(&cache_dir, &results.failed_tests);
     }
 
     let coverage_files = if project.settings().coverage().sources.is_empty() {
@@ -514,3 +539,57 @@ const WORKER_POLL_INTERVAL: Duration = Duration::from_millis(10);
 /// Pause after killing workers to let kernel-buffered output drain to
 /// stdout before we emit the cancellation banner.
 const STDOUT_SETTLE: Duration = Duration::from_millis(50);
+
+fn previous_durations(cache_dir: &Utf8Path, no_cache: bool) -> HashMap<String, Duration> {
+    if no_cache {
+        return HashMap::new();
+    }
+
+    match read_recent_durations(cache_dir) {
+        Ok(durations) => durations,
+        Err(err) => {
+            tracing::warn!("Failed to read previous test durations from cache: {err}");
+            HashMap::new()
+        }
+    }
+}
+
+fn last_failed_set(cache_dir: &Utf8Path, enabled: bool) -> HashSet<String> {
+    if !enabled {
+        return HashSet::new();
+    }
+
+    match read_last_failed(cache_dir) {
+        Ok(failed) => failed.into_iter().collect(),
+        Err(err) => {
+            tracing::warn!("Failed to read last-failed cache: {err}");
+            HashSet::new()
+        }
+    }
+}
+
+fn write_last_failed(cache_dir: &Utf8Path, failed_tests: &[String]) {
+    if let Err(err) = persist_last_failed(cache_dir, failed_tests) {
+        tracing::warn!("Failed to write last-failed cache: {err}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::elapsed_since_start;
+
+    #[test]
+    fn elapsed_since_start_calculates_duration() {
+        assert_eq!(
+            elapsed_since_start(1_500, 1_000, 0),
+            Duration::from_millis(500)
+        );
+    }
+
+    #[test]
+    fn elapsed_since_start_handles_future_start_time() {
+        assert_eq!(elapsed_since_start(1_000, 1_500, 0), Duration::ZERO);
+    }
+}
