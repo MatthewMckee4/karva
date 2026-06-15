@@ -262,6 +262,16 @@ jobs:
             benchmark: karva_benchmark_walltime::packaging
           - project: parse
             benchmark: karva_benchmark_walltime::parse
+          - project: h11
+            benchmark: karva_benchmark_walltime::h11
+          - project: markupsafe
+            benchmark: karva_benchmark_walltime::markupsafe
+          - project: sniffio
+            benchmark: karva_benchmark_walltime::sniffio
+          - project: itsdangerous
+            benchmark: karva_benchmark_walltime::itsdangerous
+          - project: pyparsing
+            benchmark: karva_benchmark_walltime::pyparsing
 
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1

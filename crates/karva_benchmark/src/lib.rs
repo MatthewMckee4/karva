@@ -78,8 +78,81 @@ pub const PARSE_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: false,
 };
 
-pub const BENCHMARK_PROJECTS: &[BenchmarkProject] =
-    &[SYNTHETIC_PROJECT, PACKAGING_PROJECT, PARSE_PROJECT];
+pub const H11_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "h11",
+    repository: "https://github.com/python-hyper/h11",
+    commit: "62c5068c971579d61fa1b55373390e12f25fd856",
+    paths: &["h11/tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: false,
+};
+
+pub const MARKUPSAFE_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "markupsafe",
+    repository: "https://github.com/pallets/markupsafe",
+    commit: "b2e4d9c7687be25695fffbe93a37622302b24fb1",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: true,
+};
+
+pub const SNIFFIO_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "sniffio",
+    repository: "https://github.com/python-trio/sniffio",
+    commit: "6996e05d9b9debe32f42f709c8041e744f850478",
+    paths: &["sniffio/_tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: false,
+};
+
+pub const ITSDANGEROUS_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "itsdangerous",
+    repository: "https://github.com/pallets/itsdangerous",
+    commit: "672971d66a2ef9f85151e53283113f33d642dabd",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: true,
+};
+
+pub const PYPARSING_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "pyparsing",
+    repository: "https://github.com/pyparsing/pyparsing",
+    commit: "057a2e6d1b8391dc85abe725d4d12c0987a9ec10",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: true,
+};
+
+pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
+    SYNTHETIC_PROJECT,
+    PACKAGING_PROJECT,
+    PARSE_PROJECT,
+    H11_PROJECT,
+    MARKUPSAFE_PROJECT,
+    SNIFFIO_PROJECT,
+    ITSDANGEROUS_PROJECT,
+    PYPARSING_PROJECT,
+];
 
 pub const PROJECT_NAME: &str = SYNTHETIC_PROJECT.name;
 pub const REPOSITORY: &str = SYNTHETIC_PROJECT.repository;
