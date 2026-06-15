@@ -272,6 +272,16 @@ jobs:
             benchmark: karva_benchmark_walltime::itsdangerous
           - project: pyparsing
             benchmark: karva_benchmark_walltime::pyparsing
+          - project: blinker
+            benchmark: karva_benchmark_walltime::blinker
+          - project: jinja
+            benchmark: karva_benchmark_walltime::jinja
+          - project: installer
+            benchmark: karva_benchmark_walltime::installer
+          - project: tomlkit
+            benchmark: karva_benchmark_walltime::tomlkit
+          - project: outcome
+            benchmark: karva_benchmark_walltime::outcome
 
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1

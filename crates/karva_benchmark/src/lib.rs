@@ -143,6 +143,75 @@ pub const PYPARSING_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: true,
 };
 
+pub const BLINKER_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "blinker",
+    repository: "https://github.com/pallets-eco/blinker",
+    commit: "c3364059663df1ddce32799d6b1922af89a345f6",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: false,
+};
+
+pub const JINJA_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "jinja",
+    repository: "https://github.com/pallets/jinja",
+    commit: "5ef70112a1ff19c05324ff889dd30405b1002044",
+    paths: &[
+        "tests/test_runtime.py",
+        "tests/test_idtracking.py",
+        "tests/test_nodes.py",
+    ],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: true,
+};
+
+pub const INSTALLER_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "installer",
+    repository: "https://github.com/pypa/installer",
+    commit: "5a2134bebaadf0c5087ddbaff6cd77abbd28271d",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: false,
+};
+
+pub const TOMLKIT_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "tomlkit",
+    repository: "https://github.com/python-poetry/tomlkit",
+    commit: "ae1b6790d99b21bc0a339a5825e7d5e40e7e6f6a",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: false,
+};
+
+pub const OUTCOME_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "outcome",
+    repository: "https://github.com/python-trio/outcome",
+    commit: "03ed6218b08001877745bb1a9e180c8c5cf7c903",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: false,
+};
+
 pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
     SYNTHETIC_PROJECT,
     PACKAGING_PROJECT,
@@ -152,6 +221,11 @@ pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
     SNIFFIO_PROJECT,
     ITSDANGEROUS_PROJECT,
     PYPARSING_PROJECT,
+    BLINKER_PROJECT,
+    JINJA_PROJECT,
+    INSTALLER_PROJECT,
+    TOMLKIT_PROJECT,
+    OUTCOME_PROJECT,
 ];
 
 pub const PROJECT_NAME: &str = SYNTHETIC_PROJECT.name;

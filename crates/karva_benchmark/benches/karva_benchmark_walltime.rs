@@ -40,6 +40,31 @@ fn pyparsing(bencher: Bencher) {
     karva_benchmark::bench_project(bencher, &karva_benchmark::PYPARSING_PROJECT);
 }
 
+#[bench(sample_size = 2, sample_count = 1)]
+fn blinker(bencher: Bencher) {
+    karva_benchmark::bench_project(bencher, &karva_benchmark::BLINKER_PROJECT);
+}
+
+#[bench(sample_size = 2, sample_count = 1)]
+fn jinja(bencher: Bencher) {
+    karva_benchmark::bench_project(bencher, &karva_benchmark::JINJA_PROJECT);
+}
+
+#[bench(sample_size = 2, sample_count = 1)]
+fn installer(bencher: Bencher) {
+    karva_benchmark::bench_project(bencher, &karva_benchmark::INSTALLER_PROJECT);
+}
+
+#[bench(sample_size = 2, sample_count = 1)]
+fn tomlkit(bencher: Bencher) {
+    karva_benchmark::bench_project(bencher, &karva_benchmark::TOMLKIT_PROJECT);
+}
+
+#[bench(sample_size = 2, sample_count = 1)]
+fn outcome(bencher: Bencher) {
+    karva_benchmark::bench_project(bencher, &karva_benchmark::OUTCOME_PROJECT);
+}
+
 fn main() {
     divan::main();
 }
