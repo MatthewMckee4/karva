@@ -1,0 +1,293 @@
+name: PR Benchmarks
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/pr-benchmarks.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "crates/**"
+      - "pyproject.toml"
+      - "python/**"
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-benchmarks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  BENCHMARK_PYTHON_VERSION: "3.13"
+
+jobs:
+  benchmark-projects:
+    name: "benchmark projects"
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      matrix: ${{ steps.projects.outputs.matrix }}
+
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+
+      - name: Setup Python
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
+        id: setup-python
+        with:
+          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
+
+      - name: Generate project matrix
+        id: projects
+        env:
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
+        run: |
+          matrix=$(cargo run -p karva_benchmark --bin karva-benchmark -- list-projects)
+          echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
+
+  build-wheels:
+    name: "build benchmark wheels"
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    outputs:
+      base_short: ${{ steps.wheels.outputs.base_short }}
+      head_short: ${{ steps.wheels.outputs.head_short }}
+
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+
+      - name: Setup Python
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
+        id: setup-python
+        with:
+          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        with:
+          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
+
+      - name: Build comparison wheels
+        id: wheels
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
+        run: |
+          set -euo pipefail
+
+          git remote add base "https://github.com/${GITHUB_REPOSITORY}.git" 2>/dev/null || \
+            git remote set-url base "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 base "${BASE_SHA}"
+
+          base_worktree="${RUNNER_TEMP}/karva-base"
+          base_wheel_dir="${RUNNER_TEMP}/karva-wheels/base"
+          head_wheel_dir="${RUNNER_TEMP}/karva-wheels/head"
+          artifact_dir="${RUNNER_TEMP}/benchmark-wheels"
+
+          git worktree add --detach "${base_worktree}" "${BASE_SHA}"
+          (
+            cd "${base_worktree}"
+            uv run --no-project --with maturin maturin build --out "${base_wheel_dir}"
+          )
+          uv run --no-project --with maturin maturin build --out "${head_wheel_dir}"
+
+          base_wheel=$(find "${base_wheel_dir}" -maxdepth 1 -name "karva-*.whl" -print -quit)
+          head_wheel=$(find "${head_wheel_dir}" -maxdepth 1 -name "karva-*.whl" -print -quit)
+
+          if [[ -z "${base_wheel}" || -z "${head_wheel}" ]]; then
+            echo "Failed to find both benchmark wheels" >&2
+            exit 1
+          fi
+
+          mkdir -p "${artifact_dir}/base" "${artifact_dir}/head"
+          cp "${base_wheel}" "${artifact_dir}/base/"
+          cp "${head_wheel}" "${artifact_dir}/head/"
+
+          {
+            echo "base_short=${BASE_SHA::7}"
+            echo "head_short=${HEAD_SHA::7}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Upload benchmark wheels
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: benchmark-wheels
+          path: ${{ runner.temp }}/benchmark-wheels
+
+  compare-benchmarks:
+    name: "compare benchmarks (${{ matrix.project }})"
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    needs:
+      - benchmark-projects
+      - build-wheels
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.benchmark-projects.outputs.matrix) }}
+
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+
+      - name: Setup Python
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
+        id: setup-python
+        with:
+          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        with:
+          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
+
+      - name: Build benchmark runner
+        env:
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
+        run: cargo build -p karva_benchmark --bin karva-benchmark --release
+
+      - name: Download benchmark wheels
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: benchmark-wheels
+          path: ${{ runner.temp }}/benchmark-wheels
+
+      - name: Compare benchmarks
+        env:
+          BASE_LABEL: main (${{ needs.build-wheels.outputs.base_short }})
+          HEAD_LABEL: PR (${{ needs.build-wheels.outputs.head_short }})
+          ITERATIONS: ${{ matrix.iterations }}
+          PROJECT: ${{ matrix.project }}
+        run: |
+          set -euo pipefail
+
+          base_wheel=$(find "${RUNNER_TEMP}/benchmark-wheels/base" -maxdepth 1 -name "karva-*.whl" -print -quit)
+          head_wheel=$(find "${RUNNER_TEMP}/benchmark-wheels/head" -maxdepth 1 -name "karva-*.whl" -print -quit)
+          report_dir="${RUNNER_TEMP}/benchmark-reports"
+          mkdir -p "${report_dir}"
+
+          target/release/karva-benchmark compare \
+            --baseline-label "${BASE_LABEL}" \
+            --baseline-wheel "${base_wheel}" \
+            --candidate-label "${HEAD_LABEL}" \
+            --candidate-wheel "${head_wheel}" \
+            --iterations "${ITERATIONS}" \
+            --project "${PROJECT}" \
+            --output-json "${report_dir}/${PROJECT}.json" \
+            --output-markdown "${report_dir}/${PROJECT}.md"
+
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: benchmark-report-${{ matrix.project }}
+          path: ${{ runner.temp }}/benchmark-reports/${{ matrix.project }}.json
+
+  comment:
+    name: "comment benchmark report"
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+
+    needs:
+      - benchmark-projects
+      - build-wheels
+      - compare-benchmarks
+
+    if: ${{ needs.compare-benchmarks.result == 'success' }}
+
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+
+      - name: Setup Python
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
+        id: setup-python
+        with:
+          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
+
+      - name: Download benchmark reports
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: benchmark-report-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/benchmark-reports
+
+      - name: Merge benchmark reports
+        env:
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
+        run: |
+          cargo run -p karva_benchmark --bin karva-benchmark -- merge-reports \
+            --input-dir "${RUNNER_TEMP}/benchmark-reports" \
+            --output-markdown "${RUNNER_TEMP}/benchmark-report.md"
+
+      - name: Comment benchmark report
+        if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          marker="<!-- karva-benchmark-comparison -->"
+          report_path="${RUNNER_TEMP}/benchmark-report.md"
+          payload_path="${RUNNER_TEMP}/benchmark-comment.json"
+
+          comment_id=$(
+            gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | contains(\"${marker}\"))) | .id" \
+              | tail -n 1
+          )
+
+          jq -n --rawfile body "${report_path}" '{body: $body}' > "${payload_path}"
+
+          if [[ -n "${comment_id}" ]]; then
+            gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" \
+              --input "${payload_path}"
+          else
+            gh api --method POST "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              --input "${payload_path}"
+          fi

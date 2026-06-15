@@ -190,7 +190,16 @@ pub const TOMLKIT_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "tomlkit",
     repository: "https://github.com/python-poetry/tomlkit",
     commit: "ae1b6790d99b21bc0a339a5825e7d5e40e7e6f6a",
-    paths: &["tests"],
+    paths: &[
+        "tests/test_toml_file.py",
+        "tests/test_parser.py",
+        "tests/test_write.py",
+        "tests/test_items.py",
+        "tests/test_build.py",
+        "tests/test_api.py",
+        "tests/test_toml_document.py",
+        "tests/test_utils.py",
+    ],
     python_version: PythonVersion::PY313,
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
@@ -228,7 +237,38 @@ pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
     OUTCOME_PROJECT,
 ];
 
+pub const CLI_BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
+    PACKAGING_PROJECT,
+    PARSE_PROJECT,
+    H11_PROJECT,
+    SNIFFIO_PROJECT,
+    ITSDANGEROUS_PROJECT,
+    PYPARSING_PROJECT,
+    BLINKER_PROJECT,
+    JINJA_PROJECT,
+    INSTALLER_PROJECT,
+    TOMLKIT_PROJECT,
+    OUTCOME_PROJECT,
+];
+
 pub fn prepare_benchmark_project(config: &BenchmarkProject) -> Result<Project> {
+    let karva_wheel = karva_project::find_karva_wheel()
+        .context("Karva wheel must be built before benchmarking")?;
+    prepare_benchmark_project_with_wheel(config, &karva_wheel)
+}
+
+pub fn prepare_benchmark_project_with_wheel(
+    config: &BenchmarkProject,
+    karva_wheel: &Utf8Path,
+) -> Result<Project> {
+    let project = prepare_benchmark_project_environment(config)?;
+    install_benchmark_tools(config, project.cwd(), karva_wheel)?;
+    clean_project_cache(project.cwd()).context("Failed to clean benchmark cache")?;
+
+    Ok(project)
+}
+
+pub fn prepare_benchmark_project_environment(config: &BenchmarkProject) -> Result<Project> {
     let project_root = ensure_checkout(config).context("Failed to checkout benchmark project")?;
     install_dependencies(config, &project_root)
         .context("Failed to install benchmark dependencies")?;
@@ -444,17 +484,26 @@ fn install_dependencies(config: &BenchmarkProject, project_root: &Utf8PathBuf) -
         }
     }
 
-    install_benchmark_tools(config, project_root)
+    Ok(())
 }
 
-fn install_benchmark_tools(config: &BenchmarkProject, project_root: &Utf8PathBuf) -> Result<()> {
+pub fn install_benchmark_tools(
+    config: &BenchmarkProject,
+    project_root: &Utf8Path,
+    karva_wheel: &Utf8Path,
+) -> Result<()> {
     let venv_path = project_root.join(".venv");
-    let karva_wheel = karva_project::find_karva_wheel()
-        .context("Karva wheel must be built before benchmarking")?;
 
     let mut command = Command::new("uv");
     command
-        .args(["pip", "install", "--python", venv_path.as_str()])
+        .args([
+            "pip",
+            "install",
+            "--python",
+            venv_path.as_str(),
+            "--reinstall-package",
+            "karva",
+        ])
         .arg(karva_wheel);
 
     if let DependencySetup::DateCappedUvSync { exclude_newer, .. } = config.dependency_setup {
