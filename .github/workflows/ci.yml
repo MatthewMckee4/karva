@@ -247,7 +247,7 @@ jobs:
   benchmarks-walltime:
     name: "walltime benchmarks"
 
-    runs-on: ubuntu-latest # should be codspeed-macro
+    runs-on: codspeed-macro
 
     needs: determine_changes
     if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
@@ -280,6 +280,20 @@ jobs:
       - name: Build wheels
         run: |
           uv run --no-project --with maturin maturin build
+
+      - name: Run benchmark report
+        env:
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
+        run: |
+          cargo run --release -p karva_benchmark -- \
+            --samples 3 \
+            --output target/benchmark-results/karva-benchmark.json
+
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: karva-benchmark-report
+          path: target/benchmark-results/karva-benchmark.json
 
       - name: Build benchmarks
         env:

@@ -128,8 +128,12 @@ pub fn partition_collected_tests(
         });
     }
 
-    // Shuffle tests without durations so they distribute randomly across partitions
-    shuffle_tests_without_durations(&mut test_infos);
+    if num_workers == 1 {
+        test_infos.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
+    } else {
+        // Shuffle tests without durations so they distribute randomly across partitions.
+        shuffle_tests_without_durations(&mut test_infos);
+    }
 
     // Step 1: Group tests by module and calculate module weights
     let mut module_groups: HashMap<String, Vec<TestInfo>> = HashMap::new();

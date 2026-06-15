@@ -64,7 +64,7 @@ Infrastructure and tooling:
 - `karva_python` — the PyO3 `cdylib` that produces the Python wheel and wraps both `karva` and `karva_worker`.
 - `karva_macros` — procedural macros.
 - `karva_dev` — dev tools such as CLI reference generation.
-- `karva_benchmark` — wall-time benchmark that runs `karva test` against a pinned snapshot of `karva-benchmark-1`.
+- `karva_benchmark` — wall-time benchmarks that run `karva test` against pinned synthetic and open-source benchmark projects.
 
 ### Prerequisites
 
@@ -108,6 +108,22 @@ Or simply, with just, run:
 
 ```bash
 just test
+```
+
+### Benchmarks
+
+Karva has a pinned wall-time benchmark suite for CI and local comparison. It
+includes the synthetic `karva-benchmark-1` project plus selected open-source
+projects that Karva can run cleanly today.
+
+```bash
+just benchmark --samples 5 --output target/benchmark-results/karva-benchmark.json
+```
+
+To run a single project:
+
+```bash
+just benchmark --project packaging --samples 5
 ```
 
 ### Documentation
