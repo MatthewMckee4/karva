@@ -1082,6 +1082,7 @@ dependencies = [
  "anyhow",
  "camino",
  "codspeed-divan-compat",
+ "karva_cache",
  "karva_cli",
  "karva_logging",
  "karva_metadata",

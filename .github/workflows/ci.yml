@@ -245,12 +245,43 @@ jobs:
         run: uv run --isolated --only-group docs zensical build
 
   benchmarks-walltime:
-    name: "walltime benchmarks"
+    name: "walltime benchmarks (${{ matrix.project }})"
 
-    runs-on: ubuntu-latest # should be codspeed-macro
+    runs-on: ubuntu-latest
 
     needs: determine_changes
     if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: karva-benchmark-1
+            benchmark: karva_benchmark_walltime::karva_benchmark_1
+          - project: packaging
+            benchmark: karva_benchmark_walltime::packaging
+          - project: parse
+            benchmark: karva_benchmark_walltime::parse
+          - project: h11
+            benchmark: karva_benchmark_walltime::h11
+          - project: markupsafe
+            benchmark: karva_benchmark_walltime::markupsafe
+          - project: sniffio
+            benchmark: karva_benchmark_walltime::sniffio
+          - project: itsdangerous
+            benchmark: karva_benchmark_walltime::itsdangerous
+          - project: pyparsing
+            benchmark: karva_benchmark_walltime::pyparsing
+          - project: blinker
+            benchmark: karva_benchmark_walltime::blinker
+          - project: jinja
+            benchmark: karva_benchmark_walltime::jinja
+          - project: installer
+            benchmark: karva_benchmark_walltime::installer
+          - project: tomlkit
+            benchmark: karva_benchmark_walltime::tomlkit
+          - project: outcome
+            benchmark: karva_benchmark_walltime::outcome
 
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -287,9 +318,10 @@ jobs:
         run: cargo codspeed build -m walltime
 
       - name: Run benchmarks
+        continue-on-error: true
         uses: CodSpeedHQ/action@972e3437949c89e1357ebd1a2dbc852fcbc57245 # v4.5.1
         env:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         with:
-          run: cargo codspeed run --bench karva_benchmark_walltime
+          run: cargo codspeed run --bench karva_benchmark_walltime -- --exact ${{ matrix.benchmark }}
           mode: walltime

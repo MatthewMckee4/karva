@@ -1,64 +1,272 @@
-//! Wall-time benchmark for karva.
+//! Wall-time benchmarks for Karva.
 //!
-//! Clones a fixed snapshot of <https://github.com/MatthewMckee4/karva-benchmark-1>
-//! into `target/benchmark_cache/`, installs its dependencies via uv, and runs
-//! `karva test` against it. The snapshot is pinned to a specific commit so
-//! results stay stable across runs.
+//! Each benchmark project is a pinned Git checkout under `target/benchmark_cache/`.
+//! Dependencies are either synced from a lockfile or resolved with uv's
+//! `--exclude-newer` cap so CI runs are reproducible.
 
 use std::path::PathBuf;
 use std::process::Command;
 
 use anyhow::{Context, Result};
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use divan::Bencher;
+use karva_cache::{CACHE_DIR, clean_cache};
 use karva_cli::{OutputFormat, SubTestCommand};
 use karva_logging::{FinalStatusLevel, Printer, StatusLevel};
-use karva_metadata::{Options, ProjectMetadata, TerminalOptions};
+use karva_metadata::{Options, ProjectMetadata, SrcOptions, TerminalOptions, TestOptions};
 use karva_project::Project;
+use karva_runner::RunOutput;
 use ruff_python_ast::PythonVersion;
 
-const PROJECT_NAME: &str = "karva-benchmark-1";
-const REPOSITORY: &str = "https://github.com/MatthewMckee4/karva-benchmark-1";
-const COMMIT: &str = "89791b99d8b13a1e104af7a0b55b3741e315268a";
-const DEPENDENCIES: &[&str] = &["pytest"];
-const MAX_DEP_DATE: &str = "2026-12-01";
-const PYTHON_VERSION: PythonVersion = PythonVersion::PY313;
+pub const WORKER_COUNT: usize = 1;
 
-/// Clone (or update) the benchmark project, install its dependencies, and
-/// return a `Project` ready to be benchmarked.
-pub fn setup_project() -> Project {
-    let project_root = ensure_checkout().expect("Failed to checkout benchmark project");
-    install_dependencies(&project_root).expect("Failed to install dependencies");
+#[derive(Debug, Clone, Copy)]
+pub enum DependencySetup {
+    LockedUvSync {
+        group: &'static str,
+    },
+    DateCappedUvSync {
+        exclude_newer: &'static str,
+        all_extras: bool,
+    },
+}
 
-    // Worker subprocesses derive their `--status-level` and
-    // `--final-status-level` from project settings, not from the
-    // `SubTestCommand` we hand to `run_parallel_tests`. Suppress them at the
-    // settings level so the bench output isn't drowned in per-test PASS lines.
-    let mut metadata = ProjectMetadata::new(project_root, PYTHON_VERSION);
+#[derive(Debug, Clone, Copy)]
+pub struct BenchmarkProject {
+    pub name: &'static str,
+    pub repository: &'static str,
+    pub commit: &'static str,
+    pub paths: &'static [&'static str],
+    pub python_version: PythonVersion,
+    pub dependency_setup: DependencySetup,
+    pub try_import_fixtures: bool,
+}
+
+pub const SYNTHETIC_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "karva-benchmark-1",
+    repository: "https://github.com/MatthewMckee4/karva-benchmark-1",
+    commit: "89791b99d8b13a1e104af7a0b55b3741e315268a",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::LockedUvSync { group: "dev" },
+    try_import_fixtures: false,
+};
+
+pub const PACKAGING_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "packaging",
+    repository: "https://github.com/pypa/packaging",
+    commit: "c901ded1a6b97acee3b6b1eb17526228129c4645",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: false,
+};
+
+pub const PARSE_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "parse",
+    repository: "https://github.com/r1chardj0n3s/parse",
+    commit: "a285c6670773dcc3a2085b07fef281320a284a8e",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: false,
+};
+
+pub const H11_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "h11",
+    repository: "https://github.com/python-hyper/h11",
+    commit: "62c5068c971579d61fa1b55373390e12f25fd856",
+    paths: &["h11/tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: false,
+};
+
+pub const MARKUPSAFE_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "markupsafe",
+    repository: "https://github.com/pallets/markupsafe",
+    commit: "b2e4d9c7687be25695fffbe93a37622302b24fb1",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: true,
+};
+
+pub const SNIFFIO_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "sniffio",
+    repository: "https://github.com/python-trio/sniffio",
+    commit: "6996e05d9b9debe32f42f709c8041e744f850478",
+    paths: &["sniffio/_tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: false,
+};
+
+pub const ITSDANGEROUS_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "itsdangerous",
+    repository: "https://github.com/pallets/itsdangerous",
+    commit: "672971d66a2ef9f85151e53283113f33d642dabd",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: true,
+};
+
+pub const PYPARSING_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "pyparsing",
+    repository: "https://github.com/pyparsing/pyparsing",
+    commit: "057a2e6d1b8391dc85abe725d4d12c0987a9ec10",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: true,
+};
+
+pub const BLINKER_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "blinker",
+    repository: "https://github.com/pallets-eco/blinker",
+    commit: "c3364059663df1ddce32799d6b1922af89a345f6",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: false,
+};
+
+pub const JINJA_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "jinja",
+    repository: "https://github.com/pallets/jinja",
+    commit: "5ef70112a1ff19c05324ff889dd30405b1002044",
+    paths: &[
+        "tests/test_runtime.py",
+        "tests/test_idtracking.py",
+        "tests/test_nodes.py",
+    ],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: true,
+};
+
+pub const INSTALLER_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "installer",
+    repository: "https://github.com/pypa/installer",
+    commit: "5a2134bebaadf0c5087ddbaff6cd77abbd28271d",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: false,
+};
+
+pub const TOMLKIT_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "tomlkit",
+    repository: "https://github.com/python-poetry/tomlkit",
+    commit: "ae1b6790d99b21bc0a339a5825e7d5e40e7e6f6a",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: false,
+};
+
+pub const OUTCOME_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "outcome",
+    repository: "https://github.com/python-trio/outcome",
+    commit: "03ed6218b08001877745bb1a9e180c8c5cf7c903",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+    },
+    try_import_fixtures: false,
+};
+
+pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
+    SYNTHETIC_PROJECT,
+    PACKAGING_PROJECT,
+    PARSE_PROJECT,
+    H11_PROJECT,
+    MARKUPSAFE_PROJECT,
+    SNIFFIO_PROJECT,
+    ITSDANGEROUS_PROJECT,
+    PYPARSING_PROJECT,
+    BLINKER_PROJECT,
+    JINJA_PROJECT,
+    INSTALLER_PROJECT,
+    TOMLKIT_PROJECT,
+    OUTCOME_PROJECT,
+];
+
+pub fn prepare_benchmark_project(config: &BenchmarkProject) -> Result<Project> {
+    let project_root = ensure_checkout(config).context("Failed to checkout benchmark project")?;
+    install_dependencies(config, &project_root)
+        .context("Failed to install benchmark dependencies")?;
+    clean_project_cache(&project_root).context("Failed to clean benchmark cache")?;
+
+    let mut metadata = ProjectMetadata::new(project_root, config.python_version);
     metadata.options = Options {
+        src: Some(SrcOptions {
+            include: Some(config.paths.iter().map(ToString::to_string).collect()),
+            ..SrcOptions::default()
+        }),
         terminal: Some(TerminalOptions {
             status_level: Some(StatusLevel::None),
             final_status_level: Some(FinalStatusLevel::None),
             ..TerminalOptions::default()
         }),
+        test: Some(TestOptions {
+            try_import_fixtures: Some(config.try_import_fixtures),
+            ..TestOptions::default()
+        }),
         ..Options::default()
     };
 
-    Project::from_metadata(metadata)
+    Ok(Project::from_metadata(metadata))
 }
 
-/// Run karva tests against the prepared project once.
-pub fn run_karva(project: &Project) {
-    // Single worker keeps the benchmark deterministic across iterations: no
-    // inter-process scheduling jitter, no shared-cache contention, no variance
-    // from how the OS balances two worker processes.
+pub fn try_run_project(project: &Project) -> Result<RunOutput> {
+    // Single worker keeps wall-time benchmarks deterministic across iterations:
+    // no inter-process scheduling jitter, shared-cache contention, or variance
+    // from OS worker balancing.
     let config = karva_runner::ParallelTestConfig {
-        num_workers: 1,
-        no_cache: false,
+        num_workers: WORKER_COUNT,
+        no_cache: true,
         create_ctrlc_handler: false,
         last_failed: false,
         profile: None,
         partition: None,
+        test_ordering: karva_runner::TestOrdering::Stable,
     };
 
     let args = SubTestCommand {
@@ -70,97 +278,118 @@ pub fn run_karva(project: &Project) {
     };
 
     let printer = Printer::new(StatusLevel::None, FinalStatusLevel::None);
-    let output = karva_runner::run_parallel_tests(project, &config, &args, printer).unwrap();
+    let output = karva_runner::run_parallel_tests(project, &config, &args, printer)?;
 
-    assert!(output.results.stats.total() > 0);
+    anyhow::ensure!(
+        output.results.stats.total() > 0,
+        "Benchmark project did not run any tests",
+    );
+    anyhow::ensure!(
+        output.results.stats.is_success(),
+        "Benchmark project had {} failing tests",
+        output.results.stats.failed(),
+    );
+
+    Ok(output)
 }
 
-/// Divan bencher entry point: re-creates the project for each iteration so the
-/// measurement covers running tests, not project construction.
-pub fn bench(bencher: Bencher) {
+pub fn clean_project_cache(project_root: &Utf8Path) -> Result<bool> {
+    clean_cache(&project_root.join(CACHE_DIR)).context("Failed to remove Karva benchmark cache")
+}
+
+pub fn bench_project(bencher: Bencher, config: &'static BenchmarkProject) {
     bencher
-        .with_inputs(setup_project)
-        .bench_local_refs(|project| run_karva(project));
+        .with_inputs(move || {
+            prepare_benchmark_project(config).expect("Failed to prepare benchmark project")
+        })
+        .bench_local_refs(|project| {
+            try_run_project(project).expect("Karva benchmark run failed");
+        });
 }
 
-fn ensure_checkout() -> Result<Utf8PathBuf> {
-    let project_root = project_cache_dir()?;
+pub fn find_benchmark_project(name: &str) -> Option<&'static BenchmarkProject> {
+    BENCHMARK_PROJECTS
+        .iter()
+        .find(|project| project.name == name)
+}
+
+fn ensure_checkout(config: &BenchmarkProject) -> Result<Utf8PathBuf> {
+    let project_root = project_cache_dir(config.name)?;
     if !project_root.exists() {
-        clone_repository(&project_root)?;
+        clone_repository(config, &project_root)?;
     }
-    fetch_and_checkout(&project_root)?;
+    fetch_and_checkout(config, &project_root)?;
     Ok(project_root)
 }
 
-fn project_cache_dir() -> Result<Utf8PathBuf> {
+fn project_cache_dir(project_name: &str) -> Result<Utf8PathBuf> {
     let target_dir = cargo_target_directory()
         .cloned()
         .unwrap_or_else(|| PathBuf::from("target"));
     let target_dir =
         std::path::absolute(target_dir).context("Failed to construct an absolute path")?;
-    let cache_dir = target_dir.join("benchmark_cache").join(PROJECT_NAME);
+    let cache_dir = target_dir.join("benchmark_cache").join(project_name);
 
     if let Some(parent) = cache_dir.parent() {
         std::fs::create_dir_all(parent).context("Failed to create cache directory")?;
     }
 
-    Ok(Utf8PathBuf::from_path_buf(cache_dir).unwrap())
+    Utf8PathBuf::from_path_buf(cache_dir).map_err(|path| {
+        anyhow::anyhow!(
+            "Benchmark cache path is not valid UTF-8: {}",
+            path.display()
+        )
+    })
 }
 
-fn clone_repository(target_dir: &Utf8PathBuf) -> Result<()> {
+fn clone_repository(config: &BenchmarkProject, target_dir: &Utf8PathBuf) -> Result<()> {
     if let Some(parent) = target_dir.parent() {
         std::fs::create_dir_all(parent).context("Failed to create parent directory for clone")?;
     }
 
-    let output = Command::new("git")
-        .args([
+    run_command(
+        Command::new("git").args([
             "clone",
             "--filter=blob:none",
             "--no-checkout",
-            REPOSITORY,
+            config.repository,
             target_dir.as_ref(),
-        ])
-        .output()
-        .context("Failed to execute git clone command")?;
-
-    anyhow::ensure!(
-        output.status.success(),
-        "Git clone failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    Ok(())
+        ]),
+        "Git clone failed",
+    )
 }
 
-fn fetch_and_checkout(project_root: &Utf8PathBuf) -> Result<()> {
-    let output = Command::new("git")
-        .args(["fetch", "origin", COMMIT])
-        .current_dir(project_root)
-        .output()
-        .context("Failed to execute git fetch command")?;
+fn fetch_and_checkout(config: &BenchmarkProject, project_root: &Utf8PathBuf) -> Result<()> {
+    run_command(
+        Command::new("git")
+            .args(["fetch", "origin", config.commit])
+            .current_dir(project_root),
+        "Git fetch failed",
+    )?;
 
-    anyhow::ensure!(
-        output.status.success(),
-        "Git fetch of commit {COMMIT} failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    run_command(
+        Command::new("git")
+            .args(["checkout", config.commit])
+            .current_dir(project_root),
+        "Git checkout failed",
+    )?;
 
-    let output = Command::new("git")
-        .args(["checkout", COMMIT])
-        .current_dir(project_root)
-        .output()
-        .context("Failed to execute git checkout command")?;
+    run_command(
+        Command::new("git")
+            .args(["reset", "--hard", config.commit])
+            .current_dir(project_root),
+        "Git reset failed",
+    )?;
 
-    anyhow::ensure!(
-        output.status.success(),
-        "Git checkout of commit {COMMIT} failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    Ok(())
+    run_command(
+        Command::new("git")
+            .args(["clean", "-ffdx", "-e", ".venv"])
+            .current_dir(project_root),
+        "Git clean failed",
+    )
 }
 
-fn install_dependencies(project_root: &Utf8PathBuf) -> Result<()> {
+fn install_dependencies(config: &BenchmarkProject, project_root: &Utf8PathBuf) -> Result<()> {
     let uv_check = Command::new("uv")
         .arg("--version")
         .output()
@@ -173,77 +402,82 @@ fn install_dependencies(project_root: &Utf8PathBuf) -> Result<()> {
          https://docs.astral.sh/uv/getting-started/installation/",
     );
 
-    let venv_path = global_venv_path();
-    let python_version_str = PYTHON_VERSION.to_string();
-
-    let output = Command::new("uv")
-        .args(["venv", "--python", &python_version_str, "--allow-existing"])
-        .arg(&venv_path)
-        .output()
-        .context("Failed to execute uv venv command")?;
-
-    anyhow::ensure!(
-        output.status.success(),
-        "Failed to create virtual environment: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let output = Command::new("uv")
-        .args([
-            "pip",
-            "install",
-            "--python",
-            venv_path.to_str().unwrap(),
-            "--exclude-newer",
-            MAX_DEP_DATE,
-            "--no-build",
-        ])
-        .args(DEPENDENCIES)
-        .output()
-        .context("Failed to execute uv pip install command")?;
-
-    anyhow::ensure!(
-        output.status.success(),
-        "Dependency installation failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    if let Ok(karva_wheel) = karva_project::find_karva_wheel() {
-        let output = Command::new("uv")
-            .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
-            .arg(karva_wheel)
-            .output()
-            .context("Failed to execute uv pip install command")?;
-
-        anyhow::ensure!(
-            output.status.success(),
-            "Karva wheel installation failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+    let python_version = config.python_version.to_string();
+    match config.dependency_setup {
+        DependencySetup::LockedUvSync { group } => {
+            run_command(
+                Command::new("uv")
+                    .args([
+                        "sync",
+                        "--locked",
+                        "--group",
+                        group,
+                        "--python",
+                        &python_version,
+                        "--compile-bytecode",
+                    ])
+                    .current_dir(project_root),
+                "Failed to sync locked benchmark project environment",
+            )?;
+        }
+        DependencySetup::DateCappedUvSync {
+            exclude_newer,
+            all_extras,
+        } => {
+            let mut command = Command::new("uv");
+            command.args([
+                "sync",
+                "--python",
+                &python_version,
+                "--exclude-newer",
+                exclude_newer,
+                "--compile-bytecode",
+            ]);
+            if all_extras {
+                command.arg("--all-extras");
+            }
+            command.current_dir(project_root);
+            run_command(
+                &mut command,
+                "Failed to sync date-capped benchmark project environment",
+            )?;
+        }
     }
 
-    let output = Command::new("uv")
-        .args(["pip", "install", "--python", venv_path.to_str().unwrap()])
-        .arg(project_root)
-        .output()
-        .context("Failed to execute uv pip install command")?;
+    install_benchmark_tools(config, project_root)
+}
 
-    anyhow::ensure!(
-        output.status.success(),
-        "Project installation failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+fn install_benchmark_tools(config: &BenchmarkProject, project_root: &Utf8PathBuf) -> Result<()> {
+    let venv_path = project_root.join(".venv");
+    let karva_wheel = karva_project::find_karva_wheel()
+        .context("Karva wheel must be built before benchmarking")?;
+
+    let mut command = Command::new("uv");
+    command
+        .args(["pip", "install", "--python", venv_path.as_str()])
+        .arg(karva_wheel);
+
+    if let DependencySetup::DateCappedUvSync { exclude_newer, .. } = config.dependency_setup {
+        command.args(["--exclude-newer", exclude_newer, "pytest"]);
+    }
+
+    run_command(&mut command, "Benchmark tool installation failed")?;
 
     Ok(())
 }
 
-fn global_venv_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join(".venv")
+fn run_command(command: &mut Command, failure: &str) -> Result<()> {
+    let output = command
+        .output()
+        .with_context(|| format!("Failed to execute command for: {failure}"))?;
+
+    anyhow::ensure!(
+        output.status.success(),
+        "{failure}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    Ok(())
 }
 
 static CARGO_TARGET_DIR: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();

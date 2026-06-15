@@ -82,6 +82,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         last_failed,
         profile,
         partition,
+        test_ordering: karva_runner::TestOrdering::ShuffleUnknownDurations,
     };
 
     if watch {

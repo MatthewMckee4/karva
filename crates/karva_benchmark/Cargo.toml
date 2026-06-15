@@ -15,6 +15,7 @@ license = { workspace = true }
 anyhow = { workspace = true }
 camino = { workspace = true }
 divan = { workspace = true }
+karva_cache = { workspace = true }
 karva_cli = { workspace = true }
 karva_logging = { workspace = true }
 karva_metadata = { workspace = true }
