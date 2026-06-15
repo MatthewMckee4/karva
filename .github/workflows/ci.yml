@@ -245,12 +245,23 @@ jobs:
         run: uv run --isolated --only-group docs zensical build
 
   benchmarks-walltime:
-    name: "walltime benchmarks"
+    name: "walltime benchmarks (${{ matrix.project }})"
 
     runs-on: ubuntu-latest
 
     needs: determine_changes
     if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: karva-benchmark-1
+            benchmark: karva_benchmark
+          - project: packaging
+            benchmark: packaging
+          - project: parse
+            benchmark: parse
 
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -286,14 +297,15 @@ jobs:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         run: |
           cargo run --release -p karva_benchmark -- \
+            --project ${{ matrix.project }} \
             --samples 3 \
-            --output target/benchmark-results/karva-benchmark.json
+            --output target/benchmark-results/karva-benchmark-${{ matrix.project }}.json
 
       - name: Upload benchmark report
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: karva-benchmark-report
-          path: target/benchmark-results/karva-benchmark.json
+          name: karva-benchmark-report-${{ matrix.project }}
+          path: target/benchmark-results/karva-benchmark-${{ matrix.project }}.json
 
       - name: Build benchmarks
         env:
@@ -306,5 +318,5 @@ jobs:
         env:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         with:
-          run: cargo codspeed run --bench karva_benchmark_walltime
+          run: cargo codspeed run --bench karva_benchmark_walltime ${{ matrix.benchmark }}
           mode: walltime
