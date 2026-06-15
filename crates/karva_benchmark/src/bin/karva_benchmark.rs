@@ -11,6 +11,8 @@ use clap::Parser;
 use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject, CLI_BENCHMARK_PROJECTS, WORKER_COUNT};
 use serde::{Deserialize, Serialize};
 
+const MATERIAL_CHANGE_PERCENT: f64 = 1.0;
+
 #[derive(Debug, Parser)]
 #[command(about = "Run Karva benchmark comparisons")]
 struct Cli {
@@ -413,14 +415,33 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
     body.push_str("### Karva benchmark comparison\n\n");
     writeln!(
         body,
-        "Baseline: `{}`. Candidate: `{}`. Each row is the median of {} CLI {} on one runner, alternating install order. Lower is better. Karva runs with one worker and no cache.",
-        report.baseline_label, report.candidate_label, report.iterations, run_word
+        "Baseline: `{}`. Candidate: `{}`. Each row is the median of {} CLI {} on one runner, alternating install order. Lower is better. Karva runs with one worker and no cache. Only projects with at least {:.1}% median change are shown.",
+        report.baseline_label,
+        report.candidate_label,
+        report.iterations,
+        run_word,
+        MATERIAL_CHANGE_PERCENT
     )?;
     writeln!(body)?;
+
+    let visible_projects = report
+        .projects
+        .iter()
+        .filter(|project| is_material_change(project.percent_change))
+        .collect::<Vec<_>>();
+
+    if visible_projects.is_empty() {
+        writeln!(
+            body,
+            "No project changed by at least {MATERIAL_CHANGE_PERCENT:.1}%."
+        )?;
+        return Ok(body);
+    }
+
     body.push_str("| Project | Baseline | Candidate | Change | Result |\n");
     body.push_str("| --- | ---: | ---: | ---: | --- |\n");
 
-    for project in &report.projects {
+    for project in visible_projects {
         writeln!(
             body,
             "| {} | {} | {} | {} | {} |",
@@ -436,13 +457,17 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
 }
 
 fn trend(percent_change: f64) -> &'static str {
-    if percent_change <= -1.0 {
+    if percent_change <= -MATERIAL_CHANGE_PERCENT {
         "faster"
-    } else if percent_change >= 1.0 {
+    } else if percent_change >= MATERIAL_CHANGE_PERCENT {
         "slower"
     } else {
         "flat"
     }
+}
+
+fn is_material_change(percent_change: f64) -> bool {
+    percent_change.abs() >= MATERIAL_CHANGE_PERCENT
 }
 
 fn median(values: &[f64]) -> f64 {
@@ -504,4 +529,70 @@ fn path_with_venv_first(bin_dir: &Utf8Path) -> Result<std::ffi::OsString> {
 fn utf8_path(path: PathBuf) -> Result<Utf8PathBuf> {
     Utf8PathBuf::from_path_buf(path)
         .map_err(|path| anyhow::anyhow!("Path is not valid UTF-8: {}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ComparisonReport, Measurement, ProjectComparison, markdown_report, trend};
+
+    #[test]
+    fn markdown_report_omits_projects_under_material_change_threshold() {
+        let report = report_with_projects(vec![
+            project("flat-project", 1.0, 1.004),
+            project("faster-project", 1.0, 0.99),
+            project("slower-project", 1.0, 1.012),
+        ]);
+
+        let markdown = markdown_report(&report).expect("report should render");
+
+        assert!(!markdown.contains("flat-project"));
+        assert!(markdown.contains("| faster-project | 1.000 s | 990.0 ms | -1.0% | faster |"));
+        assert!(markdown.contains("| slower-project | 1.000 s | 1.012 s | +1.2% | slower |"));
+    }
+
+    #[test]
+    fn markdown_report_says_when_all_projects_are_under_material_change_threshold() {
+        let report = report_with_projects(vec![project("flat-project", 1.0, 1.004)]);
+
+        let markdown = markdown_report(&report).expect("report should render");
+
+        assert!(markdown.contains("No project changed by at least 1.0%."));
+        assert!(!markdown.contains("| Project | Baseline | Candidate | Change | Result |"));
+        assert!(!markdown.contains("flat-project"));
+    }
+
+    #[test]
+    fn trend_uses_material_change_threshold() {
+        assert_eq!(trend(-1.0), "faster");
+        assert_eq!(trend(1.0), "slower");
+        assert_eq!(trend(0.9), "flat");
+        assert_eq!(trend(-0.9), "flat");
+    }
+
+    fn report_with_projects(projects: Vec<ProjectComparison>) -> ComparisonReport {
+        ComparisonReport {
+            baseline_label: "main".to_string(),
+            baseline_wheel: "baseline.whl".into(),
+            candidate_label: "PR".to_string(),
+            candidate_wheel: "candidate.whl".into(),
+            iterations: 3,
+            projects,
+        }
+    }
+
+    fn project(name: &str, baseline: f64, candidate: f64) -> ProjectComparison {
+        ProjectComparison {
+            name: name.to_string(),
+            baseline: measurement(baseline),
+            candidate: measurement(candidate),
+            percent_change: super::percent_change(baseline, candidate),
+        }
+    }
+
+    fn measurement(median_secs: f64) -> Measurement {
+        Measurement {
+            durations_secs: vec![median_secs],
+            median_secs,
+        }
+    }
 }
