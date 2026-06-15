@@ -19,7 +19,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BENCHMARK_ITERATIONS: "9"
   BENCHMARK_PYTHON_VERSION: "3.13"
 
 jobs:
@@ -189,6 +188,7 @@ jobs:
         env:
           BASE_LABEL: main (${{ needs.build-wheels.outputs.base_short }})
           HEAD_LABEL: PR (${{ needs.build-wheels.outputs.head_short }})
+          ITERATIONS: ${{ matrix.iterations }}
           PROJECT: ${{ matrix.project }}
         run: |
           set -euo pipefail
@@ -203,7 +203,7 @@ jobs:
             --baseline-wheel "${base_wheel}" \
             --candidate-label "${HEAD_LABEL}" \
             --candidate-wheel "${head_wheel}" \
-            --iterations "${BENCHMARK_ITERATIONS}" \
+            --iterations "${ITERATIONS}" \
             --project "${PROJECT}" \
             --output-json "${report_dir}/${PROJECT}.json" \
             --output-markdown "${report_dir}/${PROJECT}.md"

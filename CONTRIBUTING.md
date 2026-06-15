@@ -117,8 +117,9 @@ Karva has a pinned wall-time benchmark suite for CI. It includes the synthetic
 installed Karva CLI can run cleanly today. Pull requests build both the base
 commit and the PR commit as wheels, then run each CLI-compatible open-source
 benchmark project as a separate matrix job. Each matrix job compares base and PR
-wheels on the same GitHub Actions runner, and the benchmark workflow posts one
-sticky PR comment with the merged median CLI wall-time results.
+wheels on the same GitHub Actions runner using a project-specific iteration
+count, and the benchmark workflow posts one sticky PR comment with the merged
+median CLI wall-time results.
 
 ### Documentation
 

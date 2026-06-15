@@ -12,6 +12,9 @@ use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject, CLI_BENCHMARK_PROJEC
 use serde::{Deserialize, Serialize};
 
 const MATERIAL_CHANGE_PERCENT: f64 = 1.0;
+const FAST_PROJECT_ITERATIONS: usize = 21;
+const MEDIUM_PROJECT_ITERATIONS: usize = 15;
+const SLOW_PROJECT_ITERATIONS: usize = 9;
 
 #[derive(Debug, Parser)]
 #[command(about = "Run Karva benchmark comparisons")]
@@ -71,6 +74,7 @@ struct Matrix {
 #[derive(Debug, Serialize)]
 struct MatrixProject {
     project: &'static str,
+    iterations: usize,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -79,13 +83,13 @@ struct ComparisonReport {
     baseline_wheel: Utf8PathBuf,
     candidate_label: String,
     candidate_wheel: Utf8PathBuf,
-    iterations: usize,
     projects: Vec<ProjectComparison>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ProjectComparison {
     name: String,
+    iterations: usize,
     baseline: Measurement,
     candidate: Measurement,
     percent_change: f64,
@@ -119,6 +123,7 @@ fn list_projects() -> Result<()> {
             .iter()
             .map(|project| MatrixProject {
                 project: project.name,
+                iterations: matrix_iterations(project.name),
             })
             .collect(),
     };
@@ -173,6 +178,7 @@ fn compare(args: CompareArgs) -> Result<()> {
 
         comparisons.push(ProjectComparison {
             name: config.name.to_string(),
+            iterations: args.iterations,
             baseline,
             candidate,
             percent_change,
@@ -184,7 +190,6 @@ fn compare(args: CompareArgs) -> Result<()> {
         baseline_wheel,
         candidate_label: args.candidate_label,
         candidate_wheel,
-        iterations: args.iterations,
         projects: comparisons,
     };
 
@@ -227,11 +232,6 @@ fn merge_report_files(input_dir: &Utf8Path) -> Result<ComparisonReport> {
             report.candidate_label == merged.candidate_label,
             "Benchmark reports use different candidate labels"
         );
-        anyhow::ensure!(
-            report.iterations == merged.iterations,
-            "Benchmark reports use different iteration counts"
-        );
-
         for project in report.projects {
             anyhow::ensure!(
                 seen.insert(project.name.clone()),
@@ -406,21 +406,12 @@ fn create_parent_dir(path: &Utf8Path) -> Result<()> {
 fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std::fmt::Error> {
     use std::fmt::Write as _;
 
-    let run_word = if report.iterations == 1 {
-        "run"
-    } else {
-        "runs"
-    };
     let mut body = String::from("<!-- karva-benchmark-comparison -->\n");
     body.push_str("### Karva benchmark comparison\n\n");
     writeln!(
         body,
-        "Baseline: `{}`. Candidate: `{}`. Each row is the median of {} CLI {} on one runner, alternating install order. Lower is better. Karva runs with one worker and no cache. Only projects with at least {:.1}% median change are shown.",
-        report.baseline_label,
-        report.candidate_label,
-        report.iterations,
-        run_word,
-        MATERIAL_CHANGE_PERCENT
+        "Baseline: `{}`. Candidate: `{}`. Each row is a median CLI wall-time measurement on one runner, alternating install order. Runs are configured per project. Lower is better. Karva runs with one worker and no cache. Only projects with at least {:.1}% median change are shown.",
+        report.baseline_label, report.candidate_label, MATERIAL_CHANGE_PERCENT
     )?;
     writeln!(body)?;
 
@@ -438,14 +429,15 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
         return Ok(body);
     }
 
-    body.push_str("| Project | Baseline | Candidate | Change | Result |\n");
-    body.push_str("| --- | ---: | ---: | ---: | --- |\n");
+    body.push_str("| Project | Runs | Baseline | Candidate | Change | Result |\n");
+    body.push_str("| --- | ---: | ---: | ---: | ---: | --- |\n");
 
     for project in visible_projects {
         writeln!(
             body,
-            "| {} | {} | {} | {} | {} |",
+            "| {} | {} | {} | {} | {} | {} |",
             project.name,
+            project.iterations,
             format_seconds(project.baseline.median_secs),
             format_seconds(project.candidate.median_secs),
             format_percent(project.percent_change),
@@ -454,6 +446,14 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
     }
 
     Ok(body)
+}
+
+fn matrix_iterations(project_name: &str) -> usize {
+    match project_name {
+        "packaging" | "pyparsing" => SLOW_PROJECT_ITERATIONS,
+        "tomlkit" => MEDIUM_PROJECT_ITERATIONS,
+        _ => FAST_PROJECT_ITERATIONS,
+    }
 }
 
 fn trend(percent_change: f64) -> &'static str {
@@ -533,31 +533,34 @@ fn utf8_path(path: PathBuf) -> Result<Utf8PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ComparisonReport, Measurement, ProjectComparison, markdown_report, trend};
+    use super::{
+        ComparisonReport, FAST_PROJECT_ITERATIONS, MEDIUM_PROJECT_ITERATIONS, Measurement,
+        ProjectComparison, SLOW_PROJECT_ITERATIONS, markdown_report, matrix_iterations, trend,
+    };
 
     #[test]
     fn markdown_report_omits_projects_under_material_change_threshold() {
         let report = report_with_projects(vec![
-            project("flat-project", 1.0, 1.004),
-            project("faster-project", 1.0, 0.99),
-            project("slower-project", 1.0, 1.012),
+            project("flat-project", 21, 1.0, 1.004),
+            project("faster-project", 21, 1.0, 0.99),
+            project("slower-project", 15, 1.0, 1.012),
         ]);
 
         let markdown = markdown_report(&report).expect("report should render");
 
         assert!(!markdown.contains("flat-project"));
-        assert!(markdown.contains("| faster-project | 1.000 s | 990.0 ms | -1.0% | faster |"));
-        assert!(markdown.contains("| slower-project | 1.000 s | 1.012 s | +1.2% | slower |"));
+        assert!(markdown.contains("| faster-project | 21 | 1.000 s | 990.0 ms | -1.0% | faster |"));
+        assert!(markdown.contains("| slower-project | 15 | 1.000 s | 1.012 s | +1.2% | slower |"));
     }
 
     #[test]
     fn markdown_report_says_when_all_projects_are_under_material_change_threshold() {
-        let report = report_with_projects(vec![project("flat-project", 1.0, 1.004)]);
+        let report = report_with_projects(vec![project("flat-project", 21, 1.0, 1.004)]);
 
         let markdown = markdown_report(&report).expect("report should render");
 
         assert!(markdown.contains("No project changed by at least 1.0%."));
-        assert!(!markdown.contains("| Project | Baseline | Candidate | Change | Result |"));
+        assert!(!markdown.contains("| Project | Runs | Baseline | Candidate | Change | Result |"));
         assert!(!markdown.contains("flat-project"));
     }
 
@@ -569,20 +572,29 @@ mod tests {
         assert_eq!(trend(-0.9), "flat");
     }
 
+    #[test]
+    fn matrix_iterations_are_higher_for_fast_projects() {
+        assert_eq!(matrix_iterations("sniffio"), FAST_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("h11"), FAST_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("tomlkit"), MEDIUM_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("packaging"), SLOW_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("pyparsing"), SLOW_PROJECT_ITERATIONS);
+    }
+
     fn report_with_projects(projects: Vec<ProjectComparison>) -> ComparisonReport {
         ComparisonReport {
             baseline_label: "main".to_string(),
             baseline_wheel: "baseline.whl".into(),
             candidate_label: "PR".to_string(),
             candidate_wheel: "candidate.whl".into(),
-            iterations: 3,
             projects,
         }
     }
 
-    fn project(name: &str, baseline: f64, candidate: f64) -> ProjectComparison {
+    fn project(name: &str, iterations: usize, baseline: f64, candidate: f64) -> ProjectComparison {
         ProjectComparison {
             name: name.to_string(),
+            iterations,
             baseline: measurement(baseline),
             candidate: measurement(candidate),
             percent_change: super::percent_change(baseline, candidate),
