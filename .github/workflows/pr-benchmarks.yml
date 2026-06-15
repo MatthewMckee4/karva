@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BENCHMARK_ITERATIONS: "3"
+  BENCHMARK_ITERATIONS: "9"
   BENCHMARK_PYTHON_VERSION: "3.13"
 
 jobs:
