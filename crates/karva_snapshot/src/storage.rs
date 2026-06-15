@@ -260,6 +260,7 @@ pub struct SnapshotInfo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnreferencedReason {
     NoSource,
+    InvalidSource(String),
     TestFileNotFound(String),
     FunctionNotFound { file: String, function: String },
 }
@@ -268,6 +269,7 @@ impl std::fmt::Display for UnreferencedReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NoSource => write!(f, "no source metadata"),
+            Self::InvalidSource(source) => write!(f, "invalid source metadata: {source}"),
             Self::TestFileNotFound(file) => write!(f, "test file not found: {file}"),
             Self::FunctionNotFound { file, function } => {
                 write!(f, "function `{function}` not found in {file}")
@@ -403,7 +405,7 @@ fn check_snapshot_reference(info: &SnapshotInfo) -> io::Result<Option<Unreferenc
     };
 
     let Some((file_name, snapshot_name)) = parse_source(source) else {
-        return Ok(Some(UnreferencedReason::NoSource));
+        return Ok(Some(UnreferencedReason::InvalidSource(source.clone())));
     };
 
     let Some(snapshots_dir) = info.snap_path.parent() else {
@@ -681,6 +683,30 @@ mod tests {
         let unreferenced = find_unreferenced_snapshots(dir_path).expect("find unreferenced");
         assert_eq!(unreferenced.len(), 1);
         insta::assert_snapshot!(unreferenced[0].reason, @"test file not found: test.py");
+    }
+
+    #[test]
+    fn unreferenced_invalid_source_metadata() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
+        let snap_dir = dir_path.join("snapshots");
+        std::fs::create_dir_all(&snap_dir).expect("mkdir");
+
+        let snapshot = SnapshotFile {
+            metadata: crate::format::SnapshotMetadata {
+                source: Some("not-a-source-reference".to_string()),
+                ..Default::default()
+            },
+            content: "hello\n".to_string(),
+        };
+        write_snapshot(&snap_dir.join("test__test_foo.snap"), &snapshot).expect("write");
+
+        let unreferenced = find_unreferenced_snapshots(dir_path).expect("find unreferenced");
+        assert_eq!(unreferenced.len(), 1);
+        insta::assert_snapshot!(
+            unreferenced[0].reason,
+            @"invalid source metadata: not-a-source-reference"
+        );
     }
 
     #[test]
