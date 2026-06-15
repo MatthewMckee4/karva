@@ -114,7 +114,9 @@ just test
 
 Karva has a pinned wall-time benchmark suite for CI and local comparison. It
 includes the synthetic `karva-benchmark-1` project plus selected open-source
-projects that Karva can run cleanly today.
+projects that Karva can run cleanly today. The JSON benchmark report is the
+repeatable CI artifact; CodSpeed wall-time upload is best-effort trend
+reporting because CodSpeed macro runners require GitHub organization ownership.
 
 ```bash
 just benchmark --samples 5 --output target/benchmark-results/karva-benchmark.json
