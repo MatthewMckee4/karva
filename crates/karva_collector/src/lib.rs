@@ -30,6 +30,8 @@ pub struct CollectionSettings<'a> {
     pub respect_ignore_files: bool,
     /// Whether to collect fixture function definitions in addition to test functions.
     pub collect_fixtures: bool,
+    /// Whether collected modules need to retain their full source text.
+    pub retain_source_text: bool,
 }
 
 /// Collects test functions and fixtures from a Python file.
@@ -63,7 +65,12 @@ pub fn collect_file(
         return Ok(None);
     };
 
-    let mut collected_module = CollectedModule::new(module_path, module_type, source_text);
+    let module_source_text = if settings.retain_source_text {
+        source_text
+    } else {
+        String::new()
+    };
+    let mut collected_module = CollectedModule::new(module_path, module_type, module_source_text);
 
     for stmt in parsed.into_syntax().body {
         if let Stmt::FunctionDef(function_def) = stmt {
@@ -110,6 +117,7 @@ mod tests {
             test_function_prefix: "test_",
             respect_ignore_files: true,
             collect_fixtures: false,
+            retain_source_text: true,
         }
     }
 
@@ -126,5 +134,25 @@ mod tests {
             error,
             CollectionError::ReadSource { path: error_path, .. } if error_path == path
         ));
+    }
+
+    #[test]
+    fn collect_file_can_drop_source_text() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let cwd = Utf8Path::from_path(temp_dir.path()).expect("temp dir should be UTF-8");
+        let path = cwd.join("test_sample.py");
+        std::fs::write(&path, "def test_sample():\n    assert True\n").expect("write test file");
+
+        let settings = CollectionSettings {
+            retain_source_text: false,
+            ..settings()
+        };
+
+        let module = collect_file(&path, cwd, &settings, &[])
+            .expect("collection should succeed")
+            .expect("module should be collected");
+
+        assert!(module.source_text.is_empty());
+        assert_eq!(module.test_function_defs.len(), 1);
     }
 }

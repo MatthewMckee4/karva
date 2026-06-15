@@ -406,6 +406,7 @@ pub fn collect_tests(project: &Project) -> Result<CollectedPackage> {
         test_function_prefix: &project.settings().test().test_function_prefix,
         respect_ignore_files: project.settings().src().respect_ignore_files,
         collect_fixtures: false,
+        retain_source_text: false,
     };
 
     let collector = ParallelCollector::new(project.cwd(), collection_settings);

@@ -15,7 +15,7 @@ pub enum TestOrdering {
 /// Test metadata used for partitioning decisions
 #[derive(Debug, Clone)]
 struct TestInfo {
-    module_name: String,
+    module_index: usize,
     /// The qualified name of the test (e.g., `test_a::test_1`), used for last-failed filtering.
     qualified_name: String,
     path: String,
@@ -118,8 +118,14 @@ pub fn partition_collected_tests(
     partition_selection: Option<PartitionSelection>,
     test_ordering: TestOrdering,
 ) -> Vec<Partition> {
-    let mut test_infos = Vec::new();
-    collect_test_paths_recursive(package, &mut test_infos, previous_durations);
+    let mut test_infos = Vec::with_capacity(package.test_count());
+    let mut module_index = 0;
+    collect_test_paths_recursive(
+        package,
+        &mut test_infos,
+        previous_durations,
+        &mut module_index,
+    );
 
     if !last_failed.is_empty() {
         test_infos.retain(|info| last_failed.contains(&info.qualified_name));
@@ -141,23 +147,19 @@ pub fn partition_collected_tests(
     order_tests_for_partitioning(&mut test_infos, test_ordering);
 
     // Step 1: Group tests by module and calculate module weights
-    let mut module_groups: HashMap<String, Vec<TestInfo>> = HashMap::new();
-    let mut module_weights: HashMap<String, u128> = HashMap::new();
+    let mut module_groups: Vec<Vec<TestInfo>> = (0..module_index).map(|_| Vec::new()).collect();
+    let mut module_weights = vec![0; module_index];
 
     for test_info in test_infos {
         let weight = test_weight(test_info.duration);
+        let module_index = test_info.module_index;
 
-        *module_weights
-            .entry(test_info.module_name.clone())
-            .or_default() += weight;
-        module_groups
-            .entry(test_info.module_name.clone())
-            .or_default()
-            .push(test_info);
+        module_weights[module_index] += weight;
+        module_groups[module_index].push(test_info);
     }
 
     // Step 2: Calculate threshold for splitting decision
-    let total_weight: u128 = module_weights.values().sum();
+    let total_weight: u128 = module_weights.iter().sum();
     let target_partition_weight = total_weight / num_workers.max(1) as u128;
     let split_threshold = target_partition_weight / 2;
 
@@ -165,8 +167,12 @@ pub fn partition_collected_tests(
     let mut small_modules = Vec::new();
     let mut large_modules = Vec::new();
 
-    for (module_name, tests) in module_groups {
-        let weight = module_weights[&module_name];
+    for (module_index, tests) in module_groups.into_iter().enumerate() {
+        if tests.is_empty() {
+            continue;
+        }
+
+        let weight = module_weights[module_index];
         let module_group = ModuleGroup::new(tests, weight);
 
         if module_group.weight() < split_threshold {
@@ -259,14 +265,18 @@ fn collect_test_paths_recursive(
     package: &karva_collector::CollectedPackage,
     test_infos: &mut Vec<TestInfo>,
     previous_durations: &HashMap<String, Duration>,
+    next_module_index: &mut usize,
 ) {
     for module in package.modules.values() {
+        let module_index = *next_module_index;
+        *next_module_index += 1;
+
         for test_fn_def in &module.test_function_defs {
             let qualified_name = format!("{}::{}", module.path.module_name(), test_fn_def.name);
             let duration = previous_durations.get(&qualified_name).copied();
 
             test_infos.push(TestInfo {
-                module_name: module.path.module_name().to_string(),
+                module_index,
                 qualified_name,
                 path: format!("{}::{}", module.path.path(), test_fn_def.name),
                 duration,
@@ -275,7 +285,12 @@ fn collect_test_paths_recursive(
     }
 
     for subpackage in package.packages.values() {
-        collect_test_paths_recursive(subpackage, test_infos, previous_durations);
+        collect_test_paths_recursive(
+            subpackage,
+            test_infos,
+            previous_durations,
+            next_module_index,
+        );
     }
 }
 
@@ -285,7 +300,7 @@ mod tests {
 
     fn test_info(qualified_name: &str) -> TestInfo {
         TestInfo {
-            module_name: "test_module".to_string(),
+            module_index: 0,
             qualified_name: qualified_name.to_string(),
             path: qualified_name.to_string(),
             duration: None,
