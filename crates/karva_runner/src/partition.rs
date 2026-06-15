@@ -144,7 +144,11 @@ pub fn partition_collected_tests(
         });
     }
 
-    order_tests_for_partitioning(&mut test_infos, test_ordering);
+    order_tests_for_partitioning(&mut test_infos, test_ordering, num_workers);
+
+    if num_workers == 1 {
+        return vec![single_partition(test_infos)];
+    }
 
     // Step 1: Group tests by module and calculate module weights
     let mut module_groups: Vec<Vec<TestInfo>> = (0..module_index).map(|_| Vec::new()).collect();
@@ -230,6 +234,15 @@ fn compare_test_weights(a: &TestInfo, b: &TestInfo) -> std::cmp::Ordering {
     }
 }
 
+fn single_partition(test_infos: Vec<TestInfo>) -> Partition {
+    let mut partition = Partition::new();
+    for test_info in test_infos {
+        let weight = test_weight(test_info.duration);
+        partition.add_test(test_info, weight);
+    }
+    partition
+}
+
 /// Shuffles only the tests that have no historical duration data.
 ///
 /// This ensures tests without timing info are randomly distributed across partitions
@@ -251,9 +264,17 @@ fn shuffle_tests_without_durations(test_infos: &mut [TestInfo]) {
     }
 }
 
-fn order_tests_for_partitioning(test_infos: &mut [TestInfo], ordering: TestOrdering) {
+fn order_tests_for_partitioning(
+    test_infos: &mut [TestInfo],
+    ordering: TestOrdering,
+    num_workers: usize,
+) {
     match ordering {
-        TestOrdering::ShuffleUnknownDurations => shuffle_tests_without_durations(test_infos),
+        TestOrdering::ShuffleUnknownDurations => {
+            if num_workers > 1 {
+                shuffle_tests_without_durations(test_infos);
+            }
+        }
         TestOrdering::Stable => {
             test_infos.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
         }
@@ -315,7 +336,7 @@ mod tests {
             test_info("test_module::test_b"),
         ];
 
-        order_tests_for_partitioning(&mut tests, TestOrdering::Stable);
+        order_tests_for_partitioning(&mut tests, TestOrdering::Stable, 1);
 
         let ordered_names: Vec<_> = tests
             .iter()
@@ -327,6 +348,30 @@ mod tests {
                 "test_module::test_a",
                 "test_module::test_b",
                 "test_module::test_c"
+            ]
+        );
+    }
+
+    #[test]
+    fn one_worker_shuffle_ordering_preserves_input_order() {
+        let mut tests = vec![
+            test_info("test_module::test_c"),
+            test_info("test_module::test_a"),
+            test_info("test_module::test_b"),
+        ];
+
+        order_tests_for_partitioning(&mut tests, TestOrdering::ShuffleUnknownDurations, 1);
+
+        let ordered_names: Vec<_> = tests
+            .iter()
+            .map(|test| test.qualified_name.as_str())
+            .collect();
+        assert_eq!(
+            ordered_names,
+            [
+                "test_module::test_c",
+                "test_module::test_a",
+                "test_module::test_b"
             ]
         );
     }

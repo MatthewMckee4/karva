@@ -1,5 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
-use ruff_python_ast::{PythonVersion, Stmt};
+use ruff_python_ast::{PythonVersion, Stmt, StmtFunctionDef};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 use thiserror::Error;
 
@@ -84,7 +84,8 @@ pub fn collect_file(
                 function_names,
                 settings.test_function_prefix,
             ) {
-                collected_module.add_test_function_def(function_def);
+                collected_module
+                    .add_test_function_def(collected_test_function_def(function_def, settings));
             }
         }
     }
@@ -103,6 +104,21 @@ fn is_test_function_to_collect(name: &str, explicit_names: &[String], prefix: &s
     } else {
         explicit_names.iter().any(|n| n == name)
     }
+}
+
+fn collected_test_function_def(
+    mut function_def: StmtFunctionDef,
+    settings: &CollectionSettings,
+) -> StmtFunctionDef {
+    if !settings.retain_source_text && !settings.collect_fixtures {
+        function_def.decorator_list.clear();
+        function_def.type_params = None;
+        function_def.parameters = Box::default();
+        function_def.returns = None;
+        function_def.body.clear();
+    }
+
+    function_def
 }
 
 #[cfg(test)]
@@ -141,7 +157,11 @@ mod tests {
         let temp_dir = tempfile::tempdir().expect("create temp dir");
         let cwd = Utf8Path::from_path(temp_dir.path()).expect("temp dir should be UTF-8");
         let path = cwd.join("test_sample.py");
-        std::fs::write(&path, "def test_sample():\n    assert True\n").expect("write test file");
+        std::fs::write(
+            &path,
+            "def test_sample(value: int = 1) -> int:\n    x = value + 1\n    return x\n",
+        )
+        .expect("write test file");
 
         let settings = CollectionSettings {
             retain_source_text: false,
@@ -154,5 +174,10 @@ mod tests {
 
         assert!(module.source_text.is_empty());
         assert_eq!(module.test_function_defs.len(), 1);
+
+        let function_def = &module.test_function_defs[0];
+        assert!(function_def.body.is_empty());
+        assert_eq!(function_def.parameters.len(), 0);
+        assert!(function_def.returns.is_none());
     }
 }
