@@ -21,7 +21,7 @@ use karva_project::Project;
 
 use crate::binary::find_karva_worker_binary;
 use crate::collection::ParallelCollector;
-use crate::partition::{Partition, partition_collected_tests};
+use crate::partition::{Partition, UnknownDurationTestOrdering, partition_collected_tests};
 use crate::worker_args::{WorkerSpawn, worker_command};
 
 /// Width that result labels (`PASS`, `FAIL`, `SIGINT`) are right-padded to so
@@ -333,6 +333,10 @@ pub struct ParallelTestConfig {
     pub profile: Option<String>,
     /// When set, restrict the run to the selected slice of collected tests.
     pub partition: Option<PartitionSelection>,
+    /// Ordering strategy for tests without duration history. Keep shuffling
+    /// enabled for normal runs to avoid sticky first-run imbalance; benchmarks
+    /// use stable ordering for deterministic inputs.
+    pub unknown_duration_test_ordering: UnknownDurationTestOrdering,
 }
 
 /// Spawn worker processes for each partition
@@ -482,6 +486,7 @@ pub fn run_parallel_tests(
         &previous_durations,
         &last_failed_set,
         config.partition,
+        config.unknown_duration_test_ordering,
     );
 
     let run_hash = RunHash::current_time();

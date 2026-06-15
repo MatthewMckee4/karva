@@ -3,6 +3,15 @@ use std::time::Duration;
 
 use karva_cli::PartitionSelection;
 
+/// Ordering strategy for tests without historical duration data.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum UnknownDurationTestOrdering {
+    /// Randomize unknown-duration tests to avoid sticky first-run imbalance.
+    Shuffle,
+    /// Use qualified-name ordering for deterministic benchmark inputs.
+    Stable,
+}
+
 /// Test metadata used for partitioning decisions
 #[derive(Debug, Clone)]
 struct TestInfo {
@@ -107,6 +116,7 @@ pub fn partition_collected_tests(
     previous_durations: &HashMap<String, Duration>,
     last_failed: &HashSet<String>,
     partition_selection: Option<PartitionSelection>,
+    unknown_duration_test_ordering: UnknownDurationTestOrdering,
 ) -> Vec<Partition> {
     let mut test_infos = Vec::new();
     collect_test_paths_recursive(package, &mut test_infos, previous_durations);
@@ -128,12 +138,7 @@ pub fn partition_collected_tests(
         });
     }
 
-    if num_workers == 1 {
-        test_infos.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-    } else {
-        // Shuffle tests without durations so they distribute randomly across partitions.
-        shuffle_tests_without_durations(&mut test_infos);
-    }
+    order_tests_for_partitioning(&mut test_infos, unknown_duration_test_ordering);
 
     // Step 1: Group tests by module and calculate module weights
     let mut module_groups: HashMap<String, Vec<TestInfo>> = HashMap::new();
@@ -240,6 +245,18 @@ fn shuffle_tests_without_durations(test_infos: &mut [TestInfo]) {
     }
 }
 
+fn order_tests_for_partitioning(
+    test_infos: &mut [TestInfo],
+    ordering: UnknownDurationTestOrdering,
+) {
+    match ordering {
+        UnknownDurationTestOrdering::Shuffle => shuffle_tests_without_durations(test_infos),
+        UnknownDurationTestOrdering::Stable => {
+            test_infos.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
+        }
+    }
+}
+
 /// Recursively collects test information from a package and all its subpackages
 fn collect_test_paths_recursive(
     package: &karva_collector::CollectedPackage,
@@ -262,5 +279,43 @@ fn collect_test_paths_recursive(
 
     for subpackage in package.packages.values() {
         collect_test_paths_recursive(subpackage, test_infos, previous_durations);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_info(qualified_name: &str) -> TestInfo {
+        TestInfo {
+            module_name: "test_module".to_string(),
+            qualified_name: qualified_name.to_string(),
+            path: qualified_name.to_string(),
+            duration: None,
+        }
+    }
+
+    #[test]
+    fn deterministic_partitioning_sorts_by_qualified_name() {
+        let mut tests = vec![
+            test_info("test_module::test_c"),
+            test_info("test_module::test_a"),
+            test_info("test_module::test_b"),
+        ];
+
+        order_tests_for_partitioning(&mut tests, UnknownDurationTestOrdering::Stable);
+
+        let ordered_names: Vec<_> = tests
+            .iter()
+            .map(|test| test.qualified_name.as_str())
+            .collect();
+        assert_eq!(
+            ordered_names,
+            [
+                "test_module::test_a",
+                "test_module::test_b",
+                "test_module::test_c"
+            ]
+        );
     }
 }
