@@ -112,23 +112,11 @@ just test
 
 ### Benchmarks
 
-Karva has a pinned wall-time benchmark suite for CI and local comparison. It
-includes the synthetic `karva-benchmark-1` project plus selected open-source
-projects that Karva can run cleanly today. CI shards the suite by benchmark
-project so independent projects can run in parallel, and each shard runs one
-exact Divan benchmark through CodSpeed. The local benchmark command can write a
-JSON report for ad hoc comparison, but CI does not gate on wall-time deltas from
-GitHub-hosted runners.
-
-```bash
-just benchmark --samples 5 --output target/benchmark-results/karva-benchmark.json
-```
-
-To run a single project:
-
-```bash
-just benchmark --project packaging --samples 5
-```
+Karva has a pinned wall-time benchmark suite for CI. It includes the synthetic
+`karva-benchmark-1` project plus selected open-source projects that Karva can
+run cleanly today. CI shards the suite by benchmark project so independent
+projects can run in parallel, and each shard runs one exact Divan benchmark
+through CodSpeed.
 
 ### Documentation
 

@@ -1081,11 +1081,9 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "camino",
- "clap",
  "codspeed-divan-compat",
  "karva_cache",
  "karva_cli",
- "karva_diagnostic",
  "karva_logging",
  "karva_metadata",
  "karva_project",

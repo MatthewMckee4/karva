@@ -7,7 +7,3 @@ test *args:
     else \
         cargo test {{args}}; \
     fi
-
-benchmark *args:
-    uv run --no-project --with maturin maturin build
-    cargo run --release -p karva_benchmark -- {{args}}
