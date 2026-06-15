@@ -290,7 +290,7 @@ pub fn try_run_project(project: &Project) -> Result<RunOutput> {
         last_failed: false,
         profile: None,
         partition: None,
-        unknown_duration_test_ordering: karva_runner::UnknownDurationTestOrdering::Stable,
+        test_ordering: karva_runner::TestOrdering::Stable,
     };
 
     let args = SubTestCommand {

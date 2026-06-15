@@ -3,11 +3,11 @@ use std::time::Duration;
 
 use karva_cli::PartitionSelection;
 
-/// Ordering strategy for tests without historical duration data.
+/// Ordering strategy for partition inputs.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum UnknownDurationTestOrdering {
+pub enum TestOrdering {
     /// Randomize unknown-duration tests to avoid sticky first-run imbalance.
-    Shuffle,
+    ShuffleUnknownDurations,
     /// Use qualified-name ordering for deterministic benchmark inputs.
     Stable,
 }
@@ -116,7 +116,7 @@ pub fn partition_collected_tests(
     previous_durations: &HashMap<String, Duration>,
     last_failed: &HashSet<String>,
     partition_selection: Option<PartitionSelection>,
-    unknown_duration_test_ordering: UnknownDurationTestOrdering,
+    test_ordering: TestOrdering,
 ) -> Vec<Partition> {
     let mut test_infos = Vec::new();
     collect_test_paths_recursive(package, &mut test_infos, previous_durations);
@@ -138,7 +138,7 @@ pub fn partition_collected_tests(
         });
     }
 
-    order_tests_for_partitioning(&mut test_infos, unknown_duration_test_ordering);
+    order_tests_for_partitioning(&mut test_infos, test_ordering);
 
     // Step 1: Group tests by module and calculate module weights
     let mut module_groups: HashMap<String, Vec<TestInfo>> = HashMap::new();
@@ -245,13 +245,10 @@ fn shuffle_tests_without_durations(test_infos: &mut [TestInfo]) {
     }
 }
 
-fn order_tests_for_partitioning(
-    test_infos: &mut [TestInfo],
-    ordering: UnknownDurationTestOrdering,
-) {
+fn order_tests_for_partitioning(test_infos: &mut [TestInfo], ordering: TestOrdering) {
     match ordering {
-        UnknownDurationTestOrdering::Shuffle => shuffle_tests_without_durations(test_infos),
-        UnknownDurationTestOrdering::Stable => {
+        TestOrdering::ShuffleUnknownDurations => shuffle_tests_without_durations(test_infos),
+        TestOrdering::Stable => {
             test_infos.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
         }
     }
@@ -303,7 +300,7 @@ mod tests {
             test_info("test_module::test_b"),
         ];
 
-        order_tests_for_partitioning(&mut tests, UnknownDurationTestOrdering::Stable);
+        order_tests_for_partitioning(&mut tests, TestOrdering::Stable);
 
         let ordered_names: Vec<_> = tests
             .iter()
