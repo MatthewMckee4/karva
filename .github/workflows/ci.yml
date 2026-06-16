@@ -11,8 +11,16 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
   PYTHON_VERSION: "3.14"
+  RUSTUP_MAX_RETRIES: 10
   NEXTEST_PROFILE: ci
 
 jobs:
