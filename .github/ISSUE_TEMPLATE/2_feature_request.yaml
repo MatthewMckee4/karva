@@ -1,0 +1,19 @@
+name: Feature request
+description: Propose a new feature or change to existing behavior
+labels: ["needs-decision"]
+body:
+  - type: textarea
+    attributes:
+      label: Summary
+      description: |
+        Describe the feature or behavior change you want, including the problem it solves.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Example
+      description: |
+        Show the command, configuration, or test case you would expect to write if this existed.
+    validations:
+      required: false
