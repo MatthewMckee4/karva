@@ -207,6 +207,25 @@ output-format = "concise"
 
 ---
 
+### `show-progress`
+
+Live progress display rendered while tests run.
+
+Defaults to `none`.
+
+**Default value**: `none`
+
+**Type**: `none | counter | bar`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.terminal]
+show-progress = "bar"
+```
+
+---
+
 ### `show-python-output`
 
 Whether to show the python output.

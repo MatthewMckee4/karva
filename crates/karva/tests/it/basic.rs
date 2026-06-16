@@ -1586,6 +1586,52 @@ def test_with_print():
 }
 
 #[test]
+fn test_show_progress_bar_does_not_alter_stdout() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+def test_1(): pass
+def test_2(): pass
+",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--show-progress=bar"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test::test_1
+            PASS [TIME] test::test_2
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_show_progress_counter_does_not_alter_stdout() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+def test_1(): pass
+",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--show-progress=counter"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_1
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_retry_flag() {
     let context = TestContext::with_file(
         "test.py",

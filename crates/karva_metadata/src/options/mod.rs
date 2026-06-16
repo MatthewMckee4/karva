@@ -2,7 +2,7 @@ mod config;
 mod overrides;
 
 use karva_combine::Combine;
-use karva_logging::{FinalStatusLevel, StatusLevel};
+use karva_logging::{FinalStatusLevel, ProgressMode, StatusLevel};
 use karva_macros::{Combine, OptionsMetadata};
 use ruff_db::diagnostic::DiagnosticFormat;
 use serde::{Deserialize, Serialize};
@@ -226,6 +226,19 @@ pub struct TerminalOptions {
         "#
     )]
     pub final_status_level: Option<FinalStatusLevel>,
+
+    /// Live progress display rendered while tests run.
+    ///
+    /// Defaults to `none`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"none"#,
+        value_type = "none | counter | bar",
+        example = r#"
+            show-progress = "bar"
+        "#
+    )]
+    pub show_progress: Option<ProgressMode>,
 }
 
 impl TerminalOptions {
@@ -235,6 +248,7 @@ impl TerminalOptions {
             show_python_output: self.show_python_output.unwrap_or_default(),
             status_level: self.status_level.unwrap_or_default(),
             final_status_level: self.final_status_level.unwrap_or_default(),
+            show_progress: self.show_progress.unwrap_or_default(),
         }
     }
 }

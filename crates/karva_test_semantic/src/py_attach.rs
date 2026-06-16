@@ -27,6 +27,9 @@ where
 {
     attach(|py| {
         if show_output {
+            if let Err(err) = enable_line_buffering(py) {
+                tracing::warn!("failed to line-buffer Python stdout and stderr: {err}");
+            }
             return f(py);
         }
 
@@ -51,6 +54,20 @@ where
         }
         result
     })
+}
+
+fn enable_line_buffering(py: Python<'_>) -> PyResult<()> {
+    py.run(
+        c"import sys
+for stream in (sys.stdout, sys.stderr):
+    try:
+        stream.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):
+        pass
+",
+        None,
+        None,
+    )
 }
 
 fn open_devnull(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
