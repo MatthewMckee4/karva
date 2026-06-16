@@ -4,8 +4,8 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use karva_logging::{FinalStatusLevel, StatusLevel, TerminalColor};
 use karva_metadata::{
-    CovFailUnder, CoverageOptions, MaxFail, Options, OverrideOptions, SlowTimeoutSecs, SrcOptions,
-    TerminalOptions, TestOptions, TestTimeoutSecs,
+    CovFailUnder, CoverageOptions, MaxFail, Options, OverrideOptions, RunTimeoutSecs,
+    SlowTimeoutSecs, SrcOptions, TerminalOptions, TestOptions, TestTimeoutSecs,
 };
 
 use crate::enums::{CovReport, NoTests, OutputFormat, RunIgnored};
@@ -265,6 +265,14 @@ pub struct TestCommand {
     #[clap(short = 'n', long, help_heading = "Runner options")]
     pub num_workers: Option<usize>,
 
+    /// Wall-clock limit for the whole run, in seconds.
+    ///
+    /// When the run takes longer than this duration, karva stops the
+    /// remaining workers and exits with a failure status. Accepts fractional
+    /// seconds such as `--run-timeout=1800` or `--run-timeout=0.5`.
+    #[clap(long, value_name = "SECONDS", help_heading = "Runner options")]
+    pub run_timeout: Option<f64>,
+
     /// Disable parallel execution (equivalent to `--num-workers 1`)
     #[clap(long, default_missing_value = "true", num_args=0..1, help_heading = "Runner options")]
     pub no_parallel: Option<bool>,
@@ -365,6 +373,11 @@ impl SubTestCommand {
                 no_tests: self.no_tests.map(Into::into),
                 slow_timeout: self.slow_timeout.map(SlowTimeoutSecs),
                 timeout: self.timeout.map(TestTimeoutSecs),
+                // `run-timeout` is a main-process-only option and is never
+                // forwarded to workers, so it lives on `TestCommand` rather
+                // than this worker-shared struct. `TestCommand::into_options`
+                // sets the real value.
+                run_timeout: None,
             }),
             coverage: Some(CoverageOptions {
                 sources: (!self.cov.is_empty()).then(|| self.cov.clone()),
@@ -385,11 +398,16 @@ impl SubTestCommand {
 
 impl TestCommand {
     pub fn into_options(self) -> Options {
+        let run_timeout = self.run_timeout;
         let mut sub_command = self.sub_command;
         if self.no_capture {
             sub_command.show_output = Some(true);
         }
-        sub_command.into_options()
+        let mut options = sub_command.into_options();
+        if let Some(test) = options.test.as_mut() {
+            test.run_timeout = run_timeout.map(RunTimeoutSecs);
+        }
+        options
     }
 }
 

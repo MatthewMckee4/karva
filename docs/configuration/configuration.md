@@ -337,6 +337,30 @@ retry = 3
 
 ---
 
+### `run-timeout`
+
+Wall-clock limit (in seconds) for the entire run.
+
+When the run takes longer than this duration, karva stops the
+remaining workers and exits with a failure status. This is a safety
+net for CI to bound runaway suites; it does not affect individual
+test results that already completed.
+
+Defaults to unset, which lets the run take as long as it needs.
+
+**Default value**: `null`
+
+**Type**: `float (seconds)`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.test]
+run-timeout = 1800.0
+```
+
+---
+
 ### `slow-timeout`
 
 Threshold (in seconds) after which a test is flagged as slow.

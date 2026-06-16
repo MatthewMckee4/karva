@@ -99,6 +99,33 @@ impl Combine for TestTimeoutSecs {
     }
 }
 
+/// A global run timeout expressed in seconds.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct RunTimeoutSecs(pub f64);
+
+impl Eq for RunTimeoutSecs {}
+
+impl RunTimeoutSecs {
+    pub fn as_duration(self) -> Option<Duration> {
+        if self.0.is_finite() && self.0 > 0.0 {
+            Some(Duration::from_secs_f64(self.0))
+        } else {
+            None
+        }
+    }
+}
+
+impl Combine for RunTimeoutSecs {
+    #[inline(always)]
+    fn combine_with(&mut self, _other: Self) {}
+
+    #[inline]
+    fn combine(self, _other: Self) -> Self {
+        self
+    }
+}
+
 /// A coverage threshold expressed as a percentage (`0..=100`).
 ///
 /// Wraps `f64` for the same reason as [`SlowTimeoutSecs`]: keeps the
@@ -309,4 +336,8 @@ pub struct TestSettings {
         serialize_with = "serialize_duration_secs"
     )]
     pub timeout: Option<Duration>,
+    /// Wall-clock limit for the entire run. When the run exceeds this
+    /// duration, the remaining workers are stopped and the run fails.
+    /// `None` disables the limit.
+    pub run_timeout: Option<Duration>,
 }
