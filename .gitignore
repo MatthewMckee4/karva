@@ -1,10 +1,15 @@
-__pycache__/
-
 /target
 /site
 
-karva.egg-info/
 uv.lock
+
+# Python bytecode and package builds
+__pycache__/
+*.py[cod]
+build/
+dist/
+wheels/
+*.egg-info/
 
 # insta
 *.rs.pending-snap
@@ -12,8 +17,29 @@ uv.lock
 # Compiled Python files
 *.so
 
+# Local Python environments and tool caches
+.venv*/
+.tox/
+.nox/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
 # Coverage profile data
 *.profraw
+.coverage
+.coverage.*
+htmlcov/
+
+# Rust formatter backups
+**/*.rs.bk
+
+# Profiling and tracing outputs
+perf.data
+perf.data.old
+tracing.folded
+tracing-flamechart.svg
+tracing-flamegraph.svg
 
 # prek prettier cache
 node_modules
