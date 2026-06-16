@@ -1,12 +1,16 @@
-use std::io::ErrorKind;
-use std::io::Write;
+use std::fs::{File, OpenOptions};
+use std::io::{Seek, SeekFrom, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use camino::Utf8PathBuf;
+use camino::Utf8Path;
 use colored::Colorize;
 use karva_logging::time::format_duration_bracketed;
 use karva_logging::{Printer, StatusLevel};
 use karva_python_semantic::QualifiedTestName;
+use serde::Serialize;
 
 use crate::result::IndividualTestResultKind;
 
@@ -97,7 +101,7 @@ pub struct TestCaseReporter {
     /// Optional path to a JSON file describing the test currently
     /// executing. The orchestrator reads this on Ctrl+C to render
     /// per-test `SIGINT` lines.
-    progress_file: Option<Utf8PathBuf>,
+    progress_file: Option<Mutex<ProgressFile>>,
 }
 
 impl TestCaseReporter {
@@ -108,14 +112,131 @@ impl TestCaseReporter {
         }
     }
 
-    /// Direct the reporter to write the currently running test's name and
-    /// start time to `path` whenever a test begins, and remove the file
-    /// when it ends.
-    #[must_use]
-    pub fn with_progress_file(mut self, path: Utf8PathBuf) -> Self {
-        self.progress_file = Some(path);
-        self
+    /// Direct the reporter to publish the currently running test's name and
+    /// start time to `path` while it is in flight.
+    pub fn with_progress_file(mut self, path: &Utf8Path) -> std::io::Result<Self> {
+        self.progress_file = Some(Mutex::new(ProgressFile::spawn(path)?));
+        Ok(self)
     }
+}
+
+struct ProgressFile {
+    state: Arc<Mutex<Option<ProgressSnapshot>>>,
+    stop: Arc<AtomicBool>,
+    flusher: Option<JoinHandle<()>>,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize)]
+struct ProgressSnapshot {
+    name: String,
+    start_unix_ms: u64,
+}
+
+impl ProgressFile {
+    fn spawn(path: &Utf8Path) -> std::io::Result<Self> {
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(path)?;
+        let state = Arc::new(Mutex::new(None));
+        let stop = Arc::new(AtomicBool::new(false));
+        let flusher_state = Arc::clone(&state);
+        let flusher_stop = Arc::clone(&stop);
+        let flusher = thread::spawn(move || {
+            flush_progress_file(file, &flusher_state, &flusher_stop);
+        });
+
+        Ok(Self {
+            state,
+            stop,
+            flusher: Some(flusher),
+        })
+    }
+
+    fn set_current_test(&self, snapshot: ProgressSnapshot) -> std::io::Result<()> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| std::io::Error::other("test progress state lock poisoned"))?;
+        *state = Some(snapshot);
+        Ok(())
+    }
+
+    fn clear(&self) -> std::io::Result<()> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| std::io::Error::other("test progress state lock poisoned"))?;
+        *state = None;
+        Ok(())
+    }
+}
+
+impl Drop for ProgressFile {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Release);
+        if let Some(flusher) = self.flusher.take()
+            && let Err(err) = flusher.join()
+        {
+            tracing::warn!(?err, "test progress flusher thread panicked");
+        }
+    }
+}
+
+const PROGRESS_FLUSH_INTERVAL: Duration = Duration::from_millis(25);
+
+fn flush_progress_file(mut file: File, state: &Mutex<Option<ProgressSnapshot>>, stop: &AtomicBool) {
+    let mut written = None;
+    while !stop.load(Ordering::Acquire) {
+        flush_progress_snapshot(&mut file, state, &mut written);
+        thread::sleep(PROGRESS_FLUSH_INTERVAL);
+    }
+    flush_progress_snapshot(&mut file, state, &mut written);
+    if let Err(err) = clear_progress_file(&mut file) {
+        tracing::warn!("failed to clear test progress file: {err}");
+    }
+}
+
+fn flush_progress_snapshot(
+    file: &mut File,
+    state: &Mutex<Option<ProgressSnapshot>>,
+    written: &mut Option<ProgressSnapshot>,
+) {
+    let snapshot = if let Ok(state) = state.lock() {
+        state.clone()
+    } else {
+        tracing::warn!("failed to lock test progress state");
+        return;
+    };
+
+    if snapshot == *written {
+        return;
+    }
+
+    let result = match snapshot.as_ref() {
+        Some(snapshot) => write_progress_file(file, snapshot),
+        None => clear_progress_file(file),
+    };
+    if let Err(err) = result {
+        tracing::warn!("failed to flush test progress file: {err}");
+        return;
+    }
+
+    *written = snapshot;
+}
+
+fn write_progress_file(file: &mut File, snapshot: &ProgressSnapshot) -> std::io::Result<()> {
+    file.set_len(0)?;
+    file.seek(SeekFrom::Start(0))?;
+    serde_json::to_writer(file, snapshot)?;
+    Ok(())
+}
+
+fn clear_progress_file(file: &mut File) -> std::io::Result<()> {
+    file.set_len(0)?;
+    file.seek(SeekFrom::Start(0))?;
+    Ok(())
 }
 
 impl Reporter for TestCaseReporter {
@@ -142,10 +263,9 @@ impl Reporter for TestCaseReporter {
             _ => String::new(),
         };
 
-        let mut stdout = self.printer.stream_for_test_result().lock();
-        if let Err(err) = writeln!(
-            stdout,
-            "{padding}{colored_label} {duration_str} {test_path}{suffix}"
+        if let Err(err) = write_test_result_line(
+            self.printer,
+            format!("{padding}{colored_label} {duration_str} {test_path}{suffix}"),
         ) {
             tracing::warn!("failed to write test result line: {err}");
         }
@@ -162,10 +282,9 @@ impl Reporter for TestCaseReporter {
         let duration_str = format_duration_bracketed(duration);
         let test_path = format_test_path(test_name);
 
-        let mut stdout = self.printer.stream_for_test_result().lock();
-        if let Err(err) = writeln!(
-            stdout,
-            "{padding}{colored_label} {duration_str} {test_path}"
+        if let Err(err) = write_test_result_line(
+            self.printer,
+            format!("{padding}{colored_label} {duration_str} {test_path}"),
         ) {
             tracing::warn!("failed to write slow test line: {err}");
         }
@@ -191,40 +310,45 @@ impl Reporter for TestCaseReporter {
         let duration_str = format_duration_bracketed(duration);
         let test_path = format_test_path(test_name);
 
-        let mut stdout = self.printer.stream_for_test_result().lock();
-        if let Err(err) = writeln!(
-            stdout,
-            "{padding}TRY {attempt} {colored_status} {duration_str} {test_path}"
+        if let Err(err) = write_test_result_line(
+            self.printer,
+            format!("{padding}TRY {attempt} {colored_status} {duration_str} {test_path}"),
         ) {
             tracing::warn!("failed to write test attempt line: {err}");
         }
     }
 
     fn report_test_started(&self, test_name: &QualifiedTestName) {
-        let Some(path) = self.progress_file.as_ref() else {
+        let Some(progress_file) = self.progress_file.as_ref() else {
             return;
         };
         let start_unix_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
             .unwrap_or(0);
-        let body = serde_json::json!({
-            "name": test_name.to_string(),
-            "start_unix_ms": start_unix_ms,
-        });
-        if let Err(err) = std::fs::write(path, body.to_string()) {
-            tracing::warn!(path = %path, "failed to write test progress file: {err}");
+        let snapshot = ProgressSnapshot {
+            name: test_name.to_string(),
+            start_unix_ms,
+        };
+        let Ok(progress_file) = progress_file.lock() else {
+            tracing::warn!("failed to lock test progress file");
+            return;
+        };
+        if let Err(err) = progress_file.set_current_test(snapshot) {
+            tracing::warn!("failed to update test progress state: {err}");
         }
     }
 
     fn report_test_finished(&self, _test_name: &QualifiedTestName) {
-        let Some(path) = self.progress_file.as_ref() else {
+        let Some(progress_file) = self.progress_file.as_ref() else {
             return;
         };
-        match std::fs::remove_file(path) {
-            Ok(()) => {}
-            Err(err) if err.kind() == ErrorKind::NotFound => {}
-            Err(err) => tracing::warn!(path = %path, "failed to remove test progress file: {err}"),
+        let Ok(progress_file) = progress_file.lock() else {
+            tracing::warn!("failed to lock test progress file");
+            return;
+        };
+        if let Err(err) = progress_file.clear() {
+            tracing::warn!("failed to clear test progress state: {err}");
         }
     }
 }
@@ -235,6 +359,12 @@ const LABEL_COLUMN_WIDTH: usize = 12;
 
 fn label_padding(label_len: usize) -> String {
     " ".repeat(LABEL_COLUMN_WIDTH.saturating_sub(label_len))
+}
+
+fn write_test_result_line(printer: Printer, mut line: String) -> std::io::Result<()> {
+    line.push('\n');
+    let mut stdout = printer.stream_for_test_result().lock();
+    stdout.write_all(line.as_bytes())
 }
 
 /// Render the colored `module::function[params]` portion of a result line.
@@ -292,6 +422,8 @@ impl From<&IndividualTestResultKind> for ResultLabel {
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, Instant};
+
     use camino::Utf8PathBuf;
     use karva_logging::Printer;
     use karva_python_semantic::{ModulePath, QualifiedFunctionName};
@@ -308,17 +440,43 @@ mod tests {
         )
     }
 
+    fn wait_for_progress_body(path: &Utf8Path, matches: impl Fn(&str) -> bool) -> String {
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(1) {
+            let body = std::fs::read_to_string(path).expect("progress file should exist");
+            if matches(&body) {
+                return body;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        panic!("timed out waiting for progress file body");
+    }
+
+    fn wait_for_empty_progress_body(path: &Utf8Path) {
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(1) {
+            let body = std::fs::read_to_string(path).expect("progress file should exist");
+            if body.is_empty() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        panic!("timed out waiting for progress file to clear");
+    }
+
     #[test]
-    fn progress_file_is_written_and_removed() {
+    fn progress_file_is_written_and_cleared() {
         let temp_dir = tempfile::tempdir().expect("create temp dir");
         let path = Utf8PathBuf::try_from(temp_dir.path().join("current-test.json"))
             .expect("temp path should be UTF-8");
-        let reporter = TestCaseReporter::new(Printer::default()).with_progress_file(path.clone());
+        let reporter = TestCaseReporter::new(Printer::default())
+            .with_progress_file(&path)
+            .expect("progress file should open");
         let test_name = qualified_test_name();
 
         reporter.report_test_started(&test_name);
 
-        let body = std::fs::read_to_string(&path).expect("progress file should exist");
+        let body = wait_for_progress_body(&path, |body| !body.is_empty());
         let progress: serde_json::Value =
             serde_json::from_str(&body).expect("progress file should be valid JSON");
         assert_eq!(progress["name"], "test_module::test_example");
@@ -326,16 +484,38 @@ mod tests {
 
         reporter.report_test_finished(&test_name);
 
-        assert!(!path.exists());
+        wait_for_empty_progress_body(&path);
     }
 
     #[test]
-    fn progress_file_cleanup_allows_missing_marker() {
+    fn progress_file_reuses_marker_without_stale_content() {
         let temp_dir = tempfile::tempdir().expect("create temp dir");
         let path = Utf8PathBuf::try_from(temp_dir.path().join("current-test.json"))
             .expect("temp path should be UTF-8");
-        let reporter = TestCaseReporter::new(Printer::default()).with_progress_file(path);
+        let reporter = TestCaseReporter::new(Printer::default())
+            .with_progress_file(&path)
+            .expect("progress file should open");
+
+        reporter.report_test_started(&QualifiedTestName::new(
+            QualifiedFunctionName::new(
+                "test_example_with_a_much_longer_name".to_string(),
+                ModulePath::new_with_name("test_module.py", "test_module".to_string()),
+            ),
+            None,
+        ));
+        let body = wait_for_progress_body(&path, |body| {
+            body.contains("test_example_with_a_much_longer_name")
+        });
+        assert!(body.contains("test_example_with_a_much_longer_name"));
 
         reporter.report_test_finished(&qualified_test_name());
+        reporter.report_test_started(&qualified_test_name());
+
+        let body = wait_for_progress_body(&path, |body| {
+            body.contains(r#""name":"test_module::test_example""#)
+        });
+        let progress: serde_json::Value =
+            serde_json::from_str(&body).expect("progress file should be valid JSON");
+        assert_eq!(progress["name"], "test_module::test_example");
     }
 }

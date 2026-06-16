@@ -159,7 +159,11 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     let reporter: Box<dyn Reporter> = if matches!(printer.status_level(), StatusLevel::None) {
         Box::new(DummyReporter)
     } else {
-        Box::new(TestCaseReporter::new(printer).with_progress_file(progress_file))
+        Box::new(
+            TestCaseReporter::new(printer)
+                .with_progress_file(&progress_file)
+                .context("Failed to open worker progress file")?,
+        )
     };
 
     let result = karva_test_semantic::run_tests(
