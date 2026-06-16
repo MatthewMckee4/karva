@@ -83,6 +83,12 @@ uv tool install prek
 prek install
 ```
 
+We recommend [nextest](https://nexte.st/) for running the Rust test suite:
+
+```bash
+cargo install cargo-nextest --locked
+```
+
 ### Development
 
 Note, you can use [just](https://github.com/casey/just) to run some useful commands.
@@ -93,21 +99,32 @@ To run the cli on a test file, run:
 cargo run test tests/test_add.py
 ```
 
-Annoyingly, you need a global python with pytest installed.
-
-We have had many issues with local development using `uv` virtual environments with pytest installed, but this does not always work well.
+You need a Python installation with pytest available for integration tests that compare Karva behavior against pytest. Avoid relying on a project-local `uv` virtual environment for this; local development has been more reliable with pytest installed in the Python environment used by the test runner.
 
 If you want to run the tests, you need to build a wheel every time, so you need to run the following:
 
 ```bash
 maturin build
-cargo nextest run 
+cargo nextest run
 ```
 
 Or simply, with just, run:
 
 ```bash
 just test
+```
+
+Pass test arguments through `just test` for focused iteration:
+
+```bash
+just test -p karva_cache
+```
+
+Before opening a pull request, run the relevant tests plus the full validation sweep:
+
+```bash
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+uvx prek run -a
 ```
 
 ### Benchmarks
@@ -130,6 +147,8 @@ We use zensical to build the documentation.
 uv run -s scripts/prepare_docs.py
 uv run --isolated --only-group docs zensical build
 ```
+
+Run `cargo run -p karva_dev generate-all` after changing configuration options, CLI arguments, or environment variable definitions. These changes regenerate the reference docs under `docs/`.
 
 ## Release Process
 
