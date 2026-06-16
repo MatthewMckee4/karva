@@ -1,0 +1,3 @@
+[alias]
+dev = "run --package karva_dev --bin karva_dev"
+benchmark = "bench -p karva_benchmark --bench karva_benchmark_walltime --"
