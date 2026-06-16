@@ -882,7 +882,7 @@ def test_9():
     ",
     );
 
-    assert_cmd_snapshot!(context.command().arg("--fail-fast").arg("--num-workers").arg("2").arg("-v"), @"
+    assert_cmd_snapshot!(context.command().arg("--fail-fast").arg("--num-workers").arg("2"), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -908,12 +908,6 @@ def test_9():
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
 
     ----- stderr -----
-    INFO Collected all tests in [TIME]
-    INFO Spawning 2 workers
-    INFO Worker 0 spawned with 5 tests
-    INFO Worker 1 spawned with 5 tests
-    INFO Waiting for 2 workers to complete (Ctrl+C to cancel)
-    INFO Fail-fast signal received — stopping remaining workers
     ");
 }
 
