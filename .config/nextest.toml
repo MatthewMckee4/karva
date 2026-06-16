@@ -1,3 +1,16 @@
 [profile.ci]
 retries = 2
 fail-fast = false
+
+# Print failing test output immediately and again at the end for easier CI
+# scrollback.
+failure-output = "immediate-final"
+
+# Keep routine passing test output quiet, but include slow tests in the final
+# summary.
+status-level = "skip"
+final-status-level = "slow"
+
+# Mark tests that take longer than 1s as slow, and terminate tests that exceed
+# 60s as a stop-gap against deadlocks.
+slow-timeout = { period = "1s", terminate-after = 60 }
