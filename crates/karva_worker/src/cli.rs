@@ -6,7 +6,9 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use karva_cache::{RunCache, RunHash};
 use karva_cli::{SubTestCommand, Verbosity};
-use karva_diagnostic::{DummyReporter, FileLineSink, LineSink, Reporter, TestCaseReporter};
+use karva_diagnostic::{
+    DummyReporter, FileLineSink, LineSink, ProgressTrackingReporter, Reporter, TestCaseReporter,
+};
 use karva_logging::{Printer, StatusLevel, set_colored_override, setup_tracing};
 use karva_metadata::RunIgnoredMode;
 use karva_metadata::filter::FiltersetSet;
@@ -154,15 +156,19 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         .with_context(|| format!("Failed to create worker directory `{worker_dir}`"))?;
 
     let current_test_file = cache.current_test_file(args.worker_id);
+    let progress_file = cache.progress_file(args.worker_id).into_std_path_buf();
     let reporter: Box<dyn Reporter> = if matches!(printer.status_level(), StatusLevel::None) {
-        Box::new(DummyReporter)
+        Box::new(ProgressTrackingReporter::new(DummyReporter, progress_file))
     } else {
         let output_path = cache.output_file(args.worker_id);
         let sink: Box<dyn LineSink> = Box::new(
             FileLineSink::open(output_path.as_std_path())
                 .with_context(|| format!("Failed to open worker output file `{output_path}`"))?,
         );
-        Box::new(TestCaseReporter::new(printer, sink).with_current_test_file(current_test_file))
+        Box::new(ProgressTrackingReporter::new(
+            TestCaseReporter::new(printer, sink).with_current_test_file(current_test_file),
+            progress_file,
+        ))
     };
 
     let result = karva_test_semantic::run_tests(

@@ -4,7 +4,8 @@ mod result;
 mod traceback;
 
 pub use reporter::{
-    DummyReporter, FileLineSink, LineSink, Reporter, StdoutLineSink, TestCaseReporter,
+    DummyReporter, FileLineSink, LineSink, ProgressTrackingReporter, Reporter, StdoutLineSink,
+    TestCaseReporter,
 };
 pub use result::{
     DisplayFlakyTest, DisplayFlakyTests, FlakyTest, IndividualTestResultKind, TestResultKind,

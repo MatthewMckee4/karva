@@ -15,9 +15,12 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use camino::Utf8PathBuf;
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use karva_cache::RunCache;
+use karva_logging::ProgressMode;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
+const STEADY_TICK: Duration = Duration::from_millis(120);
 
 /// Captured stdout pipe for a single worker child process.
 pub struct WorkerPipes {
@@ -26,6 +29,7 @@ pub struct WorkerPipes {
 
 /// Drains per-worker output files and stdout pipes.
 pub struct OutputDrain {
+    bar: Option<ProgressBar>,
     stop: Arc<AtomicBool>,
     handle: Option<JoinHandle<()>>,
     pipe_handles: Vec<JoinHandle<()>>,
@@ -33,7 +37,26 @@ pub struct OutputDrain {
 
 impl OutputDrain {
     /// Start the output drain.
-    pub fn start(num_workers: usize, cache: &RunCache, pipes: Vec<WorkerPipes>) -> Self {
+    pub fn start(
+        mode: ProgressMode,
+        total_tests: u64,
+        num_workers: usize,
+        cache: RunCache,
+        pipes: Vec<WorkerPipes>,
+    ) -> Self {
+        let bar = if total_tests > 0 && !matches!(mode, ProgressMode::None) {
+            let bar =
+                ProgressBar::with_draw_target(Some(total_tests), ProgressDrawTarget::stderr());
+            bar.set_style(style_for(mode));
+            if matches!(mode, ProgressMode::Bar) {
+                bar.set_message("Testing");
+            }
+            bar.enable_steady_tick(STEADY_TICK);
+            Some(bar)
+        } else {
+            None
+        };
+
         let output_paths: Vec<Utf8PathBuf> =
             (0..num_workers).map(|id| cache.output_file(id)).collect();
 
@@ -50,11 +73,15 @@ impl OutputDrain {
 
         let stop = Arc::new(AtomicBool::new(false));
         let handle = {
+            let bar = bar.clone();
             let stop = Arc::clone(&stop);
-            thread::spawn(move || drain_loop(&output_paths, &stop, &stdout_rx))
+            thread::spawn(move || {
+                drain_loop(&output_paths, &cache, bar.as_ref(), &stop, &stdout_rx);
+            })
         };
 
         Self {
+            bar,
             stop,
             handle: Some(handle),
             pipe_handles,
@@ -77,6 +104,9 @@ impl OutputDrain {
             && handle.join().is_err()
         {
             tracing::warn!("worker output drain thread panicked");
+        }
+        if let Some(bar) = self.bar.take() {
+            bar.finish_and_clear();
         }
     }
 }
@@ -194,7 +224,13 @@ impl WorkerStream {
     }
 }
 
-fn drain_loop(output_paths: &[Utf8PathBuf], stop: &AtomicBool, stdout_rx: &mpsc::Receiver<String>) {
+fn drain_loop(
+    output_paths: &[Utf8PathBuf],
+    cache: &RunCache,
+    bar: Option<&ProgressBar>,
+    stop: &AtomicBool,
+    stdout_rx: &mpsc::Receiver<String>,
+) {
     let mut streams: Vec<WorkerStream> = output_paths
         .iter()
         .cloned()
@@ -214,7 +250,11 @@ fn drain_loop(output_paths: &[Utf8PathBuf], stop: &AtomicBool, stdout_rx: &mpsc:
                 progressed = true;
             }
         }
-        emit_lines(&lines);
+        emit_lines(&lines, bar);
+
+        if let Some(bar) = bar {
+            bar.set_position(cache.completed_count());
+        }
 
         if stop.load(Ordering::SeqCst) {
             let mut final_lines: Vec<String> = Vec::new();
@@ -224,7 +264,10 @@ fn drain_loop(output_paths: &[Utf8PathBuf], stop: &AtomicBool, stdout_rx: &mpsc:
             for stream in &mut streams {
                 stream.poll(&mut final_lines);
             }
-            emit_lines(&final_lines);
+            emit_lines(&final_lines, bar);
+            if let Some(bar) = bar {
+                bar.set_position(cache.completed_count());
+            }
             break;
         }
 
@@ -234,16 +277,47 @@ fn drain_loop(output_paths: &[Utf8PathBuf], stop: &AtomicBool, stdout_rx: &mpsc:
     }
 }
 
-fn emit_lines(lines: &[String]) {
+fn emit_lines(lines: &[String], bar: Option<&ProgressBar>) {
     if lines.is_empty() {
         return;
     }
 
-    let mut stdout = std::io::stdout().lock();
-    for line in lines {
-        if let Err(err) = writeln!(stdout, "{line}") {
-            tracing::warn!("failed to write worker output line: {err}");
-            return;
+    let write = || {
+        let mut stdout = std::io::stdout().lock();
+        for line in lines {
+            if let Err(err) = writeln!(stdout, "{line}") {
+                tracing::warn!("failed to write worker output line: {err}");
+                return;
+            }
+        }
+    };
+
+    if let Some(bar) = bar {
+        bar.suspend(write);
+    } else {
+        write();
+    }
+}
+
+fn style_for(mode: ProgressMode) -> ProgressStyle {
+    match mode {
+        ProgressMode::Bar => {
+            match ProgressStyle::with_template("{msg:8.dim} {bar:60.green/dim} {pos}/{len} tests") {
+                Ok(style) => style.progress_chars("--"),
+                Err(err) => {
+                    tracing::warn!("failed to create progress bar style: {err}");
+                    ProgressStyle::default_bar()
+                }
+            }
+        }
+        ProgressMode::Counter | ProgressMode::None => {
+            match ProgressStyle::with_template("{pos}/{len} tests") {
+                Ok(style) => style,
+                Err(err) => {
+                    tracing::warn!("failed to create progress counter style: {err}");
+                    ProgressStyle::default_bar()
+                }
+            }
         }
     }
 }

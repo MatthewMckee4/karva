@@ -47,6 +47,7 @@ impl AggregatedResults {
 }
 
 /// Reads and writes test results in the cache directory for a specific run.
+#[derive(Clone)]
 pub struct RunCache {
     run_dir: Utf8PathBuf,
 }
@@ -101,6 +102,25 @@ impl RunCache {
     /// Path to the per-worker output file.
     pub fn output_file(&self, worker_id: usize) -> Utf8PathBuf {
         CacheFile::Output.path_in(&self.worker_dir(worker_id))
+    }
+
+    /// Path to the per-worker progress file.
+    pub fn progress_file(&self, worker_id: usize) -> Utf8PathBuf {
+        CacheFile::Progress.path_in(&self.worker_dir(worker_id))
+    }
+
+    /// Sum of completed-test counts across every worker for this run.
+    pub fn completed_count(&self) -> u64 {
+        let Ok(worker_dirs) = list_worker_dirs(&self.run_dir) else {
+            return 0;
+        };
+        worker_dirs
+            .iter()
+            .map(|dir| {
+                let path = CacheFile::Progress.path_in(dir);
+                path.metadata().map_or(0, |meta| meta.len())
+            })
+            .sum()
     }
 
     /// Reads the snapshot of which test the worker is currently running.

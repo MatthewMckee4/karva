@@ -164,6 +164,12 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 }
             }
 
+            self.context
+                .notify_test_function_completed(&QualifiedTestName::new(
+                    test_function.name.clone(),
+                    None,
+                ));
+
             if self.max_fail_reached() {
                 break;
             }

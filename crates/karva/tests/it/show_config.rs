@@ -19,6 +19,7 @@ fn show_config_default_profile() {
     show-python-output = false
     status-level = "pass"
     final-status-level = "pass"
+    show-progress = "none"
 
     [test]
     test-function-prefix = "test"
@@ -61,6 +62,7 @@ output-format = "concise"
     show-python-output = false
     status-level = "pass"
     final-status-level = "pass"
+    show-progress = "none"
 
     [test]
     test-function-prefix = "check"
@@ -106,6 +108,7 @@ output-format = "concise"
     show-python-output = false
     status-level = "pass"
     final-status-level = "pass"
+    show-progress = "none"
 
     [test]
     test-function-prefix = "check"
@@ -150,6 +153,7 @@ fail-under = 90
     show-python-output = false
     status-level = "pass"
     final-status-level = "pass"
+    show-progress = "none"
 
     [test]
     test-function-prefix = "test"
@@ -197,6 +201,7 @@ slow-timeout = 0.5
     show-python-output = false
     status-level = "pass"
     final-status-level = "pass"
+    show-progress = "none"
 
     [test]
     test-function-prefix = "test"

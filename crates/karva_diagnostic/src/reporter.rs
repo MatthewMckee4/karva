@@ -1,7 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -59,6 +59,11 @@ pub trait Reporter: Send + Sync {
     /// reporter can clear any in-flight state recorded by
     /// [`Self::report_test_started`]. Default no-op.
     fn report_test_finished(&self, test_name: &QualifiedTestName) {
+        let _ = test_name;
+    }
+
+    /// Notify that a test has fully completed for accounting purposes.
+    fn notify_test_completed(&self, test_name: &QualifiedTestName) {
         let _ = test_name;
     }
 }
@@ -267,6 +272,84 @@ impl Reporter for TestCaseReporter {
     }
 }
 
+/// Wraps another reporter and appends one byte to a file when a test completes.
+pub struct ProgressTrackingReporter<R: Reporter> {
+    inner: R,
+    progress_file: PathBuf,
+}
+
+impl<R: Reporter> ProgressTrackingReporter<R> {
+    pub fn new(inner: R, progress_file: PathBuf) -> Self {
+        Self {
+            inner,
+            progress_file,
+        }
+    }
+
+    fn append_tick(&self) {
+        match OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.progress_file)
+        {
+            Ok(mut file) => {
+                if let Err(err) = file.write_all(b"\x01") {
+                    tracing::warn!(
+                        path = %self.progress_file.display(),
+                        "failed to write progress tick: {err}"
+                    );
+                }
+            }
+            Err(err) => {
+                tracing::warn!(
+                    path = %self.progress_file.display(),
+                    "failed to open progress file: {err}"
+                );
+            }
+        }
+    }
+}
+
+impl<R: Reporter> Reporter for ProgressTrackingReporter<R> {
+    fn report_test_case_result(
+        &self,
+        test_name: &QualifiedTestName,
+        result_kind: IndividualTestResultKind,
+        duration: Duration,
+    ) {
+        self.inner
+            .report_test_case_result(test_name, result_kind, duration);
+    }
+
+    fn report_test_attempt(
+        &self,
+        test_name: &QualifiedTestName,
+        attempt: u32,
+        result_kind: IndividualTestResultKind,
+        duration: Duration,
+    ) {
+        self.inner
+            .report_test_attempt(test_name, attempt, result_kind, duration);
+    }
+
+    fn report_test_slow(&self, test_name: &QualifiedTestName, duration: Duration) {
+        self.inner.report_test_slow(test_name, duration);
+    }
+
+    fn report_test_started(&self, test_name: &QualifiedTestName) {
+        self.inner.report_test_started(test_name);
+    }
+
+    fn report_test_finished(&self, test_name: &QualifiedTestName) {
+        self.inner.report_test_finished(test_name);
+    }
+
+    fn notify_test_completed(&self, test_name: &QualifiedTestName) {
+        self.inner.notify_test_completed(test_name);
+        self.append_tick();
+    }
+}
+
 /// The width that result labels (`PASS`, `FAIL`, `SKIP`, `SLOW`, `TRY N PASS`,
 /// etc.) are right-padded to so columns align.
 const LABEL_COLUMN_WIDTH: usize = 12;
@@ -377,5 +460,18 @@ mod tests {
             .with_current_test_file(path);
 
         reporter.report_test_finished(&qualified_test_name());
+    }
+
+    #[test]
+    fn progress_tracking_reporter_appends_one_byte_per_completion() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let path = temp_dir.path().join("progress");
+        let reporter = ProgressTrackingReporter::new(DummyReporter, path.clone());
+        let test_name = qualified_test_name();
+
+        reporter.notify_test_completed(&test_name);
+        reporter.notify_test_completed(&test_name);
+
+        assert_eq!(std::fs::metadata(path).expect("progress file").len(), 2);
     }
 }

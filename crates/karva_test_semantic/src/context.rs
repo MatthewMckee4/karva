@@ -85,6 +85,10 @@ impl<'a> Context<'a> {
         self.reporter.report_test_finished(test_case_name);
     }
 
+    pub fn notify_test_function_completed(&self, function_name: &QualifiedTestName) {
+        self.reporter.notify_test_completed(function_name);
+    }
+
     pub fn register_test_case_result(
         &self,
         test_case_name: &QualifiedTestName,

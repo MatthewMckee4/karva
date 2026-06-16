@@ -519,7 +519,14 @@ pub fn run_parallel_tests(
         coverage_enabled: !project.settings().coverage().sources.is_empty(),
     };
     let (mut worker_manager, pipes) = spawn_workers(&spawn, &partitions)?;
-    let drain = OutputDrain::start(num_workers, &cache, pipes);
+    let total_tests_for_progress = u64::try_from(total_tests).unwrap_or(u64::MAX);
+    let drain = OutputDrain::start(
+        project.settings().terminal().show_progress,
+        total_tests_for_progress,
+        num_workers,
+        cache.clone(),
+        pipes,
+    );
 
     let max_fail_cache = project.settings().max_fail().has_limit().then_some(&cache);
 

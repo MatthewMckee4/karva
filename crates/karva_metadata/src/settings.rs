@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use karva_combine::Combine;
-use karva_logging::{FinalStatusLevel, StatusLevel};
+use karva_logging::{FinalStatusLevel, ProgressMode, StatusLevel};
 use serde::{Deserialize, Serialize, Serializer};
 
 use crate::filter::{EvalContext, FiltersetSet, ValidatedFilter};
@@ -281,6 +281,7 @@ pub struct TerminalSettings {
     pub show_python_output: bool,
     pub status_level: StatusLevel,
     pub final_status_level: FinalStatusLevel,
+    pub show_progress: ProgressMode,
 }
 
 #[derive(Default, Debug, Clone, Serialize)]

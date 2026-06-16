@@ -28,6 +28,8 @@ pub enum CacheFile {
     FlakyTests,
     /// Per-worker JSON: line-coverage data for sources tracked during the run.
     Coverage,
+    /// Per-worker append-only file: one byte per completed test.
+    Progress,
     /// Per-worker append-only file: newline-delimited preformatted result
     /// lines. The orchestrator drains these files and prints whole lines to
     /// its stdout to prevent worker output from interleaving.
@@ -52,6 +54,7 @@ impl CacheFile {
             Self::FailedTests => "failed_tests.json",
             Self::FlakyTests => "flaky_tests.json",
             Self::Coverage => "coverage.json",
+            Self::Progress => "progress",
             Self::Output => "output",
             Self::FailFastSignal => "fail-fast",
             Self::LastFailed => "last-failed.json",
