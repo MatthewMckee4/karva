@@ -87,13 +87,18 @@ impl WorkerManager {
     ///
     /// Returns early if a message is received on `shutdown_rx`, if the cache
     /// contains a fail-fast signal indicating a worker encountered a test
-    /// failure, or if `run_timeout` elapses. The timeout is measured from the
-    /// start of this call (test execution); collection happens beforehand.
+    /// failure, or if `deadline` passes. Finished workers are reaped at the
+    /// top of each iteration before any of those conditions are checked, so a
+    /// run that completes just as the deadline passes (or a signal arrives) is
+    /// reported as `AllCompleted` rather than `TimedOut`/`Cancelled`.
+    ///
+    /// `deadline` is the absolute instant at which the whole run times out; it
+    /// is computed before collection so the limit covers the entire run.
     fn wait_for_completion(
         &mut self,
         shutdown_rx: Option<&Receiver<()>>,
         cache: Option<&RunCache>,
-        run_timeout: Option<Duration>,
+        deadline: Option<Instant>,
     ) -> WaitOutcome {
         if self.workers.is_empty() {
             return WaitOutcome::AllCompleted;
@@ -104,33 +109,7 @@ impl WorkerManager {
             self.workers.len()
         );
 
-        let start = Instant::now();
-
         loop {
-            if let Some(rx) = shutdown_rx {
-                match rx.try_recv() {
-                    Ok(()) | Err(TryRecvError::Disconnected) => {
-                        tracing::info!("Shutdown requested — stopping remaining workers");
-                        return WaitOutcome::Cancelled;
-                    }
-                    Err(TryRecvError::Empty) => {}
-                }
-            }
-
-            if let Some(cache) = cache
-                && cache.has_fail_fast_signal()
-            {
-                tracing::info!("Fail-fast signal received — stopping remaining workers");
-                return WaitOutcome::FailFast;
-            }
-
-            if let Some(timeout) = run_timeout
-                && start.elapsed() >= timeout
-            {
-                tracing::info!("Run timeout exceeded — stopping remaining workers");
-                return WaitOutcome::TimedOut;
-            }
-
             self.workers
                 .retain_mut(|worker| match worker.child.try_wait() {
                     Ok(Some(status)) => {
@@ -160,6 +139,30 @@ impl WorkerManager {
             if self.workers.is_empty() {
                 tracing::info!("All workers completed");
                 return WaitOutcome::AllCompleted;
+            }
+
+            if let Some(rx) = shutdown_rx {
+                match rx.try_recv() {
+                    Ok(()) | Err(TryRecvError::Disconnected) => {
+                        tracing::info!("Shutdown requested — stopping remaining workers");
+                        return WaitOutcome::Cancelled;
+                    }
+                    Err(TryRecvError::Empty) => {}
+                }
+            }
+
+            if let Some(cache) = cache
+                && cache.has_fail_fast_signal()
+            {
+                tracing::info!("Fail-fast signal received — stopping remaining workers");
+                return WaitOutcome::FailFast;
+            }
+
+            if let Some(deadline) = deadline
+                && Instant::now() >= deadline
+            {
+                tracing::info!("Run timeout exceeded — stopping remaining workers");
+                return WaitOutcome::TimedOut;
             }
 
             std::thread::sleep(WORKER_POLL_INTERVAL);
@@ -448,6 +451,14 @@ pub fn run_parallel_tests(
         None
     };
 
+    // Anchor the run-timeout deadline before collection so the limit covers
+    // the whole run, not just test execution.
+    let run_deadline = project
+        .settings()
+        .test()
+        .run_timeout
+        .map(|timeout| Instant::now() + timeout);
+
     let collected = collect_tests(project)?;
 
     let total_tests = collected.test_count();
@@ -527,11 +538,7 @@ pub fn run_parallel_tests(
 
     let max_fail_cache = project.settings().max_fail().has_limit().then_some(&cache);
 
-    let outcome = worker_manager.wait_for_completion(
-        shutdown_rx,
-        max_fail_cache,
-        project.settings().test().run_timeout,
-    );
+    let outcome = worker_manager.wait_for_completion(shutdown_rx, max_fail_cache, run_deadline);
     let interrupted_tests = if outcome == WaitOutcome::Cancelled {
         worker_manager.cancel_and_kill(printer, &cache)
     } else {

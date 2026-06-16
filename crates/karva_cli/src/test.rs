@@ -373,6 +373,10 @@ impl SubTestCommand {
                 no_tests: self.no_tests.map(Into::into),
                 slow_timeout: self.slow_timeout.map(SlowTimeoutSecs),
                 timeout: self.timeout.map(TestTimeoutSecs),
+                // `run-timeout` is a main-process-only option and is never
+                // forwarded to workers, so it lives on `TestCommand` rather
+                // than this worker-shared struct. `TestCommand::into_options`
+                // sets the real value.
                 run_timeout: None,
             }),
             coverage: Some(CoverageOptions {

@@ -28,6 +28,11 @@ fn run_and_print(
             if let Err(err) = print_test_output(printer, start_time, &output.results, durations) {
                 tracing::error!("Failed to print test output: {err}");
             }
+            if output.timed_out
+                && let Err(err) = super::print_run_timed_out(printer)
+            {
+                tracing::error!("Failed to print run timeout message: {err}");
+            }
         }
         Err(err) => {
             let mut stderr = std::io::stderr().lock();

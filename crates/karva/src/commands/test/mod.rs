@@ -101,8 +101,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     print_test_output(printer, start_time, &result, durations)?;
 
     if timed_out {
-        let mut stdout = printer.stream_for_message().lock();
-        writeln!(stdout, "\nerror: run timed out before all tests completed")?;
+        print_run_timed_out(printer)?;
         return Ok(ExitStatus::Failure);
     }
 
@@ -208,6 +207,14 @@ fn coverage_report_path(
 
 fn no_tests_collected(result: &AggregatedResults) -> bool {
     result.stats.total() == 0 && result.diagnostics.is_empty()
+}
+
+/// Print the message shown when a run is stopped by `--run-timeout`.
+///
+/// Shared by the one-shot and watch-mode paths.
+pub(super) fn print_run_timed_out(printer: Printer) -> std::io::Result<()> {
+    let mut stdout = printer.stream_for_message().lock();
+    writeln!(stdout, "\nerror: run timed out before all tests completed")
 }
 
 /// Print test output: diagnostics, durations, and result summary.
