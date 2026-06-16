@@ -98,6 +98,11 @@ impl RunCache {
         CacheFile::CurrentTest.path_in(&self.worker_dir(worker_id))
     }
 
+    /// Path to the per-worker output file.
+    pub fn output_file(&self, worker_id: usize) -> Utf8PathBuf {
+        CacheFile::Output.path_in(&self.worker_dir(worker_id))
+    }
+
     /// Reads the snapshot of which test the worker is currently running.
     /// Returns `None` if the worker is between tests or hasn't started yet.
     pub fn read_current_test(&self, worker_id: usize) -> Result<Option<CurrentTest>> {

@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
-use std::process::{Child, Stdio};
+use std::process::{Child, ChildStdout, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
@@ -21,6 +21,7 @@ use karva_project::Project;
 
 use crate::binary::find_karva_worker_binary;
 use crate::collection::ParallelCollector;
+use crate::output::{OutputDrain, WorkerPipes};
 use crate::partition::{Partition, TestOrdering, partition_collected_tests};
 use crate::worker_args::{WorkerSpawn, worker_command};
 
@@ -193,20 +194,13 @@ impl WorkerManager {
         }
     }
 
-    /// Stop remaining workers and emit nextest-style cancellation lines.
+    /// Snapshot which tests are currently in flight.
     ///
     /// Each worker writes a `current_test.json` file at the start of every
-    /// test and removes it when the test finishes. We read those files
-    /// *before* killing — once we kill the worker, that file may be removed
-    /// by an in-flight finalizer or simply lost — and remember a
-    /// `(worker_id, test name, test start time)` snapshot for each.
-    ///
-    /// Workers are killed and reaped before we print so any in-flight
-    /// `PASS`/`FAIL` lines they were writing to the inherited stdout land
-    /// before our banner; otherwise the cancellation block interleaves
-    /// with worker output. A short settle pause lets any kernel-buffered
-    /// writes drain.
-    fn cancel_and_kill(&mut self, printer: Printer, cache: &RunCache) -> Vec<InterruptedTest> {
+    /// test and removes it when the test finishes. We read those files before
+    /// killing workers so the cancellation block can report interrupted tests
+    /// even if the files disappear during shutdown.
+    fn snapshot_in_flight(&self, cache: &RunCache) -> Vec<InFlightTest> {
         if self.workers.is_empty() {
             return Vec::new();
         }
@@ -216,8 +210,7 @@ impl WorkerManager {
             .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
             .unwrap_or(0);
 
-        let in_flight: Vec<_> = self
-            .workers
+        self.workers
             .iter()
             .map(|worker| {
                 let current = match cache.read_current_test(worker.id) {
@@ -240,73 +233,58 @@ impl WorkerManager {
                     elapsed,
                 }
             })
-            .collect();
-
-        let running_tests = in_flight.iter().filter(|test| test.name.is_some()).count();
-        let test_label = if running_tests == 1 { "test" } else { "tests" };
-
-        for worker in &mut self.workers {
-            if let Err(err) = worker.child.kill() {
-                tracing::warn!(
-                    worker_id = worker.id,
-                    "failed to kill worker process: {err}"
-                );
-            }
-        }
-        for worker in &mut self.workers {
-            if let Err(err) = worker.child.wait() {
-                tracing::warn!(
-                    worker_id = worker.id,
-                    "failed to wait for worker process: {err}"
-                );
-            }
-        }
-        std::thread::sleep(STDOUT_SETTLE);
-
-        let mut stdout = printer.stream_for_test_result().lock();
-        let cancel_label = "Cancelling".yellow().bold();
-        let interrupt_label = "interrupt".yellow().bold();
-        if let Err(err) = writeln!(
-            stdout,
-            "  {cancel_label} due to {interrupt_label}: {running_tests} {test_label} still running"
-        ) {
-            tracing::warn!("failed to write cancellation banner: {err}");
-        }
-
-        let label = "SIGINT".yellow().bold();
-        let padding = " ".repeat(LABEL_COLUMN_WIDTH.saturating_sub("SIGINT".len()));
-        for test in &in_flight {
-            let duration_str = format_duration_bracketed(test.elapsed);
-            match &test.name {
-                Some(name) => {
-                    let colored = format_in_flight_test(name);
-                    if let Err(err) = writeln!(stdout, "{padding}{label} {duration_str} {colored}")
-                    {
-                        tracing::warn!("failed to write interrupted test line: {err}");
-                    }
-                }
-                None => {
-                    if let Err(err) = writeln!(
-                        stdout,
-                        "{padding}{label} {duration_str} worker {} (between tests)",
-                        test.worker_id
-                    ) {
-                        tracing::warn!("failed to write interrupted worker line: {err}");
-                    }
-                }
-            }
-        }
-
-        in_flight
-            .into_iter()
-            .filter_map(|test| {
-                test.name.map(|name| InterruptedTest {
-                    name,
-                    duration: test.elapsed,
-                })
-            })
             .collect()
     }
+}
+
+fn print_cancellation(printer: Printer, in_flight: &[InFlightTest]) {
+    let running_tests = in_flight.iter().filter(|test| test.name.is_some()).count();
+    let test_label = if running_tests == 1 { "test" } else { "tests" };
+
+    let mut stdout = printer.stream_for_test_result().lock();
+    let cancel_label = "Cancelling".yellow().bold();
+    let interrupt_label = "interrupt".yellow().bold();
+    if let Err(err) = writeln!(
+        stdout,
+        "  {cancel_label} due to {interrupt_label}: {running_tests} {test_label} still running"
+    ) {
+        tracing::warn!("failed to write cancellation banner: {err}");
+    }
+
+    let label = "SIGINT".yellow().bold();
+    let padding = " ".repeat(LABEL_COLUMN_WIDTH.saturating_sub("SIGINT".len()));
+    for test in in_flight {
+        let duration_str = format_duration_bracketed(test.elapsed);
+        match &test.name {
+            Some(name) => {
+                let colored = format_in_flight_test(name);
+                if let Err(err) = writeln!(stdout, "{padding}{label} {duration_str} {colored}") {
+                    tracing::warn!("failed to write interrupted test line: {err}");
+                }
+            }
+            None => {
+                if let Err(err) = writeln!(
+                    stdout,
+                    "{padding}{label} {duration_str} worker {} (between tests)",
+                    test.worker_id
+                ) {
+                    tracing::warn!("failed to write interrupted worker line: {err}");
+                }
+            }
+        }
+    }
+}
+
+fn interrupted_tests_from(in_flight: Vec<InFlightTest>) -> Vec<InterruptedTest> {
+    in_flight
+        .into_iter()
+        .filter_map(|test| {
+            test.name.map(|name| InterruptedTest {
+                name,
+                duration: test.elapsed,
+            })
+        })
+        .collect()
 }
 
 fn elapsed_since_start(now_ms: u64, start_ms: u64, worker_id: usize) -> Duration {
@@ -361,8 +339,12 @@ pub struct ParallelTestConfig {
 ///
 /// Creates a worker process for each non-empty partition, passing the appropriate
 /// subset of tests and command-line arguments to each worker.
-fn spawn_workers(spawn: &WorkerSpawn, partitions: &[Partition]) -> Result<WorkerManager> {
+fn spawn_workers(
+    spawn: &WorkerSpawn,
+    partitions: &[Partition],
+) -> Result<(WorkerManager, Vec<WorkerPipes>)> {
     let mut worker_manager = WorkerManager::default();
+    let mut pipes: Vec<WorkerPipes> = Vec::new();
 
     for (worker_id, partition) in partitions.iter().enumerate() {
         if partition.tests().is_empty() {
@@ -370,11 +352,12 @@ fn spawn_workers(spawn: &WorkerSpawn, partitions: &[Partition]) -> Result<Worker
             continue;
         }
 
-        let child = worker_command(spawn, worker_id, partition)
-            .stdout(Stdio::inherit())
+        let mut child = worker_command(spawn, worker_id, partition)
+            .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
             .context("Failed to spawn karva-worker process")?;
+        let stdout: Option<ChildStdout> = child.stdout.take();
 
         tracing::info!(
             "Worker {} spawned with {} tests",
@@ -383,9 +366,10 @@ fn spawn_workers(spawn: &WorkerSpawn, partitions: &[Partition]) -> Result<Worker
         );
 
         worker_manager.spawn(worker_id, child);
+        pipes.push(WorkerPipes { stdout });
     }
 
-    Ok(worker_manager)
+    Ok((worker_manager, pipes))
 }
 
 /// Collect tests from the project without executing them.
@@ -534,15 +518,21 @@ pub fn run_parallel_tests(
         worker_binary: &worker_binary,
         coverage_enabled: !project.settings().coverage().sources.is_empty(),
     };
-    let mut worker_manager = spawn_workers(&spawn, &partitions)?;
+    let (mut worker_manager, pipes) = spawn_workers(&spawn, &partitions)?;
+    let drain = OutputDrain::start(num_workers, &cache, pipes);
 
     let max_fail_cache = project.settings().max_fail().has_limit().then_some(&cache);
 
     let outcome = worker_manager.wait_for_completion(shutdown_rx, max_fail_cache, run_deadline);
     let interrupted_tests = if outcome == WaitOutcome::Cancelled {
-        worker_manager.cancel_and_kill(printer, &cache)
+        let in_flight = worker_manager.snapshot_in_flight(&cache);
+        worker_manager.kill_remaining();
+        drain.finish();
+        print_cancellation(printer, &in_flight);
+        interrupted_tests_from(in_flight)
     } else {
         worker_manager.kill_remaining();
+        drain.finish();
         Vec::new()
     };
 
@@ -572,9 +562,6 @@ pub fn run_parallel_tests(
 
 const MIN_TESTS_PER_WORKER: usize = 5;
 const WORKER_POLL_INTERVAL: Duration = Duration::from_millis(10);
-/// Pause after killing workers to let kernel-buffered output drain to
-/// stdout before we emit the cancellation banner.
-const STDOUT_SETTLE: Duration = Duration::from_millis(50);
 
 fn previous_durations(cache_dir: &Utf8Path, no_cache: bool) -> HashMap<String, Duration> {
     if no_cache {
