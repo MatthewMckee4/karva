@@ -71,12 +71,16 @@ repos:
         types: [rust]
         pass_filenames: false
         priority: 1
+
+  - repo: https://github.com/astral-sh/ty-pre-commit
+    rev: v0.0.48
+    hooks:
       - id: ty
-        name: ty
-        entry: uvx ty check python/
-        language: system
-        types: [python]
-        pass_filenames: false
+        args: [--isolated, --no-project]
+        files: ^python/
+        types: [file]
+        types_or: [python, pyi]
+        always_run: false
         priority: 2
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
