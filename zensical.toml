@@ -57,6 +57,7 @@ nav = [
 ]
 
 [project.theme]
+name = "shadcn"
 language = "en"
 features = [
     "navigation.instant",
