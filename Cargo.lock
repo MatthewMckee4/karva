@@ -1055,7 +1055,6 @@ dependencies = [
  "insta-cmd",
  "karva_cache",
  "karva_cli",
- "karva_collector",
  "karva_coverage",
  "karva_logging",
  "karva_metadata",
@@ -1280,7 +1279,6 @@ dependencies = [
  "pyo3",
  "ruff_python_ast",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1297,7 +1295,6 @@ dependencies = [
  "karva_cache",
  "karva_cli",
  "karva_collector",
- "karva_coverage",
  "karva_logging",
  "karva_metadata",
  "karva_project",
@@ -1347,7 +1344,6 @@ dependencies = [
  "ruff_python_ast",
  "ruff_python_parser",
  "ruff_source_file",
- "tempfile",
  "tracing",
 ]
 
