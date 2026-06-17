@@ -6,11 +6,11 @@
 //! pairing the filename with its serializer in one place means adding a new
 //! artifact is a single-place change and read/write helpers can't drift.
 
-use std::fs;
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 
 use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
+use fs_err as fs;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tempfile::NamedTempFile;
@@ -109,25 +109,73 @@ pub fn write_json_if_nonempty<T: Serialize>(
 /// Reads `dir/<file>` as JSON, or returns `Ok(None)` when the file does not exist.
 pub fn read_json<T: DeserializeOwned>(dir: &Utf8Path, file: CacheFile) -> Result<Option<T>> {
     let path = file.path_in(dir);
-    if !path.exists() {
-        return Ok(None);
-    }
-    let content = fs::read_to_string(&path)?;
-    Ok(Some(serde_json::from_str(&content)?))
+    let content = match fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(err.into()),
+    };
+    serde_json::from_str(&content)
+        .with_context(|| format!("failed to parse cache artifact `{path}`"))
+        .map(Some)
 }
 
 /// Reads `dir/<file>` as raw text, or returns `Ok(None)` when the file does not exist.
 pub fn read_text(dir: &Utf8Path, file: CacheFile) -> Result<Option<String>> {
     let path = file.path_in(dir);
-    if !path.exists() {
-        return Ok(None);
+    match fs::read_to_string(&path) {
+        Ok(content) => Ok(Some(content)),
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(None),
+        Err(err) => Err(err.into()),
     }
-    Ok(Some(fs::read_to_string(&path)?))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn read_text_missing_artifact_returns_none() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let cache_dir =
+            Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf()).expect("UTF-8 temp path");
+
+        let content = read_text(&cache_dir, CacheFile::LastFailed).expect("read artifact");
+
+        assert!(content.is_none());
+    }
+
+    #[test]
+    fn read_text_reports_artifact_path_on_read_error() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let cache_dir =
+            Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf()).expect("UTF-8 temp path");
+        let path = CacheFile::LastFailed.path_in(&cache_dir);
+        std::fs::create_dir(&path).expect("create directory at artifact path");
+
+        let error = read_text(&cache_dir, CacheFile::LastFailed).expect_err("read should fail");
+
+        assert!(
+            error.to_string().contains(path.as_str()),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn read_json_reports_artifact_path_on_parse_error() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let cache_dir =
+            Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf()).expect("UTF-8 temp path");
+        let path = CacheFile::LastFailed.path_in(&cache_dir);
+        std::fs::write(&path, "not-json").expect("write malformed artifact");
+
+        let error = read_json::<Vec<String>>(&cache_dir, CacheFile::LastFailed)
+            .expect_err("parse should fail");
+
+        assert!(
+            error.to_string().contains(path.as_str()),
+            "unexpected error: {error}"
+        );
+    }
 
     #[test]
     fn write_text_replaces_existing_artifact() {

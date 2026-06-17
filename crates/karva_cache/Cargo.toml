@@ -15,6 +15,7 @@ karva_diagnostic = { workspace = true }
 
 anyhow = { workspace = true }
 camino = { workspace = true }
+fs-err = { workspace = true }
 ruff_db = { workspace = true }
 ruff_notebook = { workspace = true }
 serde = { workspace = true }
