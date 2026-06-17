@@ -3,3 +3,6 @@ contact_links:
   - name: Documentation
     url: https://matthewmckee4.github.io/karva/
     about: Please consult the documentation before creating an issue.
+  - name: Community
+    url: https://discord.gg/XG95vNz4Zu
+    about: Join the Discord community to ask questions and collaborate.
