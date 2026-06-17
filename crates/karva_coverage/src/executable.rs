@@ -8,8 +8,10 @@
 //! bytecode constants rather than executable statements.
 
 use std::collections::HashSet;
+use std::io;
 use std::path::Path;
 
+use fs_err as fs;
 use ruff_python_ast::helpers::is_docstring_stmt;
 use ruff_python_ast::token::TokenKind;
 use ruff_python_ast::visitor::source_order::{
@@ -22,11 +24,9 @@ use ruff_source_file::LineIndex;
 use ruff_text_size::{Ranged, TextSize};
 
 /// Parse `path` and return the set of line numbers that contain a statement.
-pub fn executable_lines(path: &Path) -> HashSet<u32> {
-    let Ok(source) = std::fs::read_to_string(path) else {
-        return HashSet::new();
-    };
-    executable_lines_for_source(&source)
+pub fn executable_lines(path: &Path) -> io::Result<HashSet<u32>> {
+    let source = fs::read_to_string(path)?;
+    Ok(executable_lines_for_source(&source))
 }
 
 /// Compute executable line numbers from a source string. Exposed separately
@@ -213,6 +213,17 @@ mod tests {
             })
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    #[test]
+    fn executable_lines_reports_read_errors() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("missing.py");
+
+        let err = executable_lines(&path).expect_err("missing source should fail");
+
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
+        assert!(err.to_string().contains("missing.py"), "{err}");
     }
 
     #[test]
