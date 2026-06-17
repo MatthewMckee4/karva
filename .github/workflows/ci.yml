@@ -56,7 +56,6 @@ jobs:
             . \
             ':!.editorconfig' \
             ':!.gitattributes' \
-            ':!.ignore' \
             ':!.github/CODEOWNERS' \
             ':!.github/FUNDING.yml' \
             ':!.github/ISSUE_TEMPLATE/**' \
