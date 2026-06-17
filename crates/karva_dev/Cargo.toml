@@ -5,6 +5,7 @@ publish = false
 authors = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
+description = "Development tooling for Karva."
 homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }

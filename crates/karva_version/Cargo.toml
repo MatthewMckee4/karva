@@ -3,6 +3,7 @@ name = "karva_version"
 version = "0.0.1-alpha.6"
 edition.workspace = true
 rust-version.workspace = true
+description = "Version metadata for Karva."
 homepage.workspace = true
 documentation.workspace = true
 repository.workspace = true

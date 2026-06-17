@@ -5,6 +5,7 @@ default-run = "karva"
 
 edition = { workspace = true }
 rust-version = { workspace = true }
+description = "The main Karva CLI binary."
 homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
