@@ -39,6 +39,13 @@ updates:
     cooldown:
       default-days: 7
 
+  - package-ecosystem: "rust-toolchain"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+
   - package-ecosystem: "cargo" # See documentation for possible values
 
     directory: "/" # Location of package manifests
