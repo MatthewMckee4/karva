@@ -8,6 +8,8 @@ version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
+    labels:
+      - "dependencies"
     schedule:
       interval: "weekly"
     groups:
@@ -19,6 +21,8 @@ updates:
 
   - package-ecosystem: "uv"
     directory: "/"
+    labels:
+      - "dependencies"
     schedule:
       interval: "weekly"
     groups:
@@ -30,6 +34,8 @@ updates:
 
   - package-ecosystem: "pre-commit"
     directory: "/"
+    labels:
+      - "dependencies"
     schedule:
       interval: "weekly"
     groups:
@@ -41,6 +47,8 @@ updates:
 
   - package-ecosystem: "rust-toolchain"
     directory: "/"
+    labels:
+      - "dependencies"
     schedule:
       interval: "weekly"
     cooldown:
@@ -49,6 +57,9 @@ updates:
   - package-ecosystem: "cargo" # See documentation for possible values
 
     directory: "/" # Location of package manifests
+
+    labels:
+      - "dependencies"
 
     schedule:
       interval: "weekly"
