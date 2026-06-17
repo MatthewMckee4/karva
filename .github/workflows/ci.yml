@@ -28,6 +28,7 @@ jobs:
     name: "determine changes"
 
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     outputs:
       # Flag that is raised when any code is changed
@@ -87,6 +88,7 @@ jobs:
     name: "pre commit"
 
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -104,6 +106,7 @@ jobs:
     name: "cargo test (${{ matrix.os }})"
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
 
     needs: determine_changes
     if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
@@ -249,6 +252,7 @@ jobs:
     name: "Build docs"
 
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
