@@ -43,6 +43,17 @@ module-name = "karva._karva"
 python-source = "python"
 features = ["pyo3/extension-module"]
 
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "Cargo.lock" },
+    { file = ".cargo/config.toml" },
+    { file = "rust-toolchain.toml" },
+    { file = "crates/**/*.rs" },
+    { file = "crates/**/Cargo.toml" },
+]
+
 [tool.ruff]
 fix = true
 target-version = "py311"
