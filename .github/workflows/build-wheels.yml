@@ -5,6 +5,13 @@ on:
 
   pull_request:
     paths:
+      # Rust build inputs can change the native extension or the release
+      # toolchain used by maturin.
+      - .cargo/config.toml
+      - Cargo.lock
+      - Cargo.toml
+      - crates/**/Cargo.toml
+      - rust-toolchain.toml
       # When we change pyproject.toml, we want to ensure that the maturin builds still work.
       - pyproject.toml
       # And when we change this workflow itself...
