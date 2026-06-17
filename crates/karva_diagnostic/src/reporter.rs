@@ -227,15 +227,18 @@ fn flush_progress_snapshot(
 }
 
 fn write_progress_file(file: &mut File, snapshot: &ProgressSnapshot) -> std::io::Result<()> {
+    let body = serde_json::to_vec(snapshot).map_err(std::io::Error::other)?;
     file.set_len(0)?;
     file.seek(SeekFrom::Start(0))?;
-    serde_json::to_writer(file, snapshot)?;
+    file.write_all(&body)?;
+    file.flush()?;
     Ok(())
 }
 
 fn clear_progress_file(file: &mut File) -> std::io::Result<()> {
     file.set_len(0)?;
     file.seek(SeekFrom::Start(0))?;
+    file.flush()?;
     Ok(())
 }
 
@@ -440,16 +443,21 @@ mod tests {
         )
     }
 
-    fn wait_for_progress_body(path: &Utf8Path, matches: impl Fn(&str) -> bool) -> String {
+    fn wait_for_progress_snapshot(
+        path: &Utf8Path,
+        matches: impl Fn(&serde_json::Value) -> bool,
+    ) -> serde_json::Value {
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(1) {
             let body = std::fs::read_to_string(path).expect("progress file should exist");
-            if matches(&body) {
-                return body;
+            if let Ok(progress) = serde_json::from_str(&body)
+                && matches(&progress)
+            {
+                return progress;
             }
             std::thread::sleep(Duration::from_millis(5));
         }
-        panic!("timed out waiting for progress file body");
+        panic!("timed out waiting for progress file snapshot");
     }
 
     fn wait_for_empty_progress_body(path: &Utf8Path) {
@@ -476,9 +484,7 @@ mod tests {
 
         reporter.report_test_started(&test_name);
 
-        let body = wait_for_progress_body(&path, |body| !body.is_empty());
-        let progress: serde_json::Value =
-            serde_json::from_str(&body).expect("progress file should be valid JSON");
+        let progress = wait_for_progress_snapshot(&path, |_| true);
         assert_eq!(progress["name"], "test_module::test_example");
         assert!(progress["start_unix_ms"].as_u64().is_some());
 
@@ -503,19 +509,20 @@ mod tests {
             ),
             None,
         ));
-        let body = wait_for_progress_body(&path, |body| {
-            body.contains("test_example_with_a_much_longer_name")
+        let progress = wait_for_progress_snapshot(&path, |progress| {
+            progress["name"] == "test_module::test_example_with_a_much_longer_name"
         });
-        assert!(body.contains("test_example_with_a_much_longer_name"));
+        assert_eq!(
+            progress["name"],
+            "test_module::test_example_with_a_much_longer_name"
+        );
 
         reporter.report_test_finished(&qualified_test_name());
         reporter.report_test_started(&qualified_test_name());
 
-        let body = wait_for_progress_body(&path, |body| {
-            body.contains(r#""name":"test_module::test_example""#)
+        let progress = wait_for_progress_snapshot(&path, |progress| {
+            progress["name"] == "test_module::test_example"
         });
-        let progress: serde_json::Value =
-            serde_json::from_str(&body).expect("progress file should be valid JSON");
         assert_eq!(progress["name"], "test_module::test_example");
     }
 }
