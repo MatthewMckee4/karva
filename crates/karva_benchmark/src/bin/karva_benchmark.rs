@@ -351,6 +351,8 @@ fn run_subject(
         .with_context(|| format!("Failed to install `{}` benchmark wheel", subject.label))?;
     karva_benchmark::clean_project_cache(project_root)
         .with_context(|| format!("Failed to clean benchmark cache for `{}`", config.name))?;
+    warm_project_cache(config, project_root)
+        .with_context(|| format!("Failed to warm benchmark cache for `{}`", config.name))?;
 
     let value = run_project_cli(metric, config, project_root)
         .with_context(|| format!("Failed to run `{}` with `{}`", config.name, subject.label))?;
@@ -378,16 +380,17 @@ fn run_project_cli(
     }
 }
 
+fn warm_project_cache(config: &BenchmarkProject, project_root: &Utf8Path) -> Result<()> {
+    let invocation = karva_invocation(config, project_root)?;
+    let output = run_invocation(&invocation, project_root)?;
+    ensure_karva_success(&output, config)
+}
+
 fn run_project_wall_time(config: &BenchmarkProject, project_root: &Utf8Path) -> Result<f64> {
     let invocation = karva_invocation(config, project_root)?;
 
     let start = Instant::now();
-    let output = invocation.command(project_root).output().with_context(|| {
-        format!(
-            "Failed to execute `{}`",
-            invocation.binary.as_std_path().display()
-        )
-    })?;
+    let output = run_invocation(&invocation, project_root)?;
     let elapsed = start.elapsed();
 
     ensure_karva_success(&output, config)?;
@@ -428,6 +431,15 @@ fn run_project_peak_rss_kib(config: &BenchmarkProject, project_root: &Utf8Path) 
     }
 }
 
+fn run_invocation(invocation: &KarvaInvocation, project_root: &Utf8Path) -> Result<Output> {
+    invocation.command(project_root).output().with_context(|| {
+        format!(
+            "Failed to execute `{}`",
+            invocation.binary.as_std_path().display()
+        )
+    })
+}
+
 fn karva_invocation(config: &BenchmarkProject, project_root: &Utf8Path) -> Result<KarvaInvocation> {
     let bin_dir = venv_bin_dir(project_root);
     let binary = bin_dir.join(executable_name("karva"));
@@ -438,14 +450,9 @@ fn karva_invocation(config: &BenchmarkProject, project_root: &Utf8Path) -> Resul
         "test".to_string(),
         "--num-workers".to_string(),
         worker_count,
-        "--no-cache".to_string(),
         "--no-ignore".to_string(),
         "--output-format".to_string(),
         "concise".to_string(),
-        "--status-level".to_string(),
-        "none".to_string(),
-        "--final-status-level".to_string(),
-        "none".to_string(),
     ];
 
     if config.try_import_fixtures {
@@ -684,10 +691,10 @@ impl BenchmarkMetric {
     fn report_context(self) -> &'static str {
         match self {
             Self::WallTime => {
-                "Each benchmark compares median CLI wall time on one GitHub Actions runner, alternating install order. Runs are configured per project. Lower is better."
+                "Each benchmark compares median CLI wall time on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Lower is better."
             }
             Self::Memory => {
-                "Each benchmark compares median peak RSS for the installed Karva CLI on one GitHub Actions runner, alternating install order. Runs are configured per project. Lower is better."
+                "Each benchmark compares median peak RSS for the installed Karva CLI on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and are configured per project. Lower is better."
             }
         }
     }
@@ -792,9 +799,11 @@ fn utf8_path(path: PathBuf) -> Result<Utf8PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use camino::Utf8Path;
+
     use super::{
         BenchmarkMetric, ComparisonReport, FAST_PROJECT_ITERATIONS, MEDIUM_PROJECT_ITERATIONS,
-        Measurement, ProjectComparison, SLOW_PROJECT_ITERATIONS, markdown_report,
+        Measurement, ProjectComparison, SLOW_PROJECT_ITERATIONS, karva_invocation, markdown_report,
         matrix_iterations, trend,
     };
 
@@ -871,6 +880,23 @@ mod tests {
         assert_eq!(matrix_iterations("tomlkit"), MEDIUM_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("packaging"), SLOW_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("pyparsing"), SLOW_PROJECT_ITERATIONS);
+    }
+
+    #[test]
+    fn cli_benchmark_invocation_uses_normal_cached_status_output() {
+        let invocation = karva_invocation(
+            &karva_benchmark::SYNTHETIC_PROJECT,
+            Utf8Path::new("/tmp/project"),
+        )
+        .expect("invocation should build");
+
+        assert!(
+            !invocation
+                .args
+                .iter()
+                .any(|arg| arg == "--status-level" || arg == "--final-status-level")
+        );
+        assert!(!invocation.args.iter().any(|arg| arg == "--no-cache"));
     }
 
     fn report_with_projects(projects: Vec<ProjectComparison>) -> ComparisonReport {

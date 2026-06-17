@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
+use std::io::ErrorKind;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -14,7 +15,7 @@ use crate::{RUN_PREFIX, RunHash, WORKER_PREFIX, worker_folder};
 
 /// Snapshot of the test a worker is currently executing.
 ///
-/// Workers update this file at the start of each test and remove it on
+/// Workers update this file at the start of each test and clear it on
 /// completion; the orchestrator reads it on Ctrl+C to render per-test
 /// `SIGINT` lines.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,9 +100,21 @@ impl RunCache {
     }
 
     /// Reads the snapshot of which test the worker is currently running.
-    /// Returns `None` if the worker is between tests or hasn't started yet.
+    /// Returns `None` if the worker is between tests, hasn't started yet, or
+    /// has cleared its progress file after finishing a test.
     pub fn read_current_test(&self, worker_id: usize) -> Result<Option<CurrentTest>> {
-        read_json::<CurrentTest>(&self.worker_dir(worker_id), CacheFile::CurrentTest)
+        let path = self.current_test_file(worker_id);
+        let content = match fs::read_to_string(path) {
+            Ok(content) => content,
+            Err(err) if err.kind() == ErrorKind::NotFound => return Ok(None),
+            Err(err) => return Err(err.into()),
+        };
+
+        if content.trim().is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some(serde_json::from_str(&content)?))
     }
 
     /// Returns paths to every per-worker coverage file that exists for this
@@ -617,6 +630,19 @@ mod tests {
             "mod::test_slow": 42ms,
         }
         "#);
+    }
+
+    #[test]
+    fn read_current_test_treats_empty_progress_file_as_between_tests() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+        let run_hash = RunHash::from_existing("run-750");
+        let cache = RunCache::new(&cache_dir, &run_hash);
+        let progress_file = cache.current_test_file(0);
+        fs::create_dir_all(progress_file.parent().expect("progress file parent")).unwrap();
+        fs::write(progress_file, "").unwrap();
+
+        assert!(cache.read_current_test(0).unwrap().is_none());
     }
 
     #[test]

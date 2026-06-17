@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
-use std::io::Write;
-use std::process::{Child, Stdio};
+use std::io::{BufRead, BufReader, Write};
+use std::process::{Child, ChildStdout, Stdio};
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
@@ -27,6 +28,7 @@ use crate::worker_args::{WorkerSpawn, worker_command};
 /// Width that result labels (`PASS`, `FAIL`, `SIGINT`) are right-padded to so
 /// columns align. Mirrors the constant in `karva_diagnostic::reporter`.
 const LABEL_COLUMN_WIDTH: usize = 12;
+const CURRENT_TEST_SETTLE: Duration = Duration::from_millis(50);
 
 /// How `wait_for_completion` exited.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,14 +47,16 @@ enum WaitOutcome {
 struct Worker {
     id: usize,
     child: Child,
+    output: Option<WorkerOutputForwarder>,
     start_time: Instant,
 }
 
 impl Worker {
-    fn new(id: usize, child: Child) -> Self {
+    fn new(id: usize, child: Child, output: Option<WorkerOutputForwarder>) -> Self {
         Self {
             id,
             child,
+            output,
             start_time: Instant::now(),
         }
     }
@@ -60,11 +64,54 @@ impl Worker {
     fn duration(&self) -> Duration {
         self.start_time.elapsed()
     }
+
+    fn join_output(&mut self) {
+        if let Some(output) = self.output.take() {
+            output.join(self.id);
+        }
+    }
 }
 
 #[derive(Default, Debug)]
 struct WorkerManager {
     workers: Vec<Worker>,
+}
+
+#[derive(Debug)]
+struct WorkerOutputForwarder {
+    handle: JoinHandle<std::io::Result<()>>,
+}
+
+impl WorkerOutputForwarder {
+    fn spawn(stdout: ChildStdout) -> Self {
+        let handle = thread::spawn(move || forward_worker_stdout(stdout));
+        Self { handle }
+    }
+
+    fn join(self, worker_id: usize) {
+        match self.handle.join() {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) if err.kind() == std::io::ErrorKind::BrokenPipe => {}
+            Ok(Err(err)) => tracing::warn!(worker_id, "failed to forward worker stdout: {err}"),
+            Err(err) => tracing::warn!(worker_id, ?err, "worker stdout forwarder panicked"),
+        }
+    }
+}
+
+fn forward_worker_stdout(stdout: ChildStdout) -> std::io::Result<()> {
+    let mut reader = BufReader::new(stdout);
+    let mut line = Vec::new();
+
+    loop {
+        line.clear();
+        let bytes_read = reader.read_until(b'\n', &mut line)?;
+        if bytes_read == 0 {
+            return Ok(());
+        }
+
+        let mut stdout = std::io::stdout().lock();
+        stdout.write_all(&line)?;
+    }
 }
 
 struct InFlightTest {
@@ -79,8 +126,8 @@ struct InterruptedTest {
 }
 
 impl WorkerManager {
-    fn spawn(&mut self, worker_id: usize, child: Child) {
-        self.workers.push(Worker::new(worker_id, child));
+    fn spawn(&mut self, worker_id: usize, child: Child, output: Option<WorkerOutputForwarder>) {
+        self.workers.push(Worker::new(worker_id, child, output));
     }
 
     /// Wait for all workers to complete.
@@ -113,6 +160,7 @@ impl WorkerManager {
             self.workers
                 .retain_mut(|worker| match worker.child.try_wait() {
                     Ok(Some(status)) => {
+                        worker.join_output();
                         if status.success() {
                             tracing::info!(
                                 "Worker {} completed successfully in {}",
@@ -190,26 +238,27 @@ impl WorkerManager {
                     "failed to wait for worker process: {err}"
                 );
             }
+            worker.join_output();
         }
     }
 
     /// Stop remaining workers and emit nextest-style cancellation lines.
     ///
-    /// Each worker writes a `current_test.json` file at the start of every
-    /// test and removes it when the test finishes. We read those files
-    /// *before* killing — once we kill the worker, that file may be removed
-    /// by an in-flight finalizer or simply lost — and remember a
+    /// Each worker publishes a `current_test.json` file while a test is in
+    /// flight and clears it when the worker is between tests. We read those
+    /// files *before* killing — once we kill the worker, that file may be
+    /// removed by an in-flight finalizer or simply lost — and remember a
     /// `(worker_id, test name, test start time)` snapshot for each.
     ///
-    /// Workers are killed and reaped before we print so any in-flight
-    /// `PASS`/`FAIL` lines they were writing to the inherited stdout land
-    /// before our banner; otherwise the cancellation block interleaves
-    /// with worker output. A short settle pause lets any kernel-buffered
-    /// writes drain.
+    /// Workers are killed, reaped, and have their forwarded stdout drained
+    /// before we print so any in-flight `PASS`/`FAIL` lines land before the
+    /// cancellation block.
     fn cancel_and_kill(&mut self, printer: Printer, cache: &RunCache) -> Vec<InterruptedTest> {
         if self.workers.is_empty() {
             return Vec::new();
         }
+
+        std::thread::sleep(CURRENT_TEST_SETTLE);
 
         let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -260,8 +309,8 @@ impl WorkerManager {
                     "failed to wait for worker process: {err}"
                 );
             }
+            worker.join_output();
         }
-        std::thread::sleep(STDOUT_SETTLE);
 
         let mut stdout = printer.stream_for_test_result().lock();
         let cancel_label = "Cancelling".yellow().bold();
@@ -361,7 +410,11 @@ pub struct ParallelTestConfig {
 ///
 /// Creates a worker process for each non-empty partition, passing the appropriate
 /// subset of tests and command-line arguments to each worker.
-fn spawn_workers(spawn: &WorkerSpawn, partitions: &[Partition]) -> Result<WorkerManager> {
+fn spawn_workers(
+    spawn: &WorkerSpawn,
+    partitions: &[Partition],
+    forward_stdout: bool,
+) -> Result<WorkerManager> {
     let mut worker_manager = WorkerManager::default();
 
     for (worker_id, partition) in partitions.iter().enumerate() {
@@ -370,11 +423,22 @@ fn spawn_workers(spawn: &WorkerSpawn, partitions: &[Partition]) -> Result<Worker
             continue;
         }
 
-        let child = worker_command(spawn, worker_id, partition)
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
+        let mut command = worker_command(spawn, worker_id, partition);
+        command.stderr(Stdio::inherit());
+        if forward_stdout {
+            command.stdout(Stdio::piped());
+        } else {
+            command.stdout(Stdio::inherit());
+        }
+
+        let mut child = command
             .spawn()
             .context("Failed to spawn karva-worker process")?;
+        let output = if forward_stdout {
+            child.stdout.take().map(WorkerOutputForwarder::spawn)
+        } else {
+            None
+        };
 
         tracing::info!(
             "Worker {} spawned with {} tests",
@@ -382,7 +446,7 @@ fn spawn_workers(spawn: &WorkerSpawn, partitions: &[Partition]) -> Result<Worker
             partition.tests().len()
         );
 
-        worker_manager.spawn(worker_id, child);
+        worker_manager.spawn(worker_id, child, output);
     }
 
     Ok(worker_manager)
@@ -534,7 +598,8 @@ pub fn run_parallel_tests(
         worker_binary: &worker_binary,
         coverage_enabled: !project.settings().coverage().sources.is_empty(),
     };
-    let mut worker_manager = spawn_workers(&spawn, &partitions)?;
+    let forward_stdout = printer.stream_for_test_result().is_enabled();
+    let mut worker_manager = spawn_workers(&spawn, &partitions, forward_stdout)?;
 
     let max_fail_cache = project.settings().max_fail().has_limit().then_some(&cache);
 
@@ -572,10 +637,6 @@ pub fn run_parallel_tests(
 
 const MIN_TESTS_PER_WORKER: usize = 5;
 const WORKER_POLL_INTERVAL: Duration = Duration::from_millis(10);
-/// Pause after killing workers to let kernel-buffered output drain to
-/// stdout before we emit the cancellation banner.
-const STDOUT_SETTLE: Duration = Duration::from_millis(50);
-
 fn previous_durations(cache_dir: &Utf8Path, no_cache: bool) -> HashMap<String, Duration> {
     if no_cache {
         return HashMap::new();

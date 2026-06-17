@@ -33,8 +33,8 @@ pub enum CacheFile {
     /// Cache-root JSON: list of last-run failed test names.
     LastFailed,
     /// Per-worker JSON: name + start time of the test currently executing,
-    /// or absent when the worker is between tests. Used by the orchestrator
-    /// to render per-test `SIGINT` lines on Ctrl+C.
+    /// or empty/absent when the worker is between tests. Used by the
+    /// orchestrator to render per-test `SIGINT` lines on Ctrl+C.
     CurrentTest,
 }
 

@@ -4,6 +4,7 @@ use camino::Utf8PathBuf;
 
 use karva_cache::{RunCache, RunHash};
 use karva_cli::SubTestCommand;
+use karva_logging::TerminalColor;
 use karva_metadata::ProjectSettings;
 use karva_project::Project;
 use karva_static::WorkerEnvVars;
@@ -90,7 +91,12 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
     cli_args.push("--final-status-level".to_string());
     cli_args.push(settings.terminal().final_status_level.as_str().to_string());
 
-    if let Some(color) = args.color {
+    let color = args.color.or_else(|| {
+        colored::control::SHOULD_COLORIZE
+            .should_colorize()
+            .then_some(TerminalColor::Always)
+    });
+    if let Some(color) = color {
         cli_args.push("--color".to_string());
         cli_args.push(color.as_str().to_string());
     }
