@@ -10,8 +10,13 @@ authors = [{ name = "Matthew Mckee", email = "matthewmckee04@yahoo.co.uk" }]
 license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.10,<3.15"
+keywords = ["karva", "pytest", "rust", "testing"]
 classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -20,6 +25,8 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Rust",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
 ]
 
 [project.scripts]
@@ -32,6 +39,7 @@ docs = ["zensical==0.0.45"]
 release = ["tbump"]
 
 [project.urls]
+Changelog = "https://github.com/MatthewMckee4/karva/blob/main/CHANGELOG.md"
 Documentation = "https://matthewmckee4.github.io/karva/"
 Homepage = "https://matthewmckee4.github.io/karva/"
 Issues = "https://github.com/MatthewMckee4/karva/issues"
