@@ -72,4 +72,12 @@ karva test tests/test_example.py
 
 Contributions are welcome! See [CONTRIBUTING.md](https://github.com/MatthewMckee4/karva/blob/main/CONTRIBUTING.md) for more information.
 
-You can also join us on [Discord](https://discord.gg/XG95vNz4Zu)
+## Support
+
+Use [GitHub issues](https://github.com/MatthewMckee4/karva/issues) for bug reports and feature requests, or join the [Discord](https://discord.gg/XG95vNz4Zu) for discussion.
+
+Please report security issues privately; see [SECURITY.md](https://github.com/MatthewMckee4/karva/blob/main/SECURITY.md).
+
+## License
+
+Karva is licensed under the [MIT License](https://github.com/MatthewMckee4/karva/blob/main/LICENSE).
