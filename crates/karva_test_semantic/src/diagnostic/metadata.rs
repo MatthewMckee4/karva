@@ -37,11 +37,10 @@ macro_rules! declare_diagnostic_type {
     };
 }
 
-/// Builder for creating diagnostic guards with the appropriate context.
+/// Builder for reporting diagnostics with the appropriate context.
 ///
-/// Used to construct diagnostics with the correct ID, severity, and context
-/// before they are finalized and reported.
-pub struct DiagnosticGuardBuilder<'ctx, 'a> {
+/// Used to construct diagnostics with the correct ID, severity, and context.
+pub struct DiagnosticBuilder<'ctx, 'a> {
     /// Reference to the test execution context.
     context: &'ctx Context<'a>,
 
@@ -52,61 +51,96 @@ pub struct DiagnosticGuardBuilder<'ctx, 'a> {
     severity: Severity,
 }
 
-impl<'ctx, 'a> DiagnosticGuardBuilder<'ctx, 'a> {
+impl<'ctx, 'a> DiagnosticBuilder<'ctx, 'a> {
     pub(crate) fn new(
         context: &'ctx Context<'a>,
         diagnostic_type: &'static DiagnosticType,
     ) -> Self {
-        DiagnosticGuardBuilder {
+        DiagnosticBuilder {
             context,
             id: DiagnosticId::Lint(diagnostic_type.name),
             severity: diagnostic_type.severity,
         }
     }
 
-    /// Build a diagnostic guard with the given message.
-    pub(crate) fn into_diagnostic(
+    /// Report a diagnostic with the given message.
+    pub(crate) fn emit(self, message: impl std::fmt::Display) {
+        self.emit_with(message, |_| {});
+    }
+
+    /// Report a diagnostic after applying additional annotations or notes.
+    pub(crate) fn emit_with(
         self,
         message: impl std::fmt::Display,
-    ) -> DiagnosticGuard<'ctx, 'a> {
-        DiagnosticGuard {
-            context: self.context,
-            diag: Some(Diagnostic::new(self.id, self.severity, message)),
+        configure: impl FnOnce(&mut Diagnostic),
+    ) {
+        let mut diagnostic = Diagnostic::new(self.id, self.severity, message);
+        configure(&mut diagnostic);
+        self.context.result().add_diagnostic(diagnostic);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use camino::Utf8Path;
+    use karva_diagnostic::DummyReporter;
+    use karva_metadata::ProjectSettings;
+    use ruff_python_ast::PythonVersion;
+
+    use super::*;
+    declare_diagnostic_type! {
+        /// Test diagnostic.
+        static TEST_DIAGNOSTIC = {
+            summary: "Test diagnostic",
+            severity: Severity::Error,
         }
     }
-}
 
-/// A guard that holds a diagnostic and reports it when dropped.
-///
-/// Allows mutation of the diagnostic before it is automatically
-/// reported to the test results when the guard goes out of scope.
-pub struct DiagnosticGuard<'ctx, 'a> {
-    /// Reference to the test execution context.
-    context: &'ctx Context<'a>,
+    #[test]
+    fn emit_records_diagnostic() {
+        let settings = ProjectSettings::default();
+        let reporter = DummyReporter;
+        let context = Context::new(
+            Utf8Path::new("."),
+            &settings,
+            PythonVersion::PY312,
+            &reporter,
+        );
 
-    /// The diagnostic being built, wrapped in Option for take-on-drop.
-    diag: Option<Diagnostic>,
-}
+        DiagnosticBuilder::new(&context, &TEST_DIAGNOSTIC).emit("plain diagnostic");
 
-/// Return a immutable borrow of the diagnostic in this guard.
-impl std::ops::Deref for DiagnosticGuard<'_, '_> {
-    type Target = Diagnostic;
-
-    fn deref(&self) -> &Diagnostic {
-        self.diag.as_ref().unwrap()
+        let result = context.into_result();
+        let [diagnostic] = result.diagnostics() else {
+            panic!("expected one diagnostic");
+        };
+        assert_eq!(diagnostic.primary_message(), "plain diagnostic");
     }
-}
 
-/// Return a mutable borrow of the diagnostic in this guard.
-impl std::ops::DerefMut for DiagnosticGuard<'_, '_> {
-    fn deref_mut(&mut self) -> &mut Diagnostic {
-        self.diag.as_mut().unwrap()
-    }
-}
+    #[test]
+    fn emit_with_configures_diagnostic_before_recording() {
+        let settings = ProjectSettings::default();
+        let reporter = DummyReporter;
+        let context = Context::new(
+            Utf8Path::new("."),
+            &settings,
+            PythonVersion::PY312,
+            &reporter,
+        );
 
-impl Drop for DiagnosticGuard<'_, '_> {
-    fn drop(&mut self) {
-        let diag = self.diag.take().unwrap();
-        self.context.result().add_diagnostic(diag);
+        DiagnosticBuilder::new(&context, &TEST_DIAGNOSTIC).emit_with(
+            "diagnostic with context",
+            |diagnostic| {
+                diagnostic.info("extra context");
+                diagnostic.set_concise_message("concise context");
+            },
+        );
+
+        let result = context.into_result();
+        let [diagnostic] = result.diagnostics() else {
+            panic!("expected one diagnostic");
+        };
+        assert_eq!(diagnostic.primary_message(), "diagnostic with context");
+        assert_eq!(diagnostic.sub_diagnostics().len(), 1);
+        assert_eq!(diagnostic.concise_message().to_string(), "concise context");
     }
 }

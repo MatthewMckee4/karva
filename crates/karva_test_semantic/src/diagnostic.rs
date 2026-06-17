@@ -18,7 +18,8 @@ use ruff_source_file::SourceFile;
 
 mod metadata;
 
-pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
+pub use metadata::DiagnosticBuilder;
+pub use metadata::DiagnosticType;
 
 use crate::runner::{FixtureCallError, FixtureChainEntry};
 use crate::utils::truncate_string;
@@ -154,13 +155,13 @@ fn report_dependency_chain(
 pub fn report_collection_error(context: &Context, error: &CollectionError) {
     let builder = context.report_diagnostic(&FAILED_TO_COLLECT_MODULE);
 
-    builder.into_diagnostic(format!("Failed to collect python module: {error}"));
+    builder.emit(format!("Failed to collect python module: {error}"));
 }
 
 pub fn report_failed_to_import_module(context: &Context, module_name: &str, error: &str) {
     let builder = context.report_diagnostic(&FAILED_TO_IMPORT_MODULE);
 
-    builder.into_diagnostic(format!(
+    builder.emit(format!(
         "Failed to import python module `{module_name}`: {error}"
     ));
 }
@@ -174,18 +175,17 @@ pub fn report_invalid_fixture(
 ) {
     let builder = context.report_diagnostic(&INVALID_FIXTURE);
 
-    let mut diagnostic = builder.into_diagnostic(format!(
-        "Discovered an invalid fixture `{}`",
-        stmt_function_def.name
-    ));
+    builder.emit_with(
+        format!("Discovered an invalid fixture `{}`", stmt_function_def.name),
+        |diagnostic| {
+            annotate_function_name(diagnostic, source_file, stmt_function_def);
 
-    annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
-
-    let error_string = error.value(py).to_string();
-
-    if !error_string.is_empty() {
-        diagnostic.info(indent_continuation_lines(&error_string));
-    }
+            let error_string = error.value(py).to_string();
+            if !error_string.is_empty() {
+                diagnostic.info(indent_continuation_lines(&error_string));
+            }
+        },
+    );
 }
 
 pub fn report_invalid_fixture_finalizer(
@@ -196,14 +196,16 @@ pub fn report_invalid_fixture_finalizer(
 ) {
     let builder = context.report_diagnostic(&INVALID_FIXTURE_FINALIZER);
 
-    let mut diagnostic = builder.into_diagnostic(format!(
-        "Discovered an invalid fixture finalizer `{}`",
-        stmt_function_def.name
-    ));
-
-    annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
-
-    diagnostic.info(reason);
+    builder.emit_with(
+        format!(
+            "Discovered an invalid fixture finalizer `{}`",
+            stmt_function_def.name
+        ),
+        |diagnostic| {
+            annotate_function_name(diagnostic, source_file, stmt_function_def);
+            diagnostic.info(reason);
+        },
+    );
 }
 
 pub fn report_fixture_failure(context: &Context, py: Python, error: FixtureCallError) {
@@ -218,19 +220,19 @@ pub fn report_fixture_failure(context: &Context, py: Python, error: FixtureCallE
 
     let builder = context.report_diagnostic(&FIXTURE_FAILURE);
 
-    let mut diagnostic = builder.into_diagnostic(format!("Fixture `{fixture_name}` failed"));
+    builder.emit_with(format!("Fixture `{fixture_name}` failed"), |diagnostic| {
+        report_dependency_chain(diagnostic, &dependency_chain, &fixture_name);
 
-    report_dependency_chain(&mut diagnostic, &dependency_chain, &fixture_name);
-
-    handle_failed_function_call(
-        &mut diagnostic,
-        py,
-        &source_file,
-        &stmt_function_def,
-        &arguments,
-        FunctionKind::Fixture,
-        &error,
-    );
+        handle_failed_function_call(
+            diagnostic,
+            py,
+            &source_file,
+            &stmt_function_def,
+            &arguments,
+            FunctionKind::Fixture,
+            &error,
+        );
+    });
 }
 
 pub fn report_missing_fixtures(
@@ -244,62 +246,65 @@ pub fn report_missing_fixtures(
 ) {
     let builder = context.report_diagnostic(&MISSING_FIXTURES);
 
-    let mut diagnostic = builder.into_diagnostic(format!(
-        "{} `{}` has missing fixtures",
-        function_kind.capitalised(),
-        stmt_function_def.name
-    ));
-
-    annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
-
     let missing_fixtures_string = missing_fixtures
         .iter()
         .map(|fixture| format!("`{}`", truncate_string(fixture)))
         .collect::<Vec<String>>()
         .join(", ");
 
-    diagnostic.info(format!("Missing fixtures: {missing_fixtures_string}"));
+    builder.emit_with(
+        format!(
+            "{} `{}` has missing fixtures",
+            function_kind.capitalised(),
+            stmt_function_def.name
+        ),
+        |diagnostic| {
+            annotate_function_name(diagnostic, source_file, stmt_function_def);
 
-    diagnostic.set_concise_message(format!(
-        "{} `{}` has missing fixtures: {missing_fixtures_string}",
-        function_kind.capitalised(),
-        stmt_function_def.name,
-    ));
+            diagnostic.info(format!("Missing fixtures: {missing_fixtures_string}"));
 
-    for FixtureCallError {
-        error,
-        fixture_name,
-        source_file,
-        dependency_chain,
-        ..
-    } in fixture_call_errors
-    {
-        report_dependency_chain(&mut diagnostic, &dependency_chain, &fixture_name);
+            diagnostic.set_concise_message(format!(
+                "{} `{}` has missing fixtures: {missing_fixtures_string}",
+                function_kind.capitalised(),
+                stmt_function_def.name,
+            ));
 
-        if let Some(Traceback {
-            lines: _,
-            error_source_file,
-            location,
-        }) = Traceback::from_error_with_source(py, &error, &source_file)
-        {
-            let mut sub = SubDiagnostic::new(
-                SubDiagnosticSeverity::Info,
-                format!("Fixture `{fixture_name}` failed here"),
-            );
+            for FixtureCallError {
+                error,
+                fixture_name,
+                source_file,
+                dependency_chain,
+                ..
+            } in fixture_call_errors
+            {
+                report_dependency_chain(diagnostic, &dependency_chain, &fixture_name);
 
-            let secondary_span = Span::from(error_source_file).with_range(location);
+                if let Some(Traceback {
+                    lines: _,
+                    error_source_file,
+                    location,
+                }) = Traceback::from_error_with_source(py, &error, &source_file)
+                {
+                    let mut sub = SubDiagnostic::new(
+                        SubDiagnosticSeverity::Info,
+                        format!("Fixture `{fixture_name}` failed here"),
+                    );
 
-            sub.annotate(Annotation::primary(secondary_span));
+                    let secondary_span = Span::from(error_source_file).with_range(location);
 
-            diagnostic.sub(sub);
-        }
+                    sub.annotate(Annotation::primary(secondary_span));
 
-        let error_string = error.value(py).to_string();
+                    diagnostic.sub(sub);
+                }
 
-        if !error_string.is_empty() {
-            diagnostic.info(indent_continuation_lines(&error_string));
-        }
-    }
+                let error_string = error.value(py).to_string();
+
+                if !error_string.is_empty() {
+                    diagnostic.info(indent_continuation_lines(&error_string));
+                }
+            }
+        },
+    );
 }
 
 pub fn report_test_pass_on_expect_failure(
@@ -310,16 +315,19 @@ pub fn report_test_pass_on_expect_failure(
 ) {
     let builder = context.report_diagnostic(&TEST_PASS_ON_EXPECT_FAILURE);
 
-    let mut diagnostic = builder.into_diagnostic(format!(
-        "Test `{}` passes when expected to fail",
-        stmt_function_def.name
-    ));
+    builder.emit_with(
+        format!(
+            "Test `{}` passes when expected to fail",
+            stmt_function_def.name
+        ),
+        |diagnostic| {
+            annotate_function_name(diagnostic, source_file, stmt_function_def);
 
-    annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
-
-    if let Some(reason) = reason {
-        diagnostic.info(format!("Reason: {reason}"));
-    }
+            if let Some(reason) = reason {
+                diagnostic.info(format!("Reason: {reason}"));
+            }
+        },
+    );
 }
 
 pub fn report_test_failure(
@@ -332,17 +340,19 @@ pub fn report_test_failure(
 ) {
     let builder = context.report_diagnostic(&TEST_FAILURE);
 
-    let mut diagnostic =
-        builder.into_diagnostic(format!("Test `{}` failed", stmt_function_def.name));
-
-    handle_failed_function_call(
-        &mut diagnostic,
-        py,
-        source_file,
-        stmt_function_def,
-        arguments,
-        FunctionKind::Test,
-        error,
+    builder.emit_with(
+        format!("Test `{}` failed", stmt_function_def.name),
+        |diagnostic| {
+            handle_failed_function_call(
+                diagnostic,
+                py,
+                source_file,
+                stmt_function_def,
+                arguments,
+                FunctionKind::Test,
+                error,
+            );
+        },
     );
 }
 

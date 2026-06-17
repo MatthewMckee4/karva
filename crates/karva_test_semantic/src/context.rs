@@ -8,7 +8,7 @@ use karva_metadata::ProjectSettings;
 use karva_python_semantic::QualifiedTestName;
 use ruff_python_ast::PythonVersion;
 
-use crate::diagnostic::{DiagnosticGuardBuilder, DiagnosticType};
+use crate::diagnostic::{DiagnosticBuilder, DiagnosticType};
 
 /// Central context object that holds shared state for a test run.
 ///
@@ -167,8 +167,8 @@ impl<'a> Context<'a> {
     pub(crate) fn report_diagnostic<'ctx>(
         &'ctx self,
         rule: &'static DiagnosticType,
-    ) -> DiagnosticGuardBuilder<'ctx, 'a> {
-        DiagnosticGuardBuilder::new(self, rule)
+    ) -> DiagnosticBuilder<'ctx, 'a> {
+        DiagnosticBuilder::new(self, rule)
     }
 
     pub fn python_version(&self) -> PythonVersion {
