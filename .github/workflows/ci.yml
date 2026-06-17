@@ -54,7 +54,6 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             . \
-            ':!.editorconfig' \
             ':!.gitattributes' \
             ':!.github/CODEOWNERS' \
             ':!.github/FUNDING.yml' \
