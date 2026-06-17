@@ -18,7 +18,6 @@ path = "src/main.rs"
 [dependencies]
 karva_cache = { workspace = true }
 karva_cli = { workspace = true }
-karva_collector = { workspace = true }
 karva_coverage = { workspace = true }
 karva_logging = { workspace = true }
 karva_metadata = { workspace = true }

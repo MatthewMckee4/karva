@@ -15,8 +15,5 @@ pyo3 = { workspace = true }
 ruff_python_ast = { workspace = true }
 serde = { workspace = true }
 
-[dev-dependencies]
-serde_json = { workspace = true }
-
 [lints]
 workspace = true
