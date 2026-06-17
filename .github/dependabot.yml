@@ -28,6 +28,17 @@ updates:
     cooldown:
       default-days: 7
 
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      pre-commit-hooks:
+        patterns:
+          - "*"
+    cooldown:
+      default-days: 7
+
   - package-ecosystem: "cargo" # See documentation for possible values
 
     directory: "/" # Location of package manifests
