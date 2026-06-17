@@ -19,6 +19,7 @@ karva_static = { workspace = true }
 anyhow = { workspace = true }
 camino = { workspace = true }
 clap = { workspace = true, features = ["wrap_help", "env"] }
+fs-err = { workspace = true }
 itertools = { workspace = true }
 markdown = { workspace = true }
 pretty_assertions = { workspace = true }

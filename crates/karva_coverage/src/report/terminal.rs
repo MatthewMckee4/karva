@@ -3,6 +3,7 @@ use std::io::Write;
 use anyhow::{Context, Result};
 use camino::Utf8Path;
 use colored::Colorize;
+use fs_err as fs;
 
 use super::combined_rows;
 use super::html::build_html_report;
@@ -35,12 +36,12 @@ pub fn write_cobertura_xml(
     if let Some(parent) = output.parent()
         && !parent.as_str().is_empty()
     {
-        std::fs::create_dir_all(parent.as_std_path())
+        fs::create_dir_all(parent.as_std_path())
             .with_context(|| format!("failed to create coverage output directory {parent}"))?;
     }
 
     let xml = build_cobertura_xml(cwd, &cwd_real, &rows)?;
-    std::fs::write(output.as_std_path(), xml)
+    fs::write(output.as_std_path(), xml)
         .with_context(|| format!("failed to write coverage xml {output}"))?;
 
     Ok(Some(total_pct))
@@ -59,12 +60,12 @@ pub fn write_json_report(
     if let Some(parent) = output.parent()
         && !parent.as_str().is_empty()
     {
-        std::fs::create_dir_all(parent.as_std_path())
+        fs::create_dir_all(parent.as_std_path())
             .with_context(|| format!("failed to create coverage output directory {parent}"))?;
     }
 
     let json = build_json_report(&rows)?;
-    std::fs::write(output.as_std_path(), json)
+    fs::write(output.as_std_path(), json)
         .with_context(|| format!("failed to write coverage json {output}"))?;
 
     Ok(Some(total_pct))
@@ -80,12 +81,12 @@ pub fn write_html_report(
     };
     let total_pct = total_percent(&rows);
 
-    std::fs::create_dir_all(output_dir.as_std_path())
+    fs::create_dir_all(output_dir.as_std_path())
         .with_context(|| format!("failed to create coverage html directory {output_dir}"))?;
 
     let html = build_html_report(&rows);
     let output_file = output_dir.join("index.html");
-    std::fs::write(output_file.as_std_path(), html)
+    fs::write(output_file.as_std_path(), html)
         .with_context(|| format!("failed to write coverage html {output_file}"))?;
 
     Ok(Some(total_pct))

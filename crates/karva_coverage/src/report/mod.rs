@@ -8,6 +8,7 @@ mod xml;
 
 use anyhow::Result;
 use camino::Utf8Path;
+use fs_err as fs;
 
 pub use terminal::combine_and_report;
 pub use terminal::write_cobertura_xml;
@@ -26,7 +27,7 @@ pub(crate) fn combined_rows(
         return Ok(None);
     }
 
-    let cwd_real = std::fs::canonicalize(cwd.as_std_path())
+    let cwd_real = fs::canonicalize(cwd.as_std_path())
         .map(|path| dunce::simplified(&path).to_path_buf())
         .unwrap_or_else(|_| cwd.into());
     let rows = shared::build_rows(&cwd_real, &combined, show_missing);

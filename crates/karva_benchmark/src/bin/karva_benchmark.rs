@@ -1,4 +1,3 @@
-use std::fs::File;
 use std::io::Write as _;
 use std::path::PathBuf;
 use std::process::{Command, Output};
@@ -8,6 +7,7 @@ use std::{collections::HashSet, io};
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Parser, ValueEnum};
+use fs_err::{self as fs, File};
 use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject, CLI_BENCHMARK_PROJECTS, WORKER_COUNT};
 use karva_static::ToolEnvVars;
 use serde::{Deserialize, Serialize};
@@ -284,7 +284,7 @@ fn merge_report_files(input_dir: &Utf8Path) -> Result<ComparisonReport> {
 
 fn read_report_files(input_dir: &Utf8Path) -> Result<Vec<ComparisonReport>> {
     let mut reports = Vec::new();
-    for entry in std::fs::read_dir(input_dir)
+    for entry in fs::read_dir(input_dir)
         .with_context(|| format!("Failed to read benchmark report directory `{input_dir}`"))?
     {
         let entry =
@@ -417,7 +417,7 @@ fn run_project_peak_rss_kib(config: &BenchmarkProject, project_root: &Utf8Path) 
         ensure_karva_success(&output, config)?;
 
         let peak_rss_kib = read_peak_rss_kib(&report_path)?;
-        if let Err(err) = std::fs::remove_file(&report_path) {
+        if let Err(err) = fs::remove_file(&report_path) {
             eprintln!("failed to remove memory benchmark report `{report_path}`: {err}");
         }
 
@@ -498,7 +498,7 @@ fn memory_report_path(project_root: &Utf8Path, project_name: &str) -> Utf8PathBu
 
 #[cfg(target_os = "linux")]
 fn read_peak_rss_kib(path: &Utf8Path) -> Result<f64> {
-    let raw = std::fs::read_to_string(path)
+    let raw = fs::read_to_string(path)
         .with_context(|| format!("Failed to read memory benchmark report `{path}`"))?;
     raw.trim()
         .parse::<f64>()
@@ -517,12 +517,12 @@ fn write_json(path: &Utf8Path, report: &ComparisonReport) -> Result<()> {
 fn write_markdown(path: &Utf8Path, report: &ComparisonReport) -> Result<()> {
     create_parent_dir(path)?;
     let body = markdown_report(report).context("Failed to render markdown benchmark report")?;
-    std::fs::write(path, body).with_context(|| format!("Failed to write `{path}`"))
+    fs::write(path, body).with_context(|| format!("Failed to write `{path}`"))
 }
 
 fn create_parent_dir(path: &Utf8Path) -> Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
+        fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create parent directory `{parent}`"))?;
     }
     Ok(())

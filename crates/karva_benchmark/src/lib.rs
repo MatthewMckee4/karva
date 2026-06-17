@@ -10,6 +10,7 @@ use std::process::Command;
 use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use divan::Bencher;
+use fs_err as fs;
 use karva_cache::{CACHE_DIR, clean_cache};
 use karva_cli::{OutputFormat, SubTestCommand};
 use karva_logging::{FinalStatusLevel, Printer, StatusLevel};
@@ -372,7 +373,7 @@ fn project_cache_dir(project_name: &str) -> Result<Utf8PathBuf> {
     let cache_dir = target_dir.join("benchmark_cache").join(project_name);
 
     if let Some(parent) = cache_dir.parent() {
-        std::fs::create_dir_all(parent).context("Failed to create cache directory")?;
+        fs::create_dir_all(parent).context("Failed to create cache directory")?;
     }
 
     Utf8PathBuf::from_path_buf(cache_dir).map_err(|path| {
@@ -385,7 +386,7 @@ fn project_cache_dir(project_name: &str) -> Result<Utf8PathBuf> {
 
 fn clone_repository(config: &BenchmarkProject, target_dir: &Utf8PathBuf) -> Result<()> {
     if let Some(parent) = target_dir.parent() {
-        std::fs::create_dir_all(parent).context("Failed to create parent directory for clone")?;
+        fs::create_dir_all(parent).context("Failed to create parent directory for clone")?;
     }
 
     run_command(

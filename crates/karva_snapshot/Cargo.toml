@@ -15,6 +15,7 @@ license = { workspace = true }
 camino = { workspace = true }
 colored = { workspace = true }
 console = { workspace = true }
+fs-err = { workspace = true }
 regex = { workspace = true }
 similar = { workspace = true }
 terminal_size = { workspace = true }

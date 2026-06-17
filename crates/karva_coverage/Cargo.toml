@@ -16,6 +16,7 @@ anyhow = { workspace = true }
 camino = { workspace = true }
 colored = { workspace = true }
 dunce = { workspace = true }
+fs-err = { workspace = true }
 pyo3 = { workspace = true }
 ruff_python_ast = { workspace = true }
 ruff_python_parser = { workspace = true }
