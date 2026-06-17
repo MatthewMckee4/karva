@@ -56,6 +56,12 @@ repos:
       - id: zizmor
         priority: 0
 
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.37.2
+    hooks:
+      - id: check-github-workflows
+        priority: 0
+
   - repo: https://github.com/executablebooks/mdformat
     rev: 1.0.0
     hooks:
