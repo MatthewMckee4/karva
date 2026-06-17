@@ -7,7 +7,7 @@ use karva_cli::SubTestCommand;
 use karva_logging::TerminalColor;
 use karva_metadata::ProjectSettings;
 use karva_project::Project;
-use karva_static::WorkerEnvVars;
+use karva_static::{PythonEnvVars, WorkerEnvVars};
 
 use crate::partition::Partition;
 
@@ -35,7 +35,7 @@ pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize, partition: &Partiti
         .arg(worker_id.to_string())
         .current_dir(spawn.project.cwd())
         // Ensure python does not buffer output
-        .env("PYTHONUNBUFFERED", "1")
+        .env(PythonEnvVars::PYTHONUNBUFFERED, "1")
         .env(WorkerEnvVars::KARVA, "1")
         .env(WorkerEnvVars::KARVA_WORKER_ID, worker_id.to_string())
         .env(WorkerEnvVars::KARVA_RUN_ID, spawn.run_hash.inner())

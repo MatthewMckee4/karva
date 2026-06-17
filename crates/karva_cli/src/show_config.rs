@@ -1,5 +1,6 @@
 use camino::Utf8PathBuf;
 use clap::Parser;
+use karva_static::EnvVars;
 
 /// Print the resolved configuration karva would run with.
 ///
@@ -11,7 +12,7 @@ pub struct ShowConfigCommand {
     /// The path to a `karva.toml` file to use for configuration.
     #[arg(
         long,
-        env = "KARVA_CONFIG_FILE",
+        env = EnvVars::KARVA_CONFIG_FILE,
         value_name = "PATH",
         help_heading = "Config options"
     )]
@@ -23,7 +24,7 @@ pub struct ShowConfigCommand {
     #[arg(
         short = 'P',
         long,
-        env = "KARVA_PROFILE",
+        env = EnvVars::KARVA_PROFILE,
         value_name = "NAME",
         help_heading = "Config options"
     )]

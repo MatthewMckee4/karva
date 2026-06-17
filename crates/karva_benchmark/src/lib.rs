@@ -16,6 +16,7 @@ use karva_logging::{FinalStatusLevel, Printer, StatusLevel};
 use karva_metadata::{Options, ProjectMetadata, SrcOptions, TerminalOptions, TestOptions};
 use karva_project::Project;
 use karva_runner::RunOutput;
+use karva_static::ToolEnvVars;
 use ruff_python_ast::PythonVersion;
 
 pub const WORKER_COUNT: usize = 1;
@@ -572,10 +573,10 @@ fn cargo_target_directory() -> Option<&'static PathBuf> {
                 target_directory: PathBuf,
             }
 
-            std::env::var_os("CARGO_TARGET_DIR")
+            std::env::var_os(ToolEnvVars::CARGO_TARGET_DIR)
                 .map(PathBuf::from)
                 .or_else(|| {
-                    let output = Command::new(std::env::var_os("CARGO")?)
+                    let output = Command::new(std::env::var_os(ToolEnvVars::CARGO)?)
                         .args(["metadata", "--format-version", "1"])
                         .output()
                         .ok()?;

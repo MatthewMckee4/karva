@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
+use karva_static::EnvVars;
 
 const KARVA_WORKER_BINARY_NAME: &str = "karva-worker";
 
@@ -61,7 +62,7 @@ fn venv_binary(binary_name: &str, directory: &Utf8Path) -> Option<Utf8PathBuf> {
 }
 
 fn venv_binary_from_active_env(binary_name: &str) -> Option<Utf8PathBuf> {
-    let venv_root = std::env::var_os("VIRTUAL_ENV")?;
+    let venv_root = std::env::var_os(EnvVars::VIRTUAL_ENV)?;
     let path = std::path::PathBuf::from(venv_root);
     let venv_root = match Utf8PathBuf::from_path_buf(path) {
         Ok(path) => path,

@@ -3,6 +3,7 @@ mod profile;
 mod required_version;
 
 use insta_cmd::assert_cmd_snapshot;
+use karva_static::EnvVars;
 
 use crate::common::TestContext;
 
@@ -1430,7 +1431,7 @@ def test_should_not_run(): pass
     ]);
 
     assert_cmd_snapshot!(
-        context.command().env("KARVA_CONFIG_FILE", "custom.toml"),
+        context.command().env(EnvVars::KARVA_CONFIG_FILE, "custom.toml"),
         @"
     success: true
     exit_code: 0
@@ -1476,7 +1477,7 @@ def cli_should_run(): pass
     assert_cmd_snapshot!(
         context
             .command()
-            .env("KARVA_CONFIG_FILE", "env.toml")
+            .env(EnvVars::KARVA_CONFIG_FILE, "env.toml")
             .args(["--config-file", "cli.toml"]),
         @"
     success: true

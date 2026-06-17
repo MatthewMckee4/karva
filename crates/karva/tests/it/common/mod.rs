@@ -9,6 +9,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use directories::ProjectDirs;
 use insta::Settings;
 use insta::internals::SettingsBindDropGuard;
+use karva_static::{EnvVars, ToolEnvVars};
 use tempfile::TempDir;
 
 /// Lazily initialized shared venv path for test reuse (within a single test process).
@@ -48,7 +49,8 @@ impl TestContext {
         )
         .expect("Path is not valid UTF-8");
 
-        let python_version = std::env::var("PYTHON_VERSION").unwrap_or_else(|_| "3.13".to_string());
+        let python_version =
+            std::env::var(ToolEnvVars::PYTHON_VERSION).unwrap_or_else(|_| "3.13".to_string());
 
         let karva_wheel = karva_project::find_karva_wheel()
             .expect("Could not find karva wheel. Run `maturin build` before running tests.")
@@ -141,7 +143,7 @@ impl TestContext {
 
     fn karva_command(&self) -> Command {
         let mut command = Command::new(self.venv_binary("karva"));
-        command.env("VIRTUAL_ENV", self.venv_path.as_str());
+        command.env(EnvVars::VIRTUAL_ENV, self.venv_path.as_str());
         command
     }
 
