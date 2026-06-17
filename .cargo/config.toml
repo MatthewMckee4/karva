@@ -1,3 +1,8 @@
 [alias]
 dev = "run --package karva_dev --bin karva_dev"
 benchmark = "bench -p karva_benchmark --bench karva_benchmark_walltime --"
+
+# Statically link the C runtime so Windows wheels do not depend on the
+# shared/dynamic MSVC runtime.
+[target.'cfg(all(target_env = "msvc", target_os = "windows"))']
+rustflags = ["-C", "target-feature=+crt-static"]
