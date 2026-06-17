@@ -7,11 +7,13 @@
 //! artifact is a single-place change and read/write helpers can't drift.
 
 use std::fs;
+use std::io::Write;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use tempfile::NamedTempFile;
 
 /// One of the well-known files in the cache directory hierarchy.
 #[derive(Clone, Copy)]
@@ -62,8 +64,30 @@ impl CacheFile {
 
 /// Pretty-prints `value` as JSON and writes it to `dir/<file>`.
 pub fn write_json<T: Serialize>(dir: &Utf8Path, file: CacheFile, value: &T) -> Result<()> {
-    let json = serde_json::to_string_pretty(value)?;
-    fs::write(file.path_in(dir), json)?;
+    let json = serde_json::to_vec_pretty(value)?;
+    write_bytes(dir, file, &json)
+}
+
+/// Writes `content` to `dir/<file>`.
+pub fn write_text(dir: &Utf8Path, file: CacheFile, content: impl AsRef<[u8]>) -> Result<()> {
+    write_bytes(dir, file, content.as_ref())
+}
+
+fn write_bytes(dir: &Utf8Path, file: CacheFile, content: &[u8]) -> Result<()> {
+    let path = file.path_in(dir);
+    let parent = path
+        .parent()
+        .with_context(|| format!("cache artifact `{path}` has no parent directory"))?;
+
+    let mut temp =
+        NamedTempFile::new_in(parent).with_context(|| format!("failed to create `{path}`"))?;
+    temp.write_all(content)
+        .with_context(|| format!("failed to write `{path}`"))?;
+    temp.flush()
+        .with_context(|| format!("failed to flush `{path}`"))?;
+    temp.persist(path.as_std_path())
+        .map_err(|err| err.error)
+        .with_context(|| format!("failed to replace `{path}`"))?;
     Ok(())
 }
 
@@ -99,4 +123,23 @@ pub fn read_text(dir: &Utf8Path, file: CacheFile) -> Result<Option<String>> {
         return Ok(None);
     }
     Ok(Some(fs::read_to_string(&path)?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn write_text_replaces_existing_artifact() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let cache_dir =
+            Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf()).expect("UTF-8 temp path");
+
+        write_text(&cache_dir, CacheFile::LastFailed, "old").expect("write old artifact");
+        write_text(&cache_dir, CacheFile::LastFailed, "new").expect("replace artifact");
+
+        let body = std::fs::read_to_string(CacheFile::LastFailed.path_in(&cache_dir))
+            .expect("read artifact");
+        assert_eq!(body, "new");
+    }
 }

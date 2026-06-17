@@ -10,7 +10,7 @@ use ruff_db::diagnostic::{
 use ruff_db::files::File;
 use ruff_notebook::NotebookIndex;
 
-use crate::artifact::CacheFile;
+use crate::artifact::{CacheFile, write_text};
 
 /// Renders diagnostics into the worker directory.
 ///
@@ -32,11 +32,7 @@ pub fn write_diagnostics(
 
     let resolver = DiagnosticFileResolver::new(cwd);
     let output = DisplayDiagnostics::new(&resolver, config, result.diagnostics());
-    std::fs::write(
-        CacheFile::Diagnostics.path_in(worker_dir),
-        output.to_string(),
-    )?;
-    Ok(())
+    write_text(worker_dir, CacheFile::Diagnostics, output.to_string())
 }
 
 fn ensure_source_file_spans(result: &TestRunResult) -> Result<()> {
