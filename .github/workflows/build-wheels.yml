@@ -10,6 +10,10 @@ on:
       # And when we change this workflow itself...
       - .github/workflows/build-wheels.yml
 
+concurrency:
+  group: build-wheels-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions: {}
 
 env:
