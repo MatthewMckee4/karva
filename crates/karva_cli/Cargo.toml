@@ -13,6 +13,7 @@ license.workspace = true
 [dependencies]
 karva_logging = { workspace = true }
 karva_metadata = { workspace = true }
+karva_static = { workspace = true }
 karva_version = { workspace = true }
 
 camino = { workspace = true }

@@ -7,6 +7,7 @@ use karva_metadata::{
     CovFailUnder, CoverageOptions, MaxFail, Options, OverrideOptions, RunTimeoutSecs,
     SlowTimeoutSecs, SrcOptions, TerminalOptions, TestOptions, TestTimeoutSecs,
 };
+use karva_static::EnvVars;
 
 use crate::enums::{CovReport, NoTests, OutputFormat, RunIgnored};
 use crate::partition::PartitionSelection;
@@ -69,7 +70,7 @@ pub struct SubTestCommand {
     #[arg(
         long,
         value_name = "ACTION",
-        env = "KARVA_NO_TESTS",
+        env = EnvVars::KARVA_NO_TESTS,
         help_heading = "Filter options"
     )]
     pub no_tests: Option<NoTests>,
@@ -144,7 +145,7 @@ pub struct SubTestCommand {
     #[arg(
         long,
         value_name = "LEVEL",
-        env = "KARVA_STATUS_LEVEL",
+        env = EnvVars::KARVA_STATUS_LEVEL,
         help_heading = "Reporter options"
     )]
     pub status_level: Option<StatusLevel>,
@@ -153,7 +154,7 @@ pub struct SubTestCommand {
     #[arg(
         long,
         value_name = "LEVEL",
-        env = "KARVA_FINAL_STATUS_LEVEL",
+        env = EnvVars::KARVA_FINAL_STATUS_LEVEL,
         help_heading = "Reporter options"
     )]
     pub final_status_level: Option<FinalStatusLevel>,
@@ -303,7 +304,7 @@ pub struct TestCommand {
     /// While karva configuration can be included in a `pyproject.toml` file, it is not allowed in this context.
     #[arg(
         long,
-        env = "KARVA_CONFIG_FILE",
+        env = EnvVars::KARVA_CONFIG_FILE,
         value_name = "PATH",
         help_heading = "Config options"
     )]
@@ -321,7 +322,7 @@ pub struct TestCommand {
     #[arg(
         short = 'P',
         long,
-        env = "KARVA_PROFILE",
+        env = EnvVars::KARVA_PROFILE,
         value_name = "NAME",
         help_heading = "Config options"
     )]

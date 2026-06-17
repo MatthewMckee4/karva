@@ -1,4 +1,5 @@
 use insta_cmd::assert_cmd_snapshot;
+use karva_static::EnvVars;
 
 use crate::common::TestContext;
 
@@ -182,7 +183,7 @@ def test_not_run(): pass
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command().env("KARVA_PROFILE", "fast"), @"
+    assert_cmd_snapshot!(context.command().env(EnvVars::KARVA_PROFILE, "fast"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -221,7 +222,7 @@ def test_not_run(): pass
     assert_cmd_snapshot!(
         context
             .command()
-            .env("KARVA_PROFILE", "fast")
+            .env(EnvVars::KARVA_PROFILE, "fast")
             .args(["--profile", "ci"]),
         @"
     success: true

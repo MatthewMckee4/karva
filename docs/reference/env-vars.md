@@ -20,15 +20,39 @@ This is a standard Karva environment variable.
 
 This is a standard Karva environment variable.
 
-### `KARVA_LOG_PROFILE`
+### `KARVA_PROFILE`
 
-When set to a truthy boolish value, writes tracing profile output
-to `tracing.folded`.
+Configuration profile to use, equivalent to `--profile`.
+
+### `KARVA_NO_TESTS`
+
+Behavior when no tests are found to run, equivalent to
+`--no-tests`.
+
+### `KARVA_STATUS_LEVEL`
+
+Test result statuses to display during the run, equivalent to
+`--status-level`.
+
+### `KARVA_FINAL_STATUS_LEVEL`
+
+Test summary information to display at the end of the run,
+equivalent to `--final-status-level`.
 
 ### `KARVA_SNAPSHOT_UPDATE`
 
 When set to a truthy boolish value, snapshot assertions write
 directly to `.snap` instead of creating `.snap.new` pending files.
+
+### `KARVA_LOG_PROFILE`
+
+When set to a truthy boolish value, writes tracing profile output
+to `tracing.folded`.
+
+### `VIRTUAL_ENV`
+
+Path to the active Python virtual environment. Used as a fallback
+when resolving the `karva-worker` binary.
 
 ## Set by the worker on tests
 

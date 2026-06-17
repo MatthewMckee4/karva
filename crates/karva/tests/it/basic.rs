@@ -1,4 +1,5 @@
 use insta_cmd::assert_cmd_snapshot;
+use karva_static::EnvVars;
 
 use crate::common::TestContext;
 
@@ -2460,7 +2461,7 @@ fn test_num_workers_invalid_value() {
 fn test_max_parallelism_env_invalid_value() {
     let context = TestContext::with_file("test.py", "def test_1(): pass");
 
-    assert_cmd_snapshot!(context.command().env("KARVA_MAX_PARALLELISM", "0"), @r"
+    assert_cmd_snapshot!(context.command().env(EnvVars::KARVA_MAX_PARALLELISM, "0"), @r"
     success: false
     exit_code: 2
     ----- stdout -----

@@ -9,6 +9,7 @@ use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Parser, ValueEnum};
 use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject, CLI_BENCHMARK_PROJECTS, WORKER_COUNT};
+use karva_static::ToolEnvVars;
 use serde::{Deserialize, Serialize};
 
 const MATERIAL_CHANGE_PERCENT: f64 = 1.0;
@@ -406,7 +407,7 @@ fn run_project_peak_rss_kib(config: &BenchmarkProject, project_root: &Utf8Path) 
 
         let output = Command::new("/usr/bin/time")
             .current_dir(project_root)
-            .env("PATH", &invocation.path)
+            .env(ToolEnvVars::PATH, &invocation.path)
             .args(["-f", "%M", "-o", report_path.as_str()])
             .arg(invocation.binary.as_str())
             .args(&invocation.args)
@@ -468,7 +469,7 @@ impl KarvaInvocation {
         let mut command = Command::new(&self.binary);
         command
             .current_dir(project_root)
-            .env("PATH", &self.path)
+            .env(ToolEnvVars::PATH, &self.path)
             .args(&self.args);
         command
     }
@@ -786,7 +787,7 @@ fn executable_name(name: &str) -> String {
 
 fn path_with_venv_first(bin_dir: &Utf8Path) -> Result<std::ffi::OsString> {
     let mut paths = vec![PathBuf::from(bin_dir.as_str())];
-    if let Some(existing_path) = std::env::var_os("PATH") {
+    if let Some(existing_path) = std::env::var_os(ToolEnvVars::PATH) {
         paths.extend(std::env::split_paths(&existing_path));
     }
     std::env::join_paths(paths).context("Failed to construct PATH for benchmark command")

@@ -58,14 +58,59 @@ env_vars! {
         /// This is a standard Karva environment variable.
         pub const KARVA_CONFIG_FILE: &'static str = "KARVA_CONFIG_FILE";
 
-        /// When set to a truthy boolish value, writes tracing profile output
-        /// to `tracing.folded`.
-        pub const KARVA_LOG_PROFILE: &'static str = "KARVA_LOG_PROFILE";
+        /// Configuration profile to use, equivalent to `--profile`.
+        pub const KARVA_PROFILE: &'static str = "KARVA_PROFILE";
+
+        /// Behavior when no tests are found to run, equivalent to
+        /// `--no-tests`.
+        pub const KARVA_NO_TESTS: &'static str = "KARVA_NO_TESTS";
+
+        /// Test result statuses to display during the run, equivalent to
+        /// `--status-level`.
+        pub const KARVA_STATUS_LEVEL: &'static str = "KARVA_STATUS_LEVEL";
+
+        /// Test summary information to display at the end of the run,
+        /// equivalent to `--final-status-level`.
+        pub const KARVA_FINAL_STATUS_LEVEL: &'static str = "KARVA_FINAL_STATUS_LEVEL";
 
         /// When set to a truthy boolish value, snapshot assertions write
         /// directly to `.snap` instead of creating `.snap.new` pending files.
         pub const KARVA_SNAPSHOT_UPDATE: &'static str = "KARVA_SNAPSHOT_UPDATE";
+
+        /// When set to a truthy boolish value, writes tracing profile output
+        /// to `tracing.folded`.
+        pub const KARVA_LOG_PROFILE: &'static str = "KARVA_LOG_PROFILE";
+
+        /// Path to the active Python virtual environment. Used as a fallback
+        /// when resolving the `karva-worker` binary.
+        pub const VIRTUAL_ENV: &'static str = "VIRTUAL_ENV";
     }
+}
+
+/// Environment variables read by Karva's developer and benchmark tooling.
+pub struct ToolEnvVars;
+
+impl ToolEnvVars {
+    /// The cargo executable to use for cargo subcommands.
+    pub const CARGO: &'static str = "CARGO";
+
+    /// The cargo target directory to use for build artifacts.
+    pub const CARGO_TARGET_DIR: &'static str = "CARGO_TARGET_DIR";
+
+    /// The standard executable search path environment variable.
+    pub const PATH: &'static str = "PATH";
+
+    /// Python version to use when creating integration-test virtual
+    /// environments.
+    pub const PYTHON_VERSION: &'static str = "PYTHON_VERSION";
+}
+
+/// Environment variables used when invoking Python processes.
+pub struct PythonEnvVars;
+
+impl PythonEnvVars {
+    /// Forces unbuffered I/O streams, equivalent to `python -u`.
+    pub const PYTHONUNBUFFERED: &'static str = "PYTHONUNBUFFERED";
 }
 
 env_vars! {
