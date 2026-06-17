@@ -77,6 +77,10 @@ repos:
     hooks:
       - id: ty
         args: [--isolated, --no-project]
+        files: ^python/
+        types: [file]
+        types_or: [python, pyi]
+        always_run: false
         priority: 2
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
