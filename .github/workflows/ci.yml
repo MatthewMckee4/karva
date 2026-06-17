@@ -173,7 +173,7 @@ jobs:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
           KARVA_MAX_PARALLELISM: 2
         run: |
-          cargo nextest run
+          cargo nextest run --profile ci
 
   build-windows-tests:
     name: "build tests archive | windows"
@@ -268,7 +268,7 @@ jobs:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
           KARVA_MAX_PARALLELISM: 2
         run: |
-          cargo nextest run --archive-file nextest-archive.tar.zst --partition hash:${{ matrix.partition }}/5
+          cargo nextest run --profile ci --archive-file nextest-archive.tar.zst --partition hash:${{ matrix.partition }}/5
 
   build-docs:
     name: "Build docs"
