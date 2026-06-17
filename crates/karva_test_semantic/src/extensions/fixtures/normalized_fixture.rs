@@ -1,14 +1,13 @@
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
 
 use crate::extensions::fixtures::FixtureScope;
 use crate::extensions::tags::Tags;
+use crate::runner::FixtureArguments;
 use crate::utils::run_coroutine;
 
 /// A normalized fixture represents a concrete instance of a fixture ready for execution.
@@ -73,17 +72,12 @@ impl NormalizedFixture {
     pub(crate) fn call(
         &self,
         py: Python,
-        fixture_arguments: &HashMap<String, Py<PyAny>>,
+        fixture_arguments: &FixtureArguments,
     ) -> PyResult<Py<PyAny>> {
         let result = if fixture_arguments.is_empty() {
             self.py_function.call0(py)
         } else {
-            let kwargs_dict = PyDict::new(py);
-
-            for (key, value) in fixture_arguments {
-                kwargs_dict.set_item(key, value)?;
-            }
-
+            let kwargs_dict = fixture_arguments.to_kwargs(py)?;
             self.py_function.call(py, (), Some(&kwargs_dict))
         };
 

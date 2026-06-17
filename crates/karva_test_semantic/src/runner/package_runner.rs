@@ -3,14 +3,12 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-type FixtureArguments = HashMap<String, Py<PyAny>>;
-
 use karva_diagnostic::IndividualTestResultKind;
 use karva_metadata::RunIgnoredMode;
 use karva_metadata::filter::EvalContext;
 use karva_python_semantic::{FunctionKind, QualifiedFunctionName, QualifiedTestName};
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyIterator};
+use pyo3::types::PyIterator;
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
 
@@ -28,7 +26,7 @@ use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
 use crate::extensions::tags::timeout::TimeoutTag;
 use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::runner::test_iterator::{TestVariant, TestVariantIterator};
-use crate::runner::{FinalizerCache, FixtureCache};
+use crate::runner::{FinalizerCache, FixtureArguments, FixtureCache};
 use crate::utils::{
     full_test_name, run_coroutine, run_test_with_timeout, set_attempt_env, set_test_name_env,
 };
@@ -290,7 +288,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let use_fixture_errors = self.run_fixtures(py, use_fixture_dependencies);
         fixture_call_errors.extend(use_fixture_errors);
 
-        let mut function_arguments: FixtureArguments = HashMap::new();
+        let mut function_arguments = FixtureArguments::default();
 
         for fixture in fixture_dependencies {
             match self.run_fixture(py, fixture) {
@@ -554,10 +552,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             let result = if function_arguments.is_empty() {
                 function.call0(py)
             } else {
-                let py_dict = PyDict::new(py);
-                for (key, value) in &function_arguments {
-                    py_dict.set_item(key, value.as_ref())?;
-                }
+                let py_dict = function_arguments.to_kwargs(py)?;
                 function.call(py, (), Some(&py_dict))
             };
             if is_async {
@@ -638,7 +633,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             return Ok((cached, None));
         }
 
-        let mut function_arguments: FixtureArguments = HashMap::new();
+        let mut function_arguments = FixtureArguments::default();
 
         for dep in fixture.dependencies() {
             match self.run_fixture(py, dep) {
@@ -678,7 +673,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             error: err,
             stmt_function_def: fixture.stmt_function_def.clone(),
             source_file: fixture.source_file.clone(),
-            arguments: HashMap::new(),
+            arguments: FixtureArguments::default(),
             dependency_chain: Vec::new(),
         })?;
 

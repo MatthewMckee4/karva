@@ -4,13 +4,11 @@
 //!
 //! `ruff_db` diagnostics look great and have a great API.
 
-use std::collections::HashMap;
-
 use camino::Utf8Path;
 use karva_collector::CollectionError;
 use karva_diagnostic::Traceback;
 use karva_python_semantic::FunctionKind;
-use pyo3::{Py, PyAny, PyErr, Python};
+use pyo3::{PyErr, Python};
 use ruff_db::diagnostic::{
     Annotation, Diagnostic, Severity, Span, SubDiagnostic, SubDiagnosticSeverity,
 };
@@ -21,7 +19,7 @@ mod metadata;
 
 pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
 
-use crate::runner::{FixtureCallError, FixtureChainEntry};
+use crate::runner::{FixtureArguments, FixtureCallError, FixtureChainEntry};
 use crate::utils::truncate_string;
 use crate::{Context, declare_diagnostic_type};
 
@@ -356,7 +354,7 @@ pub fn report_test_failure(
     py: Python,
     source_file: &SourceFile,
     stmt_function_def: &StmtFunctionDef,
-    arguments: &HashMap<String, Py<PyAny>>,
+    arguments: &FixtureArguments,
     error: &PyErr,
 ) {
     let builder = context.report_diagnostic(&TEST_FAILURE);
@@ -380,7 +378,7 @@ fn handle_failed_function_call(
     py: Python,
     source_file: &SourceFile,
     stmt_function_def: &StmtFunctionDef,
-    arguments: &HashMap<String, Py<PyAny>>,
+    arguments: &FixtureArguments,
     function_kind: FunctionKind,
     error: &PyErr,
 ) {
