@@ -11,6 +11,14 @@ body:
 
   - type: input
     attributes:
+      label: Platform
+      description: What operating system and architecture are you using? (see `uname -orsm`)
+      placeholder: e.g., macOS 15 arm64, Windows 11 x86_64, Ubuntu 24.04 amd64
+    validations:
+      required: false
+
+  - type: input
+    attributes:
       label: Version
       description: What version of Karva are you using? (see `karva --version`)
       placeholder: e.g., Karva 0.1.0
