@@ -1131,6 +1131,7 @@ name = "karva_collector"
 version = "0.0.0"
 dependencies = [
  "camino",
+ "fs-err",
  "karva_python_semantic",
  "ruff_python_ast",
  "ruff_python_parser",
@@ -1153,6 +1154,7 @@ dependencies = [
  "camino",
  "colored 3.1.1",
  "dunce",
+ "fs-err",
  "insta",
  "pyo3",
  "ruff_python_ast",
@@ -1234,6 +1236,7 @@ name = "karva_metadata"
 version = "0.0.0"
 dependencies = [
  "camino",
+ "fs-err",
  "globset",
  "insta",
  "karva_combine",
@@ -1258,6 +1261,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "camino",
+ "fs-err",
  "insta",
  "karva_metadata",
  "karva_python_semantic",
@@ -1333,6 +1337,7 @@ name = "karva_test_semantic"
 version = "0.0.0"
 dependencies = [
  "camino",
+ "fs-err",
  "karva_collector",
  "karva_coverage",
  "karva_diagnostic",
@@ -1364,6 +1369,7 @@ dependencies = [
  "camino",
  "clap",
  "colored 3.1.1",
+ "fs-err",
  "karva_cache",
  "karva_cli",
  "karva_diagnostic",

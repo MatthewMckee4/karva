@@ -1542,9 +1542,9 @@ fn test_config_file_flag_nonexistent_unix() {
 
     ----- stderr -----
     Karva failed
-      Cause: <temp_dir>/nonexistent.toml is not a valid `karva.toml`: Failed to read `<temp_dir>/nonexistent.toml`: No such file or directory (os error 2)
-      Cause: Failed to read `<temp_dir>/nonexistent.toml`: No such file or directory (os error 2)
-      Cause: No such file or directory (os error 2)
+      Cause: <temp_dir>/nonexistent.toml is not a valid `karva.toml`: Failed to read `<temp_dir>/nonexistent.toml`: failed to open file `<temp_dir>/nonexistent.toml`: No such file or directory (os error 2)
+      Cause: Failed to read `<temp_dir>/nonexistent.toml`: failed to open file `<temp_dir>/nonexistent.toml`: No such file or directory (os error 2)
+      Cause: failed to open file `<temp_dir>/nonexistent.toml`: No such file or directory (os error 2)
     ");
 }
 
@@ -1561,9 +1561,9 @@ fn test_discovered_karva_toml_read_error_unix() {
 
     ----- stderr -----
     Karva failed
-      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`: Failed to read `<temp_dir>/karva.toml`: Is a directory (os error 21)
-      Cause: Failed to read `<temp_dir>/karva.toml`: Is a directory (os error 21)
-      Cause: Is a directory (os error 21)
+      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`: Failed to read `<temp_dir>/karva.toml`: failed to read from file `<temp_dir>/karva.toml`: Is a directory (os error 21)
+      Cause: Failed to read `<temp_dir>/karva.toml`: failed to read from file `<temp_dir>/karva.toml`: Is a directory (os error 21)
+      Cause: failed to read from file `<temp_dir>/karva.toml`: Is a directory (os error 21)
     ");
 }
 
@@ -1579,8 +1579,8 @@ fn test_config_file_flag_nonexistent_windows() {
 
     ----- stderr -----
     Karva failed
-      Cause: <temp_dir>/nonexistent.toml is not a valid `karva.toml`: Failed to read `<temp_dir>/nonexistent.toml`: The system cannot find the file specified. (os error 2)
-      Cause: Failed to read `<temp_dir>/nonexistent.toml`: The system cannot find the file specified. (os error 2)
-      Cause: The system cannot find the file specified. (os error 2)
+      Cause: <temp_dir>/nonexistent.toml is not a valid `karva.toml`: Failed to read `<temp_dir>/nonexistent.toml`: failed to open file `<temp_dir>/nonexistent.toml`: The system cannot find the file specified. (os error 2)
+      Cause: Failed to read `<temp_dir>/nonexistent.toml`: failed to open file `<temp_dir>/nonexistent.toml`: The system cannot find the file specified. (os error 2)
+      Cause: failed to open file `<temp_dir>/nonexistent.toml`: The system cannot find the file specified. (os error 2)
     ");
 }

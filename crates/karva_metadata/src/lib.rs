@@ -1,4 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
+use fs_err as fs;
 use karva_combine::Combine;
 use ruff_python_ast::PythonVersion;
 use thiserror::Error;
@@ -225,7 +226,7 @@ impl ProjectMetadata {
 fn try_load_karva_toml(dir: &Utf8Path) -> Result<Option<Config>, ProjectMetadataError> {
     let path = dir.join("karva.toml");
 
-    let content = match std::fs::read_to_string(&path) {
+    let content = match fs::read_to_string(&path) {
         Ok(content) => content,
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(source) => {
@@ -253,7 +254,7 @@ fn try_load_karva_toml(dir: &Utf8Path) -> Result<Option<Config>, ProjectMetadata
 fn try_load_pyproject(dir: &Utf8Path) -> Result<Option<PyProject>, ProjectMetadataError> {
     let path = dir.join("pyproject.toml");
 
-    let content = match std::fs::read_to_string(&path) {
+    let content = match fs::read_to_string(&path) {
         Ok(content) => content,
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(source) => {

@@ -2,6 +2,7 @@ pub mod path;
 
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
+use fs_err as fs;
 use karva_metadata::{ProjectMetadata, ProjectSettings};
 
 use crate::path::{TestPath, TestPathError, absolute};
@@ -23,7 +24,7 @@ pub fn find_karva_wheel() -> anyhow::Result<Utf8PathBuf> {
 }
 
 fn find_karva_wheel_in(wheels_dir: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
-    let entries = std::fs::read_dir(wheels_dir)
+    let entries = fs::read_dir(wheels_dir)
         .with_context(|| format!("Could not read wheels directory: {wheels_dir}"))?;
 
     let mut newest: Option<(std::time::SystemTime, Utf8PathBuf)> = None;

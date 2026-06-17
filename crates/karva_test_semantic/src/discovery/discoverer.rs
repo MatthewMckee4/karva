@@ -2,6 +2,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use camino::Utf8Path;
+use fs_err as fs;
 use karva_collector::{CollectedModule, CollectedPackage};
 use karva_project::path::{TestPath, TestPathError};
 use karva_python_semantic::ModulePath;
@@ -174,7 +175,7 @@ fn discover_framework_fixtures(
         return None;
     };
 
-    let source_text = match std::fs::read_to_string(utf8_path) {
+    let source_text = match fs::read_to_string(utf8_path) {
         Ok(text) => text,
         Err(err) => {
             tracing::warn!("Failed to read `karva._builtins` source at {utf8_path}: {err}");

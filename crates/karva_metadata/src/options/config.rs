@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use camino::{Utf8Path, Utf8PathBuf};
+use fs_err as fs;
 use karva_combine::Combine;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
@@ -68,7 +69,7 @@ impl Config {
 
     pub(crate) fn from_karva_configuration_file(path: &Utf8Path) -> Result<Self, KarvaTomlError> {
         let karva_toml_str =
-            std::fs::read_to_string(path).map_err(|source| KarvaTomlError::FileReadError {
+            fs::read_to_string(path).map_err(|source| KarvaTomlError::FileReadError {
                 source,
                 path: path.to_path_buf(),
             })?;

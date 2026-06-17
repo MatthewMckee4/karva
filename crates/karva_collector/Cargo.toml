@@ -14,6 +14,7 @@ license.workspace = true
 karva_python_semantic = { workspace = true }
 
 camino = { workspace = true }
+fs-err = { workspace = true }
 ruff_python_ast = { workspace = true }
 ruff_python_parser = { workspace = true }
 thiserror = { workspace = true }
