@@ -76,7 +76,7 @@ repos:
     rev: v0.0.48
     hooks:
       - id: ty
-        args: [--isolated]
+        args: [--isolated, --no-project]
         priority: 2
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
