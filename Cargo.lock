@@ -1187,6 +1187,7 @@ version = "0.0.0"
 dependencies = [
  "camino",
  "colored 3.1.1",
+ "fs-err",
  "insta",
  "karva_logging",
  "karva_python_semantic",
