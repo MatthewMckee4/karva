@@ -1,4 +1,3 @@
-use std::fs::{File, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -7,6 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use camino::Utf8Path;
 use colored::Colorize;
+use fs_err::{File, OpenOptions};
 use karva_logging::time::format_duration_bracketed;
 use karva_logging::{Printer, StatusLevel};
 use karva_python_semantic::QualifiedTestName;
@@ -524,5 +524,26 @@ mod tests {
             progress["name"] == "test_module::test_example"
         });
         assert_eq!(progress["name"], "test_module::test_example");
+    }
+
+    #[test]
+    fn progress_file_open_error_includes_path() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let path = Utf8PathBuf::try_from(
+            temp_dir
+                .path()
+                .join("missing-parent")
+                .join("current-test.json"),
+        )
+        .expect("temp path should be UTF-8");
+
+        let Err(error) = TestCaseReporter::new(Printer::default()).with_progress_file(&path) else {
+            panic!("missing parent should fail");
+        };
+
+        assert!(
+            error.to_string().contains(path.as_str()),
+            "unexpected error: {error}"
+        );
     }
 }

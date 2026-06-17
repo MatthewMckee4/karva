@@ -19,6 +19,7 @@ karva_python_semantic = { workspace = true }
 
 camino = { workspace = true }
 colored = { workspace = true }
+fs-err = { workspace = true }
 pyo3 = { workspace = true, optional = true }
 ruff_db = { workspace = true }
 ruff_source_file = { workspace = true }
