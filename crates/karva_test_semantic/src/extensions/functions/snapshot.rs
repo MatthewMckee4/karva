@@ -11,7 +11,7 @@ use karva_snapshot::format::{SnapshotFile, SnapshotMetadata};
 use karva_snapshot::storage::{
     read_snapshot, snapshot_path, write_pending_snapshot, write_snapshot,
 };
-use karva_static::EnvVars;
+use karva_static::{EnvVars, parse_boolish_env_var};
 use pyo3::exceptions::PyOSError;
 use pyo3::prelude::*;
 
@@ -329,8 +329,9 @@ fn assert_snapshot_impl(
             )
         })?;
 
-    let update_mode =
-        std::env::var(EnvVars::KARVA_SNAPSHOT_UPDATE).is_ok_and(|v| v == "1" || v == "true");
+    let update_mode = parse_boolish_env_var(EnvVars::KARVA_SNAPSHOT_UPDATE)
+        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?
+        .unwrap_or(false);
 
     if let Some(inline_value) = inline {
         return handle_inline_snapshot(

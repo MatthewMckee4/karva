@@ -58,8 +58,12 @@ env_vars! {
         /// This is a standard Karva environment variable.
         pub const KARVA_CONFIG_FILE: &'static str = "KARVA_CONFIG_FILE";
 
-        /// When set to "1" or "true", snapshot assertions write directly to `.snap`
-        /// instead of creating `.snap.new` pending files.
+        /// When set to a truthy boolish value, writes tracing profile output
+        /// to `tracing.folded`.
+        pub const KARVA_LOG_PROFILE: &'static str = "KARVA_LOG_PROFILE";
+
+        /// When set to a truthy boolish value, snapshot assertions write
+        /// directly to `.snap` instead of creating `.snap.new` pending files.
         pub const KARVA_SNAPSHOT_UPDATE: &'static str = "KARVA_SNAPSHOT_UPDATE";
     }
 }
@@ -130,6 +134,30 @@ pub enum MaxParallelismError {
     AvailableParallelism(io::Error),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BoolishEnvVarError {
+    InvalidValue { name: &'static str, value: String },
+    InvalidUnicode { name: &'static str, value: String },
+}
+
+impl fmt::Display for BoolishEnvVarError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidValue { name, value } => {
+                write!(
+                    f,
+                    "invalid {name} value `{value}`; expected a boolish value"
+                )
+            }
+            Self::InvalidUnicode { name, value } => {
+                write!(f, "{name} must contain valid Unicode, got `{value}`")
+            }
+        }
+    }
+}
+
+impl std::error::Error for BoolishEnvVarError {}
+
 impl fmt::Display for MaxParallelismError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -156,6 +184,38 @@ impl std::error::Error for MaxParallelismError {
             Self::InvalidUnicode { .. } => None,
             Self::AvailableParallelism(source) => Some(source),
         }
+    }
+}
+
+pub fn parse_boolish_env_var(name: &'static str) -> Result<Option<bool>, BoolishEnvVarError> {
+    match env::var(name) {
+        Ok(value) => parse_boolish(&value)
+            .map(Some)
+            .ok_or(BoolishEnvVarError::InvalidValue { name, value }),
+        Err(env::VarError::NotPresent) => Ok(None),
+        Err(env::VarError::NotUnicode(value)) => Err(BoolishEnvVarError::InvalidUnicode {
+            name,
+            value: value.to_string_lossy().into_owned(),
+        }),
+    }
+}
+
+fn parse_boolish(value: &str) -> Option<bool> {
+    const TRUE_LITERALS: &[&str] = &["y", "yes", "t", "true", "on", "1"];
+    const FALSE_LITERALS: &[&str] = &["n", "no", "f", "false", "off", "0"];
+
+    if TRUE_LITERALS
+        .iter()
+        .any(|literal| value.eq_ignore_ascii_case(literal))
+    {
+        Some(true)
+    } else if FALSE_LITERALS
+        .iter()
+        .any(|literal| value.eq_ignore_ascii_case(literal))
+    {
+        Some(false)
+    } else {
+        None
     }
 }
 
@@ -190,22 +250,31 @@ mod tests {
     use std::ffi::OsString;
     use std::sync::{Mutex, MutexGuard};
 
-    use super::{EnvVars, MaxParallelismError, max_parallelism};
+    use super::{
+        BoolishEnvVarError, EnvVars, MaxParallelismError, max_parallelism, parse_boolish_env_var,
+    };
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     struct EnvRestore {
-        karva: Option<OsString>,
-        rayon: Option<OsString>,
+        values: Vec<(&'static str, Option<OsString>)>,
         _guard: MutexGuard<'static, ()>,
     }
 
     impl EnvRestore {
         fn new() -> Self {
             let guard = ENV_LOCK.lock().expect("env lock");
+            let names = [
+                EnvVars::KARVA_MAX_PARALLELISM,
+                EnvVars::RAYON_NUM_THREADS,
+                EnvVars::KARVA_LOG_PROFILE,
+                EnvVars::KARVA_SNAPSHOT_UPDATE,
+            ];
             Self {
-                karva: std::env::var_os(EnvVars::KARVA_MAX_PARALLELISM),
-                rayon: std::env::var_os(EnvVars::RAYON_NUM_THREADS),
+                values: names
+                    .into_iter()
+                    .map(|name| (name, std::env::var_os(name)))
+                    .collect(),
                 _guard: guard,
             }
         }
@@ -227,32 +296,19 @@ mod tests {
 
     impl Drop for EnvRestore {
         fn drop(&mut self) {
-            match &self.karva {
-                Some(value) => {
-                    // SAFETY: Tests in this module hold ENV_LOCK while mutating env vars.
-                    unsafe {
-                        std::env::set_var(EnvVars::KARVA_MAX_PARALLELISM, value);
+            for (name, value) in &self.values {
+                match value {
+                    Some(value) => {
+                        // SAFETY: Tests in this module hold ENV_LOCK while mutating env vars.
+                        unsafe {
+                            std::env::set_var(name, value);
+                        }
                     }
-                }
-                None => {
-                    // SAFETY: Tests in this module hold ENV_LOCK while mutating env vars.
-                    unsafe {
-                        std::env::remove_var(EnvVars::KARVA_MAX_PARALLELISM);
-                    }
-                }
-            }
-
-            match &self.rayon {
-                Some(value) => {
-                    // SAFETY: Tests in this module hold ENV_LOCK while mutating env vars.
-                    unsafe {
-                        std::env::set_var(EnvVars::RAYON_NUM_THREADS, value);
-                    }
-                }
-                None => {
-                    // SAFETY: Tests in this module hold ENV_LOCK while mutating env vars.
-                    unsafe {
-                        std::env::remove_var(EnvVars::RAYON_NUM_THREADS);
+                    None => {
+                        // SAFETY: Tests in this module hold ENV_LOCK while mutating env vars.
+                        unsafe {
+                            std::env::remove_var(name);
+                        }
                     }
                 }
             }
@@ -288,5 +344,45 @@ mod tests {
         };
         assert_eq!(name, EnvVars::KARVA_MAX_PARALLELISM);
         assert_eq!(value, "0");
+    }
+
+    #[test]
+    fn boolish_env_var_accepts_true_values() {
+        let _restore = EnvRestore::new();
+
+        for value in ["1", "true", "TRUE", "yes", "on", "t", "y"] {
+            EnvRestore::set(EnvVars::KARVA_SNAPSHOT_UPDATE, value);
+            assert_eq!(
+                parse_boolish_env_var(EnvVars::KARVA_SNAPSHOT_UPDATE).expect("boolish"),
+                Some(true)
+            );
+        }
+    }
+
+    #[test]
+    fn boolish_env_var_accepts_false_values() {
+        let _restore = EnvRestore::new();
+
+        for value in ["0", "false", "FALSE", "no", "off", "f", "n"] {
+            EnvRestore::set(EnvVars::KARVA_LOG_PROFILE, value);
+            assert_eq!(
+                parse_boolish_env_var(EnvVars::KARVA_LOG_PROFILE).expect("boolish"),
+                Some(false)
+            );
+        }
+    }
+
+    #[test]
+    fn boolish_env_var_rejects_invalid_value() {
+        let _restore = EnvRestore::new();
+        EnvRestore::set(EnvVars::KARVA_LOG_PROFILE, "sometimes");
+
+        assert_eq!(
+            parse_boolish_env_var(EnvVars::KARVA_LOG_PROFILE),
+            Err(BoolishEnvVarError::InvalidValue {
+                name: EnvVars::KARVA_LOG_PROFILE,
+                value: "sometimes".to_string(),
+            })
+        );
     }
 }
