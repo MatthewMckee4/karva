@@ -9,7 +9,9 @@ use karva_diagnostic::{FlakyTest, TestResultKind, TestResultStats, TestRunResult
 use ruff_db::diagnostic::DisplayDiagnosticConfig;
 use serde::{Deserialize, Serialize};
 
-use crate::artifact::{CacheFile, read_json, read_text, write_json, write_json_if_nonempty};
+use crate::artifact::{
+    CacheFile, read_json, read_text, write_json, write_json_if_nonempty, write_text,
+};
 use crate::diagnostics::write_diagnostics;
 use crate::{RUN_PREFIX, RunHash, WORKER_PREFIX, worker_folder};
 
@@ -62,8 +64,7 @@ impl RunCache {
     /// Writes a fail-fast signal file to indicate a worker encountered a test failure.
     pub fn write_fail_fast_signal(&self) -> Result<()> {
         fs::create_dir_all(&self.run_dir)?;
-        fs::write(CacheFile::FailFastSignal.path_in(&self.run_dir), "")?;
-        Ok(())
+        write_text(&self.run_dir, CacheFile::FailFastSignal, "")
     }
 
     /// Checks whether any worker has written a fail-fast signal file.
