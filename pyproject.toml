@@ -42,6 +42,9 @@ manifest-path = "crates/karva_python/Cargo.toml"
 module-name = "karva._karva"
 python-source = "python"
 features = ["pyo3/extension-module"]
+include = [
+    { path = "rust-toolchain.toml", format = "sdist" },
+]
 
 [tool.ruff]
 fix = true
