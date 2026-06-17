@@ -54,16 +54,27 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             . \
+            ':!.gitattributes' \
+            ':!.github/CODEOWNERS' \
+            ':!.github/CODE_OF_CONDUCT.md' \
+            ':!.github/FUNDING.yml' \
+            ':!.github/ISSUE_TEMPLATE/**' \
+            ':!.github/PULL_REQUEST_TEMPLATE.md' \
+            ':!.github/actionlint.yaml' \
+            ':!.github/dependabot.yml' \
+            ':!.github/zizmor.yml' \
             ':!docs/' \
             ':!.markdownlint.yaml' \
             ':!.pre-commit-config.yaml' \
+            ':!AGENTS.md' \
             ':!CHANGELOG.md' \
-            ':!CLAUDE.md' \
             ':!CODE_OF_CONDUCT.md' \
             ':!CONTRIBUTING.md' \
             ':!justfile' \
             ':!LICENSE' \
             ':!README.md' \
+            ':!SECURITY.md' \
+            ':!STYLE.md' \
             ':!seal.toml' \
             ':!zensical.toml' \
           ; then
