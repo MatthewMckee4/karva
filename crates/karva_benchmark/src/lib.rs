@@ -520,13 +520,46 @@ fn run_command(command: &mut Command, failure: &str) -> Result<()> {
         .output()
         .with_context(|| format!("Failed to execute command for: {failure}"))?;
 
-    anyhow::ensure!(
-        output.status.success(),
-        "{failure}: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    if !output.status.success() {
+        anyhow::bail!("{}", command_failure_message(failure, &output));
+    }
 
     Ok(())
+}
+
+fn command_failure_message(failure: &str, output: &std::process::Output) -> String {
+    format_command_failure(
+        failure,
+        &output.status.to_string(),
+        &output.stdout,
+        &output.stderr,
+    )
+}
+
+fn format_command_failure(failure: &str, status: &str, stdout: &[u8], stderr: &[u8]) -> String {
+    let mut message = format!("{failure}\nstatus: {status}");
+    append_command_stream(
+        &mut message,
+        "stdout",
+        String::from_utf8_lossy(stdout).trim_end(),
+    );
+    append_command_stream(
+        &mut message,
+        "stderr",
+        String::from_utf8_lossy(stderr).trim_end(),
+    );
+    message
+}
+
+fn append_command_stream(message: &mut String, label: &str, output: &str) {
+    if output.is_empty() {
+        return;
+    }
+
+    message.push_str("\n\n[");
+    message.push_str(label);
+    message.push_str("]\n");
+    message.push_str(output);
 }
 
 static CARGO_TARGET_DIR: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
@@ -551,4 +584,43 @@ fn cargo_target_directory() -> Option<&'static PathBuf> {
                 })
         })
         .as_ref()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_command_failure;
+
+    #[test]
+    fn command_failure_includes_status_stdout_and_stderr() {
+        assert_eq!(
+            format_command_failure(
+                "uv sync failed",
+                "exit status: 1",
+                b"resolved\n",
+                b"denied\n"
+            ),
+            "uv sync failed\nstatus: exit status: 1\n\n[stdout]\nresolved\n\n[stderr]\ndenied"
+        );
+    }
+
+    #[test]
+    fn command_failure_includes_stdout_when_stderr_is_empty() {
+        assert_eq!(
+            format_command_failure(
+                "git fetch failed",
+                "exit status: 128",
+                b"fatal details\n",
+                b""
+            ),
+            "git fetch failed\nstatus: exit status: 128\n\n[stdout]\nfatal details"
+        );
+    }
+
+    #[test]
+    fn command_failure_keeps_empty_output_compact() {
+        assert_eq!(
+            format_command_failure("git clean failed", "exit status: 1", b"", b""),
+            "git clean failed\nstatus: exit status: 1"
+        );
+    }
 }
