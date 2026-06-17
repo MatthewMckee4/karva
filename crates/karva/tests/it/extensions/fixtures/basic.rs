@@ -739,3 +739,64 @@ def invoke():
     ----- stderr -----
     ");
 }
+
+#[test]
+#[cfg(unix)]
+fn test_imported_fixture_missing_source_is_reported() {
+    let context = TestContext::with_files([
+        ("mypackage/__init__.py", ""),
+        (
+            "mypackage/fixtures.py",
+            r"
+import pytest
+
+@pytest.fixture
+def invoke():
+    return 'invoked'
+",
+        ),
+        (
+            "conftest.py",
+            r"from pathlib import Path
+
+from mypackage.fixtures import invoke
+
+Path(__file__).with_name('mypackage').joinpath('fixtures.py').unlink()
+",
+        ),
+        (
+            "test_invoke.py",
+            "def test_invoke(invoke): assert invoke == 'invoked'",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test_invoke::test_invoke
+
+    diagnostics:
+
+    error[failed-to-discover-imported-fixture]: Failed to discover imported fixture `invoke` from `<temp_dir>/mypackage/fixtures.py`: failed to open file `<temp_dir>/mypackage/fixtures.py`: No such file or directory (os error 2)
+     --> conftest.py:1:1
+      |
+    1 | from pathlib import Path
+      | ^
+      |
+
+    error[missing-fixtures]: Test `test_invoke` has missing fixtures
+     --> test_invoke.py:1:5
+      |
+    1 | def test_invoke(invoke): assert invoke == 'invoked'
+      |     ^^^^^^^^^^^
+      |
+    info: Missing fixtures: `invoke`
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}

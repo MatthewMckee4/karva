@@ -1333,6 +1333,7 @@ name = "karva_test_semantic"
 version = "0.0.0"
 dependencies = [
  "camino",
+ "fs-err",
  "karva_collector",
  "karva_coverage",
  "karva_diagnostic",

@@ -2,6 +2,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use camino::Utf8Path;
+use fs_err as fs;
 use karva_python_semantic::ModulePath;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
@@ -11,7 +12,10 @@ use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 use ruff_source_file::SourceFileBuilder;
 
 use crate::Context;
-use crate::diagnostic::{report_failed_to_import_module, report_invalid_fixture};
+use crate::diagnostic::{
+    report_failed_to_discover_imported_fixture, report_failed_to_import_module,
+    report_invalid_fixture,
+};
 use crate::discovery::{DiscoveredModule, DiscoveredTestFunction};
 use crate::extensions::fixtures::DiscoveredFixture;
 use crate::extensions::fixtures::python::FixtureFunctionDefinition;
@@ -207,7 +211,6 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             .ok()?;
         let utf8_file_name = Utf8Path::from_path(Path::new(&file_name))?;
         let module_path = ModulePath::new(utf8_file_name, &self.context.cwd().to_path_buf())?;
-        let source_text = std::fs::read_to_string(utf8_file_name).ok()?;
 
         // Use the function's own __name__ to find its definition in the source, since the
         // conftest symbol name may differ when the fixture is imported under an alias.
@@ -216,6 +219,20 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             .ok()
             .and_then(|n| n.extract::<String>().ok())
             .unwrap_or_else(|| name.to_string());
+
+        let source_text = match fs::read_to_string(utf8_file_name) {
+            Ok(source_text) => source_text,
+            Err(err) => {
+                report_failed_to_discover_imported_fixture(
+                    self.context,
+                    name,
+                    self.module.source_file(),
+                    utf8_file_name,
+                    &err,
+                );
+                return None;
+            }
+        };
 
         let stmt_function_def =
             find_function_statement(&func_name, &source_text, self.context.python_version())?;
