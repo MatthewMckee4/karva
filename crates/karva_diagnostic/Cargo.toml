@@ -3,6 +3,7 @@ name = "karva_diagnostic"
 version = "0.0.0"
 edition.workspace = true
 rust-version.workspace = true
+description = "Test result types and diagnostic reporting for Karva."
 homepage.workspace = true
 documentation.workspace = true
 repository.workspace = true
