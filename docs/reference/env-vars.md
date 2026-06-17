@@ -20,10 +20,15 @@ This is a standard Karva environment variable.
 
 This is a standard Karva environment variable.
 
+### `KARVA_LOG_PROFILE`
+
+When set to a truthy boolish value, writes tracing profile output
+to `tracing.folded`.
+
 ### `KARVA_SNAPSHOT_UPDATE`
 
-When set to "1" or "true", snapshot assertions write directly to `.snap`
-instead of creating `.snap.new` pending files.
+When set to a truthy boolish value, snapshot assertions write
+directly to `.snap` instead of creating `.snap.new` pending files.
 
 ## Set by the worker on tests
 

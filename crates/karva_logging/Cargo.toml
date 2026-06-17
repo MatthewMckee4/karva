@@ -12,6 +12,7 @@ license.workspace = true
 
 [dependencies]
 karva_combine = { workspace = true }
+karva_static = { workspace = true }
 
 chrono = { workspace = true }
 clap = { workspace = true }

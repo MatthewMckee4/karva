@@ -4,6 +4,7 @@ use std::io::{self, BufWriter};
 use std::path::Path;
 
 use colored::Colorize;
+use karva_static::{EnvVars, parse_boolish_env_var};
 use tracing::{Event, Subscriber};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
@@ -111,14 +112,18 @@ fn setup_profile<S>() -> ProfileSetup<S>
 where
     S: Subscriber + for<'span> LookupSpan<'span>,
 {
-    if let Ok("1" | "true") = std::env::var("KARVA_LOG_PROFILE").as_deref() {
-        setup_profile_file("tracing.folded")
-    } else {
-        ProfileSetup {
+    match parse_boolish_env_var(EnvVars::KARVA_LOG_PROFILE) {
+        Ok(Some(true)) => setup_profile_file("tracing.folded"),
+        Ok(Some(false) | None) => ProfileSetup {
             layer: None,
             guard: None,
             warning: None,
-        }
+        },
+        Err(err) => ProfileSetup {
+            layer: None,
+            guard: None,
+            warning: Some(format!("{err}; profiling disabled")),
+        },
     }
 }
 
