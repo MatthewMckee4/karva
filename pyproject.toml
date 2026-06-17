@@ -28,7 +28,7 @@ karva-worker = "karva._karva:karva_worker_run"
 
 [dependency-groups]
 dev = ["ruff", "ty"]
-docs = ["zensical==0.0.38"]
+docs = ["zensical==0.0.45"]
 release = ["tbump"]
 
 [project.urls]
