@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 
+use camino::Utf8Path;
 use karva_collector::CollectionError;
 use karva_diagnostic::Traceback;
 use karva_python_semantic::FunctionKind;
@@ -46,6 +47,18 @@ declare_diagnostic_type! {
     /// exits non-zero.
     pub static FAILED_TO_IMPORT_MODULE = {
         summary: "Failed to import python module",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
+    /// ## Failed to discover imported fixture
+    ///
+    /// Raised when karva finds a fixture object imported into a test module or
+    /// `conftest.py`, but cannot read the original source file needed to locate
+    /// the fixture definition.
+    pub static FAILED_TO_DISCOVER_IMPORTED_FIXTURE = {
+        summary: "Failed to discover imported fixture",
         severity: Severity::Error,
     }
 }
@@ -163,6 +176,22 @@ pub fn report_failed_to_import_module(context: &Context, module_name: &str, erro
     builder.into_diagnostic(format!(
         "Failed to import python module `{module_name}`: {error}"
     ));
+}
+
+pub fn report_failed_to_discover_imported_fixture(
+    context: &Context,
+    fixture_name: &str,
+    importing_source_file: SourceFile,
+    source_path: &Utf8Path,
+    error: &std::io::Error,
+) {
+    let builder = context.report_diagnostic(&FAILED_TO_DISCOVER_IMPORTED_FIXTURE);
+
+    let mut diagnostic = builder.into_diagnostic(format!(
+        "Failed to discover imported fixture `{fixture_name}` from `{source_path}`: {error}"
+    ));
+
+    diagnostic.annotate(Annotation::primary(Span::from(importing_source_file)));
 }
 
 pub fn report_invalid_fixture(
