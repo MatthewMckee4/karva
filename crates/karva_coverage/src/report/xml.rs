@@ -8,7 +8,7 @@ use fs_err as fs;
 
 use super::shared::{FileRow, class_filename, escape_xml, rate};
 
-pub fn build_cobertura_xml(
+pub(super) fn build_cobertura_xml(
     cwd: &Utf8Path,
     cwd_real: &std::path::Path,
     rows: &[FileRow],

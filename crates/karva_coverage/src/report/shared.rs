@@ -7,12 +7,12 @@ use fs_err as fs;
 use crate::data::WorkerFile;
 
 #[derive(Debug, Default)]
-pub struct CombinedFile {
-    pub executable: BTreeSet<u32>,
-    pub executed: BTreeSet<u32>,
+pub(super) struct CombinedFile {
+    executable: BTreeSet<u32>,
+    executed: BTreeSet<u32>,
 }
 
-pub struct FileRow {
+pub(super) struct FileRow {
     pub name: String,
     pub absolute_name: String,
     pub stmts: u32,
@@ -23,7 +23,7 @@ pub struct FileRow {
     pub executed: Vec<u32>,
 }
 
-pub fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String, CombinedFile>> {
+pub(super) fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String, CombinedFile>> {
     let mut combined: BTreeMap<String, CombinedFile> = BTreeMap::new();
 
     for path in files {
@@ -43,7 +43,7 @@ pub fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String, Combin
     Ok(combined)
 }
 
-pub fn build_rows(
+pub(super) fn build_rows(
     cwd_real: &std::path::Path,
     combined: &BTreeMap<String, CombinedFile>,
     show_missing: bool,
@@ -81,7 +81,7 @@ pub fn build_rows(
         .collect()
 }
 
-pub fn total_percent(rows: &[FileRow]) -> f64 {
+pub(super) fn total_percent(rows: &[FileRow]) -> f64 {
     let total_stmts = rows
         .iter()
         .fold(0_u32, |acc, row| acc.saturating_add(row.stmts));
@@ -91,7 +91,7 @@ pub fn total_percent(rows: &[FileRow]) -> f64 {
     percent(total_stmts, total_miss)
 }
 
-pub fn totals_row(rows: &[FileRow]) -> FileRow {
+pub(super) fn totals_row(rows: &[FileRow]) -> FileRow {
     let stmts = rows
         .iter()
         .fold(0_u32, |acc, row| acc.saturating_add(row.stmts));
@@ -114,7 +114,7 @@ pub fn totals_row(rows: &[FileRow]) -> FileRow {
     }
 }
 
-pub fn missing_lines(row: &FileRow) -> Vec<u32> {
+pub(super) fn missing_lines(row: &FileRow) -> Vec<u32> {
     let executed: BTreeSet<u32> = row.executed.iter().copied().collect();
     row.executable
         .iter()
@@ -123,7 +123,7 @@ pub fn missing_lines(row: &FileRow) -> Vec<u32> {
         .collect()
 }
 
-pub fn class_filename(row: &FileRow, cwd_real: &std::path::Path) -> String {
+pub(super) fn class_filename(row: &FileRow, cwd_real: &std::path::Path) -> String {
     if let Ok(relative) = std::path::Path::new(&row.absolute_name).strip_prefix(cwd_real) {
         normalize_report_path(&relative.to_string_lossy())
     } else {
@@ -131,7 +131,7 @@ pub fn class_filename(row: &FileRow, cwd_real: &std::path::Path) -> String {
     }
 }
 
-pub fn percent(total: u32, miss: u32) -> f64 {
+pub(super) fn percent(total: u32, miss: u32) -> f64 {
     if total == 0 {
         return 100.0;
     }
@@ -139,7 +139,7 @@ pub fn percent(total: u32, miss: u32) -> f64 {
     f64::from(hit) / f64::from(total) * 100.0
 }
 
-pub fn rate(hit: u32, total: u32) -> f64 {
+pub(super) fn rate(hit: u32, total: u32) -> f64 {
     if total == 0 {
         1.0
     } else {
@@ -147,12 +147,12 @@ pub fn rate(hit: u32, total: u32) -> f64 {
     }
 }
 
-pub fn format_percent(total: u32, miss: u32) -> String {
+pub(super) fn format_percent(total: u32, miss: u32) -> String {
     let pct = percent(total, miss);
     format!("{pct:.0}%")
 }
 
-pub fn collapse_ranges(lines: &BTreeSet<u32>) -> String {
+pub(super) fn collapse_ranges(lines: &BTreeSet<u32>) -> String {
     let mut parts: Vec<String> = Vec::new();
     let mut iter = lines.iter().copied();
     let Some(mut start) = iter.next() else {
@@ -197,7 +197,7 @@ fn normalize_report_path(path: &str) -> String {
     path.replace('\\', "/")
 }
 
-pub fn escape_xml(value: &str) -> String {
+pub(super) fn escape_xml(value: &str) -> String {
     value
         .replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -206,7 +206,7 @@ pub fn escape_xml(value: &str) -> String {
         .replace('\'', "&apos;")
 }
 
-pub fn escape_html(value: &str) -> String {
+pub(super) fn escape_html(value: &str) -> String {
     value
         .replace('&', "&amp;")
         .replace('<', "&lt;")
