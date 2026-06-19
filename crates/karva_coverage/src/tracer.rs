@@ -406,7 +406,7 @@ fn save_data(
 
     let mut files = BTreeMap::new();
     for (path, hits) in executed {
-        let executable = executable_lines(&path);
+        let executable = executable_lines(&path)?;
         if executable.is_empty() {
             continue;
         }
@@ -430,4 +430,25 @@ fn save_data(
     }
     let bytes = serde_json::to_vec(&WorkerFile { files })?;
     fs::write(data_file.as_std_path(), bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn save_data_reports_missing_executed_source() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let data_file = Utf8Path::from_path(dir.path())
+            .expect("utf8 temp dir")
+            .join("coverage.json");
+        let missing = dir.path().join("missing.py");
+        let executed = HashMap::from([(missing, HashSet::from([1]))]);
+
+        let err = save_data(&data_file, executed, &[]).expect_err("missing source should fail");
+
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+        assert!(err.to_string().contains("missing.py"), "{err}");
+        assert!(!data_file.exists());
+    }
 }
