@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Context, Result};
 use camino::Utf8Path;
+use fs_err as fs;
 
 use crate::data::WorkerFile;
 
@@ -27,8 +28,8 @@ pub fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String, Combin
 
     for path in files {
         let path = path.as_ref();
-        let bytes = std::fs::read(path.as_std_path())
-            .with_context(|| format!("failed to read coverage file {path}"))?;
+        let bytes =
+            fs::read(path).with_context(|| format!("failed to read coverage file {path}"))?;
         let parsed: WorkerFile = serde_json::from_slice(&bytes)
             .with_context(|| format!("failed to parse coverage file {path}"))?;
 

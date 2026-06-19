@@ -20,6 +20,7 @@ karva_macros = { workspace = true }
 karva_version = { workspace = true }
 
 camino = { workspace = true }
+fs-err = { workspace = true }
 globset = { workspace = true }
 regex = { workspace = true }
 ruff_db = { workspace = true }

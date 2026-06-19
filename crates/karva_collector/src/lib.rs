@@ -1,4 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
+use fs_err as fs;
 use ruff_python_ast::{PythonVersion, Stmt};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 use thiserror::Error;
@@ -47,11 +48,10 @@ pub fn collect_file(
         return Ok(None);
     };
 
-    let source_text =
-        std::fs::read_to_string(path).map_err(|source| CollectionError::ReadSource {
-            path: path.clone(),
-            source,
-        })?;
+    let source_text = fs::read_to_string(path).map_err(|source| CollectionError::ReadSource {
+        path: path.clone(),
+        source,
+    })?;
 
     let module_type: ModuleType = path.into();
 

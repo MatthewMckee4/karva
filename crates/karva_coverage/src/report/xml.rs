@@ -4,6 +4,7 @@ use std::time::UNIX_EPOCH;
 
 use anyhow::{Context, Result};
 use camino::Utf8Path;
+use fs_err as fs;
 
 use super::shared::{FileRow, class_filename, escape_xml, rate};
 
@@ -19,7 +20,7 @@ pub fn build_cobertura_xml(
         .iter()
         .fold(0_u32, |acc, row| acc.saturating_add(row.hit));
     let line_rate = rate(total_hit, total_stmts);
-    let timestamp = std::fs::metadata(cwd.as_std_path())
+    let timestamp = fs::metadata(cwd)
         .with_context(|| format!("failed to read coverage root metadata {cwd}"))?
         .modified()
         .with_context(|| format!("failed to read coverage root modification time {cwd}"))?

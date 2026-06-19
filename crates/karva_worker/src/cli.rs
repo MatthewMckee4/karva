@@ -4,6 +4,7 @@ use std::process::{ExitCode, Termination};
 use anyhow::Context as _;
 use camino::Utf8PathBuf;
 use clap::Parser;
+use fs_err as fs;
 use karva_cache::{RunCache, RunHash};
 use karva_cli::{SubTestCommand, Verbosity};
 use karva_diagnostic::{DummyReporter, Reporter, TestCaseReporter};
@@ -153,7 +154,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     // Make sure the worker dir exists so the reporter can write the
     // progress file before the worker has otherwise touched it.
     if let Some(parent) = progress_file.parent() {
-        std::fs::create_dir_all(parent)
+        fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create worker progress directory `{parent}`"))?;
     }
     let reporter: Box<dyn Reporter> = if matches!(printer.status_level(), StatusLevel::None) {
