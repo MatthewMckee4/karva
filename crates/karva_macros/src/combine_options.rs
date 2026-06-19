@@ -1,7 +1,11 @@
 use quote::{quote, quote_spanned};
 use syn::{Data, DataStruct, DeriveInput, Field, Fields, Path, PathSegment, Type, TypePath};
 
-pub fn derive_impl(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "parent module calls this helper while unreachable_pub rejects plain pub"
+)]
+pub(super) fn derive_impl(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let DeriveInput { ident, data, .. } = input;
 
     match data {
