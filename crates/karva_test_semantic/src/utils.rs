@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt::Write;
 
 use camino::Utf8Path;
@@ -7,6 +6,8 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAnyMethods, PyDict};
 use pyo3::{PyResult, Python};
+
+use crate::runner::FixtureArguments;
 
 const MAKE_SYNC_CODE: &std::ffi::CStr = c"
 def _make_sync(async_fn):
@@ -34,15 +35,11 @@ pub(crate) fn run_coroutine(py: Python<'_>, coroutine: Py<PyAny>) -> PyResult<Py
 pub(crate) fn run_test_with_timeout(
     py: Python<'_>,
     function: &Py<PyAny>,
-    kwargs: &HashMap<String, Py<PyAny>>,
+    kwargs: &FixtureArguments,
     is_async: bool,
     seconds: f64,
 ) -> PyResult<Py<PyAny>> {
-    let kwargs_dict = PyDict::new(py);
-    for (key, value) in kwargs {
-        kwargs_dict.set_item(key, value)?;
-    }
-
+    let kwargs_dict = kwargs.to_kwargs(py)?;
     if is_async {
         run_async_with_timeout(py, function, &kwargs_dict, seconds)
     } else {
@@ -209,11 +206,7 @@ pub(crate) fn add_to_sys_path(py: Python<'_>, path: &Utf8Path, index: isize) -> 
     Ok(())
 }
 
-pub(crate) fn full_test_name(
-    py: Python,
-    function: String,
-    kwargs: &HashMap<String, Py<PyAny>>,
-) -> String {
+pub(crate) fn full_test_name(py: Python, function: String, kwargs: &FixtureArguments) -> String {
     if kwargs.is_empty() {
         function
     } else {
