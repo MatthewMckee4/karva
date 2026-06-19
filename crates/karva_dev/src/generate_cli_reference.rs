@@ -17,12 +17,12 @@ fn render_html(markdown_text: &str) -> String {
 }
 
 #[derive(clap::Args)]
-pub(crate) struct Args {
+pub struct Args {
     #[arg(long, default_value_t, value_enum)]
-    pub(crate) mode: Mode,
+    pub mode: Mode,
 }
 
-pub(crate) fn main(args: &Args) -> Result<()> {
+pub fn main(args: &Args) -> Result<()> {
     apply_mode(args.mode, "docs/reference/cli.md", &generate())
 }
 

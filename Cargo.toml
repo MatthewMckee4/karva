@@ -88,6 +88,7 @@ which = { version = "8.0" }
 wild = { version = "2" }
 
 [workspace.lints.rust]
+unsafe_code = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(codspeed)"] }
 
 [workspace.lints.clippy]

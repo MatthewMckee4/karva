@@ -24,3 +24,6 @@ itertools = { workspace = true }
 markdown = { workspace = true }
 pretty_assertions = { workspace = true }
 ruff_options_metadata = { workspace = true }
+
+[lints]
+workspace = true
