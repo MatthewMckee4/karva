@@ -1101,6 +1101,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "camino",
+ "fs-err",
  "insta",
  "karva_diagnostic",
  "ruff_db",

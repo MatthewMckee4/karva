@@ -1,10 +1,10 @@
 use std::collections::HashMap;
-use std::fs;
 use std::io::ErrorKind;
 use std::time::Duration;
 
 use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
+use fs_err as fs;
 use karva_diagnostic::{FlakyTest, TestResultKind, TestResultStats, TestRunResult};
 use ruff_db::diagnostic::DisplayDiagnosticConfig;
 use serde::{Deserialize, Serialize};
@@ -205,12 +205,13 @@ pub fn read_last_failed(cache_dir: &Utf8Path) -> Result<Vec<String>> {
 /// Returns an empty vec if `parent` does not exist. Non-UTF-8 entries and
 /// non-directory entries are silently skipped.
 fn list_subdirs_with_prefix(parent: &Utf8Path, prefix: &str) -> Result<Vec<Utf8PathBuf>> {
-    if !parent.exists() {
-        return Ok(Vec::new());
-    }
-
     let mut dirs = Vec::new();
-    for entry in fs::read_dir(parent)? {
+    let entries = match fs::read_dir(parent) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(err) => return Err(err.into()),
+    };
+    for entry in entries {
         let entry = entry?;
         let Ok(path) = Utf8PathBuf::try_from(entry.path()) else {
             continue;
@@ -273,12 +274,6 @@ pub struct PruneResult {
 
 /// Removes all but the most recent `run-*` directory from the cache.
 pub fn prune_cache(cache_dir: &Utf8Path) -> Result<PruneResult> {
-    if !cache_dir.exists() {
-        return Ok(PruneResult {
-            removed: Vec::new(),
-        });
-    }
-
     let mut run_dirs = collect_run_dirs(cache_dir)?;
 
     let to_remove = run_dirs.len().saturating_sub(1);
@@ -297,11 +292,10 @@ pub fn prune_cache(cache_dir: &Utf8Path) -> Result<PruneResult> {
 ///
 /// Returns `true` if the directory existed and was removed.
 pub fn clean_cache(cache_dir: &Utf8Path) -> Result<bool> {
-    if cache_dir.exists() {
-        fs::remove_dir_all(cache_dir)?;
-        Ok(true)
-    } else {
-        Ok(false)
+    match fs::remove_dir_all(cache_dir) {
+        Ok(()) => Ok(true),
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(false),
+        Err(err) => Err(err.into()),
     }
 }
 
@@ -496,6 +490,22 @@ mod tests {
     }
 
     #[test]
+    fn prune_cache_reports_cache_dir_read_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = Utf8PathBuf::try_from(tmp.path().join("cache")).unwrap();
+        fs::write(&cache_dir, "").unwrap();
+
+        let Err(error) = prune_cache(&cache_dir) else {
+            panic!("file cache path should fail");
+        };
+
+        assert!(
+            error.to_string().contains(cache_dir.as_str()),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
     fn prune_cache_ignores_non_run_directories() {
         let tmp = tempfile::tempdir().unwrap();
         let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
@@ -644,6 +654,25 @@ mod tests {
         fs::write(progress_file, "").unwrap();
 
         assert!(cache.read_current_test(0).unwrap().is_none());
+    }
+
+    #[test]
+    fn read_current_test_reports_path_on_read_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+        let run_hash = RunHash::from_existing("run-760");
+        let cache = RunCache::new(&cache_dir, &run_hash);
+        let progress_file = cache.current_test_file(0);
+        fs::create_dir_all(&progress_file).unwrap();
+
+        let error = cache
+            .read_current_test(0)
+            .expect_err("directory progress file should fail");
+
+        assert!(
+            error.to_string().contains(progress_file.as_str()),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]
