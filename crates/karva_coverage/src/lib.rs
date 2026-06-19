@@ -13,6 +13,8 @@
 //! The two halves communicate only through the JSON file format, defined
 //! in [`data`].
 
+#![warn(unreachable_pub)]
+
 pub mod data;
 pub mod executable;
 pub mod report;
