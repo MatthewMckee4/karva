@@ -584,7 +584,17 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Write as _;
+
+    use insta::assert_snapshot;
+
     use super::*;
+
+    struct FilterCase<'a> {
+        name: &'a str,
+        expression: &'a str,
+        contexts: &'a [EvalContext<'a>],
+    }
 
     fn ctx<'a>(test_name: &'a str, tag_list: &'a [&'a str]) -> EvalContext<'a> {
         EvalContext {
@@ -594,325 +604,476 @@ mod tests {
     }
 
     #[test]
-    fn tag_default_exact() {
-        let f = Filterset::new("tag(slow)").expect("parse");
-        assert!(f.matches(&ctx("x", &["slow"])));
-        assert!(!f.matches(&ctx("x", &["slowish"])));
-        assert!(!f.matches(&ctx("x", &[])));
+    fn evaluates_matcher_predicates() {
+        assert_snapshot!(
+            render_filter_evaluations(&[
+                FilterCase {
+                    name: "tag default exact",
+                    expression: "tag(slow)",
+                    contexts: &[ctx("x", &["slow"]), ctx("x", &["slowish"]), ctx("x", &[])],
+                },
+                FilterCase {
+                    name: "tag explicit exact",
+                    expression: "tag(=slow)",
+                    contexts: &[ctx("x", &["slow"]), ctx("x", &["slowish"])],
+                },
+                FilterCase {
+                    name: "tag substring",
+                    expression: "tag(~slo)",
+                    contexts: &[ctx("x", &["slow"]), ctx("x", &["slowish"]), ctx("x", &["fast"])],
+                },
+                FilterCase {
+                    name: "tag regex",
+                    expression: "tag(/^slo/)",
+                    contexts: &[ctx("x", &["slow"]), ctx("x", &["slower"]), ctx("x", &["not_slow"])],
+                },
+                FilterCase {
+                    name: "tag glob",
+                    expression: "tag(#py3*)",
+                    contexts: &[ctx("x", &["py311"]), ctx("x", &["py312"]), ctx("x", &["py2"])],
+                },
+                FilterCase {
+                    name: "quoted tag",
+                    expression: "tag(=\"my tag\")",
+                    contexts: &[ctx("x", &["my tag"]), ctx("x", &["my-tag"])],
+                },
+                FilterCase {
+                    name: "test default substring",
+                    expression: "test(login)",
+                    contexts: &[
+                        ctx("mod::test_login", &[]),
+                        ctx("mod::test_login_flow", &[]),
+                        ctx("mod::test_logout", &[]),
+                    ],
+                },
+                FilterCase {
+                    name: "test exact",
+                    expression: "test(=mod::test_login)",
+                    contexts: &[ctx("mod::test_login", &[]), ctx("mod::test_login_flow", &[])],
+                },
+                FilterCase {
+                    name: "test regex",
+                    expression: "test(/^mod::test_login$/)",
+                    contexts: &[ctx("mod::test_login", &[]), ctx("mod::test_login_flow", &[])],
+                },
+                FilterCase {
+                    name: "test regex alternation",
+                    expression: "test(/slow|fast/)",
+                    contexts: &[
+                        ctx("mod::test_slow", &[]),
+                        ctx("mod::test_fast", &[]),
+                        ctx("mod::test_medium", &[]),
+                    ],
+                },
+                FilterCase {
+                    name: "test glob",
+                    expression: "test(#*login*)",
+                    contexts: &[
+                        ctx("mod::test_login", &[]),
+                        ctx("mod::test_logout_and_login", &[]),
+                        ctx("mod::test_logout", &[]),
+                    ],
+                },
+                FilterCase {
+                    name: "test name with colons",
+                    expression: "test(=mod::sub::test_login)",
+                    contexts: &[
+                        ctx("mod::sub::test_login", &[]),
+                        ctx("mod::sub::test_login_flow", &[]),
+                    ],
+                },
+                FilterCase {
+                    name: "parametrized test regex",
+                    expression: r"test(/param=1/)",
+                    contexts: &[
+                        ctx("mod::test_add(param=1)", &[]),
+                        ctx("mod::test_add(param=2)", &[]),
+                    ],
+                },
+                FilterCase {
+                    name: "keyword tag matcher",
+                    expression: "tag(test)",
+                    contexts: &[ctx("x", &["test"]), ctx("x", &["slow"])],
+                },
+                FilterCase {
+                    name: "keyword test matcher",
+                    expression: "test(tag)",
+                    contexts: &[ctx("mod::test_tag_something", &[]), ctx("mod::test_something", &[])],
+                },
+            ]),
+            @r#"
+tag default exact: tag(slow)
+  x tags=[slow] => match
+  x tags=[slowish] => miss
+  x tags=[] => miss
+
+tag explicit exact: tag(=slow)
+  x tags=[slow] => match
+  x tags=[slowish] => miss
+
+tag substring: tag(~slo)
+  x tags=[slow] => match
+  x tags=[slowish] => match
+  x tags=[fast] => miss
+
+tag regex: tag(/^slo/)
+  x tags=[slow] => match
+  x tags=[slower] => match
+  x tags=[not_slow] => miss
+
+tag glob: tag(#py3*)
+  x tags=[py311] => match
+  x tags=[py312] => match
+  x tags=[py2] => miss
+
+quoted tag: tag(="my tag")
+  x tags=[my tag] => match
+  x tags=[my-tag] => miss
+
+test default substring: test(login)
+  mod::test_login tags=[] => match
+  mod::test_login_flow tags=[] => match
+  mod::test_logout tags=[] => miss
+
+test exact: test(=mod::test_login)
+  mod::test_login tags=[] => match
+  mod::test_login_flow tags=[] => miss
+
+test regex: test(/^mod::test_login$/)
+  mod::test_login tags=[] => match
+  mod::test_login_flow tags=[] => miss
+
+test regex alternation: test(/slow|fast/)
+  mod::test_slow tags=[] => match
+  mod::test_fast tags=[] => match
+  mod::test_medium tags=[] => miss
+
+test glob: test(#*login*)
+  mod::test_login tags=[] => match
+  mod::test_logout_and_login tags=[] => match
+  mod::test_logout tags=[] => miss
+
+test name with colons: test(=mod::sub::test_login)
+  mod::sub::test_login tags=[] => match
+  mod::sub::test_login_flow tags=[] => miss
+
+parametrized test regex: test(/param=1/)
+  mod::test_add(param=1) tags=[] => match
+  mod::test_add(param=2) tags=[] => miss
+
+keyword tag matcher: tag(test)
+  x tags=[test] => match
+  x tags=[slow] => miss
+
+keyword test matcher: test(tag)
+  mod::test_tag_something tags=[] => match
+  mod::test_something tags=[] => miss
+"#
+        );
     }
 
     #[test]
-    fn tag_exact_explicit() {
-        let f = Filterset::new("tag(=slow)").expect("parse");
-        assert!(f.matches(&ctx("x", &["slow"])));
-        assert!(!f.matches(&ctx("x", &["slowish"])));
+    fn evaluates_boolean_expressions() {
+        assert_snapshot!(
+            render_filter_evaluations(&[
+                FilterCase {
+                    name: "and requires both",
+                    expression: "tag(slow) & tag(integration)",
+                    contexts: &[
+                        ctx("x", &["slow", "integration"]),
+                        ctx("x", &["slow"]),
+                        ctx("x", &["integration"]),
+                    ],
+                },
+                FilterCase {
+                    name: "and keyword",
+                    expression: "tag(slow) and tag(integration)",
+                    contexts: &[ctx("x", &["slow", "integration"]), ctx("x", &["slow"])],
+                },
+                FilterCase {
+                    name: "or matches either",
+                    expression: "tag(slow) | tag(fast)",
+                    contexts: &[ctx("x", &["slow"]), ctx("x", &["fast"]), ctx("x", &["medium"])],
+                },
+                FilterCase {
+                    name: "or keyword",
+                    expression: "tag(slow) or tag(fast)",
+                    contexts: &[ctx("x", &["slow"]), ctx("x", &["fast"])],
+                },
+                FilterCase {
+                    name: "not keyword",
+                    expression: "not tag(flaky)",
+                    contexts: &[ctx("x", &[]), ctx("x", &["slow"]), ctx("x", &["flaky"])],
+                },
+                FilterCase {
+                    name: "bang not",
+                    expression: "!tag(flaky)",
+                    contexts: &[ctx("x", &[]), ctx("x", &["flaky"])],
+                },
+                FilterCase {
+                    name: "minus excludes",
+                    expression: "tag(slow) - tag(flaky)",
+                    contexts: &[
+                        ctx("x", &["slow"]),
+                        ctx("x", &["slow", "flaky"]),
+                        ctx("x", &["flaky"]),
+                    ],
+                },
+                FilterCase {
+                    name: "parens override precedence",
+                    expression: "(tag(a) | tag(b)) & tag(c)",
+                    contexts: &[
+                        ctx("x", &["a", "c"]),
+                        ctx("x", &["b", "c"]),
+                        ctx("x", &["a"]),
+                        ctx("x", &["c"]),
+                    ],
+                },
+                FilterCase {
+                    name: "and binds tighter than or",
+                    expression: "tag(a) | tag(b) & tag(c)",
+                    contexts: &[ctx("x", &["a"]), ctx("x", &["b", "c"]), ctx("x", &["b"])],
+                },
+                FilterCase {
+                    name: "combined test and tag",
+                    expression: "test(login) & tag(slow)",
+                    contexts: &[
+                        ctx("mod::test_login", &["slow"]),
+                        ctx("mod::test_login", &[]),
+                        ctx("mod::test_logout", &["slow"]),
+                    ],
+                },
+                FilterCase {
+                    name: "double not",
+                    expression: "not not tag(slow)",
+                    contexts: &[ctx("x", &["slow"]), ctx("x", &["fast"])],
+                },
+                FilterCase {
+                    name: "not with parens",
+                    expression: "not (tag(a) & tag(b))",
+                    contexts: &[ctx("x", &["a"]), ctx("x", &["b"]), ctx("x", &["a", "b"])],
+                },
+            ]),
+            @r#"
+and requires both: tag(slow) & tag(integration)
+  x tags=[slow, integration] => match
+  x tags=[slow] => miss
+  x tags=[integration] => miss
+
+and keyword: tag(slow) and tag(integration)
+  x tags=[slow, integration] => match
+  x tags=[slow] => miss
+
+or matches either: tag(slow) | tag(fast)
+  x tags=[slow] => match
+  x tags=[fast] => match
+  x tags=[medium] => miss
+
+or keyword: tag(slow) or tag(fast)
+  x tags=[slow] => match
+  x tags=[fast] => match
+
+not keyword: not tag(flaky)
+  x tags=[] => match
+  x tags=[slow] => match
+  x tags=[flaky] => miss
+
+bang not: !tag(flaky)
+  x tags=[] => match
+  x tags=[flaky] => miss
+
+minus excludes: tag(slow) - tag(flaky)
+  x tags=[slow] => match
+  x tags=[slow, flaky] => miss
+  x tags=[flaky] => miss
+
+parens override precedence: (tag(a) | tag(b)) & tag(c)
+  x tags=[a, c] => match
+  x tags=[b, c] => match
+  x tags=[a] => miss
+  x tags=[c] => miss
+
+and binds tighter than or: tag(a) | tag(b) & tag(c)
+  x tags=[a] => match
+  x tags=[b, c] => match
+  x tags=[b] => miss
+
+combined test and tag: test(login) & tag(slow)
+  mod::test_login tags=[slow] => match
+  mod::test_login tags=[] => miss
+  mod::test_logout tags=[slow] => miss
+
+double not: not not tag(slow)
+  x tags=[slow] => match
+  x tags=[fast] => miss
+
+not with parens: not (tag(a) & tag(b))
+  x tags=[a] => match
+  x tags=[b] => match
+  x tags=[a, b] => miss
+"#
+        );
     }
 
     #[test]
-    fn tag_substring() {
-        let f = Filterset::new("tag(~slo)").expect("parse");
-        assert!(f.matches(&ctx("x", &["slow"])));
-        assert!(f.matches(&ctx("x", &["slowish"])));
-        assert!(!f.matches(&ctx("x", &["fast"])));
-    }
-
-    #[test]
-    fn tag_regex() {
-        let f = Filterset::new("tag(/^slo/)").expect("parse");
-        assert!(f.matches(&ctx("x", &["slow"])));
-        assert!(f.matches(&ctx("x", &["slower"])));
-        assert!(!f.matches(&ctx("x", &["not_slow"])));
-    }
-
-    #[test]
-    fn tag_glob() {
-        let f = Filterset::new("tag(#py3*)").expect("parse");
-        assert!(f.matches(&ctx("x", &["py311"])));
-        assert!(f.matches(&ctx("x", &["py312"])));
-        assert!(!f.matches(&ctx("x", &["py2"])));
-    }
-
-    #[test]
-    fn test_default_substring() {
-        let f = Filterset::new("test(login)").expect("parse");
-        assert!(f.matches(&ctx("mod::test_login", &[])));
-        assert!(f.matches(&ctx("mod::test_login_flow", &[])));
-        assert!(!f.matches(&ctx("mod::test_logout", &[])));
-    }
-
-    #[test]
-    fn test_exact() {
-        let f = Filterset::new("test(=mod::test_login)").expect("parse");
-        assert!(f.matches(&ctx("mod::test_login", &[])));
-        assert!(!f.matches(&ctx("mod::test_login_flow", &[])));
-    }
-
-    #[test]
-    fn test_regex() {
-        let f = Filterset::new("test(/^mod::test_login$/)").expect("parse");
-        assert!(f.matches(&ctx("mod::test_login", &[])));
-        assert!(!f.matches(&ctx("mod::test_login_flow", &[])));
-    }
-
-    #[test]
-    fn test_regex_alternation() {
-        let f = Filterset::new("test(/slow|fast/)").expect("parse");
-        assert!(f.matches(&ctx("mod::test_slow", &[])));
-        assert!(f.matches(&ctx("mod::test_fast", &[])));
-        assert!(!f.matches(&ctx("mod::test_medium", &[])));
-    }
-
-    #[test]
-    fn test_glob() {
-        let f = Filterset::new("test(#*login*)").expect("parse");
-        assert!(f.matches(&ctx("mod::test_login", &[])));
-        assert!(f.matches(&ctx("mod::test_logout_and_login", &[])));
-        assert!(!f.matches(&ctx("mod::test_logout", &[])));
-    }
-
-    #[test]
-    fn quoted_string_matcher() {
-        let f = Filterset::new("tag(=\"my tag\")").expect("parse");
-        assert!(f.matches(&ctx("x", &["my tag"])));
-        assert!(!f.matches(&ctx("x", &["my-tag"])));
-    }
-
-    #[test]
-    fn and_both_required() {
-        let f = Filterset::new("tag(slow) & tag(integration)").expect("parse");
-        assert!(f.matches(&ctx("x", &["slow", "integration"])));
-        assert!(!f.matches(&ctx("x", &["slow"])));
-        assert!(!f.matches(&ctx("x", &["integration"])));
-    }
-
-    #[test]
-    fn and_with_keyword_spelling() {
-        let f = Filterset::new("tag(slow) and tag(integration)").expect("parse");
-        assert!(f.matches(&ctx("x", &["slow", "integration"])));
-        assert!(!f.matches(&ctx("x", &["slow"])));
-    }
-
-    #[test]
-    fn or_either() {
-        let f = Filterset::new("tag(slow) | tag(fast)").expect("parse");
-        assert!(f.matches(&ctx("x", &["slow"])));
-        assert!(f.matches(&ctx("x", &["fast"])));
-        assert!(!f.matches(&ctx("x", &["medium"])));
-    }
-
-    #[test]
-    fn or_with_keyword_spelling() {
-        let f = Filterset::new("tag(slow) or tag(fast)").expect("parse");
-        assert!(f.matches(&ctx("x", &["slow"])));
-        assert!(f.matches(&ctx("x", &["fast"])));
-    }
-
-    #[test]
-    fn not_inverts() {
-        let f = Filterset::new("not tag(flaky)").expect("parse");
-        assert!(f.matches(&ctx("x", &[])));
-        assert!(f.matches(&ctx("x", &["slow"])));
-        assert!(!f.matches(&ctx("x", &["flaky"])));
-    }
-
-    #[test]
-    fn bang_inverts() {
-        let f = Filterset::new("!tag(flaky)").expect("parse");
-        assert!(f.matches(&ctx("x", &[])));
-        assert!(!f.matches(&ctx("x", &["flaky"])));
-    }
-
-    #[test]
-    fn minus_is_and_not() {
-        let f = Filterset::new("tag(slow) - tag(flaky)").expect("parse");
-        assert!(f.matches(&ctx("x", &["slow"])));
-        assert!(!f.matches(&ctx("x", &["slow", "flaky"])));
-        assert!(!f.matches(&ctx("x", &["flaky"])));
-    }
-
-    #[test]
-    fn parens_override_precedence() {
-        let f = Filterset::new("(tag(a) | tag(b)) & tag(c)").expect("parse");
-        assert!(f.matches(&ctx("x", &["a", "c"])));
-        assert!(f.matches(&ctx("x", &["b", "c"])));
-        assert!(!f.matches(&ctx("x", &["a"])));
-        assert!(!f.matches(&ctx("x", &["c"])));
-    }
-
-    #[test]
-    fn precedence_and_binds_tighter_than_or() {
-        let f = Filterset::new("tag(a) | tag(b) & tag(c)").expect("parse");
-        assert!(f.matches(&ctx("x", &["a"])));
-        assert!(f.matches(&ctx("x", &["b", "c"])));
-        assert!(!f.matches(&ctx("x", &["b"])));
-    }
-
-    #[test]
-    fn combined_test_and_tag() {
-        let f = Filterset::new("test(login) & tag(slow)").expect("parse");
-        assert!(f.matches(&ctx("mod::test_login", &["slow"])));
-        assert!(!f.matches(&ctx("mod::test_login", &[])));
-        assert!(!f.matches(&ctx("mod::test_logout", &["slow"])));
-    }
-
-    #[test]
-    fn test_name_with_colons_bare() {
-        let f = Filterset::new("test(=mod::sub::test_login)").expect("parse");
-        assert!(f.matches(&ctx("mod::sub::test_login", &[])));
-        assert!(!f.matches(&ctx("mod::sub::test_login_flow", &[])));
-    }
-
-    #[test]
-    fn double_not() {
-        let f = Filterset::new("not not tag(slow)").expect("parse");
-        assert!(f.matches(&ctx("x", &["slow"])));
-        assert!(!f.matches(&ctx("x", &["fast"])));
-    }
-
-    #[test]
-    fn not_with_parens() {
-        let f = Filterset::new("not (tag(a) & tag(b))").expect("parse");
-        assert!(f.matches(&ctx("x", &["a"])));
-        assert!(f.matches(&ctx("x", &["b"])));
-        assert!(!f.matches(&ctx("x", &["a", "b"])));
-    }
-
-    #[test]
-    fn filterset_set_or_across_flags() {
+    fn filterset_set_matches_any_expression() {
         let set = FiltersetSet::new(&["tag(slow)".to_string(), "tag(integration)".to_string()])
             .expect("parse");
-        assert!(set.matches(&ctx("x", &["slow"])));
-        assert!(set.matches(&ctx("x", &["integration"])));
-        assert!(!set.matches(&ctx("x", &["fast"])));
+        assert_snapshot!(
+            render_filterset_set_evaluation(
+                &set,
+                &[ctx("x", &["slow"]), ctx("x", &["integration"]), ctx("x", &["fast"])]
+            ),
+            @r#"
+x tags=[slow] => match
+x tags=[integration] => match
+x tags=[fast] => miss
+"#
+        );
     }
 
     #[test]
     fn filterset_set_empty_matches_all() {
         let set = FiltersetSet::new(&[]).expect("parse");
         assert!(set.is_empty());
-        assert!(set.matches(&ctx("anything", &[])));
+        assert_snapshot!(
+            render_filterset_set_evaluation(&set, &[ctx("anything", &[])]),
+            @"anything tags=[] => match"
+        );
     }
 
     #[test]
-    fn empty_expression_is_error() {
-        assert!(matches!(
-            Filterset::new(""),
-            Err(FilterError::EmptyExpression { .. })
-        ));
+    fn reports_parse_errors() {
+        assert_snapshot!(
+            render_parse_errors(&[
+                "",
+                "   ",
+                "package(foo)",
+                "slow",
+                "tag(slow",
+                "test(/slow",
+                "tag(\"slow)",
+                "test(/[invalid/)",
+                "tag()",
+                "tag(=)",
+                "tag slow",
+                "tag(slow) &",
+                "tag(slow) |",
+                "& tag(slow)",
+                "tag(@)",
+                "tag(#[)",
+            ]),
+            @r#"
+"": EmptyExpression: empty filter expression ``
+"   ": EmptyExpression: empty filter expression `   `
+"package(foo)": UnknownPredicate: unknown predicate `package` in filter expression `package(foo)` (expected `test` or `tag`)
+"slow": UnknownPredicate: unknown predicate `slow` in filter expression `slow` (expected `test` or `tag`)
+"tag(slow": UnclosedParenthesis: expected closing `)` in filter expression `tag(slow`
+"test(/slow": UnclosedRegex: unterminated regex literal in filter expression `test(/slow`
+"tag(\"slow)": UnclosedString: unterminated quoted string in filter expression `tag("slow)`
+"test(/[invalid/)": InvalidRegex: invalid regex `/[invalid/` in filter expression `test(/[invalid/)`: regex parse error:
+    [invalid
+    ^
+error: unclosed character class
+"tag()": ExpectedMatcher: expected a matcher body in filter expression `tag()`
+"tag(=)": ExpectedMatcher: expected a matcher body in filter expression `tag(=)`
+"tag slow": ExpectedPredicateOpenParen: expected `(` after predicate in filter expression `tag slow`
+"tag(slow) &": UnexpectedEndOfExpression: unexpected end of filter expression `tag(slow) &`
+"tag(slow) |": UnexpectedEndOfExpression: unexpected end of filter expression `tag(slow) |`
+"& tag(slow)": UnexpectedToken: unexpected token `&` in filter expression `& tag(slow)`
+"tag(@)": UnexpectedCharacter: unexpected character `@` in filter expression `tag(@)`
+"tag(#[)": InvalidGlob: invalid glob `#[` in filter expression `tag(#[)`: error parsing glob '[': unclosed character class; missing ']'
+"#
+        );
     }
 
-    #[test]
-    fn whitespace_only_is_error() {
-        assert!(matches!(
-            Filterset::new("   "),
-            Err(FilterError::EmptyExpression { .. })
-        ));
+    fn render_filter_evaluations(cases: &[FilterCase<'_>]) -> String {
+        let mut report = String::new();
+
+        for case in cases {
+            let filter = Filterset::new(case.expression).expect("parse filter expression");
+            report.push_str(case.name);
+            report.push_str(": ");
+            report.push_str(case.expression);
+            report.push('\n');
+
+            for context in case.contexts {
+                push_context_result(&mut report, "  ", context, filter.matches(context));
+                report.push('\n');
+            }
+
+            report.push('\n');
+        }
+
+        report.trim_end().to_string()
     }
 
-    #[test]
-    fn unknown_predicate_is_error() {
-        assert!(matches!(
-            Filterset::new("package(foo)"),
-            Err(FilterError::UnknownPredicate { .. })
-        ));
+    fn render_filterset_set_evaluation(set: &FiltersetSet, contexts: &[EvalContext<'_>]) -> String {
+        let mut report = String::new();
+
+        for context in contexts {
+            push_context_result(&mut report, "", context, set.matches(context));
+            report.push('\n');
+        }
+
+        report.trim_end().to_string()
     }
 
-    #[test]
-    fn bare_ident_without_parens_is_error() {
-        assert!(matches!(
-            Filterset::new("slow"),
-            Err(FilterError::UnknownPredicate { .. })
-        ));
+    fn push_context_result(
+        report: &mut String,
+        indent: &str,
+        context: &EvalContext<'_>,
+        matches: bool,
+    ) {
+        if !report.is_empty() && !report.ends_with('\n') {
+            report.push('\n');
+        }
+        report.push_str(indent);
+        report.push_str(context.test_name);
+        report.push_str(" tags=");
+        report.push_str(&format_tags(context.tags));
+        report.push_str(" => ");
+        report.push_str(if matches { "match" } else { "miss" });
     }
 
-    #[test]
-    fn unclosed_paren_is_error() {
-        assert!(matches!(
-            Filterset::new("tag(slow"),
-            Err(FilterError::UnclosedParenthesis { .. })
-        ));
+    fn format_tags(tags: &[&str]) -> String {
+        if tags.is_empty() {
+            return "[]".to_string();
+        }
+
+        format!("[{}]", tags.join(", "))
     }
 
-    #[test]
-    fn unclosed_regex_is_error() {
-        assert!(matches!(
-            Filterset::new("test(/slow"),
-            Err(FilterError::UnclosedRegex { .. })
-        ));
+    fn render_parse_errors(inputs: &[&str]) -> String {
+        let mut report = String::new();
+
+        for input in inputs {
+            let error = Filterset::new(input).expect_err("filter expression should not parse");
+            writeln!(
+                &mut report,
+                "{input:?}: {}: {error}",
+                filter_error_kind(&error)
+            )
+            .expect("write parse error report");
+        }
+
+        report.trim_end().to_string()
     }
 
-    #[test]
-    fn unclosed_string_is_error() {
-        assert!(matches!(
-            Filterset::new("tag(\"slow)"),
-            Err(FilterError::UnclosedString { .. })
-        ));
-    }
-
-    #[test]
-    fn invalid_regex_is_error() {
-        assert!(matches!(
-            Filterset::new("test(/[invalid/)"),
-            Err(FilterError::InvalidRegex { .. })
-        ));
-    }
-
-    #[test]
-    fn missing_matcher_body_is_error() {
-        assert!(matches!(
-            Filterset::new("tag()"),
-            Err(FilterError::ExpectedMatcher { .. })
-        ));
-        assert!(matches!(
-            Filterset::new("tag(=)"),
-            Err(FilterError::ExpectedMatcher { .. })
-        ));
-    }
-
-    #[test]
-    fn predicate_without_parens_is_error() {
-        assert!(matches!(
-            Filterset::new("tag slow"),
-            Err(FilterError::ExpectedPredicateOpenParen { .. })
-        ));
-    }
-
-    #[test]
-    fn trailing_and_is_error() {
-        assert!(matches!(
-            Filterset::new("tag(slow) &"),
-            Err(FilterError::UnexpectedEndOfExpression { .. })
-        ));
-    }
-
-    #[test]
-    fn trailing_or_is_error() {
-        assert!(matches!(
-            Filterset::new("tag(slow) |"),
-            Err(FilterError::UnexpectedEndOfExpression { .. })
-        ));
-    }
-
-    #[test]
-    fn leading_and_is_error() {
-        assert!(matches!(
-            Filterset::new("& tag(slow)"),
-            Err(FilterError::UnexpectedToken { .. })
-        ));
-    }
-
-    #[test]
-    fn parametrized_test_name_via_regex() {
-        let f = Filterset::new(r"test(/param=1/)").expect("parse");
-        assert!(f.matches(&ctx("mod::test_add(param=1)", &[])));
-        assert!(!f.matches(&ctx("mod::test_add(param=2)", &[])));
-    }
-
-    #[test]
-    fn test_and_tag_keywords_not_reserved_inside_matchers() {
-        let f = Filterset::new("tag(test)").expect("parse");
-        assert!(f.matches(&ctx("x", &["test"])));
-        let f = Filterset::new("test(tag)").expect("parse");
-        assert!(f.matches(&ctx("mod::test_tag_something", &[])));
+    fn filter_error_kind(error: &FilterError) -> &'static str {
+        match error {
+            FilterError::UnexpectedCharacter { .. } => "UnexpectedCharacter",
+            FilterError::EmptyExpression { .. } => "EmptyExpression",
+            FilterError::UnclosedParenthesis { .. } => "UnclosedParenthesis",
+            FilterError::UnclosedRegex { .. } => "UnclosedRegex",
+            FilterError::UnclosedString { .. } => "UnclosedString",
+            FilterError::UnexpectedToken { .. } => "UnexpectedToken",
+            FilterError::UnexpectedEndOfExpression { .. } => "UnexpectedEndOfExpression",
+            FilterError::InvalidRegex { .. } => "InvalidRegex",
+            FilterError::InvalidGlob { .. } => "InvalidGlob",
+            FilterError::UnknownPredicate { .. } => "UnknownPredicate",
+            FilterError::ExpectedPredicateOpenParen { .. } => "ExpectedPredicateOpenParen",
+            FilterError::ExpectedMatcher { .. } => "ExpectedMatcher",
+        }
     }
 }
