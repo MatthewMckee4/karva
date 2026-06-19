@@ -324,6 +324,7 @@ mod tests {
             }
         }
 
+        #[expect(unsafe_code, reason = "test env mutation is serialized by ENV_LOCK")]
         fn set(name: &str, value: &str) {
             // SAFETY: Tests in this module hold ENV_LOCK while mutating env vars.
             unsafe {
@@ -331,6 +332,7 @@ mod tests {
             }
         }
 
+        #[expect(unsafe_code, reason = "test env mutation is serialized by ENV_LOCK")]
         fn remove(name: &str) {
             // SAFETY: Tests in this module hold ENV_LOCK while mutating env vars.
             unsafe {
@@ -340,6 +342,7 @@ mod tests {
     }
 
     impl Drop for EnvRestore {
+        #[expect(unsafe_code, reason = "test env mutation is serialized by ENV_LOCK")]
         fn drop(&mut self) {
             for (name, value) in &self.values {
                 match value {

@@ -9,13 +9,13 @@ use ruff_options_metadata::{OptionField, OptionSet, OptionsMetadata, Visit};
 use crate::{Mode, apply_mode};
 
 #[derive(clap::Args)]
-pub(crate) struct Args {
+pub struct Args {
     /// Write the generated table to stdout (rather than to `docs/configuration/configuration.md`).
     #[arg(long, default_value_t, value_enum)]
-    pub(crate) mode: Mode,
+    pub mode: Mode,
 }
 
-pub(crate) fn main(args: &Args) -> anyhow::Result<()> {
+pub fn main(args: &Args) -> anyhow::Result<()> {
     let mut output = String::new();
 
     output.push_str(
@@ -52,7 +52,7 @@ fn generate_set(output: &mut String, set: Set, parents: &mut Vec<Set>) {
                 .filter_map(|set| set.name())
                 .chain(std::iter::once(name.as_str()))
                 .join(".");
-            let _ = writeln!(output, "## `{title}`\n",);
+            let _ = writeln!(output, "## `{title}`\n");
         }
     }
 
@@ -182,9 +182,9 @@ fn emit_field(output: &mut String, name: &str, field: &OptionField, parents: &[S
 
 fn format_example(header: &str, content: &str) -> String {
     if header.is_empty() {
-        format!("```toml\n{content}\n```\n",)
+        format!("```toml\n{content}\n```\n")
     } else {
-        format!("```toml\n{header}\n{content}\n```\n",)
+        format!("```toml\n{header}\n{content}\n```\n")
     }
 }
 

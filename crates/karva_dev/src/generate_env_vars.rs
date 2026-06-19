@@ -8,10 +8,10 @@ use karva_static::{EnvVarDoc, EnvVars, WorkerEnvVars};
 use crate::{Mode, apply_mode};
 
 #[derive(clap::Args)]
-pub(crate) struct Args {
+pub struct Args {
     /// Write the generated reference to stdout (rather than to `docs/reference/env-vars.md`).
     #[arg(long, default_value_t, value_enum)]
-    pub(crate) mode: Mode,
+    pub mode: Mode,
 }
 
 const FILE_NAME: &str = "docs/reference/env-vars.md";
@@ -19,7 +19,7 @@ const FILE_NAME: &str = "docs/reference/env-vars.md";
 const HEADER: &str = "<!-- WARNING: This file is auto-generated (cargo run -p karva_dev generate-all). Update the doc comments on the env-var structs in 'crates/karva_static/src/lib.rs' if you want to change anything here. -->\n\n# Environment Variables\n\nThis page lists every environment variable that Karva reads from the \
 environment, plus the variables the worker exposes to running tests.\n\n";
 
-pub(crate) fn main(args: &Args) -> anyhow::Result<()> {
+pub fn main(args: &Args) -> anyhow::Result<()> {
     apply_mode(args.mode, FILE_NAME, &generate())
 }
 
