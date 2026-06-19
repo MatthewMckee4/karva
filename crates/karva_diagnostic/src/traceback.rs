@@ -100,10 +100,8 @@ fn source_file_matches_path(source_file: &SourceFile, traceback_path: &Utf8Path)
 }
 
 fn get_traceback_location(traceback: &str) -> Option<TracebackLocation> {
-    let lines: Vec<&str> = traceback.lines().collect();
-
     // Find the last line that starts with "File \"" (ignoring leading whitespace)
-    for line in lines.iter().rev() {
+    for line in traceback.lines().rev() {
         if let Some(location) = parse_traceback_line(line) {
             return Some(location);
         }
@@ -166,10 +164,9 @@ fn calculate_line_range(source_text: &str, line_number: OneIndexed) -> Option<Te
 
 // Simplified traceback filtering that removes unnecessary traceback headers
 fn filter_traceback(traceback: &str) -> String {
-    let lines: Vec<&str> = traceback.lines().collect();
     let mut filtered = String::new();
 
-    for (i, line) in lines.iter().enumerate() {
+    for (i, line) in traceback.lines().enumerate() {
         if i == 0 && line.contains("Traceback (most recent call last):") {
             continue;
         }
