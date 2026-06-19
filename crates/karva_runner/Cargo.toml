@@ -33,6 +33,7 @@ tracing = { workspace = true }
 which = { workspace = true }
 
 [dev-dependencies]
+ruff_python_ast = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]
