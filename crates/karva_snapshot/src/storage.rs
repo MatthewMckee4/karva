@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::io;
 
 use camino::{Utf8Path, Utf8PathBuf};
+use fs_err as fs;
 
 use crate::format::SnapshotFile;
 
@@ -34,7 +35,7 @@ pub fn pending_path(snap_path: &Utf8Path) -> Utf8PathBuf {
 ///
 /// Returns `Ok(None)` when the file does not exist.
 pub fn read_snapshot(path: &Utf8Path) -> io::Result<Option<SnapshotFile>> {
-    let content = match std::fs::read_to_string(path) {
+    let content = match fs::read_to_string(path) {
         Ok(content) => content,
         Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(err) => return Err(err),
@@ -51,18 +52,18 @@ pub fn read_snapshot(path: &Utf8Path) -> io::Result<Option<SnapshotFile>> {
 /// Write a snapshot file, creating parent directories as needed.
 pub fn write_snapshot(path: &Utf8Path, snapshot: &SnapshotFile) -> io::Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent)?;
     }
-    std::fs::write(path, snapshot.serialize())
+    fs::write(path, snapshot.serialize())
 }
 
 /// Write a pending snapshot file (`.snap.new`), creating parent directories as needed.
 pub fn write_pending_snapshot(snap_path: &Utf8Path, snapshot: &SnapshotFile) -> io::Result<()> {
     let pending = pending_path(snap_path);
     if let Some(parent) = pending.parent() {
-        std::fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent)?;
     }
-    std::fs::write(pending, snapshot.serialize())
+    fs::write(pending, snapshot.serialize())
 }
 
 /// Information about a pending snapshot found on disk.
@@ -85,7 +86,7 @@ fn find_recursive<T>(
     map: &impl Fn(Utf8PathBuf) -> Option<T>,
     results: &mut Vec<T>,
 ) -> io::Result<()> {
-    for entry in std::fs::read_dir(dir)? {
+    for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
         let file_type = entry.file_type()?;
@@ -150,7 +151,7 @@ pub fn accept_pending(pending_path: &Utf8Path) -> io::Result<()> {
         let content = snapshot.content.trim_end();
         let function_name = extract_function_name(snapshot.metadata.source.as_deref());
         crate::inline::rewrite_inline_snapshot(source_file, line, content, function_name)?;
-        return std::fs::remove_file(pending_path);
+        return fs::remove_file(pending_path);
     }
 
     let snap_path = pending_path
@@ -158,7 +159,7 @@ pub fn accept_pending(pending_path: &Utf8Path) -> io::Result<()> {
         .strip_suffix(".new")
         .map(Utf8PathBuf::from)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Not a .snap.new file"))?;
-    std::fs::rename(pending_path, snap_path)
+    fs::rename(pending_path, snap_path)
 }
 
 struct InlineInfo<'a> {
@@ -218,7 +219,7 @@ fn process_inline_snapshots(
                 content,
                 item.function_name.as_deref(),
             )?;
-            std::fs::remove_file(item.pending_path)?;
+            fs::remove_file(item.pending_path)?;
         }
     }
     Ok(())
@@ -247,7 +248,7 @@ pub fn accept_pending_batch(pending: &[&PendingSnapshotInfo]) -> io::Result<()> 
 
 /// Reject a pending snapshot by deleting the `.snap.new` file.
 pub fn reject_pending(pending_path: &Utf8Path) -> io::Result<()> {
-    std::fs::remove_file(pending_path)
+    fs::remove_file(pending_path)
 }
 
 /// Information about a snapshot file found on disk.
@@ -325,7 +326,7 @@ pub fn base_function_name(name: &str) -> &str {
 
 /// Check whether a function definition `def {name}(` exists in a file.
 pub fn function_exists_in_file(path: &Utf8Path, name: &str) -> io::Result<bool> {
-    let content = std::fs::read_to_string(path).map_err(|err| {
+    let content = fs::read_to_string(path).map_err(|err| {
         io::Error::new(
             err.kind(),
             format!("failed to read source file `{path}`: {err}"),
@@ -435,10 +436,10 @@ fn check_snapshot_reference(info: &SnapshotInfo) -> io::Result<Option<Unreferenc
 
 /// Remove a snapshot file. Also removes the parent directory if it becomes empty.
 pub fn remove_snapshot(path: &Utf8Path) -> io::Result<()> {
-    std::fs::remove_file(path)?;
+    fs::remove_file(path)?;
     if let Some(parent) = path.parent() {
         if parent.file_name().is_some_and(|name| name == "snapshots") {
-            match std::fs::remove_dir(parent) {
+            match fs::remove_dir(parent) {
                 Ok(()) => {}
                 Err(err)
                     if matches!(
@@ -555,6 +556,23 @@ mod tests {
 
         reject_pending(&pending).expect("reject");
         assert!(!pending.exists());
+    }
+
+    #[test]
+    fn reject_pending_missing_file_reports_path() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
+        let pending = dir_path.join("missing.snap.new");
+
+        let err = reject_pending(&pending).expect_err("missing pending snapshot should fail");
+
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
+        assert!(
+            err.to_string()
+                .replace('\\', "/")
+                .contains(&normalize_path(&pending)),
+            "{err}"
+        );
     }
 
     #[test]

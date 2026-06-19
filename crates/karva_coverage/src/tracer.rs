@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 use camino::{Utf8Path, Utf8PathBuf};
+use fs_err as fs;
 use pyo3::prelude::*;
 
 use crate::data::{FileEntry, WorkerFile};
@@ -49,7 +50,7 @@ impl CoverageSession {
                 } else {
                     s.as_str()
                 };
-                std::fs::canonicalize(raw).unwrap_or_else(|_| PathBuf::from(raw))
+                fs::canonicalize(raw).unwrap_or_else(|_| PathBuf::from(raw))
             })
             .collect();
 
@@ -224,7 +225,7 @@ fn compute_tracked_path(filename: &str, roots: &[PathBuf]) -> Option<PathBuf> {
     if filename.is_empty() || filename.starts_with('<') {
         return None;
     }
-    let canonical = std::fs::canonicalize(filename).ok()?;
+    let canonical = fs::canonicalize(filename).ok()?;
     if canonical
         .components()
         .any(|c| PATH_EXCLUDES.contains(&c.as_os_str().to_str().unwrap_or("")))
@@ -318,7 +319,7 @@ fn walk_source_files(roots: &[PathBuf]) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut seen: HashSet<PathBuf> = HashSet::new();
     for root in roots {
-        let metadata = match std::fs::symlink_metadata(root) {
+        let metadata = match fs::symlink_metadata(root) {
             Ok(metadata) => metadata,
             Err(err) => {
                 tracing::warn!(
@@ -343,7 +344,7 @@ fn walk_source_files(roots: &[PathBuf]) -> Vec<PathBuf> {
 }
 
 fn walk_dir(dir: &Path, out: &mut Vec<PathBuf>, seen: &mut HashSet<PathBuf>) {
-    let entries = match std::fs::read_dir(dir) {
+    let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(err) => {
             tracing::warn!(
@@ -425,8 +426,8 @@ fn save_data(
     if let Some(parent) = data_file.parent()
         && !parent.as_str().is_empty()
     {
-        std::fs::create_dir_all(parent.as_std_path())?;
+        fs::create_dir_all(parent.as_std_path())?;
     }
     let bytes = serde_json::to_vec(&WorkerFile { files })?;
-    std::fs::write(data_file.as_std_path(), bytes)
+    fs::write(data_file.as_std_path(), bytes)
 }

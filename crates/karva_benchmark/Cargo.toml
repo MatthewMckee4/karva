@@ -20,6 +20,7 @@ anyhow = { workspace = true }
 camino = { workspace = true }
 clap = { workspace = true }
 divan = { workspace = true }
+fs-err = { workspace = true }
 karva_cache = { workspace = true }
 karva_cli = { workspace = true }
 karva_logging = { workspace = true }

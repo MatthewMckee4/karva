@@ -9,6 +9,7 @@ use std::process::ExitCode;
 use anyhow::{Result, bail};
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
+use fs_err as fs;
 use pretty_assertions::StrComparison;
 
 mod generate_cli_reference;
@@ -41,7 +42,7 @@ pub(crate) fn apply_mode(mode: Mode, relative_path: &str, generated: &str) -> Re
         Mode::DryRun => {
             println!("{generated}");
         }
-        Mode::Check => match std::fs::read_to_string(&path) {
+        Mode::Check => match fs::read_to_string(&path) {
             Ok(current) if current == generated => {
                 println!("Up-to-date: {relative_path}");
             }
@@ -58,13 +59,13 @@ pub(crate) fn apply_mode(mode: Mode, relative_path: &str, generated: &str) -> Re
                 bail!("{relative_path} changed, please run `{REGENERATE_ALL_COMMAND}`:\n{err}");
             }
         },
-        Mode::Write => match std::fs::read_to_string(&path) {
+        Mode::Write => match fs::read_to_string(&path) {
             Ok(current) if current == generated => {
                 println!("Up-to-date: {relative_path}");
             }
             Ok(_) | Err(_) => {
                 println!("Updating: {relative_path}");
-                std::fs::write(&path, generated.as_bytes())?;
+                fs::write(&path, generated.as_bytes())?;
             }
         },
     }
