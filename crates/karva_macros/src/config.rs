@@ -8,7 +8,11 @@ use syn::{
     Fields, Lit, LitStr, Meta, Path, PathArguments, PathSegment, Type, TypePath,
 };
 
-pub fn derive_impl(input: DeriveInput) -> syn::Result<TokenStream> {
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "parent module calls this helper while unreachable_pub rejects plain pub"
+)]
+pub(super) fn derive_impl(input: DeriveInput) -> syn::Result<TokenStream> {
     let DeriveInput {
         ident,
         data,
