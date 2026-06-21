@@ -13,7 +13,7 @@ license = { workspace = true }
 
 [[bin]]
 name = "karva-benchmark"
-path = "src/bin/karva_benchmark.rs"
+path = "src/bin/karva_benchmark/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
