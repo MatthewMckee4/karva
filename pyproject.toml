@@ -36,7 +36,10 @@ karva-worker = "karva._karva:karva_worker_run"
 
 [dependency-groups]
 dev = ["ruff", "ty"]
-docs = ["zensical==0.0.45"]
+docs = [
+    "zensical==0.0.45",
+    "zensical-shadcn @ git+https://github.com/MatthewMckee4/zensical-shadcn.git@19c2a0425582dab9e3e1ea4f9e74a5e731ba5fb0",
+]
 release = ["tbump"]
 
 [project.urls]
