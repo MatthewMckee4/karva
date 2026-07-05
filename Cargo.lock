@@ -337,7 +337,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56ca01ce4fd22b8dcc6c770dcd6b74343642e842482b94e8920d14e10c57638d"
 dependencies = [
  "divan-macros",
- "itertools",
+ "itertools 0.14.0",
  "proc-macro-crate",
  "proc-macro2",
  "quote",
@@ -1025,6 +1025,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1178,7 +1187,7 @@ dependencies = [
  "camino",
  "clap",
  "fs-err",
- "itertools",
+ "itertools 0.15.0",
  "karva_cli",
  "karva_metadata",
  "karva_static",
@@ -2112,7 +2121,7 @@ version = "0.0.0"
 source = "git+https://github.com/astral-sh/ruff/?branch=main#fb2b844c0a72b9ee4578f836f407938cc2ab1b79"
 dependencies = [
  "heck",
- "itertools",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "regex",
@@ -2134,7 +2143,7 @@ version = "0.0.0"
 source = "git+https://github.com/astral-sh/ruff/?branch=main#fb2b844c0a72b9ee4578f836f407938cc2ab1b79"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.14.0",
  "rand 0.10.0",
  "ruff_diagnostics",
  "ruff_source_file",
@@ -2194,7 +2203,7 @@ name = "ruff_python_trivia"
 version = "0.0.0"
 source = "git+https://github.com/astral-sh/ruff/?branch=main#fb2b844c0a72b9ee4578f836f407938cc2ab1b79"
 dependencies = [
- "itertools",
+ "itertools 0.14.0",
  "ruff_source_file",
  "ruff_text_size",
  "unicode-ident",

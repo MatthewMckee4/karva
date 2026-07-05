@@ -30,6 +30,7 @@ pub enum DependencySetup {
     DateCappedUvSync {
         exclude_newer: &'static str,
         all_extras: bool,
+        groups: &'static [&'static str],
     },
 }
 
@@ -54,30 +55,22 @@ pub const SYNTHETIC_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: false,
 };
 
-pub const PACKAGING_PROJECT: BenchmarkProject = BenchmarkProject {
-    name: "packaging",
-    repository: "https://github.com/pypa/packaging",
-    commit: "c901ded1a6b97acee3b6b1eb17526228129c4645",
-    paths: &["tests"],
+pub const REQUESTS_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "requests",
+    repository: "https://github.com/psf/requests",
+    commit: "d64b9ad4bf1c14e21e0df3f0f4320fec81180e91",
+    paths: &[
+        "tests/test_structures.py",
+        "tests/test_hooks.py",
+        "tests/test_utils.py",
+    ],
     python_version: PythonVersion::PY313,
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
         all_extras: true,
+        groups: &["test"],
     },
-    try_import_fixtures: false,
-};
-
-pub const PARSE_PROJECT: BenchmarkProject = BenchmarkProject {
-    name: "parse",
-    repository: "https://github.com/r1chardj0n3s/parse",
-    commit: "a285c6670773dcc3a2085b07fef281320a284a8e",
-    paths: &["tests"],
-    python_version: PythonVersion::PY313,
-    dependency_setup: DependencySetup::DateCappedUvSync {
-        exclude_newer: "2026-01-01",
-        all_extras: true,
-    },
-    try_import_fixtures: false,
+    try_import_fixtures: true,
 };
 
 pub const H11_PROJECT: BenchmarkProject = BenchmarkProject {
@@ -89,6 +82,7 @@ pub const H11_PROJECT: BenchmarkProject = BenchmarkProject {
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
         all_extras: true,
+        groups: &[],
     },
     try_import_fixtures: false,
 };
@@ -102,6 +96,7 @@ pub const MARKUPSAFE_PROJECT: BenchmarkProject = BenchmarkProject {
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
         all_extras: true,
+        groups: &[],
     },
     try_import_fixtures: true,
 };
@@ -115,6 +110,7 @@ pub const SNIFFIO_PROJECT: BenchmarkProject = BenchmarkProject {
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
         all_extras: true,
+        groups: &[],
     },
     try_import_fixtures: false,
 };
@@ -128,19 +124,7 @@ pub const ITSDANGEROUS_PROJECT: BenchmarkProject = BenchmarkProject {
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
         all_extras: true,
-    },
-    try_import_fixtures: true,
-};
-
-pub const PYPARSING_PROJECT: BenchmarkProject = BenchmarkProject {
-    name: "pyparsing",
-    repository: "https://github.com/pyparsing/pyparsing",
-    commit: "057a2e6d1b8391dc85abe725d4d12c0987a9ec10",
-    paths: &["tests"],
-    python_version: PythonVersion::PY313,
-    dependency_setup: DependencySetup::DateCappedUvSync {
-        exclude_newer: "2026-01-01",
-        all_extras: true,
+        groups: &[],
     },
     try_import_fixtures: true,
 };
@@ -154,6 +138,7 @@ pub const BLINKER_PROJECT: BenchmarkProject = BenchmarkProject {
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
         all_extras: true,
+        groups: &[],
     },
     try_import_fixtures: false,
 };
@@ -171,6 +156,7 @@ pub const JINJA_PROJECT: BenchmarkProject = BenchmarkProject {
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
         all_extras: true,
+        groups: &[],
     },
     try_import_fixtures: true,
 };
@@ -184,6 +170,7 @@ pub const INSTALLER_PROJECT: BenchmarkProject = BenchmarkProject {
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
         all_extras: true,
+        groups: &[],
     },
     try_import_fixtures: false,
 };
@@ -206,6 +193,7 @@ pub const TOMLKIT_PROJECT: BenchmarkProject = BenchmarkProject {
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
         all_extras: true,
+        groups: &[],
     },
     try_import_fixtures: false,
 };
@@ -219,38 +207,81 @@ pub const OUTCOME_PROJECT: BenchmarkProject = BenchmarkProject {
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
         all_extras: true,
+        groups: &[],
     },
     try_import_fixtures: false,
 };
 
+pub const PLUGGY_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "pluggy",
+    repository: "https://github.com/pytest-dev/pluggy",
+    commit: "7fce99cb955846901b22b051909aa4f30dc16128",
+    paths: &[
+        "testing/test_details.py",
+        "testing/test_helpers.py",
+        "testing/test_invocations.py",
+        "testing/test_multicall.py",
+        "testing/test_result.py",
+        "testing/test_tracer.py",
+        "testing/test_warnings.py",
+    ],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+        groups: &["testing"],
+    },
+    try_import_fixtures: true,
+};
+
+pub const WERKZEUG_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "werkzeug",
+    repository: "https://github.com/pallets/werkzeug",
+    commit: "1b00618e787f40dfb21eba29caf8f8be7c8e1d93",
+    paths: &[
+        "tests/test_datastructures.py",
+        "tests/test_http.py",
+        "tests/test_security.py",
+        "tests/test_urls.py",
+        "tests/test_wsgi.py",
+    ],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+        groups: &["tests"],
+    },
+    try_import_fixtures: true,
+};
+
 pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
     SYNTHETIC_PROJECT,
-    PACKAGING_PROJECT,
-    PARSE_PROJECT,
+    REQUESTS_PROJECT,
     H11_PROJECT,
     MARKUPSAFE_PROJECT,
     SNIFFIO_PROJECT,
     ITSDANGEROUS_PROJECT,
-    PYPARSING_PROJECT,
     BLINKER_PROJECT,
     JINJA_PROJECT,
     INSTALLER_PROJECT,
     TOMLKIT_PROJECT,
     OUTCOME_PROJECT,
+    PLUGGY_PROJECT,
+    WERKZEUG_PROJECT,
 ];
 
 pub const CLI_BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
-    PACKAGING_PROJECT,
-    PARSE_PROJECT,
+    REQUESTS_PROJECT,
     H11_PROJECT,
     SNIFFIO_PROJECT,
     ITSDANGEROUS_PROJECT,
-    PYPARSING_PROJECT,
     BLINKER_PROJECT,
     JINJA_PROJECT,
     INSTALLER_PROJECT,
     TOMLKIT_PROJECT,
     OUTCOME_PROJECT,
+    PLUGGY_PROJECT,
+    WERKZEUG_PROJECT,
 ];
 
 pub fn prepare_benchmark_project(config: &BenchmarkProject) -> Result<Project> {
@@ -465,6 +496,7 @@ fn install_dependencies(config: &BenchmarkProject, project_root: &Utf8PathBuf) -
         DependencySetup::DateCappedUvSync {
             exclude_newer,
             all_extras,
+            groups,
         } => {
             let mut command = Command::new("uv");
             command.args([
@@ -477,6 +509,9 @@ fn install_dependencies(config: &BenchmarkProject, project_root: &Utf8PathBuf) -
             ]);
             if all_extras {
                 command.arg("--all-extras");
+            }
+            for group in groups {
+                command.args(["--group", group]);
             }
             command.current_dir(project_root);
             run_command(

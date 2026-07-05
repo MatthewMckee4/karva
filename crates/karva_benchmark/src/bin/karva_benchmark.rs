@@ -15,7 +15,6 @@ use serde::{Deserialize, Serialize};
 const MATERIAL_CHANGE_PERCENT: f64 = 1.0;
 const FAST_PROJECT_ITERATIONS: usize = 21;
 const MEDIUM_PROJECT_ITERATIONS: usize = 15;
-const SLOW_PROJECT_ITERATIONS: usize = 9;
 
 #[derive(Debug, Parser)]
 #[command(about = "Run Karva benchmark comparisons")]
@@ -639,7 +638,6 @@ fn write_summary_line(
 
 fn matrix_iterations(project_name: &str) -> usize {
     match project_name {
-        "packaging" | "pyparsing" => SLOW_PROJECT_ITERATIONS,
         "tomlkit" => MEDIUM_PROJECT_ITERATIONS,
         _ => FAST_PROJECT_ITERATIONS,
     }
@@ -804,8 +802,8 @@ mod tests {
 
     use super::{
         BenchmarkMetric, ComparisonReport, FAST_PROJECT_ITERATIONS, MEDIUM_PROJECT_ITERATIONS,
-        Measurement, ProjectComparison, SLOW_PROJECT_ITERATIONS, karva_invocation, markdown_report,
-        matrix_iterations, trend,
+        Measurement, ProjectComparison, karva_invocation, markdown_report, matrix_iterations,
+        trend,
     };
 
     #[test]
@@ -878,9 +876,9 @@ mod tests {
     fn matrix_iterations_are_higher_for_fast_projects() {
         assert_eq!(matrix_iterations("sniffio"), FAST_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("h11"), FAST_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("requests"), FAST_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("werkzeug"), FAST_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("tomlkit"), MEDIUM_PROJECT_ITERATIONS);
-        assert_eq!(matrix_iterations("packaging"), SLOW_PROJECT_ITERATIONS);
-        assert_eq!(matrix_iterations("pyparsing"), SLOW_PROJECT_ITERATIONS);
     }
 
     #[test]
