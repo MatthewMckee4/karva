@@ -48,7 +48,7 @@ fs-err = { version = "3.2.2" }
 globset = { version = "0.4" }
 ignore = { version = "0.4.25" }
 insta = { version = "1.47.1" }
-insta-cmd = { version = "0.6.0" }
+insta-cmd = { version = "0.7.0" }
 itertools = { version = "0.15.0" }
 markdown = { version = "1.0.0" }
 notify-debouncer-mini = { version = "0.7" }
