@@ -1,10 +1,10 @@
 //! Combine per-worker JSON files and produce terminal or machine-readable reports.
 
-mod html;
-mod json;
-mod shared;
+pub(crate) mod html;
+pub(crate) mod json;
+pub(crate) mod shared;
 mod terminal;
-mod xml;
+pub(crate) mod xml;
 
 use anyhow::Result;
 use camino::Utf8Path;
@@ -17,7 +17,7 @@ pub use terminal::write_json_report;
 
 use self::shared::combine;
 
-pub(crate) fn combined_rows(
+fn combined_rows(
     cwd: &Utf8Path,
     files: &[impl AsRef<Utf8Path>],
     show_missing: bool,

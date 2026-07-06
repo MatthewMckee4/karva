@@ -96,12 +96,8 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     let args = Args::parse_from(args);
 
-    // SAFETY: This is called during single-threaded initialization before any
-    // concurrent work begins. The env var is read later by `assert_snapshot`.
     if args.sub_command.snapshot_update.unwrap_or(false) {
-        unsafe {
-            std::env::set_var(EnvVars::KARVA_SNAPSHOT_UPDATE, "1");
-        }
+        enable_snapshot_update_env_var();
     }
 
     let verbosity = args.verbosity().level();
@@ -195,6 +191,18 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     }
 
     Ok(ExitStatus::Success)
+}
+
+#[expect(
+    unsafe_code,
+    reason = "worker startup sets this before concurrent test execution"
+)]
+fn enable_snapshot_update_env_var() {
+    // SAFETY: This is called during single-threaded initialization before any
+    // concurrent work begins. The env var is read later by `assert_snapshot`.
+    unsafe {
+        std::env::set_var(EnvVars::KARVA_SNAPSHOT_UPDATE, "1");
+    }
 }
 
 /// Get the current working directory as a UTF-8 path.

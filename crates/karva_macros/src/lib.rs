@@ -1,9 +1,11 @@
+#![warn(unreachable_pub)]
+
 use proc_macro::TokenStream;
 use syn::{DeriveInput, parse_macro_input};
 
-mod combine;
-mod combine_options;
-mod config;
+pub(crate) mod combine;
+pub(crate) mod combine_options;
+pub(crate) mod config;
 
 #[proc_macro_derive(OptionsMetadata, attributes(option, option_group))]
 pub fn derive_options_metadata(input: TokenStream) -> TokenStream {

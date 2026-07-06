@@ -48,13 +48,13 @@ fs-err = { version = "3.2.2" }
 globset = { version = "0.4" }
 ignore = { version = "0.4.25" }
 insta = { version = "1.47.1" }
-insta-cmd = { version = "0.6.0" }
-itertools = { version = "0.14.0" }
+insta-cmd = { version = "0.7.0" }
+itertools = { version = "0.15.0" }
 markdown = { version = "1.0.0" }
 notify-debouncer-mini = { version = "0.7" }
 pretty_assertions = { version = "1.4.1" }
 proc-macro2 = { version = "1.0.106" }
-pyo3 = { version = "0.28.3", features = ["abi3-py310"] }
+pyo3 = { version = "0.29.0", features = ["abi3-py310"] }
 quote = { version = "1.0.45" }
 regex = { version = "1.12.3" }
 rstest = { version = "0.26" }
@@ -88,6 +88,7 @@ which = { version = "8.0" }
 wild = { version = "2" }
 
 [workspace.lints.rust]
+unsafe_code = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(codspeed)"] }
 
 [workspace.lints.clippy]

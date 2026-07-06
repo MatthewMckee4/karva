@@ -42,7 +42,7 @@ struct JsonMeta {
     version: &'static str,
 }
 
-pub fn build_json_report(rows: &[FileRow]) -> Result<String> {
+pub(super) fn build_json_report(rows: &[FileRow]) -> Result<String> {
     let files = rows
         .iter()
         .map(|row| {

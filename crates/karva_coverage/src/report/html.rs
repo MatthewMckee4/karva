@@ -2,7 +2,7 @@ use std::fmt;
 
 use super::shared::{FileRow, escape_html, format_percent, totals_row};
 
-pub fn build_html_report(rows: &[FileRow]) -> String {
+pub(super) fn build_html_report(rows: &[FileRow]) -> String {
     HtmlReport { rows }.to_string()
 }
 
