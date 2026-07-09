@@ -1,3 +1,9 @@
+#![expect(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "benchmark CLI intentionally prints progress and merged results"
+)]
+
 use std::io::Write as _;
 use std::path::PathBuf;
 use std::process::{Command, Output};
