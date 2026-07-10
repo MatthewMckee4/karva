@@ -53,6 +53,7 @@ nav = [
     { "Reference" = [
         { "CLI" = "reference/cli.md"},
         { "Environment Variables" = "reference/env-vars.md"},
+        { "Project Non-Goals" = "reference/non-goals.md"},
     ]},
 ]
 
