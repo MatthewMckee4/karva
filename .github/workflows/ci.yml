@@ -175,6 +175,39 @@ jobs:
         run: |
           cargo nextest run --profile ci
 
+  wheel-smoke:
+    name: "wheel smoke"
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    needs: determine_changes
+    if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.10"
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          command: build
+
+      - name: Run wheel smoke project
+        working-directory: crates/karva/tests/projects/wheel-smoke
+        run: |
+          python -m pip install ../../../../../target/wheels/karva-*.whl --force-reinstall
+          karva test --no-parallel --status-level=skip --final-status-level=skip
+
   build-windows-tests:
     name: "build tests archive | windows"
 
