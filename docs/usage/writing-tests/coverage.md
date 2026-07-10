@@ -84,6 +84,25 @@ karva test --cov=src --cov-report=html:build/htmlcov
 
 Files that were never imported during the run still appear, at `0%`, so dead modules under your source root show up rather than silently inflating the total.
 
+## Filtering report files
+
+Use `--cov-include` and `--cov-omit` to keep generated files, migrations, vendored code, or other non-target paths out of the report:
+
+```bash
+karva test --cov=src --cov-include='src/**' --cov-omit='**/migrations/*'
+```
+
+Globs match the project-relative file path shown in the coverage report. When include filters are set, only matching files are reported. Omit filters are applied after include filters.
+
+Equivalent configuration:
+
+```toml
+[tool.karva.profile.default.coverage]
+sources = ["src"]
+include = ["src/**"]
+omit = ["**/migrations/*"]
+```
+
 ## Failing on low coverage
 
 `--cov-fail-under=N` exits non-zero when total coverage drops below `N`, even if every test passed:
