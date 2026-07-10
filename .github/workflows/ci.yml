@@ -192,8 +192,7 @@ jobs:
       - name: "Install Rust toolchain"
         run: rustup show
 
-      - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           python-version: "3.10"
 
@@ -205,8 +204,9 @@ jobs:
       - name: Run wheel smoke project
         working-directory: crates/karva/tests/projects/wheel-smoke
         run: |
-          python -m pip install ../../../../../target/wheels/karva-*.whl --force-reinstall
-          karva test --no-parallel --status-level=skip --final-status-level=skip
+          uv venv --python 3.10 .venv
+          uv pip install --python .venv/bin/python ../../../../../target/wheels/karva-*.whl
+          uv run --no-sync karva test --no-parallel --status-level=skip --final-status-level=skip
 
   build-windows-tests:
     name: "build tests archive | windows"
