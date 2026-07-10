@@ -174,6 +174,28 @@ pub struct SubTestCommand {
     )]
     pub cov: Vec<String>,
 
+    /// Exclude coverage report files whose project-relative path matches this glob.
+    ///
+    /// May be passed multiple times.
+    #[clap(
+        long = "cov-omit",
+        value_name = "GLOB",
+        action = clap::ArgAction::Append,
+        help_heading = "Coverage options"
+    )]
+    pub cov_omit: Vec<String>,
+
+    /// Include only coverage report files whose project-relative path matches this glob.
+    ///
+    /// May be passed multiple times.
+    #[clap(
+        long = "cov-include",
+        value_name = "GLOB",
+        action = clap::ArgAction::Append,
+        help_heading = "Coverage options"
+    )]
+    pub cov_include: Vec<String>,
+
     /// Disable coverage measurement for this run.
     ///
     /// Overrides any `--cov` flag and any `[coverage] sources` configured in
@@ -382,6 +404,8 @@ impl SubTestCommand {
             }),
             coverage: Some(CoverageOptions {
                 sources: (!self.cov.is_empty()).then(|| self.cov.clone()),
+                include: (!self.cov_include.is_empty()).then(|| self.cov_include.clone()),
+                omit: (!self.cov_omit.is_empty()).then(|| self.cov_omit.clone()),
                 report: cov_report.clone().map(Into::into),
                 report_path: cov_report.as_ref().and_then(|report| match report {
                     CovReport::Xml { path }

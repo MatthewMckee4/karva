@@ -109,6 +109,8 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         None
     } else {
         let coverage = project.settings().coverage();
+        let coverage_filters =
+            karva_coverage::CoverageFilters::new(&coverage.include, &coverage.omit)?;
         if coverage.report_path.is_some()
             && matches!(coverage.report, CovReport::Term | CovReport::TermMissing)
         {
@@ -120,19 +122,30 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
             )?;
         }
         let coverage_result = match coverage.report {
-            CovReport::Term => {
-                karva_coverage::combine_and_report(project.cwd(), &coverage_files, false)
-            }
-            CovReport::TermMissing => {
-                karva_coverage::combine_and_report(project.cwd(), &coverage_files, true)
-            }
+            CovReport::Term => karva_coverage::combine_and_report(
+                project.cwd(),
+                &coverage_files,
+                false,
+                &coverage_filters,
+            ),
+            CovReport::TermMissing => karva_coverage::combine_and_report(
+                project.cwd(),
+                &coverage_files,
+                true,
+                &coverage_filters,
+            ),
             CovReport::Xml => {
                 let output = coverage_report_path(
                     coverage.report_path.as_deref(),
                     "coverage.xml",
                     project.cwd(),
                 );
-                karva_coverage::write_cobertura_xml(project.cwd(), &coverage_files, &output)
+                karva_coverage::write_cobertura_xml(
+                    project.cwd(),
+                    &coverage_files,
+                    &output,
+                    &coverage_filters,
+                )
             }
             CovReport::Json => {
                 let output = coverage_report_path(
@@ -140,12 +153,22 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
                     "coverage.json",
                     project.cwd(),
                 );
-                karva_coverage::write_json_report(project.cwd(), &coverage_files, &output)
+                karva_coverage::write_json_report(
+                    project.cwd(),
+                    &coverage_files,
+                    &output,
+                    &coverage_filters,
+                )
             }
             CovReport::Html => {
                 let output =
                     coverage_report_path(coverage.report_path.as_deref(), "htmlcov", project.cwd());
-                karva_coverage::write_html_report(project.cwd(), &coverage_files, &output)
+                karva_coverage::write_html_report(
+                    project.cwd(),
+                    &coverage_files,
+                    &output,
+                    &coverage_filters,
+                )
             }
         };
         match coverage_result {

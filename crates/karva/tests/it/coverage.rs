@@ -1092,6 +1092,68 @@ def test_add():
 }
 
 #[test]
+fn test_cov_include_and_omit_filters_report_rows() {
+    let context = TestContext::with_files([
+        (
+            "src/app/service.py",
+            r"
+def used():
+    return 1
+",
+        ),
+        (
+            "src/app/generated.py",
+            r"
+def generated():
+    return 2
+",
+        ),
+        (
+            "src/other.py",
+            r"
+def outside():
+    return 3
+",
+        ),
+        (
+            "test_service.py",
+            r"
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+from src.app.service import used
+
+def test_used():
+    assert used() == 1
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel()
+            .arg("--cov=src")
+            .arg("--cov-include=src/app/*")
+            .arg("--cov-omit=src/app/generated.py")
+            .arg("--status-level=none")
+            .arg("test_service.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    Name                 Stmts   Miss   Cover
+    [LONG-LINE]
+    src/app/service.py       2      0    100%
+    [LONG-LINE]
+    TOTAL                    2      0    100%
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
 fn test_cov_sources_from_config() {
     let context = TestContext::with_files([
         (
@@ -1137,6 +1199,74 @@ def test_add():
     src/mymod.py       2      0    100%
     [LONG-LINE]
     TOTAL              2      0    100%
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn test_cov_include_and_omit_from_config() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.coverage]
+sources = ["src"]
+include = ["src/app/*"]
+omit = ["src/app/generated.py"]
+"#,
+        ),
+        (
+            "src/app/service.py",
+            r"
+def used():
+    return 1
+",
+        ),
+        (
+            "src/app/generated.py",
+            r"
+def generated():
+    return 2
+",
+        ),
+        (
+            "src/other.py",
+            r"
+def outside():
+    return 3
+",
+        ),
+        (
+            "test_service.py",
+            r"
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+from src.app.service import used
+
+def test_used():
+    assert used() == 1
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel()
+            .arg("--status-level=none")
+            .arg("test_service.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    Name                 Stmts   Miss   Cover
+    [LONG-LINE]
+    src/app/service.py       2      0    100%
+    [LONG-LINE]
+    TOTAL                    2      0    100%
 
     ----- stderr -----
     "

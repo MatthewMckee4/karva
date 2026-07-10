@@ -430,6 +430,36 @@ pub struct CoverageOptions {
     )]
     pub sources: Option<Vec<String>>,
 
+    /// Include only coverage report files matching these globs.
+    ///
+    /// Globs are matched against the project-relative file path shown in the
+    /// coverage report, such as `src/package/module.py`. When unset, all files
+    /// under the configured coverage sources are included unless omitted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"null"#,
+        value_type = r#"list[str]"#,
+        example = r#"
+            include = ["src/**"]
+        "#
+    )]
+    pub include: Option<Vec<String>>,
+
+    /// Exclude coverage report files matching these globs.
+    ///
+    /// Globs are matched against the project-relative file path shown in the
+    /// coverage report, such as `src/package/module.py`. Omit filters are
+    /// applied after include filters.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"null"#,
+        value_type = r#"list[str]"#,
+        example = r#"
+            omit = ["**/migrations/*"]
+        "#
+    )]
+    pub omit: Option<Vec<String>>,
+
     /// Coverage report type.
     ///
     /// `term` (default) prints a compact terminal table.
@@ -491,6 +521,8 @@ impl Combine for CoverageOptions {
         let report_overridden = self.report.is_some();
 
         self.sources = self.sources.take().combine(other.sources);
+        self.include = self.include.take().combine(other.include);
+        self.omit = self.omit.take().combine(other.omit);
         self.report = self.report.combine(other.report);
         self.report_path = if report_overridden && self.report_path.is_none() {
             None
@@ -511,6 +543,8 @@ impl CoverageOptions {
         };
         CoverageSettings {
             sources,
+            include: self.include.clone().unwrap_or_default(),
+            omit: self.omit.clone().unwrap_or_default(),
             report: self.report.unwrap_or_default(),
             report_path: self.report_path.clone(),
             fail_under: self.fail_under.map(|t| t.0),
@@ -1033,6 +1067,8 @@ retry = 5
         let toml = r#"
 [profile.default.coverage]
 sources = ["src", "tests"]
+include = ["src/**"]
+omit = ["**/generated.py"]
 report = "term-missing"
 report-path = "build/coverage.xml"
 "#;
@@ -1047,6 +1083,16 @@ report-path = "build/coverage.xml"
                     [
                         "src",
                         "tests",
+                    ],
+                ),
+                include: Some(
+                    [
+                        "src/**",
+                    ],
+                ),
+                omit: Some(
+                    [
+                        "**/generated.py",
                     ],
                 ),
                 report: Some(
@@ -1083,9 +1129,47 @@ report-path = "build/coverage.xml"
                     "tests",
                 ],
             ),
+            include: None,
+            omit: None,
             report: Some(
                 TermMissing,
             ),
+            report_path: None,
+            fail_under: None,
+            disabled: None,
+        }
+        "#);
+    }
+
+    /// CLI filters accumulate with file filters, matching coverage sources.
+    #[test]
+    fn combine_appends_cli_coverage_filters_after_file() {
+        let cli = CoverageOptions {
+            include: Some(vec!["tests/**".to_string()]),
+            omit: Some(vec!["**/generated.py".to_string()]),
+            ..CoverageOptions::default()
+        };
+        let file = CoverageOptions {
+            include: Some(vec!["src/**".to_string()]),
+            omit: Some(vec!["**/migrations/*".to_string()]),
+            ..CoverageOptions::default()
+        };
+        assert_debug_snapshot!(cli.combine(file), @r#"
+        CoverageOptions {
+            sources: None,
+            include: Some(
+                [
+                    "src/**",
+                    "tests/**",
+                ],
+            ),
+            omit: Some(
+                [
+                    "**/migrations/*",
+                    "**/generated.py",
+                ],
+            ),
+            report: None,
             report_path: None,
             fail_under: None,
             disabled: None,
@@ -1142,6 +1226,8 @@ report-path = "build/coverage.xml"
         assert_debug_snapshot!(cli.combine(file), @r#"
         CoverageOptions {
             sources: None,
+            include: None,
+            omit: None,
             report: Some(
                 Json,
             ),
@@ -1182,7 +1268,7 @@ disabled = true
           |
         3 | disabled = true
           | ^^^^^^^^
-        unknown field `disabled`, expected one of `sources`, `report`, `report-path`, `fail-under`
+        unknown field `disabled`, expected one of `sources`, `include`, `omit`, `report`, `report-path`, `fail-under`
         "
         );
     }
@@ -1201,7 +1287,7 @@ nonsense = 1
           |
         4 | nonsense = 1
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `sources`, `report`, `report-path`, `fail-under`
+        unknown field `nonsense`, expected one of `sources`, `include`, `omit`, `report`, `report-path`, `fail-under`
         "
         );
     }

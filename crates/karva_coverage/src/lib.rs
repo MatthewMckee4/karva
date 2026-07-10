@@ -20,5 +20,7 @@ pub mod executable;
 pub mod report;
 pub mod tracer;
 
-pub use report::{combine_and_report, write_cobertura_xml, write_html_report, write_json_report};
+pub use report::{
+    CoverageFilters, combine_and_report, write_cobertura_xml, write_html_report, write_json_report,
+};
 pub use tracer::{CoverageConfig, CoverageSession};

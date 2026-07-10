@@ -5,6 +5,7 @@ use camino::Utf8Path;
 use colored::Colorize;
 use fs_err as fs;
 
+use super::CoverageFilters;
 use super::combined_rows;
 use super::html::build_html_report;
 use super::json::build_json_report;
@@ -15,8 +16,9 @@ pub fn combine_and_report(
     cwd: &Utf8Path,
     files: &[impl AsRef<Utf8Path>],
     show_missing: bool,
+    filters: &CoverageFilters,
 ) -> Result<Option<f64>> {
-    let Some((_, rows)) = combined_rows(cwd, files, show_missing)? else {
+    let Some((_, rows)) = combined_rows(cwd, files, show_missing, filters)? else {
         return Ok(None);
     };
     let total = print_report(&rows, show_missing, &mut std::io::stdout().lock())?;
@@ -27,8 +29,9 @@ pub fn write_cobertura_xml(
     cwd: &Utf8Path,
     files: &[impl AsRef<Utf8Path>],
     output: &Utf8Path,
+    filters: &CoverageFilters,
 ) -> Result<Option<f64>> {
-    let Some((cwd_real, rows)) = combined_rows(cwd, files, false)? else {
+    let Some((cwd_real, rows)) = combined_rows(cwd, files, false, filters)? else {
         return Ok(None);
     };
     let total_pct = total_percent(&rows);
@@ -51,8 +54,9 @@ pub fn write_json_report(
     cwd: &Utf8Path,
     files: &[impl AsRef<Utf8Path>],
     output: &Utf8Path,
+    filters: &CoverageFilters,
 ) -> Result<Option<f64>> {
-    let Some((_, rows)) = combined_rows(cwd, files, false)? else {
+    let Some((_, rows)) = combined_rows(cwd, files, false, filters)? else {
         return Ok(None);
     };
     let total_pct = total_percent(&rows);
@@ -75,8 +79,9 @@ pub fn write_html_report(
     cwd: &Utf8Path,
     files: &[impl AsRef<Utf8Path>],
     output_dir: &Utf8Path,
+    filters: &CoverageFilters,
 ) -> Result<Option<f64>> {
-    let Some((_, rows)) = combined_rows(cwd, files, true)? else {
+    let Some((_, rows)) = combined_rows(cwd, files, true, filters)? else {
         return Ok(None);
     };
     let total_pct = total_percent(&rows);

@@ -28,6 +28,8 @@ fn show_config_default_profile() {
 
     [coverage]
     sources = []
+    include = []
+    omit = []
     report = "term"
 
     ----- stderr -----
@@ -71,6 +73,8 @@ output-format = "concise"
 
     [coverage]
     sources = []
+    include = []
+    omit = []
     report = "term"
 
     ----- stderr -----
@@ -115,6 +119,8 @@ output-format = "concise"
 
     [coverage]
     sources = []
+    include = []
+    omit = []
     report = "term"
 
     ----- stderr -----
@@ -132,6 +138,8 @@ timeout = 120
 
 [profile.default.coverage]
 sources = ["src"]
+include = ["src/app/*"]
+omit = ["**/generated.py"]
 report = "term-missing"
 fail-under = 90
 "#,
@@ -161,6 +169,8 @@ fail-under = 90
 
     [coverage]
     sources = ["src"]
+    include = ["src/app/*"]
+    omit = ["**/generated.py"]
     report = "term-missing"
     fail-under = 90.0
 
@@ -206,6 +216,8 @@ slow-timeout = 0.5
 
     [coverage]
     sources = []
+    include = []
+    omit = []
     report = "term"
 
     [[overrides]]

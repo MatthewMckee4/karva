@@ -1167,6 +1167,7 @@ dependencies = [
  "colored 3.1.1",
  "dunce",
  "fs-err",
+ "globset",
  "insta",
  "pyo3",
  "ruff_python_ast",

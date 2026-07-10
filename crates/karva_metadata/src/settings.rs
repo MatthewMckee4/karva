@@ -295,6 +295,8 @@ pub struct SrcSettings {
 #[serde(rename_all = "kebab-case")]
 pub struct CoverageSettings {
     pub sources: Vec<String>,
+    pub include: Vec<String>,
+    pub omit: Vec<String>,
     pub report: CovReport,
     pub report_path: Option<String>,
     /// Minimum total coverage percentage (`0..=100`). When set and the

@@ -51,6 +51,10 @@ karva test [OPTIONS] [PATH]...
 <p>May be passed multiple times to measure several sources. Pass without a value (<code>--cov</code>) to measure the current working directory.</p>
 </dd><dt id="karva-test--cov-fail-under"><a href="#karva-test--cov-fail-under"><code>--cov-fail-under</code></a> <i>percent</i></dt><dd><p>Fail the run if total coverage is below the given percentage.</p>
 <p>Accepts any value in <code>0..=100</code> (fractional values such as <code>90.5</code> are allowed). When the reported <code>TOTAL</code> percentage is below the threshold, the test command exits with a non-zero status even if every test passed. Has no effect when tests have already failed.</p>
+</dd><dt id="karva-test--cov-include"><a href="#karva-test--cov-include"><code>--cov-include</code></a> <i>glob</i></dt><dd><p>Include only coverage report files whose project-relative path matches this glob.</p>
+<p>May be passed multiple times.</p>
+</dd><dt id="karva-test--cov-omit"><a href="#karva-test--cov-omit"><code>--cov-omit</code></a> <i>glob</i></dt><dd><p>Exclude coverage report files whose project-relative path matches this glob.</p>
+<p>May be passed multiple times.</p>
 </dd><dt id="karva-test--cov-report"><a href="#karva-test--cov-report"><code>--cov-report</code></a> <i>type</i></dt><dd><p>Coverage report type.</p>
 <p><code>term</code> (default) prints a compact terminal table. <code>term-missing</code> extends it with a <code>Missing</code> column listing the uncovered line numbers per file. <code>xml&#91;:PATH&#93;</code>, <code>json&#91;:PATH&#93;</code>, and <code>html&#91;:DIR&#93;</code> write reports to disk.</p>
 </dd><dt id="karva-test--durations"><a href="#karva-test--durations"><code>--durations</code></a> <i>n</i></dt><dd><p>Show the N slowest tests after the run completes</p>

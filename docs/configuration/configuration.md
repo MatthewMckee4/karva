@@ -57,6 +57,48 @@ fail-under = 90
 
 ---
 
+### `include`
+
+Include only coverage report files matching these globs.
+
+Globs are matched against the project-relative file path shown in the
+coverage report, such as `src/package/module.py`. When unset, all files
+under the configured coverage sources are included unless omitted.
+
+**Default value**: `null`
+
+**Type**: `list[str]`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.coverage]
+include = ["src/**"]
+```
+
+---
+
+### `omit`
+
+Exclude coverage report files matching these globs.
+
+Globs are matched against the project-relative file path shown in the
+coverage report, such as `src/package/module.py`. Omit filters are
+applied after include filters.
+
+**Default value**: `null`
+
+**Type**: `list[str]`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.coverage]
+omit = ["**/migrations/*"]
+```
+
+---
+
 ### `report`
 
 Coverage report type.
