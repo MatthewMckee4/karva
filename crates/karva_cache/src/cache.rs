@@ -5,7 +5,9 @@ use std::time::Duration;
 use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
-use karva_diagnostic::{FlakyTest, TestResultKind, TestResultStats, TestRunResult};
+use karva_diagnostic::{
+    CapturedTestOutput, FlakyTest, TestResultKind, TestResultStats, TestRunResult,
+};
 use ruff_db::diagnostic::DisplayDiagnosticConfig;
 use serde::{Deserialize, Serialize};
 
@@ -35,6 +37,7 @@ pub struct AggregatedResults {
     pub diagnostics: String,
     pub failed_tests: Vec<String>,
     pub flaky_tests: Vec<FlakyTest>,
+    pub captured_outputs: Vec<CapturedTestOutput>,
     pub durations: HashMap<String, Duration>,
 }
 
@@ -131,7 +134,7 @@ impl RunCache {
         Ok(files)
     }
 
-    /// Persists a test run result (stats, diagnostics, durations, and failed tests) to disk.
+    /// Persists a test run result to disk.
     pub fn write_result(
         &self,
         worker_id: usize,
@@ -153,6 +156,11 @@ impl RunCache {
             .collect();
         write_json_if_nonempty(&worker_dir, CacheFile::FailedTests, &failed_names)?;
         write_json_if_nonempty(&worker_dir, CacheFile::FlakyTests, result.flaky_tests())?;
+        write_json_if_nonempty(
+            &worker_dir,
+            CacheFile::CapturedOutput,
+            result.captured_outputs(),
+        )?;
 
         Ok(())
     }
@@ -174,6 +182,12 @@ fn read_worker_results(worker_dir: &Utf8Path, results: &mut AggregatedResults) -
 
     if let Some(flaky) = read_json::<Vec<FlakyTest>>(worker_dir, CacheFile::FlakyTests)? {
         results.flaky_tests.extend(flaky);
+    }
+
+    if let Some(outputs) =
+        read_json::<Vec<CapturedTestOutput>>(worker_dir, CacheFile::CapturedOutput)?
+    {
+        results.captured_outputs.extend(outputs);
     }
 
     if let Some(durations) =
@@ -620,6 +634,64 @@ mod tests {
                 "mod::test_b",
                 20ms,
             ),
+        ]
+        "#);
+    }
+
+    #[test]
+    fn aggregate_results_merges_captured_output_across_workers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+        let run_hash = RunHash::from_existing("run-710");
+
+        let run_dir = tmp.path().join(run_hash.dir_name());
+        let worker0 = run_dir.join("worker-0");
+        let worker1 = run_dir.join("worker-1");
+        fs::create_dir_all(&worker0).unwrap();
+        fs::create_dir_all(&worker1).unwrap();
+
+        let output0 = CapturedTestOutput::new(
+            "mod::test_a".to_string(),
+            karva_diagnostic::CapturedTestOutcome::Failed,
+            "worker 0 stdout\n".to_string(),
+            String::new(),
+        );
+        let output1 = CapturedTestOutput::new(
+            "mod::test_b".to_string(),
+            karva_diagnostic::CapturedTestOutcome::Passed,
+            String::new(),
+            "worker 1 stderr\n".to_string(),
+        );
+
+        fs::write(
+            worker0.join(CacheFile::CapturedOutput.filename()),
+            serde_json::to_string(&[output0]).unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            worker1.join(CacheFile::CapturedOutput.filename()),
+            serde_json::to_string(&[output1]).unwrap(),
+        )
+        .unwrap();
+
+        let cache = RunCache::new(&cache_dir, &run_hash);
+        let mut outputs = cache.aggregate_results().unwrap().captured_outputs;
+        outputs.sort_by(|a, b| a.test_name().cmp(b.test_name()));
+
+        assert_debug_snapshot!(outputs, @r#"
+        [
+            CapturedTestOutput {
+                test_name: "mod::test_a",
+                outcome: Failed,
+                stdout: "worker 0 stdout\n",
+                stderr: "",
+            },
+            CapturedTestOutput {
+                test_name: "mod::test_b",
+                outcome: Passed,
+                stdout: "",
+                stderr: "worker 1 stderr\n",
+            },
         ]
         "#);
     }

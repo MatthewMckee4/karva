@@ -164,6 +164,17 @@ impl<'a> Context<'a> {
         passed
     }
 
+    pub fn register_captured_output(
+        &self,
+        test_case_name: &QualifiedTestName,
+        result: &IndividualTestResultKind,
+        stdout: String,
+        stderr: String,
+    ) {
+        self.result()
+            .register_captured_output(test_case_name, result, stdout, stderr);
+    }
+
     pub(crate) fn report_diagnostic<'ctx>(
         &'ctx self,
         rule: &'static DiagnosticType,
