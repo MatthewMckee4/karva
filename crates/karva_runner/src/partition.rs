@@ -282,6 +282,10 @@ fn collect_test_paths_recursive(
 
 #[cfg(test)]
 mod tests {
+    use camino::Utf8PathBuf;
+    use karva_collector::{CollectedPackage, CollectionSettings, collect_file};
+    use ruff_python_ast::PythonVersion;
+
     use super::*;
 
     fn test_info(qualified_name: &str) -> TestInfo {
@@ -315,5 +319,77 @@ mod tests {
                 "test_module::test_c"
             ]
         );
+    }
+
+    #[test]
+    fn partition_selection_filters_after_sorting_by_qualified_name() {
+        let (_temp_dir, test_path, package) = collected_package(
+            "def test_c(): pass\n\
+             def test_a(): pass\n\
+             def test_b(): pass\n",
+        );
+        let selection = "slice:2/3"
+            .parse::<PartitionSelection>()
+            .expect("valid partition selection");
+
+        let partitions = partition_collected_tests(
+            &package,
+            1,
+            &HashMap::new(),
+            &HashSet::new(),
+            Some(selection),
+            TestOrdering::Stable,
+        );
+
+        assert_eq!(partitions[0].tests(), &[format!("{test_path}::test_b")]);
+    }
+
+    #[test]
+    fn last_failed_filters_before_explicit_partition_selection() {
+        let (_temp_dir, test_path, package) = collected_package(
+            "def test_c(): pass\n\
+             def test_a(): pass\n\
+             def test_b(): pass\n\
+             def test_d(): pass\n",
+        );
+        let selection = "slice:2/2"
+            .parse::<PartitionSelection>()
+            .expect("valid partition selection");
+        let last_failed = HashSet::from([
+            "test_sample::test_b".to_string(),
+            "test_sample::test_c".to_string(),
+        ]);
+
+        let partitions = partition_collected_tests(
+            &package,
+            1,
+            &HashMap::new(),
+            &last_failed,
+            Some(selection),
+            TestOrdering::Stable,
+        );
+
+        assert_eq!(partitions[0].tests(), &[format!("{test_path}::test_c")]);
+    }
+
+    fn collected_package(source: &str) -> (tempfile::TempDir, Utf8PathBuf, CollectedPackage) {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let root = Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf())
+            .expect("temp path should be UTF-8");
+        let test_path = root.join("test_sample.py");
+        std::fs::write(&test_path, source).expect("write test file");
+        let settings = CollectionSettings {
+            python_version: PythonVersion::PY312,
+            test_function_prefix: "test_",
+            respect_ignore_files: true,
+            collect_fixtures: false,
+        };
+        let module = collect_file(&test_path, &root, &settings, &[])
+            .expect("collect test file")
+            .expect("test file should collect");
+        let mut package = CollectedPackage::new(root);
+        package.add_module(module);
+
+        (temp_dir, test_path, package)
     }
 }
