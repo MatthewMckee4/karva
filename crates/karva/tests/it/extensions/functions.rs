@@ -208,6 +208,35 @@ def test_conditional_skip():
     }
 }
 
+#[rstest]
+fn test_runtime_skip_does_not_retry(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import {framework}
+
+def test_skip():
+    {framework}.skip('This test is skipped at runtime')
+    assert False, 'This should not be reached'
+        "
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=2"), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
 #[test]
 fn test_mixed_skip_and_pass() {
     let context = TestContext::with_file(

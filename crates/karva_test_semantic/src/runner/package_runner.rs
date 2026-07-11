@@ -441,6 +441,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         py: Python<'_>,
         qualified_test_name: &QualifiedTestName,
         configured_retries: u32,
+        should_retry_error: impl Fn(&PyErr) -> bool,
         mut run_test: impl FnMut() -> PyResult<Py<PyAny>>,
     ) -> RetryOutcome {
         let max_attempts = configured_retries.saturating_add(1);
@@ -456,7 +457,10 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let mut final_attempt_duration = attempt_start.elapsed();
 
         while retry_count > 0 {
-            if test_result.is_ok() {
+            let Err(err) = &test_result else {
+                break;
+            };
+            if !should_retry_error(err) {
                 break;
             }
             let attempt_duration = attempt_start.elapsed();
@@ -483,10 +487,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             //   TRY 2 PASS ...   (or TRY 2 FAIL for an exhausted retry)
             // The diagnostic for the final attempt (if any) is collected by
             // `classify_test_result` and shown in the end-of-run block.
-            let final_kind = match &test_result {
-                Ok(_) => IndividualTestResultKind::Passed,
-                Err(_) => IndividualTestResultKind::Failed,
-            };
+            let final_kind = attempt_result_kind(py, &test_result);
             self.context.report_test_attempt(
                 qualified_test_name,
                 attempt,
@@ -606,6 +607,9 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         };
 
         let configured_retries = self.context.settings().retry_for(&eval_ctx);
+        let expect_fail = expect_fail_tag
+            .as_ref()
+            .is_some_and(ExpectFailTag::should_expect_fail);
         self.context.report_test_started(&qualified_test_name);
         if let Some(coverage) = self.coverage {
             coverage.set_current_context(py, Some(&qualified_name_str));
@@ -615,7 +619,13 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             attempt,
             max_attempts,
             was_retried,
-        } = self.run_with_retries(py, &qualified_test_name, configured_retries, run_test);
+        } = self.run_with_retries(
+            py,
+            &qualified_test_name,
+            configured_retries,
+            |err| !expect_fail && !is_skip_exception(py, err),
+            run_test,
+        );
         self.context.report_test_finished(&qualified_test_name);
 
         let report_ctx = VariantReportCtx {
@@ -842,6 +852,19 @@ fn get_value_and_finalizer(
         }
     } else {
         Ok((fixture_call_result, None))
+    }
+}
+
+fn attempt_result_kind(
+    py: Python<'_>,
+    test_result: &PyResult<Py<PyAny>>,
+) -> IndividualTestResultKind {
+    match test_result {
+        Ok(_) => IndividualTestResultKind::Passed,
+        Err(err) if is_skip_exception(py, err) => IndividualTestResultKind::Skipped {
+            reason: extract_skip_reason(py, err),
+        },
+        Err(_) => IndividualTestResultKind::Failed,
     }
 }
 
