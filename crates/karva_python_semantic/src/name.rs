@@ -75,7 +75,9 @@ impl QualifiedTestName {
     pub fn params(&self) -> Option<&str> {
         let full_name = self.full_name.as_deref()?;
         let base = self.function_name.to_string();
-        full_name.strip_prefix(&base)
+        full_name
+            .strip_prefix(&base)
+            .filter(|params| !params.is_empty())
     }
 }
 
@@ -123,5 +125,43 @@ impl ModulePath {
     /// Return the filesystem path of this module.
     pub fn path(&self) -> &Utf8PathBuf {
         &self.path
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn qualified_function_name() -> QualifiedFunctionName {
+        QualifiedFunctionName::new(
+            "test_example".to_string(),
+            ModulePath::new_with_name("test_module.py", "test_module".to_string()),
+        )
+    }
+
+    #[test]
+    fn params_returns_none_without_full_name() {
+        let name = QualifiedTestName::new(qualified_function_name(), None);
+
+        assert_eq!(name.params(), None);
+    }
+
+    #[test]
+    fn params_returns_none_when_full_name_is_base_name() {
+        let function_name = qualified_function_name();
+        let name = QualifiedTestName::new(function_name.clone(), Some(function_name.to_string()));
+
+        assert_eq!(name.params(), None);
+    }
+
+    #[test]
+    fn params_returns_suffix_for_parametrized_name() {
+        let function_name = qualified_function_name();
+        let name = QualifiedTestName::new(
+            function_name,
+            Some("test_module::test_example(value=1)".to_string()),
+        );
+
+        assert_eq!(name.params(), Some("(value=1)"));
     }
 }
