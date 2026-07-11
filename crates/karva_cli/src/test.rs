@@ -516,7 +516,48 @@ fn parse_cov_report(raw: &str) -> Result<CovReport, String> {
 mod tests {
     use camino::Utf8PathBuf;
 
-    use super::{CovReport, parse_cov_report};
+    use super::{CovReport, parse_cov_fail_under, parse_cov_report};
+
+    #[test]
+    fn parse_cov_fail_under_accepts_percent_bounds_and_fractional_values() {
+        assert_eq!(parse_cov_fail_under("0"), Ok(0.0));
+        assert_eq!(parse_cov_fail_under("90.5"), Ok(90.5));
+        assert_eq!(parse_cov_fail_under("100"), Ok(100.0));
+    }
+
+    #[test]
+    fn parse_cov_fail_under_rejects_out_of_range_values() {
+        assert_eq!(
+            parse_cov_fail_under("-0.1"),
+            Err("must be between 0 and 100, got `-0.1`".to_string())
+        );
+        assert_eq!(
+            parse_cov_fail_under("100.1"),
+            Err("must be between 0 and 100, got `100.1`".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_cov_fail_under_rejects_non_finite_values() {
+        assert_eq!(
+            parse_cov_fail_under("NaN"),
+            Err("must be between 0 and 100, got `NaN`".to_string())
+        );
+        assert_eq!(
+            parse_cov_fail_under("inf"),
+            Err("must be between 0 and 100, got `inf`".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_cov_fail_under_rejects_non_numeric_values() {
+        let error = parse_cov_fail_under("high").expect_err("non-number should fail");
+
+        assert!(
+            error.starts_with("`high` is not a valid number:"),
+            "{error}"
+        );
+    }
 
     #[test]
     fn parse_xml_cov_report_without_path() {
