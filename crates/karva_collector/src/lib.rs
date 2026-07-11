@@ -100,6 +100,7 @@ fn is_test_function_to_collect(name: &str, explicit_names: &[String], prefix: &s
 
 #[cfg(test)]
 mod tests {
+    use camino::Utf8PathBuf;
     use ruff_python_ast::PythonVersion;
 
     use super::*;
@@ -126,5 +127,92 @@ mod tests {
             error,
             CollectionError::ReadSource { path: error_path, .. } if error_path == path
         ));
+    }
+
+    #[test]
+    fn collect_file_collects_prefixed_tests() {
+        let (_temp_dir, root, path) = python_file(
+            "test_sample.py",
+            "def helper(): pass\n\
+             def test_first(): pass\n\
+             def test_second(): pass\n",
+        );
+
+        let module = collect_file(&path, &root, &settings(), &[])
+            .expect("collect file")
+            .expect("module should collect");
+
+        assert_eq!(
+            function_names(&module.test_function_defs),
+            ["test_first", "test_second"]
+        );
+        assert!(module.fixture_function_defs.is_empty());
+    }
+
+    #[test]
+    fn collect_file_collects_explicit_function_names() {
+        let (_temp_dir, root, path) = python_file(
+            "test_sample.py",
+            "def helper(): pass\n\
+             def test_first(): pass\n\
+             def test_second(): pass\n",
+        );
+
+        let module = collect_file(&path, &root, &settings(), &["helper".to_string()])
+            .expect("collect file")
+            .expect("module should collect");
+
+        assert_eq!(function_names(&module.test_function_defs), ["helper"]);
+    }
+
+    #[test]
+    fn collect_file_collects_fixtures_when_enabled() {
+        let (_temp_dir, root, path) = python_file(
+            "test_sample.py",
+            "from karva import fixture\n\
+             @fixture\n\
+             def db(): pass\n\
+             def test_uses_db(): pass\n",
+        );
+        let settings = CollectionSettings {
+            collect_fixtures: true,
+            ..settings()
+        };
+
+        let module = collect_file(&path, &root, &settings, &[])
+            .expect("collect file")
+            .expect("module should collect");
+
+        assert_eq!(function_names(&module.fixture_function_defs), ["db"]);
+        assert_eq!(function_names(&module.test_function_defs), ["test_uses_db"]);
+    }
+
+    #[test]
+    fn collect_file_skips_paths_outside_cwd() {
+        let (_temp_dir, _root, path) = python_file("test_sample.py", "def test_sample(): pass\n");
+        let outside_dir = tempfile::tempdir().expect("create outside temp dir");
+        let cwd = Utf8PathBuf::from_path_buf(outside_dir.path().to_path_buf())
+            .expect("outside temp path should be UTF-8");
+
+        let module = collect_file(&path, &cwd, &settings(), &[]).expect("collect file");
+
+        assert!(module.is_none());
+    }
+
+    fn python_file(name: &str, source: &str) -> (tempfile::TempDir, Utf8PathBuf, Utf8PathBuf) {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let root = Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf())
+            .expect("temp path should be UTF-8");
+        let path = root.join(name);
+        std::fs::write(&path, source).expect("write Python file");
+
+        (temp_dir, root, path)
+    }
+
+    fn function_names(functions: &[ruff_python_ast::StmtFunctionDef]) -> Vec<&str> {
+        functions
+            .iter()
+            .map(|function| function.name.as_str())
+            .collect()
     }
 }
