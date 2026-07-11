@@ -172,9 +172,9 @@ struct InlineInfo<'a> {
 type ClassifiedPendingSnapshots<'a> = (HashMap<String, Vec<InlineInfo<'a>>>, Vec<&'a Utf8Path>);
 
 /// Classify pending snapshots into inline (grouped by source file) and file-based.
-fn classify_pending_snapshots<'a>(
-    pending: &'a [&PendingSnapshotInfo],
-) -> io::Result<ClassifiedPendingSnapshots<'a>> {
+fn classify_pending_snapshots(
+    pending: &[PendingSnapshotInfo],
+) -> io::Result<ClassifiedPendingSnapshots<'_>> {
     let mut inline_by_source: HashMap<String, Vec<InlineInfo<'_>>> = HashMap::new();
     let mut file_based: Vec<&Utf8Path> = Vec::new();
 
@@ -240,7 +240,7 @@ fn process_file_based_snapshots(file_based: &[&Utf8Path]) -> io::Result<()> {
 /// expansion shifts line numbers for subsequent snapshots. By processing in
 /// descending line order (bottom-to-top), edits at higher lines don't affect
 /// line numbers above.
-pub fn accept_pending_batch(pending: &[&PendingSnapshotInfo]) -> io::Result<()> {
+pub fn accept_pending_batch(pending: &[PendingSnapshotInfo]) -> io::Result<()> {
     let (mut inline_by_source, file_based) = classify_pending_snapshots(pending)?;
     process_inline_snapshots(&mut inline_by_source)?;
     process_file_based_snapshots(&file_based)
