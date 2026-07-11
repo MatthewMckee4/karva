@@ -285,7 +285,7 @@ pub struct TestCommand {
     #[clap(long, alias = "lf", help_heading = "Filter options")]
     pub last_failed: bool,
 
-    /// Run only a slice of the collected tests, distributed round-robin.
+    /// Run only one partition of the collected tests.
     ///
     /// Accepts `slice:M/N` where this run executes slice `M` of `N` total
     /// slices (1-indexed). Tests are sorted by qualified name and then
@@ -294,9 +294,9 @@ pub struct TestCommand {
     /// `slice:1/N` through `slice:N/N` together covers every collected test
     /// exactly once.
     ///
-    /// Useful for splitting a test run across CI jobs. Slice membership
-    /// shifts when tests are added or removed, so it gives less stable
-    /// per-test placement than a hash-based scheme.
+    /// Also accepts `hash:M/N`, which assigns each test to a stable bucket
+    /// based on its qualified name. Hash partitioning is less balanced than
+    /// `slice`, but adding or removing a test only changes that test's bucket.
     #[clap(long, value_name = "STRATEGY:M/N", help_heading = "Filter options")]
     pub partition: Option<PartitionSelection>,
 

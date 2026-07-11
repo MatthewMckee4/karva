@@ -125,14 +125,15 @@ pub fn partition_collected_tests(
         test_infos.retain(|info| last_failed.contains(&info.qualified_name));
     }
 
-    // Slice partitioning runs on a deterministic ordering of the post-filter
-    // test set so that `slice:M/N` is stable across runs and machines (modulo
-    // changes to the test set itself).
+    // Explicit partitioning runs on a deterministic ordering of the
+    // post-filter test set so that `slice:M/N` is stable across runs and
+    // machines. `hash:M/N` does not depend on the position, but sharing the
+    // same ordering keeps the selected worker input stable too.
     if let Some(selection) = partition_selection {
         test_infos.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
         let mut position = 0usize;
-        test_infos.retain(|_| {
-            let keep = selection.contains(position);
+        test_infos.retain(|info| {
+            let keep = selection.contains_test(position, &info.qualified_name);
             position += 1;
             keep
         });
