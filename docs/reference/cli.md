@@ -114,7 +114,13 @@ karva test [OPTIONS] [PATH]...
 </dd><dt id="karva-test--profile"><a href="#karva-test--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to use.</p>
 <p>Profiles are defined as <code>&#91;profile.&lt;name&gt;&#93;</code> sections in <code>karva.toml</code> (or <code>&#91;tool.karva.profile.&lt;name&gt;&#93;</code> in <code>pyproject.toml</code>) and may override any of the <code>&#91;src&#93;</code>, <code>&#91;terminal&#93;</code>, and <code>&#91;test&#93;</code> settings. The selected profile is layered on top of any <code>&#91;profile.default&#93;</code> overrides, which themselves layer on top of the top-level options.</p>
 <p>Defaults to <code>default</code>.</p>
-<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd><dt id="karva-test--retry"><a href="#karva-test--retry"><code>--retry</code></a> <i>retry</i></dt><dd><p>When set, the test will retry failed tests up to this number of times</p>
+<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd><dt id="karva-test--result-format"><a href="#karva-test--result-format"><code>--result-format</code></a> <i>format</i></dt><dd><p>Machine-readable test result format</p>
+<p>Possible values:</p>
+<ul>
+<li><code>json</code>:  Write one JSON document with the full run result</li>
+<li><code>jsonl</code>:  Write newline-delimited JSON events</li>
+</ul></dd><dt id="karva-test--result-output"><a href="#karva-test--result-output"><code>--result-output</code></a> <i>path</i></dt><dd><p>Write machine-readable test results to this path</p>
+</dd><dt id="karva-test--retry"><a href="#karva-test--retry"><code>--retry</code></a> <i>retry</i></dt><dd><p>When set, the test will retry failed tests up to this number of times</p>
 </dd><dt id="karva-test--run-ignored"><a href="#karva-test--run-ignored"><code>--run-ignored</code></a> <i>run-ignored</i></dt><dd><p>Run ignored tests</p>
 <p>Possible values:</p>
 <ul>

@@ -1,4 +1,5 @@
 mod junit;
+mod result_report;
 mod watch;
 
 use std::collections::HashMap;
@@ -47,6 +48,8 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     let sub_command = args.sub_command.clone();
     let watch = args.watch;
     let durations = args.durations;
+    let result_output = args.result_output.clone();
+    let result_format = args.result_format.unwrap_or_default();
     let last_failed = args.last_failed;
     let partition = args.partition;
     let no_cache = args.no_cache.unwrap_or(false);
@@ -101,10 +104,22 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
 
     print_test_output(printer, start_time, &result, durations)?;
     junit::write_junit_report(project.settings().junit(), &result, project.cwd())?;
+    let write_result_report = |exit_status| {
+        result_report::write_result_report(
+            result_output.as_deref(),
+            result_format,
+            &result,
+            project.cwd(),
+            start_time.elapsed(),
+            exit_status,
+        )
+    };
 
     if timed_out {
         print_run_timed_out(printer)?;
-        return Ok(ExitStatus::Failure);
+        let exit_status = ExitStatus::Failure;
+        write_result_report(exit_status)?;
+        return Ok(exit_status);
     }
 
     let coverage_total = if coverage_files.is_empty() {
@@ -208,27 +223,44 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     if no_tests_collected(&result) {
         let has_filters = !sub_command.filter_expressions.is_empty();
         match project.settings().test().no_tests {
-            NoTestsMode::Pass => return Ok(ExitStatus::Success),
-            NoTestsMode::Auto if has_filters => return Ok(ExitStatus::Success),
+            NoTestsMode::Pass => {
+                let exit_status = ExitStatus::Success;
+                write_result_report(exit_status)?;
+                return Ok(exit_status);
+            }
+            NoTestsMode::Auto if has_filters => {
+                let exit_status = ExitStatus::Success;
+                write_result_report(exit_status)?;
+                return Ok(exit_status);
+            }
             NoTestsMode::Warn => {
                 let mut stdout = printer.stream_for_message().lock();
                 writeln!(stdout, "warning: no tests to run")?;
-                return Ok(ExitStatus::Success);
+                let exit_status = ExitStatus::Success;
+                write_result_report(exit_status)?;
+                return Ok(exit_status);
             }
             NoTestsMode::Auto | NoTestsMode::Fail => {
                 let mut stdout = printer.stream_for_message().lock();
                 writeln!(stdout, "error: no tests to run")?;
                 writeln!(stdout, "(hint: use `--no-tests` to customize)")?;
-                return Ok(ExitStatus::Failure);
+                let exit_status = ExitStatus::Failure;
+                write_result_report(exit_status)?;
+                return Ok(exit_status);
             }
         }
     }
 
-    if result.stats.is_success() && result.diagnostics.is_empty() && !coverage_below_threshold {
-        Ok(ExitStatus::Success)
+    let exit_status = if result.stats.is_success()
+        && result.diagnostics.is_empty()
+        && !coverage_below_threshold
+    {
+        ExitStatus::Success
     } else {
-        Ok(ExitStatus::Failure)
-    }
+        ExitStatus::Failure
+    };
+    write_result_report(exit_status)?;
+    Ok(exit_status)
 }
 
 fn coverage_report_path(

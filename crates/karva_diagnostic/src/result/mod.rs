@@ -11,7 +11,7 @@ use ruff_db::diagnostic::Diagnostic;
 
 use crate::reporter::Reporter;
 
-pub use case::{TestCaseOutcome, TestCaseResult};
+pub use case::{TestCaseOutcome, TestCaseResult, TestCaseRetry};
 pub use flaky::{DisplayFlakyTest, DisplayFlakyTests, FlakyTest};
 pub use kind::{IndividualTestResultKind, TestResultKind};
 pub use output::{CapturedTestOutcome, CapturedTestOutput};
@@ -128,10 +128,11 @@ impl TestRunResult {
         self.stats.add(result.clone().into());
 
         let function_name = test_case_name.function_name().clone();
-        self.test_cases.push(TestCaseResult::new(
+        self.test_cases.push(TestCaseResult::retried(
             test_case_name,
             TestCaseOutcome::from(result),
             duration,
+            TestCaseRetry::new(passed_on, total_attempts),
         ));
 
         if matches!(result, IndividualTestResultKind::Failed) {

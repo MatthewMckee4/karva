@@ -13,6 +13,7 @@ mod filterset;
 mod junit;
 mod last_failed;
 mod partition;
+mod result_report;
 mod run_ignored;
 mod run_timeout;
 mod show_config;
