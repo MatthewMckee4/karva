@@ -47,7 +47,7 @@ impl DiscoveredModule {
         self.path.module_name()
     }
 
-    pub(crate) fn test_functions(&self) -> &Vec<DiscoveredTestFunction> {
+    pub(crate) fn test_functions(&self) -> &[DiscoveredTestFunction] {
         &self.test_functions
     }
 
@@ -55,7 +55,7 @@ impl DiscoveredModule {
         self.test_functions.push(test_function);
     }
 
-    pub(crate) fn fixtures(&self) -> &Vec<DiscoveredFixture> {
+    pub(crate) fn fixtures(&self) -> &[DiscoveredFixture] {
         &self.fixtures
     }
 

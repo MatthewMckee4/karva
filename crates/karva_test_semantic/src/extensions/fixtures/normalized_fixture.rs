@@ -49,7 +49,7 @@ impl NormalizedFixture {
     }
 
     /// Returns the fixture dependencies.
-    pub(crate) fn dependencies(&self) -> &Vec<Rc<Self>> {
+    pub(crate) fn dependencies(&self) -> &[Rc<Self>] {
         &self.dependencies
     }
 
