@@ -71,7 +71,7 @@ impl<'ctx, 'a> DiagnosticGuardBuilder<'ctx, 'a> {
     ) -> DiagnosticGuard<'ctx, 'a> {
         DiagnosticGuard {
             context: self.context,
-            diag: Some(Diagnostic::new(self.id, self.severity, message)),
+            diag: Diagnostic::new(self.id, self.severity, message),
         }
     }
 }
@@ -84,8 +84,8 @@ pub struct DiagnosticGuard<'ctx, 'a> {
     /// Reference to the test execution context.
     context: &'ctx Context<'a>,
 
-    /// The diagnostic being built, wrapped in Option for take-on-drop.
-    diag: Option<Diagnostic>,
+    /// The diagnostic being built.
+    diag: Diagnostic,
 }
 
 /// Return a immutable borrow of the diagnostic in this guard.
@@ -93,20 +93,19 @@ impl std::ops::Deref for DiagnosticGuard<'_, '_> {
     type Target = Diagnostic;
 
     fn deref(&self) -> &Diagnostic {
-        self.diag.as_ref().unwrap()
+        &self.diag
     }
 }
 
 /// Return a mutable borrow of the diagnostic in this guard.
 impl std::ops::DerefMut for DiagnosticGuard<'_, '_> {
     fn deref_mut(&mut self) -> &mut Diagnostic {
-        self.diag.as_mut().unwrap()
+        &mut self.diag
     }
 }
 
 impl Drop for DiagnosticGuard<'_, '_> {
     fn drop(&mut self) {
-        let diag = self.diag.take().unwrap();
-        self.context.result().add_diagnostic(diag);
+        self.context.result().add_diagnostic(self.diag.clone());
     }
 }
