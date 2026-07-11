@@ -408,6 +408,43 @@ def test_under_tag_limit():
 }
 
 #[test]
+fn test_config_slow_timeout_flags_slow_test() {
+    let context = TestContext::with_files([
+        (
+            "pyproject.toml",
+            r"
+[tool.karva.profile.default.test]
+slow-timeout = 0.001
+            ",
+        ),
+        (
+            "test.py",
+            r"
+import time
+
+def test_slow():
+    time.sleep(0.05)
+            ",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().arg("--status-level=slow"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            SLOW [TIME] test::test_slow
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped, 1 slow
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
 fn test_config_timeout_kills_slow_test() {
     let context = TestContext::with_files([
         (
