@@ -52,8 +52,11 @@ impl FromStr for CovReport {
             Some(("xml", _)) => Err("`xml` report path cannot be empty".to_string()),
             Some(("json", _)) => Err("`json` report path cannot be empty".to_string()),
             Some(("html", _)) => Err("`html` report path cannot be empty".to_string()),
-            Some((kind, _)) => Err(format!(
+            Some((kind @ ("term" | "term-missing"), _)) => Err(format!(
                 "report `{kind}` does not accept a path; expected `term`, `term-missing`, `xml[:PATH]`, `json[:PATH]`, or `html[:PATH]`"
+            )),
+            Some((_, _)) => Err(format!(
+                "invalid value `{raw}`; expected one of `term`, `term-missing`, `xml[:PATH]`, `json[:PATH]`, or `html[:PATH]`"
             )),
         }
     }

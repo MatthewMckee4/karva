@@ -562,4 +562,20 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn parse_term_cov_report_rejects_path() {
+        assert_eq!(
+            parse_cov_report("term:build/coverage.txt"),
+            Err("report `term` does not accept a path; expected `term`, `term-missing`, `xml[:PATH]`, `json[:PATH]`, or `html[:PATH]`".to_string()),
+        );
+    }
+
+    #[test]
+    fn parse_unknown_cov_report_with_path_reports_invalid_value() {
+        assert_eq!(
+            parse_cov_report("bogus:build/coverage.txt"),
+            Err("invalid value `bogus:build/coverage.txt`; expected one of `term`, `term-missing`, `xml[:PATH]`, `json[:PATH]`, or `html[:PATH]`".to_string()),
+        );
+    }
 }
