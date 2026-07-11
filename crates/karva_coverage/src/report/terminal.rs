@@ -202,6 +202,8 @@ fn format_row(name_width: usize, show_missing: bool, row: &Row<'_>) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
 
     fn row(name: &str, stmts: u32, hit: u32, miss: u32, missing: &str) -> FileRow {
@@ -214,6 +216,7 @@ mod tests {
             missing: missing.to_string(),
             executable: Vec::new(),
             executed: Vec::new(),
+            contexts: BTreeMap::new(),
         }
     }
 

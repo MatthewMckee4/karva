@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use karva_coverage::CoverageSession;
 use karva_diagnostic::IndividualTestResultKind;
 use karva_metadata::RunIgnoredMode;
 use karva_metadata::filter::EvalContext;
@@ -46,6 +47,9 @@ pub struct PackageRunner<'ctx, 'a> {
     /// Cache for fixture finalizers to run cleanup at appropriate times.
     finalizer_cache: FinalizerCache,
 
+    /// Active coverage session, when coverage is enabled for this worker.
+    coverage: Option<&'ctx CoverageSession>,
+
     /// Running count of failed tests observed during this run.
     ///
     /// Used to enforce `--max-fail=N`: once this counter reaches the
@@ -54,11 +58,12 @@ pub struct PackageRunner<'ctx, 'a> {
 }
 
 impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
-    pub(crate) fn new(context: &'ctx Context<'a>) -> Self {
+    pub(crate) fn new(context: &'ctx Context<'a>, coverage: Option<&'ctx CoverageSession>) -> Self {
         Self {
             context,
             fixture_cache: FixtureCache::default(),
             finalizer_cache: FinalizerCache::default(),
+            coverage,
             failed_count: Cell::new(0),
         }
     }
@@ -564,6 +569,9 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
         let configured_retries = self.context.settings().retry_for(&eval_ctx);
         self.context.report_test_started(&qualified_test_name);
+        if let Some(coverage) = self.coverage {
+            coverage.set_current_context(py, Some(&qualified_name_str));
+        }
         let RetryOutcome {
             test_result,
             attempt,
@@ -615,6 +623,9 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         }
 
         self.clean_up_scope(py, FixtureScope::Function);
+        if let Some(coverage) = self.coverage {
+            coverage.set_current_context(py, None);
+        }
 
         passed
     }

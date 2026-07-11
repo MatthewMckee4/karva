@@ -548,6 +548,103 @@ def test_only_covered():
 }
 
 #[test]
+fn test_cov_context_test_records_json_contexts() {
+    let context = TestContext::with_files([
+        (
+            "src/app.py",
+            "def shared():\n    value = 1\n    return value\n\ndef only_one():\n    return shared() + 1\n\ndef only_two():\n    return shared() + 2\n",
+        ),
+        (
+            "test_context.py",
+            r"
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+from src.app import only_one, only_two
+
+def test_one():
+    assert only_one() == 2
+
+def test_two():
+    assert only_two() == 3
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--cov=src")
+            .arg("--cov-context=test")
+            .arg("--cov-report=json")
+            .arg("--status-level=none")
+            .arg("test_context.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let json = context.read_file("coverage.json");
+    insta::assert_snapshot!(json, @r#"
+    {
+      "meta": {
+        "format": 2,
+        "version": "karva",
+        "show_contexts": true
+      },
+      "files": {
+        "src/app.py": {
+          "executed_lines": [
+            1,
+            2,
+            3,
+            5,
+            6,
+            8,
+            9
+          ],
+          "summary": {
+            "covered_lines": 7,
+            "num_statements": 7,
+            "percent_covered": 100.0,
+            "missing_lines": [],
+            "excluded_lines": []
+          },
+          "missing_lines": [],
+          "excluded_lines": [],
+          "contexts": {
+            "2": [
+              "test_context::test_one",
+              "test_context::test_two"
+            ],
+            "3": [
+              "test_context::test_one",
+              "test_context::test_two"
+            ],
+            "6": [
+              "test_context::test_one"
+            ],
+            "9": [
+              "test_context::test_two"
+            ]
+          }
+        }
+      },
+      "totals": {
+        "covered_lines": 7,
+        "num_statements": 7,
+        "percent_covered": 100.0
+      }
+    }
+    "#);
+}
+
+#[test]
 fn test_cov_report_cli_override_uses_default_path_when_config_path_is_stale() {
     let context = TestContext::with_files([
         (

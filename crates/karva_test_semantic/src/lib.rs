@@ -48,7 +48,7 @@ pub fn run_tests(
 
         let session = StandardDiscoverer::new(&context).discover_with_py(py, test_paths);
 
-        PackageRunner::new(&context).execute(py, &session);
+        PackageRunner::new(&context, cov_session.as_ref()).execute(py, &session);
 
         if let Some(cov_session) = cov_session
             && let Err(err) = cov_session.stop_and_save(py)

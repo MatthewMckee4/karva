@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -20,6 +21,8 @@ struct JsonFileReport {
     summary: JsonFileSummary,
     missing_lines: Vec<u32>,
     excluded_lines: Vec<u32>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    contexts: BTreeMap<u32, BTreeSet<String>>,
 }
 
 #[derive(Serialize)]
@@ -40,6 +43,16 @@ struct JsonReport {
 struct JsonMeta {
     format: u32,
     version: &'static str,
+    #[serde(skip_serializing_if = "is_false")]
+    show_contexts: bool,
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if passes a reference to the field"
+)]
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 pub(super) fn build_json_report(rows: &[FileRow]) -> Result<String> {
@@ -53,16 +66,19 @@ pub(super) fn build_json_report(rows: &[FileRow]) -> Result<String> {
                     summary: json_summary(row),
                     missing_lines: missing_lines(row),
                     excluded_lines: Vec::new(),
+                    contexts: row.contexts.clone(),
                 },
             )
         })
         .collect();
 
     let totals_row = totals_row(rows);
+    let show_contexts = rows.iter().any(|row| !row.contexts.is_empty());
     let report = JsonReport {
         meta: JsonMeta {
             format: 2,
             version: "karva",
+            show_contexts,
         },
         files,
         totals: json_totals_summary(&totals_row),

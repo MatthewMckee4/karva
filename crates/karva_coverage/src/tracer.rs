@@ -5,7 +5,7 @@
 //! touched file and writes a per-worker JSON file at
 //! [`CoverageConfig::data_file`].
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
@@ -25,6 +25,9 @@ pub struct CoverageConfig {
 
     /// Per-worker data file path. The runner combines these after the run.
     pub data_file: Utf8PathBuf,
+
+    /// Whether to record the current test context for each executed line.
+    pub contexts: bool,
 }
 
 /// Path components inside a source root that suppress tracking. These match
@@ -58,6 +61,7 @@ impl CoverageSession {
             py,
             CoverageTracer {
                 roots,
+                contexts: config.contexts,
                 state: Mutex::new(TracerState::default()),
                 monitoring_tool_id: OnceLock::new(),
                 monitoring_disable: OnceLock::new(),
@@ -92,18 +96,31 @@ impl CoverageSession {
         }
 
         let borrowed = bound.borrow();
-        let executed = match borrowed.state.lock() {
-            Ok(mut state) => std::mem::take(&mut state.executed),
-            Err(poisoned) => std::mem::take(&mut poisoned.into_inner().executed),
+        let (executed, contexts) = match borrowed.state.lock() {
+            Ok(mut state) => (
+                std::mem::take(&mut state.executed),
+                std::mem::take(&mut state.contexts),
+            ),
+            Err(poisoned) => {
+                let mut state = poisoned.into_inner();
+                (
+                    std::mem::take(&mut state.executed),
+                    std::mem::take(&mut state.contexts),
+                )
+            }
         };
         let roots = borrowed.roots.clone();
         drop(borrowed);
-        save_data(&data_file, executed, &roots).map_err(|err| {
+        save_data(&data_file, executed, contexts, &roots).map_err(|err| {
             pyo3::exceptions::PyOSError::new_err(format!(
                 "failed to write coverage data to {data_file}: {err}"
             ))
         })?;
         Ok(())
+    }
+
+    pub fn set_current_context(&self, py: Python<'_>, context: Option<&str>) {
+        self.tracer.bind(py).borrow().set_current_context(context);
     }
 }
 
@@ -111,6 +128,10 @@ impl CoverageSession {
 struct TracerState {
     /// Files with the set of executed line numbers.
     executed: HashMap<PathBuf, HashSet<u32>>,
+    /// Per-line test contexts for files with executed lines.
+    contexts: HashMap<PathBuf, HashMap<u32, HashSet<String>>>,
+    /// Current test context, if `--cov-context=test` is active and a test is running.
+    current_context: Option<String>,
     /// Memoized result of [`compute_tracked_path`] per filename string.
     track_cache: HashMap<String, Option<PathBuf>>,
     /// Memoized result of [`compute_tracked_path`] per live Python code object.
@@ -131,6 +152,7 @@ struct TrackedCode {
 #[pyclass(module = "karva_coverage")]
 struct CoverageTracer {
     roots: Vec<PathBuf>,
+    contexts: bool,
     state: Mutex<TracerState>,
     monitoring_tool_id: OnceLock<u8>,
     /// Cached `sys.monitoring.DISABLE` sentinel. Populated when the
@@ -144,20 +166,23 @@ struct CoverageTracer {
 #[pymethods]
 impl CoverageTracer {
     /// `sys.monitoring` LINE event callback. Records the line if it's in a
-    /// tracked file, then always returns `sys.monitoring.DISABLE` so the
-    /// interpreter never calls us back for the same `(code, line)` pair.
+    /// tracked file, then returns `sys.monitoring.DISABLE` for normal coverage
+    /// so the interpreter never calls us back for the same `(code, line)` pair.
+    /// Context coverage keeps callbacks active so later tests can be attributed.
     fn line_cb(
         &self,
         py: Python<'_>,
         code: &Bound<'_, PyAny>,
         lineno: u32,
     ) -> PyResult<Option<Py<PyAny>>> {
-        if let Some(path) = self.tracked_code_path(code)?
-            && let Ok(mut state) = self.state.lock()
-        {
-            state.executed.entry(path).or_default().insert(lineno);
+        if let Some(path) = self.tracked_code_path(code)? {
+            self.record_line(path, lineno);
         }
-        Ok(self.monitoring_disable.get().map(|d| d.clone_ref(py)))
+        if self.contexts {
+            Ok(None)
+        } else {
+            Ok(self.monitoring_disable.get().map(|d| d.clone_ref(py)))
+        }
     }
 
     /// `sys.settrace` global trace function. Returns the per-frame
@@ -198,9 +223,7 @@ impl CoverageTracer {
             let path = slf.borrow().tracked_path(&filename);
             if let Some(path) = path {
                 let lineno: u32 = frame.getattr("f_lineno")?.extract()?;
-                if let Ok(mut state) = slf.borrow().state.lock() {
-                    state.executed.entry(path).or_default().insert(lineno);
-                }
+                slf.borrow().record_line(path, lineno);
             }
         }
         Ok(slf.getattr("local_trace")?.unbind())
@@ -208,6 +231,38 @@ impl CoverageTracer {
 }
 
 impl CoverageTracer {
+    fn set_current_context(&self, context: Option<&str>) {
+        if !self.contexts {
+            return;
+        }
+        if let Ok(mut state) = self.state.lock() {
+            state.current_context = context.map(ToOwned::to_owned);
+        }
+    }
+
+    fn record_line(&self, path: PathBuf, lineno: u32) {
+        if let Ok(mut state) = self.state.lock() {
+            if self.contexts
+                && let Some(context) = state.current_context.clone()
+            {
+                state
+                    .executed
+                    .entry(path.clone())
+                    .or_default()
+                    .insert(lineno);
+                state
+                    .contexts
+                    .entry(path)
+                    .or_default()
+                    .entry(lineno)
+                    .or_default()
+                    .insert(context);
+            } else {
+                state.executed.entry(path).or_default().insert(lineno);
+            }
+        }
+    }
+
     /// Resolve a live Python code object without extracting `co_filename`
     /// after the first line callback for that object.
     fn tracked_code_path(&self, code: &Bound<'_, PyAny>) -> PyResult<Option<PathBuf>> {
@@ -431,6 +486,7 @@ fn is_python_source(path: &Path) -> bool {
 fn save_data(
     data_file: &Utf8Path,
     mut executed: HashMap<PathBuf, HashSet<u32>>,
+    mut contexts: HashMap<PathBuf, HashMap<u32, HashSet<String>>>,
     roots: &[PathBuf],
 ) -> std::io::Result<()> {
     for path in walk_source_files(roots) {
@@ -447,11 +503,19 @@ fn save_data(
         executed_lines.sort_unstable();
         let mut executable_lines_vec: Vec<u32> = executable.into_iter().collect();
         executable_lines_vec.sort_unstable();
+        let context_lines = contexts
+            .remove(&path)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(line, _)| executed_lines.binary_search(line).is_ok())
+            .map(|(line, contexts)| (line, contexts.into_iter().collect::<BTreeSet<_>>()))
+            .collect();
         files.insert(
             path.to_string_lossy().into_owned(),
             FileEntry {
                 executable: executable_lines_vec,
                 executed: executed_lines,
+                contexts: context_lines,
             },
         );
     }
@@ -484,6 +548,7 @@ mod tests {
         Python::attach(|py| -> PyResult<()> {
             let tracer = CoverageTracer {
                 roots: vec![root],
+                contexts: false,
                 state: Mutex::new(TracerState::default()),
                 monitoring_tool_id: OnceLock::new(),
                 monitoring_disable: OnceLock::new(),
@@ -539,7 +604,8 @@ code = Code()
         let missing = dir.path().join("missing.py");
         let executed = HashMap::from([(missing, HashSet::from([1]))]);
 
-        let err = save_data(&data_file, executed, &[]).expect_err("missing source should fail");
+        let err = save_data(&data_file, executed, HashMap::new(), &[])
+            .expect_err("missing source should fail");
 
         assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
         assert!(err.to_string().contains("missing.py"), "{err}");
