@@ -49,3 +49,39 @@ impl VerbosityLevel {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verbosity_levels_map_to_tracing_filters() {
+        assert_eq!(VerbosityLevel::Default.level_filter(), LevelFilter::WARN);
+        assert_eq!(VerbosityLevel::Verbose.level_filter(), LevelFilter::INFO);
+        assert_eq!(
+            VerbosityLevel::ExtraVerbose.level_filter(),
+            LevelFilter::DEBUG
+        );
+        assert_eq!(VerbosityLevel::Trace.level_filter(), LevelFilter::TRACE);
+    }
+
+    #[test]
+    fn verbosity_levels_map_to_worker_cli_args() {
+        assert_eq!(VerbosityLevel::Default.cli_arg(), None);
+        assert_eq!(VerbosityLevel::Verbose.cli_arg(), Some("-v"));
+        assert_eq!(VerbosityLevel::ExtraVerbose.cli_arg(), Some("-vv"));
+        assert_eq!(VerbosityLevel::Trace.cli_arg(), Some("-vvv"));
+    }
+
+    #[test]
+    fn predicate_methods_match_exact_levels() {
+        assert!(VerbosityLevel::Default.is_default());
+        assert!(!VerbosityLevel::Verbose.is_default());
+
+        assert!(VerbosityLevel::ExtraVerbose.is_extra_verbose());
+        assert!(!VerbosityLevel::Trace.is_extra_verbose());
+
+        assert!(VerbosityLevel::Trace.is_trace());
+        assert!(!VerbosityLevel::ExtraVerbose.is_trace());
+    }
+}

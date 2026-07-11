@@ -24,3 +24,23 @@ impl Verbosity {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verbosity_count_maps_to_level() {
+        assert_eq!(Verbosity { verbose: 0 }.level(), VerbosityLevel::Default);
+        assert_eq!(Verbosity { verbose: 1 }.level(), VerbosityLevel::Verbose);
+        assert_eq!(
+            Verbosity { verbose: 2 }.level(),
+            VerbosityLevel::ExtraVerbose
+        );
+        assert_eq!(Verbosity { verbose: 3 }.level(), VerbosityLevel::Trace);
+        assert_eq!(
+            Verbosity { verbose: u8::MAX }.level(),
+            VerbosityLevel::Trace
+        );
+    }
+}
