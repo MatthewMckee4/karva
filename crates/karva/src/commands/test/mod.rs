@@ -1,4 +1,5 @@
 mod junit;
+mod result_report;
 mod watch;
 
 use std::collections::HashMap;
@@ -47,6 +48,8 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     let sub_command = args.sub_command.clone();
     let watch = args.watch;
     let durations = args.durations;
+    let result_output = args.result_output.clone();
+    let result_format = args.result_format.unwrap_or_default();
     let last_failed = args.last_failed;
     let partition = args.partition;
     let no_cache = args.no_cache.unwrap_or(false);
@@ -101,6 +104,13 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
 
     print_test_output(printer, start_time, &result, durations)?;
     junit::write_junit_report(project.settings().junit(), &result, project.cwd())?;
+    result_report::write_result_report(
+        result_output.as_deref(),
+        result_format,
+        &result,
+        project.cwd(),
+        start_time.elapsed(),
+    )?;
 
     if timed_out {
         print_run_timed_out(printer)?;

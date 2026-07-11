@@ -72,6 +72,19 @@ pub enum OutputFormat {
     Concise,
 }
 
+/// Machine-readable test result report format.
+#[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Default, clap::ValueEnum)]
+pub enum ResultFormat {
+    /// Write one JSON document with the full run result.
+    #[default]
+    #[value(name = "json")]
+    Json,
+
+    /// Write newline-delimited JSON events.
+    #[value(name = "jsonl")]
+    Jsonl,
+}
+
 impl From<OutputFormat> for DiagnosticFormat {
     fn from(value: OutputFormat) -> Self {
         match value {
