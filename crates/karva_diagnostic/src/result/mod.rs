@@ -1,3 +1,4 @@
+mod case;
 mod flaky;
 mod kind;
 mod output;
@@ -10,6 +11,7 @@ use ruff_db::diagnostic::Diagnostic;
 
 use crate::reporter::Reporter;
 
+pub use case::{TestCaseOutcome, TestCaseResult};
 pub use flaky::{DisplayFlakyTest, DisplayFlakyTests, FlakyTest};
 pub use kind::{IndividualTestResultKind, TestResultKind};
 pub use output::{CapturedTestOutcome, CapturedTestOutput};
@@ -35,6 +37,9 @@ pub struct TestRunResult {
 
     /// Tests that passed only after at least one retry.
     flaky_tests: Vec<FlakyTest>,
+
+    /// Final outcome for each executed test variant.
+    test_cases: Vec<TestCaseResult>,
 
     /// Captured Python stdout/stderr for individual test variants.
     captured_outputs: Vec<CapturedTestOutput>,
@@ -81,6 +86,11 @@ impl TestRunResult {
         self.stats.add(result.clone().into());
 
         let function_name = test_case_name.function_name().clone();
+        self.test_cases.push(TestCaseResult::new(
+            test_case_name,
+            TestCaseOutcome::from(&result),
+            duration,
+        ));
 
         if matches!(result, IndividualTestResultKind::Failed) {
             self.failed_tests.push(function_name.clone());
@@ -118,6 +128,11 @@ impl TestRunResult {
         self.stats.add(result.clone().into());
 
         let function_name = test_case_name.function_name().clone();
+        self.test_cases.push(TestCaseResult::new(
+            test_case_name,
+            TestCaseOutcome::from(result),
+            duration,
+        ));
 
         if matches!(result, IndividualTestResultKind::Failed) {
             self.failed_tests.push(function_name.clone());
@@ -171,6 +186,11 @@ impl TestRunResult {
     #[must_use]
     pub fn into_sorted(mut self) -> Self {
         self.diagnostics.sort_by(Diagnostic::ruff_start_ordering);
+        self.test_cases.sort_by(|a, b| {
+            a.module_name()
+                .cmp(b.module_name())
+                .then_with(|| a.name().cmp(b.name()))
+        });
         self.captured_outputs
             .sort_by(|a, b| a.test_name().cmp(b.test_name()));
         self
@@ -186,6 +206,10 @@ impl TestRunResult {
 
     pub fn flaky_tests(&self) -> &[FlakyTest] {
         &self.flaky_tests
+    }
+
+    pub fn test_cases(&self) -> &[TestCaseResult] {
+        &self.test_cases
     }
 
     pub fn captured_outputs(&self) -> &[CapturedTestOutput] {

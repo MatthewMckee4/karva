@@ -28,6 +28,8 @@ pub enum CacheFile {
     FailedTests,
     /// Per-worker JSON: list of `FlakyTest` records.
     FlakyTests,
+    /// Per-worker JSON: final result records for executed test variants.
+    TestCases,
     /// Per-worker JSON: captured Python stdout/stderr records by exact test name.
     CapturedOutput,
     /// Per-worker JSON: line-coverage data for sources tracked during the run.
@@ -51,6 +53,7 @@ impl CacheFile {
             Self::Durations => "durations.json",
             Self::FailedTests => "failed_tests.json",
             Self::FlakyTests => "flaky_tests.json",
+            Self::TestCases => "test_cases.json",
             Self::CapturedOutput => "captured_output.json",
             Self::Coverage => "coverage.json",
             Self::FailFastSignal => "fail-fast",

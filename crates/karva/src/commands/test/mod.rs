@@ -1,3 +1,4 @@
+mod junit;
 mod watch;
 
 use std::collections::HashMap;
@@ -99,6 +100,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     } = karva_runner::run_parallel_tests(&project, &config, &sub_command, printer)?;
 
     print_test_output(printer, start_time, &result, durations)?;
+    junit::write_junit_report(project.settings().junit(), &result, project.cwd())?;
 
     if timed_out {
         print_run_timed_out(printer)?;

@@ -32,6 +32,10 @@ fn show_config_default_profile() {
     omit = []
     report = "term"
 
+    [junit]
+    report-name = "karva-tests"
+    store-failure-output = true
+
     ----- stderr -----
     "#);
 }
@@ -76,6 +80,10 @@ output-format = "concise"
     include = []
     omit = []
     report = "term"
+
+    [junit]
+    report-name = "karva-tests"
+    store-failure-output = true
 
     ----- stderr -----
     "#);
@@ -122,6 +130,10 @@ output-format = "concise"
     include = []
     omit = []
     report = "term"
+
+    [junit]
+    report-name = "karva-tests"
+    store-failure-output = true
 
     ----- stderr -----
     "#);
@@ -174,6 +186,10 @@ fail-under = 90
     report = "term-missing"
     fail-under = 90.0
 
+    [junit]
+    report-name = "karva-tests"
+    store-failure-output = true
+
     ----- stderr -----
     "#);
 }
@@ -219,6 +235,10 @@ slow-timeout = 0.5
     include = []
     omit = []
     report = "term"
+
+    [junit]
+    report-name = "karva-tests"
+    store-failure-output = true
 
     [[overrides]]
     filter = "tag(network)"
