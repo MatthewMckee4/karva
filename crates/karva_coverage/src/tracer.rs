@@ -113,6 +113,13 @@ struct TracerState {
     executed: HashMap<PathBuf, HashSet<u32>>,
     /// Memoized result of [`compute_tracked_path`] per filename string.
     track_cache: HashMap<String, Option<PathBuf>>,
+    /// Memoized result of [`compute_tracked_path`] per live Python code object.
+    code_cache: HashMap<usize, TrackedCode>,
+}
+
+struct TrackedCode {
+    code: Py<PyAny>,
+    path: Option<PathBuf>,
 }
 
 /// Thread-safe because the trace callbacks fire on whichever Python thread
@@ -145,8 +152,7 @@ impl CoverageTracer {
         code: &Bound<'_, PyAny>,
         lineno: u32,
     ) -> PyResult<Option<Py<PyAny>>> {
-        let filename: String = code.getattr("co_filename")?.extract()?;
-        if let Some(path) = self.tracked_path(&filename)
+        if let Some(path) = self.tracked_code_path(code)?
             && let Ok(mut state) = self.state.lock()
         {
             state.executed.entry(path).or_default().insert(lineno);
@@ -202,6 +208,33 @@ impl CoverageTracer {
 }
 
 impl CoverageTracer {
+    /// Resolve a live Python code object without extracting `co_filename`
+    /// after the first line callback for that object.
+    fn tracked_code_path(&self, code: &Bound<'_, PyAny>) -> PyResult<Option<PathBuf>> {
+        let code_id = code.as_ptr() as usize;
+        if let Ok(state) = self.state.lock()
+            && let Some(cached) = state.code_cache.get(&code_id)
+        {
+            debug_assert!(cached.code.is(code));
+            return Ok(cached.path.clone());
+        }
+
+        let filename: String = code.getattr("co_filename")?.extract()?;
+        let path = self.tracked_path(&filename);
+
+        if let Ok(mut state) = self.state.lock() {
+            state.code_cache.insert(
+                code_id,
+                TrackedCode {
+                    code: code.clone().unbind(),
+                    path: path.clone(),
+                },
+            );
+        }
+
+        Ok(path)
+    }
+
     /// Resolve `filename` against the source roots. Returns the canonical
     /// path if the file should be tracked, or `None` otherwise. Memoized
     /// per filename string.
@@ -434,7 +467,68 @@ fn save_data(
 
 #[cfg(test)]
 mod tests {
+    use pyo3::ffi::c_str;
+    use pyo3::types::PyDict;
+
     use super::*;
+
+    #[test]
+    fn tracked_code_path_uses_code_cache_after_first_lookup() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let source = dir.path().join("module.py");
+        fs::write(&source, "x = 1\n").expect("write source");
+        let root = fs::canonicalize(dir.path()).expect("canonical root");
+        let expected = Some(fs::canonicalize(&source).expect("canonical source"));
+
+        Python::initialize();
+        Python::attach(|py| -> PyResult<()> {
+            let tracer = CoverageTracer {
+                roots: vec![root],
+                state: Mutex::new(TracerState::default()),
+                monitoring_tool_id: OnceLock::new(),
+                monitoring_disable: OnceLock::new(),
+            };
+            let locals = PyDict::new(py);
+            locals.set_item("filename", source.to_string_lossy().as_ref())?;
+            py.run(
+                c_str!(
+                    r#"
+class Code:
+    def __init__(self):
+        self.calls = 0
+
+    @property
+    def co_filename(self):
+        self.calls += 1
+        if self.calls > 1:
+            raise AssertionError("co_filename should be cached")
+        return filename
+
+code = Code()
+"#
+                ),
+                Some(&locals),
+                Some(&locals),
+            )?;
+            let code = locals.get_item("code")?.expect("code object");
+
+            assert_eq!(tracer.tracked_code_path(&code)?, expected);
+            assert_eq!(tracer.tracked_code_path(&code)?, expected);
+
+            let calls: u32 = code.getattr("calls")?.extract()?;
+            assert_eq!(calls, 1);
+
+            let state = tracer.state.lock().expect("state lock");
+            let cached = state
+                .code_cache
+                .get(&(code.as_ptr() as usize))
+                .expect("cached code");
+            assert!(cached.code.is(&code));
+
+            Ok(())
+        })
+        .expect("python assertions");
+    }
 
     #[test]
     fn save_data_reports_missing_executed_source() {
