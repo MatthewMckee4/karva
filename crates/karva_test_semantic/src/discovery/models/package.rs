@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use camino::Utf8PathBuf;
 
@@ -14,10 +14,10 @@ pub struct DiscoveredPackage {
     path: Utf8PathBuf,
 
     /// Test modules directly in this package, keyed by file path.
-    modules: HashMap<Utf8PathBuf, DiscoveredModule>,
+    modules: BTreeMap<Utf8PathBuf, DiscoveredModule>,
 
     /// Sub-packages within this package, keyed by directory path.
-    packages: HashMap<Utf8PathBuf, Self>,
+    packages: BTreeMap<Utf8PathBuf, Self>,
 
     /// Optional conftest.py module containing shared fixtures.
     configuration_module: Option<DiscoveredModule>,
@@ -31,8 +31,8 @@ impl DiscoveredPackage {
     pub(crate) fn new(path: Utf8PathBuf) -> Self {
         Self {
             path,
-            modules: HashMap::new(),
-            packages: HashMap::new(),
+            modules: BTreeMap::new(),
+            packages: BTreeMap::new(),
             configuration_module: None,
             framework_module: None,
         }
@@ -42,11 +42,11 @@ impl DiscoveredPackage {
         &self.path
     }
 
-    pub(crate) fn modules(&self) -> &HashMap<Utf8PathBuf, DiscoveredModule> {
+    pub(crate) fn modules(&self) -> &BTreeMap<Utf8PathBuf, DiscoveredModule> {
         &self.modules
     }
 
-    pub(crate) fn packages(&self) -> &HashMap<Utf8PathBuf, Self> {
+    pub(crate) fn packages(&self) -> &BTreeMap<Utf8PathBuf, Self> {
         &self.packages
     }
 
@@ -98,8 +98,18 @@ impl DiscoveredPackage {
 #[cfg(test)]
 mod tests {
     use camino::Utf8PathBuf;
+    use karva_python_semantic::ModulePath;
+
+    use crate::discovery::DiscoveredModule;
 
     use super::DiscoveredPackage;
+
+    fn module(path: &str) -> DiscoveredModule {
+        DiscoveredModule::new_with_source(
+            ModulePath::new_with_name(path, path.trim_end_matches(".py").to_string()),
+            String::new(),
+        )
+    }
 
     #[test]
     fn shrink_removes_packages_that_become_empty_after_child_shrink() {
@@ -112,5 +122,36 @@ mod tests {
         root.shrink();
 
         assert!(root.packages().is_empty());
+    }
+
+    #[test]
+    fn modules_iterate_by_path() {
+        let mut root = DiscoveredPackage::new(Utf8PathBuf::from("/project"));
+        root.add_direct_module(module("/project/test_z.py"));
+        root.add_direct_module(module("/project/test_a.py"));
+        root.add_direct_module(module("/project/test_m.py"));
+
+        let paths: Vec<_> = root.modules().keys().map(|path| path.as_str()).collect();
+
+        assert_eq!(
+            paths,
+            [
+                "/project/test_a.py",
+                "/project/test_m.py",
+                "/project/test_z.py"
+            ]
+        );
+    }
+
+    #[test]
+    fn packages_iterate_by_path() {
+        let mut root = DiscoveredPackage::new(Utf8PathBuf::from("/project"));
+        root.add_direct_subpackage(DiscoveredPackage::new(Utf8PathBuf::from("/project/z")));
+        root.add_direct_subpackage(DiscoveredPackage::new(Utf8PathBuf::from("/project/a")));
+        root.add_direct_subpackage(DiscoveredPackage::new(Utf8PathBuf::from("/project/m")));
+
+        let paths: Vec<_> = root.packages().keys().map(|path| path.as_str()).collect();
+
+        assert_eq!(paths, ["/project/a", "/project/m", "/project/z"]);
     }
 }
