@@ -7,7 +7,7 @@ pub use reporter::{DummyReporter, Reporter, TestCaseReporter};
 pub use result::{
     CapturedTestOutcome, CapturedTestOutput, DisplayFlakyTest, DisplayFlakyTests, FlakyTest,
     IndividualTestResultKind, TestCaseOutcome, TestCaseResult, TestCaseRetry, TestResultKind,
-    TestResultStats, TestRunResult,
+    TestResultStats, TestRunResult, captured_outputs_by_test,
 };
 
 #[cfg(feature = "traceback")]

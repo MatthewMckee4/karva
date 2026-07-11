@@ -4,7 +4,9 @@ use std::fmt::Write as _;
 use anyhow::{Context as _, Result};
 use camino::Utf8Path;
 use karva_cache::AggregatedResults;
-use karva_diagnostic::{CapturedTestOutput, TestCaseOutcome, TestCaseResult};
+use karva_diagnostic::{
+    CapturedTestOutput, TestCaseOutcome, TestCaseResult, captured_outputs_by_test,
+};
 use karva_metadata::JunitSettings;
 use karva_project::path::absolute;
 
@@ -31,7 +33,7 @@ pub(super) fn write_junit_report(
 }
 
 fn build_junit_xml(settings: &JunitSettings, results: &AggregatedResults) -> Result<String> {
-    let captured_outputs = captured_outputs_by_test(results);
+    let captured_outputs = captured_outputs_by_test(&results.captured_outputs);
     let suites = test_cases_by_module(&results.test_cases);
     let total_time = results
         .test_cases
@@ -164,14 +166,6 @@ fn test_cases_by_module(cases: &[TestCaseResult]) -> BTreeMap<&str, Vec<&TestCas
             .push(case);
     }
     by_module
-}
-
-fn captured_outputs_by_test(results: &AggregatedResults) -> HashMap<&str, &CapturedTestOutput> {
-    results
-        .captured_outputs
-        .iter()
-        .map(|output| (output.test_name(), output))
-        .collect()
 }
 
 fn escape_xml(value: &str) -> String {

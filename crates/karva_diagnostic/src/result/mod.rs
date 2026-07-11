@@ -14,7 +14,7 @@ use crate::reporter::Reporter;
 pub use case::{TestCaseOutcome, TestCaseResult, TestCaseRetry};
 pub use flaky::{DisplayFlakyTest, DisplayFlakyTests, FlakyTest};
 pub use kind::{IndividualTestResultKind, TestResultKind};
-pub use output::{CapturedTestOutcome, CapturedTestOutput};
+pub use output::{CapturedTestOutcome, CapturedTestOutput, captured_outputs_by_test};
 pub use stats::TestResultStats;
 
 /// Represents the result of a test run.

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use super::kind::IndividualTestResultKind;
@@ -8,6 +10,15 @@ pub struct CapturedTestOutput {
     outcome: CapturedTestOutcome,
     stdout: String,
     stderr: String,
+}
+
+pub fn captured_outputs_by_test(
+    outputs: &[CapturedTestOutput],
+) -> HashMap<&str, &CapturedTestOutput> {
+    outputs
+        .iter()
+        .map(|output| (output.test_name(), output))
+        .collect()
 }
 
 impl CapturedTestOutput {

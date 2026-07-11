@@ -1,11 +1,12 @@
-use std::collections::HashMap;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
 use camino::Utf8Path;
 use karva_cache::AggregatedResults;
 use karva_cli::ResultFormat;
-use karva_diagnostic::{CapturedTestOutput, TestCaseOutcome, TestCaseResult, TestCaseRetry};
+use karva_diagnostic::{
+    CapturedTestOutput, TestCaseOutcome, TestCaseResult, TestCaseRetry, captured_outputs_by_test,
+};
 use karva_project::path::absolute;
 use serde::Serialize;
 
@@ -104,7 +105,7 @@ struct RunReport<'a> {
 
 impl<'a> RunReport<'a> {
     fn new(results: &'a AggregatedResults, elapsed: Duration, status: RunStatus) -> Self {
-        let captured_outputs = captured_outputs_by_test(results);
+        let captured_outputs = captured_outputs_by_test(&results.captured_outputs);
         let tests = results
             .test_cases
             .iter()
@@ -263,12 +264,4 @@ struct RunFinishedEvent {
 )]
 fn is_false(value: &bool) -> bool {
     !*value
-}
-
-fn captured_outputs_by_test(results: &AggregatedResults) -> HashMap<&str, &CapturedTestOutput> {
-    results
-        .captured_outputs
-        .iter()
-        .map(|output| (output.test_name(), output))
-        .collect()
 }
