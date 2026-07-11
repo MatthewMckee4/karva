@@ -115,39 +115,25 @@ impl DiscoveredFixture {
 
         let function = py_module.getattr(stmt_function_def.name.to_string())?;
 
-        let try_karva = Self::try_from_karva_function(
-            py,
-            stmt_function_def.clone(),
-            &function,
-            module_path.clone(),
-            source_file.clone(),
-            is_generator_function,
-        );
+        if get_fixture_function_marker(&function).is_ok() {
+            return Self::try_from_pytest_function(
+                py,
+                stmt_function_def,
+                &function,
+                module_path.clone(),
+                source_file,
+                is_generator_function,
+            );
+        }
 
-        let try_karva_err = match try_karva {
-            Ok(fixture) => return Ok(fixture),
-            Err(e) => {
-                tracing::debug!("Failed to create fixture from Karva function: {}", e);
-                Some(e)
-            }
-        };
-
-        let try_pytest = Self::try_from_pytest_function(
+        Self::try_from_karva_function(
             py,
             stmt_function_def,
             &function,
             module_path.clone(),
             source_file,
             is_generator_function,
-        );
-
-        match try_pytest {
-            Ok(fixture) => Ok(fixture),
-            Err(e) => {
-                tracing::debug!("Failed to create fixture from Pytest function: {}", e);
-                Err(try_karva_err.unwrap_or(e))
-            }
-        }
+        )
     }
 
     pub(crate) fn try_from_pytest_function(
