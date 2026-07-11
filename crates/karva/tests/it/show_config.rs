@@ -1,4 +1,5 @@
 use insta_cmd::assert_cmd_snapshot;
+use karva_static::EnvVars;
 
 use crate::common::TestContext;
 
@@ -123,6 +124,50 @@ output-format = "concise"
     test-function-prefix = "check"
     try-import-fixtures = false
     retry = 3
+    no-tests = "auto"
+
+    [coverage]
+    sources = []
+    include = []
+    omit = []
+    report = "term"
+
+    [junit]
+    report-name = "karva-tests"
+    store-failure-output = true
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn show_config_profile_from_env() {
+    let context = TestContext::with_file(
+        "karva.toml",
+        r"
+[profile.fast.test]
+retry = 2
+",
+    );
+
+    assert_cmd_snapshot!(context.show_config().env(EnvVars::KARVA_PROFILE, "fast"), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    [src]
+    respect-ignore-files = true
+    include = []
+
+    [terminal]
+    output-format = "full"
+    show-python-output = false
+    status-level = "pass"
+    final-status-level = "pass"
+
+    [test]
+    test-function-prefix = "test"
+    try-import-fixtures = false
+    retry = 2
     no-tests = "auto"
 
     [coverage]
