@@ -7,7 +7,7 @@ use karva_cli::SubTestCommand;
 use karva_logging::TerminalColor;
 use karva_metadata::ProjectSettings;
 use karva_project::Project;
-use karva_static::{PythonEnvVars, WorkerEnvVars};
+use karva_static::{EnvVars, PythonEnvVars, WorkerEnvVars};
 
 use crate::partition::Partition;
 
@@ -49,6 +49,16 @@ pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize, partition: &Partiti
             spawn.num_workers.to_string(),
         )
         .env(WorkerEnvVars::KARVA_VERSION, karva_version::version());
+
+    match spawn.args.snapshot_update {
+        Some(true) => {
+            cmd.env(EnvVars::KARVA_SNAPSHOT_UPDATE, "1");
+        }
+        Some(false) => {
+            cmd.env(EnvVars::KARVA_SNAPSHOT_UPDATE, "0");
+        }
+        None => {}
+    }
 
     for path in partition.tests() {
         cmd.arg(path);

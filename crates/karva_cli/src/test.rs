@@ -36,13 +36,13 @@ pub struct SubTestCommand {
     pub test_prefix: Option<String>,
 
     /// When set, .gitignore files will not be respected.
-    #[clap(long, default_missing_value = "true", num_args=0..1, help_heading = "Filter options")]
+    #[clap(long, default_missing_value = "true", require_equals = true, num_args=0..=1, help_heading = "Filter options")]
     pub no_ignore: Option<bool>,
 
     /// When set, we will try to import functions in each test file as well as parsing the ast to find them.
     ///
     /// This is often slower, so it is not recommended for most projects.
-    #[clap(long, default_missing_value = "true", num_args=0..1, help_heading = "Filter options")]
+    #[clap(long, default_missing_value = "true", require_equals = true, num_args=0..=1, help_heading = "Filter options")]
     pub try_import_fixtures: Option<bool>,
 
     /// Filter tests using a filterset expression.
@@ -93,7 +93,7 @@ pub struct SubTestCommand {
     ///
     /// Equivalent to `--max-fail=1`. Use `--no-fail-fast` to keep running
     /// after failures.
-    #[clap(long, default_missing_value = "true", num_args=0..1, overrides_with = "no_fail_fast", help_heading = "Runner options")]
+    #[clap(long, default_missing_value = "true", require_equals = true, num_args=0..=1, overrides_with = "no_fail_fast", help_heading = "Runner options")]
     pub fail_fast: Option<bool>,
 
     /// Run every test regardless of how many fail.
@@ -131,7 +131,7 @@ pub struct SubTestCommand {
     ///
     /// When set, `karva.assert_snapshot()` will write directly to `.snap` files,
     /// accepting any changes automatically.
-    #[clap(long, default_missing_value = "true", num_args=0..1, help_heading = "Runner options")]
+    #[clap(long, default_missing_value = "true", require_equals = true, num_args=0..=1, help_heading = "Runner options")]
     pub snapshot_update: Option<bool>,
 
     /// The format to use for printing diagnostic messages.
@@ -139,7 +139,7 @@ pub struct SubTestCommand {
     pub output_format: Option<OutputFormat>,
 
     /// Show Python stdout during test execution.
-    #[clap(short = 's', long, default_missing_value = "true", num_args=0..1, help_heading = "Reporter options")]
+    #[clap(short = 's', long, default_missing_value = "true", require_equals = true, num_args=0..=1, help_heading = "Reporter options")]
     pub show_output: Option<bool>,
 
     /// Test result statuses to display during the run [default: pass]
@@ -323,7 +323,7 @@ pub struct TestCommand {
     pub termination_grace_period: Option<f64>,
 
     /// Disable parallel execution (equivalent to `--num-workers 1`)
-    #[clap(long, default_missing_value = "true", num_args=0..1, help_heading = "Runner options")]
+    #[clap(long, default_missing_value = "true", require_equals = true, num_args=0..=1, help_heading = "Runner options")]
     pub no_parallel: Option<bool>,
 
     /// Disable output capture and run tests serially.
@@ -336,7 +336,7 @@ pub struct TestCommand {
     pub no_capture: bool,
 
     /// Disable reading the karva cache for test duration history
-    #[clap(long, default_missing_value = "true", num_args=0..1, help_heading = "Runner options")]
+    #[clap(long, default_missing_value = "true", require_equals = true, num_args=0..=1, help_heading = "Runner options")]
     pub no_cache: Option<bool>,
 
     /// Re-run tests when Python source files change.
@@ -515,8 +515,53 @@ fn parse_cov_report(raw: &str) -> Result<CovReport, String> {
 #[cfg(test)]
 mod tests {
     use camino::Utf8PathBuf;
+    use clap::Parser as _;
 
-    use super::{CovReport, parse_cov_report};
+    use super::{CovReport, TestCommand, parse_cov_report};
+
+    #[test]
+    fn optional_bool_flags_accept_equals_false() {
+        let command = TestCommand::parse_from([
+            "karva-test",
+            "--no-ignore=false",
+            "--try-import-fixtures=false",
+            "--fail-fast=false",
+            "--snapshot-update=false",
+            "--show-output=false",
+            "--no-parallel=false",
+            "--no-cache=false",
+        ]);
+
+        assert_eq!(command.sub_command.no_ignore, Some(false));
+        assert_eq!(command.sub_command.try_import_fixtures, Some(false));
+        assert_eq!(command.sub_command.fail_fast, Some(false));
+        assert_eq!(command.sub_command.snapshot_update, Some(false));
+        assert_eq!(command.sub_command.show_output, Some(false));
+        assert_eq!(command.no_parallel, Some(false));
+        assert_eq!(command.no_cache, Some(false));
+    }
+
+    #[test]
+    fn optional_bool_flags_keep_bare_true_form() {
+        let command = TestCommand::parse_from([
+            "karva-test",
+            "--no-ignore",
+            "--try-import-fixtures",
+            "--fail-fast",
+            "--snapshot-update",
+            "--show-output",
+            "--no-parallel",
+            "--no-cache",
+        ]);
+
+        assert_eq!(command.sub_command.no_ignore, Some(true));
+        assert_eq!(command.sub_command.try_import_fixtures, Some(true));
+        assert_eq!(command.sub_command.fail_fast, Some(true));
+        assert_eq!(command.sub_command.snapshot_update, Some(true));
+        assert_eq!(command.sub_command.show_output, Some(true));
+        assert_eq!(command.no_parallel, Some(true));
+        assert_eq!(command.no_cache, Some(true));
+    }
 
     #[test]
     fn parse_xml_cov_report_without_path() {
