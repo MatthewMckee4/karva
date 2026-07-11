@@ -1,4 +1,5 @@
 use insta_cmd::assert_cmd_snapshot;
+use karva_static::EnvVars;
 
 use crate::common::TestContext;
 
@@ -85,6 +86,108 @@ def test_hello():
     ---
     hello world
     ");
+}
+
+#[test]
+fn test_snapshot_update_env_creates_snap_file() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_hello():
+    karva.assert_snapshot('hello world')
+        ",
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .env(EnvVars::KARVA_SNAPSHOT_UPDATE, "1"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_hello
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let content = context.read_file("snapshots/test__test_hello.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:5::test_hello
+    ---
+    hello world
+    ");
+}
+
+#[test]
+fn test_snapshot_update_false_overrides_env() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_hello():
+    karva.assert_snapshot('hello world')
+        ",
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .env(EnvVars::KARVA_SNAPSHOT_UPDATE, "1")
+            .arg("--snapshot-update=false"),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_hello
+
+    diagnostics:
+
+    error[test-failure]: Test `test_hello` failed
+     --> test.py:4:5
+      |
+    4 | def test_hello():
+      |     ^^^^^^^^^^
+      |
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot('hello world')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: New snapshot for 'test_hello'.
+          Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+          Pending file: snapshots/test__test_hello.snap.new
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let content = context.read_file("snapshots/test__test_hello.snap.new");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:5::test_hello
+    ---
+    hello world
+    ");
+    assert!(
+        !context
+            .root()
+            .join("snapshots/test__test_hello.snap")
+            .exists()
+    );
 }
 
 #[test]

@@ -64,9 +64,13 @@ karva test [OPTIONS] [PATH]...
 </dd><dt id="karva-test--cov-report"><a href="#karva-test--cov-report"><code>--cov-report</code></a> <i>type</i></dt><dd><p>Coverage report type.</p>
 <p><code>term</code> (default) prints a compact terminal table. <code>term-missing</code> extends it with a <code>Missing</code> column listing the uncovered line numbers per file. <code>xml&#91;:PATH&#93;</code>, <code>json&#91;:PATH&#93;</code>, and <code>html&#91;:DIR&#93;</code> write reports to disk.</p>
 </dd><dt id="karva-test--durations"><a href="#karva-test--durations"><code>--durations</code></a> <i>n</i></dt><dd><p>Show the N slowest tests after the run completes</p>
-</dd><dt id="karva-test--fail-fast"><a href="#karva-test--fail-fast"><code>--fail-fast</code></a></dt><dd><p>Stop scheduling new tests after the first failure.</p>
+</dd><dt id="karva-test--fail-fast"><a href="#karva-test--fail-fast"><code>--fail-fast</code></a> <i>fail-fast</i></dt><dd><p>Stop scheduling new tests after the first failure.</p>
 <p>Equivalent to <code>--max-fail=1</code>. Use <code>--no-fail-fast</code> to keep running after failures.</p>
-</dd><dt id="karva-test--filter"><a href="#karva-test--filter"><code>--filter</code></a>, <code>-E</code> <i>filter-expressions</i></dt><dd><p>Filter tests using a filterset expression.</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--filter"><a href="#karva-test--filter"><code>--filter</code></a>, <code>-E</code> <i>filter-expressions</i></dt><dd><p>Filter tests using a filterset expression.</p>
 <p>Predicates: <code>test(&lt;matcher&gt;)</code> matches the fully qualified test name; <code>tag(&lt;matcher&gt;)</code> matches any custom tag on the test.</p>
 <p>Matchers: <code>=exact</code>, <code>~substring</code>, <code>/regex/</code>, <code>#glob</code>. The default is substring for <code>test()</code> and exact for <code>tag()</code>. String bodies may be quoted (<code>&quot;...&quot;</code>) to allow spaces or reserved characters.</p>
 <p>Operators: <code>&amp;</code> / <code>and</code>, <code>|</code> / <code>or</code>, <code>not</code> / <code>!</code>, and <code>-</code> as shorthand for &quot;and not&quot;. Use parentheses for grouping. <code>and</code> binds tighter than <code>or</code>.</p>
@@ -86,16 +90,28 @@ karva test [OPTIONS] [PATH]...
 </dd><dt id="karva-test--last-failed"><a href="#karva-test--last-failed"><code>--last-failed</code></a>, <code>--lf</code></dt><dd><p>Re-run only the tests that failed in the previous run</p>
 </dd><dt id="karva-test--max-fail"><a href="#karva-test--max-fail"><code>--max-fail</code></a> <i>n</i></dt><dd><p>Stop scheduling new tests after this many failures.</p>
 <p>Accepts a positive integer such as <code>--max-fail=3</code>. <code>--max-fail=1</code> is equivalent to the legacy <code>--fail-fast</code>, and <code>--no-fail-fast</code> clears the limit. When <code>--max-fail</code> is provided alongside <code>--fail-fast</code> or <code>--no-fail-fast</code>, <code>--max-fail</code> takes precedence.</p>
-</dd><dt id="karva-test--no-cache"><a href="#karva-test--no-cache"><code>--no-cache</code></a></dt><dd><p>Disable reading the karva cache for test duration history</p>
-</dd><dt id="karva-test--no-capture"><a href="#karva-test--no-capture"><code>--no-capture</code></a></dt><dd><p>Disable output capture and run tests serially.</p>
+</dd><dt id="karva-test--no-cache"><a href="#karva-test--no-cache"><code>--no-cache</code></a> <i>no-cache</i></dt><dd><p>Disable reading the karva cache for test duration history</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--no-capture"><a href="#karva-test--no-capture"><code>--no-capture</code></a></dt><dd><p>Disable output capture and run tests serially.</p>
 <p>Lets stdout/stderr from tests flow directly to the terminal, useful when debugging with print statements or interactive debuggers. Implies <code>--show-output</code> and forces a single worker so output from concurrent tests cannot interleave.</p>
 </dd><dt id="karva-test--no-cov"><a href="#karva-test--no-cov"><code>--no-cov</code></a></dt><dd><p>Disable coverage measurement for this run.</p>
 <p>Overrides any <code>--cov</code> flag and any <code>&#91;coverage&#93; sources</code> configured in <code>karva.toml</code> / <code>pyproject.toml</code>. Useful when iterating locally without editing config.</p>
 </dd><dt id="karva-test--no-fail-fast"><a href="#karva-test--no-fail-fast"><code>--no-fail-fast</code></a></dt><dd><p>Run every test regardless of how many fail.</p>
 <p>Clears any <code>fail-fast</code> or <code>max-fail</code> value set in configuration. When <code>--max-fail</code> is provided alongside <code>--no-fail-fast</code>, <code>--max-fail</code> takes precedence.</p>
-</dd><dt id="karva-test--no-ignore"><a href="#karva-test--no-ignore"><code>--no-ignore</code></a></dt><dd><p>When set, .gitignore files will not be respected</p>
-</dd><dt id="karva-test--no-parallel"><a href="#karva-test--no-parallel"><code>--no-parallel</code></a></dt><dd><p>Disable parallel execution (equivalent to <code>--num-workers 1</code>)</p>
-</dd><dt id="karva-test--no-tests"><a href="#karva-test--no-tests"><code>--no-tests</code></a> <i>action</i></dt><dd><p>Behavior when no tests are found to run &#91;default: auto&#93;</p>
+</dd><dt id="karva-test--no-ignore"><a href="#karva-test--no-ignore"><code>--no-ignore</code></a> <i>no-ignore</i></dt><dd><p>When set, .gitignore files will not be respected</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--no-parallel"><a href="#karva-test--no-parallel"><code>--no-parallel</code></a> <i>no-parallel</i></dt><dd><p>Disable parallel execution (equivalent to <code>--num-workers 1</code>)</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--no-tests"><a href="#karva-test--no-tests"><code>--no-tests</code></a> <i>action</i></dt><dd><p>Behavior when no tests are found to run &#91;default: auto&#93;</p>
 <p>May also be set with the <code>KARVA_NO_TESTS</code> environment variable.</p><p>Possible values:</p>
 <ul>
 <li><code>auto</code>:  Automatically determine behavior: fail if no filter expressions were given, pass silently if filters were given</li>
@@ -128,12 +144,20 @@ karva test [OPTIONS] [PATH]...
 <li><code>all</code>:  Run both ignored and non-ignored tests</li>
 </ul></dd><dt id="karva-test--run-timeout"><a href="#karva-test--run-timeout"><code>--run-timeout</code></a> <i>seconds</i></dt><dd><p>Wall-clock limit for the whole run, in seconds.</p>
 <p>When the run takes longer than this duration, karva stops the remaining workers and exits with a failure status. Accepts fractional seconds such as <code>--run-timeout=1800</code> or <code>--run-timeout=0.5</code>.</p>
-</dd><dt id="karva-test--show-output"><a href="#karva-test--show-output"><code>--show-output</code></a>, <code>-s</code></dt><dd><p>Show Python stdout during test execution</p>
-</dd><dt id="karva-test--slow-timeout"><a href="#karva-test--slow-timeout"><code>--slow-timeout</code></a> <i>seconds</i></dt><dd><p>Threshold in seconds after which a test is flagged as slow.</p>
+</dd><dt id="karva-test--show-output"><a href="#karva-test--show-output"><code>--show-output</code></a>, <code>-s</code> <i>show-output</i></dt><dd><p>Show Python stdout during test execution</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--slow-timeout"><a href="#karva-test--slow-timeout"><code>--slow-timeout</code></a> <i>seconds</i></dt><dd><p>Threshold in seconds after which a test is flagged as slow.</p>
 <p>When a test takes longer than this duration, it is reported with a <code>SLOW</code> status line (gated on <code>--status-level=slow</code> or higher) and counted in the run summary. Pass a positive number such as <code>--slow-timeout=60</code> or <code>--slow-timeout=0.5</code>.</p>
-</dd><dt id="karva-test--snapshot-update"><a href="#karva-test--snapshot-update"><code>--snapshot-update</code></a></dt><dd><p>Update snapshots directly instead of creating pending <code>.snap.new</code> files.</p>
+</dd><dt id="karva-test--snapshot-update"><a href="#karva-test--snapshot-update"><code>--snapshot-update</code></a> <i>snapshot-update</i></dt><dd><p>Update snapshots directly instead of creating pending <code>.snap.new</code> files.</p>
 <p>When set, <code>karva.assert_snapshot()</code> will write directly to <code>.snap</code> files, accepting any changes automatically.</p>
-</dd><dt id="karva-test--status-level"><a href="#karva-test--status-level"><code>--status-level</code></a> <i>level</i></dt><dd><p>Test result statuses to display during the run &#91;default: pass&#93;</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--status-level"><a href="#karva-test--status-level"><code>--status-level</code></a> <i>level</i></dt><dd><p>Test result statuses to display during the run &#91;default: pass&#93;</p>
 <p>May also be set with the <code>KARVA_STATUS_LEVEL</code> environment variable.</p><p>Possible values:</p>
 <ul>
 <li><code>none</code>:  Don't display any test result lines (or the &quot;Starting&quot; header)</li>
@@ -149,9 +173,13 @@ karva test [OPTIONS] [PATH]...
 </dd><dt id="karva-test--timeout"><a href="#karva-test--timeout"><code>--timeout</code></a> <i>seconds</i></dt><dd><p>Hard per-test timeout, in seconds.</p>
 <p>Tests that run longer than this duration are killed and reported as failures. A test-level &#91;<code>@karva.tags.timeout</code>&#93; decorator overrides the default for that specific test.</p>
 <p>Accepts fractional seconds such as <code>--timeout=120</code> or <code>--timeout=0.5</code>.</p>
-</dd><dt id="karva-test--try-import-fixtures"><a href="#karva-test--try-import-fixtures"><code>--try-import-fixtures</code></a></dt><dd><p>When set, we will try to import functions in each test file as well as parsing the ast to find them.</p>
+</dd><dt id="karva-test--try-import-fixtures"><a href="#karva-test--try-import-fixtures"><code>--try-import-fixtures</code></a> <i>try-import-fixtures</i></dt><dd><p>When set, we will try to import functions in each test file as well as parsing the ast to find them.</p>
 <p>This is often slower, so it is not recommended for most projects.</p>
-</dd><dt id="karva-test--verbose"><a href="#karva-test--verbose"><code>--verbose</code></a>, <code>-v</code></dt><dd><p>Use verbose output (or <code>-vv</code> and <code>-vvv</code> for more verbose output)</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--verbose"><a href="#karva-test--verbose"><code>--verbose</code></a>, <code>-v</code></dt><dd><p>Use verbose output (or <code>-vv</code> and <code>-vvv</code> for more verbose output)</p>
 </dd><dt id="karva-test--watch"><a href="#karva-test--watch"><code>--watch</code></a></dt><dd><p>Re-run tests when Python source files change</p>
 </dd></dl>
 
