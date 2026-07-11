@@ -1785,6 +1785,59 @@ def test_2(): pass
     ");
 }
 
+#[test]
+fn test_status_level_from_env() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+def test_1(): pass
+def test_2(): pass
+",
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .env(EnvVars::KARVA_STATUS_LEVEL, "none"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn test_final_status_level_from_env() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+def test_1(): pass
+def test_2(): pass
+",
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .env(EnvVars::KARVA_FINAL_STATUS_LEVEL, "none"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test::test_1
+            PASS [TIME] test::test_2
+
+    ----- stderr -----
+    "
+    );
+}
+
 /// `-qq` is silent: even the summary line emitted by `-q` must be suppressed,
 /// so a failing run under `-qq` produces no stdout at all.
 #[test]
