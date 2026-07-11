@@ -4,6 +4,8 @@ Karva measures line coverage natively. There is no plugin to install, no `.cover
 
 The implementation runs in the test worker on top of `sys.monitoring` (Python 3.12+) or `sys.settrace` (older versions), records every executed line under the configured source roots, and prints a `Name / Stmts / Miss / Cover` table at the end of the run.
 
+Every coverage run also writes a coverage.py-compatible `.coverage` SQLite file in the project root. Tools such as `coverage html`, `coverage xml`, Codecov uploaders, IDE gutters, and `diff-cover` can consume that artifact directly.
+
 ## Quick start
 
 Pass `--cov` to measure the current working directory:
