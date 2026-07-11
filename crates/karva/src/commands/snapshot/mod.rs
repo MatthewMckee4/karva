@@ -12,7 +12,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use karva_cli::{SnapshotAction, SnapshotCommand};
 use karva_logging::{Printer, Stdout};
 use karva_project::path::absolute;
-use karva_snapshot::storage::{PendingSnapshotInfo, find_pending_snapshots};
+use karva_snapshot::storage::{
+    PendingSnapshotInfo, find_pending_snapshots, matches_snapshot_filter,
+};
 
 use crate::ExitStatus;
 use crate::utils::cwd;
@@ -94,49 +96,5 @@ fn matches_filter(snapshot_path: &Utf8Path, resolved_filters: &[Utf8PathBuf]) ->
     resolved_filters.is_empty()
         || resolved_filters
             .iter()
-            .any(|filter| matches_snapshot_path(snapshot_path, filter))
-}
-
-fn matches_snapshot_path(snapshot_path: &Utf8Path, filter: &Utf8Path) -> bool {
-    matches_path(snapshot_path, filter)
-        || source_path_for_snapshot(snapshot_path)
-            .is_some_and(|source| matches_path(&source, filter))
-}
-
-fn matches_path(path: &Utf8Path, filter: &Utf8Path) -> bool {
-    path.starts_with(filter) || matches_snapshot_file_stem(path, filter)
-}
-
-fn matches_snapshot_file_stem(path: &Utf8Path, filter: &Utf8Path) -> bool {
-    if path.parent() != filter.parent() {
-        return false;
-    }
-
-    let Some(file_name) = path.file_name() else {
-        return false;
-    };
-    let Some(filter_name) = filter.file_name() else {
-        return false;
-    };
-    let Some(rest) = file_name.strip_prefix(filter_name) else {
-        return false;
-    };
-
-    rest.starts_with("__") || rest.starts_with(".snap")
-}
-
-fn source_path_for_snapshot(snapshot_path: &Utf8Path) -> Option<Utf8PathBuf> {
-    let snapshots_dir = snapshot_path.parent()?;
-    if snapshots_dir.file_name()? != "snapshots" {
-        return None;
-    }
-
-    let file_name = snapshot_path.file_name()?;
-    let snapshot_stem = file_name
-        .strip_suffix(".snap.new")
-        .or_else(|| file_name.strip_suffix(".snap"))?;
-    let (module_name, _) = snapshot_stem.split_once("__")?;
-    let source_dir = snapshots_dir.parent()?;
-
-    Some(source_dir.join(format!("{module_name}.py")))
+            .any(|filter| matches_snapshot_filter(snapshot_path, filter))
 }
