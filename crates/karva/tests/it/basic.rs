@@ -2763,6 +2763,7 @@ fn test_no_subcommand_prints_help() {
       snapshot     Manage snapshots created by `karva.assert_snapshot()`
       cache        Manage the karva cache
       show-config  Print the resolved configuration karva would run with
+      usage        Print concise usage guidance for automation and coding agents
       version      Display Karva's version
       help         Print this message or the help of the given subcommand(s)
 

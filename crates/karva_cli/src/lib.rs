@@ -49,6 +49,9 @@ pub enum Command {
     /// Print the resolved configuration karva would run with.
     ShowConfig(ShowConfigCommand),
 
+    /// Print concise usage guidance for automation and coding agents.
+    Usage,
+
     /// Display Karva's version
     Version,
 }

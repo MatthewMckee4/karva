@@ -41,6 +41,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         Command::ShowConfig(show_config_args) => {
             commands::show_config::show_config(show_config_args)
         }
+        Command::Usage => commands::usage::usage().map(|()| ExitStatus::Success),
         Command::Version => commands::version::version().map(|()| ExitStatus::Success),
     }
 }

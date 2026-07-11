@@ -16,5 +16,6 @@ mod partition;
 mod run_ignored;
 mod run_timeout;
 mod show_config;
+mod usage;
 mod version;
 mod watch;

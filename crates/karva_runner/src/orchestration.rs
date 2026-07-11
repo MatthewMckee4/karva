@@ -231,6 +231,10 @@ impl WorkerManager {
         if self.workers.is_empty() {
             return;
         }
+        self.reap_finished(false);
+        if self.workers.is_empty() {
+            return;
+        }
 
         let processes: Vec<_> = self
             .workers
