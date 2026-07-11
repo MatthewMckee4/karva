@@ -403,8 +403,7 @@ fn write_durations_block(
         writeln!(stdout)?;
     }
 
-    let mut sorted: Vec<_> = test_durations.iter().collect();
-    sorted.sort_by(|a, b| b.1.cmp(a.1));
+    let sorted = sorted_test_durations(test_durations);
     let count = n.min(sorted.len());
 
     writeln!(stdout, "{count} slowest tests:")?;
@@ -420,4 +419,36 @@ fn write_durations_block(
     // last duration line.
     writeln!(stdout)?;
     Ok(())
+}
+
+fn sorted_test_durations(test_durations: &HashMap<String, Duration>) -> Vec<(&String, &Duration)> {
+    let mut sorted: Vec<_> = test_durations.iter().collect();
+    sorted.sort_by(|(a_name, a_duration), (b_name, b_duration)| {
+        b_duration.cmp(a_duration).then_with(|| a_name.cmp(b_name))
+    });
+    sorted
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::time::Duration;
+
+    use super::sorted_test_durations;
+
+    #[test]
+    fn sorted_test_durations_breaks_ties_by_name() {
+        let durations = HashMap::from([
+            ("test_b".to_string(), Duration::from_millis(10)),
+            ("test_slow".to_string(), Duration::from_millis(20)),
+            ("test_a".to_string(), Duration::from_millis(10)),
+        ]);
+
+        let names: Vec<_> = sorted_test_durations(&durations)
+            .into_iter()
+            .map(|(name, _)| name.as_str())
+            .collect();
+
+        assert_eq!(names, ["test_slow", "test_a", "test_b"]);
+    }
 }
