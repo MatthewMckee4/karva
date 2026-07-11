@@ -403,7 +403,6 @@ impl TestCommand {
 
 impl SubTestCommand {
     pub fn into_options(self) -> Options {
-        let cov_report = self.cov_report.clone();
         // `--no-fail-fast` forces `fail_fast = false` and clears any
         // `max-fail` limit from config. `overrides_with` guarantees
         // `--fail-fast` and `--no-fail-fast` cannot both be active.
@@ -419,6 +418,13 @@ impl SubTestCommand {
             (None, true) => Some(MaxFail::unlimited()),
             (None, false) => None,
         };
+
+        let coverage_report_path = self.cov_report.as_ref().and_then(|report| match report {
+            CovReport::Xml { path } | CovReport::Json { path } | CovReport::Html { path } => {
+                path.as_ref().map(ToString::to_string)
+            }
+            CovReport::Term | CovReport::TermMissing => None,
+        });
 
         Options {
             src: Some(SrcOptions {
@@ -448,16 +454,11 @@ impl SubTestCommand {
                 termination_grace_period: None,
             }),
             coverage: Some(CoverageOptions {
-                sources: (!self.cov.is_empty()).then(|| self.cov.clone()),
-                include: (!self.cov_include.is_empty()).then(|| self.cov_include.clone()),
-                omit: (!self.cov_omit.is_empty()).then(|| self.cov_omit.clone()),
-                report: cov_report.clone().map(Into::into),
-                report_path: cov_report.as_ref().and_then(|report| match report {
-                    CovReport::Xml { path }
-                    | CovReport::Json { path }
-                    | CovReport::Html { path } => path.as_ref().map(ToString::to_string),
-                    CovReport::Term | CovReport::TermMissing => None,
-                }),
+                sources: (!self.cov.is_empty()).then_some(self.cov),
+                include: (!self.cov_include.is_empty()).then_some(self.cov_include),
+                omit: (!self.cov_omit.is_empty()).then_some(self.cov_omit),
+                report: self.cov_report.map(Into::into),
+                report_path: coverage_report_path,
                 branch: self.cov_branch.then_some(true),
                 fail_under: self.cov_fail_under.map(CovFailUnder),
                 disabled: self.no_cov.then_some(true),
