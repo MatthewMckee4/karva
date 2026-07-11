@@ -222,33 +222,23 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
 
     if no_tests_collected(&result) {
         let has_filters = !sub_command.filter_expressions.is_empty();
-        match project.settings().test().no_tests {
-            NoTestsMode::Pass => {
-                let exit_status = ExitStatus::Success;
-                write_result_report(exit_status)?;
-                return Ok(exit_status);
-            }
-            NoTestsMode::Auto if has_filters => {
-                let exit_status = ExitStatus::Success;
-                write_result_report(exit_status)?;
-                return Ok(exit_status);
-            }
+        let exit_status = match project.settings().test().no_tests {
+            NoTestsMode::Pass => ExitStatus::Success,
+            NoTestsMode::Auto if has_filters => ExitStatus::Success,
             NoTestsMode::Warn => {
                 let mut stdout = printer.stream_for_message().lock();
                 writeln!(stdout, "warning: no tests to run")?;
-                let exit_status = ExitStatus::Success;
-                write_result_report(exit_status)?;
-                return Ok(exit_status);
+                ExitStatus::Success
             }
             NoTestsMode::Auto | NoTestsMode::Fail => {
                 let mut stdout = printer.stream_for_message().lock();
                 writeln!(stdout, "error: no tests to run")?;
                 writeln!(stdout, "(hint: use `--no-tests` to customize)")?;
-                let exit_status = ExitStatus::Failure;
-                write_result_report(exit_status)?;
-                return Ok(exit_status);
+                ExitStatus::Failure
             }
-        }
+        };
+        write_result_report(exit_status)?;
+        return Ok(exit_status);
     }
 
     let exit_status = if result.stats.is_success()
