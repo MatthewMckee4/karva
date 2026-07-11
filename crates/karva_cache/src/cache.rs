@@ -256,8 +256,20 @@ fn list_subdirs_with_prefix(parent: &Utf8Path, prefix: &str) -> Result<Vec<Utf8P
 /// Returns sorted `worker-*` directories within a run directory.
 fn list_worker_dirs(run_dir: &Utf8Path) -> Result<Vec<Utf8PathBuf>> {
     let mut dirs = list_subdirs_with_prefix(run_dir, WORKER_PREFIX)?;
-    dirs.sort();
+    dirs.sort_by(|a, b| {
+        worker_dir_sort_key(a)
+            .cmp(&worker_dir_sort_key(b))
+            .then_with(|| a.cmp(b))
+    });
     Ok(dirs)
+}
+
+fn worker_dir_sort_key(path: &Utf8Path) -> (bool, usize) {
+    worker_dir_id(path).map_or((true, usize::MAX), |id| (false, id))
+}
+
+fn worker_dir_id(path: &Utf8Path) -> Option<usize> {
+    path.file_name()?.strip_prefix(WORKER_PREFIX)?.parse().ok()
 }
 
 /// Returns `run-*` directory names sorted chronologically by their parsed timestamp.
@@ -417,6 +429,31 @@ mod tests {
 
         assert_eq!(results.stats.total(), 0);
         assert!(results.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn list_worker_dirs_sorts_by_numeric_worker_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let run_dir = Utf8PathBuf::try_from(tmp.path().join("run-1")).unwrap();
+
+        for name in ["worker-10", "worker-2", "worker-old", "worker-1"] {
+            fs::create_dir_all(run_dir.join(name)).unwrap();
+        }
+
+        let names: Vec<_> = list_worker_dirs(&run_dir)
+            .unwrap()
+            .into_iter()
+            .filter_map(|path| path.file_name().map(str::to_string))
+            .collect();
+
+        assert_debug_snapshot!(names, @r#"
+        [
+            "worker-1",
+            "worker-2",
+            "worker-10",
+            "worker-old",
+        ]
+        "#);
     }
 
     #[test]
