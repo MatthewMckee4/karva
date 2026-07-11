@@ -75,6 +75,12 @@ karva test --cov=src --cov-report=json
 karva test --cov=src --cov-report=json:build/coverage.json
 ```
 
+Pass `--cov-context=test` with JSON reports to include a `contexts` map from executed source lines to the qualified test names that covered them:
+
+```bash
+karva test --cov=src --cov-context=test --cov-report=json
+```
+
 `--cov-report=html[:DIR]` writes a simple browsable HTML report. If `DIR` is omitted, karva writes `htmlcov/` in the project root:
 
 ```bash

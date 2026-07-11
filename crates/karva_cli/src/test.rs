@@ -196,6 +196,18 @@ pub struct SubTestCommand {
     )]
     pub cov_include: Vec<String>,
 
+    /// Record per-test coverage contexts.
+    ///
+    /// Currently supports `test`, which records the qualified test name for
+    /// each line executed while that test is running. Contexts are emitted in
+    /// JSON coverage reports.
+    #[clap(
+        long = "cov-context",
+        value_name = "CONTEXT",
+        help_heading = "Coverage options"
+    )]
+    pub cov_context: Option<crate::CovContext>,
+
     /// Disable coverage measurement for this run.
     ///
     /// Overrides any `--cov` flag and any `[coverage] sources` configured in

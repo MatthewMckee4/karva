@@ -138,6 +138,11 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
         cli_args.push(format!("--cov={source}"));
     }
 
+    if let Some(context) = args.cov_context {
+        cli_args.push("--cov-context".to_string());
+        cli_args.push(context.as_str().to_string());
+    }
+
     for ovr in settings.overrides() {
         let json = serde_json::json!({
             "filter": ovr.filter.as_str(),

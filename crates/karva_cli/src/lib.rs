@@ -11,7 +11,7 @@ mod test;
 mod verbosity;
 
 pub use cache::{CacheAction, CacheCommand};
-pub use enums::{CovReport, NoTests, OutputFormat, RunIgnored};
+pub use enums::{CovContext, CovReport, NoTests, OutputFormat, RunIgnored};
 pub use partition::PartitionSelection;
 pub use show_config::ShowConfigCommand;
 pub use snapshot::{

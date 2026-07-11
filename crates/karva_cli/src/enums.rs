@@ -102,6 +102,21 @@ impl From<CovReport> for karva_metadata::CovReport {
     }
 }
 
+/// Coverage context selection parsed from `--cov-context`.
+#[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum CovContext {
+    /// Record the current test name for each covered line.
+    Test,
+}
+
+impl CovContext {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Test => "test",
+        }
+    }
+}
+
 /// Whether to run ignored/skipped tests.
 #[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, clap::ValueEnum)]
 pub enum RunIgnored {

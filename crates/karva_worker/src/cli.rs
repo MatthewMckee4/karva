@@ -230,6 +230,7 @@ fn worker_coverage_config(
     Ok(Some(karva_test_semantic::CoverageConfig {
         sources: sub_command.cov.clone(),
         data_file,
+        contexts: sub_command.cov_context == Some(karva_cli::CovContext::Test),
     }))
 }
 
@@ -280,5 +281,23 @@ mod tests {
 
         assert_eq!(coverage.sources, vec![String::new(), "pkg".to_string()]);
         assert_eq!(coverage.data_file, data_file);
+        assert!(!coverage.contexts);
+    }
+
+    #[test]
+    fn coverage_config_preserves_context_mode() {
+        let data_file = Utf8PathBuf::from(".coverage.worker-0");
+        let sub_command = SubTestCommand {
+            cov: vec!["pkg".to_string()],
+            cov_context: Some(karva_cli::CovContext::Test),
+            cov_data_file: Some(data_file),
+            ..SubTestCommand::default()
+        };
+
+        let coverage = worker_coverage_config(&sub_command)
+            .expect("coverage config")
+            .expect("coverage should be enabled");
+
+        assert!(coverage.contexts);
     }
 }

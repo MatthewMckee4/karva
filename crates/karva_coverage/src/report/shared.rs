@@ -10,6 +10,7 @@ use crate::data::WorkerFile;
 pub(super) struct CombinedFile {
     executable: BTreeSet<u32>,
     executed: BTreeSet<u32>,
+    contexts: BTreeMap<u32, BTreeSet<String>>,
 }
 
 pub(super) struct FileRow {
@@ -21,6 +22,7 @@ pub(super) struct FileRow {
     pub missing: String,
     pub executable: Vec<u32>,
     pub executed: Vec<u32>,
+    pub contexts: BTreeMap<u32, BTreeSet<String>>,
 }
 
 pub(super) fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String, CombinedFile>> {
@@ -37,6 +39,9 @@ pub(super) fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String,
             let bucket = combined.entry(filename).or_default();
             bucket.executable.extend(file_entry.executable);
             bucket.executed.extend(file_entry.executed);
+            for (line, contexts) in file_entry.contexts {
+                bucket.contexts.entry(line).or_default().extend(contexts);
+            }
         }
     }
 
@@ -76,6 +81,7 @@ pub(super) fn build_rows(
                 missing,
                 executable,
                 executed,
+                contexts: data.contexts.clone(),
             }
         })
         .collect()
@@ -111,6 +117,7 @@ pub(super) fn totals_row(rows: &[FileRow]) -> FileRow {
         missing: collapse_ranges(&missing.iter().copied().collect()),
         executable: Vec::new(),
         executed: Vec::new(),
+        contexts: BTreeMap::new(),
     }
 }
 
@@ -259,6 +266,39 @@ mod tests {
     }
 
     #[test]
+    fn combine_merges_contexts_for_same_line() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let first = dir.path().join("worker-0.json");
+        let second = dir.path().join("worker-1.json");
+        fs::write(
+            &first,
+            r#"{"files":{"/project/src/app.py":{"executable":[1,2],"executed":[2],"contexts":{"2":["test_a"]}}}}"#,
+        )
+        .expect("write first worker file");
+        fs::write(
+            &second,
+            r#"{"files":{"/project/src/app.py":{"executable":[1,2],"executed":[2],"contexts":{"2":["test_b"]}}}}"#,
+        )
+        .expect("write second worker file");
+
+        let first = camino::Utf8PathBuf::from_path_buf(first).expect("utf8 path");
+        let second = camino::Utf8PathBuf::from_path_buf(second).expect("utf8 path");
+        let combined = combine(&[first, second]).expect("combine coverage files");
+
+        assert_eq!(
+            combined
+                .get("/project/src/app.py")
+                .expect("combined file")
+                .contexts
+                .get(&2),
+            Some(&BTreeSet::from([
+                "test_a".to_string(),
+                "test_b".to_string()
+            ]))
+        );
+    }
+
+    #[test]
     #[cfg(windows)]
     fn simplify_path_strips_windows_verbatim_prefix() {
         assert_eq!(
@@ -289,6 +329,7 @@ mod tests {
             missing: String::new(),
             executable: Vec::new(),
             executed: Vec::new(),
+            contexts: BTreeMap::new(),
         };
 
         assert_eq!(
