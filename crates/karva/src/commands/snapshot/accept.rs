@@ -9,8 +9,7 @@ pub fn accept(filter_paths: &[String]) -> Result<ExitStatus> {
     let Some((mut stdout, filtered)) = pending_setup(filter_paths)? else {
         return Ok(ExitStatus::Success);
     };
-    let refs: Vec<_> = filtered.iter().collect();
-    karva_snapshot::storage::accept_pending_batch(&refs)?;
+    karva_snapshot::storage::accept_pending_batch(&filtered)?;
     for info in &filtered {
         writeln!(stdout, "Accepted: {}", info.pending_path)?;
     }

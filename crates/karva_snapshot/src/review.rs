@@ -182,8 +182,7 @@ pub fn run_review(root: &Utf8Path, resolved_filters: &[Utf8PathBuf]) -> io::Resu
                     break;
                 }
                 ReviewAction::AcceptAll => {
-                    let to_accept: Vec<&PendingSnapshotInfo> = filtered[i..].iter().collect();
-                    accept_pending_batch(&to_accept)?;
+                    accept_pending_batch(&filtered[i..])?;
                     for item in &filtered[i..] {
                         summary.accepted.push(item.pending_path.to_string());
                     }
