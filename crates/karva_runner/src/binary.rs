@@ -48,8 +48,8 @@ fn construct_binary_path(venv_root: &Utf8Path, binary_name: &str) -> Utf8PathBuf
 fn venv_binary_at(venv_root: &Utf8Path, binary_name: &str) -> Option<Utf8PathBuf> {
     let binary_path = construct_binary_path(venv_root, binary_name);
     match binary_path.try_exists() {
-        Ok(true) => Some(binary_path),
-        Ok(false) => None,
+        Ok(true) if binary_path.is_file() => Some(binary_path),
+        Ok(_) => None,
         Err(err) => {
             tracing::warn!(path = %binary_path, "Failed to inspect virtualenv binary: {err}");
             None
@@ -109,5 +109,15 @@ mod tests {
         std::fs::write(&binary, "").expect("write binary");
 
         assert_eq!(venv_binary_at(venv, "karva-worker"), Some(binary));
+    }
+
+    #[test]
+    fn virtualenv_binary_ignores_directory_candidate() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let venv = Utf8Path::from_path(tempdir.path()).expect("utf8 tempdir");
+        let binary = construct_binary_path(venv, "karva-worker");
+        std::fs::create_dir_all(&binary).expect("create directory candidate");
+
+        assert_eq!(venv_binary_at(venv, "karva-worker"), None);
     }
 }
