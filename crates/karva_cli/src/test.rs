@@ -433,6 +433,7 @@ impl SubTestCommand {
                 fail_under: self.cov_fail_under.map(CovFailUnder),
                 disabled: self.no_cov.then_some(true),
             }),
+            junit: None,
             overrides: self.override_json,
         }
     }

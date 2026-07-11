@@ -10,6 +10,7 @@ mod discovery;
 mod durations;
 mod extensions;
 mod filterset;
+mod junit;
 mod last_failed;
 mod partition;
 mod run_ignored;

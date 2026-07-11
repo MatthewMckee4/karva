@@ -180,6 +180,78 @@ sources = ["src"]
 
 ---
 
+## `junit`
+
+### `path`
+
+Output path for the `JUnit` XML report.
+
+When unset, no `JUnit` report is written.
+
+**Default value**: `null`
+
+**Type**: `path`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.junit]
+path = "reports/test-results.xml"
+```
+
+---
+
+### `report-name`
+
+Name of the top-level `JUnit` test suite collection.
+
+**Default value**: `"karva-tests"`
+
+**Type**: `string`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.junit]
+report-name = "karva-tests"
+```
+
+---
+
+### `store-failure-output`
+
+Whether to include captured stdout and stderr for failing tests.
+
+**Default value**: `true`
+
+**Type**: `true | false`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.junit]
+store-failure-output = true
+```
+
+---
+
+### `store-success-output`
+
+Whether to include captured stdout and stderr for passing tests.
+
+**Default value**: `false`
+
+**Type**: `true | false`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.junit]
+store-success-output = true
+```
+
+---
+
 ## `src`
 
 ### `include`

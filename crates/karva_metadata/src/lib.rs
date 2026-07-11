@@ -12,14 +12,14 @@ mod settings;
 
 pub use max_fail::MaxFail;
 pub use options::{
-    Config, CovReport, CoverageOptions, DEFAULT_PROFILE, IncompatibleVersionError, Options,
-    OutputFormat, OverrideOptions, ProjectOptionsOverrides, SrcOptions, TerminalOptions,
+    Config, CovReport, CoverageOptions, DEFAULT_PROFILE, IncompatibleVersionError, JunitOptions,
+    Options, OutputFormat, OverrideOptions, ProjectOptionsOverrides, SrcOptions, TerminalOptions,
     TestOptions, UnknownProfile,
 };
 pub use pyproject::{PyProject, PyProjectError};
 pub use settings::{
-    CovFailUnder, CoverageSettings, NoTestsMode, OverrideSettings, ProjectSettings, RunIgnoredMode,
-    RunTimeoutSecs, SlowTimeoutSecs, TestTimeoutSecs,
+    CovFailUnder, CoverageSettings, JunitSettings, NoTestsMode, OverrideSettings, ProjectSettings,
+    RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs, TestTimeoutSecs,
 };
 
 use crate::options::KarvaTomlError;

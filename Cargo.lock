@@ -1066,6 +1066,7 @@ dependencies = [
  "karva_cache",
  "karva_cli",
  "karva_coverage",
+ "karva_diagnostic",
  "karva_logging",
  "karva_metadata",
  "karva_project",

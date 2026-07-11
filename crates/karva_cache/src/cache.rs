@@ -6,7 +6,8 @@ use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use karva_diagnostic::{
-    CapturedTestOutput, FlakyTest, TestResultKind, TestResultStats, TestRunResult,
+    CapturedTestOutput, FlakyTest, TestCaseOutcome, TestCaseResult, TestResultKind,
+    TestResultStats, TestRunResult,
 };
 use ruff_db::diagnostic::DisplayDiagnosticConfig;
 use serde::{Deserialize, Serialize};
@@ -37,6 +38,7 @@ pub struct AggregatedResults {
     pub diagnostics: String,
     pub failed_tests: Vec<String>,
     pub flaky_tests: Vec<FlakyTest>,
+    pub test_cases: Vec<TestCaseResult>,
     pub captured_outputs: Vec<CapturedTestOutput>,
     pub durations: HashMap<String, Duration>,
 }
@@ -48,6 +50,11 @@ impl AggregatedResults {
             .map_or_else(|| name.to_string(), |(base, _)| base.to_string());
         self.stats.add(TestResultKind::Failed);
         self.failed_tests.push(function_name.clone());
+        self.test_cases.push(TestCaseResult::from_display_name(
+            name,
+            TestCaseOutcome::Failed,
+            duration,
+        ));
         self.durations.insert(function_name, duration);
     }
 }
@@ -156,6 +163,7 @@ impl RunCache {
             .collect();
         write_json_if_nonempty(&worker_dir, CacheFile::FailedTests, &failed_names)?;
         write_json_if_nonempty(&worker_dir, CacheFile::FlakyTests, result.flaky_tests())?;
+        write_json_if_nonempty(&worker_dir, CacheFile::TestCases, result.test_cases())?;
         write_json_if_nonempty(
             &worker_dir,
             CacheFile::CapturedOutput,
@@ -182,6 +190,10 @@ fn read_worker_results(worker_dir: &Utf8Path, results: &mut AggregatedResults) -
 
     if let Some(flaky) = read_json::<Vec<FlakyTest>>(worker_dir, CacheFile::FlakyTests)? {
         results.flaky_tests.extend(flaky);
+    }
+
+    if let Some(cases) = read_json::<Vec<TestCaseResult>>(worker_dir, CacheFile::TestCases)? {
+        results.test_cases.extend(cases);
     }
 
     if let Some(outputs) =

@@ -155,6 +155,7 @@ pub struct ProjectSettings {
     pub(crate) terminal: TerminalSettings,
     pub(crate) test: TestSettings,
     pub(crate) coverage: CoverageSettings,
+    pub(crate) junit: JunitSettings,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) overrides: Vec<OverrideSettings>,
 }
@@ -194,6 +195,10 @@ impl ProjectSettings {
 
     pub fn coverage(&self) -> &CoverageSettings {
         &self.coverage
+    }
+
+    pub fn junit(&self) -> &JunitSettings {
+        &self.junit
     }
 
     pub fn max_fail(&self) -> MaxFail {
@@ -306,6 +311,28 @@ pub struct CoverageSettings {
     /// exits with a non-zero status even if every test passed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fail_under: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct JunitSettings {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    pub report_name: String,
+    #[serde(skip_serializing_if = "is_false")]
+    pub store_success_output: bool,
+    pub store_failure_output: bool,
+}
+
+impl Default for JunitSettings {
+    fn default() -> Self {
+        Self {
+            path: None,
+            report_name: "karva-tests".to_string(),
+            store_success_output: false,
+            store_failure_output: true,
+        }
+    }
 }
 
 #[expect(

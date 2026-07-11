@@ -15,8 +15,9 @@ pub use overrides::ProjectOptionsOverrides;
 use crate::filter::{FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
 use crate::settings::{
-    CovFailUnder, CoverageSettings, NoTestsMode, OverrideSettings, ProjectSettings, RunIgnoredMode,
-    RunTimeoutSecs, SlowTimeoutSecs, SrcSettings, TerminalSettings, TestSettings, TestTimeoutSecs,
+    CovFailUnder, CoverageSettings, JunitSettings, NoTestsMode, OverrideSettings, ProjectSettings,
+    RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs, SrcSettings, TerminalSettings, TestSettings,
+    TestTimeoutSecs,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata)]
@@ -34,6 +35,9 @@ pub struct Options {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option_group]
     pub coverage: Option<CoverageOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option_group]
+    pub junit: Option<JunitOptions>,
 
     /// Per-test configuration overrides.
     ///
@@ -52,6 +56,7 @@ impl Combine for Options {
         Combine::combine_with(&mut self.terminal, other.terminal);
         Combine::combine_with(&mut self.test, other.test);
         Combine::combine_with(&mut self.coverage, other.coverage);
+        Combine::combine_with(&mut self.junit, other.junit);
         // Overrides obey "first match wins"; higher-precedence entries
         // (i.e. those from `self`) must come first, so prepend rather
         // than using the default `Vec::combine_with` which appends.
@@ -66,6 +71,7 @@ impl Options {
             src: self.src.clone().unwrap_or_default().to_settings(),
             test: self.test.clone().unwrap_or_default().to_settings(),
             coverage: self.coverage.clone().unwrap_or_default().to_settings(),
+            junit: self.junit.clone().unwrap_or_default().to_settings(),
             overrides: self
                 .overrides
                 .iter()
@@ -561,6 +567,72 @@ impl CoverageOptions {
             report_path: self.report_path.clone(),
             branch: self.branch.unwrap_or_default(),
             fail_under: self.fail_under.map(|t| t.0),
+        }
+    }
+}
+
+#[derive(
+    Debug, Default, Clone, Eq, PartialEq, Combine, Serialize, Deserialize, OptionsMetadata,
+)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct JunitOptions {
+    /// Output path for the `JUnit` XML report.
+    ///
+    /// When unset, no `JUnit` report is written.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"null"#,
+        value_type = r#"path"#,
+        example = r#"
+            path = "reports/test-results.xml"
+        "#
+    )]
+    pub path: Option<String>,
+
+    /// Name of the top-level `JUnit` test suite collection.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#""karva-tests""#,
+        value_type = r#"string"#,
+        example = r#"
+            report-name = "karva-tests"
+        "#
+    )]
+    pub report_name: Option<String>,
+
+    /// Whether to include captured stdout and stderr for passing tests.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"false"#,
+        value_type = r#"true | false"#,
+        example = r#"
+            store-success-output = true
+        "#
+    )]
+    pub store_success_output: Option<bool>,
+
+    /// Whether to include captured stdout and stderr for failing tests.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"true"#,
+        value_type = r#"true | false"#,
+        example = r#"
+            store-failure-output = true
+        "#
+    )]
+    pub store_failure_output: Option<bool>,
+}
+
+impl JunitOptions {
+    pub fn to_settings(&self) -> JunitSettings {
+        JunitSettings {
+            path: self.path.clone(),
+            report_name: self
+                .report_name
+                .clone()
+                .unwrap_or_else(|| "karva-tests".to_string()),
+            store_success_output: self.store_success_output.unwrap_or_default(),
+            store_failure_output: self.store_failure_output.unwrap_or(true),
         }
     }
 }
@@ -1117,6 +1189,39 @@ report-path = "build/coverage.xml"
                 branch: None,
                 fail_under: None,
                 disabled: None,
+            },
+        )
+        "#);
+    }
+
+    #[test]
+    fn parse_junit_section() {
+        let toml = r#"
+[profile.ci.junit]
+path = "reports/test-results.xml"
+report-name = "karva-ci"
+store-success-output = true
+store-failure-output = false
+"#;
+        let resolved = Config::from_toml_str(toml)
+            .expect("parse")
+            .resolve_profile(Some("ci"))
+            .expect("resolves");
+        assert_debug_snapshot!(resolved.junit, @r#"
+        Some(
+            JunitOptions {
+                path: Some(
+                    "reports/test-results.xml",
+                ),
+                report_name: Some(
+                    "karva-ci",
+                ),
+                store_success_output: Some(
+                    true,
+                ),
+                store_failure_output: Some(
+                    false,
+                ),
             },
         )
         "#);
