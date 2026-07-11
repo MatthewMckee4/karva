@@ -67,11 +67,11 @@ impl Combine for Options {
 impl Options {
     pub fn to_settings(&self) -> ProjectSettings {
         ProjectSettings {
-            terminal: self.terminal.clone().unwrap_or_default().to_settings(),
-            src: self.src.clone().unwrap_or_default().to_settings(),
-            test: self.test.clone().unwrap_or_default().to_settings(),
-            coverage: self.coverage.clone().unwrap_or_default().to_settings(),
-            junit: self.junit.clone().unwrap_or_default().to_settings(),
+            terminal: settings_or_default(self.terminal.as_ref(), TerminalOptions::to_settings),
+            src: settings_or_default(self.src.as_ref(), SrcOptions::to_settings),
+            test: settings_or_default(self.test.as_ref(), TestOptions::to_settings),
+            coverage: settings_or_default(self.coverage.as_ref(), CoverageOptions::to_settings),
+            junit: settings_or_default(self.junit.as_ref(), JunitOptions::to_settings),
             overrides: self
                 .overrides
                 .iter()
@@ -79,6 +79,10 @@ impl Options {
                 .collect(),
         }
     }
+}
+
+fn settings_or_default<T, U: Default>(options: Option<&T>, to_settings: fn(&T) -> U) -> U {
+    options.map_or_else(U::default, to_settings)
 }
 
 /// A single per-test override entry.
