@@ -278,7 +278,12 @@ fn collect_run_dirs(cache_dir: &Utf8Path) -> Result<Vec<String>> {
         .into_iter()
         .filter_map(|p| p.file_name().map(str::to_string))
         .collect();
-    run_dirs.sort_by_key(|hash| RunHash::from_existing(hash).sort_key());
+    run_dirs.sort_by(|a, b| {
+        RunHash::from_existing(a)
+            .sort_key()
+            .cmp(&RunHash::from_existing(b).sort_key())
+            .then_with(|| a.cmp(b))
+    });
     Ok(run_dirs)
 }
 
@@ -602,6 +607,28 @@ mod tests {
 
         assert!(cache_dir.join("run-100").exists());
         assert!(!cache_dir.join("run-9").exists());
+    }
+
+    #[test]
+    fn collect_run_dirs_breaks_equal_timestamp_ties_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+
+        for name in [
+            "run-100-00000000-0000-4000-8000-000000000002",
+            "run-100-00000000-0000-4000-8000-000000000001",
+            "run-90-00000000-0000-4000-8000-000000000099",
+        ] {
+            fs::create_dir_all(tmp.path().join(name)).unwrap();
+        }
+
+        assert_debug_snapshot!(collect_run_dirs(&cache_dir).unwrap(), @r#"
+        [
+            "run-90-00000000-0000-4000-8000-000000000099",
+            "run-100-00000000-0000-4000-8000-000000000001",
+            "run-100-00000000-0000-4000-8000-000000000002",
+        ]
+        "#);
     }
 
     #[test]
