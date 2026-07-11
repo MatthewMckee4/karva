@@ -506,14 +506,10 @@ fn spawn_workers(
 
 /// Collect tests from the project without executing them.
 pub fn collect_tests(project: &Project) -> Result<CollectedPackage> {
-    let mut test_paths = Vec::new();
-
-    for path in project.test_paths() {
-        match path {
-            Ok(path) => test_paths.push(path),
-            Err(err) => return Err(err.into()),
-        }
-    }
+    let test_paths: Vec<_> = project
+        .test_paths()
+        .into_iter()
+        .collect::<std::result::Result<_, _>>()?;
 
     tracing::debug!(path_count = test_paths.len(), "Found test paths");
 
@@ -811,7 +807,13 @@ mod process_control {
 mod tests {
     use std::time::Duration;
 
-    use super::elapsed_since_start;
+    use camino::Utf8Path;
+    use karva_metadata::{Options, ProjectMetadata, SrcOptions};
+    use karva_project::Project;
+    use karva_project::path::TestPathError;
+    use ruff_python_ast::PythonVersion;
+
+    use super::{collect_tests, elapsed_since_start};
 
     #[test]
     fn elapsed_since_start_calculates_duration() {
@@ -824,5 +826,32 @@ mod tests {
     #[test]
     fn elapsed_since_start_handles_future_start_time() {
         assert_eq!(elapsed_since_start(1_000, 1_500, 0), Duration::ZERO);
+    }
+
+    #[test]
+    fn collect_tests_reports_invalid_configured_path() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let root = Utf8Path::from_path(temp_dir.path())
+            .expect("temp path should be UTF-8")
+            .to_path_buf();
+        let missing_path = root.join("missing.py");
+        let mut metadata = ProjectMetadata::new(root, PythonVersion::PY312);
+        metadata.options = Options {
+            src: Some(SrcOptions {
+                include: Some(vec!["missing.py".to_string()]),
+                ..SrcOptions::default()
+            }),
+            ..Options::default()
+        };
+        let project = Project::from_metadata(metadata);
+
+        let Err(err) = collect_tests(&project) else {
+            panic!("missing configured path should fail collection");
+        };
+        let Some(err) = err.downcast_ref::<TestPathError>() else {
+            panic!("expected TestPathError, got {err:?}");
+        };
+
+        assert_eq!(err, &TestPathError::NotFound(missing_path));
     }
 }
