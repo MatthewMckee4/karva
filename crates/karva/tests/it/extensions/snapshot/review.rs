@@ -237,6 +237,74 @@ def test_hello():
 }
 
 #[test]
+fn test_snapshot_review_with_source_file_filter() {
+    let context = TestContext::default();
+    context.write_file(
+        "test_one.py",
+        r"
+import karva
+
+def test_from_one():
+    karva.assert_snapshot('from file one')
+        ",
+    );
+    context.write_file(
+        "test_one_extra.py",
+        r"
+import karva
+
+def test_from_extra():
+    karva.assert_snapshot('from extra file')
+        ",
+    );
+
+    let _ = context.command_no_parallel().output();
+
+    assert_cmd_snapshot!(context.snapshot("review").arg("test_one.py").pass_stdin("a\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/1
+    File: <temp_dir>/snapshots/test_one__test_from_one.snap.new
+    Source: test_one.py:5::test_from_one
+
+    ────────────┬[LONG-LINE]
+              1 │ +from file one
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    > 
+    review finished
+    accepted:
+      <temp_dir>/snapshots/test_one__test_from_one.snap.new
+
+    ----- stderr -----
+    ");
+
+    assert!(
+        context
+            .root()
+            .join("snapshots/test_one__test_from_one.snap")
+            .exists(),
+        "Expected test_one snapshot to be accepted"
+    );
+    assert!(
+        context
+            .root()
+            .join("snapshots/test_one_extra__test_from_extra.snap.new")
+            .exists(),
+        "Expected test_one_extra pending snapshot to still exist"
+    );
+}
+
+#[test]
 fn test_snapshot_review_accept_all() {
     let context = TestContext::with_file(
         "test.py",

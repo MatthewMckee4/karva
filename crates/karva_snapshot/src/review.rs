@@ -7,7 +7,7 @@ use console::{Key, Term};
 use crate::diff::print_changeset;
 use crate::storage::{
     PendingSnapshotInfo, accept_pending, accept_pending_batch, find_pending_snapshots,
-    read_snapshot, reject_pending,
+    matches_snapshot_filter, read_snapshot, reject_pending,
 };
 
 /// Result of reviewing all pending snapshots.
@@ -117,7 +117,7 @@ pub fn run_review(root: &Utf8Path, resolved_filters: &[Utf8PathBuf]) -> io::Resu
             .filter(|info| {
                 resolved_filters
                     .iter()
-                    .any(|f| info.pending_path.as_str().starts_with(f.as_str()))
+                    .any(|filter| matches_snapshot_filter(&info.pending_path, filter))
             })
             .collect()
     };

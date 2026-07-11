@@ -12,7 +12,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use karva_cli::{SnapshotAction, SnapshotCommand};
 use karva_logging::{Printer, Stdout};
 use karva_project::path::absolute;
-use karva_snapshot::storage::{PendingSnapshotInfo, find_pending_snapshots};
+use karva_snapshot::storage::{
+    PendingSnapshotInfo, find_pending_snapshots, matches_snapshot_filter,
+};
 
 use crate::ExitStatus;
 use crate::utils::cwd;
@@ -86,11 +88,13 @@ fn resolve_filter_paths(filter_paths: &[String], cwd: &Utf8Path) -> Vec<Utf8Path
     filter_paths.iter().map(|f| absolute(f, cwd)).collect()
 }
 
-/// Check if a snapshot path matches any resolved filter (absolute path prefix match).
-/// Returns true if filters is empty (match all).
+/// Check if a snapshot path matches any resolved filter.
+///
+/// Filters can target either the generated snapshot file or the source file
+/// whose stem is encoded in that snapshot filename.
 fn matches_filter(snapshot_path: &Utf8Path, resolved_filters: &[Utf8PathBuf]) -> bool {
     resolved_filters.is_empty()
         || resolved_filters
             .iter()
-            .any(|f| snapshot_path.as_str().starts_with(f.as_str()))
+            .any(|filter| matches_snapshot_filter(snapshot_path, filter))
 }
