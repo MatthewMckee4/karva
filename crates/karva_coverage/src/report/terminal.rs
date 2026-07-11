@@ -9,7 +9,7 @@ use super::CoverageFilters;
 use super::combined_rows;
 use super::html::build_html_report;
 use super::json::build_json_report;
-use super::shared::{FileRow, row_percent, total_percent};
+use super::shared::{FileRow, row_percent, total_percent, totals_row};
 use super::xml::build_cobertura_xml;
 
 pub fn combine_and_report(
@@ -138,12 +138,6 @@ fn print_report(rows: &[FileRow], show_missing: bool, out: &mut dyn Write) -> Re
     writeln!(out, "{}", header.bold())?;
     writeln!(out, "{rule}")?;
 
-    let mut total_stmts: u32 = 0;
-    let mut total_miss: u32 = 0;
-    let mut total_branches: u32 = 0;
-    let mut total_branch_miss: u32 = 0;
-    let mut total_branch_partial: u32 = 0;
-
     for row in rows {
         let cover = format!("{:.0}%", row_percent(row));
         let stmts_str = row.stmts.to_string();
@@ -168,26 +162,16 @@ fn print_report(rows: &[FileRow], show_missing: bool, out: &mut dyn Write) -> Re
                 },
             )
         )?;
-        total_stmts = total_stmts.saturating_add(row.stmts);
-        total_miss = total_miss.saturating_add(row.miss);
-        total_branches = total_branches.saturating_add(row.branches);
-        total_branch_miss = total_branch_miss.saturating_add(row.branch_miss);
-        total_branch_partial = total_branch_partial.saturating_add(row.branch_partial);
     }
 
     writeln!(out, "{rule}")?;
     let total_pct = total_percent(rows);
-    let total_cover = format!(
-        "{:.0}%",
-        super::shared::percent(
-            total_stmts.saturating_add(total_branches),
-            total_miss.saturating_add(total_branch_miss),
-        )
-    );
-    let total_stmts_str = total_stmts.to_string();
-    let total_miss_str = total_miss.to_string();
-    let total_branches_str = total_branches.to_string();
-    let total_branch_partial_str = total_branch_partial.to_string();
+    let total = totals_row(rows);
+    let total_cover = format!("{:.0}%", row_percent(&total));
+    let total_stmts_str = total.stmts.to_string();
+    let total_miss_str = total.miss.to_string();
+    let total_branches_str = total.branches.to_string();
+    let total_branch_partial_str = total.branch_partial.to_string();
     writeln!(
         out,
         "{}",
