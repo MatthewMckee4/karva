@@ -109,9 +109,9 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
         cli_args.push("--snapshot-update".to_string());
     }
 
-    if let Some(retry) = args.retry {
+    if settings.test().retry > 0 {
         cli_args.push("--retry".to_string());
-        cli_args.push(retry.to_string());
+        cli_args.push(settings.test().retry.to_string());
     }
 
     if let Some(threshold) = settings.test().slow_timeout {
