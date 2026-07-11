@@ -1,4 +1,5 @@
 use insta_cmd::assert_cmd_snapshot;
+use karva_static::EnvVars;
 
 use crate::common::TestContext;
 
@@ -149,6 +150,49 @@ fn no_tests_collected_warn() {
     ────────────
          Summary [TIME] 0 tests run: 0 passed, 0 skipped
     warning: no tests to run
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn no_tests_collected_env_warn() {
+    let context = TestContext::with_file("test.py", NO_TESTS);
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .env(EnvVars::KARVA_NO_TESTS, "warn"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+    warning: no tests to run
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn no_tests_collected_cli_overrides_env() {
+    let context = TestContext::with_file("test.py", NO_TESTS);
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .env(EnvVars::KARVA_NO_TESTS, "pass")
+            .arg("--no-tests")
+            .arg("fail"),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+    error: no tests to run
+    (hint: use `--no-tests` to customize)
 
     ----- stderr -----
     "
