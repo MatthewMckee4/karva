@@ -112,6 +112,42 @@ def test_no_match():
 }
 
 #[test]
+fn test_snapshot_filter_replacement_is_literal() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_literal_replacement():
+    with karva.snapshot_settings(filters=[
+        (r"cost=\d+", "cost=$1"),
+    ]):
+        karva.assert_snapshot("cost=42")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_literal_replacement
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    let content = context.read_file("snapshots/test__test_literal_replacement.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:8::test_literal_replacement
+    ---
+    cost=$1
+    ");
+}
+
+#[test]
 fn test_snapshot_filter_invalid_regex() {
     let context = TestContext::with_file(
         "test.py",

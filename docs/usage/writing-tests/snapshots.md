@@ -372,7 +372,7 @@ def test_api_response():
         karva.assert_snapshot(get_response())
 ```
 
-Each filter is a `(regex_pattern, replacement)` tuple. Filters are applied sequentially to the serialized value before it is compared or stored in the snapshot file.
+Each filter is a `(regex_pattern, replacement)` tuple. Filters are applied sequentially to the serialized value before it is compared or stored in the snapshot file. Replacement text is literal, so `$1` and other capture references are not expanded.
 
 ### Multiple Filters
 
