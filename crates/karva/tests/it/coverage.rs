@@ -548,6 +548,48 @@ def test_only_covered():
 }
 
 #[test]
+fn test_cov_writes_coveragepy_sqlite_file() {
+    let context = TestContext::with_files([
+        (
+            "src/app.py",
+            "def covered():\n    return 1\n\ndef missed():\n    return 2\n",
+        ),
+        (
+            "test_sqlite.py",
+            r"
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+from src.app import covered
+
+def test_covered():
+    assert covered() == 1
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--cov=src")
+            .arg("--cov-report=json")
+            .arg("--status-level=none")
+            .arg("test_sqlite.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let bytes = std::fs::read(context.root().join(".coverage")).expect("read .coverage");
+    assert!(bytes.starts_with(b"SQLite format 3\0"));
+}
+
+#[test]
 fn test_cov_context_test_records_json_contexts() {
     let context = TestContext::with_files([
         (

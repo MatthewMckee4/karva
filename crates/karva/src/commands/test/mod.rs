@@ -121,6 +121,15 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
                 coverage.report.as_str()
             )?;
         }
+        let coverage_data_path = project.cwd().join(".coverage");
+        if let Err(err) = karva_coverage::write_coveragepy_sqlite(
+            project.cwd(),
+            &coverage_files,
+            &coverage_data_path,
+            &coverage_filters,
+        ) {
+            tracing::error!("Coverage data file failed: {err:#}");
+        }
         let coverage_result = match coverage.report {
             CovReport::Term => karva_coverage::combine_and_report(
                 project.cwd(),

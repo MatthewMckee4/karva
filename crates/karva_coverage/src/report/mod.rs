@@ -1,5 +1,6 @@
 //! Combine per-worker JSON files and produce terminal or machine-readable reports.
 
+pub(crate) mod coveragepy;
 pub(crate) mod html;
 pub(crate) mod json;
 pub(crate) mod shared;
@@ -11,6 +12,7 @@ use camino::Utf8Path;
 use fs_err as fs;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 
+pub use coveragepy::write_coveragepy_sqlite;
 pub use terminal::combine_and_report;
 pub use terminal::write_cobertura_xml;
 pub use terminal::write_html_report;
