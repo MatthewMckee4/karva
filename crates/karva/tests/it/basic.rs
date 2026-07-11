@@ -2509,6 +2509,23 @@ fn test_num_workers_invalid_value() {
     ");
 }
 
+/// `--num-workers` must reject zero before the runner starts.
+#[test]
+fn test_num_workers_zero_is_rejected() {
+    let context = TestContext::with_file("test.py", "def test_1(): pass");
+
+    assert_cmd_snapshot!(context.command().args(["--num-workers", "0"]), @r"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    error: invalid value '0' for '--num-workers <NUM_WORKERS>': number would be zero for non-zero type
+
+    For more information, try '--help'.
+    ");
+}
+
 #[test]
 fn test_max_parallelism_env_invalid_value() {
     let context = TestContext::with_file("test.py", "def test_1(): pass");

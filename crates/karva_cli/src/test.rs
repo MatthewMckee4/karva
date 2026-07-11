@@ -1,4 +1,4 @@
-use std::num::NonZeroU32;
+use std::num::{NonZeroU32, NonZeroUsize};
 
 use camino::Utf8PathBuf;
 use clap::Parser;
@@ -303,7 +303,7 @@ pub struct TestCommand {
 
     /// Number of parallel workers (default: number of CPU cores)
     #[clap(short = 'n', long, help_heading = "Runner options")]
-    pub num_workers: Option<usize>,
+    pub num_workers: Option<NonZeroUsize>,
 
     /// Wall-clock limit for the whole run, in seconds.
     ///

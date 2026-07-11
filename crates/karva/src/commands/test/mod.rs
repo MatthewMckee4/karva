@@ -56,7 +56,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     let num_workers = if args.no_parallel.unwrap_or(false) || args.no_capture {
         1
     } else if let Some(num_workers) = args.num_workers {
-        num_workers
+        num_workers.get()
     } else {
         karva_static::max_parallelism()
             .context("Failed to determine default worker count")?
