@@ -100,6 +100,69 @@ fn slice_one_of_one_runs_everything() {
 }
 
 #[test]
+fn hash_first_of_three() {
+    let context = TestContext::with_file("test_mod.py", SIX_TESTS);
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().arg("--partition=hash:1/3"),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 6 tests across 1 worker
+            PASS [TIME] test_mod::test_c
+            PASS [TIME] test_mod::test_e
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn hash_second_of_three() {
+    let context = TestContext::with_file("test_mod.py", SIX_TESTS);
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().arg("--partition=hash:2/3"),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 6 tests across 1 worker
+            PASS [TIME] test_mod::test_b
+            PASS [TIME] test_mod::test_d
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn hash_third_of_three() {
+    let context = TestContext::with_file("test_mod.py", SIX_TESTS);
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().arg("--partition=hash:3/3"),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 6 tests across 1 worker
+            PASS [TIME] test_mod::test_a
+            PASS [TIME] test_mod::test_f
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
 fn invalid_partition_index_above_total_errors() {
     let context = TestContext::with_file("test_mod.py", SIX_TESTS);
 
@@ -123,14 +186,14 @@ fn invalid_partition_strategy_errors() {
     let context = TestContext::with_file("test_mod.py", SIX_TESTS);
 
     assert_cmd_snapshot!(
-        context.command_no_parallel().arg("--partition=hash:1/3"),
+        context.command_no_parallel().arg("--partition=random:1/3"),
         @r"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    error: invalid value 'hash:1/3' for '--partition <STRATEGY:M/N>': unknown partition strategy `hash`; supported strategies: `slice`
+    error: invalid value 'random:1/3' for '--partition <STRATEGY:M/N>': unknown partition strategy `random`; supported strategies: `slice`, `hash`
 
     For more information, try '--help'.
     "
