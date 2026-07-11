@@ -249,11 +249,11 @@ fn shuffle_tests_without_durations(test_infos: &mut [TestInfo]) {
 }
 
 fn order_tests_for_partitioning(test_infos: &mut [TestInfo], ordering: TestOrdering) {
+    test_infos.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
+
     match ordering {
         TestOrdering::ShuffleUnknownDurations => shuffle_tests_without_durations(test_infos),
-        TestOrdering::Stable => {
-            test_infos.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-        }
+        TestOrdering::Stable => {}
     }
 }
 
@@ -291,11 +291,15 @@ mod tests {
     use super::*;
 
     fn test_info(qualified_name: &str) -> TestInfo {
+        test_info_with_duration(qualified_name, None)
+    }
+
+    fn test_info_with_duration(qualified_name: &str, duration: Option<Duration>) -> TestInfo {
         TestInfo {
             module_name: "test_module".to_string(),
             qualified_name: qualified_name.to_string(),
             path: qualified_name.to_string(),
-            duration: None,
+            duration,
         }
     }
 
@@ -308,6 +312,31 @@ mod tests {
         ];
 
         order_tests_for_partitioning(&mut tests, TestOrdering::Stable);
+
+        let ordered_names: Vec<_> = tests
+            .iter()
+            .map(|test| test.qualified_name.as_str())
+            .collect();
+        assert_eq!(
+            ordered_names,
+            [
+                "test_module::test_a",
+                "test_module::test_b",
+                "test_module::test_c"
+            ]
+        );
+    }
+
+    #[test]
+    fn duration_backed_partitioning_starts_from_qualified_name_order() {
+        let duration = Some(Duration::from_millis(1));
+        let mut tests = vec![
+            test_info_with_duration("test_module::test_c", duration),
+            test_info_with_duration("test_module::test_a", duration),
+            test_info_with_duration("test_module::test_b", duration),
+        ];
+
+        order_tests_for_partitioning(&mut tests, TestOrdering::ShuffleUnknownDurations);
 
         let ordered_names: Vec<_> = tests
             .iter()
