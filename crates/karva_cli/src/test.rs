@@ -10,7 +10,7 @@ use karva_metadata::{
 };
 use karva_static::EnvVars;
 
-use crate::enums::{CovReport, NoTests, OutputFormat, RunIgnored};
+use crate::enums::{CovReport, NoTests, OutputFormat, ResultFormat, RunIgnored};
 use crate::partition::PartitionSelection;
 use crate::verbosity::Verbosity;
 
@@ -346,6 +346,24 @@ pub struct TestCommand {
     /// Show the N slowest tests after the run completes.
     #[clap(long, value_name = "N", help_heading = "Reporter options")]
     pub durations: Option<usize>,
+
+    /// Write machine-readable test results to this path.
+    #[arg(
+        long,
+        value_name = "PATH",
+        conflicts_with = "watch",
+        help_heading = "Reporter options"
+    )]
+    pub result_output: Option<Utf8PathBuf>,
+
+    /// Machine-readable test result format.
+    #[arg(
+        long,
+        value_name = "FORMAT",
+        requires = "result_output",
+        help_heading = "Reporter options"
+    )]
+    pub result_format: Option<ResultFormat>,
 
     /// The path to a `karva.toml` file to use for configuration.
     ///

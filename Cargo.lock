@@ -1079,6 +1079,8 @@ dependencies = [
  "regex",
  "rstest",
  "ruff_python_trivia",
+ "serde",
+ "serde_json",
  "tempfile",
  "toml",
  "tracing",
