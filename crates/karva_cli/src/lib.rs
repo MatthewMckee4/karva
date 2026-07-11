@@ -4,6 +4,7 @@ use clap::builder::styling::{AnsiColor, Effects};
 
 mod cache;
 mod enums;
+mod exit_status;
 mod partition;
 mod show_config;
 mod snapshot;
@@ -12,6 +13,7 @@ mod verbosity;
 
 pub use cache::{CacheAction, CacheCommand};
 pub use enums::{CovContext, CovReport, NoTests, OutputFormat, ResultFormat, RunIgnored};
+pub use exit_status::ExitStatus;
 pub use partition::PartitionSelection;
 pub use show_config::ShowConfigCommand;
 pub use snapshot::{
