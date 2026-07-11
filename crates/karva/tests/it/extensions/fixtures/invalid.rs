@@ -35,7 +35,7 @@ fn test_invalid_pytest_fixture_scope() {
     5 | def some_fixture() -> int:
       |     ^^^^^^^^^^^^
       |
-    info: 'FixtureFunctionDefinition' object is not an instance of 'FixtureFunctionDefinition'
+    info: Invalid fixture scope: sessionss
 
     error[missing-fixtures]: Test `test_all_scopes` has missing fixtures
      --> test.py:8:5
