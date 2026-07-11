@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt;
 use std::time::Instant;
 
@@ -11,7 +10,11 @@ use super::kind::TestResultKind;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TestResultStats {
-    inner: HashMap<TestResultKind, usize>,
+    passed: usize,
+    failed: usize,
+    skipped: usize,
+    flaky: usize,
+    slow: usize,
 }
 
 impl TestResultStats {
@@ -25,41 +28,42 @@ impl TestResultStats {
         self.failed() == 0
     }
 
-    fn get(&self, kind: TestResultKind) -> usize {
-        self.inner.get(&kind).copied().unwrap_or(0)
-    }
-
     pub fn merge(&mut self, other: &Self) {
-        for (kind, count) in &other.inner {
-            self.inner
-                .entry(*kind)
-                .and_modify(|v| *v += count)
-                .or_insert(*count);
-        }
+        self.passed += other.passed;
+        self.failed += other.failed;
+        self.skipped += other.skipped;
+        self.flaky += other.flaky;
+        self.slow += other.slow;
     }
 
     pub fn passed(&self) -> usize {
-        self.get(TestResultKind::Passed)
+        self.passed
     }
 
     pub fn failed(&self) -> usize {
-        self.get(TestResultKind::Failed)
+        self.failed
     }
 
     pub fn skipped(&self) -> usize {
-        self.get(TestResultKind::Skipped)
+        self.skipped
     }
 
     pub fn flaky(&self) -> usize {
-        self.get(TestResultKind::Flaky)
+        self.flaky
     }
 
     pub fn slow(&self) -> usize {
-        self.get(TestResultKind::Slow)
+        self.slow
     }
 
     pub fn add(&mut self, kind: TestResultKind) {
-        self.inner.entry(kind).and_modify(|v| *v += 1).or_insert(1);
+        match kind {
+            TestResultKind::Passed => self.passed += 1,
+            TestResultKind::Failed => self.failed += 1,
+            TestResultKind::Skipped => self.skipped += 1,
+            TestResultKind::Flaky => self.flaky += 1,
+            TestResultKind::Slow => self.slow += 1,
+        }
     }
 
     pub fn display(&self, start_time: Instant) -> DisplayTestResultStats<'_> {
@@ -74,9 +78,19 @@ impl Serialize for TestResultStats {
     {
         use serde::ser::SerializeMap;
 
-        let mut map = serializer.serialize_map(Some(self.inner.len()))?;
-        for (kind, count) in &self.inner {
-            map.serialize_entry(kind.as_str(), count)?;
+        let counts = [
+            (TestResultKind::Passed, self.passed),
+            (TestResultKind::Failed, self.failed),
+            (TestResultKind::Skipped, self.skipped),
+            (TestResultKind::Flaky, self.flaky),
+            (TestResultKind::Slow, self.slow),
+        ];
+        let mut map = serializer
+            .serialize_map(Some(counts.iter().filter(|(_, count)| *count > 0).count()))?;
+        for (kind, count) in counts {
+            if count > 0 {
+                map.serialize_entry(kind.as_str(), &count)?;
+            }
         }
         map.end()
     }
@@ -100,7 +114,7 @@ impl<'de> Deserialize<'de> for TestResultStats {
             where
                 M: MapAccess<'de>,
             {
-                let mut inner = HashMap::new();
+                let mut stats = TestResultStats::default();
 
                 while let Some((key, value)) = access.next_entry::<String, usize>()? {
                     let kind = TestResultKind::from_str(&key).map_err(|_| {
@@ -109,10 +123,16 @@ impl<'de> Deserialize<'de> for TestResultStats {
                             &["passed", "failed", "skipped", "flaky", "slow"],
                         )
                     })?;
-                    inner.insert(kind, value);
+                    match kind {
+                        TestResultKind::Passed => stats.passed = value,
+                        TestResultKind::Failed => stats.failed = value,
+                        TestResultKind::Skipped => stats.skipped = value,
+                        TestResultKind::Flaky => stats.flaky = value,
+                        TestResultKind::Slow => stats.slow = value,
+                    }
                 }
 
-                Ok(TestResultStats { inner })
+                Ok(stats)
             }
         }
 
@@ -206,6 +226,7 @@ mod tests {
         stats.add(TestResultKind::Skipped);
 
         let json = serde_json::to_string(&stats).unwrap();
+        assert_eq!(json, r#"{"passed":2,"failed":1,"skipped":1}"#);
         let deserialized: TestResultStats = serde_json::from_str(&json).unwrap();
 
         assert_eq!(deserialized.passed(), 2);
