@@ -182,6 +182,60 @@ def test_from_two():
 }
 
 #[test]
+fn test_snapshot_delete_with_source_file_filter() {
+    let context = TestContext::default();
+    context.write_file(
+        "test_one.py",
+        r"
+import karva
+
+def test_from_one():
+    karva.assert_snapshot('from file one')
+        ",
+    );
+    context.write_file(
+        "test_one_extra.py",
+        r"
+import karva
+
+def test_from_extra():
+    karva.assert_snapshot('from extra file')
+        ",
+    );
+
+    let _ = context
+        .command_no_parallel()
+        .arg("--snapshot-update")
+        .output();
+
+    assert_cmd_snapshot!(context.snapshot("delete").arg("test_one.py"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Deleted: <temp_dir>/snapshots/test_one__test_from_one.snap
+
+    1 snapshot file(s) deleted.
+
+    ----- stderr -----
+    ");
+
+    assert!(
+        !context
+            .root()
+            .join("snapshots/test_one__test_from_one.snap")
+            .exists(),
+        "Expected test_one snapshot to be deleted"
+    );
+    assert!(
+        context
+            .root()
+            .join("snapshots/test_one_extra__test_from_extra.snap")
+            .exists(),
+        "Expected test_one_extra snapshot to still exist"
+    );
+}
+
+#[test]
 fn test_snapshot_delete_only_pending() {
     let context = TestContext::with_file(
         "test.py",
