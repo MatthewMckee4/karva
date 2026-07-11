@@ -127,7 +127,85 @@ impl From<Stdout> for std::process::Stdio {
 mod tests {
     use std::io::Write as _;
 
-    use super::Stdout;
+    use crate::status_level::{FinalStatusLevel, StatusLevel};
+
+    use super::{Printer, Stdout};
+
+    #[test]
+    fn test_result_stream_follows_status_level() {
+        assert!(
+            !Printer::new(StatusLevel::None, FinalStatusLevel::Pass)
+                .stream_for_test_result()
+                .is_enabled()
+        );
+        assert!(
+            Printer::new(StatusLevel::Fail, FinalStatusLevel::None)
+                .stream_for_test_result()
+                .is_enabled()
+        );
+    }
+
+    #[test]
+    fn summary_stream_follows_final_status_level() {
+        assert!(
+            !Printer::new(StatusLevel::Pass, FinalStatusLevel::None)
+                .stream_for_summary(false, false)
+                .is_enabled()
+        );
+        assert!(
+            !Printer::new(StatusLevel::Pass, FinalStatusLevel::Fail)
+                .stream_for_summary(true, false)
+                .is_enabled()
+        );
+        assert!(
+            Printer::new(StatusLevel::Pass, FinalStatusLevel::Fail)
+                .stream_for_summary(false, false)
+                .is_enabled()
+        );
+        assert!(
+            Printer::new(StatusLevel::Pass, FinalStatusLevel::Retry)
+                .stream_for_summary(true, true)
+                .is_enabled()
+        );
+        assert!(
+            Printer::new(StatusLevel::Pass, FinalStatusLevel::Pass)
+                .stream_for_summary(true, false)
+                .is_enabled()
+        );
+    }
+
+    #[test]
+    fn details_stream_follows_final_status_level() {
+        assert!(
+            !Printer::new(StatusLevel::Pass, FinalStatusLevel::None)
+                .stream_for_details()
+                .is_enabled()
+        );
+        assert!(
+            Printer::new(StatusLevel::Pass, FinalStatusLevel::Fail)
+                .stream_for_details()
+                .is_enabled()
+        );
+    }
+
+    #[test]
+    fn message_stream_is_hidden_only_when_both_levels_are_none() {
+        assert!(
+            !Printer::new(StatusLevel::None, FinalStatusLevel::None)
+                .stream_for_message()
+                .is_enabled()
+        );
+        assert!(
+            Printer::new(StatusLevel::None, FinalStatusLevel::Fail)
+                .stream_for_message()
+                .is_enabled()
+        );
+        assert!(
+            Printer::new(StatusLevel::Fail, FinalStatusLevel::None)
+                .stream_for_message()
+                .is_enabled()
+        );
+    }
 
     #[test]
     fn disabled_stdout_accepts_writes() {
