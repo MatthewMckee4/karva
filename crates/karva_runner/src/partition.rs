@@ -46,6 +46,11 @@ impl ModuleGroup {
         }
     }
 
+    fn add_test(&mut self, test: TestInfo, test_weight: u128) {
+        self.tests.push(test);
+        self.total_weight += test_weight;
+    }
+
     fn weight(&self) -> u128 {
         self.total_weight
     }
@@ -141,24 +146,24 @@ pub fn partition_collected_tests(
 
     order_tests_for_partitioning(&mut test_infos, test_ordering);
 
-    // Step 1: Group tests by module and calculate module weights
-    let mut module_groups: HashMap<String, Vec<TestInfo>> = HashMap::new();
-    let mut module_weights: HashMap<String, u128> = HashMap::new();
+    // Step 1: Group tests by module and calculate module weights, preserving
+    // the order chosen above for the first test seen from each module.
+    let mut module_groups: Vec<ModuleGroup> = Vec::new();
+    let mut module_indices: HashMap<String, usize> = HashMap::new();
 
     for test_info in test_infos {
         let weight = test_weight(test_info.duration);
 
-        *module_weights
-            .entry(test_info.module_name.clone())
-            .or_default() += weight;
-        module_groups
-            .entry(test_info.module_name.clone())
-            .or_default()
-            .push(test_info);
+        if let Some(&index) = module_indices.get(&test_info.module_name) {
+            module_groups[index].add_test(test_info, weight);
+        } else {
+            module_indices.insert(test_info.module_name.clone(), module_groups.len());
+            module_groups.push(ModuleGroup::new(vec![test_info], weight));
+        }
     }
 
     // Step 2: Calculate threshold for splitting decision
-    let total_weight: u128 = module_weights.values().sum();
+    let total_weight: u128 = module_groups.iter().map(ModuleGroup::weight).sum();
     let target_partition_weight = total_weight / num_workers.max(1) as u128;
     let split_threshold = target_partition_weight / 2;
 
@@ -166,10 +171,7 @@ pub fn partition_collected_tests(
     let mut small_modules = Vec::new();
     let mut large_modules = Vec::new();
 
-    for (module_name, tests) in module_groups {
-        let weight = module_weights[&module_name];
-        let module_group = ModuleGroup::new(tests, weight);
-
+    for module_group in module_groups {
         if module_group.weight() < split_threshold {
             small_modules.push(module_group);
         } else {
@@ -372,24 +374,75 @@ mod tests {
         assert_eq!(partitions[0].tests(), &[format!("{test_path}::test_c")]);
     }
 
+    #[test]
+    fn stable_partitioning_preserves_module_order_after_grouping() {
+        let (_temp_dir, test_paths, package) = collected_package_with_files([
+            ("test_c.py", "def test_1(): pass\n"),
+            ("test_a.py", "def test_1(): pass\n"),
+            ("test_b.py", "def test_1(): pass\n"),
+        ]);
+
+        let partitions = partition_collected_tests(
+            &package,
+            2,
+            &HashMap::new(),
+            &HashSet::new(),
+            None,
+            TestOrdering::Stable,
+        );
+
+        assert_eq!(
+            partitions[0].tests(),
+            &[
+                format!("{}::test_1", test_paths["test_a.py"]),
+                format!("{}::test_1", test_paths["test_c.py"]),
+            ]
+        );
+        assert_eq!(
+            partitions[1].tests(),
+            &[format!("{}::test_1", test_paths["test_b.py"])]
+        );
+    }
+
     fn collected_package(source: &str) -> (tempfile::TempDir, Utf8PathBuf, CollectedPackage) {
+        let (temp_dir, mut test_paths, package) =
+            collected_package_with_files([("test_sample.py", source)]);
+        let test_path = test_paths
+            .remove("test_sample.py")
+            .expect("test path should exist");
+
+        (temp_dir, test_path, package)
+    }
+
+    fn collected_package_with_files<const N: usize>(
+        files: [(&str, &str); N],
+    ) -> (
+        tempfile::TempDir,
+        HashMap<String, Utf8PathBuf>,
+        CollectedPackage,
+    ) {
         let temp_dir = tempfile::tempdir().expect("create temp dir");
         let root = Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf())
             .expect("temp path should be UTF-8");
-        let test_path = root.join("test_sample.py");
-        std::fs::write(&test_path, source).expect("write test file");
         let settings = CollectionSettings {
             python_version: PythonVersion::PY312,
             test_function_prefix: "test_",
             respect_ignore_files: true,
             collect_fixtures: false,
         };
-        let module = collect_file(&test_path, &root, &settings, &[])
-            .expect("collect test file")
-            .expect("test file should collect");
         let mut package = CollectedPackage::new(root);
-        package.add_module(module);
+        let mut test_paths = HashMap::new();
 
-        (temp_dir, test_path, package)
+        for (name, source) in files {
+            let test_path = package.path.join(name);
+            std::fs::write(&test_path, source).expect("write test file");
+            let module = collect_file(&test_path, &package.path, &settings, &[])
+                .expect("collect test file")
+                .expect("test file should collect");
+            package.add_module(module);
+            test_paths.insert(name.to_string(), test_path);
+        }
+
+        (temp_dir, test_paths, package)
     }
 }
