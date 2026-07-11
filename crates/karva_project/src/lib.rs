@@ -47,7 +47,10 @@ fn find_karva_wheel_in(wheels_dir: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
             .modified()
             .with_context(|| format!("Could not read wheel modification time: {path}"))?;
 
-        if newest.as_ref().is_none_or(|(t, _)| mtime > *t) {
+        if newest
+            .as_ref()
+            .is_none_or(|(t, p)| (mtime, path.as_str()) > (*t, p.as_str()))
+        {
             newest = Some((mtime, path));
         }
     }
@@ -140,6 +143,18 @@ mod tests {
         let wheel = find_karva_wheel_in(root).expect("find wheel");
 
         assert_eq!(wheel, newest);
+    }
+
+    #[test]
+    fn find_karva_wheel_uses_stable_tiebreak_for_equal_mtimes() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let root = temp_path(&temp_dir);
+        write_wheel(root, "karva-0.1.0-py3-none-any.whl", 10);
+        let selected = write_wheel(root, "karva-0.2.0-py3-none-any.whl", 10);
+
+        let wheel = find_karva_wheel_in(root).expect("find wheel");
+
+        assert_eq!(wheel, selected);
     }
 
     #[test]
