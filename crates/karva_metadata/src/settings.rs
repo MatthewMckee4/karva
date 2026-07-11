@@ -299,11 +299,21 @@ pub struct CoverageSettings {
     pub omit: Vec<String>,
     pub report: CovReport,
     pub report_path: Option<String>,
+    #[serde(skip_serializing_if = "is_false")]
+    pub branch: bool,
     /// Minimum total coverage percentage (`0..=100`). When set and the
     /// reported `TOTAL` coverage is below this value, the test command
     /// exits with a non-zero status even if every test passed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fail_under: Option<f64>,
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if passes a reference to the field"
+)]
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Default, Debug, Clone, Serialize)]

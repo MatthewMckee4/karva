@@ -35,6 +35,23 @@ required-version = ">=0.5.0"
 
 ## `coverage`
 
+### `branch`
+
+Whether to measure branch coverage in addition to line coverage.
+
+**Default value**: `false`
+
+**Type**: `true | false`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.coverage]
+branch = true
+```
+
+---
+
 ### `fail-under`
 
 Minimum total coverage percentage required for the run to succeed.

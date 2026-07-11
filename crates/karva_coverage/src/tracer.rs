@@ -13,7 +13,8 @@ use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use pyo3::prelude::*;
 
-use crate::data::{FileEntry, WorkerFile};
+use crate::branches::branch_arcs;
+use crate::data::{BranchArc, BranchContextEntry, BranchEntry, FileEntry, WorkerFile};
 use crate::executable::executable_lines;
 
 /// Configuration for a single worker's coverage measurement.
@@ -28,6 +29,9 @@ pub struct CoverageConfig {
 
     /// Whether to record the current test context for each executed line.
     pub contexts: bool,
+
+    /// Whether to record branch arcs in addition to executed lines.
+    pub branches: bool,
 }
 
 /// Path components inside a source root that suppress tracking. These match
@@ -62,6 +66,7 @@ impl CoverageSession {
             CoverageTracer {
                 roots,
                 contexts: config.contexts,
+                branches: config.branches,
                 state: Mutex::new(TracerState::default()),
                 monitoring_tool_id: OnceLock::new(),
                 monitoring_disable: OnceLock::new(),
@@ -96,22 +101,36 @@ impl CoverageSession {
         }
 
         let borrowed = bound.borrow();
-        let (executed, contexts) = match borrowed.state.lock() {
+        let (executed, contexts, arcs, arc_contexts) = match borrowed.state.lock() {
             Ok(mut state) => (
                 std::mem::take(&mut state.executed),
                 std::mem::take(&mut state.contexts),
+                std::mem::take(&mut state.arcs),
+                std::mem::take(&mut state.arc_contexts),
             ),
             Err(poisoned) => {
                 let mut state = poisoned.into_inner();
                 (
                     std::mem::take(&mut state.executed),
                     std::mem::take(&mut state.contexts),
+                    std::mem::take(&mut state.arcs),
+                    std::mem::take(&mut state.arc_contexts),
                 )
             }
         };
         let roots = borrowed.roots.clone();
+        let branches = borrowed.branches;
         drop(borrowed);
-        save_data(&data_file, executed, contexts, &roots).map_err(|err| {
+        save_data(
+            &data_file,
+            executed,
+            contexts,
+            arcs,
+            arc_contexts,
+            branches,
+            &roots,
+        )
+        .map_err(|err| {
             pyo3::exceptions::PyOSError::new_err(format!(
                 "failed to write coverage data to {data_file}: {err}"
             ))
@@ -130,17 +149,34 @@ struct TracerState {
     executed: HashMap<PathBuf, HashSet<u32>>,
     /// Per-line test contexts for files with executed lines.
     contexts: HashMap<PathBuf, HashMap<u32, HashSet<String>>>,
+    /// Line-to-line arcs executed in each file.
+    arcs: HashMap<PathBuf, HashSet<BranchArc>>,
+    /// Per-arc test contexts for files with executed arcs.
+    arc_contexts: HashMap<PathBuf, HashMap<BranchArc, HashSet<String>>>,
     /// Current test context, if `--cov-context=test` is active and a test is running.
     current_context: Option<String>,
     /// Memoized result of [`compute_tracked_path`] per filename string.
     track_cache: HashMap<String, Option<PathBuf>>,
     /// Memoized result of [`compute_tracked_path`] per live Python code object.
     code_cache: HashMap<usize, TrackedCode>,
+    /// Last executed line per live Python code object for `sys.monitoring` arcs.
+    monitoring_last_lines: HashMap<usize, u32>,
+    /// Last executed line per traced frame for `sys.settrace` arcs.
+    frame_last_lines: HashMap<usize, u32>,
 }
 
 struct TrackedCode {
     code: Py<PyAny>,
     path: Option<PathBuf>,
+    first_line: i32,
+    line_ranges: Vec<CodeLineRange>,
+}
+
+#[derive(Clone)]
+struct CodeLineRange {
+    start: u32,
+    end: u32,
+    line: Option<u32>,
 }
 
 /// Thread-safe because the trace callbacks fire on whichever Python thread
@@ -153,6 +189,7 @@ struct TrackedCode {
 struct CoverageTracer {
     roots: Vec<PathBuf>,
     contexts: bool,
+    branches: bool,
     state: Mutex<TracerState>,
     monitoring_tool_id: OnceLock<u8>,
     /// Cached `sys.monitoring.DISABLE` sentinel. Populated when the
@@ -175,14 +212,54 @@ impl CoverageTracer {
         code: &Bound<'_, PyAny>,
         lineno: u32,
     ) -> PyResult<Option<Py<PyAny>>> {
-        if let Some(path) = self.tracked_code_path(code)? {
-            self.record_line(path, lineno);
+        if let Some(info) = self.tracked_code_info(code)? {
+            self.record_monitoring_line(code.as_ptr() as usize, info.path, info.first_line, lineno);
+        }
+        if self.contexts || self.branches {
+            Ok(None)
+        } else {
+            Ok(self.monitoring_disable.get().map(|d| d.clone_ref(py)))
+        }
+    }
+
+    fn branch_cb(
+        &self,
+        py: Python<'_>,
+        code: &Bound<'_, PyAny>,
+        offset: u32,
+        destination: u32,
+    ) -> PyResult<Option<Py<PyAny>>> {
+        if let Some(info) = self.tracked_code_info(code)?
+            && let Some(from) = line_for_offset(&info.line_ranges, offset)
+        {
+            let to = line_for_offset(&info.line_ranges, destination)
+                .map(line_to_i32)
+                .unwrap_or_else(|| -info.first_line);
+            self.record_arc(
+                info.path,
+                BranchArc {
+                    from: line_to_i32(from),
+                    to,
+                },
+            );
         }
         if self.contexts {
             Ok(None)
         } else {
             Ok(self.monitoring_disable.get().map(|d| d.clone_ref(py)))
         }
+    }
+
+    fn return_cb(
+        &self,
+        code: &Bound<'_, PyAny>,
+        _offset: u32,
+        _value: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        if let Some(info) = self.tracked_code_info(code)? {
+            self.record_monitoring_return(code.as_ptr() as usize, info.path, info.first_line);
+        }
+        Ok(())
     }
 
     /// `sys.settrace` global trace function. Returns the per-frame
@@ -219,11 +296,23 @@ impl CoverageTracer {
         _arg: &Bound<'py, PyAny>,
     ) -> PyResult<Py<PyAny>> {
         if event == "line" {
-            let filename: String = frame.getattr("f_code")?.getattr("co_filename")?.extract()?;
+            let code = frame.getattr("f_code")?;
+            let filename: String = code.getattr("co_filename")?.extract()?;
             let path = slf.borrow().tracked_path(&filename);
             if let Some(path) = path {
                 let lineno: u32 = frame.getattr("f_lineno")?.extract()?;
-                slf.borrow().record_line(path, lineno);
+                let first_line: i32 = code.getattr("co_firstlineno")?.extract()?;
+                slf.borrow()
+                    .record_frame_line(frame.as_ptr() as usize, path, first_line, lineno);
+            }
+        } else if event == "return" {
+            let code = frame.getattr("f_code")?;
+            let filename: String = code.getattr("co_filename")?.extract()?;
+            let path = slf.borrow().tracked_path(&filename);
+            if let Some(path) = path {
+                let first_line: i32 = code.getattr("co_firstlineno")?.extract()?;
+                slf.borrow()
+                    .record_frame_return(frame.as_ptr() as usize, path, first_line);
             }
         }
         Ok(slf.getattr("local_trace")?.unbind())
@@ -240,42 +329,113 @@ impl CoverageTracer {
         }
     }
 
-    fn record_line(&self, path: PathBuf, lineno: u32) {
+    fn record_monitoring_line(&self, code_id: usize, path: PathBuf, first_line: i32, lineno: u32) {
         if let Ok(mut state) = self.state.lock() {
-            if self.contexts
-                && let Some(context) = state.current_context.clone()
-            {
-                state
-                    .executed
-                    .entry(path.clone())
-                    .or_default()
-                    .insert(lineno);
-                state
-                    .contexts
-                    .entry(path)
-                    .or_default()
-                    .entry(lineno)
-                    .or_default()
-                    .insert(context);
-            } else {
-                state.executed.entry(path).or_default().insert(lineno);
+            if self.branches {
+                let arc = state
+                    .monitoring_last_lines
+                    .insert(code_id, lineno)
+                    .map_or_else(
+                        || BranchArc {
+                            from: -first_line,
+                            to: line_to_i32(lineno),
+                        },
+                        |from| BranchArc {
+                            from: line_to_i32(from),
+                            to: line_to_i32(lineno),
+                        },
+                    );
+                record_arc_in_state(&mut state, self.contexts, path.clone(), arc);
             }
+            record_line_in_state(&mut state, self.contexts, path, lineno);
+        }
+    }
+
+    fn record_monitoring_return(&self, code_id: usize, path: PathBuf, first_line: i32) {
+        if !self.branches {
+            return;
+        }
+        if let Ok(mut state) = self.state.lock()
+            && let Some(from) = state.monitoring_last_lines.remove(&code_id)
+        {
+            record_arc_in_state(
+                &mut state,
+                self.contexts,
+                path,
+                BranchArc {
+                    from: line_to_i32(from),
+                    to: -first_line,
+                },
+            );
+        }
+    }
+
+    fn record_frame_line(&self, frame_id: usize, path: PathBuf, first_line: i32, lineno: u32) {
+        if let Ok(mut state) = self.state.lock() {
+            if self.branches {
+                let arc = state.frame_last_lines.insert(frame_id, lineno).map_or_else(
+                    || BranchArc {
+                        from: -first_line,
+                        to: line_to_i32(lineno),
+                    },
+                    |from| BranchArc {
+                        from: line_to_i32(from),
+                        to: line_to_i32(lineno),
+                    },
+                );
+                record_arc_in_state(&mut state, self.contexts, path.clone(), arc);
+            }
+            record_line_in_state(&mut state, self.contexts, path, lineno);
+        }
+    }
+
+    fn record_frame_return(&self, frame_id: usize, path: PathBuf, first_line: i32) {
+        if !self.branches {
+            return;
+        }
+        if let Ok(mut state) = self.state.lock()
+            && let Some(from) = state.frame_last_lines.remove(&frame_id)
+        {
+            record_arc_in_state(
+                &mut state,
+                self.contexts,
+                path,
+                BranchArc {
+                    from: line_to_i32(from),
+                    to: -first_line,
+                },
+            );
+        }
+    }
+
+    fn record_arc(&self, path: PathBuf, arc: BranchArc) {
+        if !self.branches || arc.from == arc.to {
+            return;
+        }
+        if let Ok(mut state) = self.state.lock() {
+            record_arc_in_state(&mut state, self.contexts, path, arc);
         }
     }
 
     /// Resolve a live Python code object without extracting `co_filename`
     /// after the first line callback for that object.
-    fn tracked_code_path(&self, code: &Bound<'_, PyAny>) -> PyResult<Option<PathBuf>> {
+    fn tracked_code_info(&self, code: &Bound<'_, PyAny>) -> PyResult<Option<TrackedCodeInfo>> {
         let code_id = code.as_ptr() as usize;
         if let Ok(state) = self.state.lock()
             && let Some(cached) = state.code_cache.get(&code_id)
         {
             debug_assert!(cached.code.is(code));
-            return Ok(cached.path.clone());
+            return Ok(cached.path.clone().map(|path| TrackedCodeInfo {
+                path,
+                first_line: cached.first_line,
+                line_ranges: cached.line_ranges.clone(),
+            }));
         }
 
         let filename: String = code.getattr("co_filename")?.extract()?;
         let path = self.tracked_path(&filename);
+        let first_line = code.getattr("co_firstlineno")?.extract()?;
+        let line_ranges = code_line_ranges(code)?;
 
         if let Ok(mut state) = self.state.lock() {
             state.code_cache.insert(
@@ -283,11 +443,17 @@ impl CoverageTracer {
                 TrackedCode {
                     code: code.clone().unbind(),
                     path: path.clone(),
+                    first_line,
+                    line_ranges: line_ranges.clone(),
                 },
             );
         }
 
-        Ok(path)
+        Ok(path.map(|path| TrackedCodeInfo {
+            path,
+            first_line,
+            line_ranges,
+        }))
     }
 
     /// Resolve `filename` against the source roots. Returns the canonical
@@ -307,6 +473,80 @@ impl CoverageTracer {
         }
         resolved
     }
+}
+
+struct TrackedCodeInfo {
+    path: PathBuf,
+    first_line: i32,
+    line_ranges: Vec<CodeLineRange>,
+}
+
+fn record_line_in_state(
+    state: &mut TracerState,
+    contexts_enabled: bool,
+    path: PathBuf,
+    lineno: u32,
+) {
+    if contexts_enabled && let Some(context) = state.current_context.clone() {
+        state
+            .executed
+            .entry(path.clone())
+            .or_default()
+            .insert(lineno);
+        state
+            .contexts
+            .entry(path)
+            .or_default()
+            .entry(lineno)
+            .or_default()
+            .insert(context);
+    } else {
+        state.executed.entry(path).or_default().insert(lineno);
+    }
+}
+
+fn record_arc_in_state(
+    state: &mut TracerState,
+    contexts_enabled: bool,
+    path: PathBuf,
+    arc: BranchArc,
+) {
+    if arc.from == arc.to {
+        return;
+    }
+    if contexts_enabled && let Some(context) = state.current_context.clone() {
+        state.arcs.entry(path.clone()).or_default().insert(arc);
+        state
+            .arc_contexts
+            .entry(path)
+            .or_default()
+            .entry(arc)
+            .or_default()
+            .insert(context);
+    } else {
+        state.arcs.entry(path).or_default().insert(arc);
+    }
+}
+
+fn code_line_ranges(code: &Bound<'_, PyAny>) -> PyResult<Vec<CodeLineRange>> {
+    let mut ranges = Vec::new();
+    let co_lines = code.call_method0("co_lines")?;
+    for item in co_lines.try_iter()? {
+        let (start, end, line): (u32, u32, Option<u32>) = item?.extract()?;
+        ranges.push(CodeLineRange { start, end, line });
+    }
+    Ok(ranges)
+}
+
+fn line_for_offset(ranges: &[CodeLineRange], offset: u32) -> Option<u32> {
+    ranges
+        .iter()
+        .find(|range| range.start <= offset && offset < range.end)
+        .and_then(|range| range.line)
+}
+
+fn line_to_i32(line: u32) -> i32 {
+    i32::try_from(line).unwrap_or(i32::MAX)
 }
 
 fn compute_tracked_path(filename: &str, roots: &[PathBuf]) -> Option<PathBuf> {
@@ -337,7 +577,9 @@ fn py_version_at_least(py: Python<'_>, major: u8, minor: u8) -> PyResult<bool> {
 
 fn install_monitoring(py: Python<'_>, tracer: &Py<CoverageTracer>) -> PyResult<()> {
     let mon = py.import("sys")?.getattr("monitoring")?;
-    let line_event = mon.getattr("events")?.getattr("LINE")?;
+    let events = mon.getattr("events")?;
+    let line_event = events.getattr("LINE")?;
+    let line_event_value: u32 = line_event.extract()?;
     let disable = mon.getattr("DISABLE")?.unbind();
 
     let tool_id = (0u8..6u8)
@@ -349,11 +591,28 @@ fn install_monitoring(py: Python<'_>, tracer: &Py<CoverageTracer>) -> PyResult<(
         })?;
 
     let install_result = (|| -> PyResult<()> {
-        let callback = tracer.bind(py).getattr("line_cb")?;
+        let tracer_bound = tracer.bind(py);
+        let callback = tracer_bound.getattr("line_cb")?;
         mon.call_method1("register_callback", (tool_id, &line_event, callback))?;
-        mon.call_method1("set_events", (tool_id, &line_event))?;
+
+        let mut event_mask = line_event_value;
+        if tracer_bound.borrow().branches {
+            let branch_callback = tracer_bound.getattr("branch_cb")?;
+            for event in branch_events(&events)? {
+                mon.call_method1("register_callback", (tool_id, event, &branch_callback))?;
+                event_mask |= event;
+            }
+            let return_callback = tracer_bound.getattr("return_cb")?;
+            for event_name in ["PY_RETURN", "PY_UNWIND"] {
+                let event: u32 = events.getattr(event_name)?.extract()?;
+                mon.call_method1("register_callback", (tool_id, event, &return_callback))?;
+                event_mask |= event;
+            }
+        }
+
+        mon.call_method1("set_events", (tool_id, event_mask))?;
         {
-            let bound = tracer.bind(py).borrow();
+            let bound = tracer_bound.borrow();
             bound.monitoring_tool_id.set(tool_id).map_err(|_| {
                 pyo3::exceptions::PyRuntimeError::new_err(
                     "coverage monitoring tool id was already initialized",
@@ -374,6 +633,15 @@ fn install_monitoring(py: Python<'_>, tracer: &Py<CoverageTracer>) -> PyResult<(
     }
 
     Ok(())
+}
+
+fn branch_events(events: &Bound<'_, PyAny>) -> PyResult<Vec<u32>> {
+    let left = events.getattr("BRANCH_LEFT");
+    let right = events.getattr("BRANCH_RIGHT");
+    if let (Ok(left), Ok(right)) = (left, right) {
+        return Ok(vec![left.extract()?, right.extract()?]);
+    }
+    Ok(vec![events.getattr("BRANCH")?.extract()?])
 }
 
 fn release_monitoring_tool(
@@ -487,6 +755,9 @@ fn save_data(
     data_file: &Utf8Path,
     mut executed: HashMap<PathBuf, HashSet<u32>>,
     mut contexts: HashMap<PathBuf, HashMap<u32, HashSet<String>>>,
+    mut arcs: HashMap<PathBuf, HashSet<BranchArc>>,
+    mut arc_contexts: HashMap<PathBuf, HashMap<BranchArc, HashSet<String>>>,
+    branches: bool,
     roots: &[PathBuf],
 ) -> std::io::Result<()> {
     for path in walk_source_files(roots) {
@@ -510,12 +781,38 @@ fn save_data(
             .filter(|(line, _)| executed_lines.binary_search(line).is_ok())
             .map(|(line, contexts)| (line, contexts.into_iter().collect::<BTreeSet<_>>()))
             .collect();
+        let branches = if branches {
+            let possible = branch_arcs(&path)?;
+            let executed_arcs = arcs.remove(&path).unwrap_or_default();
+            let mut possible_vec: Vec<BranchArc> = possible.iter().copied().collect();
+            possible_vec.sort_unstable();
+            let mut executed_vec: Vec<BranchArc> = executed_arcs.iter().copied().collect();
+            executed_vec.sort_unstable();
+            let contexts = arc_contexts
+                .remove(&path)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|(arc, _)| executed_arcs.contains(arc))
+                .map(|(arc, contexts)| BranchContextEntry {
+                    arc,
+                    contexts: contexts.into_iter().collect(),
+                })
+                .collect();
+            Some(BranchEntry {
+                possible: possible_vec,
+                executed: executed_vec,
+                contexts,
+            })
+        } else {
+            None
+        };
         files.insert(
             path.to_string_lossy().into_owned(),
             FileEntry {
                 executable: executable_lines_vec,
                 executed: executed_lines,
                 contexts: context_lines,
+                branches,
             },
         );
     }
@@ -549,6 +846,7 @@ mod tests {
             let tracer = CoverageTracer {
                 roots: vec![root],
                 contexts: false,
+                branches: false,
                 state: Mutex::new(TracerState::default()),
                 monitoring_tool_id: OnceLock::new(),
                 monitoring_disable: OnceLock::new(),
@@ -569,6 +867,13 @@ class Code:
             raise AssertionError("co_filename should be cached")
         return filename
 
+    @property
+    def co_firstlineno(self):
+        return 1
+
+    def co_lines(self):
+        return iter([(0, 2, 1)])
+
 code = Code()
 "#
                 ),
@@ -577,8 +882,14 @@ code = Code()
             )?;
             let code = locals.get_item("code")?.expect("code object");
 
-            assert_eq!(tracer.tracked_code_path(&code)?, expected);
-            assert_eq!(tracer.tracked_code_path(&code)?, expected);
+            assert_eq!(
+                tracer.tracked_code_info(&code)?.map(|info| info.path),
+                expected
+            );
+            assert_eq!(
+                tracer.tracked_code_info(&code)?.map(|info| info.path),
+                expected
+            );
 
             let calls: u32 = code.getattr("calls")?.extract()?;
             assert_eq!(calls, 1);
@@ -604,8 +915,16 @@ code = Code()
         let missing = dir.path().join("missing.py");
         let executed = HashMap::from([(missing, HashSet::from([1]))]);
 
-        let err = save_data(&data_file, executed, HashMap::new(), &[])
-            .expect_err("missing source should fail");
+        let err = save_data(
+            &data_file,
+            executed,
+            HashMap::new(),
+            HashMap::new(),
+            HashMap::new(),
+            false,
+            &[],
+        )
+        .expect_err("missing source should fail");
 
         assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
         assert!(err.to_string().contains("missing.py"), "{err}");
