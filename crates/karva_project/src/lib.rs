@@ -41,9 +41,13 @@ fn find_karva_wheel_in(wheels_dir: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
         }
 
         let path = wheels_dir.join(name);
-        let mtime = entry
+        let metadata = entry
             .metadata()
-            .with_context(|| format!("Could not read wheel metadata: {path}"))?
+            .with_context(|| format!("Could not read wheel metadata: {path}"))?;
+        if !metadata.is_file() {
+            continue;
+        }
+        let mtime = metadata
             .modified()
             .with_context(|| format!("Could not read wheel modification time: {path}"))?;
 
@@ -159,5 +163,18 @@ mod tests {
             err.to_string().contains("Could not find karva wheel"),
             "{err:?}"
         );
+    }
+
+    #[test]
+    fn find_karva_wheel_ignores_directory_candidates() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let root = temp_path(&temp_dir);
+        let wheel = write_wheel(root, "karva-0.1.0-py3-none-any.whl", 10);
+        std::fs::create_dir(root.join("karva-0.2.0-py3-none-any.whl"))
+            .expect("create directory candidate");
+
+        let found = find_karva_wheel_in(root).expect("find wheel");
+
+        assert_eq!(found, wheel);
     }
 }
