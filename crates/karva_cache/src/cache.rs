@@ -45,9 +45,7 @@ pub struct AggregatedResults {
 
 impl AggregatedResults {
     pub fn register_interrupted_test(&mut self, name: &str, duration: Duration) {
-        let function_name = name
-            .split_once('[')
-            .map_or_else(|| name.to_string(), |(base, _)| base.to_string());
+        let function_name = base_test_name(name);
         self.stats.add(TestResultKind::Failed);
         self.failed_tests.push(function_name.clone());
         self.test_cases.push(TestCaseResult::from_display_name(
@@ -57,6 +55,17 @@ impl AggregatedResults {
         ));
         self.durations.insert(function_name, duration);
     }
+}
+
+fn base_test_name(name: &str) -> String {
+    let Some((module, function)) = name.rsplit_once("::") else {
+        return name.to_string();
+    };
+    let function = function
+        .split_once('(')
+        .or_else(|| function.split_once('['))
+        .map_or(function, |(base, _)| base);
+    format!("{module}::{function}")
 }
 
 /// Reads and writes test results in the cache directory for a specific run.
@@ -776,7 +785,7 @@ mod tests {
     fn interrupted_tests_count_as_failures() {
         let mut results = AggregatedResults::default();
 
-        results.register_interrupted_test("mod::test_slow[param]", Duration::from_millis(42));
+        results.register_interrupted_test("mod::test_slow", Duration::from_millis(42));
 
         assert_eq!(results.stats.failed(), 1);
         assert_debug_snapshot!(results.failed_tests, @r#"
@@ -788,6 +797,55 @@ mod tests {
         {
             "mod::test_slow": 42ms,
         }
+        "#);
+    }
+
+    #[test]
+    fn interrupted_parametrized_tests_store_base_function_name_for_reruns() {
+        let mut results = AggregatedResults::default();
+
+        results.register_interrupted_test("mod::test_slow(value=1)", Duration::from_millis(42));
+        results.register_interrupted_test("mod::test_legacy[value]", Duration::from_millis(24));
+
+        assert_debug_snapshot!(results.failed_tests, @r#"
+        [
+            "mod::test_slow",
+            "mod::test_legacy",
+        ]
+        "#);
+        let mut durations: Vec<_> = results.durations.iter().collect();
+        durations.sort_by_key(|(name, _)| *name);
+        assert_debug_snapshot!(durations, @r#"
+        [
+            (
+                "mod::test_legacy",
+                24ms,
+            ),
+            (
+                "mod::test_slow",
+                42ms,
+            ),
+        ]
+        "#);
+        assert_debug_snapshot!(results.test_cases, @r#"
+        [
+            TestCaseResult {
+                module_name: "mod",
+                name: "test_slow(value=1)",
+                full_name: "mod::test_slow(value=1)",
+                outcome: Failed,
+                duration: 42ms,
+                retry: None,
+            },
+            TestCaseResult {
+                module_name: "mod",
+                name: "test_legacy[value]",
+                full_name: "mod::test_legacy[value]",
+                outcome: Failed,
+                duration: 24ms,
+                retry: None,
+            },
+        ]
         "#);
     }
 
