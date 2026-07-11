@@ -46,7 +46,7 @@ required-version = ">=999.0.0"
 
     ----- stderr -----
     Karva failed
-      Cause: <temp_dir>/karva.toml: the installed karva [VERSION] does not satisfy `required-version = ">=999.0.0"`
+      Cause: <temp_dir>/karva.toml has an incompatible `required-version`
       Cause: the installed karva [VERSION] does not satisfy `required-version = ">=999.0.0"`
     "#);
 }
@@ -74,7 +74,7 @@ required-version = ">=999.0.0"
 
     ----- stderr -----
     Karva failed
-      Cause: <temp_dir>/pyproject.toml: the installed karva [VERSION] does not satisfy `required-version = ">=999.0.0"`
+      Cause: <temp_dir>/pyproject.toml has an incompatible `required-version`
       Cause: the installed karva [VERSION] does not satisfy `required-version = ">=999.0.0"`
     "#);
 }

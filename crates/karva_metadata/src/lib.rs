@@ -347,7 +347,7 @@ pub enum ProjectMetadataError {
         path: Utf8PathBuf,
     },
 
-    #[error("{path}: {source}")]
+    #[error("{path} has an incompatible `required-version`")]
     IncompatibleVersion {
         path: Utf8PathBuf,
         #[source]
