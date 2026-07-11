@@ -138,8 +138,8 @@ fn rebrand_timeout_error(
 /// Returns `true` if the function was patched (caller should NOT apply `asyncio.run()`),
 /// or `false` if no patching was needed.
 pub(crate) fn patch_async_test_function(py: Python<'_>, function: &Py<PyAny>) -> PyResult<bool> {
-    let asyncio = py.import("asyncio")?;
-    let is_coroutine_fn = asyncio
+    let inspect = py.import("inspect")?;
+    let is_coroutine_fn = inspect
         .call_method1("iscoroutinefunction", (function,))?
         .extract::<bool>()?;
 
@@ -156,7 +156,7 @@ pub(crate) fn patch_async_test_function(py: Python<'_>, function: &Py<PyAny>) ->
         return Ok(false);
     };
 
-    let inner_is_async = asyncio
+    let inner_is_async = inspect
         .call_method1("iscoroutinefunction", (&inner_test,))?
         .extract::<bool>()?;
 
