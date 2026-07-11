@@ -12,14 +12,14 @@ pub enum FixtureScope {
 
 impl FixtureScope {
     /// Returns a list of scopes above the current scope.
-    pub(crate) fn scopes_above(self) -> Vec<Self> {
+    pub(crate) fn scopes_above(self) -> &'static [Self] {
         use FixtureScope::{Function, Module, Package, Session};
 
         match self {
-            Function => vec![Function, Module, Package, Session],
-            Module => vec![Module, Package, Session],
-            Package => vec![Package, Session],
-            Session => vec![Session],
+            Function => &[Function, Module, Package, Session],
+            Module => &[Module, Package, Session],
+            Package => &[Package, Session],
+            Session => &[Session],
         }
     }
 }
@@ -76,5 +76,21 @@ pub fn fixture_scope(
         FixtureScope::try_from(scope_str)
     } else {
         Err("Scope must be either a string or a callable".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FixtureScope::{Function, Module, Package, Session};
+
+    #[test]
+    fn scopes_above_returns_current_scope_through_session() {
+        assert_eq!(
+            Function.scopes_above(),
+            &[Function, Module, Package, Session]
+        );
+        assert_eq!(Module.scopes_above(), &[Module, Package, Session]);
+        assert_eq!(Package.scopes_above(), &[Package, Session]);
+        assert_eq!(Session.scopes_above(), &[Session]);
     }
 }

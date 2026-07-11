@@ -749,20 +749,14 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             fixture.scope(),
         );
 
-        // Handle finalizer based on scope
-        // Function-scoped finalizers are returned to be run immediately after the test
-        // Higher-scoped finalizers are added to the cache
-        let return_finalizer = finalizer.map_or_else(
-            || None,
-            |f| {
-                if f.scope == FixtureScope::Function {
-                    Some(f)
-                } else {
-                    self.finalizer_cache.add_finalizer(f);
-                    None
-                }
-            },
-        );
+        let return_finalizer = finalizer.and_then(|f| {
+            if f.scope == FixtureScope::Function {
+                Some(f)
+            } else {
+                self.finalizer_cache.add_finalizer(f);
+                None
+            }
+        });
 
         Ok((final_result, return_finalizer))
     }

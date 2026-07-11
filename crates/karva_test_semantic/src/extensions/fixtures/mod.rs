@@ -255,7 +255,7 @@ pub fn get_auto_use_fixtures<'a>(
     current: &'a dyn HasFixtures<'a>,
     scope: FixtureScope,
 ) -> Vec<&'a DiscoveredFixture> {
-    let current_fixtures = current.auto_use_fixtures(&scope.scopes_above());
+    let current_fixtures = current.auto_use_fixtures(scope.scopes_above());
     let parent_fixtures = parents
         .iter()
         .flat_map(|parent| parent.auto_use_fixtures(&[scope]));
