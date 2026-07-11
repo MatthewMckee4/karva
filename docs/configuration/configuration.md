@@ -516,6 +516,30 @@ slow-timeout = 60.0
 
 ---
 
+### `termination-grace-period`
+
+Grace period (in seconds) between graceful worker termination and
+force-kill.
+
+Karva uses this when stopping workers because of Ctrl+C, fail-fast, or
+`run-timeout`. Set to `0` to send the force-kill signal immediately
+after the graceful termination signal.
+
+Defaults to 10 seconds.
+
+**Default value**: `10.0`
+
+**Type**: `float (seconds)`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.test]
+termination-grace-period = 10.0
+```
+
+---
+
 ### `test-function-prefix`
 
 The prefix to use for test functions.

@@ -1323,6 +1323,7 @@ dependencies = [
  "karva_project",
  "karva_static",
  "karva_version",
+ "libc",
  "ruff_python_ast",
  "serde_json",
  "tempfile",

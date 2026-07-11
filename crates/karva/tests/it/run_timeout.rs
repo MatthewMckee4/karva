@@ -68,6 +68,52 @@ def test_slow():
     ");
 }
 
+/// A timed-out run sends SIGTERM before force-killing the worker, giving the
+/// running test process a chance to clean up.
+#[cfg(unix)]
+#[test]
+fn test_run_timeout_sends_sigterm_before_force_kill() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import os
+from pathlib import Path
+import signal
+import time
+
+def handle_sigterm(signum, frame):
+    Path('terminated').write_text('1')
+    os._exit(0)
+
+signal.signal(signal.SIGTERM, handle_sigterm)
+
+def test_slow():
+    time.sleep(30)
+        ",
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command()
+            .arg("--run-timeout=1")
+            .arg("--termination-grace-period=2"),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    error: run timed out before all tests completed
+
+    ----- stderr -----
+    "
+    );
+
+    assert!(context.root().join("terminated").exists());
+}
+
 /// A run that finishes within `--run-timeout` is unaffected.
 #[test]
 fn test_run_timeout_allows_fast_run() {

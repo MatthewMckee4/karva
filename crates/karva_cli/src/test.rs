@@ -5,7 +5,8 @@ use clap::Parser;
 use karva_logging::{FinalStatusLevel, StatusLevel, TerminalColor};
 use karva_metadata::{
     CovFailUnder, CoverageOptions, MaxFail, Options, OverrideOptions, RunTimeoutSecs,
-    SlowTimeoutSecs, SrcOptions, TerminalOptions, TestOptions, TestTimeoutSecs,
+    SlowTimeoutSecs, SrcOptions, TerminalOptions, TerminationGracePeriodSecs, TestOptions,
+    TestTimeoutSecs,
 };
 use karva_static::EnvVars;
 
@@ -312,6 +313,15 @@ pub struct TestCommand {
     #[clap(long, value_name = "SECONDS", help_heading = "Runner options")]
     pub run_timeout: Option<f64>,
 
+    /// Grace period before force-killing workers during shutdown, in seconds.
+    ///
+    /// When karva stops workers because of Ctrl+C, fail-fast, or
+    /// `--run-timeout`, it first asks them to terminate gracefully. If they
+    /// are still running after this period, karva force-kills them. Pass `0`
+    /// to force-kill immediately after graceful termination.
+    #[clap(long, value_name = "SECONDS", help_heading = "Runner options")]
+    pub termination_grace_period: Option<f64>,
+
     /// Disable parallel execution (equivalent to `--num-workers 1`)
     #[clap(long, default_missing_value = "true", num_args=0..1, help_heading = "Runner options")]
     pub no_parallel: Option<bool>,
@@ -417,6 +427,7 @@ impl SubTestCommand {
                 // than this worker-shared struct. `TestCommand::into_options`
                 // sets the real value.
                 run_timeout: None,
+                termination_grace_period: None,
             }),
             coverage: Some(CoverageOptions {
                 sources: (!self.cov.is_empty()).then(|| self.cov.clone()),
@@ -442,6 +453,7 @@ impl SubTestCommand {
 impl TestCommand {
     pub fn into_options(self) -> Options {
         let run_timeout = self.run_timeout;
+        let termination_grace_period = self.termination_grace_period;
         let mut sub_command = self.sub_command;
         if self.no_capture {
             sub_command.show_output = Some(true);
@@ -449,6 +461,8 @@ impl TestCommand {
         let mut options = sub_command.into_options();
         if let Some(test) = options.test.as_mut() {
             test.run_timeout = run_timeout.map(RunTimeoutSecs);
+            test.termination_grace_period =
+                termination_grace_period.map(TerminationGracePeriodSecs);
         }
         options
     }

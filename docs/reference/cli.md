@@ -137,7 +137,9 @@ karva test [OPTIONS] [PATH]...
 <li><code>pass</code>:  Display failed, retried, slow, and passing test results (default)</li>
 <li><code>skip</code>:  Additionally display skipped test results</li>
 <li><code>all</code>:  Display all test result statuses</li>
-</ul></dd><dt id="karva-test--test-prefix"><a href="#karva-test--test-prefix"><code>--test-prefix</code></a> <i>test-prefix</i></dt><dd><p>The prefix of the test functions</p>
+</ul></dd><dt id="karva-test--termination-grace-period"><a href="#karva-test--termination-grace-period"><code>--termination-grace-period</code></a> <i>seconds</i></dt><dd><p>Grace period before force-killing workers during shutdown, in seconds.</p>
+<p>When karva stops workers because of Ctrl+C, fail-fast, or <code>--run-timeout</code>, it first asks them to terminate gracefully. If they are still running after this period, karva force-kills them. Pass <code>0</code> to force-kill immediately after graceful termination.</p>
+</dd><dt id="karva-test--test-prefix"><a href="#karva-test--test-prefix"><code>--test-prefix</code></a> <i>test-prefix</i></dt><dd><p>The prefix of the test functions</p>
 </dd><dt id="karva-test--timeout"><a href="#karva-test--timeout"><code>--timeout</code></a> <i>seconds</i></dt><dd><p>Hard per-test timeout, in seconds.</p>
 <p>Tests that run longer than this duration are killed and reported as failures. A test-level &#91;<code>@karva.tags.timeout</code>&#93; decorator overrides the default for that specific test.</p>
 <p>Accepts fractional seconds such as <code>--timeout=120</code> or <code>--timeout=0.5</code>.</p>

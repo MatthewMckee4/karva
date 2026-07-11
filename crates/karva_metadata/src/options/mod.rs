@@ -16,8 +16,8 @@ use crate::filter::{FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
 use crate::settings::{
     CovFailUnder, CoverageSettings, JunitSettings, NoTestsMode, OverrideSettings, ProjectSettings,
-    RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs, SrcSettings, TerminalSettings, TestSettings,
-    TestTimeoutSecs,
+    RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs, SrcSettings, TerminalSettings,
+    TerminationGracePeriodSecs, TestSettings, TestTimeoutSecs,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata)]
@@ -391,6 +391,24 @@ pub struct TestOptions {
         "#
     )]
     pub run_timeout: Option<RunTimeoutSecs>,
+
+    /// Grace period (in seconds) between graceful worker termination and
+    /// force-kill.
+    ///
+    /// Karva uses this when stopping workers because of Ctrl+C, fail-fast, or
+    /// `run-timeout`. Set to `0` to send the force-kill signal immediately
+    /// after the graceful termination signal.
+    ///
+    /// Defaults to 10 seconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"10.0"#,
+        value_type = "float (seconds)",
+        example = r#"
+            termination-grace-period = 10.0
+        "#
+    )]
+    pub termination_grace_period: Option<TerminationGracePeriodSecs>,
 }
 
 impl TestOptions {
@@ -414,6 +432,9 @@ impl TestOptions {
             slow_timeout: self.slow_timeout.and_then(SlowTimeoutSecs::as_duration),
             timeout: self.timeout.and_then(TestTimeoutSecs::as_duration),
             run_timeout: self.run_timeout.and_then(RunTimeoutSecs::as_duration),
+            termination_grace_period: self
+                .termination_grace_period
+                .and_then(TerminationGracePeriodSecs::as_duration),
         }
     }
 }
@@ -794,7 +815,7 @@ nonsense = 42
           |
         4 | nonsense = 42
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `test-function-prefix`, `fail-fast`, `max-fail`, `try-import-fixtures`, `retry`, `no-tests`, `slow-timeout`, `timeout`, `run-timeout`
+        unknown field `nonsense`, expected one of `test-function-prefix`, `fail-fast`, `max-fail`, `try-import-fixtures`, `retry`, `no-tests`, `slow-timeout`, `timeout`, `run-timeout`, `termination-grace-period`
         "
         );
     }
@@ -895,6 +916,7 @@ max-fail = 0
             slow_timeout: None,
             timeout: None,
             run_timeout: None,
+            termination_grace_period: None,
         }
         "#);
     }
@@ -925,6 +947,7 @@ max-fail = 0
             slow_timeout: None,
             timeout: None,
             run_timeout: None,
+            termination_grace_period: None,
         }
         "#);
     }
@@ -988,6 +1011,7 @@ retry = 2
                 slow_timeout: None,
                 timeout: None,
                 run_timeout: None,
+                termination_grace_period: None,
             },
         )
         "#);
@@ -1045,6 +1069,7 @@ retry = 5
                 slow_timeout: None,
                 timeout: None,
                 run_timeout: None,
+                termination_grace_period: None,
             },
         )
         "#);
