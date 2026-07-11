@@ -4,13 +4,17 @@ use anyhow::{Context, Result};
 use camino::Utf8Path;
 use fs_err as fs;
 
-use crate::data::WorkerFile;
+use crate::data::{BranchArc, WorkerFile};
 
 #[derive(Debug, Default)]
 pub(super) struct CombinedFile {
     executable: BTreeSet<u32>,
     executed: BTreeSet<u32>,
     contexts: BTreeMap<u32, BTreeSet<String>>,
+    branches_enabled: bool,
+    branch_possible: BTreeSet<BranchArc>,
+    branch_executed: BTreeSet<BranchArc>,
+    arc_contexts: BTreeMap<BranchArc, BTreeSet<String>>,
 }
 
 pub(super) struct FileRow {
@@ -23,6 +27,16 @@ pub(super) struct FileRow {
     pub executable: Vec<u32>,
     pub executed: Vec<u32>,
     pub contexts: BTreeMap<u32, BTreeSet<String>>,
+    pub branches_enabled: bool,
+    pub branches: u32,
+    pub branch_hit: u32,
+    pub branch_miss: u32,
+    pub branch_partial: u32,
+    pub branch_possible: Vec<BranchArc>,
+    pub branch_executed: Vec<BranchArc>,
+    pub branch_missing: Vec<BranchArc>,
+    pub arcs: Vec<BranchArc>,
+    pub arc_contexts: BTreeMap<BranchArc, BTreeSet<String>>,
 }
 
 pub(super) fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String, CombinedFile>> {
@@ -41,6 +55,18 @@ pub(super) fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String,
             bucket.executed.extend(file_entry.executed);
             for (line, contexts) in file_entry.contexts {
                 bucket.contexts.entry(line).or_default().extend(contexts);
+            }
+            if let Some(branches) = file_entry.branches {
+                bucket.branches_enabled = true;
+                bucket.branch_possible.extend(branches.possible);
+                bucket.branch_executed.extend(branches.executed);
+                for entry in branches.contexts {
+                    bucket
+                        .arc_contexts
+                        .entry(entry.arc)
+                        .or_default()
+                        .extend(entry.contexts);
+                }
             }
         }
     }
@@ -62,13 +88,27 @@ pub(super) fn build_rows(
             let stmts = u32::try_from(executable.len()).unwrap_or(u32::MAX);
             let hit = u32::try_from(executed.len()).unwrap_or(u32::MAX);
             let miss = stmts.saturating_sub(hit);
+            let branch_executed: BTreeSet<BranchArc> = data
+                .branch_executed
+                .intersection(&data.branch_possible)
+                .copied()
+                .collect();
+            let branch_missing: BTreeSet<BranchArc> = data
+                .branch_possible
+                .difference(&branch_executed)
+                .copied()
+                .collect();
+            let branches = u32::try_from(data.branch_possible.len()).unwrap_or(u32::MAX);
+            let branch_hit = u32::try_from(branch_executed.len()).unwrap_or(u32::MAX);
+            let branch_miss = branches.saturating_sub(branch_hit);
+            let branch_partial = partial_branch_count(&data.branch_possible, &branch_executed);
             let missing = if show_missing {
                 let uncovered: BTreeSet<u32> = data
                     .executable
                     .difference(&data.executed)
                     .copied()
                     .collect();
-                collapse_ranges(&uncovered)
+                collapse_missing(&uncovered, &branch_missing)
             } else {
                 String::new()
             };
@@ -82,6 +122,16 @@ pub(super) fn build_rows(
                 executable,
                 executed,
                 contexts: data.contexts.clone(),
+                branches_enabled: data.branches_enabled,
+                branches,
+                branch_hit,
+                branch_miss,
+                branch_partial,
+                branch_possible: data.branch_possible.iter().copied().collect(),
+                branch_executed: branch_executed.iter().copied().collect(),
+                branch_missing: branch_missing.iter().copied().collect(),
+                arcs: data.branch_executed.iter().copied().collect(),
+                arc_contexts: data.arc_contexts.clone(),
             }
         })
         .collect()
@@ -94,7 +144,16 @@ pub(super) fn total_percent(rows: &[FileRow]) -> f64 {
     let total_miss = rows
         .iter()
         .fold(0_u32, |acc, row| acc.saturating_add(row.miss));
-    percent(total_stmts, total_miss)
+    let total_branches = rows
+        .iter()
+        .fold(0_u32, |acc, row| acc.saturating_add(row.branches));
+    let total_branch_miss = rows
+        .iter()
+        .fold(0_u32, |acc, row| acc.saturating_add(row.branch_miss));
+    percent(
+        total_stmts.saturating_add(total_branches),
+        total_miss.saturating_add(total_branch_miss),
+    )
 }
 
 pub(super) fn totals_row(rows: &[FileRow]) -> FileRow {
@@ -108,6 +167,18 @@ pub(super) fn totals_row(rows: &[FileRow]) -> FileRow {
         .iter()
         .fold(0_u32, |acc, row| acc.saturating_add(row.miss));
     let missing = rows.iter().flat_map(missing_lines).collect::<Vec<_>>();
+    let branches = rows
+        .iter()
+        .fold(0_u32, |acc, row| acc.saturating_add(row.branches));
+    let branch_hit = rows
+        .iter()
+        .fold(0_u32, |acc, row| acc.saturating_add(row.branch_hit));
+    let branch_miss = rows
+        .iter()
+        .fold(0_u32, |acc, row| acc.saturating_add(row.branch_miss));
+    let branch_partial = rows
+        .iter()
+        .fold(0_u32, |acc, row| acc.saturating_add(row.branch_partial));
     FileRow {
         name: "TOTAL".to_string(),
         absolute_name: String::new(),
@@ -118,6 +189,16 @@ pub(super) fn totals_row(rows: &[FileRow]) -> FileRow {
         executable: Vec::new(),
         executed: Vec::new(),
         contexts: BTreeMap::new(),
+        branches_enabled: rows.iter().any(|row| row.branches_enabled),
+        branches,
+        branch_hit,
+        branch_miss,
+        branch_partial,
+        branch_possible: Vec::new(),
+        branch_executed: Vec::new(),
+        branch_missing: Vec::new(),
+        arcs: Vec::new(),
+        arc_contexts: BTreeMap::new(),
     }
 }
 
@@ -154,6 +235,13 @@ pub(super) fn rate(hit: u32, total: u32) -> f64 {
     }
 }
 
+pub(super) fn row_percent(row: &FileRow) -> f64 {
+    percent(
+        row.stmts.saturating_add(row.branches),
+        row.miss.saturating_add(row.branch_miss),
+    )
+}
+
 pub(super) fn format_percent(total: u32, miss: u32) -> String {
     let pct = percent(total, miss);
     format!("{pct:.0}%")
@@ -183,6 +271,49 @@ fn format_range(start: u32, end: u32) -> String {
     } else {
         format!("{start}-{end}")
     }
+}
+
+fn partial_branch_count(possible: &BTreeSet<BranchArc>, executed: &BTreeSet<BranchArc>) -> u32 {
+    let mut by_source: BTreeMap<i32, (u32, u32)> = BTreeMap::new();
+    for arc in possible {
+        let entry = by_source.entry(arc.from).or_default();
+        entry.0 = entry.0.saturating_add(1);
+        if executed.contains(arc) {
+            entry.1 = entry.1.saturating_add(1);
+        }
+    }
+    u32::try_from(
+        by_source
+            .values()
+            .filter(|(possible, executed)| *executed > 0 && executed < possible)
+            .count(),
+    )
+    .unwrap_or(u32::MAX)
+}
+
+fn collapse_missing(lines: &BTreeSet<u32>, branches: &BTreeSet<BranchArc>) -> String {
+    let mut parts = Vec::new();
+    let lines_collapsed = collapse_ranges(lines);
+    if !lines_collapsed.is_empty() {
+        parts.push(lines_collapsed);
+    }
+    parts.extend(
+        branches
+            .iter()
+            .copied()
+            .filter(|arc| arc.to <= 0 || !lines.contains(&(u32::try_from(arc.to).unwrap_or(0))))
+            .map(format_branch_arc),
+    );
+    parts.join(", ")
+}
+
+pub(super) fn format_branch_arc(arc: BranchArc) -> String {
+    let to = if arc.to < 0 {
+        "exit".to_string()
+    } else {
+        arc.to.to_string()
+    };
+    format!("{}->{to}", arc.from)
 }
 
 fn simplify_path(path: &str) -> String {
@@ -330,6 +461,16 @@ mod tests {
             executable: Vec::new(),
             executed: Vec::new(),
             contexts: BTreeMap::new(),
+            branches_enabled: false,
+            branches: 0,
+            branch_hit: 0,
+            branch_miss: 0,
+            branch_partial: 0,
+            branch_possible: Vec::new(),
+            branch_executed: Vec::new(),
+            branch_missing: Vec::new(),
+            arcs: Vec::new(),
+            arc_contexts: BTreeMap::new(),
         };
 
         assert_eq!(

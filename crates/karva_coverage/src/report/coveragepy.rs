@@ -21,6 +21,7 @@ const SQLITE_WRITER: &str = include_str!("../../../../python/karva/_coverage_sql
 
 #[derive(Serialize)]
 struct SqlitePayload {
+    has_arcs: bool,
     files: Vec<SqliteFileRow>,
 }
 
@@ -28,12 +29,19 @@ struct SqlitePayload {
 struct SqliteFileRow {
     path: String,
     contexts: Vec<SqliteContextRow>,
+    arcs: Vec<SqliteArcContextRow>,
 }
 
 #[derive(Serialize)]
 struct SqliteContextRow {
     context: String,
     numbits: Vec<u8>,
+}
+
+#[derive(Serialize)]
+struct SqliteArcContextRow {
+    context: String,
+    arcs: Vec<[i32; 2]>,
 }
 
 pub fn write_coveragepy_sqlite(
@@ -128,6 +136,7 @@ fn python_writer_error(output_status: &Output) -> Result<()> {
 
 fn sqlite_payload(rows: &[FileRow]) -> SqlitePayload {
     SqlitePayload {
+        has_arcs: rows.iter().any(|row| row.branches_enabled),
         files: rows
             .iter()
             .map(|row| SqliteFileRow {
@@ -138,6 +147,14 @@ fn sqlite_payload(rows: &[FileRow]) -> SqlitePayload {
                     .map(|(context, lines)| SqliteContextRow {
                         context,
                         numbits: nums_to_numbits(&lines),
+                    })
+                    .collect(),
+                arcs: arcs_by_context(row)
+                    .into_iter()
+                    .filter(|(_, arcs)| !arcs.is_empty())
+                    .map(|(context, arcs)| SqliteArcContextRow {
+                        context,
+                        arcs: arcs.into_iter().map(|arc| [arc.from, arc.to]).collect(),
                     })
                     .collect(),
             })
@@ -214,6 +231,30 @@ fn lines_by_context(row: &FileRow) -> BTreeMap<String, BTreeSet<u32>> {
     lines_by_context
 }
 
+fn arcs_by_context(row: &FileRow) -> BTreeMap<String, BTreeSet<crate::data::BranchArc>> {
+    let mut arcs_by_context: BTreeMap<String, BTreeSet<crate::data::BranchArc>> = BTreeMap::new();
+
+    for arc in &row.arcs {
+        if let Some(contexts) = row.arc_contexts.get(arc)
+            && !contexts.is_empty()
+        {
+            for context in contexts {
+                arcs_by_context
+                    .entry(context.clone())
+                    .or_default()
+                    .insert(*arc);
+            }
+        } else {
+            arcs_by_context
+                .entry(String::new())
+                .or_default()
+                .insert(*arc);
+        }
+    }
+
+    arcs_by_context
+}
+
 fn nums_to_numbits(lines: &BTreeSet<u32>) -> Vec<u8> {
     let Some(max_line) = lines.iter().next_back() else {
         return Vec::new();
@@ -234,7 +275,7 @@ mod tests {
     use pyo3::types::PyDict;
 
     use super::*;
-    use crate::data::{FileEntry, WorkerFile};
+    use crate::data::{BranchArc, BranchEntry, FileEntry, WorkerFile};
 
     type CoverageData = (u32, String, u32, Vec<(String, String)>);
 
@@ -275,6 +316,7 @@ mod tests {
                             ),
                             (6, BTreeSet::from(["test_mod::test_one".to_string()])),
                         ]),
+                        branches: None,
                     },
                 ),
                 (
@@ -283,6 +325,7 @@ mod tests {
                         executable: vec![1, 2],
                         executed: Vec::new(),
                         contexts: BTreeMap::new(),
+                        branches: None,
                     },
                 ),
             ]),
@@ -317,6 +360,48 @@ mod tests {
         );
     }
 
+    #[test]
+    fn write_coveragepy_sqlite_writes_branch_arcs() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let root = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).expect("utf8 temp dir");
+        let worker_file = root.join("worker.json");
+        let output = root.join(".coverage");
+        let app = root.join("src/app.py");
+        let worker = WorkerFile {
+            files: BTreeMap::from([(
+                app.to_string(),
+                FileEntry {
+                    executable: vec![1, 2, 3, 4],
+                    executed: vec![1, 2, 3],
+                    contexts: BTreeMap::new(),
+                    branches: Some(BranchEntry {
+                        possible: vec![BranchArc { from: 2, to: 3 }, BranchArc { from: 2, to: 4 }],
+                        executed: vec![
+                            BranchArc { from: -1, to: 1 },
+                            BranchArc { from: 1, to: 2 },
+                            BranchArc { from: 2, to: 3 },
+                            BranchArc { from: 3, to: -1 },
+                        ],
+                        contexts: Vec::new(),
+                    }),
+                },
+            )]),
+        };
+        fs::write(
+            &worker_file,
+            serde_json::to_vec(&worker).expect("serialize worker file"),
+        )
+        .expect("write worker file");
+
+        write_coveragepy_sqlite(&root, &[worker_file], &output, &CoverageFilters::default())
+            .expect("write coverage.py sqlite");
+
+        let (has_arcs, arcs) = query_arc_data(&output, &app).expect("query arc data");
+
+        assert_eq!(has_arcs, "1");
+        assert_eq!(arcs, vec![(-1, 1), (1, 2), (2, 3), (3, -1)]);
+    }
+
     fn query_coverage_data(output: &Utf8Path, app: &Utf8Path) -> PyResult<CoverageData> {
         Python::initialize();
         Python::attach(|py| {
@@ -341,6 +426,44 @@ try:
                 JOIN file ON file.id = line_bits.file_id
                 WHERE file.path = ?
                 ORDER BY context.context
+                """,
+            (app,),
+        )),
+    )
+finally:
+    conn.close()
+"#,
+                None,
+                Some(&locals),
+            )?;
+            locals
+                .get_item("result")?
+                .expect("result should be set")
+                .extract()
+        })
+    }
+
+    fn query_arc_data(output: &Utf8Path, app: &Utf8Path) -> PyResult<(String, Vec<(i32, i32)>)> {
+        Python::initialize();
+        Python::attach(|py| {
+            let locals = PyDict::new(py);
+            locals.set_item("output", output.as_str())?;
+            locals.set_item("app", app.as_str())?;
+            py.run(
+                cr#"
+import sqlite3
+
+conn = sqlite3.connect(output)
+try:
+    result = (
+        conn.execute("SELECT value FROM meta WHERE key = 'has_arcs'").fetchone()[0],
+        list(conn.execute(
+            """
+                SELECT arc.fromno, arc.tono
+                FROM arc
+                JOIN file ON file.id = arc.file_id
+                WHERE file.path = ?
+                ORDER BY arc.fromno, arc.tono
                 """,
             (app,),
         )),

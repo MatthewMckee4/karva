@@ -38,6 +38,32 @@ sources = ["src"]
 
 An empty entry (`""`) measures the cwd, matching `pytest-cov`'s bare `--cov`.
 
+## Branch coverage
+
+Pass `--cov-branch` to measure branch destinations as well as lines:
+
+```bash
+karva test --cov --cov-branch --cov-report=term-missing
+```
+
+```text
+Name             Stmts   Miss   Branch   BrPart   Cover   Missing
+──────────────────────────────────────────────────────────────────
+test_branch.py       6      1        2        1     75%   5
+──────────────────────────────────────────────────────────────────
+TOTAL                6      1        2        1     75%
+```
+
+Branch coverage records line-to-line arcs for conditional control flow and compares them with statically possible branch destinations. The `Cover` percentage includes both statement and branch opportunities, matching coverage.py's branch coverage model. JSON, XML, HTML, and the `.coverage` SQLite file include branch data when branch mode is enabled.
+
+Equivalent configuration:
+
+```toml
+[tool.karva.profile.default.coverage]
+sources = ["src"]
+branch = true
+```
+
 ## Reports
 
 `--cov-report=term` (the default) prints the compact table above. `--cov-report=term-missing` adds a `Missing` column listing the uncovered line numbers per file:

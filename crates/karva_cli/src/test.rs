@@ -208,6 +208,10 @@ pub struct SubTestCommand {
     )]
     pub cov_context: Option<crate::CovContext>,
 
+    /// Measure branch coverage in addition to line coverage.
+    #[clap(long = "cov-branch", action = clap::ArgAction::SetTrue, help_heading = "Coverage options")]
+    pub cov_branch: bool,
+
     /// Disable coverage measurement for this run.
     ///
     /// Overrides any `--cov` flag and any `[coverage] sources` configured in
@@ -425,6 +429,7 @@ impl SubTestCommand {
                     | CovReport::Html { path } => path.as_ref().map(ToString::to_string),
                     CovReport::Term | CovReport::TermMissing => None,
                 }),
+                branch: self.cov_branch.then_some(true),
                 fail_under: self.cov_fail_under.map(CovFailUnder),
                 disabled: self.no_cov.then_some(true),
             }),

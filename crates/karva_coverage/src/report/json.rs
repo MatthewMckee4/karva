@@ -4,7 +4,9 @@ use std::collections::BTreeSet;
 use anyhow::{Context, Result};
 use serde::Serialize;
 
-use super::shared::{FileRow, missing_lines, percent, totals_row};
+use crate::data::BranchArc;
+
+use super::shared::{FileRow, missing_lines, percent, row_percent, totals_row};
 
 #[derive(Serialize)]
 struct JsonFileSummary {
@@ -13,6 +15,16 @@ struct JsonFileSummary {
     percent_covered: f64,
     missing_lines: Vec<u32>,
     excluded_lines: Vec<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    num_branches: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    num_partial_branches: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    covered_branches: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    missing_branches: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    percent_branches_covered: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -23,6 +35,10 @@ struct JsonFileReport {
     excluded_lines: Vec<u32>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     contexts: BTreeMap<u32, BTreeSet<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    executed_branches: Option<Vec<[i32; 2]>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    missing_branches: Option<Vec<[i32; 2]>>,
 }
 
 #[derive(Serialize)]
@@ -30,6 +46,16 @@ struct JsonTotalsSummary {
     covered_lines: u32,
     num_statements: u32,
     percent_covered: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    num_branches: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    num_partial_branches: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    covered_branches: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    missing_branches: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    percent_branches_covered: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -67,6 +93,12 @@ pub(super) fn build_json_report(rows: &[FileRow]) -> Result<String> {
                     missing_lines: missing_lines(row),
                     excluded_lines: Vec::new(),
                     contexts: row.contexts.clone(),
+                    executed_branches: row
+                        .branches_enabled
+                        .then(|| branch_pairs(&row.branch_executed)),
+                    missing_branches: row
+                        .branches_enabled
+                        .then(|| branch_pairs(&row.branch_missing)),
                 },
             )
         })
@@ -91,9 +123,16 @@ fn json_summary(row: &FileRow) -> JsonFileSummary {
     JsonFileSummary {
         covered_lines: row.hit,
         num_statements: row.stmts,
-        percent_covered: percent(row.stmts, row.miss),
+        percent_covered: row_percent(row),
         missing_lines: missing_lines(row),
         excluded_lines: Vec::new(),
+        num_branches: row.branches_enabled.then_some(row.branches),
+        num_partial_branches: row.branches_enabled.then_some(row.branch_partial),
+        covered_branches: row.branches_enabled.then_some(row.branch_hit),
+        missing_branches: row.branches_enabled.then_some(row.branch_miss),
+        percent_branches_covered: row
+            .branches_enabled
+            .then(|| percent(row.branches, row.branch_miss)),
     }
 }
 
@@ -101,6 +140,17 @@ fn json_totals_summary(row: &FileRow) -> JsonTotalsSummary {
     JsonTotalsSummary {
         covered_lines: row.hit,
         num_statements: row.stmts,
-        percent_covered: percent(row.stmts, row.miss),
+        percent_covered: row_percent(row),
+        num_branches: row.branches_enabled.then_some(row.branches),
+        num_partial_branches: row.branches_enabled.then_some(row.branch_partial),
+        covered_branches: row.branches_enabled.then_some(row.branch_hit),
+        missing_branches: row.branches_enabled.then_some(row.branch_miss),
+        percent_branches_covered: row
+            .branches_enabled
+            .then(|| percent(row.branches, row.branch_miss)),
     }
+}
+
+fn branch_pairs(arcs: &[BranchArc]) -> Vec<[i32; 2]> {
+    arcs.iter().map(|arc| [arc.from, arc.to]).collect()
 }

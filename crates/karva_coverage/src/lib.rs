@@ -15,6 +15,7 @@
 
 #![warn(unreachable_pub)]
 
+pub(crate) mod branches;
 pub mod data;
 pub mod executable;
 pub mod report;

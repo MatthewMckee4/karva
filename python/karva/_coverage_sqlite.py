@@ -67,10 +67,26 @@ def main() -> int:
                 "INSERT INTO meta (key, value) VALUES (?, ?)", ("version", "karva")
             )
             conn.execute(
-                "INSERT INTO meta (key, value) VALUES (?, ?)", ("has_arcs", "0")
+                "INSERT INTO meta (key, value) VALUES (?, ?)",
+                ("has_arcs", "1" if payload.get("has_arcs") else "0"),
             )
 
             context_ids: dict[str, int] = {}
+
+            def context_id_for(context: str) -> int:
+                context_id = context_ids.get(context)
+                if context_id is not None:
+                    return context_id
+                cursor = conn.execute(
+                    "INSERT INTO context (context) VALUES (?)",
+                    (context,),
+                )
+                context_id = cursor.lastrowid
+                if context_id is None:
+                    raise RuntimeError("sqlite did not return a context id")
+                context_ids[context] = context_id
+                return context_id
+
             for file_row in payload["files"]:
                 cursor = conn.execute(
                     "INSERT INTO file (path) VALUES (?)", (file_row["path"],)
@@ -79,23 +95,22 @@ def main() -> int:
                 if file_id is None:
                     raise RuntimeError("sqlite did not return a file id")
                 for context_row in file_row["contexts"]:
-                    context = context_row["context"]
-                    context_id = context_ids.get(context)
-                    if context_id is None:
-                        cursor = conn.execute(
-                            "INSERT INTO context (context) VALUES (?)",
-                            (context,),
-                        )
-                        context_id = cursor.lastrowid
-                        if context_id is None:
-                            raise RuntimeError("sqlite did not return a context id")
-                        context_ids[context] = context_id
+                    context_id = context_id_for(context_row["context"])
                     conn.execute(
                         "INSERT INTO line_bits (file_id, context_id, numbits) VALUES (?, ?, ?)",
                         (
                             file_id,
                             context_id,
                             sqlite3.Binary(bytes(context_row["numbits"])),
+                        ),
+                    )
+                for context_row in file_row.get("arcs", ()):
+                    context_id = context_id_for(context_row["context"])
+                    conn.executemany(
+                        "INSERT INTO arc (file_id, context_id, fromno, tono) VALUES (?, ?, ?, ?)",
+                        (
+                            (file_id, context_id, arc[0], arc[1])
+                            for arc in context_row["arcs"]
                         ),
                     )
     finally:

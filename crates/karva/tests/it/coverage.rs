@@ -96,6 +96,189 @@ def test_pos():
 }
 
 #[test]
+fn test_cov_branch_reports_partial_branch() {
+    let context = TestContext::with_file(
+        "test_branch.py",
+        r"
+def choose(flag):
+    if flag:
+        return 'yes'
+    return 'no'
+
+def test_yes():
+    assert choose(True) == 'yes'
+",
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel()
+            .arg("--cov")
+            .arg("--cov-branch")
+            .arg("--cov-report=term-missing")
+            .arg("--status-level=none")
+            .arg("test_branch.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    Name             Stmts   Miss   Branch   BrPart   Cover   Missing
+    [LONG-LINE]
+    test_branch.py       6      1        2        1     75%   5
+    [LONG-LINE]
+    TOTAL                6      1        2        1     75%
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn test_cov_branch_json_reports_branch_arcs() {
+    let context = TestContext::with_file(
+        "test_branch_json.py",
+        r"
+def choose(flag):
+    if flag:
+        return 'yes'
+    return 'no'
+
+def test_yes():
+    assert choose(True) == 'yes'
+",
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel()
+            .arg("--cov")
+            .arg("--cov-branch")
+            .arg("--cov-report=json")
+            .arg("--status-level=none")
+            .arg("test_branch_json.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let json = context.read_file("coverage.json");
+    insta::assert_snapshot!(json, @r#"
+    {
+      "meta": {
+        "format": 2,
+        "version": "karva"
+      },
+      "files": {
+        "test_branch_json.py": {
+          "executed_lines": [
+            2,
+            3,
+            4,
+            7,
+            8
+          ],
+          "summary": {
+            "covered_lines": 5,
+            "num_statements": 6,
+            "percent_covered": 75.0,
+            "missing_lines": [
+              5
+            ],
+            "excluded_lines": [],
+            "num_branches": 2,
+            "num_partial_branches": 1,
+            "covered_branches": 1,
+            "missing_branches": 1,
+            "percent_branches_covered": 50.0
+          },
+          "missing_lines": [
+            5
+          ],
+          "excluded_lines": [],
+          "executed_branches": [
+            [
+              3,
+              4
+            ]
+          ],
+          "missing_branches": [
+            [
+              3,
+              5
+            ]
+          ]
+        }
+      },
+      "totals": {
+        "covered_lines": 5,
+        "num_statements": 6,
+        "percent_covered": 75.0,
+        "num_branches": 2,
+        "num_partial_branches": 1,
+        "covered_branches": 1,
+        "missing_branches": 1,
+        "percent_branches_covered": 50.0
+      }
+    }
+    "#);
+}
+
+#[test]
+fn test_cov_branch_can_be_enabled_from_config() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.coverage]
+sources = [""]
+branch = true
+"#,
+        ),
+        (
+            "test_branch_config.py",
+            r"
+def choose(flag):
+    if flag:
+        return 'yes'
+    return 'no'
+
+def test_yes():
+    assert choose(True) == 'yes'
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel()
+            .arg("--cov-report=term-missing")
+            .arg("--status-level=none")
+            .arg("test_branch_config.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    Name                    Stmts   Miss   Branch   BrPart   Cover   Missing
+    [LONG-LINE]
+    test_branch_config.py       6      1        2        1     75%   5
+    [LONG-LINE]
+    TOTAL                       6      1        2        1     75%
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
 fn test_cov_saves_on_test_failure() {
     let context = TestContext::with_file(
         "test_failing.py",

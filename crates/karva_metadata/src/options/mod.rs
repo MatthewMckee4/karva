@@ -491,6 +491,17 @@ pub struct CoverageOptions {
     )]
     pub report_path: Option<String>,
 
+    /// Whether to measure branch coverage in addition to line coverage.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"false"#,
+        value_type = r#"true | false"#,
+        example = r#"
+            branch = true
+        "#
+    )]
+    pub branch: Option<bool>,
+
     /// Minimum total coverage percentage required for the run to succeed.
     ///
     /// When set, the test command exits with a non-zero status if the
@@ -529,6 +540,7 @@ impl Combine for CoverageOptions {
         } else {
             self.report_path.take().combine(other.report_path)
         };
+        self.branch = self.branch.combine(other.branch);
         self.fail_under = self.fail_under.combine(other.fail_under);
         self.disabled = self.disabled.combine(other.disabled);
     }
@@ -547,6 +559,7 @@ impl CoverageOptions {
             omit: self.omit.clone().unwrap_or_default(),
             report: self.report.unwrap_or_default(),
             report_path: self.report_path.clone(),
+            branch: self.branch.unwrap_or_default(),
             fail_under: self.fail_under.map(|t| t.0),
         }
     }
@@ -1101,6 +1114,7 @@ report-path = "build/coverage.xml"
                 report_path: Some(
                     "build/coverage.xml",
                 ),
+                branch: None,
                 fail_under: None,
                 disabled: None,
             },
@@ -1135,6 +1149,7 @@ report-path = "build/coverage.xml"
                 TermMissing,
             ),
             report_path: None,
+            branch: None,
             fail_under: None,
             disabled: None,
         }
@@ -1171,6 +1186,7 @@ report-path = "build/coverage.xml"
             ),
             report: None,
             report_path: None,
+            branch: None,
             fail_under: None,
             disabled: None,
         }
@@ -1232,6 +1248,7 @@ report-path = "build/coverage.xml"
                 Json,
             ),
             report_path: None,
+            branch: None,
             fail_under: None,
             disabled: None,
         }
@@ -1268,7 +1285,7 @@ disabled = true
           |
         3 | disabled = true
           | ^^^^^^^^
-        unknown field `disabled`, expected one of `sources`, `include`, `omit`, `report`, `report-path`, `fail-under`
+        unknown field `disabled`, expected one of `sources`, `include`, `omit`, `report`, `report-path`, `branch`, `fail-under`
         "
         );
     }
@@ -1287,7 +1304,7 @@ nonsense = 1
           |
         4 | nonsense = 1
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `sources`, `include`, `omit`, `report`, `report-path`, `fail-under`
+        unknown field `nonsense`, expected one of `sources`, `include`, `omit`, `report`, `report-path`, `branch`, `fail-under`
         "
         );
     }

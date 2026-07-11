@@ -9,7 +9,7 @@ use super::CoverageFilters;
 use super::combined_rows;
 use super::html::build_html_report;
 use super::json::build_json_report;
-use super::shared::{FileRow, format_percent, total_percent};
+use super::shared::{FileRow, row_percent, total_percent};
 use super::xml::build_cobertura_xml;
 
 pub fn combine_and_report(
@@ -101,11 +101,14 @@ struct Row<'a> {
     name: &'a str,
     stmts: &'a str,
     miss: &'a str,
+    branches: &'a str,
+    branch_partial: &'a str,
     cover: &'a str,
     missing: &'a str,
 }
 
 fn print_report(rows: &[FileRow], show_missing: bool, out: &mut dyn Write) -> Result<f64> {
+    let show_branches = rows.iter().any(|row| row.branches_enabled);
     let name_width = rows
         .iter()
         .map(|row| row.name.len())
@@ -117,10 +120,13 @@ fn print_report(rows: &[FileRow], show_missing: bool, out: &mut dyn Write) -> Re
     let header = format_row(
         name_width,
         show_missing,
+        show_branches,
         &Row {
             name: "Name",
             stmts: "Stmts",
             miss: "Miss",
+            branches: "Branch",
+            branch_partial: "BrPart",
             cover: "Cover",
             missing: "Missing",
         },
@@ -134,21 +140,29 @@ fn print_report(rows: &[FileRow], show_missing: bool, out: &mut dyn Write) -> Re
 
     let mut total_stmts: u32 = 0;
     let mut total_miss: u32 = 0;
+    let mut total_branches: u32 = 0;
+    let mut total_branch_miss: u32 = 0;
+    let mut total_branch_partial: u32 = 0;
 
     for row in rows {
-        let cover = format_percent(row.stmts, row.miss);
+        let cover = format!("{:.0}%", row_percent(row));
         let stmts_str = row.stmts.to_string();
         let miss_str = row.miss.to_string();
+        let branches_str = row.branches.to_string();
+        let branch_partial_str = row.branch_partial.to_string();
         writeln!(
             out,
             "{}",
             format_row(
                 name_width,
                 show_missing,
+                show_branches,
                 &Row {
                     name: &row.name,
                     stmts: &stmts_str,
                     miss: &miss_str,
+                    branches: &branches_str,
+                    branch_partial: &branch_partial_str,
                     cover: &cover,
                     missing: &row.missing,
                 },
@@ -156,23 +170,37 @@ fn print_report(rows: &[FileRow], show_missing: bool, out: &mut dyn Write) -> Re
         )?;
         total_stmts = total_stmts.saturating_add(row.stmts);
         total_miss = total_miss.saturating_add(row.miss);
+        total_branches = total_branches.saturating_add(row.branches);
+        total_branch_miss = total_branch_miss.saturating_add(row.branch_miss);
+        total_branch_partial = total_branch_partial.saturating_add(row.branch_partial);
     }
 
     writeln!(out, "{rule}")?;
     let total_pct = total_percent(rows);
-    let total_cover = format_percent(total_stmts, total_miss);
+    let total_cover = format!(
+        "{:.0}%",
+        super::shared::percent(
+            total_stmts.saturating_add(total_branches),
+            total_miss.saturating_add(total_branch_miss),
+        )
+    );
     let total_stmts_str = total_stmts.to_string();
     let total_miss_str = total_miss.to_string();
+    let total_branches_str = total_branches.to_string();
+    let total_branch_partial_str = total_branch_partial.to_string();
     writeln!(
         out,
         "{}",
         format_row(
             name_width,
             show_missing,
+            show_branches,
             &Row {
                 name: "TOTAL",
                 stmts: &total_stmts_str,
                 miss: &total_miss_str,
+                branches: &total_branches_str,
+                branch_partial: &total_branch_partial_str,
                 cover: &total_cover,
                 missing: "",
             },
@@ -182,17 +210,34 @@ fn print_report(rows: &[FileRow], show_missing: bool, out: &mut dyn Write) -> Re
     Ok(total_pct)
 }
 
-fn format_row(name_width: usize, show_missing: bool, row: &Row<'_>) -> String {
-    let base = format!(
-        "{name:<name_width$}   {stmts:>stmts_w$}   {miss:>miss_w$}   {cover:>cover_w$}",
-        name = row.name,
-        stmts = row.stmts,
-        miss = row.miss,
-        cover = row.cover,
-        stmts_w = "Stmts".len(),
-        miss_w = "Miss".len(),
-        cover_w = "Cover".len(),
-    );
+fn format_row(name_width: usize, show_missing: bool, show_branches: bool, row: &Row<'_>) -> String {
+    let base = if show_branches {
+        format!(
+            "{name:<name_width$}   {stmts:>stmts_w$}   {miss:>miss_w$}   {branches:>branches_w$}   {branch_partial:>branch_partial_w$}   {cover:>cover_w$}",
+            name = row.name,
+            stmts = row.stmts,
+            miss = row.miss,
+            branches = row.branches,
+            branch_partial = row.branch_partial,
+            cover = row.cover,
+            stmts_w = "Stmts".len(),
+            miss_w = "Miss".len(),
+            branches_w = "Branch".len(),
+            branch_partial_w = "BrPart".len(),
+            cover_w = "Cover".len(),
+        )
+    } else {
+        format!(
+            "{name:<name_width$}   {stmts:>stmts_w$}   {miss:>miss_w$}   {cover:>cover_w$}",
+            name = row.name,
+            stmts = row.stmts,
+            miss = row.miss,
+            cover = row.cover,
+            stmts_w = "Stmts".len(),
+            miss_w = "Miss".len(),
+            cover_w = "Cover".len(),
+        )
+    };
     if show_missing && !row.missing.is_empty() {
         format!("{base}   {missing}", missing = row.missing)
     } else {
@@ -217,6 +262,16 @@ mod tests {
             executable: Vec::new(),
             executed: Vec::new(),
             contexts: BTreeMap::new(),
+            branches_enabled: false,
+            branches: 0,
+            branch_hit: 0,
+            branch_miss: 0,
+            branch_partial: 0,
+            branch_possible: Vec::new(),
+            branch_executed: Vec::new(),
+            branch_missing: Vec::new(),
+            arcs: Vec::new(),
+            arc_contexts: BTreeMap::new(),
         }
     }
 

@@ -51,7 +51,7 @@ pub fn executable_lines_for_source(source: &str) -> HashSet<u32> {
 /// Collect the set of line numbers carrying a `# pragma: no cover` comment.
 /// Match is case-insensitive and tolerant of surrounding whitespace, mirroring
 /// coverage.py's default `exclude_lines` regex.
-fn pragma_no_cover_lines<T>(
+pub(crate) fn pragma_no_cover_lines<T>(
     parsed: &ruff_python_parser::Parsed<T>,
     source: &str,
     line_index: &LineIndex,
