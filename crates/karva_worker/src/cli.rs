@@ -115,16 +115,14 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     let python_version = current_python_version();
 
-    let test_paths: Vec<Utf8PathBuf> = args
+    let test_paths: Vec<Result<TestPath, TestPathError>> = args
         .sub_command
         .paths
         .iter()
-        .map(|p| absolute(p, cwd.clone()))
-        .collect();
-
-    let test_paths: Vec<Result<TestPath, TestPathError>> = test_paths
-        .iter()
-        .map(|p| TestPath::new(p.as_str()))
+        .map(|path| {
+            let path = absolute(path, &cwd);
+            TestPath::new(path.as_str())
+        })
         .collect();
 
     let filter = FiltersetSet::new(&args.sub_command.filter_expressions)
