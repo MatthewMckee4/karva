@@ -54,7 +54,13 @@ impl TestResultKind {
 
 impl From<IndividualTestResultKind> for TestResultKind {
     fn from(val: IndividualTestResultKind) -> Self {
-        match val {
+        Self::from(&val)
+    }
+}
+
+impl From<&IndividualTestResultKind> for TestResultKind {
+    fn from(val: &IndividualTestResultKind) -> Self {
+        match *val {
             IndividualTestResultKind::Passed => Self::Passed,
             IndividualTestResultKind::Failed => Self::Failed,
             IndividualTestResultKind::Skipped { .. } => Self::Skipped,
