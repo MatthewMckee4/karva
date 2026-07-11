@@ -112,7 +112,7 @@ impl_noop_combine!(String);
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
 
     use super::Combine;
 
@@ -121,6 +121,20 @@ mod tests {
         assert_eq!(Some(1).combine(Some(2)), Some(1));
         assert_eq!(None.combine(Some(2)), Some(2));
         assert_eq!(Some(1).combine(None), Some(1));
+    }
+
+    #[test]
+    fn combine_with_option() {
+        let mut value = Some(vec![1, 2]);
+        value.combine_with(Some(vec![3, 4]));
+        assert_eq!(value, Some(vec![3, 4, 1, 2]));
+
+        value.combine_with(None);
+        assert_eq!(value, Some(vec![3, 4, 1, 2]));
+
+        let mut value = None;
+        value.combine_with(Some(vec![1, 2]));
+        assert_eq!(value, Some(vec![1, 2]));
     }
 
     #[test]
@@ -145,6 +159,25 @@ mod tests {
             Some(HashMap::from_iter([
                 (0, "b"),
                 // The value from `a` takes precedence
+                (1, "a"),
+                (2, "a"),
+                (3, "a"),
+                (5, "b")
+            ]))
+        );
+    }
+
+    #[test]
+    fn combine_btree_map() {
+        let a = BTreeMap::from_iter([(1, "a"), (2, "a"), (3, "a")]);
+        let b = BTreeMap::from_iter([(0, "b"), (2, "b"), (5, "b")]);
+
+        assert_eq!(None.combine(Some(b.clone())), Some(b.clone()));
+        assert_eq!(Some(a.clone()).combine(None), Some(a.clone()));
+        assert_eq!(
+            Some(a).combine(Some(b)),
+            Some(BTreeMap::from_iter([
+                (0, "b"),
                 (1, "a"),
                 (2, "a"),
                 (3, "a"),
