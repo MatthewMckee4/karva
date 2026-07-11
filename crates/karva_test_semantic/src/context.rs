@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::rc::Rc;
 
 use camino::Utf8Path;
 use karva_collector::CollectionSettings;
@@ -25,7 +24,7 @@ pub struct Context<'a> {
     python_version: PythonVersion,
 
     /// Accumulated test results, wrapped in `RefCell` for interior mutability.
-    result: Rc<RefCell<TestRunResult>>,
+    result: RefCell<TestRunResult>,
 
     /// Reporter for outputting test progress and results.
     reporter: &'a dyn Reporter,
@@ -42,7 +41,7 @@ impl<'a> Context<'a> {
             cwd,
             settings,
             python_version,
-            result: Rc::new(RefCell::new(TestRunResult::default())),
+            result: RefCell::new(TestRunResult::default()),
             reporter,
         }
     }
@@ -69,7 +68,7 @@ impl<'a> Context<'a> {
     }
 
     pub(crate) fn into_result(self) -> TestRunResult {
-        self.result.borrow().clone().into_sorted()
+        self.result.into_inner().into_sorted()
     }
 
     /// Record the start of a test execution. Forwarded to the reporter
