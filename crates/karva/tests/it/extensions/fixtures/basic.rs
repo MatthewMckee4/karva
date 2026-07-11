@@ -741,6 +741,50 @@ def invoke():
 }
 
 #[test]
+fn test_config_try_import_fixtures() {
+    let context = TestContext::with_files([
+        (
+            "pyproject.toml",
+            r"
+[tool.karva.profile.default.test]
+try-import-fixtures = true
+",
+        ),
+        (
+            "fixtures.py",
+            r#"
+import karva
+
+@karva.fixture
+def imported_fixture():
+    return "imported"
+"#,
+        ),
+        (
+            "test_imported_fixture.py",
+            r#"
+from fixtures import imported_fixture
+
+def test_uses_imported_fixture(imported_fixture):
+    assert imported_fixture == "imported"
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_imported_fixture::test_uses_imported_fixture(imported_fixture=imported)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 #[cfg(unix)]
 fn test_imported_fixture_missing_source_is_reported() {
     let context = TestContext::with_files([
