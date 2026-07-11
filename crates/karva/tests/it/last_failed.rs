@@ -18,7 +18,7 @@ fn last_failed_reruns_only_failures() {
     success: false
     exit_code: 1
     ----- stdout -----
-        Starting 2 tests across 1 worker
+        Starting 1 test across 1 worker
             FAIL [TIME] test_a::test_fail
 
     diagnostics:
@@ -59,7 +59,7 @@ fn last_failed_lf_alias() {
     success: false
     exit_code: 1
     ----- stdout -----
-        Starting 2 tests across 1 worker
+        Starting 1 test across 1 worker
             FAIL [TIME] test_a::test_fail
 
     diagnostics:
@@ -218,7 +218,7 @@ def test_fail_b(): assert False
     success: false
     exit_code: 1
     ----- stdout -----
-        Starting 3 tests across 1 worker
+        Starting 2 tests across 1 worker
             FAIL [TIME] test_a::test_fail_a
 
     diagnostics:
@@ -368,7 +368,7 @@ def test_fail(): assert True
     success: true
     exit_code: 0
     ----- stdout -----
-        Starting 2 tests across 1 worker
+        Starting 1 test across 1 worker
             PASS [TIME] test_a::test_fail
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
