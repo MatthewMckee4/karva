@@ -78,20 +78,39 @@ impl DiscoveredPackage {
 
     /// Remove empty modules and packages.
     pub(crate) fn shrink(&mut self) {
-        self.modules.retain(|_, module| !module.is_empty());
-
         for module in self.modules.values_mut() {
             module.shrink();
         }
 
-        self.packages.retain(|_, package| !package.is_empty());
-
         for package in self.packages.values_mut() {
             package.shrink();
         }
+
+        self.modules.retain(|_, module| !module.is_empty());
+        self.packages.retain(|_, package| !package.is_empty());
     }
 
     pub(crate) fn is_empty(&self) -> bool {
         self.modules.is_empty() && self.packages.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use camino::Utf8PathBuf;
+
+    use super::DiscoveredPackage;
+
+    #[test]
+    fn shrink_removes_packages_that_become_empty_after_child_shrink() {
+        let mut root = DiscoveredPackage::new(Utf8PathBuf::from("/project"));
+        let mut child = DiscoveredPackage::new(Utf8PathBuf::from("/project/pkg"));
+        let empty_path = Utf8PathBuf::from("/project/pkg/empty");
+        child.add_direct_subpackage(DiscoveredPackage::new(empty_path));
+        root.add_direct_subpackage(child);
+
+        root.shrink();
+
+        assert!(root.packages().is_empty());
     }
 }

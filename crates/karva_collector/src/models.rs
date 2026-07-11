@@ -209,13 +209,12 @@ impl CollectedPackage {
 
     /// Remove empty modules and packages recursively.
     pub fn shrink(&mut self) {
-        self.modules.retain(|_, module| !module.is_empty());
-
-        self.packages.retain(|_, package| !package.is_empty());
-
         for package in self.packages.values_mut() {
             package.shrink();
         }
+
+        self.modules.retain(|_, module| !module.is_empty());
+        self.packages.retain(|_, package| !package.is_empty());
     }
 }
 
@@ -263,5 +262,28 @@ impl From<&Utf8PathBuf> for ModuleType {
         } else {
             Self::Test
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use camino::Utf8PathBuf;
+
+    use super::CollectedPackage;
+
+    #[test]
+    fn shrink_removes_packages_that_become_empty_after_child_shrink() {
+        let mut root = CollectedPackage::new(Utf8PathBuf::from("/project"));
+        let mut child = CollectedPackage::new(Utf8PathBuf::from("/project/pkg"));
+        let empty_path = Utf8PathBuf::from("/project/pkg/empty");
+        child
+            .packages
+            .insert(empty_path.clone(), CollectedPackage::new(empty_path));
+        root.packages
+            .insert(Utf8PathBuf::from("/project/pkg"), child);
+
+        root.shrink();
+
+        assert!(root.packages.is_empty());
     }
 }
