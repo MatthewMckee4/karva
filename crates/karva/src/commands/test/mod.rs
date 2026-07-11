@@ -259,15 +259,21 @@ pub fn print_test_output(
     let mut details = printer.stream_for_details().lock();
 
     let has_diagnostics = !result.diagnostics.is_empty();
+    let has_captured_output = has_failed_captured_output(result);
     let has_preceding_test_lines = result.stats.total() > 0;
 
     write_diagnostics_block(&mut details, result, has_preceding_test_lines)?;
+    write_captured_output_block(
+        &mut details,
+        result,
+        has_preceding_test_lines && !has_diagnostics,
+    )?;
 
     write_durations_block(
         &mut details,
         &result.durations,
         durations,
-        has_preceding_test_lines && !has_diagnostics,
+        has_preceding_test_lines && !has_diagnostics && !has_captured_output,
     )?;
 
     drop(details);
@@ -280,6 +286,13 @@ pub fn print_test_output(
     write!(summary, "{}", DisplayFlakyTests::new(&result.flaky_tests))?;
 
     Ok(())
+}
+
+fn has_failed_captured_output(result: &AggregatedResults) -> bool {
+    result
+        .captured_outputs
+        .iter()
+        .any(|output| output.outcome().is_failed() && !output.is_empty())
 }
 
 fn write_diagnostics_block(
@@ -297,6 +310,54 @@ fn write_diagnostics_block(
     writeln!(stdout, "diagnostics:")?;
     writeln!(stdout)?;
     write!(stdout, "{}", result.diagnostics)?;
+
+    Ok(())
+}
+
+fn write_captured_output_block(
+    stdout: &mut Stdout,
+    result: &AggregatedResults,
+    needs_leading_blank: bool,
+) -> Result<()> {
+    let mut failed_outputs: Vec<_> = result
+        .captured_outputs
+        .iter()
+        .filter(|output| output.outcome().is_failed() && !output.is_empty())
+        .collect();
+    if failed_outputs.is_empty() {
+        return Ok(());
+    }
+
+    failed_outputs.sort_by_key(|output| output.test_name());
+
+    if needs_leading_blank && stdout.is_enabled() {
+        writeln!(stdout)?;
+    }
+
+    for output in failed_outputs {
+        write_captured_stream(stdout, "stdout", output.test_name(), output.stdout())?;
+        write_captured_stream(stdout, "stderr", output.test_name(), output.stderr())?;
+    }
+    writeln!(stdout)?;
+
+    Ok(())
+}
+
+fn write_captured_stream(
+    stdout: &mut Stdout,
+    stream_name: &str,
+    test_name: &str,
+    content: &str,
+) -> Result<()> {
+    if content.is_empty() {
+        return Ok(());
+    }
+
+    writeln!(stdout, "captured {stream_name} for {test_name}:")?;
+    write!(stdout, "{content}")?;
+    if !content.ends_with('\n') {
+        writeln!(stdout)?;
+    }
 
     Ok(())
 }

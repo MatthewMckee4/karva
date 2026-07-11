@@ -3,6 +3,7 @@ mod context;
 pub(crate) mod diagnostic;
 pub(crate) mod discovery;
 pub(crate) mod extensions;
+mod output_capture;
 mod py_attach;
 mod python;
 mod runner;

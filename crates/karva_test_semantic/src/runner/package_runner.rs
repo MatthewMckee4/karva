@@ -25,6 +25,7 @@ use crate::extensions::fixtures::{
 use crate::extensions::tags::expect_fail::ExpectFailTag;
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
 use crate::extensions::tags::timeout::TimeoutTag;
+use crate::output_capture::PythonOutputCapture;
 use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::runner::test_iterator::{TestVariant, TestVariantIterator};
 use crate::runner::{FinalizerCache, FixtureArguments, FixtureCache};
@@ -99,6 +100,42 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         if !passed {
             self.failed_count
                 .set(self.failed_count.get().saturating_add(1));
+        }
+    }
+
+    fn start_output_capture(&self, py: Python<'_>) -> Option<PythonOutputCapture> {
+        if self.context.settings().terminal().show_python_output {
+            return None;
+        }
+
+        match PythonOutputCapture::start(py) {
+            Ok(capture) => Some(capture),
+            Err(err) => {
+                tracing::warn!("failed to start Python output capture: {err}");
+                None
+            }
+        }
+    }
+
+    fn register_captured_output(
+        &self,
+        py: Python<'_>,
+        capture: Option<PythonOutputCapture>,
+        test_name: &QualifiedTestName,
+        result: &IndividualTestResultKind,
+    ) {
+        let Some(capture) = capture else {
+            return;
+        };
+
+        match capture.finish(py) {
+            Ok(output) => self.context.register_captured_output(
+                test_name,
+                result,
+                output.stdout,
+                output.stderr,
+            ),
+            Err(err) => tracing::warn!("failed to finish Python output capture: {err}"),
         }
     }
 
@@ -489,6 +526,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             return result;
         }
 
+        let output_capture = self.start_output_capture(py);
         let start_time = std::time::Instant::now();
         let expect_fail_tag = tags.expect_fail_tag();
 
@@ -595,6 +633,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             self.context.settings().slow_timeout_for(&eval_ctx),
         );
 
+        let mut final_kind = None;
         let passed = if was_retried {
             let passed_on = attempt;
             // `total_attempts` mirrors nextest: the maximum number of attempts
@@ -603,6 +642,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             // out of an allowed T."
             let total_attempts = max_attempts;
             self.classify_test_result(py, test_result, fixture_call_errors, &report_ctx, |kind| {
+                final_kind = Some(kind.clone());
                 self.context.register_retried_result(
                     &qualified_test_name,
                     &kind,
@@ -613,6 +653,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             })
         } else {
             self.classify_test_result(py, test_result, fixture_call_errors, &report_ctx, |kind| {
+                final_kind = Some(kind.clone());
                 self.context
                     .register_test_case_result(&qualified_test_name, kind, total_duration)
             })
@@ -623,6 +664,20 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         }
 
         self.clean_up_scope(py, FixtureScope::Function);
+        match final_kind.as_ref() {
+            Some(kind) => {
+                self.register_captured_output(py, output_capture, &qualified_test_name, kind);
+            }
+            None => {
+                if let Some(capture) = output_capture
+                    && let Err(err) = capture.finish(py)
+                {
+                    tracing::warn!(
+                        "discarded Python output capture for `{qualified_test_name}` after missing result kind: {err}"
+                    );
+                }
+            }
+        }
         if let Some(coverage) = self.coverage {
             coverage.set_current_context(py, None);
         }

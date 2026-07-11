@@ -466,6 +466,58 @@ fn test_stdout() {
 }
 
 #[test]
+fn test_failed_output_is_captured() {
+    let context = TestContext::with_file(
+        "test_failed_output.py",
+        r"
+        import sys
+
+        def test_pass_with_output():
+            print('hidden pass output')
+
+        def test_fail_with_output():
+            print('stdout from failure')
+            print('stderr from failure', file=sys.stderr)
+            assert False
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_failed_output::test_pass_with_output
+            FAIL [TIME] test_failed_output::test_fail_with_output
+
+    diagnostics:
+
+    error[test-failure]: Test `test_fail_with_output` failed
+     --> test_failed_output.py:7:5
+      |
+    7 | def test_fail_with_output():
+      |     ^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Test failed here
+      --> test_failed_output.py:10:5
+       |
+    10 |     assert False
+       |     ^^^^^^^^^^^^
+       |
+
+    captured stdout for test_failed_output::test_fail_with_output:
+    stdout from failure
+    captured stderr for test_failed_output::test_fail_with_output:
+    stderr from failure
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_multiple_fixtures_not_found() {
     let context = TestContext::with_file(
         "test_multiple_fixtures_not_found.py",

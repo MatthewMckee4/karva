@@ -1,5 +1,6 @@
 mod flaky;
 mod kind;
+mod output;
 mod stats;
 
 use std::collections::HashMap;
@@ -11,6 +12,7 @@ use crate::reporter::Reporter;
 
 pub use flaky::{DisplayFlakyTest, DisplayFlakyTests, FlakyTest};
 pub use kind::{IndividualTestResultKind, TestResultKind};
+pub use output::{CapturedTestOutcome, CapturedTestOutput};
 pub use stats::TestResultStats;
 
 /// Represents the result of a test run.
@@ -33,6 +35,9 @@ pub struct TestRunResult {
 
     /// Tests that passed only after at least one retry.
     flaky_tests: Vec<FlakyTest>,
+
+    /// Captured Python stdout/stderr for individual test variants.
+    captured_outputs: Vec<CapturedTestOutput>,
 }
 
 impl TestRunResult {
@@ -46,6 +51,24 @@ impl TestRunResult {
 
     pub fn stats(&self) -> &TestResultStats {
         &self.stats
+    }
+
+    pub fn register_captured_output(
+        &mut self,
+        test_case_name: &QualifiedTestName,
+        result: &IndividualTestResultKind,
+        stdout: String,
+        stderr: String,
+    ) {
+        let output = CapturedTestOutput::new(
+            test_case_name.to_string(),
+            CapturedTestOutcome::from(result),
+            stdout,
+            stderr,
+        );
+        if !output.is_empty() {
+            self.captured_outputs.push(output);
+        }
     }
 
     pub fn register_test_case_result(
@@ -148,6 +171,8 @@ impl TestRunResult {
     #[must_use]
     pub fn into_sorted(mut self) -> Self {
         self.diagnostics.sort_by(Diagnostic::ruff_start_ordering);
+        self.captured_outputs
+            .sort_by(|a, b| a.test_name().cmp(b.test_name()));
         self
     }
 
@@ -161,5 +186,9 @@ impl TestRunResult {
 
     pub fn flaky_tests(&self) -> &[FlakyTest] {
         &self.flaky_tests
+    }
+
+    pub fn captured_outputs(&self) -> &[CapturedTestOutput] {
+        &self.captured_outputs
     }
 }
