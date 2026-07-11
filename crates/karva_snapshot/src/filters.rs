@@ -1,4 +1,4 @@
-use regex::Regex;
+use regex::{NoExpand, Regex};
 
 /// A compiled snapshot filter that replaces regex matches with a fixed string.
 #[derive(Debug)]
@@ -21,7 +21,7 @@ pub fn apply_filters(input: &str, filters: &[SnapshotFilter]) -> String {
     for filter in filters {
         result = filter
             .regex
-            .replace_all(&result, &*filter.replacement)
+            .replace_all(&result, NoExpand(&filter.replacement))
             .into_owned();
     }
     result
@@ -56,6 +56,13 @@ mod tests {
         let filters =
             vec![SnapshotFilter::new(r"ZZZZZ", "[never]".to_string()).expect("valid regex")];
         insta::assert_snapshot!(apply_filters("hello world", &filters), @"hello world");
+    }
+
+    #[test]
+    fn replacement_text_is_literal() {
+        let filters =
+            vec![SnapshotFilter::new(r"cost=\d+", "cost=$1".to_string()).expect("valid regex")];
+        insta::assert_snapshot!(apply_filters("cost=42", &filters), @"cost=$1");
     }
 
     #[test]
