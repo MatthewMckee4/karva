@@ -504,6 +504,44 @@ def test_c():
 }
 
 #[test]
+fn test_retry_from_config() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r"
+[profile.default.test]
+retry = 2
+",
+        ),
+        (
+            "test.py",
+            r"
+attempts = 0
+
+def test_config_retry():
+    global attempts
+    attempts += 1
+    assert attempts == 2
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_config_retry
+      TRY 2 PASS [TIME] test::test_config_retry
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/3 [TIME] test::test_config_retry
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_fail_fast_true() {
     let context = TestContext::with_files([
         (
