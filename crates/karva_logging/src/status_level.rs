@@ -124,3 +124,56 @@ impl Combine for FinalStatusLevel {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use karva_combine::Combine as _;
+
+    use super::{FinalStatusLevel, StatusLevel};
+
+    #[test]
+    fn status_level_as_str_matches_cli_values() {
+        assert_eq!(StatusLevel::None.as_str(), "none");
+        assert_eq!(StatusLevel::Fail.as_str(), "fail");
+        assert_eq!(StatusLevel::Retry.as_str(), "retry");
+        assert_eq!(StatusLevel::Slow.as_str(), "slow");
+        assert_eq!(StatusLevel::Pass.as_str(), "pass");
+        assert_eq!(StatusLevel::Skip.as_str(), "skip");
+        assert_eq!(StatusLevel::All.as_str(), "all");
+    }
+
+    #[test]
+    fn final_status_level_as_str_matches_cli_values() {
+        assert_eq!(FinalStatusLevel::None.as_str(), "none");
+        assert_eq!(FinalStatusLevel::Fail.as_str(), "fail");
+        assert_eq!(FinalStatusLevel::Retry.as_str(), "retry");
+        assert_eq!(FinalStatusLevel::Slow.as_str(), "slow");
+        assert_eq!(FinalStatusLevel::Pass.as_str(), "pass");
+        assert_eq!(FinalStatusLevel::Skip.as_str(), "skip");
+        assert_eq!(FinalStatusLevel::All.as_str(), "all");
+    }
+
+    #[test]
+    fn status_levels_keep_left_hand_precedence_when_combined() {
+        assert_eq!(
+            StatusLevel::Fail.combine(StatusLevel::All),
+            StatusLevel::Fail
+        );
+
+        let mut level = StatusLevel::Retry;
+        level.combine_with(StatusLevel::None);
+        assert_eq!(level, StatusLevel::Retry);
+    }
+
+    #[test]
+    fn final_status_levels_keep_left_hand_precedence_when_combined() {
+        assert_eq!(
+            FinalStatusLevel::Fail.combine(FinalStatusLevel::All),
+            FinalStatusLevel::Fail
+        );
+
+        let mut level = FinalStatusLevel::Retry;
+        level.combine_with(FinalStatusLevel::None);
+        assert_eq!(level, FinalStatusLevel::Retry);
+    }
+}
