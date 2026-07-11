@@ -1193,6 +1193,47 @@ def test_only_covered():
 }
 
 #[test]
+fn test_cov_report_html_total_includes_branches() {
+    let context = TestContext::with_file(
+        "test_branch.py",
+        r"
+def choose(flag):
+    if flag:
+        return 'yes'
+    return 'no'
+
+def test_yes():
+    assert choose(True) == 'yes'
+",
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--cov")
+            .arg("--cov-branch")
+            .arg("--cov-report=html:htmlcov")
+            .arg("--status-level=none")
+            .arg("test_branch.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let html = context.read_file("htmlcov/index.html");
+    assert!(
+        html.contains("<p>Total coverage: <strong>75%</strong> (6/8)</p>"),
+        "{html}"
+    );
+}
+
+#[test]
 fn test_cov_report_path_warns_for_term_report_from_config() {
     let context = TestContext::with_files([
         (

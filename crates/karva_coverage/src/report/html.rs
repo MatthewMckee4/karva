@@ -31,12 +31,14 @@ impl fmt::Display for HtmlReport<'_> {
 
         let total = totals_row(self.rows);
         let show_branches = total.branches_enabled;
+        let total_covered = total.hit.saturating_add(total.branch_hit);
+        let total_valid = total.stmts.saturating_add(total.branches);
         writeln!(
             html,
             "  <p>Total coverage: <strong>{:.0}%</strong> ({}/{})</p>",
             row_percent(&total),
-            total.hit,
-            total.stmts
+            total_covered,
+            total_valid
         )?;
         writeln!(html, "  <table>")?;
         writeln!(html, "    <thead>")?;
