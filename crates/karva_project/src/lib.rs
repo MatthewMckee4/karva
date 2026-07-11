@@ -86,24 +86,19 @@ impl Project {
     }
 
     pub fn test_paths(&self) -> Vec<Result<TestPath, TestPathError>> {
-        let mut discovered_paths: Vec<Utf8PathBuf> = self
-            .settings
+        if self.settings.src().include_paths.is_empty() {
+            return vec![TestPath::new(self.cwd().as_str())];
+        }
+
+        self.settings
             .src()
             .include_paths
             .iter()
-            .map(|p| absolute(p, self.cwd()))
-            .collect();
-
-        if discovered_paths.is_empty() {
-            discovered_paths.push(self.cwd().clone());
-        }
-
-        let test_paths: Vec<Result<TestPath, TestPathError>> = discovered_paths
-            .iter()
-            .map(|p| TestPath::new(p.as_str()))
-            .collect();
-
-        test_paths
+            .map(|path| {
+                let path = absolute(path, self.cwd());
+                TestPath::new(path.as_str())
+            })
+            .collect()
     }
 
     pub fn metadata(&self) -> &ProjectMetadata {
