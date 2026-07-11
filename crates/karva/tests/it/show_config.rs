@@ -147,6 +147,7 @@ fn show_config_emits_set_timeouts_and_coverage() {
 [profile.default.test]
 slow-timeout = 0.5
 timeout = 120
+termination-grace-period = 2
 
 [profile.default.coverage]
 sources = ["src"]
@@ -178,6 +179,7 @@ fail-under = 90
     no-tests = "auto"
     slow-timeout = 0.5
     timeout = 120.0
+    termination-grace-period = 2.0
 
     [coverage]
     sources = ["src"]

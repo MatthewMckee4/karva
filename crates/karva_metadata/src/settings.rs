@@ -126,6 +126,33 @@ impl Combine for RunTimeoutSecs {
     }
 }
 
+/// Grace period between graceful termination and force-kill, in seconds.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TerminationGracePeriodSecs(pub f64);
+
+impl Eq for TerminationGracePeriodSecs {}
+
+impl TerminationGracePeriodSecs {
+    pub fn as_duration(self) -> Option<Duration> {
+        if self.0.is_finite() && self.0 >= 0.0 {
+            Some(Duration::from_secs_f64(self.0))
+        } else {
+            None
+        }
+    }
+}
+
+impl Combine for TerminationGracePeriodSecs {
+    #[inline(always)]
+    fn combine_with(&mut self, _other: Self) {}
+
+    #[inline]
+    fn combine(self, _other: Self) -> Self {
+        self
+    }
+}
+
 /// A coverage threshold expressed as a percentage (`0..=100`).
 ///
 /// Wraps `f64` for the same reason as [`SlowTimeoutSecs`]: keeps the
@@ -379,4 +406,22 @@ pub struct TestSettings {
     /// duration, the remaining workers are stopped and the run fails.
     /// `None` disables the limit.
     pub run_timeout: Option<Duration>,
+    /// Grace period between graceful termination and force-kill when karva
+    /// stops workers because of Ctrl+C, fail-fast, or run timeout.
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_duration_secs"
+    )]
+    pub termination_grace_period: Option<Duration>,
+}
+
+impl TestSettings {
+    pub fn termination_grace_period(&self) -> Duration {
+        self.termination_grace_period
+            .unwrap_or_else(default_termination_grace_period)
+    }
+}
+
+pub fn default_termination_grace_period() -> Duration {
+    Duration::from_secs(10)
 }

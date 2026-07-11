@@ -130,6 +130,37 @@ impl WorkerManager {
         self.workers.push(Worker::new(worker_id, child, output));
     }
 
+    fn reap_finished(&mut self, log_completion: bool) {
+        self.workers
+            .retain_mut(|worker| match worker.child.try_wait() {
+                Ok(Some(status)) => {
+                    worker.join_output();
+                    if log_completion {
+                        if status.success() {
+                            tracing::info!(
+                                "Worker {} completed successfully in {}",
+                                worker.id,
+                                format_duration(worker.duration()),
+                            );
+                        } else {
+                            tracing::error!(
+                                "Worker {} failed with exit code {} in {}",
+                                worker.id,
+                                status.code().unwrap_or(-1),
+                                format_duration(worker.duration()),
+                            );
+                        }
+                    }
+                    false
+                }
+                Ok(None) => true,
+                Err(e) => {
+                    tracing::error!("Error waiting on worker {}: {}", worker.id, e);
+                    false
+                }
+            });
+    }
+
     /// Wait for all workers to complete.
     ///
     /// Returns early if a message is received on `shutdown_rx`, if the cache
@@ -157,32 +188,7 @@ impl WorkerManager {
         );
 
         loop {
-            self.workers
-                .retain_mut(|worker| match worker.child.try_wait() {
-                    Ok(Some(status)) => {
-                        worker.join_output();
-                        if status.success() {
-                            tracing::info!(
-                                "Worker {} completed successfully in {}",
-                                worker.id,
-                                format_duration(worker.duration()),
-                            );
-                        } else {
-                            tracing::error!(
-                                "Worker {} failed with exit code {} in {}",
-                                worker.id,
-                                status.code().unwrap_or(-1),
-                                format_duration(worker.duration()),
-                            );
-                        }
-                        false
-                    }
-                    Ok(None) => true,
-                    Err(e) => {
-                        tracing::error!("Error waiting on worker {}: {}", worker.id, e);
-                        false
-                    }
-                });
+            self.reap_finished(true);
 
             if self.workers.is_empty() {
                 tracing::info!("All workers completed");
@@ -217,21 +223,70 @@ impl WorkerManager {
         }
     }
 
-    /// Kill and wait on any remaining worker processes.
+    /// Terminate and wait on any remaining worker processes.
     ///
-    /// Uses two separate loops: the first sends kill signals to all workers
-    /// immediately, and the second reaps them. This ensures every worker
-    /// receives the signal without waiting for earlier ones to exit first.
-    fn kill_remaining(&mut self) {
+    /// Uses separate phases: send graceful termination to all workers, wait
+    /// for the configured grace period, then force-kill anything that remains.
+    fn terminate_remaining(&mut self, grace_period: Duration) {
+        if self.workers.is_empty() {
+            return;
+        }
+
+        let processes: Vec<_> = self
+            .workers
+            .iter()
+            .map(|worker| WorkerProcess {
+                worker_id: worker.id,
+                process_id: worker.child.id(),
+            })
+            .collect();
+
         for worker in &mut self.workers {
-            if let Err(err) = worker.child.kill() {
+            #[cfg(unix)]
+            let terminate_result = process_control::terminate(&worker.child);
+            #[cfg(not(unix))]
+            let terminate_result = process_control::terminate(&mut worker.child);
+            if let Err(err) = terminate_result {
                 tracing::warn!(
                     worker_id = worker.id,
-                    "failed to kill worker process: {err}"
+                    "failed to terminate worker process: {err}"
                 );
             }
         }
+
+        let deadline = Instant::now() + grace_period;
+        loop {
+            self.reap_finished(false);
+            if self.workers.is_empty()
+                && !processes
+                    .iter()
+                    .any(|process| process_control::is_running(process.process_id))
+            {
+                return;
+            }
+            if grace_period.is_zero() || Instant::now() >= deadline {
+                break;
+            }
+            std::thread::sleep(WORKER_POLL_INTERVAL);
+        }
+
+        for process in &processes {
+            if let Err(err) = process_control::force_kill(process.process_id) {
+                tracing::warn!(
+                    worker_id = process.worker_id,
+                    "failed to force-kill worker process group: {err}"
+                );
+            }
+        }
+
         for worker in &mut self.workers {
+            #[cfg(not(unix))]
+            if let Err(err) = process_control::force_kill_child(&mut worker.child) {
+                tracing::warn!(
+                    worker_id = worker.id,
+                    "failed to force-kill worker process: {err}"
+                );
+            }
             if let Err(err) = worker.child.wait() {
                 tracing::warn!(
                     worker_id = worker.id,
@@ -240,6 +295,7 @@ impl WorkerManager {
             }
             worker.join_output();
         }
+        self.workers.clear();
     }
 
     /// Stop remaining workers and emit nextest-style cancellation lines.
@@ -253,7 +309,12 @@ impl WorkerManager {
     /// Workers are killed, reaped, and have their forwarded stdout drained
     /// before we print so any in-flight `PASS`/`FAIL` lines land before the
     /// cancellation block.
-    fn cancel_and_kill(&mut self, printer: Printer, cache: &RunCache) -> Vec<InterruptedTest> {
+    fn cancel_and_kill(
+        &mut self,
+        printer: Printer,
+        cache: &RunCache,
+        grace_period: Duration,
+    ) -> Vec<InterruptedTest> {
         if self.workers.is_empty() {
             return Vec::new();
         }
@@ -294,23 +355,7 @@ impl WorkerManager {
         let running_tests = in_flight.iter().filter(|test| test.name.is_some()).count();
         let test_label = if running_tests == 1 { "test" } else { "tests" };
 
-        for worker in &mut self.workers {
-            if let Err(err) = worker.child.kill() {
-                tracing::warn!(
-                    worker_id = worker.id,
-                    "failed to kill worker process: {err}"
-                );
-            }
-        }
-        for worker in &mut self.workers {
-            if let Err(err) = worker.child.wait() {
-                tracing::warn!(
-                    worker_id = worker.id,
-                    "failed to wait for worker process: {err}"
-                );
-            }
-            worker.join_output();
-        }
+        self.terminate_remaining(grace_period);
 
         let mut stdout = printer.stream_for_test_result().lock();
         let cancel_label = "Cancelling".yellow().bold();
@@ -356,6 +401,12 @@ impl WorkerManager {
             })
             .collect()
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct WorkerProcess {
+    worker_id: usize,
+    process_id: u32,
 }
 
 fn elapsed_since_start(now_ms: u64, start_ms: u64, worker_id: usize) -> Duration {
@@ -425,6 +476,7 @@ fn spawn_workers(
 
         let mut command = worker_command(spawn, worker_id, partition);
         command.stderr(Stdio::inherit());
+        process_control::configure_worker_command(&mut command);
         if forward_stdout {
             command.stdout(Stdio::piped());
         } else {
@@ -604,10 +656,11 @@ pub fn run_parallel_tests(
     let max_fail_cache = project.settings().max_fail().has_limit().then_some(&cache);
 
     let outcome = worker_manager.wait_for_completion(shutdown_rx, max_fail_cache, run_deadline);
+    let termination_grace_period = project.settings().test().termination_grace_period();
     let interrupted_tests = if outcome == WaitOutcome::Cancelled {
-        worker_manager.cancel_and_kill(printer, &cache)
+        worker_manager.cancel_and_kill(printer, &cache, termination_grace_period)
     } else {
-        worker_manager.kill_remaining();
+        worker_manager.terminate_remaining(termination_grace_period);
         Vec::new()
     };
 
@@ -668,6 +721,89 @@ fn last_failed_set(cache_dir: &Utf8Path, enabled: bool) -> HashSet<String> {
 fn write_last_failed(cache_dir: &Utf8Path, failed_tests: &[String]) {
     if let Err(err) = persist_last_failed(cache_dir, failed_tests) {
         tracing::warn!("Failed to write last-failed cache: {err}");
+    }
+}
+
+#[cfg(unix)]
+mod process_control {
+    use std::io;
+    use std::os::unix::process::CommandExt;
+    use std::process::{Child, Command};
+
+    pub(super) fn configure_worker_command(command: &mut Command) {
+        command.process_group(0);
+    }
+
+    pub(super) fn terminate(child: &Child) -> io::Result<()> {
+        signal_process_group(child.id(), libc::SIGTERM)
+    }
+
+    pub(super) fn force_kill(process_id: u32) -> io::Result<()> {
+        signal_process_group(process_id, libc::SIGKILL)
+    }
+
+    pub(super) fn is_running(process_id: u32) -> bool {
+        let Ok(process_group_id) = process_group_id(process_id) else {
+            return false;
+        };
+        #[expect(
+            unsafe_code,
+            reason = "checking Unix process groups requires libc::kill"
+        )]
+        let result = unsafe { libc::kill(-process_group_id, 0) };
+        result == 0
+    }
+
+    fn signal_process_group(process_id: u32, signal: libc::c_int) -> io::Result<()> {
+        let process_group_id = process_group_id(process_id)?;
+        #[expect(
+            unsafe_code,
+            reason = "signalling Unix process groups requires libc::kill"
+        )]
+        let result = unsafe { libc::kill(-process_group_id, signal) };
+        if result == 0 {
+            return Ok(());
+        }
+
+        let err = io::Error::last_os_error();
+        if err.raw_os_error() == Some(libc::ESRCH) {
+            Ok(())
+        } else {
+            Err(err)
+        }
+    }
+
+    fn process_group_id(process_id: u32) -> io::Result<libc::pid_t> {
+        libc::pid_t::try_from(process_id).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("process id {process_id} cannot be represented as pid_t"),
+            )
+        })
+    }
+}
+
+#[cfg(not(unix))]
+mod process_control {
+    use std::io;
+    use std::process::{Child, Command};
+
+    pub(super) fn configure_worker_command(_command: &mut Command) {}
+
+    pub(super) fn terminate(child: &mut Child) -> io::Result<()> {
+        child.kill()
+    }
+
+    pub(super) fn force_kill(_process_id: u32) -> io::Result<()> {
+        Ok(())
+    }
+
+    pub(super) fn force_kill_child(child: &mut Child) -> io::Result<()> {
+        child.kill()
+    }
+
+    pub(super) fn is_running(_process_id: u32) -> bool {
+        false
     }
 }
 
