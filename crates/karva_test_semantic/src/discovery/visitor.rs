@@ -1,9 +1,10 @@
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::rc::Rc;
 
 use camino::Utf8Path;
 use fs_err as fs;
-use karva_python_semantic::ModulePath;
+use karva_python_semantic::{ModulePath, is_fixture};
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
 use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
@@ -13,8 +14,8 @@ use ruff_source_file::SourceFileBuilder;
 
 use crate::Context;
 use crate::diagnostic::{
-    report_failed_to_discover_imported_fixture, report_failed_to_import_module,
-    report_generator_test, report_invalid_fixture,
+    report_duplicate_fixture, report_duplicate_test, report_failed_to_discover_imported_fixture,
+    report_failed_to_import_module, report_generator_test, report_invalid_fixture,
 };
 use crate::discovery::{DiscoveredModule, DiscoveredTestFunction};
 use crate::extensions::fixtures::DiscoveredFixture;
@@ -278,7 +279,25 @@ pub fn discover(
 
     let mut visitor = FunctionDefinitionVisitor::new(py, context, module);
 
-    for test_function_def in test_function_defs {
+    let duplicate_test_indices = duplicate_definition_indices(
+        &test_function_defs,
+        |test_function_def| test_function_def.name.to_string(),
+        |name, first_definition, duplicate_definition| {
+            report_duplicate_test(
+                context,
+                visitor.module.source_file(),
+                name,
+                first_definition,
+                duplicate_definition,
+            );
+        },
+    );
+
+    for (index, test_function_def) in test_function_defs.into_iter().enumerate() {
+        if duplicate_test_indices.contains(&index) {
+            continue;
+        }
+
         if is_generator(&test_function_def) {
             report_generator_test(context, visitor.module.source_file(), &test_function_def);
             continue;
@@ -287,12 +306,99 @@ pub fn discover(
         visitor.process_test_function(test_function_def);
     }
 
-    for fixture_function_def in fixture_function_defs {
+    let duplicate_fixture_indices = duplicate_definition_indices(
+        &fixture_function_defs,
+        fixture_definition_name,
+        |name, first_definition, duplicate_definition| {
+            report_duplicate_fixture(
+                context,
+                visitor.module.source_file(),
+                name,
+                first_definition,
+                duplicate_definition,
+            );
+        },
+    );
+
+    for (index, fixture_function_def) in fixture_function_defs.into_iter().enumerate() {
+        if duplicate_fixture_indices.contains(&index) {
+            continue;
+        }
+
         visitor.process_fixture_function(fixture_function_def);
     }
 
     if is_conftest || context.settings().test().try_import_fixtures {
         visitor.find_extra_fixtures();
+    }
+}
+
+fn duplicate_definition_indices(
+    definitions: &[StmtFunctionDef],
+    mut name: impl FnMut(&StmtFunctionDef) -> String,
+    mut report: impl FnMut(&str, &StmtFunctionDef, &StmtFunctionDef),
+) -> HashSet<usize> {
+    let mut seen: HashMap<String, usize> = HashMap::new();
+    let mut duplicates: HashSet<usize> = HashSet::new();
+
+    for (index, definition) in definitions.iter().enumerate() {
+        let definition_name = name(definition);
+
+        if let Some(first_index) = seen.get(&definition_name) {
+            let first_definition = &definitions[*first_index];
+            if first_definition.range == definition.range {
+                duplicates.insert(index);
+                continue;
+            }
+
+            report(&definition_name, first_definition, definition);
+            duplicates.insert(*first_index);
+            duplicates.insert(index);
+        } else {
+            seen.insert(definition_name, index);
+        }
+    }
+
+    duplicates
+}
+
+fn fixture_definition_name(stmt_function_def: &StmtFunctionDef) -> String {
+    stmt_function_def
+        .decorator_list
+        .iter()
+        .find_map(|decorator| {
+            fixture_name_from_decorator(&decorator.expression, stmt_function_def.name.as_str())
+        })
+        .unwrap_or_else(|| stmt_function_def.name.to_string())
+}
+
+fn fixture_name_from_decorator(expr: &Expr, default_name: &str) -> Option<String> {
+    match expr {
+        Expr::Call(call) if is_fixture(call.func.as_ref()) => Some(
+            explicit_fixture_name(call)
+                .map(ToOwned::to_owned)
+                .unwrap_or_else(|| default_name.to_string()),
+        ),
+        _ if is_fixture(expr) => Some(default_name.to_string()),
+        _ => None,
+    }
+}
+
+fn explicit_fixture_name(call: &ruff_python_ast::ExprCall) -> Option<&str> {
+    call.arguments.keywords.iter().find_map(|keyword| {
+        if keyword.arg.as_ref().is_some_and(|arg| arg == "name") {
+            string_literal_value(&keyword.value)
+        } else {
+            None
+        }
+    })
+}
+
+fn string_literal_value(expr: &Expr) -> Option<&str> {
+    if let Expr::StringLiteral(string_literal) = expr {
+        Some(string_literal.value.to_str())
+    } else {
+        None
     }
 }
 
