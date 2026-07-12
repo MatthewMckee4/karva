@@ -380,8 +380,22 @@ pub fn function_exists_in_file(path: &Utf8Path, name: &str) -> io::Result<bool> 
             format!("failed to read source file `{path}`: {err}"),
         )
     })?;
-    let pattern = format!("def {name}(");
-    Ok(content.contains(&pattern))
+    Ok(content
+        .lines()
+        .any(|line| line_declares_function(line, name)))
+}
+
+fn line_declares_function(line: &str, name: &str) -> bool {
+    let trimmed = line.trim_start();
+    let Some(rest) = trimmed
+        .strip_prefix("def ")
+        .or_else(|| trimmed.strip_prefix("async def "))
+    else {
+        return false;
+    };
+
+    rest.strip_prefix(name)
+        .is_some_and(|after_name| after_name.starts_with('('))
 }
 
 /// Recursively find all committed snapshot files (`.snap`, not `.snap.new`).
