@@ -125,6 +125,16 @@ declare_diagnostic_type! {
 }
 
 declare_diagnostic_type! {
+    /// ## Invalid Test
+    ///
+    /// If a test definition cannot be run by Karva, we will raise this error.
+    pub static INVALID_TEST = {
+        summary: "Discovered an invalid test",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
     /// ## Test Returned Value
     ///
     /// If a test returns anything other than `None`, we will raise this error.
@@ -381,6 +391,22 @@ pub fn report_test_failure(
         FunctionKind::Test,
         error,
     );
+}
+
+pub fn report_generator_test(
+    context: &Context,
+    source_file: SourceFile,
+    stmt_function_def: &StmtFunctionDef,
+) {
+    let builder = context.report_diagnostic(&INVALID_TEST);
+
+    let mut diagnostic = builder.into_diagnostic(format!(
+        "Generator test `{}` is not supported",
+        stmt_function_def.name
+    ));
+
+    annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
+    diagnostic.info("Use `@karva.tags.parametrize` to define multiple test cases.");
 }
 
 pub fn report_test_returned_value(

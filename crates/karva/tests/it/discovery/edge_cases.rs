@@ -158,6 +158,144 @@ def test_one(): pass
     ");
 }
 
+#[test]
+fn test_generator_tests_are_rejected_without_running_body() {
+    let context = TestContext::with_file(
+        "test_generators.py",
+        r#"
+from pathlib import Path
+import functools
+import karva
+
+def mark(name):
+    Path(name).write_text("ran")
+
+def decorator(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    return wrapper
+
+def values():
+    yield 1
+
+def test_plain_generator():
+    mark("plain.txt")
+    yield 1
+
+async def test_async_generator():
+    mark("async.txt")
+    yield 1
+
+@decorator
+def test_decorated_generator():
+    mark("decorated.txt")
+    yield 1
+
+@karva.tags.parametrize("value", [1])
+def test_parametrized_generator(value):
+    mark("parametrized.txt")
+    yield value
+
+@karva.tags.skip(reason="still invalid")
+def test_skipped_generator():
+    mark("skipped.txt")
+    yield 1
+
+@karva.tags.expect_fail(reason="still invalid")
+def test_expected_failure_generator():
+    mark("expected_failure.txt")
+    yield 1
+
+def test_consumes_generator_internally():
+    def nested():
+        yield 1
+
+    class Iterable:
+        def __iter__(self):
+            yield 2
+
+    assert list(values()) == [1]
+    assert list(nested()) == [1]
+    assert list(Iterable()) == [2]
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 7 tests across 1 worker
+            PASS [TIME] test_generators::test_consumes_generator_internally
+
+    diagnostics:
+
+    error[invalid-test]: Generator test `test_plain_generator` is not supported
+      --> test_generators.py:18:5
+       |
+    18 | def test_plain_generator():
+       |     ^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Use `@karva.tags.parametrize` to define multiple test cases.
+
+    error[invalid-test]: Generator test `test_async_generator` is not supported
+      --> test_generators.py:22:11
+       |
+    22 | async def test_async_generator():
+       |           ^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Use `@karva.tags.parametrize` to define multiple test cases.
+
+    error[invalid-test]: Generator test `test_decorated_generator` is not supported
+      --> test_generators.py:27:5
+       |
+    27 | def test_decorated_generator():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Use `@karva.tags.parametrize` to define multiple test cases.
+
+    error[invalid-test]: Generator test `test_parametrized_generator` is not supported
+      --> test_generators.py:32:5
+       |
+    32 | def test_parametrized_generator(value):
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Use `@karva.tags.parametrize` to define multiple test cases.
+
+    error[invalid-test]: Generator test `test_skipped_generator` is not supported
+      --> test_generators.py:37:5
+       |
+    37 | def test_skipped_generator():
+       |     ^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Use `@karva.tags.parametrize` to define multiple test cases.
+
+    error[invalid-test]: Generator test `test_expected_failure_generator` is not supported
+      --> test_generators.py:42:5
+       |
+    42 | def test_expected_failure_generator():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Use `@karva.tags.parametrize` to define multiple test cases.
+
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    for marker in [
+        "plain.txt",
+        "async.txt",
+        "decorated.txt",
+        "parametrized.txt",
+        "skipped.txt",
+        "expected_failure.txt",
+    ] {
+        assert!(!context.root().join(marker).exists());
+    }
+}
+
 /// An empty subdirectory (no Python files at all) is discovered without error.
 #[test]
 fn test_empty_subdirectory_is_ignored() {
