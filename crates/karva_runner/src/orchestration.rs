@@ -590,25 +590,6 @@ pub fn run_parallel_tests(
         );
     }
 
-    if total_tests > 0 {
-        let mut stdout = printer.stream_for_test_result().lock();
-        let label = format!("{:>12}", "Starting").green().bold();
-        let test_label = if total_tests == 1 { "test" } else { "tests" };
-        let worker_label = if num_workers == 1 {
-            "worker"
-        } else {
-            "workers"
-        };
-        let total_tests_bold = total_tests.to_string().bold();
-        let num_workers_bold = num_workers.to_string().bold();
-        if let Err(err) = writeln!(
-            stdout,
-            "{label} {total_tests_bold} {test_label} across {num_workers_bold} {worker_label}"
-        ) {
-            tracing::warn!("failed to write test start line: {err}");
-        }
-    }
-
     tracing::debug!(num_workers, "Partitioning tests");
 
     let cache_dir = project.cwd().join(CACHE_DIR);
@@ -632,11 +613,42 @@ pub fn run_parallel_tests(
         config.partition,
         config.test_ordering,
     );
+    let scheduled_tests: usize = partitions
+        .iter()
+        .map(|partition| partition.tests().len())
+        .sum();
+    let scheduled_workers = partitions
+        .iter()
+        .filter(|partition| !partition.tests().is_empty())
+        .count();
+
+    if scheduled_tests > 0 {
+        let mut stdout = printer.stream_for_test_result().lock();
+        let label = format!("{:>12}", "Starting").green().bold();
+        let test_label = if scheduled_tests == 1 {
+            "test"
+        } else {
+            "tests"
+        };
+        let worker_label = if scheduled_workers == 1 {
+            "worker"
+        } else {
+            "workers"
+        };
+        let total_tests_bold = scheduled_tests.to_string().bold();
+        let num_workers_bold = scheduled_workers.to_string().bold();
+        if let Err(err) = writeln!(
+            stdout,
+            "{label} {total_tests_bold} {test_label} across {num_workers_bold} {worker_label}"
+        ) {
+            tracing::warn!("failed to write test start line: {err}");
+        }
+    }
 
     let run_hash = RunHash::current_time();
     let cache = RunCache::new(&cache_dir, &run_hash);
 
-    tracing::info!("Spawning {} workers", partitions.len());
+    tracing::info!("Spawning {} workers", scheduled_workers);
 
     let worker_binary = find_karva_worker_binary(project.cwd())?;
     let spawn = WorkerSpawn {

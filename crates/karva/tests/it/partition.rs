@@ -21,7 +21,7 @@ fn slice_first_of_three() {
     success: true
     exit_code: 0
     ----- stdout -----
-        Starting 6 tests across 1 worker
+        Starting 2 tests across 1 worker
             PASS [TIME] test_mod::test_a
             PASS [TIME] test_mod::test_d
     ────────────
@@ -42,7 +42,7 @@ fn slice_second_of_three() {
     success: true
     exit_code: 0
     ----- stdout -----
-        Starting 6 tests across 1 worker
+        Starting 2 tests across 1 worker
             PASS [TIME] test_mod::test_b
             PASS [TIME] test_mod::test_e
     ────────────
@@ -63,7 +63,7 @@ fn slice_third_of_three() {
     success: true
     exit_code: 0
     ----- stdout -----
-        Starting 6 tests across 1 worker
+        Starting 2 tests across 1 worker
             PASS [TIME] test_mod::test_c
             PASS [TIME] test_mod::test_f
     ────────────
@@ -109,7 +109,7 @@ fn hash_first_of_three() {
     success: true
     exit_code: 0
     ----- stdout -----
-        Starting 6 tests across 1 worker
+        Starting 2 tests across 1 worker
             PASS [TIME] test_mod::test_c
             PASS [TIME] test_mod::test_e
     ────────────
@@ -130,7 +130,7 @@ fn hash_second_of_three() {
     success: true
     exit_code: 0
     ----- stdout -----
-        Starting 6 tests across 1 worker
+        Starting 2 tests across 1 worker
             PASS [TIME] test_mod::test_b
             PASS [TIME] test_mod::test_d
     ────────────
@@ -151,7 +151,7 @@ fn hash_third_of_three() {
     success: true
     exit_code: 0
     ----- stdout -----
-        Starting 6 tests across 1 worker
+        Starting 2 tests across 1 worker
             PASS [TIME] test_mod::test_a
             PASS [TIME] test_mod::test_f
     ────────────
