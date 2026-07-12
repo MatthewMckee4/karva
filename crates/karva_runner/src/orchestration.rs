@@ -509,10 +509,7 @@ pub fn collect_tests(project: &Project) -> Result<CollectedPackage> {
     let mut test_paths = Vec::new();
 
     for path in project.test_paths() {
-        match path {
-            Ok(path) => test_paths.push(path),
-            Err(err) => return Err(err.into()),
-        }
+        test_paths.push(path?);
     }
 
     tracing::debug!(path_count = test_paths.len(), "Found test paths");
