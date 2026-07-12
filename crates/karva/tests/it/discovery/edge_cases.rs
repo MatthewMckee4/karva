@@ -296,6 +296,90 @@ def test_consumes_generator_internally():
     }
 }
 
+#[test]
+fn test_duplicate_test_definitions_are_rejected_without_running_body() {
+    let context = TestContext::with_file(
+        "test_duplicates.py",
+        r#"
+from pathlib import Path
+
+def mark(name):
+    Path(name).write_text("ran")
+
+def test_duplicate():
+    mark("first.txt")
+
+async def test_duplicate():
+    mark("second.txt")
+
+def test_ok():
+    assert True
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 3 tests across 1 worker
+            PASS [TIME] test_duplicates::test_ok
+
+    diagnostics:
+
+    error[duplicate-test]: Test `test_duplicate` is defined more than once
+      --> test_duplicates.py:10:11
+       |
+    10 | async def test_duplicate():
+       |           ^^^^^^^^^^^^^^
+       |
+    info: First definition of `test_duplicate` is here
+     --> test_duplicates.py:7:5
+      |
+    7 | def test_duplicate():
+      |     ^^^^^^^^^^^^^^
+      |
+
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    for marker in ["first.txt", "second.txt"] {
+        assert!(!context.root().join(marker).exists());
+    }
+}
+
+#[test]
+fn test_duplicate_test_names_in_different_modules_are_allowed() {
+    let context = TestContext::with_files([
+        (
+            "test_a.py",
+            r"
+def test_same():
+    assert True
+",
+        ),
+        (
+            "test_b.py",
+            r"
+def test_same():
+    assert True
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
 /// An empty subdirectory (no Python files at all) is discovered without error.
 #[test]
 fn test_empty_subdirectory_is_ignored() {

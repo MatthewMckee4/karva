@@ -223,8 +223,8 @@ impl CollectedModule {
     /// Merges function definitions from the other module into this one.
     pub(crate) fn update(&mut self, module: Self) {
         if self.path == module.path {
-            add_unique_definitions(&mut self.test_function_defs, module.test_function_defs);
-            add_unique_definitions(
+            add_new_definitions(&mut self.test_function_defs, module.test_function_defs);
+            add_new_definitions(
                 &mut self.fixture_function_defs,
                 module.fixture_function_defs,
             );
@@ -232,11 +232,9 @@ impl CollectedModule {
     }
 }
 
-/// Adds function definitions from `new_defs` into `existing`, skipping any
-/// whose name already appears.
-fn add_unique_definitions(existing: &mut Vec<StmtFunctionDef>, new_defs: Vec<StmtFunctionDef>) {
+fn add_new_definitions(existing: &mut Vec<StmtFunctionDef>, new_defs: Vec<StmtFunctionDef>) {
     for def in new_defs {
-        if !existing.iter().any(|e| e.name == def.name) {
+        if !existing.iter().any(|existing| existing.range == def.range) {
             existing.push(def);
         }
     }
