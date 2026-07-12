@@ -92,14 +92,23 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
         cli_args.push("-s".to_string());
     }
 
-    cli_args.push("--output-format".to_string());
-    cli_args.push(settings.terminal().output_format.as_str().to_string());
+    push_value_arg(
+        &mut cli_args,
+        "--output-format",
+        settings.terminal().output_format.as_str(),
+    );
 
-    cli_args.push("--status-level".to_string());
-    cli_args.push(settings.terminal().status_level.as_str().to_string());
+    push_value_arg(
+        &mut cli_args,
+        "--status-level",
+        settings.terminal().status_level.as_str(),
+    );
 
-    cli_args.push("--final-status-level".to_string());
-    cli_args.push(settings.terminal().final_status_level.as_str().to_string());
+    push_value_arg(
+        &mut cli_args,
+        "--final-status-level",
+        settings.terminal().final_status_level.as_str(),
+    );
 
     let color = args.color.or_else(|| {
         colored::control::SHOULD_COLORIZE
@@ -107,8 +116,7 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
             .then_some(TerminalColor::Always)
     });
     if let Some(color) = color {
-        cli_args.push("--color".to_string());
-        cli_args.push(color.as_str().to_string());
+        push_value_arg(&mut cli_args, "--color", color.as_str());
     }
 
     if settings.test().try_import_fixtures {
@@ -120,28 +128,23 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
     }
 
     if settings.test().retry > 0 {
-        cli_args.push("--retry".to_string());
-        cli_args.push(settings.test().retry.to_string());
+        push_value_arg(&mut cli_args, "--retry", settings.test().retry);
     }
 
     if let Some(threshold) = settings.test().slow_timeout {
-        cli_args.push("--slow-timeout".to_string());
-        cli_args.push(format!("{}", threshold.as_secs_f64()));
+        push_value_arg(&mut cli_args, "--slow-timeout", threshold.as_secs_f64());
     }
 
     if let Some(timeout) = settings.test().timeout {
-        cli_args.push("--timeout".to_string());
-        cli_args.push(format!("{}", timeout.as_secs_f64()));
+        push_value_arg(&mut cli_args, "--timeout", timeout.as_secs_f64());
     }
 
     for expr in &args.filter_expressions {
-        cli_args.push("--filter".to_string());
-        cli_args.push(expr.clone());
+        push_value_arg(&mut cli_args, "--filter", expr);
     }
 
     if let Some(mode) = args.run_ignored {
-        cli_args.push("--run-ignored".to_string());
-        cli_args.push(mode.as_str().to_string());
+        push_value_arg(&mut cli_args, "--run-ignored", mode.as_str());
     }
 
     for source in &settings.coverage().sources {
@@ -149,8 +152,7 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
     }
 
     if let Some(context) = args.cov_context {
-        cli_args.push("--cov-context".to_string());
-        cli_args.push(context.as_str().to_string());
+        push_value_arg(&mut cli_args, "--cov-context", context.as_str());
     }
 
     if settings.coverage().branch {
@@ -164,9 +166,13 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
             "timeout": ovr.timeout.map(|t| t.0),
             "slow-timeout": ovr.slow_timeout.map(|t| t.0),
         });
-        cli_args.push("--override-json".to_string());
-        cli_args.push(json.to_string());
+        push_value_arg(&mut cli_args, "--override-json", json);
     }
 
     cli_args
+}
+
+fn push_value_arg(args: &mut Vec<String>, flag: &'static str, value: impl std::fmt::Display) {
+    args.push(flag.to_string());
+    args.push(value.to_string());
 }
