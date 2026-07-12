@@ -14,7 +14,7 @@ use ruff_source_file::SourceFileBuilder;
 use crate::Context;
 use crate::diagnostic::{
     report_failed_to_discover_imported_fixture, report_failed_to_import_module,
-    report_invalid_fixture,
+    report_generator_test, report_invalid_fixture,
 };
 use crate::discovery::{DiscoveredModule, DiscoveredTestFunction};
 use crate::extensions::fixtures::DiscoveredFixture;
@@ -279,6 +279,11 @@ pub fn discover(
     let mut visitor = FunctionDefinitionVisitor::new(py, context, module);
 
     for test_function_def in test_function_defs {
+        if is_generator(&test_function_def) {
+            report_generator_test(context, visitor.module.source_file(), &test_function_def);
+            continue;
+        }
+
         visitor.process_test_function(test_function_def);
     }
 
@@ -309,9 +314,18 @@ struct GeneratorFunctionVisitor {
 }
 
 impl SourceOrderVisitor<'_> for GeneratorFunctionVisitor {
+    fn visit_stmt(&mut self, stmt: &'_ Stmt) {
+        match stmt {
+            Stmt::FunctionDef(_) | Stmt::ClassDef(_) => {}
+            _ => source_order::walk_stmt(self, stmt),
+        }
+    }
+
     fn visit_expr(&mut self, expr: &'_ Expr) {
         if let Expr::Yield(_) | Expr::YieldFrom(_) = *expr {
             self.is_generator = true;
+        } else {
+            source_order::walk_expr(self, expr);
         }
     }
 }
