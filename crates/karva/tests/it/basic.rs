@@ -216,6 +216,163 @@ fn test_one_test_fail() {
 }
 
 #[test]
+fn test_non_none_returns_fail() {
+    let context = TestContext::with_file(
+        "test_return.py",
+        r#"
+import functools
+import karva
+
+class LargeRepr:
+    def __repr__(self):
+        return "value-" + ("x" * 80)
+
+def passthrough(func):
+    @functools.wraps(func)
+    def wrapper():
+        return func()
+    return wrapper
+
+def test_explicit_none():
+    return None
+
+def test_returned_true():
+    return True
+
+def test_returned_false():
+    return False
+
+def test_returned_object():
+    return LargeRepr()
+
+async def test_returned_async_value():
+    return True
+
+@karva.tags.parametrize("value", [1, 2])
+def test_returned_parametrized(value):
+    return value
+
+@passthrough
+def test_returned_decorated():
+    return "decorated"
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 7 tests across 1 worker
+            PASS [TIME] test_return::test_explicit_none
+            FAIL [TIME] test_return::test_returned_true
+            FAIL [TIME] test_return::test_returned_false
+            FAIL [TIME] test_return::test_returned_object
+            FAIL [TIME] test_return::test_returned_async_value
+            FAIL [TIME] test_return::test_returned_parametrized(value=1)
+            FAIL [TIME] test_return::test_returned_parametrized(value=2)
+            FAIL [TIME] test_return::test_returned_decorated
+
+    diagnostics:
+
+    error[test-returned-value]: Test `test_returned_true` returned `True`
+      --> test_return.py:18:5
+       |
+    18 | def test_returned_true():
+       |     ^^^^^^^^^^^^^^^^^^
+       |
+    info: Test functions must return None. Did you mean to use `assert`?
+
+    error[test-returned-value]: Test `test_returned_false` returned `False`
+      --> test_return.py:21:5
+       |
+    21 | def test_returned_false():
+       |     ^^^^^^^^^^^^^^^^^^^
+       |
+    info: Test functions must return None. Did you mean to use `assert`?
+
+    error[test-returned-value]: Test `test_returned_object` returned `value-xxxxxxxxxxxxxxxxxxxxx...`
+      --> test_return.py:24:5
+       |
+    24 | def test_returned_object():
+       |     ^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Test functions must return None. Did you mean to use `assert`?
+
+    error[test-returned-value]: Test `test_returned_async_value` returned `True`
+      --> test_return.py:27:11
+       |
+    27 | async def test_returned_async_value():
+       |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Test functions must return None. Did you mean to use `assert`?
+
+    error[test-returned-value]: Test `test_returned_parametrized` returned `1`
+      --> test_return.py:31:5
+       |
+    31 | def test_returned_parametrized(value):
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Test functions must return None. Did you mean to use `assert`?
+
+    error[test-returned-value]: Test `test_returned_parametrized` returned `2`
+      --> test_return.py:31:5
+       |
+    31 | def test_returned_parametrized(value):
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Test functions must return None. Did you mean to use `assert`?
+
+    error[test-returned-value]: Test `test_returned_decorated` returned `'decorated'`
+      --> test_return.py:35:5
+       |
+    35 | def test_returned_decorated():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Test functions must return None. Did you mean to use `assert`?
+
+    ────────────
+         Summary [TIME] 8 tests run: 1 passed, 7 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_returned_value_retries() {
+    let context = TestContext::with_file(
+        "test_return.py",
+        r"
+def test_returned_value():
+    return True
+",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test_return::test_returned_value
+      TRY 2 FAIL [TIME] test_return::test_returned_value
+
+    diagnostics:
+
+    error[test-returned-value]: Test `test_returned_value` returned `True`
+     --> test_return.py:2:5
+      |
+    2 | def test_returned_value():
+      |     ^^^^^^^^^^^^^^^^^^^
+      |
+    info: Test functions must return None. Did you mean to use `assert`?
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_failure_diagnostic_uses_discovered_source_after_file_is_deleted() {
     let context = TestContext::with_file(
         "test_deleted_source.py",
