@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use karva_diagnostic::{
@@ -123,18 +123,23 @@ impl RunCache {
     /// Returns `None` if the worker is between tests, hasn't started yet, or
     /// has cleared its progress file after finishing a test.
     pub fn read_current_test(&self, worker_id: usize) -> Result<Option<CurrentTest>> {
-        let path = self.current_test_file(worker_id);
-        let content = match fs::read_to_string(path) {
-            Ok(content) => content,
-            Err(err) if err.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(err) => return Err(err.into()),
+        let worker_dir = self.worker_dir(worker_id);
+        let Some(content) = read_text(&worker_dir, CacheFile::CurrentTest)? else {
+            return Ok(None);
         };
 
         if content.trim().is_empty() {
             return Ok(None);
         }
 
-        Ok(Some(serde_json::from_str(&content)?))
+        serde_json::from_str(&content)
+            .with_context(|| {
+                format!(
+                    "failed to parse cache artifact `{}`",
+                    CacheFile::CurrentTest.path_in(&worker_dir)
+                )
+            })
+            .map(Some)
     }
 
     /// Returns paths to every per-worker coverage file that exists for this
@@ -874,6 +879,26 @@ mod tests {
         let error = cache
             .read_current_test(0)
             .expect_err("directory progress file should fail");
+
+        assert!(
+            error.to_string().contains(progress_file.as_str()),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn read_current_test_reports_path_on_parse_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+        let run_hash = RunHash::from_existing("run-770");
+        let cache = RunCache::new(&cache_dir, &run_hash);
+        let progress_file = cache.current_test_file(0);
+        fs::create_dir_all(progress_file.parent().expect("progress file parent")).unwrap();
+        fs::write(&progress_file, "not-json").unwrap();
+
+        let error = cache
+            .read_current_test(0)
+            .expect_err("malformed progress file should fail");
 
         assert!(
             error.to_string().contains(progress_file.as_str()),
