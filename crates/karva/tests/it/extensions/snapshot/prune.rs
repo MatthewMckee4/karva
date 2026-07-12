@@ -51,6 +51,48 @@ def test_other():
 }
 
 #[test]
+fn test_snapshot_prune_ignores_commented_function_name() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def test_hello():
+    karva.assert_snapshot('hello world')
+        ",
+    );
+
+    let _ = context
+        .command_no_parallel()
+        .arg("--snapshot-update")
+        .output();
+
+    context.write_file(
+        "test.py",
+        r"
+# def test_hello():
+#     pass
+REMOVED_TEST = 'def test_hello():'
+
+def test_other():
+    pass
+        ",
+    );
+
+    assert_cmd_snapshot!(context.snapshot("prune"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Removed: <temp_dir>/snapshots/test__test_hello.snap (function `test_hello` not found in test.py)
+
+    1 snapshot(s) pruned.
+
+    ----- stderr -----
+    warning: Prune uses static analysis and may not detect all unreferenced snapshots.
+    ");
+}
+
+#[test]
 fn test_snapshot_prune_dry_run() {
     let context = TestContext::with_file(
         "test.py",
