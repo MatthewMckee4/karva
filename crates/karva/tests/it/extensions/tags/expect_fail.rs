@@ -538,6 +538,32 @@ def test_1():
 }
 
 #[test]
+fn test_expect_fail_with_returned_value() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+@karva.tags.expect_fail(reason='Expected returned value')
+def test_1():
+    return False
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=2"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_1
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_expect_fail_with_assertion_error() {
     let context = TestContext::with_file(
         "test.py",

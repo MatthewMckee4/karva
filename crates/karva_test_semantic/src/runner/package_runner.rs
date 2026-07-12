@@ -16,7 +16,7 @@ use ruff_source_file::SourceFile;
 use crate::Context;
 use crate::diagnostic::{
     report_fixture_failure, report_missing_fixtures, report_test_failure,
-    report_test_pass_on_expect_failure,
+    report_test_pass_on_expect_failure, report_test_returned_value,
 };
 use crate::discovery::{DiscoveredModule, DiscoveredPackage};
 use crate::extensions::fixtures::{
@@ -31,6 +31,7 @@ use crate::runner::test_iterator::{TestVariant, TestVariantIterator};
 use crate::runner::{FinalizerCache, FixtureArguments, FixtureCache};
 use crate::utils::{
     full_test_name, run_coroutine, run_test_with_timeout, set_attempt_env, set_test_name_env,
+    truncate_string,
 };
 
 /// Executes discovered tests within a package hierarchy.
@@ -370,7 +371,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
     fn classify_test_result(
         &self,
         py: Python<'_>,
-        test_result: PyResult<Py<PyAny>>,
+        test_result: PyResult<TestCallOutcome>,
         fixture_call_errors: Vec<FixtureCallError>,
         ctx: &VariantReportCtx<'_>,
         register: impl FnOnce(IndividualTestResultKind) -> bool,
@@ -381,7 +382,19 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             .is_some_and(ExpectFailTag::should_expect_fail);
 
         let err = match test_result {
-            Ok(_) if expect_fail => {
+            Ok(TestCallOutcome::ReturnedValue(_)) if expect_fail => {
+                return register(IndividualTestResultKind::Passed);
+            }
+            Ok(TestCallOutcome::ReturnedValue(value)) => {
+                report_test_returned_value(
+                    self.context,
+                    ctx.source_file.clone(),
+                    ctx.stmt_function_def,
+                    &value,
+                );
+                return register(IndividualTestResultKind::Failed);
+            }
+            Ok(TestCallOutcome::ReturnedNone) if expect_fail => {
                 let reason = ctx.expect_fail_tag.as_ref().and_then(ExpectFailTag::reason);
                 report_test_pass_on_expect_failure(
                     self.context,
@@ -391,7 +404,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 );
                 return register(IndividualTestResultKind::Failed);
             }
-            Ok(_) => return register(IndividualTestResultKind::Passed),
+            Ok(TestCallOutcome::ReturnedNone) => return register(IndividualTestResultKind::Passed),
             Err(err) => err,
         };
 
@@ -441,8 +454,8 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         py: Python<'_>,
         qualified_test_name: &QualifiedTestName,
         configured_retries: u32,
-        should_retry_error: impl Fn(&PyErr) -> bool,
-        mut run_test: impl FnMut() -> PyResult<Py<PyAny>>,
+        expect_fail: bool,
+        mut run_test: impl FnMut() -> PyResult<TestCallOutcome>,
     ) -> RetryOutcome {
         let max_attempts = configured_retries.saturating_add(1);
         let mut run_attempt =
@@ -457,10 +470,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let mut final_attempt_duration = attempt_start.elapsed();
 
         while retry_count > 0 {
-            let Err(err) = &test_result else {
-                break;
-            };
-            if !should_retry_error(err) {
+            if !should_retry_result(py, &test_result, expect_fail) {
                 break;
             }
             let attempt_duration = attempt_start.elapsed();
@@ -584,26 +594,23 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             if let Err(err) = &async_patch_result {
                 return Err(err.clone_ref(py));
             }
-            if let Some(seconds) = timeout_seconds {
-                return run_test_with_timeout(
-                    py,
-                    &function,
-                    &function_arguments,
-                    is_async,
-                    seconds,
-                );
-            }
-            let result = if function_arguments.is_empty() {
-                function.call0(py)
+            let result = if let Some(seconds) = timeout_seconds {
+                run_test_with_timeout(py, &function, &function_arguments, is_async, seconds)
             } else {
-                let py_dict = function_arguments.to_kwargs(py)?;
-                function.call(py, (), Some(&py_dict))
+                let result = if function_arguments.is_empty() {
+                    function.call0(py)
+                } else {
+                    let py_dict = function_arguments.to_kwargs(py)?;
+                    function.call(py, (), Some(&py_dict))
+                };
+                if is_async {
+                    result.and_then(|coroutine| run_coroutine(py, coroutine))
+                } else {
+                    result
+                }
             };
-            if is_async {
-                result.and_then(|coroutine| run_coroutine(py, coroutine))
-            } else {
-                result
-            }
+
+            result.map(|value| reject_non_none_return(py, &value))
         };
 
         let configured_retries = self.context.settings().retry_for(&eval_ctx);
@@ -623,7 +630,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             py,
             &qualified_test_name,
             configured_retries,
-            |err| !expect_fail && !is_skip_exception(py, err),
+            expect_fail,
             run_test,
         );
         self.context.report_test_finished(&qualified_test_name);
@@ -855,12 +862,21 @@ fn get_value_and_finalizer(
     }
 }
 
+fn reject_non_none_return(py: Python<'_>, value: &Py<PyAny>) -> TestCallOutcome {
+    if value.bind(py).is_none() {
+        TestCallOutcome::ReturnedNone
+    } else {
+        TestCallOutcome::ReturnedValue(returned_value_repr(py, value))
+    }
+}
+
 fn attempt_result_kind(
     py: Python<'_>,
-    test_result: &PyResult<Py<PyAny>>,
+    test_result: &PyResult<TestCallOutcome>,
 ) -> IndividualTestResultKind {
     match test_result {
-        Ok(_) => IndividualTestResultKind::Passed,
+        Ok(TestCallOutcome::ReturnedNone) => IndividualTestResultKind::Passed,
+        Ok(TestCallOutcome::ReturnedValue(_)) => IndividualTestResultKind::Failed,
         Err(err) if is_skip_exception(py, err) => IndividualTestResultKind::Skipped {
             reason: extract_skip_reason(py, err),
         },
@@ -868,9 +884,40 @@ fn attempt_result_kind(
     }
 }
 
+fn should_retry_result(
+    py: Python<'_>,
+    test_result: &PyResult<TestCallOutcome>,
+    expect_fail: bool,
+) -> bool {
+    if expect_fail {
+        return false;
+    }
+
+    match test_result {
+        Ok(TestCallOutcome::ReturnedNone) => false,
+        Ok(TestCallOutcome::ReturnedValue(_)) => true,
+        Err(err) => !is_skip_exception(py, err),
+    }
+}
+
+fn returned_value_repr(py: Python<'_>, value: &Py<PyAny>) -> String {
+    match value.bind(py).repr() {
+        Ok(repr) => truncate_string(&repr.to_string()),
+        Err(err) => {
+            let error = truncate_string(&err.value(py).to_string());
+            format!("<repr failed: {error}>")
+        }
+    }
+}
+
+enum TestCallOutcome {
+    ReturnedNone,
+    ReturnedValue(String),
+}
+
 /// Outcome of driving a test through the configured retry budget.
 struct RetryOutcome {
-    test_result: PyResult<Py<PyAny>>,
+    test_result: PyResult<TestCallOutcome>,
     /// The attempt number on which the test produced its final result.
     attempt: u32,
     /// The maximum number of attempts the test was allowed (`retries + 1`).

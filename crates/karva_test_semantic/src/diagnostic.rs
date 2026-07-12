@@ -124,6 +124,16 @@ declare_diagnostic_type! {
     }
 }
 
+declare_diagnostic_type! {
+    /// ## Test Returned Value
+    ///
+    /// If a test returns anything other than `None`, we will raise this error.
+    pub static TEST_RETURNED_VALUE = {
+        summary: "Test returned a non-None value",
+        severity: Severity::Error,
+    }
+}
+
 /// Annotate a diagnostic with a primary span pointing at a function's name.
 fn annotate_function_name(
     diagnostic: &mut Diagnostic,
@@ -371,6 +381,23 @@ pub fn report_test_failure(
         FunctionKind::Test,
         error,
     );
+}
+
+pub fn report_test_returned_value(
+    context: &Context,
+    source_file: SourceFile,
+    stmt_function_def: &StmtFunctionDef,
+    returned_value: &str,
+) {
+    let builder = context.report_diagnostic(&TEST_RETURNED_VALUE);
+
+    let mut diagnostic = builder.into_diagnostic(format!(
+        "Test `{}` returned `{returned_value}`",
+        stmt_function_def.name
+    ));
+
+    annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
+    diagnostic.info("Test functions must return None. Did you mean to use `assert`?");
 }
 
 fn handle_failed_function_call(
