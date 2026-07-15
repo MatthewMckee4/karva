@@ -541,6 +541,14 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let start_time = std::time::Instant::now();
         let expect_fail_tag = tags.expect_fail_tag();
 
+        let snapshot_test_name = {
+            let mut arguments = FixtureArguments::default();
+            for (name, value) in &params {
+                arguments.insert(name.clone(), value.as_ref().clone_ref(py));
+            }
+            full_test_name(py, name.function_name().to_string(), &arguments, &[])
+        };
+
         let (function_arguments, fixture_call_errors, test_finalizers) = self.setup_test_fixtures(
             py,
             &fixture_dependencies,
@@ -571,12 +579,6 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         // Set snapshot context so `karva.assert_snapshot()` can determine the current test.
         // Use `function_name()` (not `qualified_test_name`) to avoid doubling the module prefix,
         // since `snapshot_path()` already prepends the module name from the file stem.
-        let snapshot_test_name = full_test_name(
-            py,
-            name.function_name().to_string(),
-            &function_arguments,
-            &name_only_arguments,
-        );
         crate::extensions::functions::snapshot::set_snapshot_context(
             test_module_path.to_string(),
             snapshot_test_name,
