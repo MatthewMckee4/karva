@@ -575,7 +575,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             py,
             name.function_name().to_string(),
             &function_arguments,
-            &[],
+            &name_only_arguments,
         );
         crate::extensions::functions::snapshot::set_snapshot_context(
             test_module_path.to_string(),
