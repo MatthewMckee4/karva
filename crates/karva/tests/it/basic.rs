@@ -1272,7 +1272,7 @@ def test_1():
     exit_code: 0
     ----- stdout -----
         Starting 2 tests across 1 worker
-            PASS [TIME] test::test_setenv(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_setenv(monkeypatch)
             PASS [TIME] test::test_1
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped

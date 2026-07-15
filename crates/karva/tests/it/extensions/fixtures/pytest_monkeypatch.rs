@@ -122,12 +122,12 @@ def test_delattr_import_path(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 6 tests across 1 worker
-            PASS [TIME] test::test_string_expression(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_wrong_target(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_unknown_import(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_unknown_attr(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_unknown_attr_non_raising(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_delattr_import_path(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_string_expression(monkeypatch)
+            PASS [TIME] test::test_wrong_target(monkeypatch)
+            PASS [TIME] test::test_unknown_import(monkeypatch)
+            PASS [TIME] test::test_unknown_attr(monkeypatch)
+            PASS [TIME] test::test_unknown_attr_non_raising(monkeypatch)
+            PASS [TIME] test::test_delattr_import_path(monkeypatch)
     ────────────
          Summary [TIME] 6 tests run: 6 passed, 0 skipped
 

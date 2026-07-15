@@ -39,6 +39,46 @@ def test_data():
 }
 
 #[test]
+fn test_json_snapshot_uses_framework_fixture_names() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+from pathlib import Path
+
+import karva
+
+def test_response(tmp_path: Path, monkeypatch: karva.MockEnv):
+    karva.assert_json_snapshot({"ok": True})
+        "#,
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--snapshot-update", "--status-level=none"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let content = context.read_file("snapshots/test__test_response(monkeypatch, tmp_path).snap");
+    insta::assert_snapshot!(content, @r#"
+    ---
+    source: test.py:7::test_response(monkeypatch, tmp_path)
+    ---
+    {
+      "ok": true
+    }
+    "#);
+}
+
+#[test]
 fn test_json_snapshot_nested_data() {
     let context = TestContext::with_file(
         "test.py",

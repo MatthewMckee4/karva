@@ -225,9 +225,9 @@ def test_setattr_undo(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 3 tests across 1 worker
-            PASS [TIME] test::test_setattr_simple(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_setattr_new_attribute(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_setattr_undo(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_setattr_simple(monkeypatch)
+            PASS [TIME] test::test_setattr_new_attribute(monkeypatch)
+            PASS [TIME] test::test_setattr_undo(monkeypatch)
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
@@ -265,9 +265,9 @@ def test_setitem_undo(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 3 tests across 1 worker
-            PASS [TIME] test::test_setitem_dict(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_setitem_new_key(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_setitem_undo(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_setitem_dict(monkeypatch)
+            PASS [TIME] test::test_setitem_new_key(monkeypatch)
+            PASS [TIME] test::test_setitem_undo(monkeypatch)
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
@@ -307,9 +307,9 @@ def test_delenv(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 3 tests across 1 worker
-            PASS [TIME] test::test_setenv(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_setenv_undo(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_delenv(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_setenv(monkeypatch)
+            PASS [TIME] test::test_setenv_undo(monkeypatch)
+            PASS [TIME] test::test_delenv(monkeypatch)
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
@@ -347,8 +347,8 @@ def test_syspath_prepend_multiple(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 2 tests across 1 worker
-            PASS [TIME] test::test_syspath_prepend(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_syspath_prepend_multiple(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_syspath_prepend(monkeypatch)
+            PASS [TIME] test::test_syspath_prepend_multiple(monkeypatch)
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
@@ -412,8 +412,8 @@ def test_delattr_undo(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 2 tests across 1 worker
-            PASS [TIME] test::test_delattr(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_delattr_undo(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_delattr(monkeypatch)
+            PASS [TIME] test::test_delattr_undo(monkeypatch)
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
@@ -484,7 +484,7 @@ def test_1():
     exit_code: 0
     ----- stdout -----
         Starting 2 tests across 1 worker
-            PASS [TIME] test::test_setenv(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_setenv(monkeypatch)
             PASS [TIME] test::test_1
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped
@@ -518,8 +518,8 @@ def test_setattr_dotted_path_undo(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 2 tests across 1 worker
-            PASS [TIME] test::test_setattr_dotted_path(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_setattr_dotted_path_undo(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_setattr_dotted_path(monkeypatch)
+            PASS [TIME] test::test_setattr_dotted_path_undo(monkeypatch)
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
@@ -552,8 +552,8 @@ def test_delattr_dotted_path_undo(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 2 tests across 1 worker
-            PASS [TIME] test::test_delattr_dotted_path(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_delattr_dotted_path_undo(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_delattr_dotted_path(monkeypatch)
+            PASS [TIME] test::test_delattr_dotted_path_undo(monkeypatch)
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
@@ -635,9 +635,9 @@ def test_context_independent_of_outer(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 3 tests across 1 worker
-            PASS [TIME] test::test_context_auto_undo(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_context_env_auto_undo(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_context_independent_of_outer(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_context_auto_undo(monkeypatch)
+            PASS [TIME] test::test_context_env_auto_undo(monkeypatch)
+            PASS [TIME] test::test_context_independent_of_outer(monkeypatch)
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
@@ -668,8 +668,8 @@ def test_delitem_not_raising(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 2 tests across 1 worker
-            PASS [TIME] test::test_delitem_raises_key_error(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_delitem_not_raising(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_delitem_raises_key_error(monkeypatch)
+            PASS [TIME] test::test_delitem_not_raising(monkeypatch)
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
@@ -945,7 +945,7 @@ def test_setattr_non_absolute(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_setattr_non_absolute(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_setattr_non_absolute(monkeypatch)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -973,7 +973,7 @@ def test_delattr_no_name(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_delattr_no_name(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_delattr_no_name(monkeypatch)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1000,7 +1000,7 @@ def test_setattr_nonexistent(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_setattr_nonexistent(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_setattr_nonexistent(monkeypatch)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1026,7 +1026,7 @@ def test_setattr_missing_attr(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_setattr_missing_attr(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_setattr_missing_attr(monkeypatch)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1059,8 +1059,8 @@ def test_setattr_dotted_none_undo(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 2 tests across 1 worker
-            PASS [TIME] test::test_setattr_dotted_none(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_setattr_dotted_none_undo(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_setattr_dotted_none(monkeypatch)
+            PASS [TIME] test::test_setattr_dotted_none_undo(monkeypatch)
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
@@ -1127,8 +1127,8 @@ def test_setitem_none_value_undo(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 2 tests across 1 worker
-            PASS [TIME] test::test_setattr_none_value_undo(monkeypatch=<MockEnv object>)
-            PASS [TIME] test::test_setitem_none_value_undo(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_setattr_none_value_undo(monkeypatch)
+            PASS [TIME] test::test_setitem_none_value_undo(monkeypatch)
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
@@ -1157,7 +1157,7 @@ def test_setattr_none_as_new_value(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_setattr_none_as_new_value(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_setattr_none_as_new_value(monkeypatch)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1190,7 +1190,7 @@ def test_setattr_module_spec_none(monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_setattr_module_spec_none(monkeypatch=<MockEnv object>)
+            PASS [TIME] test::test_setattr_module_spec_none(monkeypatch)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1244,7 +1244,7 @@ def test_capsys_stdout(capsys):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_capsys_stdout(capsys=<CapsysFixture object>)
+            PASS [TIME] test::test_capsys_stdout(capsys)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1271,7 +1271,7 @@ def test_recwarn_captures(recwarn):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_recwarn_captures(recwarn=WarningsRecorder(record=True))
+            PASS [TIME] test::test_recwarn_captures(recwarn)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1324,7 +1324,7 @@ def test_capsys_stderr(capsys):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_capsys_stderr(capsys=<CapsysFixture object>)
+            PASS [TIME] test::test_capsys_stderr(capsys)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1355,7 +1355,7 @@ def test_recwarn_pop(recwarn):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_recwarn_pop(recwarn=WarningsRecorder(record=True))
+            PASS [TIME] test::test_recwarn_pop(recwarn)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1465,7 +1465,7 @@ def test_capsys_reset(capsys):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_capsys_reset(capsys=<CapsysFixture object>)
+            PASS [TIME] test::test_capsys_reset(capsys)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1494,7 +1494,7 @@ def test_recwarn_clear(recwarn):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_recwarn_clear(recwarn=WarningsRecorder(record=True))
+            PASS [TIME] test::test_recwarn_clear(recwarn)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1551,7 +1551,7 @@ def test_capsys_disabled(capsys):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_capsys_disabled(capsys=<CapsysFixture object>)
+            PASS [TIME] test::test_capsys_disabled(capsys)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1582,7 +1582,7 @@ def test_capsys_isinstance(capsys):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_capsys_isinstance(capsys=<CapsysFixture object>)
+            PASS [TIME] test::test_capsys_isinstance(capsys)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1612,7 +1612,7 @@ def test_recwarn_pop_no_match(recwarn):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_recwarn_pop_no_match(recwarn=WarningsRecorder(record=True))
+            PASS [TIME] test::test_recwarn_pop_no_match(recwarn)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1668,7 +1668,7 @@ def test_recwarn_getitem(recwarn):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_recwarn_getitem(recwarn=WarningsRecorder(record=True))
+            PASS [TIME] test::test_recwarn_getitem(recwarn)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1724,7 +1724,7 @@ def test_recwarn_iter(recwarn):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_recwarn_iter(recwarn=WarningsRecorder(record=True))
+            PASS [TIME] test::test_recwarn_iter(recwarn)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -1820,8 +1820,8 @@ def test_stdout_works_after(capsys):
     exit_code: 0
     ----- stdout -----
         Starting 2 tests across 1 worker
-            PASS [TIME] test::test_capsys_uses_capture(capsys=<CapsysFixture object>)
-            PASS [TIME] test::test_stdout_works_after(capsys=<CapsysFixture object>)
+            PASS [TIME] test::test_capsys_uses_capture(capsys)
+            PASS [TIME] test::test_stdout_works_after(capsys)
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
