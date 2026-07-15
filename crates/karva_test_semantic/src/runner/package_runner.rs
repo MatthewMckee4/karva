@@ -549,7 +549,17 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             params,
         );
 
-        let computed_full_test_name = full_test_name(py, name.to_string(), &function_arguments);
+        let name_only_arguments = fixture_dependencies
+            .iter()
+            .filter(|fixture| fixture.name.module_path().module_name() == "karva._builtins")
+            .map(|fixture| fixture.function_name())
+            .collect::<Vec<_>>();
+        let computed_full_test_name = full_test_name(
+            py,
+            name.to_string(),
+            &function_arguments,
+            &name_only_arguments,
+        );
 
         let qualified_test_name =
             QualifiedTestName::new(name.clone(), Some(computed_full_test_name));
@@ -561,8 +571,12 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         // Set snapshot context so `karva.assert_snapshot()` can determine the current test.
         // Use `function_name()` (not `qualified_test_name`) to avoid doubling the module prefix,
         // since `snapshot_path()` already prepends the module name from the file stem.
-        let snapshot_test_name =
-            full_test_name(py, name.function_name().to_string(), &function_arguments);
+        let snapshot_test_name = full_test_name(
+            py,
+            name.function_name().to_string(),
+            &function_arguments,
+            &[],
+        );
         crate::extensions::functions::snapshot::set_snapshot_context(
             test_module_path.to_string(),
             snapshot_test_name,

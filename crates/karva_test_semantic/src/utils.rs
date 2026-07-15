@@ -206,7 +206,12 @@ pub(crate) fn add_to_sys_path(py: Python<'_>, path: &Utf8Path, index: isize) -> 
     Ok(())
 }
 
-pub(crate) fn full_test_name(py: Python, function: String, kwargs: &FixtureArguments) -> String {
+pub(crate) fn full_test_name(
+    py: Python,
+    function: String,
+    kwargs: &FixtureArguments,
+    name_only_arguments: &[&str],
+) -> String {
     if kwargs.is_empty() {
         function
     } else {
@@ -218,9 +223,11 @@ pub(crate) fn full_test_name(py: Python, function: String, kwargs: &FixtureArgum
             if i > 0 {
                 args_str.push_str(", ");
             }
-            if let Ok(value) = value.cast_bound::<PyAny>(py) {
+            let truncated_key = truncate_string(key);
+            if name_only_arguments.contains(&key.as_str()) {
+                let _ = write!(args_str, "{truncated_key}");
+            } else if let Ok(value) = value.cast_bound::<PyAny>(py) {
                 let trimmed_value_str = truncate_string(&value.to_string());
-                let truncated_key = truncate_string(key);
                 let _ = write!(args_str, "{truncated_key}={trimmed_value_str}");
             }
         }

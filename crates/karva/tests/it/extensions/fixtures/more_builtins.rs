@@ -99,17 +99,19 @@ fn test_framework_fixture_visible_without_conftest() {
         r"
 from pathlib import Path
 
-def test_tmp_path_still_works(tmp_path):
+def test_tmp_path_still_works(tmp_path, monkeypatch):
     assert isinstance(tmp_path, Path)
     assert tmp_path.exists()
     assert tmp_path.is_dir()
 ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: true
     exit_code: 0
     ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_framework::test_tmp_path_still_works(monkeypatch, tmp_path)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
