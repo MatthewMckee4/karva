@@ -541,12 +541,23 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let start_time = std::time::Instant::now();
         let expect_fail_tag = tags.expect_fail_tag();
 
+        // Snapshot identity uses the unqualified function name and every `@parametrize` value.
+        // Fixture values are runtime dependencies and can be machine-specific (for example,
+        // `tmp_path`), so they must not affect snapshot file names. `snapshot_path()` prepends
+        // the test file stem. Build the identity here because `setup_test_fixtures()` consumes
+        // `params`.
         let snapshot_test_name = {
-            let mut arguments = FixtureArguments::default();
-            for (name, value) in &params {
-                arguments.insert(name.clone(), value.as_ref().clone_ref(py));
+            let mut parametrize_arguments = FixtureArguments::default();
+            for (param_name, param_value) in &params {
+                parametrize_arguments
+                    .insert(param_name.clone(), param_value.as_ref().clone_ref(py));
             }
-            full_test_name(py, name.function_name().to_string(), &arguments, &[])
+            full_test_name(
+                py,
+                name.function_name().to_string(),
+                &parametrize_arguments,
+                &[],
+            )
         };
 
         let (function_arguments, fixture_call_errors, test_finalizers) = self.setup_test_fixtures(
@@ -576,9 +587,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
         let test_name_env_result = set_test_name_env(py, &qualified_test_name.to_string());
 
-        // Set snapshot context so `karva.assert_snapshot()` can determine the current test.
-        // Use `function_name()` (not `qualified_test_name`) to avoid doubling the module prefix,
-        // since `snapshot_path()` already prepends the module name from the file stem.
+        // Make the identity available before snapshot assertions run.
         crate::extensions::functions::snapshot::set_snapshot_context(
             test_module_path.to_string(),
             snapshot_test_name,

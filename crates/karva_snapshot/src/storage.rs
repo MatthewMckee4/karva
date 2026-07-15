@@ -21,7 +21,8 @@ pub fn snapshot_dir(test_file: &Utf8Path) -> Utf8PathBuf {
 /// Return the path to a snapshot file.
 ///
 /// Format: `{test_dir}/snapshots/{module_name}__{snapshot_name}.snap`
-/// Path separators in the snapshot name are percent-escaped.
+/// Percent signs and path separators in the snapshot name are percent-escaped.
+/// Qualified-name separators (`::`) are replaced with `__`.
 pub fn snapshot_path(test_file: &Utf8Path, module_name: &str, snapshot_name: &str) -> Utf8PathBuf {
     let dir = snapshot_dir(test_file);
     let snapshot_name = snapshot_name
