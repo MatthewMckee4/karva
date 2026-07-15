@@ -39,7 +39,7 @@ def test_data():
 }
 
 #[test]
-fn test_json_snapshot_uses_params_and_ignores_fixture_values() {
+fn test_json_snapshot_uses_param_values_and_fixture_names() {
     let context = TestContext::with_file(
         "test.py",
         r#"
@@ -47,8 +47,12 @@ from pathlib import Path
 
 import karva
 
+@karva.fixture
+def machine_path():
+    return Path("/machine-specific/path")
+
 @karva.tags.parametrize("ok", [True])
-def test_response(tmp_path: Path, monkeypatch: karva.MockEnv, ok):
+def test_response(machine_path, tmp_path: Path, monkeypatch: karva.MockEnv, ok):
     karva.assert_json_snapshot({"ok": ok})
         "#,
     );
@@ -68,10 +72,12 @@ def test_response(tmp_path: Path, monkeypatch: karva.MockEnv, ok):
     "
     );
 
-    let content = context.read_file("snapshots/test__test_response(ok=True).snap");
+    let content = context.read_file(
+        "snapshots/test__test_response(machine_path, monkeypatch, ok=True, tmp_path).snap",
+    );
     insta::assert_snapshot!(content, @r#"
     ---
-    source: test.py:8::test_response(ok=True)
+    source: test.py:12::test_response(machine_path, monkeypatch, ok=True, tmp_path)
     ---
     {
       "ok": true

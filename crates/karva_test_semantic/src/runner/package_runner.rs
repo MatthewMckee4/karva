@@ -541,25 +541,6 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let start_time = std::time::Instant::now();
         let expect_fail_tag = tags.expect_fail_tag();
 
-        // Snapshot identity uses the unqualified function name and every `@parametrize` value.
-        // Fixture values are runtime dependencies and can be machine-specific (for example,
-        // `tmp_path`), so they must not affect snapshot file names. `snapshot_path()` prepends
-        // the test file stem. Build the identity here because `setup_test_fixtures()` consumes
-        // `params`.
-        let snapshot_test_name = {
-            let mut parametrize_arguments = FixtureArguments::default();
-            for (param_name, param_value) in &params {
-                parametrize_arguments
-                    .insert(param_name.clone(), param_value.as_ref().clone_ref(py));
-            }
-            full_test_name(
-                py,
-                name.function_name().to_string(),
-                &parametrize_arguments,
-                &[],
-            )
-        };
-
         let (function_arguments, fixture_call_errors, test_finalizers) = self.setup_test_fixtures(
             py,
             &fixture_dependencies,
@@ -568,7 +549,11 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             params,
         );
 
-        let name_only_arguments = fixture_dependencies
+        let fixture_names = fixture_dependencies
+            .iter()
+            .map(|fixture| fixture.function_name())
+            .collect::<Vec<_>>();
+        let framework_fixture_names = fixture_dependencies
             .iter()
             .filter(|fixture| fixture.name.module_path().module_name() == "karva._builtins")
             .map(|fixture| fixture.function_name())
@@ -577,7 +562,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             py,
             name.to_string(),
             &function_arguments,
-            &name_only_arguments,
+            &framework_fixture_names,
         );
 
         let qualified_test_name =
@@ -587,7 +572,15 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
         let test_name_env_result = set_test_name_env(py, &qualified_test_name.to_string());
 
-        // Make the identity available before snapshot assertions run.
+        // Parameter values distinguish snapshot variants, but fixture values can be
+        // machine-specific, so snapshot identity includes fixture names only. Use the
+        // unqualified function name because `snapshot_path()` prepends the test file stem.
+        let snapshot_test_name = full_test_name(
+            py,
+            name.function_name().to_string(),
+            &function_arguments,
+            &fixture_names,
+        );
         crate::extensions::functions::snapshot::set_snapshot_context(
             test_module_path.to_string(),
             snapshot_test_name,
