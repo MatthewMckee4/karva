@@ -1,5 +1,64 @@
 # Changelog
 
+## 0.0.1-alpha.7
+
+### Bug Fixes
+
+- Report fixture dependency cycles ([#995](https://github.com/MatthewMckee4/karva/pull/995))
+- Stabilize snapshot file names ([#992](https://github.com/MatthewMckee4/karva/pull/992))
+- Reject generator test functions ([#972](https://github.com/MatthewMckee4/karva/pull/972))
+- Fail tests that return values ([#971](https://github.com/MatthewMckee4/karva/pull/971))
+- Ignore commented defs when pruning snapshots ([#970](https://github.com/MatthewMckee4/karva/pull/970))
+- Report scheduled test count in start banner ([#943](https://github.com/MatthewMckee4/karva/pull/943))
+- Reject zero test workers ([#938](https://github.com/MatthewMckee4/karva/pull/938))
+- Allow explicit false for bool test flags ([#930](https://github.com/MatthewMckee4/karva/pull/930))
+- Treat snapshot filter replacements literally ([#929](https://github.com/MatthewMckee4/karva/pull/929))
+- Ignore directory worker binary candidates ([#927](https://github.com/MatthewMckee4/karva/pull/927))
+- Normalize interrupted parametrized failures ([#925](https://github.com/MatthewMckee4/karva/pull/925))
+- Avoid retrying skipped and expected-fail tests ([#924](https://github.com/MatthewMckee4/karva/pull/924))
+- Fix HTML coverage branch total ([#919](https://github.com/MatthewMckee4/karva/pull/919))
+- Fix snapshot source path filters ([#918](https://github.com/MatthewMckee4/karva/pull/918))
+- Forward configured retries to workers ([#914](https://github.com/MatthewMckee4/karva/pull/914))
+- Fix show-config serialization for overrides ([#786](https://github.com/MatthewMckee4/karva/pull/786))
+
+### CLI
+
+- Add structured result reports ([#892](https://github.com/MatthewMckee4/karva/pull/892))
+- Add graceful worker termination ([#890](https://github.com/MatthewMckee4/karva/pull/890))
+- Add hash test partitioning ([#889](https://github.com/MatthewMckee4/karva/pull/889))
+- Add branch coverage ([#885](https://github.com/MatthewMckee4/karva/pull/885))
+- Add coverage include and omit filters ([#881](https://github.com/MatthewMckee4/karva/pull/881))
+
+### Configuration
+
+- Enable Seal pull request creation ([#996](https://github.com/MatthewMckee4/karva/pull/996))
+- Cover configured fixture imports ([#916](https://github.com/MatthewMckee4/karva/pull/916))
+- Cover configured slow timeout ([#915](https://github.com/MatthewMckee4/karva/pull/915))
+- Add JUnit XML reports ([#887](https://github.com/MatthewMckee4/karva/pull/887))
+
+### Coverage
+
+- Add coverage.py data file ([#884](https://github.com/MatthewMckee4/karva/pull/884))
+- Add coverage test contexts ([#883](https://github.com/MatthewMckee4/karva/pull/883))
+- Cache coverage paths per code object ([#882](https://github.com/MatthewMckee4/karva/pull/882))
+
+### Diagnostics
+
+- Preserve argument order in test names ([#994](https://github.com/MatthewMckee4/karva/pull/994))
+- Hide framework fixture values from test names ([#991](https://github.com/MatthewMckee4/karva/pull/991))
+- Prefer pytest fixture validation errors ([#903](https://github.com/MatthewMckee4/karva/pull/903))
+- Capture output per test ([#886](https://github.com/MatthewMckee4/karva/pull/886))
+- Reduce status output progress tracking overhead ([#804](https://github.com/MatthewMckee4/karva/pull/804))
+
+### Documentation
+
+- Document project non-goals ([#878](https://github.com/MatthewMckee4/karva/pull/878))
+- Add README support and license sections ([#839](https://github.com/MatthewMckee4/karva/pull/839))
+
+### Contributors
+
+- [@MatthewMckee4](https://github.com/MatthewMckee4)
+
 ## 0.0.1-alpha.6
 
 ### Bug Fixes
