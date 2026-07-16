@@ -8,7 +8,7 @@ use crate::discovery::DiscoveredTestFunction;
 use crate::extensions::fixtures::{NormalizedFixture, RequiresFixtures};
 use crate::extensions::tags::Tags;
 use crate::extensions::tags::parametrize::ParametrizationArgs;
-use crate::runner::fixture_resolver::RuntimeFixtureResolver;
+use crate::runner::fixture_resolver::{FixtureCycleError, RuntimeFixtureResolver};
 
 /// A single variant of a test to be executed.
 ///
@@ -93,7 +93,7 @@ impl<'a> TestVariantIterator<'a> {
         py: Python,
         test: &'a DiscoveredTestFunction,
         resolver: &mut RuntimeFixtureResolver,
-    ) -> Self {
+    ) -> Result<Self, FixtureCycleError> {
         let test_params = test.tags.parametrize_args();
 
         let parametrize_param_names: HashSet<&str> = test_params
@@ -108,13 +108,13 @@ impl<'a> TestVariantIterator<'a> {
         let auto_use_fixtures = resolver.get_normalized_auto_use_fixtures(
             py,
             crate::extensions::fixtures::FixtureScope::Function,
-        );
+        )?;
 
         let fixture_dependencies =
-            resolver.resolve_test_fixtures(py, &function_param_names, &parametrize_param_names);
+            resolver.resolve_test_fixtures(py, &function_param_names, &parametrize_param_names)?;
 
         let use_fixture_names = test.tags.required_fixtures_names();
-        let use_fixture_dependencies = resolver.resolve_use_fixtures(py, &use_fixture_names);
+        let use_fixture_dependencies = resolver.resolve_use_fixtures(py, &use_fixture_names)?;
 
         let param_args = if test_params.is_empty() {
             vec![ParametrizationArgs::default()]
@@ -122,13 +122,13 @@ impl<'a> TestVariantIterator<'a> {
             test_params
         };
 
-        Self {
+        Ok(Self {
             test,
             param_args: param_args.into_iter(),
             fixture_dependencies: Rc::from(fixture_dependencies),
             use_fixture_dependencies: Rc::from(use_fixture_dependencies),
             auto_use_fixtures: Rc::from(auto_use_fixtures),
-        }
+        })
     }
 }
 

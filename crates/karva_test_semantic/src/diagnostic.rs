@@ -19,7 +19,7 @@ mod metadata;
 
 pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
 
-use crate::runner::{FixtureArguments, FixtureCallError, FixtureChainEntry};
+use crate::runner::{FixtureArguments, FixtureCallError, FixtureChainEntry, FixtureCycleError};
 use crate::utils::truncate_string;
 use crate::{Context, declare_diagnostic_type};
 
@@ -79,6 +79,16 @@ declare_diagnostic_type! {
     /// If a finalizer tries to yield another value, we will raise this error.
     pub static INVALID_FIXTURE_FINALIZER = {
         summary: "Tried to run an invalid fixture finalizer",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
+    /// ## Fixture dependency cycle
+    ///
+    /// Raised when fixture dependencies form a cycle and cannot be resolved.
+    pub static FIXTURE_CYCLE = {
+        summary: "Fixture dependency cycle detected",
         severity: Severity::Error,
     }
 }
@@ -277,6 +287,44 @@ pub fn report_fixture_failure(context: &Context, py: Python, error: FixtureCallE
         &arguments,
         FunctionKind::Fixture,
         &error,
+    );
+}
+
+pub fn report_fixture_cycle(context: &Context, error: FixtureCycleError) {
+    let FixtureCycleError { cycle } = error;
+    let Some(first_fixture) = cycle.first() else {
+        return;
+    };
+
+    let builder = context.report_diagnostic(&FIXTURE_CYCLE);
+    let mut diagnostic = builder.into_diagnostic("Fixture dependency cycle detected");
+
+    annotate_function_name(
+        &mut diagnostic,
+        first_fixture.source_file.clone(),
+        &first_fixture.stmt_function_def,
+    );
+
+    for dependency_edge in cycle.windows(2).skip(1) {
+        let [fixture, dependency] = dependency_edge else {
+            continue;
+        };
+        let mut sub = SubDiagnostic::new(
+            SubDiagnosticSeverity::Info,
+            format!("Fixture `{}` requires `{}`", fixture.name, dependency.name),
+        );
+        let span = Span::from(fixture.source_file.clone())
+            .with_range(fixture.stmt_function_def.name.range);
+        sub.annotate(Annotation::primary(span));
+        diagnostic.sub(sub);
+    }
+
+    diagnostic.info(
+        cycle
+            .iter()
+            .map(|fixture| fixture.name.as_str())
+            .collect::<Vec<_>>()
+            .join(" -> "),
     );
 }
 

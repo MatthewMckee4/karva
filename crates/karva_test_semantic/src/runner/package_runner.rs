@@ -15,10 +15,10 @@ use ruff_source_file::SourceFile;
 
 use crate::Context;
 use crate::diagnostic::{
-    report_fixture_failure, report_missing_fixtures, report_test_failure,
+    report_fixture_cycle, report_fixture_failure, report_missing_fixtures, report_test_failure,
     report_test_pass_on_expect_failure, report_test_returned_value,
 };
-use crate::discovery::{DiscoveredModule, DiscoveredPackage};
+use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::{
     Finalizer, FixtureScope, HasFixtures, NormalizedFixture, missing_arguments_from_error,
 };
@@ -28,7 +28,7 @@ use crate::extensions::tags::timeout::TimeoutTag;
 use crate::output_capture::PythonOutputCapture;
 use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::runner::test_iterator::{TestVariant, TestVariantIterator};
-use crate::runner::{FinalizerCache, FixtureArguments, FixtureCache};
+use crate::runner::{FinalizerCache, FixtureArguments, FixtureCache, FixtureCycleError};
 use crate::utils::{
     full_test_name, run_coroutine, run_test_with_timeout, set_attempt_env, set_test_name_env,
     truncate_string,
@@ -104,6 +104,40 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         }
     }
 
+    fn register_failed_test(&self, test: &DiscoveredTestFunction) {
+        self.context.register_test_case_result(
+            &QualifiedTestName::new(test.name.clone(), None),
+            IndividualTestResultKind::Failed,
+            std::time::Duration::ZERO,
+        );
+        self.record_outcome(false);
+    }
+
+    fn register_failed_module_tests(&self, module: &DiscoveredModule) {
+        for test in module.test_functions() {
+            self.register_failed_test(test);
+            if self.max_fail_reached() {
+                return;
+            }
+        }
+    }
+
+    fn register_failed_package_tests(&self, package: &DiscoveredPackage) {
+        for module in package.modules().values() {
+            self.register_failed_module_tests(module);
+            if self.max_fail_reached() {
+                return;
+            }
+        }
+
+        for child_package in package.packages().values() {
+            self.register_failed_package_tests(child_package);
+            if self.max_fail_reached() {
+                return;
+            }
+        }
+    }
+
     fn start_output_capture(&self, py: Python<'_>) -> Option<PythonOutputCapture> {
         if self.context.settings().terminal().show_python_output {
             return None;
@@ -149,30 +183,36 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         // the user conftest at the session root and the framework module. No
         // `if let Some(...)` gate: the session always exists, and if neither
         // slot contributes any autouse fixtures the walk returns an empty vec.
-        self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session);
+        if let Err(error) = self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session) {
+            report_fixture_cycle(self.context, error);
+            self.register_failed_package_tests(session);
+            return;
+        }
 
         self.execute_package(py, session, &[]);
 
         self.clean_up_scope(py, FixtureScope::Session);
     }
 
-    /// Resolve and run auto-use fixtures for `scope`, reporting any failures
-    /// through the standard fixture-failure diagnostic. The `current` source
-    /// is whichever `HasFixtures` provider applies for this scope (the
-    /// session package, a module, or a package configuration module).
+    /// Resolve and run auto-use fixtures for `scope`. Resolution cycles are
+    /// returned to the caller; execution failures are reported here. The
+    /// `current` source is whichever `HasFixtures` provider applies for this
+    /// scope (the session package, a module, or a package configuration module).
     fn run_auto_use_fixtures<'b>(
         &self,
         py: Python<'_>,
         parents: &'b [&'b DiscoveredPackage],
         current: &'b (dyn HasFixtures<'b> + 'b),
         scope: FixtureScope,
-    ) {
+    ) -> Result<(), FixtureCycleError> {
         let mut resolver = RuntimeFixtureResolver::new(parents, current);
-        let auto_use_fixtures = resolver.get_normalized_auto_use_fixtures(py, scope);
+        let auto_use_fixtures = resolver.get_normalized_auto_use_fixtures(py, scope)?;
         let auto_use_errors = self.run_fixtures(py, &auto_use_fixtures);
         for error in auto_use_errors {
             report_fixture_failure(self.context, py, error);
         }
+
+        Ok(())
     }
 
     /// Execute a module.
@@ -186,7 +226,11 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         module: &DiscoveredModule,
         parents: &[&DiscoveredPackage],
     ) -> bool {
-        self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module);
+        if let Err(error) = self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module) {
+            report_fixture_cycle(self.context, error);
+            self.register_failed_module_tests(module);
+            return false;
+        }
 
         let mut passed = true;
 
@@ -194,8 +238,21 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             // Create a new resolver for each test to handle fixture resolution
             let mut test_resolver = RuntimeFixtureResolver::new(parents, module);
 
+            let variants = match TestVariantIterator::new(py, test_function, &mut test_resolver) {
+                Ok(variants) => variants,
+                Err(error) => {
+                    report_fixture_cycle(self.context, error);
+                    self.register_failed_test(test_function);
+                    passed = false;
+                    if self.max_fail_reached() {
+                        break;
+                    }
+                    continue;
+                }
+            };
+
             // Iterate over all test variants (parametrize combinations × fixture combinations).
-            for variant in TestVariantIterator::new(py, test_function, &mut test_resolver) {
+            for variant in variants {
                 let variant_passed = self.execute_test_variant(py, variant);
                 self.record_outcome(variant_passed);
                 passed &= variant_passed;
@@ -230,7 +287,13 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         new_parents.push(package);
 
         if let Some(config_module) = package.configuration_module_impl() {
-            self.run_auto_use_fixtures(py, parents, config_module, FixtureScope::Package);
+            if let Err(error) =
+                self.run_auto_use_fixtures(py, parents, config_module, FixtureScope::Package)
+            {
+                report_fixture_cycle(self.context, error);
+                self.register_failed_package_tests(package);
+                return false;
+            }
         }
 
         let mut passed = true;
