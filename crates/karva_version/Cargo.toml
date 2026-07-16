@@ -1,6 +1,6 @@
 [package]
 name = "karva_version"
-version = "0.0.1-alpha.6"
+version = "0.0.1-alpha.7"
 edition.workspace = true
 rust-version.workspace = true
 description = "Version metadata for Karva."
