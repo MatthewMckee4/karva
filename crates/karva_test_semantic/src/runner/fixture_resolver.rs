@@ -53,6 +53,35 @@ impl FixtureCycleError {
     }
 }
 
+#[derive(Default)]
+struct FixturePath<'a> {
+    fixtures: Vec<&'a DiscoveredFixture>,
+}
+
+impl<'a> FixturePath<'a> {
+    fn enter<T>(
+        &mut self,
+        fixture: &'a DiscoveredFixture,
+        resolve: impl FnOnce(&mut Self) -> Result<T, FixtureCycleError>,
+    ) -> Result<T, FixtureCycleError> {
+        if let Some(cycle_start) = self
+            .fixtures
+            .iter()
+            .position(|active_fixture| std::ptr::eq(*active_fixture, fixture))
+        {
+            return Err(FixtureCycleError::new(
+                &self.fixtures[cycle_start..],
+                fixture,
+            ));
+        }
+
+        self.fixtures.push(fixture);
+        let result = resolve(self);
+        let _ = self.fixtures.pop();
+        result
+    }
+}
+
 impl<'a> RuntimeFixtureResolver<'a> {
     pub(super) fn new(
         parents: &'a [&'a DiscoveredPackage],
@@ -75,7 +104,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         &mut self,
         py: Python,
         fixture: &'a DiscoveredFixture,
-        path: &mut Vec<&'a DiscoveredFixture>,
+        path: &mut FixturePath<'a>,
     ) -> Result<Rc<NormalizedFixture>, FixtureCycleError> {
         let cache_key = fixture.name().to_string();
 
@@ -85,19 +114,10 @@ impl<'a> RuntimeFixtureResolver<'a> {
             }
         }
 
-        if let Some(cycle_start) = path
-            .iter()
-            .position(|active_fixture| std::ptr::eq(*active_fixture, fixture))
-        {
-            return Err(FixtureCycleError::new(&path[cycle_start..], fixture));
-        }
-
-        path.push(fixture);
-        let required_fixtures: Vec<String> = fixture.required_fixtures(py);
-        let dependent_fixtures =
-            self.get_dependent_fixtures(py, Some(fixture), &required_fixtures, path);
-        let _ = path.pop();
-        let dependent_fixtures = dependent_fixtures?;
+        let dependent_fixtures = path.enter(fixture, |path| {
+            let required_fixtures: Vec<String> = fixture.required_fixtures(py);
+            self.get_dependent_fixtures(py, Some(fixture), &required_fixtures, path)
+        })?;
 
         let result = Rc::new(NormalizedFixture {
             name: fixture.name().clone(),
@@ -123,7 +143,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         scope: FixtureScope,
     ) -> Result<Vec<Rc<NormalizedFixture>>, FixtureCycleError> {
         let auto_use_fixtures = get_auto_use_fixtures(self.parents, self.current, scope);
-        let mut path = Vec::new();
+        let mut path = FixturePath::default();
 
         auto_use_fixtures
             .into_iter()
@@ -144,7 +164,8 @@ impl<'a> RuntimeFixtureResolver<'a> {
             .cloned()
             .collect();
 
-        self.get_dependent_fixtures(py, None, &regular_fixture_names, &mut Vec::new())
+        let mut path = FixturePath::default();
+        self.get_dependent_fixtures(py, None, &regular_fixture_names, &mut path)
     }
 
     /// Resolve `use_fixtures` dependencies.
@@ -153,7 +174,8 @@ impl<'a> RuntimeFixtureResolver<'a> {
         py: Python,
         fixture_names: &[String],
     ) -> Result<Vec<Rc<NormalizedFixture>>, FixtureCycleError> {
-        self.get_dependent_fixtures(py, None, fixture_names, &mut Vec::new())
+        let mut path = FixturePath::default();
+        self.get_dependent_fixtures(py, None, fixture_names, &mut path)
     }
 
     /// Get dependent fixtures for a list of fixture names.
@@ -162,7 +184,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         py: Python,
         current_fixture: Option<&'a DiscoveredFixture>,
         fixture_names: &[String],
-        path: &mut Vec<&'a DiscoveredFixture>,
+        path: &mut FixturePath<'a>,
     ) -> Result<Vec<Rc<NormalizedFixture>>, FixtureCycleError> {
         let mut normalized_fixtures = Vec::with_capacity(fixture_names.len());
 
