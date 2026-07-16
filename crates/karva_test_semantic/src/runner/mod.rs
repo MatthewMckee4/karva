@@ -9,4 +9,5 @@ mod test_iterator;
 use finalizer_cache::FinalizerCache;
 pub use fixture_arguments::FixtureArguments;
 use fixture_cache::FixtureCache;
+pub use fixture_resolver::FixtureCycleError;
 pub use package_runner::{FixtureCallError, FixtureChainEntry, PackageRunner};
