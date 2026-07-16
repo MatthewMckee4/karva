@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use ruff_python_ast::Parameters;
 
 /// Keyword arguments resolved for a test or fixture call.
 #[derive(Default)]
@@ -20,6 +21,21 @@ impl FixtureArguments {
 
     pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, Py<PyAny>> {
         self.inner.iter()
+    }
+
+    pub fn iter_in_signature_order<'a>(
+        &'a self,
+        parameters: &Parameters,
+    ) -> impl Iterator<Item = (&'a String, &'a Py<PyAny>)> {
+        let mut arguments = self.iter().collect::<Vec<_>>();
+        arguments.sort_by(|(left, _), (right, _)| {
+            let left_position = parameters.index(left).unwrap_or(usize::MAX);
+            let right_position = parameters.index(right).unwrap_or(usize::MAX);
+            left_position
+                .cmp(&right_position)
+                .then_with(|| left.cmp(right))
+        });
+        arguments.into_iter()
     }
 
     pub fn to_kwargs<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {

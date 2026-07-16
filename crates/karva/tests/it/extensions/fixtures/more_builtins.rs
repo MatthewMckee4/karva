@@ -111,7 +111,7 @@ def test_tmp_path_still_works(tmp_path, monkeypatch):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test_framework::test_tmp_path_still_works(monkeypatch, tmp_path)
+            PASS [TIME] test_framework::test_tmp_path_still_works(tmp_path, monkeypatch)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 

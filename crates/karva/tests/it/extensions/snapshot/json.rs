@@ -73,11 +73,11 @@ def test_response(machine_path, tmp_path: Path, monkeypatch: karva.MockEnv, ok):
     );
 
     let content = context.read_file(
-        "snapshots/test__test_response(machine_path, monkeypatch, ok=True, tmp_path).snap",
+        "snapshots/test__test_response(machine_path, tmp_path, monkeypatch, ok=True).snap",
     );
     insta::assert_snapshot!(content, @r#"
     ---
-    source: test.py:12::test_response(machine_path, monkeypatch, ok=True, tmp_path)
+    source: test.py:12::test_response(machine_path, tmp_path, monkeypatch, ok=True)
     ---
     {
       "ok": true

@@ -444,10 +444,7 @@ fn handle_failed_function_call(
         ));
     }
 
-    let mut sorted_arguments = arguments.iter().collect::<Vec<_>>();
-    sorted_arguments.sort_by_key(|&(name, _)| name);
-
-    for (name, value) in sorted_arguments {
+    for (name, value) in arguments.iter_in_signature_order(&stmt_function_def.parameters) {
         let value_str = value.bind(py).to_string();
         let truncated_value = truncate_string(&value_str);
         let truncated_name = truncate_string(name);
