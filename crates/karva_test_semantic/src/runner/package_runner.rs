@@ -113,6 +113,31 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         self.record_outcome(false);
     }
 
+    fn register_failed_module_tests(&self, module: &DiscoveredModule) {
+        for test in module.test_functions() {
+            self.register_failed_test(test);
+            if self.max_fail_reached() {
+                return;
+            }
+        }
+    }
+
+    fn register_failed_package_tests(&self, package: &DiscoveredPackage) {
+        for module in package.modules().values() {
+            self.register_failed_module_tests(module);
+            if self.max_fail_reached() {
+                return;
+            }
+        }
+
+        for child_package in package.packages().values() {
+            self.register_failed_package_tests(child_package);
+            if self.max_fail_reached() {
+                return;
+            }
+        }
+    }
+
     fn start_output_capture(&self, py: Python<'_>) -> Option<PythonOutputCapture> {
         if self.context.settings().terminal().show_python_output {
             return None;
@@ -160,6 +185,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         // slot contributes any autouse fixtures the walk returns an empty vec.
         if let Err(error) = self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session) {
             report_fixture_cycle(self.context, error);
+            self.register_failed_package_tests(session);
             return;
         }
 
@@ -202,12 +228,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
     ) -> bool {
         if let Err(error) = self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module) {
             report_fixture_cycle(self.context, error);
-            for test_function in module.test_functions() {
-                self.register_failed_test(test_function);
-                if self.max_fail_reached() {
-                    break;
-                }
-            }
+            self.register_failed_module_tests(module);
             return false;
         }
 
@@ -270,6 +291,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 self.run_auto_use_fixtures(py, parents, config_module, FixtureScope::Package)
             {
                 report_fixture_cycle(self.context, error);
+                self.register_failed_package_tests(package);
                 return false;
             }
         }
