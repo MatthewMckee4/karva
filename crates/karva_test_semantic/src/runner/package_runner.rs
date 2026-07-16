@@ -18,7 +18,7 @@ use crate::diagnostic::{
     report_fixture_cycle, report_fixture_failure, report_missing_fixtures, report_test_failure,
     report_test_pass_on_expect_failure, report_test_returned_value,
 };
-use crate::discovery::{DiscoveredModule, DiscoveredPackage};
+use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::{
     Finalizer, FixtureScope, HasFixtures, NormalizedFixture, missing_arguments_from_error,
 };
@@ -102,6 +102,15 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             self.failed_count
                 .set(self.failed_count.get().saturating_add(1));
         }
+    }
+
+    fn register_failed_test(&self, test: &DiscoveredTestFunction) {
+        self.context.register_test_case_result(
+            &QualifiedTestName::new(test.name.clone(), None),
+            IndividualTestResultKind::Failed,
+            std::time::Duration::ZERO,
+        );
+        self.record_outcome(false);
     }
 
     fn start_output_capture(&self, py: Python<'_>) -> Option<PythonOutputCapture> {
@@ -194,13 +203,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         if let Err(error) = self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module) {
             report_fixture_cycle(self.context, error);
             for test_function in module.test_functions() {
-                let test_name = QualifiedTestName::new(test_function.name.clone(), None);
-                let test_passed = self.context.register_test_case_result(
-                    &test_name,
-                    IndividualTestResultKind::Failed,
-                    std::time::Duration::ZERO,
-                );
-                self.record_outcome(test_passed);
+                self.register_failed_test(test_function);
                 if self.max_fail_reached() {
                     break;
                 }
@@ -218,13 +221,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 Ok(variants) => variants,
                 Err(error) => {
                     report_fixture_cycle(self.context, error);
-                    let test_name = QualifiedTestName::new(test_function.name.clone(), None);
-                    let test_passed = self.context.register_test_case_result(
-                        &test_name,
-                        IndividualTestResultKind::Failed,
-                        std::time::Duration::ZERO,
-                    );
-                    self.record_outcome(test_passed);
+                    self.register_failed_test(test_function);
                     passed = false;
                     if self.max_fail_reached() {
                         break;
