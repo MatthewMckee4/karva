@@ -39,7 +39,7 @@ def test_data():
 }
 
 #[test]
-fn test_json_snapshot_uses_framework_fixture_names() {
+fn test_json_snapshot_uses_param_values_and_fixture_names() {
     let context = TestContext::with_file(
         "test.py",
         r#"
@@ -47,8 +47,13 @@ from pathlib import Path
 
 import karva
 
-def test_response(tmp_path: Path, monkeypatch: karva.MockEnv):
-    karva.assert_json_snapshot({"ok": True})
+@karva.fixture
+def machine_path():
+    return Path("/machine-specific/path")
+
+@karva.tags.parametrize("ok", [True])
+def test_response(machine_path, tmp_path: Path, monkeypatch: karva.MockEnv, ok):
+    karva.assert_json_snapshot({"ok": ok})
         "#,
     );
 
@@ -67,10 +72,12 @@ def test_response(tmp_path: Path, monkeypatch: karva.MockEnv):
     "
     );
 
-    let content = context.read_file("snapshots/test__test_response(monkeypatch, tmp_path).snap");
+    let content = context.read_file(
+        "snapshots/test__test_response(machine_path, monkeypatch, ok=True, tmp_path).snap",
+    );
     insta::assert_snapshot!(content, @r#"
     ---
-    source: test.py:7::test_response(monkeypatch, tmp_path)
+    source: test.py:12::test_response(machine_path, monkeypatch, ok=True, tmp_path)
     ---
     {
       "ok": true
@@ -297,14 +304,14 @@ def test_inline_json():
 }
 
 #[test]
-fn test_json_snapshot_named() {
+fn test_json_snapshot_named_with_path_separators() {
     let context = TestContext::with_file(
         "test.py",
         r"
 import karva
 
 def test_fn():
-    karva.assert_json_snapshot({'b': 2, 'a': 1}, name='config')
+    karva.assert_json_snapshot({'b': 2, 'a': 1}, name='nested/config\\value')
         ",
     );
 
@@ -320,7 +327,7 @@ def test_fn():
     ----- stderr -----
     ");
 
-    let content = context.read_file("snapshots/test__test_fn--config.snap");
+    let content = context.read_file("snapshots/test__test_fn--nested%2Fconfig%5Cvalue.snap");
     insta::assert_snapshot!(content, @r#"
     ---
     source: test.py:5::test_fn

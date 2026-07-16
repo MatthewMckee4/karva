@@ -374,9 +374,7 @@ fn assert_snapshot_impl(
     let test_file_path = Utf8Path::new(&test_file);
     let module_name = test_file_path.file_stem().unwrap_or("unknown");
 
-    // Sanitize `::` to `__` for filesystem compatibility (`:` is reserved on Windows)
-    let fs_snapshot_name = snapshot_name.replace("::", "__");
-    let snap_path = snapshot_path(test_file_path, module_name, &fs_snapshot_name);
+    let snap_path = snapshot_path(test_file_path, module_name, &snapshot_name);
 
     let relative_test_file = test_file_path
         .file_name()

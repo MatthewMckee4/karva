@@ -21,8 +21,15 @@ pub fn snapshot_dir(test_file: &Utf8Path) -> Utf8PathBuf {
 /// Return the path to a snapshot file.
 ///
 /// Format: `{test_dir}/snapshots/{module_name}__{snapshot_name}.snap`
+/// Percent signs and path separators in the snapshot name are percent-escaped.
+/// Qualified-name separators (`::`) are replaced with `__`.
 pub fn snapshot_path(test_file: &Utf8Path, module_name: &str, snapshot_name: &str) -> Utf8PathBuf {
     let dir = snapshot_dir(test_file);
+    let snapshot_name = snapshot_name
+        .replace('%', "%25")
+        .replace('/', "%2F")
+        .replace('\\', "%5C")
+        .replace("::", "__");
     dir.join(format!("{module_name}__{snapshot_name}.snap"))
 }
 
@@ -538,6 +545,34 @@ mod tests {
             normalize_path(&snapshot_path(Utf8Path::new("tests/test_example.py"), "test_example", "test_foo")),
             @"tests/snapshots/test_example__test_foo.snap"
         );
+    }
+
+    #[test]
+    fn snapshot_path_escapes_separators() {
+        insta::assert_snapshot!(
+            normalize_path(&snapshot_path(
+                Utf8Path::new("tests/test_example.py"),
+                "test_example",
+                "TestClass::test_foo(left/right\\value%2F)",
+            )),
+            @"tests/snapshots/test_example__TestClass__test_foo(left%2Fright%5Cvalue%252F).snap"
+        );
+    }
+
+    #[test]
+    fn snapshot_path_escaping_preserves_identity() {
+        let test_file = Utf8Path::new("tests/test_example.py");
+        let slash = snapshot_path(test_file, "test_example", "test_foo(a/b)");
+        let backslash = snapshot_path(test_file, "test_example", "test_foo(a\\b)");
+        let underscore = snapshot_path(test_file, "test_example", "test_foo(a_b)");
+        let escaped = snapshot_path(test_file, "test_example", "test_foo(a%2Fb)");
+
+        assert_ne!(slash, backslash);
+        assert_ne!(slash, underscore);
+        assert_ne!(slash, escaped);
+        assert_ne!(backslash, underscore);
+        assert_ne!(backslash, escaped);
+        assert_ne!(underscore, escaped);
     }
 
     #[test]
