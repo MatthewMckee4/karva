@@ -511,7 +511,7 @@ fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &st
         exit_code: 0
         ----- stdout -----
             Starting 1 test across 1 worker
-                PASS [TIME] test::test_all_scopes(function_fixture=4, module_fixture=2, package_fixture=3, session_fixture=1)
+                PASS [TIME] test::test_all_scopes(session_fixture=1, module_fixture=2, package_fixture=3, function_fixture=4)
         ────────────
              Summary [TIME] 1 test run: 1 passed, 0 skipped
 

@@ -137,8 +137,8 @@ fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
         exit_code: 0
         ----- stdout -----
             Starting 2 tests across 1 worker
-                PASS [TIME] test::test_string_only(first_entry=a, order=['a'])
-                PASS [TIME] test::test_string_and_int(first_entry=a, order=['a'])
+                PASS [TIME] test::test_string_only(order=['a'], first_entry=a)
+                PASS [TIME] test::test_string_and_int(order=['a'], first_entry=a)
         ────────────
              Summary [TIME] 2 tests run: 2 passed, 0 skipped
 

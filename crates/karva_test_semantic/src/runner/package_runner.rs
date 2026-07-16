@@ -562,6 +562,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             py,
             name.to_string(),
             &function_arguments,
+            &stmt_function_def.parameters,
             &framework_fixture_names,
         );
 
@@ -579,6 +580,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             py,
             name.function_name().to_string(),
             &function_arguments,
+            &stmt_function_def.parameters,
             &fixture_names,
         );
         crate::extensions::functions::snapshot::set_snapshot_context(

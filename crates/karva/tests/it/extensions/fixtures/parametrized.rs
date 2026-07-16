@@ -260,7 +260,7 @@ fn test_fixture_with_multiple_fixtures(#[values("pytest", "karva")] framework: &
         exit_code: 0
         ----- stdout -----
             Starting 1 test across 1 worker
-                PASS [TIME] test::test_combination(letter=X, number=100)
+                PASS [TIME] test::test_combination(number=100, letter=X)
         ────────────
              Summary [TIME] 1 test run: 1 passed, 0 skipped
 

@@ -6,6 +6,7 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAnyMethods, PyDict};
 use pyo3::{PyResult, Python};
+use ruff_python_ast::Parameters;
 
 use crate::runner::FixtureArguments;
 
@@ -210,16 +211,14 @@ pub(crate) fn full_test_name(
     py: Python,
     function: String,
     kwargs: &FixtureArguments,
+    parameters: &Parameters,
     name_only_arguments: &[&str],
 ) -> String {
     if kwargs.is_empty() {
         function
     } else {
         let mut args_str = String::new();
-        let mut sorted_kwargs: Vec<_> = kwargs.iter().collect();
-        sorted_kwargs.sort_by_key(|(key, _)| &**key);
-
-        for (i, (key, value)) in sorted_kwargs.iter().enumerate() {
+        for (i, (key, value)) in kwargs.iter_in_signature_order(parameters).enumerate() {
             if i > 0 {
                 args_str.push_str(", ");
             }

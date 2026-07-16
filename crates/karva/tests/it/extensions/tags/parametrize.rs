@@ -45,6 +45,62 @@ def test_parametrize_with_fixture(a, fixture_value):
 }
 
 #[test]
+fn test_argument_order_matches_function_signature() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+import karva
+
+@karva.fixture
+def first():
+    return 1
+
+@karva.fixture
+def third():
+    return 3
+
+@karva.tags.parametrize("second", [2])
+def test_order(third, second, first):
+    assert os.environ["KARVA_TEST_NAME"] == "test::test_order(third=3, second=2, first=1)"
+    assert False
+        "#,
+    );
+
+    assert_cmd_snapshot!(test_context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_order(third=3, second=2, first=1)
+
+    diagnostics:
+
+    error[test-failure]: Test `test_order` failed
+      --> test.py:14:5
+       |
+    14 | def test_order(third, second, first):
+       |     ^^^^^^^^^^
+       |
+    info: Test ran with arguments:
+    info: `third`: `3`
+    info: `second`: `2`
+    info: `first`: `1`
+    info: Test failed here
+      --> test.py:16:5
+       |
+    16 |     assert False
+       |     ^^^^^^^^^^^^
+       |
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_parametrize_with_fixture_parametrize_priority() {
     let test_context = TestContext::with_file(
         "test.py",
@@ -164,8 +220,8 @@ fn test_parametrize_multiple_args_single_string(#[values("pytest", "karva")] fra
         exit_code: 0
         ----- stdout -----
             Starting 1 test across 1 worker
-                PASS [TIME] test::test_square(expected=4, input=2)
-                PASS [TIME] test::test_square(expected=9, input=3)
+                PASS [TIME] test::test_square(input=2, expected=4)
+                PASS [TIME] test::test_square(input=3, expected=9)
         ────────────
              Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
@@ -228,9 +284,9 @@ def test_square(input, expected):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_square(expected=4, input=2)
-            PASS [TIME] test::test_square(expected=9, input=3)
-            PASS [TIME] test::test_square(expected=16, input=4)
+            PASS [TIME] test::test_square(input=2, expected=4)
+            PASS [TIME] test::test_square(input=3, expected=9)
+            PASS [TIME] test::test_square(input=4, expected=16)
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
@@ -260,9 +316,9 @@ def test_square(input, expected):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_square(expected=4, input=2)
-            PASS [TIME] test::test_square(expected=9, input=3)
-            PASS [TIME] test::test_square(expected=16, input=4)
+            PASS [TIME] test::test_square(input=2, expected=4)
+            PASS [TIME] test::test_square(input=3, expected=9)
+            PASS [TIME] test::test_square(input=4, expected=16)
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
@@ -292,9 +348,9 @@ def test_square(input, expected):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_square(expected=4, input=2)
-            PASS [TIME] test::test_square(expected=9, input=3)
-            PASS [TIME] test::test_square(expected=16, input=4)
+            PASS [TIME] test::test_square(input=2, expected=4)
+            PASS [TIME] test::test_square(input=3, expected=9)
+            PASS [TIME] test::test_square(input=4, expected=16)
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
@@ -362,8 +418,8 @@ def test_square(input, expected):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_square(expected=4, input=2)
-            PASS [TIME] test::test_square(expected=26, input=5)
+            PASS [TIME] test::test_square(input=2, expected=4)
+            PASS [TIME] test::test_square(input=5, expected=26)
     ────────────
          Summary [TIME] 3 tests run: 2 passed, 1 skipped
 
@@ -425,9 +481,9 @@ def test_square(input, expected):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_square(expected=4, input=2)
-            PASS [TIME] test::test_square(expected=9, input=3)
-            PASS [TIME] test::test_square(expected=16, input=4)
+            PASS [TIME] test::test_square(input=2, expected=4)
+            PASS [TIME] test::test_square(input=3, expected=9)
+            PASS [TIME] test::test_square(input=4, expected=16)
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
@@ -457,9 +513,9 @@ def test_square(input, expected):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_square(expected=4, input=2)
-            PASS [TIME] test::test_square(expected=9, input=3)
-            PASS [TIME] test::test_square(expected=16, input=4)
+            PASS [TIME] test::test_square(input=2, expected=4)
+            PASS [TIME] test::test_square(input=3, expected=9)
+            PASS [TIME] test::test_square(input=4, expected=16)
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
@@ -489,9 +545,9 @@ def test_square(input, expected):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_square(expected=4, input=2)
-            PASS [TIME] test::test_square(expected=9, input=3)
-            PASS [TIME] test::test_square(expected=16, input=4)
+            PASS [TIME] test::test_square(input=2, expected=4)
+            PASS [TIME] test::test_square(input=3, expected=9)
+            PASS [TIME] test::test_square(input=4, expected=16)
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
@@ -561,9 +617,9 @@ def test_square(input, expected):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_square(expected=4, input=2)
-            PASS [TIME] test::test_square(expected=26, input=5)
-            PASS [TIME] test::test_square(expected=50, input=7)
+            PASS [TIME] test::test_square(input=2, expected=4)
+            PASS [TIME] test::test_square(input=5, expected=26)
+            PASS [TIME] test::test_square(input=7, expected=50)
     ────────────
          Summary [TIME] 5 tests run: 3 passed, 2 skipped
 
@@ -722,10 +778,10 @@ def test2(input, expected):
     exit_code: 0
     ----- stdout -----
         Starting 2 tests across 1 worker
-            PASS [TIME] test::test1(expected=4, input=2)
-            PASS [TIME] test::test1(expected=16, input=4)
-            PASS [TIME] test::test2(expected=4, input=2)
-            PASS [TIME] test::test2(expected=16, input=4)
+            PASS [TIME] test::test1(input=2, expected=4)
+            PASS [TIME] test::test1(input=4, expected=16)
+            PASS [TIME] test::test2(input=2, expected=4)
+            PASS [TIME] test::test2(input=4, expected=16)
     ────────────
          Summary [TIME] 4 tests run: 4 passed, 0 skipped
 
