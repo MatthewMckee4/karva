@@ -15,6 +15,7 @@ commit-message = "Release v{version}"
 branch-name = "release/v{version}"
 push = true
 confirm = true
+pre-commit-commands = ["cargo update --workspace"]
 
 [release.pull-request]
 title = "Release v{version}"
