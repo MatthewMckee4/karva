@@ -16,6 +16,8 @@ branch-name = "release/v{version}"
 push = true
 confirm = true
 
+[release.pull-request]
+
 [changelog.section-labels]
 "Bug Fixes" = ["bug"]
 "Test Running" = ["test-running"]
