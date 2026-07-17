@@ -17,7 +17,7 @@ use crate::extensions::tags::Tags;
 use crate::extensions::tags::expect_fail::ExpectFailTag;
 use crate::extensions::tags::fail_slow::FailSlowTag;
 use crate::extensions::tags::timeout::TimeoutTag;
-use crate::output_capture::PythonOutputCapture;
+use crate::output_capture::{PythonOutputCapture, with_restored_file_descriptors};
 use crate::runner::fixture_arguments::FixtureArguments;
 use crate::runner::test_iterator::TestVariant;
 use crate::utils::{full_test_name, set_attempt_env, set_test_name_env};
@@ -109,12 +109,9 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let test_name_env_result =
             set_test_name_env(self.py, &settings.qualified_test_name.to_string());
 
-        let trace_test = || tracing::debug!("Running test `{}`", settings.qualified_test_name);
-        if let Some(capture) = &output_capture {
-            capture.with_file_descriptors_restored(self.py, trace_test);
-        } else {
-            trace_test();
-        }
+        with_restored_file_descriptors(output_capture.as_ref(), self.py, || {
+            tracing::debug!("Running test `{}`", settings.qualified_test_name);
+        });
         self.package_runner
             .context
             .report_test_started(&settings.qualified_test_name);
@@ -140,7 +137,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             );
 
             if attempt.retryable && attempt_number < settings.max_attempts {
-                let report_attempt = || {
+                with_restored_file_descriptors(output_capture.as_ref(), self.py, || {
                     self.package_runner.context.report_test_attempt(
                         &settings.qualified_test_name,
                         attempt_number,
@@ -148,12 +145,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                         attempt.lifecycle.duration,
                     );
                     tracing::debug!("Retrying test `{}`", settings.qualified_test_name);
-                };
-                if let Some(capture) = &output_capture {
-                    capture.with_file_descriptors_restored(self.py, report_attempt);
-                } else {
-                    report_attempt();
-                }
+                });
                 prior_attempts.push(attempt.lifecycle);
                 attempt_number += 1;
             } else {
