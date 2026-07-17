@@ -66,17 +66,24 @@ impl PythonOutputCapture {
 
         Ok(CapturedPythonOutput { stdout, stderr })
     }
+}
 
-    pub fn with_file_descriptors_restored<R>(&self, py: Python<'_>, f: impl FnOnce() -> R) -> R {
-        if let Err(err) = self.file_descriptors.suspend(py) {
-            tracing::warn!("failed to suspend file descriptor output capture: {err}");
-        }
-        let result = f();
-        if let Err(err) = self.file_descriptors.resume(py) {
-            tracing::warn!("failed to resume file descriptor output capture: {err}");
-        }
-        result
+pub fn with_restored_file_descriptors<R>(
+    capture: Option<&PythonOutputCapture>,
+    py: Python<'_>,
+    f: impl FnOnce() -> R,
+) -> R {
+    let Some(capture) = capture else {
+        return f();
+    };
+    if let Err(err) = capture.file_descriptors.suspend(py) {
+        tracing::warn!("failed to suspend file descriptor output capture: {err}");
     }
+    let result = f();
+    if let Err(err) = capture.file_descriptors.resume(py) {
+        tracing::warn!("failed to resume file descriptor output capture: {err}");
+    }
+    result
 }
 
 pub struct CapturedPythonOutput {

@@ -25,7 +25,7 @@ use crate::extensions::fixtures::{
 use crate::extensions::tags::expect_fail::ExpectFailTag;
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
 use crate::extensions::tags::timeout::TimeoutTag;
-use crate::output_capture::PythonOutputCapture;
+use crate::output_capture::{PythonOutputCapture, with_restored_file_descriptors};
 use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::runner::test_iterator::{TestVariant, TestVariantIterator};
 use crate::runner::{FinalizerCache, FixtureArguments, FixtureCache, FixtureCycleError};
@@ -538,7 +538,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 break;
             }
             let attempt_duration = attempt_start.elapsed();
-            let report_attempt = || {
+            with_restored_file_descriptors(output_capture, py, || {
                 self.context.report_test_attempt(
                     qualified_test_name,
                     attempt,
@@ -546,12 +546,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                     attempt_duration,
                 );
                 tracing::debug!("Retrying test `{}`", qualified_test_name);
-            };
-            if let Some(capture) = output_capture {
-                capture.with_file_descriptors_restored(py, report_attempt);
-            } else {
-                report_attempt();
-            }
+            });
             was_retried = true;
 
             retry_count -= 1;
@@ -569,19 +564,14 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             // The diagnostic for the final attempt (if any) is collected by
             // `classify_test_result` and shown in the end-of-run block.
             let final_kind = attempt_result_kind(py, &test_result);
-            let report_attempt = || {
+            with_restored_file_descriptors(output_capture, py, || {
                 self.context.report_test_attempt(
                     qualified_test_name,
                     attempt,
                     final_kind,
                     final_attempt_duration,
                 );
-            };
-            if let Some(capture) = output_capture {
-                capture.with_file_descriptors_restored(py, report_attempt);
-            } else {
-                report_attempt();
-            }
+            });
         }
 
         RetryOutcome {
@@ -647,12 +637,9 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let qualified_test_name =
             QualifiedTestName::new(name.clone(), Some(computed_full_test_name));
 
-        let trace_test = || tracing::debug!("Running test `{}`", qualified_test_name);
-        if let Some(capture) = output_capture.as_ref() {
-            capture.with_file_descriptors_restored(py, trace_test);
-        } else {
-            trace_test();
-        }
+        with_restored_file_descriptors(output_capture.as_ref(), py, || {
+            tracing::debug!("Running test `{}`", qualified_test_name);
+        });
 
         let test_name_env_result = set_test_name_env(py, &qualified_test_name.to_string());
 
@@ -749,7 +736,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
         let total_duration = start_time.elapsed();
         let mut final_kind = None;
-        let report_result = || {
+        let passed = with_restored_file_descriptors(output_capture.as_ref(), py, || {
             self.maybe_register_slow(
                 &qualified_test_name,
                 total_duration,
@@ -794,12 +781,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                     },
                 )
             }
-        };
-        let passed = if let Some(capture) = output_capture.as_ref() {
-            capture.with_file_descriptors_restored(py, report_result)
-        } else {
-            report_result()
-        };
+        });
 
         for finalizer in test_finalizers.into_iter().rev() {
             finalizer.run(self.context, py);
