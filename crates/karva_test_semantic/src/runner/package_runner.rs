@@ -518,6 +518,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         qualified_test_name: &QualifiedTestName,
         configured_retries: u32,
         expect_fail: bool,
+        output_capture: Option<&PythonOutputCapture>,
         mut run_test: impl FnMut() -> PyResult<TestCallOutcome>,
     ) -> RetryOutcome {
         let max_attempts = configured_retries.saturating_add(1);
@@ -537,15 +538,22 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 break;
             }
             let attempt_duration = attempt_start.elapsed();
-            self.context.report_test_attempt(
-                qualified_test_name,
-                attempt,
-                IndividualTestResultKind::Failed,
-                attempt_duration,
-            );
+            let report_attempt = || {
+                self.context.report_test_attempt(
+                    qualified_test_name,
+                    attempt,
+                    IndividualTestResultKind::Failed,
+                    attempt_duration,
+                );
+                tracing::debug!("Retrying test `{}`", qualified_test_name);
+            };
+            if let Some(capture) = output_capture {
+                capture.with_file_descriptors_restored(py, report_attempt);
+            } else {
+                report_attempt();
+            }
             was_retried = true;
 
-            tracing::debug!("Retrying test `{}`", qualified_test_name);
             retry_count -= 1;
             attempt += 1;
             attempt_start = std::time::Instant::now();
@@ -561,12 +569,19 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             // The diagnostic for the final attempt (if any) is collected by
             // `classify_test_result` and shown in the end-of-run block.
             let final_kind = attempt_result_kind(py, &test_result);
-            self.context.report_test_attempt(
-                qualified_test_name,
-                attempt,
-                final_kind,
-                final_attempt_duration,
-            );
+            let report_attempt = || {
+                self.context.report_test_attempt(
+                    qualified_test_name,
+                    attempt,
+                    final_kind,
+                    final_attempt_duration,
+                );
+            };
+            if let Some(capture) = output_capture {
+                capture.with_file_descriptors_restored(py, report_attempt);
+            } else {
+                report_attempt();
+            }
         }
 
         RetryOutcome {
@@ -632,7 +647,12 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let qualified_test_name =
             QualifiedTestName::new(name.clone(), Some(computed_full_test_name));
 
-        tracing::debug!("Running test `{}`", qualified_test_name);
+        let trace_test = || tracing::debug!("Running test `{}`", qualified_test_name);
+        if let Some(capture) = output_capture.as_ref() {
+            capture.with_file_descriptors_restored(py, trace_test);
+        } else {
+            trace_test();
+        }
 
         let test_name_env_result = set_test_name_env(py, &qualified_test_name.to_string());
 
@@ -714,6 +734,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             &qualified_test_name,
             configured_retries,
             expect_fail,
+            output_capture.as_ref(),
             run_test,
         );
         self.context.report_test_finished(&qualified_test_name);
@@ -727,36 +748,57 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         };
 
         let total_duration = start_time.elapsed();
-        self.maybe_register_slow(
-            &qualified_test_name,
-            total_duration,
-            self.context.settings().slow_timeout_for(&eval_ctx),
-        );
-
         let mut final_kind = None;
-        let passed = if was_retried {
-            let passed_on = attempt;
-            // `total_attempts` mirrors nextest: the maximum number of attempts
-            // the test was allowed (`retries + 1`), not just the count that
-            // ran. This keeps `FLAKY M/T` readable as "passed on attempt M
-            // out of an allowed T."
-            let total_attempts = max_attempts;
-            self.classify_test_result(py, test_result, fixture_call_errors, &report_ctx, |kind| {
-                final_kind = Some(kind.clone());
-                self.context.register_retried_result(
-                    &qualified_test_name,
-                    &kind,
-                    total_duration,
-                    passed_on,
-                    total_attempts,
+        let report_result = || {
+            self.maybe_register_slow(
+                &qualified_test_name,
+                total_duration,
+                self.context.settings().slow_timeout_for(&eval_ctx),
+            );
+            if was_retried {
+                let passed_on = attempt;
+                // `total_attempts` mirrors nextest: the maximum number of attempts
+                // the test was allowed (`retries + 1`), not just the count that
+                // ran. This keeps `FLAKY M/T` readable as "passed on attempt M
+                // out of an allowed T."
+                let total_attempts = max_attempts;
+                self.classify_test_result(
+                    py,
+                    test_result,
+                    fixture_call_errors,
+                    &report_ctx,
+                    |kind| {
+                        final_kind = Some(kind.clone());
+                        self.context.register_retried_result(
+                            &qualified_test_name,
+                            &kind,
+                            total_duration,
+                            passed_on,
+                            total_attempts,
+                        )
+                    },
                 )
-            })
+            } else {
+                self.classify_test_result(
+                    py,
+                    test_result,
+                    fixture_call_errors,
+                    &report_ctx,
+                    |kind| {
+                        final_kind = Some(kind.clone());
+                        self.context.register_test_case_result(
+                            &qualified_test_name,
+                            kind,
+                            total_duration,
+                        )
+                    },
+                )
+            }
+        };
+        let passed = if let Some(capture) = output_capture.as_ref() {
+            capture.with_file_descriptors_restored(py, report_result)
         } else {
-            self.classify_test_result(py, test_result, fixture_call_errors, &report_ctx, |kind| {
-                final_kind = Some(kind.clone());
-                self.context
-                    .register_test_case_result(&qualified_test_name, kind, total_duration)
-            })
+            report_result()
         };
 
         for finalizer in test_finalizers.into_iter().rev() {

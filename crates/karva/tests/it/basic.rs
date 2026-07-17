@@ -623,10 +623,60 @@ fn test_stdout() {
 }
 
 #[test]
+fn test_subprocess_output_capture() {
+    let context = TestContext::with_file(
+        "test_subprocess_output.py",
+        r#"
+        import subprocess
+        import sys
+
+        def test_subprocess_output():
+            print("python output")
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    "import sys; print('child stdout'); print('child stderr', file=sys.stderr)",
+                ],
+                check=True,
+            )
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_subprocess_output::test_subprocess_output
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    assert_cmd_snapshot!(context.command().arg("--show-output"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    python output
+    child stdout
+            PASS [TIME] test_subprocess_output::test_subprocess_output
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    child stderr
+    ");
+}
+
+#[test]
 fn test_failed_output_is_captured() {
     let context = TestContext::with_file(
         "test_failed_output.py",
-        r"
+        r#"
+        import subprocess
         import sys
 
         def test_pass_with_output():
@@ -635,8 +685,16 @@ fn test_failed_output_is_captured() {
         def test_fail_with_output():
             print('stdout from failure')
             print('stderr from failure', file=sys.stderr)
+            subprocess.run(
+                [
+                    sys.executable,
+                    '-c',
+                    "import sys; print('child stdout'); print('child stderr', file=sys.stderr)",
+                ],
+                check=True,
+            )
             assert False
-        ",
+        "#,
     );
 
     assert_cmd_snapshot!(context.command_no_parallel(), @"
@@ -650,22 +708,24 @@ fn test_failed_output_is_captured() {
     diagnostics:
 
     error[test-failure]: Test `test_fail_with_output` failed
-     --> test_failed_output.py:7:5
+     --> test_failed_output.py:8:5
       |
-    7 | def test_fail_with_output():
+    8 | def test_fail_with_output():
       |     ^^^^^^^^^^^^^^^^^^^^^
       |
     info: Test failed here
-      --> test_failed_output.py:10:5
+      --> test_failed_output.py:19:5
        |
-    10 |     assert False
+    19 |     assert False
        |     ^^^^^^^^^^^^
        |
 
     captured stdout for test_failed_output::test_fail_with_output:
     stdout from failure
+    child stdout
     captured stderr for test_failed_output::test_fail_with_output:
     stderr from failure
+    child stderr
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
