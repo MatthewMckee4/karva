@@ -17,10 +17,12 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 import sys
+import tempfile
 import warnings
 from collections.abc import Generator
-from typing import TYPE_CHECKING, NamedTuple, TextIO, cast
+from typing import TYPE_CHECKING, BinaryIO, NamedTuple, TextIO, cast
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -120,6 +122,96 @@ class _CapsysFixture:
 
     def __repr__(self) -> str:
         return "<CapsysFixture object>"
+
+
+class _CapfdDisabled:
+    """Context manager that temporarily restores real file descriptors."""
+
+    def __init__(self, fixture: _CapfdFixture) -> None:
+        self._fixture = fixture
+
+    def __enter__(self) -> Self:
+        self._fixture._suspend()
+        return self
+
+    def __exit__(self, *args: object) -> bool:
+        self._fixture._resume()
+        return False
+
+
+class _CapfdFixture:
+    """Captures writes to stdout and stderr at the file-descriptor level."""
+
+    def __init__(self, real_stdout: TextIO, real_stderr: TextIO) -> None:
+        self._real_stdout = real_stdout
+        self._real_stderr = real_stderr
+        self._saved_stdout_fd = os.dup(1)
+        self._saved_stderr_fd = os.dup(2)
+        self._out_file: BinaryIO = tempfile.TemporaryFile(mode="w+b")  # noqa: SIM115
+        self._err_file: BinaryIO = tempfile.TemporaryFile(mode="w+b")  # noqa: SIM115
+        os.dup2(self._out_file.fileno(), 1)
+        os.dup2(self._err_file.fileno(), 2)
+        self._stdout = io.TextIOWrapper(
+            os.fdopen(os.dup(1), "wb"),
+            encoding=getattr(real_stdout, "encoding", None) or "utf-8",
+            newline="",
+            write_through=True,
+        )
+        self._stderr = io.TextIOWrapper(
+            os.fdopen(os.dup(2), "wb"),
+            encoding=getattr(real_stderr, "encoding", None) or "utf-8",
+            newline="",
+            write_through=True,
+        )
+        sys.stdout = self._stdout
+        sys.stderr = self._stderr
+
+    def readouterr(self) -> CaptureResult:
+        """Return captured output and reset the temporary files."""
+        self._flush()
+        self._out_file.seek(0)
+        out = self._out_file.read().decode(self._stdout.encoding)
+        self._out_file.seek(0)
+        self._out_file.truncate()
+        self._err_file.seek(0)
+        err = self._err_file.read().decode(self._stderr.encoding)
+        self._err_file.seek(0)
+        self._err_file.truncate()
+        return CaptureResult(out, err)
+
+    def disabled(self) -> _CapfdDisabled:
+        """Context manager that temporarily restores real file descriptors."""
+        return _CapfdDisabled(self)
+
+    def close(self) -> None:
+        """Restore stdout and stderr and close the capture files."""
+        self._suspend()
+        self._stdout.close()
+        self._stderr.close()
+        self._out_file.close()
+        self._err_file.close()
+        os.close(self._saved_stdout_fd)
+        os.close(self._saved_stderr_fd)
+
+    def _flush(self) -> None:
+        self._stdout.flush()
+        self._stderr.flush()
+
+    def _suspend(self) -> None:
+        self._flush()
+        os.dup2(self._saved_stdout_fd, 1)
+        os.dup2(self._saved_stderr_fd, 2)
+        sys.stdout = self._real_stdout
+        sys.stderr = self._real_stderr
+
+    def _resume(self) -> None:
+        os.dup2(self._out_file.fileno(), 1)
+        os.dup2(self._err_file.fileno(), 2)
+        sys.stdout = self._stdout
+        sys.stderr = self._stderr
+
+    def __repr__(self) -> str:
+        return "<CapfdFixture object>"
 
 
 class BinaryCaptureResult(NamedTuple):
@@ -342,9 +434,14 @@ def capsys() -> Generator[_CapsysFixture, None, None]:
 
 
 @fixture
-def capfd() -> Generator[_CapsysFixture, None, None]:
-    """Capture writes to ``sys.stdout`` and ``sys.stderr`` (fd-level alias of capsys)."""
-    yield from _capsys_impl()
+def capfd() -> Generator[_CapfdFixture, None, None]:
+    """Capture writes to file descriptors 1 and 2 as strings."""
+    saved_disable: int = logging.root.manager.disable
+    logging.disable(logging.NOTSET)
+    capture = _CapfdFixture(sys.stdout, sys.stderr)
+    yield capture
+    capture.close()
+    logging.disable(saved_disable)
 
 
 def _capsysbinary_impl() -> Generator[_CapsysBinaryFixture, None, None]:

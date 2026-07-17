@@ -1887,6 +1887,36 @@ def test_capfd_stderr(capfd):
 }
 
 #[test]
+fn test_capfd_captures_subprocess_output() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import subprocess
+import sys
+
+def test_capfd_subprocess(capfd):
+    subprocess.run(
+        [sys.executable, "-c", "import os; os.write(1, b'out\\n'); os.write(2, b'err\\n')"],
+        check=True,
+    )
+    captured = capfd.readouterr()
+    assert captured.out == 'out\n'
+    assert captured.err == 'err\n'
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_capsysbinary_captures_output() {
     let context = TestContext::with_file(
         "test.py",
