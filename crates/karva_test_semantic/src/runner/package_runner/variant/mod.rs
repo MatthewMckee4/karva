@@ -109,7 +109,12 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let test_name_env_result =
             set_test_name_env(self.py, &settings.qualified_test_name.to_string());
 
-        tracing::debug!("Running test `{}`", settings.qualified_test_name);
+        let trace_test = || tracing::debug!("Running test `{}`", settings.qualified_test_name);
+        if let Some(capture) = &output_capture {
+            capture.with_file_descriptors_restored(self.py, trace_test);
+        } else {
+            trace_test();
+        }
         self.package_runner
             .context
             .report_test_started(&settings.qualified_test_name);
@@ -135,14 +140,21 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             );
 
             if attempt.retryable && attempt_number < settings.max_attempts {
-                self.package_runner.context.report_test_attempt(
-                    &settings.qualified_test_name,
-                    attempt_number,
-                    attempt.lifecycle.outcome.result_kind(),
-                    attempt.lifecycle.duration,
-                );
+                let report_attempt = || {
+                    self.package_runner.context.report_test_attempt(
+                        &settings.qualified_test_name,
+                        attempt_number,
+                        attempt.lifecycle.outcome.result_kind(),
+                        attempt.lifecycle.duration,
+                    );
+                    tracing::debug!("Retrying test `{}`", settings.qualified_test_name);
+                };
+                if let Some(capture) = &output_capture {
+                    capture.with_file_descriptors_restored(self.py, report_attempt);
+                } else {
+                    report_attempt();
+                }
                 prior_attempts.push(attempt.lifecycle);
-                tracing::debug!("Retrying test `{}`", settings.qualified_test_name);
                 attempt_number += 1;
             } else {
                 break attempt.lifecycle;
