@@ -17,6 +17,7 @@ fs-err = { workspace = true }
 karva_collector = { workspace = true }
 karva_coverage = { workspace = true }
 karva_diagnostic = { workspace = true, features = ["traceback"] }
+karva_logging = { workspace = true }
 karva_metadata = { workspace = true }
 karva_project = { workspace = true }
 karva_python_semantic = { workspace = true }

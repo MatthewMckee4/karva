@@ -25,10 +25,7 @@ use crate::extensions::fixtures::{
 use crate::extensions::tags::expect_fail::ExpectFailTag;
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
 use crate::extensions::tags::timeout::TimeoutTag;
-use crate::output_capture::{
-    OutputCapture, PythonOutputCapture, with_restored_file_descriptors,
-    with_suspended_output_capture,
-};
+use crate::output_capture::{OutputCapture, PythonOutputCapture, with_restored_file_descriptors};
 use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::runner::test_iterator::{TestVariant, TestVariantIterator};
 use crate::runner::{FinalizerCache, FixtureArguments, FixtureCache, FixtureCycleError};
@@ -210,9 +207,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         // slot contributes any autouse fixtures the walk returns an empty vec.
         if let Err(error) = self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session) {
             report_fixture_cycle(self.context, error);
-            with_suspended_output_capture(self.output_capture.as_ref(), py, || {
-                self.register_failed_package_tests(session);
-            });
+            self.register_failed_package_tests(session);
             return;
         }
 
@@ -255,9 +250,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
     ) -> bool {
         if let Err(error) = self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module) {
             report_fixture_cycle(self.context, error);
-            with_suspended_output_capture(self.output_capture.as_ref(), py, || {
-                self.register_failed_module_tests(module);
-            });
+            self.register_failed_module_tests(module);
             return false;
         }
 
@@ -271,9 +264,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 Ok(variants) => variants,
                 Err(error) => {
                     report_fixture_cycle(self.context, error);
-                    with_suspended_output_capture(self.output_capture.as_ref(), py, || {
-                        self.register_failed_test(test_function);
-                    });
+                    self.register_failed_test(test_function);
                     passed = false;
                     if self.max_fail_reached() {
                         break;
@@ -322,9 +313,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 self.run_auto_use_fixtures(py, parents, config_module, FixtureScope::Package)
             {
                 report_fixture_cycle(self.context, error);
-                with_suspended_output_capture(self.output_capture.as_ref(), py, || {
-                    self.register_failed_package_tests(package);
-                });
+                self.register_failed_package_tests(package);
                 return false;
             }
         }
@@ -571,15 +560,17 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 break;
             }
             let attempt_duration = attempt_start.elapsed();
-            with_restored_file_descriptors(output_capture, py, || {
-                self.context.report_test_attempt(
-                    qualified_test_name,
-                    attempt,
-                    IndividualTestResultKind::Failed,
-                    attempt_duration,
-                );
-                tracing::debug!("Retrying test `{}`", qualified_test_name);
-            });
+            self.context.report_test_attempt(
+                qualified_test_name,
+                attempt,
+                IndividualTestResultKind::Failed,
+                attempt_duration,
+            );
+            if tracing::enabled!(tracing::Level::DEBUG) {
+                with_restored_file_descriptors(output_capture, py, || {
+                    tracing::debug!("Retrying test `{}`", qualified_test_name);
+                });
+            }
             was_retried = true;
 
             retry_count -= 1;
@@ -597,14 +588,12 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             // The diagnostic for the final attempt (if any) is collected by
             // `classify_test_result` and shown in the end-of-run block.
             let final_kind = attempt_result_kind(py, &test_result);
-            with_restored_file_descriptors(output_capture, py, || {
-                self.context.report_test_attempt(
-                    qualified_test_name,
-                    attempt,
-                    final_kind,
-                    final_attempt_duration,
-                );
-            });
+            self.context.report_test_attempt(
+                qualified_test_name,
+                attempt,
+                final_kind,
+                final_attempt_duration,
+            );
         }
 
         RetryOutcome {
@@ -771,52 +760,35 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
         let total_duration = start_time.elapsed();
         let mut final_kind = None;
-        let passed = with_restored_file_descriptors(output_capture.as_ref(), py, || {
-            self.maybe_register_slow(
-                &qualified_test_name,
-                total_duration,
-                self.context.settings().slow_timeout_for(&eval_ctx),
-            );
-            if was_retried {
-                let passed_on = attempt;
-                // `total_attempts` mirrors nextest: the maximum number of attempts
-                // the test was allowed (`retries + 1`), not just the count that
-                // ran. This keeps `FLAKY M/T` readable as "passed on attempt M
-                // out of an allowed T."
-                let total_attempts = max_attempts;
-                self.classify_test_result(
-                    py,
-                    test_result,
-                    fixture_call_errors,
-                    &report_ctx,
-                    |kind| {
-                        final_kind = Some(kind.clone());
-                        self.context.register_retried_result(
-                            &qualified_test_name,
-                            &kind,
-                            total_duration,
-                            passed_on,
-                            total_attempts,
-                        )
-                    },
+        self.maybe_register_slow(
+            &qualified_test_name,
+            total_duration,
+            self.context.settings().slow_timeout_for(&eval_ctx),
+        );
+        let passed = if was_retried {
+            let passed_on = attempt;
+            // `total_attempts` mirrors nextest: the maximum number of attempts
+            // the test was allowed (`retries + 1`), not just the count that
+            // ran. This keeps `FLAKY M/T` readable as "passed on attempt M
+            // out of an allowed T."
+            let total_attempts = max_attempts;
+            self.classify_test_result(py, test_result, fixture_call_errors, &report_ctx, |kind| {
+                final_kind = Some(kind.clone());
+                self.context.register_retried_result(
+                    &qualified_test_name,
+                    &kind,
+                    total_duration,
+                    passed_on,
+                    total_attempts,
                 )
-            } else {
-                self.classify_test_result(
-                    py,
-                    test_result,
-                    fixture_call_errors,
-                    &report_ctx,
-                    |kind| {
-                        final_kind = Some(kind.clone());
-                        self.context.register_test_case_result(
-                            &qualified_test_name,
-                            kind,
-                            total_duration,
-                        )
-                    },
-                )
-            }
-        });
+            })
+        } else {
+            self.classify_test_result(py, test_result, fixture_call_errors, &report_ctx, |kind| {
+                final_kind = Some(kind.clone());
+                self.context
+                    .register_test_case_result(&qualified_test_name, kind, total_duration)
+            })
+        };
 
         for finalizer in test_finalizers.into_iter().rev() {
             finalizer.run(self.context, py);

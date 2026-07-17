@@ -1,6 +1,40 @@
+use std::cell::RefCell;
+use std::fs::File;
 use std::io::{self, StdoutLock, Write};
+use std::sync::{Arc, Mutex};
+
+#[cfg(unix)]
+use std::os::fd::AsFd;
+#[cfg(windows)]
+use std::os::windows::io::AsHandle;
 
 use crate::status_level::{FinalStatusLevel, StatusLevel};
+
+thread_local! {
+    static SAVED_STDOUT: RefCell<Option<Arc<Mutex<File>>>> = const { RefCell::new(None) };
+}
+
+/// Restores the previous [`Printer`] stdout destination when dropped.
+pub struct SavedStdout {
+    previous: Option<Arc<Mutex<File>>>,
+}
+
+/// Directs [`Printer`] output to the current stdout destination until the returned guard is dropped.
+pub fn save_stdout() -> io::Result<SavedStdout> {
+    let stdout = std::io::stdout();
+    #[cfg(unix)]
+    let file = File::from(stdout.as_fd().try_clone_to_owned()?);
+    #[cfg(windows)]
+    let file = File::from(stdout.as_handle().try_clone_to_owned()?);
+    let previous = SAVED_STDOUT.replace(Some(Arc::new(Mutex::new(file))));
+    Ok(SavedStdout { previous })
+}
+
+impl Drop for SavedStdout {
+    fn drop(&mut self) {
+        SAVED_STDOUT.set(self.previous.take());
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Printer {
@@ -64,6 +98,7 @@ impl Printer {
 pub struct Stdout {
     enabled: bool,
     lock: Option<StdoutLock<'static>>,
+    saved: Option<Arc<Mutex<File>>>,
 }
 
 impl Stdout {
@@ -71,12 +106,13 @@ impl Stdout {
         Self {
             enabled,
             lock: None,
+            saved: SAVED_STDOUT.with_borrow(Clone::clone),
         }
     }
 
     #[must_use]
     pub fn lock(mut self) -> Self {
-        if self.enabled {
+        if self.enabled && self.saved.is_none() {
             self.lock = Some(std::io::stdout().lock());
         }
         self
@@ -97,19 +133,29 @@ impl Stdout {
 
 impl Write for Stdout {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        if self.enabled {
-            self.handle().write(buf)
-        } else {
-            Ok(buf.len())
+        if !self.enabled {
+            return Ok(buf.len());
         }
+        if let Some(saved) = self.saved.as_ref() {
+            return saved
+                .lock()
+                .map_err(|_| io::Error::other("saved stdout lock poisoned"))?
+                .write(buf);
+        }
+        self.handle().write(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        if self.enabled {
-            self.handle().flush()
-        } else {
-            Ok(())
+        if !self.enabled {
+            return Ok(());
         }
+        if let Some(saved) = self.saved.as_ref() {
+            return saved
+                .lock()
+                .map_err(|_| io::Error::other("saved stdout lock poisoned"))?
+                .flush();
+        }
+        self.handle().flush()
     }
 }
 

@@ -1361,6 +1361,7 @@ dependencies = [
  "karva_collector",
  "karva_coverage",
  "karva_diagnostic",
+ "karva_logging",
  "karva_metadata",
  "karva_project",
  "karva_python_semantic",

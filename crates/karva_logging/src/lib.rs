@@ -17,7 +17,7 @@ mod status_level;
 pub mod time;
 mod verbosity;
 
-pub use printer::{Printer, Stdout};
+pub use printer::{Printer, SavedStdout, Stdout, save_stdout};
 pub use status_level::{FinalStatusLevel, StatusLevel};
 pub use verbosity::VerbosityLevel;
 
