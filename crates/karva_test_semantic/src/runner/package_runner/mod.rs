@@ -12,6 +12,7 @@ use crate::Context;
 use crate::diagnostic::{fixture_resolution_diagnostic, invalid_parametrize_diagnostic};
 use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::FixtureScope;
+use crate::output_capture::OutputCapture;
 use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::runner::test_iterator::TestVariantIterator;
 use crate::runner::{FinalizerCache, FixtureCache};
@@ -38,6 +39,8 @@ pub struct PackageRunner<'context, 'settings> {
     coverage: Option<&'context CoverageSession>,
     /// Failed variants observed so far, used to enforce `max-fail`.
     failed_count: Cell<u32>,
+    /// Reusable files backing subprocess output capture.
+    output_capture: Option<OutputCapture>,
 }
 
 impl<'context, 'settings> PackageRunner<'context, 'settings> {
@@ -45,13 +48,26 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
     pub(crate) fn new(
         context: &'context Context<'settings>,
         coverage: Option<&'context CoverageSession>,
+        py: Python<'_>,
     ) -> Self {
+        let output_capture = if context.settings().terminal().show_python_output {
+            None
+        } else {
+            match OutputCapture::new(py) {
+                Ok(capture) => Some(capture),
+                Err(error) => {
+                    tracing::warn!("failed to initialize Python output capture: {error}");
+                    None
+                }
+            }
+        };
         Self {
             context,
             fixture_cache: FixtureCache::default(),
             finalizer_cache: FinalizerCache::default(),
             coverage,
             failed_count: Cell::new(0),
+            output_capture,
         }
     }
 

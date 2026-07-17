@@ -109,9 +109,11 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let test_name_env_result =
             set_test_name_env(self.py, &settings.qualified_test_name.to_string());
 
-        with_restored_file_descriptors(output_capture.as_ref(), self.py, || {
-            tracing::debug!("Running test `{}`", settings.qualified_test_name);
-        });
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            with_restored_file_descriptors(output_capture.as_ref(), self.py, || {
+                tracing::debug!("Running test `{}`", settings.qualified_test_name);
+            });
+        }
         self.package_runner
             .context
             .report_test_started(&settings.qualified_test_name);
@@ -286,7 +288,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
     fn finish(
         &self,
         settings: &VariantSettings,
-        output_capture: Option<PythonOutputCapture>,
+        output_capture: Option<PythonOutputCapture<'_>>,
         prior_attempts: Vec<TestLifecycleAttempt>,
         final_attempt: TestLifecycleAttempt,
     ) -> bool {
@@ -388,18 +390,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
     }
 
     /// Starts best-effort Python output capture when terminal output is hidden.
-    fn start_output_capture(&self) -> Option<PythonOutputCapture> {
-        if self
-            .package_runner
-            .context
-            .settings()
-            .terminal()
-            .show_python_output
-        {
-            return None;
-        }
-
-        match PythonOutputCapture::start(self.py) {
+    fn start_output_capture(&self) -> Option<PythonOutputCapture<'_>> {
+        match self.package_runner.output_capture.as_ref()?.start(self.py) {
             Ok(capture) => Some(capture),
             Err(error) => {
                 tracing::warn!("failed to start Python output capture: {error}");
@@ -445,7 +437,7 @@ struct VariantSettings {
 /// Finishes best-effort Python output capture.
 fn finish_output_capture(
     py: Python<'_>,
-    capture: Option<PythonOutputCapture>,
+    capture: Option<PythonOutputCapture<'_>>,
 ) -> Option<CapturedTestOutput> {
     let capture = capture?;
 
