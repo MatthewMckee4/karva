@@ -154,11 +154,13 @@ class _CapfdFixture:
         self._stdout = io.TextIOWrapper(
             os.fdopen(os.dup(1), "wb"),
             encoding=getattr(real_stdout, "encoding", None) or "utf-8",
+            newline="",
             write_through=True,
         )
         self._stderr = io.TextIOWrapper(
             os.fdopen(os.dup(2), "wb"),
             encoding=getattr(real_stderr, "encoding", None) or "utf-8",
+            newline="",
             write_through=True,
         )
         sys.stdout = self._stdout
