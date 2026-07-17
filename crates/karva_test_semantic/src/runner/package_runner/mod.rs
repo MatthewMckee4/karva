@@ -12,7 +12,7 @@ use crate::Context;
 use crate::diagnostic::{fixture_resolution_diagnostic, invalid_parametrize_diagnostic};
 use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::FixtureScope;
-use crate::output_capture::OutputCapture;
+use crate::output_capture::{OutputCapture, with_suspended_output_capture};
 use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::runner::test_iterator::TestVariantIterator;
 use crate::runner::{FinalizerCache, FixtureCache};
@@ -85,6 +85,14 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         if !passed {
             self.failed_count
                 .set(self.failed_count.get().saturating_add(1));
+        }
+    }
+
+    pub(crate) fn stop_output_capture(&self, py: Python<'_>) {
+        if let Some(capture) = &self.output_capture
+            && let Err(error) = capture.stop(py)
+        {
+            tracing::warn!("failed to stop Python output capture: {error}");
         }
     }
 
@@ -184,7 +192,9 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session)
         {
             let diagnostic = diagnostics.remove(0);
-            self.register_error_package_tests(session, &diagnostic, &diagnostics);
+            with_suspended_output_capture(self.output_capture.as_ref(), py, || {
+                self.register_error_package_tests(session, &diagnostic, &diagnostics);
+            });
             return;
         }
 
@@ -203,7 +213,9 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module)
         {
             let diagnostic = diagnostics.remove(0);
-            self.register_error_module_tests(module, &diagnostic, &diagnostics);
+            with_suspended_output_capture(self.output_capture.as_ref(), py, || {
+                self.register_error_module_tests(module, &diagnostic, &diagnostics);
+            });
             return false;
         }
 
@@ -213,11 +225,10 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             let variants = match TestVariantIterator::new(py, test, &mut resolver) {
                 Ok(variants) => variants,
                 Err(error) => {
-                    self.register_error_test(
-                        test,
-                        fixture_resolution_diagnostic(error),
-                        Vec::new(),
-                    );
+                    let diagnostic = fixture_resolution_diagnostic(error);
+                    with_suspended_output_capture(self.output_capture.as_ref(), py, || {
+                        self.register_error_test(test, diagnostic, Vec::new());
+                    });
                     passed = false;
                     if self.max_fail_reached() {
                         break;
@@ -260,7 +271,9 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                 self.run_auto_use_fixtures(py, parents, configuration_module, FixtureScope::Package)
         {
             let diagnostic = diagnostics.remove(0);
-            self.register_error_package_tests(package, &diagnostic, &diagnostics);
+            with_suspended_output_capture(self.output_capture.as_ref(), py, || {
+                self.register_error_package_tests(package, &diagnostic, &diagnostics);
+            });
             return false;
         }
 

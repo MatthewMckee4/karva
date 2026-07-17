@@ -6,14 +6,37 @@ pub struct OutputCapture {
 
 impl OutputCapture {
     pub fn new(py: Python<'_>) -> PyResult<Self> {
-        Ok(Self {
-            file_descriptors: FileDescriptorCapture::new(py)?,
-        })
+        let file_descriptors = FileDescriptorCapture::new(py)?;
+        file_descriptors.resume(py)?;
+        Ok(Self { file_descriptors })
     }
 
     pub fn start(&self, py: Python<'_>) -> PyResult<PythonOutputCapture<'_>> {
         PythonOutputCapture::start(py, &self.file_descriptors)
     }
+
+    pub fn stop(&self, py: Python<'_>) -> PyResult<()> {
+        self.file_descriptors.suspend(py)
+    }
+}
+
+pub fn with_suspended_output_capture<R>(
+    capture: Option<&OutputCapture>,
+    py: Python<'_>,
+    f: impl FnOnce() -> R,
+) -> R {
+    let Some(capture) = capture else {
+        return f();
+    };
+    if let Err(err) = capture.file_descriptors.suspend(py) {
+        tracing::warn!("failed to suspend file descriptor output capture: {err}");
+        return f();
+    }
+    let result = f();
+    if let Err(err) = capture.file_descriptors.resume(py) {
+        tracing::warn!("failed to resume file descriptor output capture: {err}");
+    }
+    result
 }
 
 pub struct PythonOutputCapture<'capture> {
@@ -136,15 +159,12 @@ impl FileDescriptorCapture {
 
     fn start(&self, py: Python<'_>) -> PyResult<()> {
         clear_file(py, &self.stdout)?;
-        clear_file(py, &self.stderr)?;
-        self.resume(py)
+        clear_file(py, &self.stderr)
     }
 
     fn finish(&self, py: Python<'_>) -> PyResult<CapturedPythonOutput> {
-        let suspend_result = self.suspend(py);
         let stdout_result = read_file(py, &self.stdout);
         let stderr_result = read_file(py, &self.stderr);
-        suspend_result?;
         let stdout = stdout_result?;
         let stderr = stderr_result?;
         Ok(CapturedPythonOutput { stdout, stderr })
