@@ -25,7 +25,10 @@ use crate::extensions::fixtures::{
 use crate::extensions::tags::expect_fail::ExpectFailTag;
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
 use crate::extensions::tags::timeout::TimeoutTag;
-use crate::output_capture::{OutputCapture, PythonOutputCapture, with_restored_file_descriptors};
+use crate::output_capture::{
+    OutputCapture, PythonOutputCapture, with_restored_file_descriptors,
+    with_suspended_output_capture,
+};
 use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::runner::test_iterator::{TestVariant, TestVariantIterator};
 use crate::runner::{FinalizerCache, FixtureArguments, FixtureCache, FixtureCycleError};
@@ -166,6 +169,14 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         }
     }
 
+    pub(crate) fn stop_output_capture(&self, py: Python<'_>) {
+        if let Some(capture) = self.output_capture.as_ref()
+            && let Err(err) = capture.stop(py)
+        {
+            tracing::warn!("failed to stop Python output capture: {err}");
+        }
+    }
+
     fn register_captured_output(
         &self,
         py: Python<'_>,
@@ -199,7 +210,9 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         // slot contributes any autouse fixtures the walk returns an empty vec.
         if let Err(error) = self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session) {
             report_fixture_cycle(self.context, error);
-            self.register_failed_package_tests(session);
+            with_suspended_output_capture(self.output_capture.as_ref(), py, || {
+                self.register_failed_package_tests(session);
+            });
             return;
         }
 
@@ -242,7 +255,9 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
     ) -> bool {
         if let Err(error) = self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module) {
             report_fixture_cycle(self.context, error);
-            self.register_failed_module_tests(module);
+            with_suspended_output_capture(self.output_capture.as_ref(), py, || {
+                self.register_failed_module_tests(module);
+            });
             return false;
         }
 
@@ -256,7 +271,9 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 Ok(variants) => variants,
                 Err(error) => {
                     report_fixture_cycle(self.context, error);
-                    self.register_failed_test(test_function);
+                    with_suspended_output_capture(self.output_capture.as_ref(), py, || {
+                        self.register_failed_test(test_function);
+                    });
                     passed = false;
                     if self.max_fail_reached() {
                         break;
@@ -305,7 +322,9 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 self.run_auto_use_fixtures(py, parents, config_module, FixtureScope::Package)
             {
                 report_fixture_cycle(self.context, error);
-                self.register_failed_package_tests(package);
+                with_suspended_output_capture(self.output_capture.as_ref(), py, || {
+                    self.register_failed_package_tests(package);
+                });
                 return false;
             }
         }
