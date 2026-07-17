@@ -12,7 +12,7 @@ use crate::Context;
 use crate::diagnostic::{fixture_resolution_diagnostic, invalid_parametrize_diagnostic};
 use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::FixtureScope;
-use crate::output_capture::{OutputCapture, with_suspended_output_capture};
+use crate::output_capture::OutputCapture;
 use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::runner::test_iterator::TestVariantIterator;
 use crate::runner::{FinalizerCache, FixtureCache};
@@ -192,9 +192,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session)
         {
             let diagnostic = diagnostics.remove(0);
-            with_suspended_output_capture(self.output_capture.as_ref(), py, || {
-                self.register_error_package_tests(session, &diagnostic, &diagnostics);
-            });
+            self.register_error_package_tests(session, &diagnostic, &diagnostics);
             return;
         }
 
@@ -213,9 +211,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module)
         {
             let diagnostic = diagnostics.remove(0);
-            with_suspended_output_capture(self.output_capture.as_ref(), py, || {
-                self.register_error_module_tests(module, &diagnostic, &diagnostics);
-            });
+            self.register_error_module_tests(module, &diagnostic, &diagnostics);
             return false;
         }
 
@@ -226,9 +222,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                 Ok(variants) => variants,
                 Err(error) => {
                     let diagnostic = fixture_resolution_diagnostic(error);
-                    with_suspended_output_capture(self.output_capture.as_ref(), py, || {
-                        self.register_error_test(test, diagnostic, Vec::new());
-                    });
+                    self.register_error_test(test, diagnostic, Vec::new());
                     passed = false;
                     if self.max_fail_reached() {
                         break;
@@ -271,9 +265,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                 self.run_auto_use_fixtures(py, parents, configuration_module, FixtureScope::Package)
         {
             let diagnostic = diagnostics.remove(0);
-            with_suspended_output_capture(self.output_capture.as_ref(), py, || {
-                self.register_error_package_tests(package, &diagnostic, &diagnostics);
-            });
+            self.register_error_package_tests(package, &diagnostic, &diagnostics);
             return false;
         }
 

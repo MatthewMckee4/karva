@@ -1,14 +1,21 @@
 use pyo3::prelude::*;
 
+use karva_logging::{SavedStdout, save_stdout};
+
 pub struct OutputCapture {
     file_descriptors: FileDescriptorCapture,
+    _saved_stdout: SavedStdout,
 }
 
 impl OutputCapture {
     pub fn new(py: Python<'_>) -> PyResult<Self> {
+        let stdout = save_stdout()?;
         let file_descriptors = FileDescriptorCapture::new(py)?;
         file_descriptors.resume(py)?;
-        Ok(Self { file_descriptors })
+        Ok(Self {
+            file_descriptors,
+            _saved_stdout: stdout,
+        })
     }
 
     pub fn start(&self, py: Python<'_>) -> PyResult<PythonOutputCapture<'_>> {
@@ -18,25 +25,6 @@ impl OutputCapture {
     pub fn stop(&self, py: Python<'_>) -> PyResult<()> {
         self.file_descriptors.suspend(py)
     }
-}
-
-pub fn with_suspended_output_capture<R>(
-    capture: Option<&OutputCapture>,
-    py: Python<'_>,
-    f: impl FnOnce() -> R,
-) -> R {
-    let Some(capture) = capture else {
-        return f();
-    };
-    if let Err(err) = capture.file_descriptors.suspend(py) {
-        tracing::warn!("failed to suspend file descriptor output capture: {err}");
-        return f();
-    }
-    let result = f();
-    if let Err(err) = capture.file_descriptors.resume(py) {
-        tracing::warn!("failed to resume file descriptor output capture: {err}");
-    }
-    result
 }
 
 pub struct PythonOutputCapture<'capture> {
@@ -158,8 +146,8 @@ impl FileDescriptorCapture {
     }
 
     fn start(&self, py: Python<'_>) -> PyResult<()> {
-        clear_file(py, &self.stdout)?;
-        clear_file(py, &self.stderr)
+        clear_if_needed(py, &self.stdout)?;
+        clear_if_needed(py, &self.stderr)
     }
 
     fn finish(&self, py: Python<'_>) -> PyResult<CapturedPythonOutput> {
@@ -239,19 +227,35 @@ fn redirect_descriptor(
     Ok(())
 }
 
-fn read_file(py: Python<'_>, file: &Py<PyAny>) -> PyResult<String> {
-    let file = file.bind(py);
-    file.call_method1("seek", (0,))?;
-    file.call_method0("read")?
-        .call_method1("decode", ("utf-8", "replace"))?
-        .extract()
+fn file_position(py: Python<'_>, file: &Py<PyAny>) -> PyResult<u64> {
+    file.bind(py).call_method0("tell")?.extract()
 }
 
-fn clear_file(py: Python<'_>, file: &Py<PyAny>) -> PyResult<()> {
+fn clear_if_needed(py: Python<'_>, file: &Py<PyAny>) -> PyResult<()> {
+    let position = file_position(py, file)?;
+    if position == 0 {
+        return Ok(());
+    }
     let file = file.bind(py);
     file.call_method1("seek", (0,))?;
     file.call_method1("truncate", (0,))?;
     Ok(())
+}
+
+fn read_file(py: Python<'_>, file: &Py<PyAny>) -> PyResult<String> {
+    let file = file.bind(py);
+    let end = file.call_method0("tell")?.extract::<u64>()?;
+    if end == 0 {
+        return Ok(String::new());
+    }
+    file.call_method1("seek", (0,))?;
+    let output = file
+        .call_method1("read", (end,))?
+        .call_method1("decode", ("utf-8", "replace"))?
+        .extract();
+    file.call_method1("seek", (0,))?;
+    file.call_method1("truncate", (0,))?;
+    output
 }
 
 fn flush_current_streams(sys: &Bound<'_, PyModule>) {

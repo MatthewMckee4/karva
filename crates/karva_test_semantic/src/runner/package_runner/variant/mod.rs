@@ -139,15 +139,17 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             );
 
             if attempt.retryable && attempt_number < settings.max_attempts {
-                with_restored_file_descriptors(output_capture.as_ref(), self.py, || {
-                    self.package_runner.context.report_test_attempt(
-                        &settings.qualified_test_name,
-                        attempt_number,
-                        attempt.lifecycle.outcome.result_kind(),
-                        attempt.lifecycle.duration,
-                    );
-                    tracing::debug!("Retrying test `{}`", settings.qualified_test_name);
-                });
+                self.package_runner.context.report_test_attempt(
+                    &settings.qualified_test_name,
+                    attempt_number,
+                    attempt.lifecycle.outcome.result_kind(),
+                    attempt.lifecycle.duration,
+                );
+                if tracing::enabled!(tracing::Level::DEBUG) {
+                    with_restored_file_descriptors(output_capture.as_ref(), self.py, || {
+                        tracing::debug!("Retrying test `{}`", settings.qualified_test_name);
+                    });
+                }
                 prior_attempts.push(attempt.lifecycle);
                 attempt_number += 1;
             } else {
