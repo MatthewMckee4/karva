@@ -127,16 +127,70 @@ pub struct CapturedPythonOutput {
 }
 
 struct FileDescriptorCapture {
-    stdout: Py<PyAny>,
-    stderr: Py<PyAny>,
+    stdout: CaptureFile,
+    stderr: CaptureFile,
     old: SavedFileDescriptors,
+}
+
+struct CaptureFile {
+    file: Py<PyAny>,
+    tell: Py<PyAny>,
+    seek: Py<PyAny>,
+    truncate: Py<PyAny>,
+    read: Py<PyAny>,
+}
+
+impl CaptureFile {
+    fn new(file: Bound<'_, PyAny>) -> PyResult<Self> {
+        let tell = file.getattr("tell")?.unbind();
+        let seek = file.getattr("seek")?.unbind();
+        let truncate = file.getattr("truncate")?.unbind();
+        let read = file.getattr("read")?.unbind();
+        Ok(Self {
+            file: file.unbind(),
+            tell,
+            seek,
+            truncate,
+            read,
+        })
+    }
+
+    fn position(&self, py: Python<'_>) -> PyResult<u64> {
+        self.tell.bind(py).call0()?.extract()
+    }
+
+    fn clear_if_needed(&self, py: Python<'_>) -> PyResult<()> {
+        if self.position(py)? == 0 {
+            return Ok(());
+        }
+        self.seek.bind(py).call1((0,))?;
+        self.truncate.bind(py).call1((0,))?;
+        Ok(())
+    }
+
+    fn read(&self, py: Python<'_>) -> PyResult<String> {
+        let end = self.position(py)?;
+        if end == 0 {
+            return Ok(String::new());
+        }
+        self.seek.bind(py).call1((0,))?;
+        let output = self
+            .read
+            .bind(py)
+            .call1((end,))?
+            .call_method1("decode", ("utf-8", "replace"))?
+            .extract();
+        self.seek.bind(py).call1((0,))?;
+        self.truncate.bind(py).call1((0,))?;
+        output
+    }
 }
 
 impl FileDescriptorCapture {
     fn new(py: Python<'_>) -> PyResult<Self> {
         let temporary_file = py.import("tempfile")?.getattr("TemporaryFile")?;
-        let stdout = temporary_file.call1(("w+b",))?.unbind();
-        let stderr = temporary_file.call1(("w+b",))?.unbind();
+        let stdout = CaptureFile::new(temporary_file.call1(("w+b",))?)?;
+        let stderr = CaptureFile::new(temporary_file.call1(("w+b",))?)?;
         let old = SavedFileDescriptors::new(py)?;
         Ok(Self {
             stdout,
@@ -146,13 +200,13 @@ impl FileDescriptorCapture {
     }
 
     fn start(&self, py: Python<'_>) -> PyResult<()> {
-        clear_if_needed(py, &self.stdout)?;
-        clear_if_needed(py, &self.stderr)
+        self.stdout.clear_if_needed(py)?;
+        self.stderr.clear_if_needed(py)
     }
 
     fn finish(&self, py: Python<'_>) -> PyResult<CapturedPythonOutput> {
-        let stdout_result = read_file(py, &self.stdout);
-        let stderr_result = read_file(py, &self.stderr);
+        let stdout_result = self.stdout.read(py);
+        let stderr_result = self.stderr.read(py);
         let stdout = stdout_result?;
         let stderr = stderr_result?;
         Ok(CapturedPythonOutput { stdout, stderr })
@@ -161,7 +215,7 @@ impl FileDescriptorCapture {
     fn suspend(&self, py: Python<'_>) -> PyResult<()> {
         if let Err(err) = self.old.restore(py) {
             let os = py.import("os")?;
-            if let Err(restore_err) = redirect_descriptor(&os, py, &self.stdout, 1) {
+            if let Err(restore_err) = redirect_descriptor(&os, py, &self.stdout.file, 1) {
                 tracing::warn!("failed to restore stdout capture after setup error: {restore_err}");
             }
             return Err(err);
@@ -171,8 +225,8 @@ impl FileDescriptorCapture {
 
     fn resume(&self, py: Python<'_>) -> PyResult<()> {
         let os = py.import("os")?;
-        redirect_descriptor(&os, py, &self.stdout, 1)?;
-        if let Err(err) = redirect_descriptor(&os, py, &self.stderr, 2) {
+        redirect_descriptor(&os, py, &self.stdout.file, 1)?;
+        if let Err(err) = redirect_descriptor(&os, py, &self.stderr.file, 2) {
             if let Err(restore_err) = redirect_descriptor(&os, py, &self.old.stdout, 1) {
                 tracing::warn!("failed to restore stdout after capture setup error: {restore_err}");
             }
@@ -225,37 +279,6 @@ fn redirect_descriptor(
     let source: i32 = file.bind(py).call_method0("fileno")?.extract()?;
     os.call_method1("dup2", (source, target))?;
     Ok(())
-}
-
-fn file_position(py: Python<'_>, file: &Py<PyAny>) -> PyResult<u64> {
-    file.bind(py).call_method0("tell")?.extract()
-}
-
-fn clear_if_needed(py: Python<'_>, file: &Py<PyAny>) -> PyResult<()> {
-    let position = file_position(py, file)?;
-    if position == 0 {
-        return Ok(());
-    }
-    let file = file.bind(py);
-    file.call_method1("seek", (0,))?;
-    file.call_method1("truncate", (0,))?;
-    Ok(())
-}
-
-fn read_file(py: Python<'_>, file: &Py<PyAny>) -> PyResult<String> {
-    let file = file.bind(py);
-    let end = file.call_method0("tell")?.extract::<u64>()?;
-    if end == 0 {
-        return Ok(String::new());
-    }
-    file.call_method1("seek", (0,))?;
-    let output = file
-        .call_method1("read", (end,))?
-        .call_method1("decode", ("utf-8", "replace"))?
-        .extract();
-    file.call_method1("seek", (0,))?;
-    file.call_method1("truncate", (0,))?;
-    output
 }
 
 fn flush_current_streams(sys: &Bound<'_, PyModule>) {

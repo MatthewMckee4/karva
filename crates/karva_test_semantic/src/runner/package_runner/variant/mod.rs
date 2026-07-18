@@ -100,9 +100,9 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             return result;
         }
 
-        let output_capture = self.start_output_capture();
         let retry_params = self.params.clone();
         let first_params = std::mem::take(&mut self.params);
+        let output_capture = self.start_output_capture();
         let first_attempt = self.prepare_attempt(first_params);
         let settings = self.settings(&first_attempt.fixtures.function_arguments);
         let function = self.test.py_function.clone_ref(self.py);
