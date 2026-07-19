@@ -79,7 +79,7 @@ repos:
         priority: 1
 
   - repo: https://github.com/astral-sh/ty-pre-commit
-    rev: v0.0.56
+    rev: v0.0.58
     hooks:
       - id: ty
         args: [--isolated, --no-project]
@@ -90,7 +90,7 @@ repos:
         priority: 2
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.20
+    rev: v0.15.21
     hooks:
       - id: ruff-check
         args: [--fix, --exit-non-zero-on-fix]
