@@ -123,6 +123,23 @@ def test_stdin():
 
 `assert_cmd_snapshot` supports `name=`, `inline=`, filters via `snapshot_settings`, and the pending/accept workflow, just like `assert_snapshot`.
 
+### ANSI Color
+
+`karva.Command` inherits environment variables from the Karva process, like a normal subprocess. If the environment forces color output, normalize ANSI styling with a snapshot filter:
+
+```python title="test.py"
+import sys
+
+import karva
+
+def test_help():
+    command = karva.Command(sys.executable).args(["-m", "app", "--help"])
+    with karva.snapshot_settings(filters=[(r"\x1b\[[0-9;]*m", "")]):
+        karva.assert_cmd_snapshot(command)
+```
+
+This keeps the command environment intact while making the stored output independent of terminal styling.
+
 ## Named Snapshots
 
 By default, each snapshot is named after the test function. If a test contains more than one unnamed `assert_snapshot()` call, karva raises an error:
