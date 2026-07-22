@@ -123,6 +123,8 @@ def test_stdin():
 
 `assert_cmd_snapshot` supports `name=`, `inline=`, filters via `snapshot_settings`, and the pending/accept workflow, just like `assert_snapshot`.
 
+Command snapshots normalize CRLF line endings to LF. Other terminal-dependent formatting, such as Rich choosing ASCII or Unicode borders, comes from the subprocess; use snapshot filters to normalize it or configure the command to render deterministically.
+
 ### ANSI Color
 
 `karva.Command` inherits environment variables from the Karva process, like a normal subprocess. If the environment forces color output, normalize ANSI styling with a snapshot filter:

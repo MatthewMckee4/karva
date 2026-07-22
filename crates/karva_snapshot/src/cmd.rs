@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 /// Output captured from running a command.
 pub struct CommandOutput {
     pub success: bool,
@@ -10,20 +12,30 @@ pub struct CommandOutput {
 pub fn format_cmd_output(output: &CommandOutput) -> String {
     use std::fmt::Write;
 
+    let stdout = normalize_line_endings(&output.stdout);
+    let stderr = normalize_line_endings(&output.stderr);
     let mut result = String::new();
     let _ = writeln!(result, "success: {}", output.success);
     let _ = writeln!(result, "exit_code: {}", output.exit_code);
     result.push_str("----- stdout -----\n");
-    result.push_str(&output.stdout);
-    if !output.stdout.ends_with('\n') && !output.stdout.is_empty() {
+    result.push_str(&stdout);
+    if !stdout.ends_with('\n') && !stdout.is_empty() {
         result.push('\n');
     }
     result.push_str("----- stderr -----\n");
-    result.push_str(&output.stderr);
-    if !output.stderr.is_empty() && !output.stderr.ends_with('\n') {
+    result.push_str(&stderr);
+    if !stderr.is_empty() && !stderr.ends_with('\n') {
         result.push('\n');
     }
     result
+}
+
+fn normalize_line_endings(value: &str) -> Cow<'_, str> {
+    if value.contains("\r\n") {
+        Cow::Owned(value.replace("\r\n", "\n"))
+    } else {
+        Cow::Borrowed(value)
+    }
 }
 
 #[cfg(test)]
@@ -164,6 +176,25 @@ mod tests {
         out
         ----- stderr -----
         err
+        ");
+    }
+
+    #[test]
+    fn normalizes_crlf_line_endings() {
+        let output = CommandOutput {
+            success: true,
+            exit_code: 0,
+            stdout: "first\r\nsecond\r\n".to_string(),
+            stderr: "warning\r\n".to_string(),
+        };
+        insta::assert_snapshot!(format_cmd_output(&output), @r"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        first
+        second
+        ----- stderr -----
+        warning
         ");
     }
 }
