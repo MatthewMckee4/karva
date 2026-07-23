@@ -4,10 +4,11 @@ use camino::Utf8Path;
 use karva_static::WorkerEnvVars;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyAnyMethods, PyDict};
+use pyo3::types::{PyAnyMethods, PyCFunction, PyDict, PyTuple};
 use pyo3::{PyResult, Python};
 use ruff_python_ast::Parameters;
 
+use crate::extensions::functions::snapshot::{SnapshotContext, set_snapshot_context};
 use crate::runner::FixtureArguments;
 
 const MAKE_SYNC_CODE: &std::ffi::CStr = c"
@@ -39,12 +40,13 @@ pub(crate) fn run_test_with_timeout(
     kwargs: &FixtureArguments,
     is_async: bool,
     seconds: f64,
+    snapshot_context: &SnapshotContext,
 ) -> PyResult<Py<PyAny>> {
     let kwargs_dict = kwargs.to_kwargs(py)?;
     if is_async {
         run_async_with_timeout(py, function, &kwargs_dict, seconds)
     } else {
-        run_sync_with_timeout(py, function, &kwargs_dict, seconds)
+        run_sync_with_timeout(py, function, &kwargs_dict, seconds, snapshot_context)
     }
 }
 
@@ -53,12 +55,26 @@ fn run_sync_with_timeout(
     function: &Py<PyAny>,
     kwargs_dict: &Bound<'_, PyDict>,
     seconds: f64,
+    snapshot_context: &SnapshotContext,
 ) -> PyResult<Py<PyAny>> {
     let concurrent_futures = py.import("concurrent.futures")?;
     let timeout_class = concurrent_futures.getattr("TimeoutError")?;
+    // Snapshot context is thread-local, so the executor thread needs its own copy.
+    let snapshot_context = snapshot_context.clone();
+    let initializer = PyCFunction::new_closure(
+        py,
+        None,
+        None,
+        move |_args: &Bound<'_, PyTuple>, _kwargs: Option<&Bound<'_, PyDict>>| -> PyResult<()> {
+            set_snapshot_context(snapshot_context.clone());
+            Ok(())
+        },
+    )?;
+    let executor_kwargs = PyDict::new(py);
+    executor_kwargs.set_item("initializer", initializer)?;
     let executor = concurrent_futures
         .getattr("ThreadPoolExecutor")?
-        .call1((1u32,))?;
+        .call((1u32,), Some(&executor_kwargs))?;
 
     let future = executor.call_method("submit", (function,), Some(kwargs_dict))?;
     let result = future.call_method1("result", (seconds,));
