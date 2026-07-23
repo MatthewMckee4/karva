@@ -4,7 +4,7 @@ requires = ["maturin>=1.9.3,<2.0"]
 
 [project]
 name = "karva"
-version = "0.0.1-alpha.7"
+version = "0.0.1-alpha.8"
 description = "A Python test framework, written in Rust."
 authors = [{ name = "Matthew Mckee", email = "matthewmckee04@yahoo.co.uk" }]
 license = "MIT"
