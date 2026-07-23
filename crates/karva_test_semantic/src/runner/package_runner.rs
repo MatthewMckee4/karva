@@ -646,9 +646,10 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             &stmt_function_def.parameters,
             &fixture_names,
         );
+        let snapshot_test_file = test_module_path.to_string();
         crate::extensions::functions::snapshot::set_snapshot_context(
-            test_module_path.to_string(),
-            snapshot_test_name,
+            snapshot_test_file.clone(),
+            snapshot_test_name.clone(),
         );
 
         let custom_tag_names = tags.custom_tag_names();
@@ -678,7 +679,15 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 return Err(err.clone_ref(py));
             }
             let result = if let Some(seconds) = timeout_seconds {
-                run_test_with_timeout(py, &function, &function_arguments, is_async, seconds)
+                run_test_with_timeout(
+                    py,
+                    &function,
+                    &function_arguments,
+                    is_async,
+                    seconds,
+                    &snapshot_test_file,
+                    &snapshot_test_name,
+                )
             } else {
                 let result = if function_arguments.is_empty() {
                     function.call0(py)
