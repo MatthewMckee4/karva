@@ -1,0 +1,2474 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A Python test framework, written in Rust">
+      
+      
+        <meta name="author" content="Matthew McKee">
+      
+      
+        <link rel="canonical" href="https://matthewmckee4.github.io/karva/reference/cli/">
+      
+      
+        <link rel="prev" href="../../configuration/profiles/">
+      
+      
+        <link rel="next" href="../env-vars/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="zensical-0.0.50">
+    
+    
+      
+        <title>CLI Reference - Karva</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="../../assets/stylesheets/modern/main.62c9b9cc.min.css">
+      
+        
+          
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/modern/palette.dfe2e883.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-label="Navigation"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#cli-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Karva" class="md-header__button md-logo" aria-label="Karva" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer" aria-label="Navigation">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Karva
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              CLI Reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-moon" viewBox="0 0 24 24"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search" aria-label="Search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+        <a href="https://github.com/MatthewMckee4/karva" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MatthewMckee4/karva
+  </div>
+</a>
+      
+    </div>
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+      
+    
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../get-started/installation/" class="md-tabs__link">
+          
+  
+  Get Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+      
+    
+    
+    
+      
+  
+  
+  
+  
+    
+      
+    
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../usage/running-tests/filtering/" class="md-tabs__link">
+          
+  
+  Usage
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+      
+    
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../configuration/configuration/" class="md-tabs__link">
+          
+  
+  Configuration
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+      
+    
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="././" class="md-tabs__link">
+          
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Karva" class="md-nav__button md-logo" aria-label="Karva" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    Karva
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/MatthewMckee4/karva" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MatthewMckee4/karva
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Home
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Get Started
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  Get Started
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Installation
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get-started/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Tutorial
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Usage
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  Usage
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Running Tests
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  Running Tests
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/running-tests/filtering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Filtering Tests
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/running-tests/parallel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Parallel Execution
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/running-tests/watch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Watch Mode
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/running-tests/cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Cache
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Failure Handling
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  Failure Handling
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/failure-handling/fail-fast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Failing Fast
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/failure-handling/retries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Retries
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/failure-handling/slow-tests/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Slow Tests
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Writing Tests
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  Writing Tests
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/writing-tests/snapshots/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Snapshots
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/writing-tests/coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Coverage
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/writing-tests/functions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Other Functions
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Fixtures
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  Fixtures
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/fixtures/fixtures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Fixtures
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/fixtures/builtin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Built In
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Tags
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  Tags
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/tags/parametrize/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Parametrize
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/tags/skip/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Skip
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/tags/expect_fail/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Expect Fail
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/tags/timeout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Timeout
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Configuration
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  Configuration
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Configuration
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Profiles
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Reference
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  Reference
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  CLI
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  CLI
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#karva" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#karva-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva test
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#karva-snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="karva snapshot">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#karva-snapshot-accept" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot accept
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-snapshot-reject" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot reject
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-snapshot-pending" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot pending
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-snapshot-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot review
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-snapshot-prune" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot prune
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-snapshot-delete" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot delete
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-snapshot-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot help
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#karva-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva cache
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="karva cache">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#karva-cache-prune" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva cache prune
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-cache-clean" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva cache clean
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-cache-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva cache help
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#karva-show-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva show-config
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#karva-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva version
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#karva-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva help
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../env-vars/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Environment Variables
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../non-goals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Project Non-Goals
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                      
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#karva" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#karva-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva test
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#karva-snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="karva snapshot">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#karva-snapshot-accept" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot accept
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-snapshot-reject" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot reject
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-snapshot-pending" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot pending
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-snapshot-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot review
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-snapshot-prune" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot prune
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-snapshot-delete" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot delete
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-snapshot-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva snapshot help
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#karva-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva cache
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="karva cache">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#karva-cache-prune" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva cache prune
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-cache-clean" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva cache clean
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#karva-cache-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva cache help
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#karva-show-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva show-config
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#karva-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva version
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#karva-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        karva help
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+  
+  
+
+
+<!-- WARNING: This file is auto-generated (cargo run -p karva_dev generate-all). Edit the doc comments in 'crates/karva/src/args.rs' if you want to change anything here. -->
+
+<h1 id="cli-reference">CLI Reference</h1>
+<h2 id="karva">karva</h2>
+<p>A Python test runner.</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva &lt;COMMAND&gt;
+</code></pre></div></td></tr></table></div>
+<h3 class="cli-reference">Commands</h3>
+
+<dl class="cli-reference"><dt><a href="#karva-test"><code>karva test</code></a></dt><dd><p>Run tests</p></dd>
+<dt><a href="#karva-snapshot"><code>karva snapshot</code></a></dt><dd><p>Manage snapshots created by <code>karva.assert_snapshot()</code></p></dd>
+<dt><a href="#karva-cache"><code>karva cache</code></a></dt><dd><p>Manage the karva cache</p></dd>
+<dt><a href="#karva-show-config"><code>karva show-config</code></a></dt><dd><p>Print the resolved configuration karva would run with</p></dd>
+<dt><a href="#karva-version"><code>karva version</code></a></dt><dd><p>Display Karva's version</p></dd>
+<dt><a href="#karva-help"><code>karva help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
+</dl>
+
+<h2 id="karva-test">karva test</h2>
+<p>Run tests</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva test [OPTIONS] [PATH]...
+</code></pre></div></td></tr></table></div>
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-test--paths"><a href="#karva-test--paths"><code>PATHS</code></a></dt><dd><p>List of files, directories, or test functions to test &#91;default: the project root&#93;</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-test--color"><a href="#karva-test--color"><code>--color</code></a> <i>color</i></dt><dd><p>Control when colored output is used</p>
+<p>Possible values:</p>
+<ul>
+<li><code>auto</code>:  Display colors if the output goes to an interactive terminal</li>
+<li><code>always</code>:  Always display colors</li>
+<li><code>never</code>:  Never display colors</li>
+</ul></dd><dt id="karva-test--config-file"><a href="#karva-test--config-file"><code>--config-file</code></a> <i>path</i></dt><dd><p>The path to a <code>karva.toml</code> file to use for configuration.</p>
+<p>While karva configuration can be included in a <code>pyproject.toml</code> file, it is not allowed in this context.</p>
+<p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-test--cov"><a href="#karva-test--cov"><code>--cov</code></a> <i>source</i></dt><dd><p>Measure code coverage for the given source path.</p>
+<p>May be passed multiple times to measure several sources. Pass without a value (<code>--cov</code>) to measure the current working directory.</p>
+</dd><dt id="karva-test--cov-branch"><a href="#karva-test--cov-branch"><code>--cov-branch</code></a></dt><dd><p>Measure branch coverage in addition to line coverage</p>
+</dd><dt id="karva-test--cov-context"><a href="#karva-test--cov-context"><code>--cov-context</code></a> <i>context</i></dt><dd><p>Record per-test coverage contexts.</p>
+<p>Currently supports <code>test</code>, which records the qualified test name for each line executed while that test is running. Contexts are emitted in JSON coverage reports.</p>
+<p>Possible values:</p>
+<ul>
+<li><code>test</code>:  Record the current test name for each covered line</li>
+</ul></dd><dt id="karva-test--cov-fail-under"><a href="#karva-test--cov-fail-under"><code>--cov-fail-under</code></a> <i>percent</i></dt><dd><p>Fail the run if total coverage is below the given percentage.</p>
+<p>Accepts any value in <code>0..=100</code> (fractional values such as <code>90.5</code> are allowed). When the reported <code>TOTAL</code> percentage is below the threshold, the test command exits with a non-zero status even if every test passed. Has no effect when tests have already failed.</p>
+</dd><dt id="karva-test--cov-include"><a href="#karva-test--cov-include"><code>--cov-include</code></a> <i>glob</i></dt><dd><p>Include only coverage report files whose project-relative path matches this glob.</p>
+<p>May be passed multiple times.</p>
+</dd><dt id="karva-test--cov-omit"><a href="#karva-test--cov-omit"><code>--cov-omit</code></a> <i>glob</i></dt><dd><p>Exclude coverage report files whose project-relative path matches this glob.</p>
+<p>May be passed multiple times.</p>
+</dd><dt id="karva-test--cov-report"><a href="#karva-test--cov-report"><code>--cov-report</code></a> <i>type</i></dt><dd><p>Coverage report type.</p>
+<p><code>term</code> (default) prints a compact terminal table. <code>term-missing</code> extends it with a <code>Missing</code> column listing the uncovered line numbers per file. <code>xml&#91;:PATH&#93;</code>, <code>json&#91;:PATH&#93;</code>, and <code>html&#91;:DIR&#93;</code> write reports to disk.</p>
+</dd><dt id="karva-test--durations"><a href="#karva-test--durations"><code>--durations</code></a> <i>n</i></dt><dd><p>Show the N slowest tests after the run completes</p>
+</dd><dt id="karva-test--fail-fast"><a href="#karva-test--fail-fast"><code>--fail-fast</code></a> <i>fail-fast</i></dt><dd><p>Stop scheduling new tests after the first failure.</p>
+<p>Equivalent to <code>--max-fail=1</code>. Use <code>--no-fail-fast</code> to keep running after failures.</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--filter"><a href="#karva-test--filter"><code>--filter</code></a>, <code>-E</code> <i>filter-expressions</i></dt><dd><p>Filter tests using a filterset expression.</p>
+<p>Predicates: <code>test(&lt;matcher&gt;)</code> matches the fully qualified test name; <code>tag(&lt;matcher&gt;)</code> matches any custom tag on the test.</p>
+<p>Matchers: <code>=exact</code>, <code>~substring</code>, <code>/regex/</code>, <code>#glob</code>. The default is substring for <code>test()</code> and exact for <code>tag()</code>. String bodies may be quoted (<code>&quot;...&quot;</code>) to allow spaces or reserved characters.</p>
+<p>Operators: <code>&amp;</code> / <code>and</code>, <code>|</code> / <code>or</code>, <code>not</code> / <code>!</code>, and <code>-</code> as shorthand for &quot;and not&quot;. Use parentheses for grouping. <code>and</code> binds tighter than <code>or</code>.</p>
+<p>When specified multiple times, a test runs if it matches any of the expressions (OR semantics across flags).</p>
+<p>Examples: <code>-E 'tag(slow)'</code>, <code>-E 'test(/^mod::test_login$/)'</code>, <code>-E 'tag(slow) &amp; test(~login)'</code>, <code>-E '(tag(fast) | tag(unit)) - tag(flaky)'</code>.</p>
+</dd><dt id="karva-test--final-status-level"><a href="#karva-test--final-status-level"><code>--final-status-level</code></a> <i>level</i></dt><dd><p>Test summary information to display at the end of the run &#91;default: pass&#93;</p>
+<p>May also be set with the <code>KARVA_FINAL_STATUS_LEVEL</code> environment variable.</p><p>Possible values:</p>
+<ul>
+<li><code>none</code>:  Don't display the summary line or any diagnostic blocks</li>
+<li><code>fail</code>:  Only display the summary line and diagnostics on failure</li>
+<li><code>retry</code>:  Display the summary line plus diagnostics on failure or when any test was retried. The summary line gains a <code>N retried</code> count whenever a retry happened</li>
+<li><code>slow</code>:  Same as <code>retry</code> until a slow-test threshold is implemented</li>
+<li><code>pass</code>:  Always display the summary line and diagnostics (default)</li>
+<li><code>skip</code>:  Same as <code>pass</code> until skip-specific summary lines are emitted</li>
+<li><code>all</code>:  Always display every summary status</li>
+</ul></dd><dt id="karva-test--help"><a href="#karva-test--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help (see a summary with '-h')</p>
+</dd><dt id="karva-test--last-failed"><a href="#karva-test--last-failed"><code>--last-failed</code></a>, <code>--lf</code></dt><dd><p>Re-run only the tests that failed in the previous run</p>
+</dd><dt id="karva-test--max-fail"><a href="#karva-test--max-fail"><code>--max-fail</code></a> <i>n</i></dt><dd><p>Stop scheduling new tests after this many failures.</p>
+<p>Accepts a positive integer such as <code>--max-fail=3</code>. <code>--max-fail=1</code> is equivalent to the legacy <code>--fail-fast</code>, and <code>--no-fail-fast</code> clears the limit. When <code>--max-fail</code> is provided alongside <code>--fail-fast</code> or <code>--no-fail-fast</code>, <code>--max-fail</code> takes precedence.</p>
+</dd><dt id="karva-test--no-cache"><a href="#karva-test--no-cache"><code>--no-cache</code></a> <i>no-cache</i></dt><dd><p>Disable reading the karva cache for test duration history</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--no-capture"><a href="#karva-test--no-capture"><code>--no-capture</code></a></dt><dd><p>Disable output capture and run tests serially.</p>
+<p>Lets stdout/stderr from tests flow directly to the terminal, useful when debugging with print statements or interactive debuggers. Implies <code>--show-output</code> and forces a single worker so output from concurrent tests cannot interleave.</p>
+</dd><dt id="karva-test--no-cov"><a href="#karva-test--no-cov"><code>--no-cov</code></a></dt><dd><p>Disable coverage measurement for this run.</p>
+<p>Overrides any <code>--cov</code> flag and any <code>&#91;coverage&#93; sources</code> configured in <code>karva.toml</code> / <code>pyproject.toml</code>. Useful when iterating locally without editing config.</p>
+</dd><dt id="karva-test--no-fail-fast"><a href="#karva-test--no-fail-fast"><code>--no-fail-fast</code></a></dt><dd><p>Run every test regardless of how many fail.</p>
+<p>Clears any <code>fail-fast</code> or <code>max-fail</code> value set in configuration. When <code>--max-fail</code> is provided alongside <code>--no-fail-fast</code>, <code>--max-fail</code> takes precedence.</p>
+</dd><dt id="karva-test--no-ignore"><a href="#karva-test--no-ignore"><code>--no-ignore</code></a> <i>no-ignore</i></dt><dd><p>When set, .gitignore files will not be respected</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--no-parallel"><a href="#karva-test--no-parallel"><code>--no-parallel</code></a> <i>no-parallel</i></dt><dd><p>Disable parallel execution (equivalent to <code>--num-workers 1</code>)</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--no-tests"><a href="#karva-test--no-tests"><code>--no-tests</code></a> <i>action</i></dt><dd><p>Behavior when no tests are found to run &#91;default: auto&#93;</p>
+<p>May also be set with the <code>KARVA_NO_TESTS</code> environment variable.</p><p>Possible values:</p>
+<ul>
+<li><code>auto</code>:  Automatically determine behavior: fail if no filter expressions were given, pass silently if filters were given</li>
+<li><code>pass</code>:  Silently exit with code 0</li>
+<li><code>warn</code>:  Produce a warning and exit with code 0</li>
+<li><code>fail</code>:  Produce an error message and exit with a non-zero code</li>
+</ul></dd><dt id="karva-test--num-workers"><a href="#karva-test--num-workers"><code>--num-workers</code></a>, <code>-n</code> <i>num-workers</i></dt><dd><p>Number of parallel workers (default: number of CPU cores)</p>
+</dd><dt id="karva-test--output-format"><a href="#karva-test--output-format"><code>--output-format</code></a> <i>output-format</i></dt><dd><p>The format to use for printing diagnostic messages</p>
+<p>Possible values:</p>
+<ul>
+<li><code>full</code>:  Print diagnostics verbosely, with context and helpful hints (default)</li>
+<li><code>concise</code>:  Print diagnostics concisely, one per line</li>
+</ul></dd><dt id="karva-test--partition"><a href="#karva-test--partition"><code>--partition</code></a> <i>strategy:m/n</i></dt><dd><p>Run only one partition of the collected tests.</p>
+<p>Accepts <code>slice:M/N</code> where this run executes slice <code>M</code> of <code>N</code> total slices (1-indexed). Tests are sorted by qualified name and then distributed by cycling through slices: test 1 to slice 1, test 2 to slice 2, ..., test N+1 to slice 1, and so on. Running every <code>slice:1/N</code> through <code>slice:N/N</code> together covers every collected test exactly once.</p>
+<p>Also accepts <code>hash:M/N</code>, which assigns each test to a stable bucket based on its qualified name. Hash partitioning is less balanced than <code>slice</code>, but adding or removing a test only changes that test's bucket.</p>
+</dd><dt id="karva-test--profile"><a href="#karva-test--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to use.</p>
+<p>Profiles are defined as <code>&#91;profile.&lt;name&gt;&#93;</code> sections in <code>karva.toml</code> (or <code>&#91;tool.karva.profile.&lt;name&gt;&#93;</code> in <code>pyproject.toml</code>) and may override any of the <code>&#91;src&#93;</code>, <code>&#91;terminal&#93;</code>, and <code>&#91;test&#93;</code> settings. The selected profile is layered on top of any <code>&#91;profile.default&#93;</code> overrides, which themselves layer on top of the top-level options.</p>
+<p>Defaults to <code>default</code>.</p>
+<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd><dt id="karva-test--result-format"><a href="#karva-test--result-format"><code>--result-format</code></a> <i>format</i></dt><dd><p>Machine-readable test result format</p>
+<p>Possible values:</p>
+<ul>
+<li><code>json</code>:  Write one JSON document with the full run result</li>
+<li><code>jsonl</code>:  Write newline-delimited JSON events</li>
+</ul></dd><dt id="karva-test--result-output"><a href="#karva-test--result-output"><code>--result-output</code></a> <i>path</i></dt><dd><p>Write machine-readable test results to this path</p>
+</dd><dt id="karva-test--retry"><a href="#karva-test--retry"><code>--retry</code></a> <i>retry</i></dt><dd><p>When set, the test will retry failed tests up to this number of times</p>
+</dd><dt id="karva-test--run-ignored"><a href="#karva-test--run-ignored"><code>--run-ignored</code></a> <i>run-ignored</i></dt><dd><p>Run ignored tests</p>
+<p>Possible values:</p>
+<ul>
+<li><code>only</code>:  Run only ignored tests</li>
+<li><code>all</code>:  Run both ignored and non-ignored tests</li>
+</ul></dd><dt id="karva-test--run-timeout"><a href="#karva-test--run-timeout"><code>--run-timeout</code></a> <i>seconds</i></dt><dd><p>Wall-clock limit for the whole run, in seconds.</p>
+<p>When the run takes longer than this duration, karva stops the remaining workers and exits with a failure status. Accepts fractional seconds such as <code>--run-timeout=1800</code> or <code>--run-timeout=0.5</code>.</p>
+</dd><dt id="karva-test--show-output"><a href="#karva-test--show-output"><code>--show-output</code></a>, <code>-s</code> <i>show-output</i></dt><dd><p>Show Python stdout during test execution</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--slow-timeout"><a href="#karva-test--slow-timeout"><code>--slow-timeout</code></a> <i>seconds</i></dt><dd><p>Threshold in seconds after which a test is flagged as slow.</p>
+<p>When a test takes longer than this duration, it is reported with a <code>SLOW</code> status line (gated on <code>--status-level=slow</code> or higher) and counted in the run summary. Pass a positive number such as <code>--slow-timeout=60</code> or <code>--slow-timeout=0.5</code>.</p>
+</dd><dt id="karva-test--snapshot-update"><a href="#karva-test--snapshot-update"><code>--snapshot-update</code></a> <i>snapshot-update</i></dt><dd><p>Update snapshots directly instead of creating pending <code>.snap.new</code> files.</p>
+<p>When set, <code>karva.assert_snapshot()</code> will write directly to <code>.snap</code> files, accepting any changes automatically.</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--status-level"><a href="#karva-test--status-level"><code>--status-level</code></a> <i>level</i></dt><dd><p>Test result statuses to display during the run &#91;default: pass&#93;</p>
+<p>May also be set with the <code>KARVA_STATUS_LEVEL</code> environment variable.</p><p>Possible values:</p>
+<ul>
+<li><code>none</code>:  Don't display any test result lines (or the &quot;Starting&quot; header)</li>
+<li><code>fail</code>:  Only display failed test results</li>
+<li><code>retry</code>:  Display failed test results plus a <code>TRY N FAIL</code> line for each failed attempt that was retried</li>
+<li><code>slow</code>:  Display failed, retried, and slow test results. Karva does not yet have a slow-test threshold, so this currently behaves like <code>retry</code></li>
+<li><code>pass</code>:  Display failed, retried, slow, and passing test results (default)</li>
+<li><code>skip</code>:  Additionally display skipped test results</li>
+<li><code>all</code>:  Display all test result statuses</li>
+</ul></dd><dt id="karva-test--termination-grace-period"><a href="#karva-test--termination-grace-period"><code>--termination-grace-period</code></a> <i>seconds</i></dt><dd><p>Grace period before force-killing workers during shutdown, in seconds.</p>
+<p>When karva stops workers because of Ctrl+C, fail-fast, or <code>--run-timeout</code>, it first asks them to terminate gracefully. If they are still running after this period, karva force-kills them. Pass <code>0</code> to force-kill immediately after graceful termination.</p>
+</dd><dt id="karva-test--test-prefix"><a href="#karva-test--test-prefix"><code>--test-prefix</code></a> <i>test-prefix</i></dt><dd><p>The prefix of the test functions</p>
+</dd><dt id="karva-test--timeout"><a href="#karva-test--timeout"><code>--timeout</code></a> <i>seconds</i></dt><dd><p>Hard per-test timeout, in seconds.</p>
+<p>Tests that run longer than this duration are killed and reported as failures. A test-level &#91;<code>@karva.tags.timeout</code>&#93; decorator overrides the default for that specific test.</p>
+<p>Accepts fractional seconds such as <code>--timeout=120</code> or <code>--timeout=0.5</code>.</p>
+</dd><dt id="karva-test--try-import-fixtures"><a href="#karva-test--try-import-fixtures"><code>--try-import-fixtures</code></a> <i>try-import-fixtures</i></dt><dd><p>When set, we will try to import functions in each test file as well as parsing the ast to find them.</p>
+<p>This is often slower, so it is not recommended for most projects.</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--verbose"><a href="#karva-test--verbose"><code>--verbose</code></a>, <code>-v</code></dt><dd><p>Use verbose output (or <code>-vv</code> and <code>-vvv</code> for more verbose output)</p>
+</dd><dt id="karva-test--watch"><a href="#karva-test--watch"><code>--watch</code></a></dt><dd><p>Re-run tests when Python source files change</p>
+</dd></dl>
+
+<h2 id="karva-snapshot">karva snapshot</h2>
+<p>Manage snapshots created by <code>karva.assert_snapshot()</code></p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva snapshot &lt;COMMAND&gt;
+</code></pre></div></td></tr></table></div>
+<h3 class="cli-reference">Commands</h3>
+
+<dl class="cli-reference"><dt><a href="#karva-snapshot-accept"><code>karva snapshot accept</code></a></dt><dd><p>Accept all (or filtered) pending snapshots</p></dd>
+<dt><a href="#karva-snapshot-reject"><code>karva snapshot reject</code></a></dt><dd><p>Reject all (or filtered) pending snapshots</p></dd>
+<dt><a href="#karva-snapshot-pending"><code>karva snapshot pending</code></a></dt><dd><p>List pending snapshots</p></dd>
+<dt><a href="#karva-snapshot-review"><code>karva snapshot review</code></a></dt><dd><p>Interactively review pending snapshots</p></dd>
+<dt><a href="#karva-snapshot-prune"><code>karva snapshot prune</code></a></dt><dd><p>Remove snapshot files whose source test no longer exists</p></dd>
+<dt><a href="#karva-snapshot-delete"><code>karva snapshot delete</code></a></dt><dd><p>Delete all (or filtered) snapshot files (.snap and .snap.new)</p></dd>
+<dt><a href="#karva-snapshot-help"><code>karva snapshot help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
+</dl>
+
+<h3 id="karva-snapshot-accept">karva snapshot accept</h3>
+<p>Accept all (or filtered) pending snapshots</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva snapshot accept [PATH]...
+</code></pre></div></td></tr></table></div>
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-accept--paths"><a href="#karva-snapshot-accept--paths"><code>PATHS</code></a></dt><dd><p>Optional paths to filter snapshots by directory or file</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-accept--help"><a href="#karva-snapshot-accept--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+<h3 id="karva-snapshot-reject">karva snapshot reject</h3>
+<p>Reject all (or filtered) pending snapshots</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva snapshot reject [PATH]...
+</code></pre></div></td></tr></table></div>
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-reject--paths"><a href="#karva-snapshot-reject--paths"><code>PATHS</code></a></dt><dd><p>Optional paths to filter snapshots by directory or file</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-reject--help"><a href="#karva-snapshot-reject--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+<h3 id="karva-snapshot-pending">karva snapshot pending</h3>
+<p>List pending snapshots</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva snapshot pending [PATH]...
+</code></pre></div></td></tr></table></div>
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-pending--paths"><a href="#karva-snapshot-pending--paths"><code>PATHS</code></a></dt><dd><p>Optional paths to filter snapshots by directory or file</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-pending--help"><a href="#karva-snapshot-pending--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+<h3 id="karva-snapshot-review">karva snapshot review</h3>
+<p>Interactively review pending snapshots</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva snapshot review [PATH]...
+</code></pre></div></td></tr></table></div>
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-review--paths"><a href="#karva-snapshot-review--paths"><code>PATHS</code></a></dt><dd><p>Optional paths to filter snapshots by directory or file</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-review--help"><a href="#karva-snapshot-review--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+<h3 id="karva-snapshot-prune">karva snapshot prune</h3>
+<p>Remove snapshot files whose source test no longer exists</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva snapshot prune [OPTIONS] [PATH]...
+</code></pre></div></td></tr></table></div>
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-prune--paths"><a href="#karva-snapshot-prune--paths"><code>PATHS</code></a></dt><dd><p>Optional paths to filter snapshots by directory or file</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-prune--dry-run"><a href="#karva-snapshot-prune--dry-run"><code>--dry-run</code></a></dt><dd><p>Show which snapshots would be removed without deleting them</p>
+</dd><dt id="karva-snapshot-prune--help"><a href="#karva-snapshot-prune--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+<h3 id="karva-snapshot-delete">karva snapshot delete</h3>
+<p>Delete all (or filtered) snapshot files (.snap and .snap.new)</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva snapshot delete [OPTIONS] [PATH]...
+</code></pre></div></td></tr></table></div>
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-delete--paths"><a href="#karva-snapshot-delete--paths"><code>PATHS</code></a></dt><dd><p>Optional paths to filter which snapshot files are deleted</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-snapshot-delete--dry-run"><a href="#karva-snapshot-delete--dry-run"><code>--dry-run</code></a></dt><dd><p>Show which snapshot files would be deleted without removing them</p>
+</dd><dt id="karva-snapshot-delete--help"><a href="#karva-snapshot-delete--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+<h3 id="karva-snapshot-help">karva snapshot help</h3>
+<p>Print this message or the help of the given subcommand(s)</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva snapshot help [COMMAND]
+</code></pre></div></td></tr></table></div>
+<h2 id="karva-cache">karva cache</h2>
+<p>Manage the karva cache</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva cache &lt;COMMAND&gt;
+</code></pre></div></td></tr></table></div>
+<h3 class="cli-reference">Commands</h3>
+
+<dl class="cli-reference"><dt><a href="#karva-cache-prune"><code>karva cache prune</code></a></dt><dd><p>Remove all but the most recent test run from the cache</p></dd>
+<dt><a href="#karva-cache-clean"><code>karva cache clean</code></a></dt><dd><p>Remove the entire cache directory</p></dd>
+<dt><a href="#karva-cache-help"><code>karva cache help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
+</dl>
+
+<h3 id="karva-cache-prune">karva cache prune</h3>
+<p>Remove all but the most recent test run from the cache</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva cache prune
+</code></pre></div></td></tr></table></div>
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-cache-prune--help"><a href="#karva-cache-prune--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+<h3 id="karva-cache-clean">karva cache clean</h3>
+<p>Remove the entire cache directory</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva cache clean
+</code></pre></div></td></tr></table></div>
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-cache-clean--help"><a href="#karva-cache-clean--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+<h3 id="karva-cache-help">karva cache help</h3>
+<p>Print this message or the help of the given subcommand(s)</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva cache help [COMMAND]
+</code></pre></div></td></tr></table></div>
+<h2 id="karva-show-config">karva show-config</h2>
+<p>Print the resolved configuration karva would run with</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva show-config [OPTIONS]
+</code></pre></div></td></tr></table></div>
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-show-config--config-file"><a href="#karva-show-config--config-file"><code>--config-file</code></a> <i>path</i></dt><dd><p>The path to a <code>karva.toml</code> file to use for configuration</p>
+<p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-show-config--help"><a href="#karva-show-config--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help (see a summary with '-h')</p>
+</dd><dt id="karva-show-config--profile"><a href="#karva-show-config--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to resolve.</p>
+<p>Defaults to <code>default</code>.</p>
+<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd></dl>
+
+<h2 id="karva-version">karva version</h2>
+<p>Display Karva's version</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva version
+</code></pre></div></td></tr></table></div>
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-version--help"><a href="#karva-version--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
+<h2 id="karva-help">karva help</h2>
+<p>Print this message or the help of the given subcommand(s)</p>
+<h3 class="cli-reference">Usage</h3>
+
+<div class="highlight"><table class="highlighttable"><tr><th colspan="2" class="filename"><span class="filename">Text Only</span></th></tr><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span></pre></div></td><td class="code"><div><pre><span></span><code>karva help [COMMAND]
+</code></pre></div></td></tr></table></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-circle-arrow-up" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4M12 16V8"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate":null,"base":"../..","features":["navigation.instant","navigation.tabs","navigation.tabs.sticky","navigation.sections","navigation.top","search.highlight"],"search":"../../assets/javascripts/workers/search.b6b7e04f.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7f30b55.min.js"></script>
+      
+    
+  </body>
+</html>
