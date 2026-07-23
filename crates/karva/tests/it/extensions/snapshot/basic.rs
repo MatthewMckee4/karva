@@ -89,6 +89,48 @@ def test_hello():
 }
 
 #[test]
+fn test_snapshot_retry_resets_unnamed_counter() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+import karva
+
+def test_flaky():
+    karva.assert_snapshot("stable")
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+        "#,
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--snapshot-update", "--retry=1"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_flaky
+      TRY 2 PASS [TIME] test::test_flaky
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_flaky
+
+    ----- stderr -----
+    "
+    );
+
+    let content = context.read_file("snapshots/test__test_flaky.snap");
+    insta::assert_snapshot!(content, @r"
+    ---
+    source: test.py:6::test_flaky
+    ---
+    stable
+    ");
+}
+
+#[test]
 fn test_snapshot_update_env_creates_snap_file() {
     let context = TestContext::with_file(
         "test.py",
@@ -302,18 +344,21 @@ def test_multiple():
     "
     );
 
-    assert_eq!(
-        context
-            .read_file("snapshots/test__test_multiple-0.snap")
-            .trim_end(),
-        "---\nsource: test.py:7::test_multiple\n---\nfirst"
-    );
-    assert_eq!(
-        context
-            .read_file("snapshots/test__test_multiple-1.snap")
-            .trim_end(),
-        "---\nsource: test.py:8::test_multiple\n---\nsecond"
-    );
+    let first_snapshot = context.read_file("snapshots/test__test_multiple-0.snap");
+    insta::assert_snapshot!(first_snapshot, @r"
+    ---
+    source: test.py:7::test_multiple
+    ---
+    first
+    ");
+
+    let second_snapshot = context.read_file("snapshots/test__test_multiple-1.snap");
+    insta::assert_snapshot!(second_snapshot, @r"
+    ---
+    source: test.py:8::test_multiple
+    ---
+    second
+    ");
 }
 
 #[test]

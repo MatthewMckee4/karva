@@ -1437,6 +1437,99 @@ def test_1():
 }
 
 #[test]
+fn test_async_retry() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import asyncio
+import os
+
+async def test_flaky():
+    await asyncio.sleep(0)
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_flaky
+      TRY 2 PASS [TIME] test::test_flaky
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_flaky
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_returned_value_then_none_is_flaky() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+
+def test_flaky_return():
+    if os.environ["KARVA_ATTEMPT"] == "1":
+        return "not none"
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_flaky_return
+      TRY 2 PASS [TIME] test::test_flaky_return
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_flaky_return
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_max_fail_counts_final_retry_outcome() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+
+def test_flaky():
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+
+def test_after():
+    pass
+        "#,
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--retry=1", "--max-fail=1"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+      TRY 1 FAIL [TIME] test::test_flaky
+      TRY 2 PASS [TIME] test::test_flaky
+            PASS [TIME] test::test_after
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_flaky
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
 fn test_parallel_worker_capping() {
     let context = TestContext::with_file(
         "test_a.py",

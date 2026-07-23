@@ -650,7 +650,6 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 &fixture_names,
             ),
         );
-        set_snapshot_context(snapshot_context.clone());
 
         let custom_tag_names = tags.custom_tag_names();
         let qualified_name_str = qualified_test_name.to_string();
@@ -672,6 +671,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 .map(|d| d.as_secs_f64())
         });
         let run_test = || {
+            set_snapshot_context(snapshot_context.clone());
             if let Err(err) = &test_name_env_result {
                 return Err(err.clone_ref(py));
             }

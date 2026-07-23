@@ -238,6 +238,35 @@ def test_skip():
 }
 
 #[test]
+fn test_runtime_skip_after_failed_attempt() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+import karva
+
+def test_skip_on_retry():
+    if os.environ["KARVA_ATTEMPT"] == "1":
+        assert False
+    karva.skip("skip after retry")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=2"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_skip_on_retry
+      TRY 2 SKIP [TIME] test::test_skip_on_retry
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_mixed_skip_and_pass() {
     let context = TestContext::with_file(
         "test.py",
