@@ -246,6 +246,33 @@ def test_hello():
 }
 
 #[test]
+fn test_async_snapshot_matches_with_timeout() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import asyncio
+import karva
+
+async def test_hello():
+    await asyncio.sleep(0)
+    karva.assert_snapshot('hello world', inline='hello world')
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--timeout=60"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_hello
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_snapshot_malformed_existing_file_fails_without_pending_snapshot() {
     let context = TestContext::with_files([
         (
