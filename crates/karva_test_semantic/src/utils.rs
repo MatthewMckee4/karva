@@ -8,7 +8,9 @@ use pyo3::types::{PyAnyMethods, PyCFunction, PyDict, PyTuple};
 use pyo3::{PyResult, Python};
 use ruff_python_ast::Parameters;
 
-use crate::extensions::functions::snapshot::{SnapshotContext, set_snapshot_context};
+use crate::extensions::functions::snapshot::{
+    SnapshotContext, capture_snapshot_thread_state, set_snapshot_thread_state,
+};
 use crate::runner::FixtureArguments;
 
 const MAKE_SYNC_CODE: &std::ffi::CStr = c"
@@ -59,14 +61,13 @@ fn run_sync_with_timeout(
 ) -> PyResult<Py<PyAny>> {
     let concurrent_futures = py.import("concurrent.futures")?;
     let timeout_class = concurrent_futures.getattr("TimeoutError")?;
-    // Snapshot context is thread-local, so the executor thread needs its own copy.
-    let snapshot_context = snapshot_context.clone();
+    let snapshot_state = capture_snapshot_thread_state(snapshot_context.clone());
     let initializer = PyCFunction::new_closure(
         py,
         None,
         None,
         move |_args: &Bound<'_, PyTuple>, _kwargs: Option<&Bound<'_, PyDict>>| -> PyResult<()> {
-            set_snapshot_context(snapshot_context.clone());
+            set_snapshot_thread_state(snapshot_state.clone());
             Ok(())
         },
     )?;
@@ -76,7 +77,12 @@ fn run_sync_with_timeout(
         .getattr("ThreadPoolExecutor")?
         .call((1u32,), Some(&executor_kwargs))?;
 
-    let future = executor.call_method("submit", (function,), Some(kwargs_dict))?;
+    let copied_context = py.import("contextvars")?.call_method0("copy_context")?;
+    let future = executor.call_method(
+        "submit",
+        (copied_context.getattr("run")?, function),
+        Some(kwargs_dict),
+    )?;
     let result = future.call_method1("result", (seconds,));
 
     let shutdown_kwargs = PyDict::new(py);

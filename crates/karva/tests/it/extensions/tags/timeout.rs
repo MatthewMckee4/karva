@@ -488,3 +488,190 @@ def test_slow():
     ----- stderr -----
     ");
 }
+
+#[test]
+fn test_timeout_preserves_fixture_context_variables() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+from contextvars import ContextVar
+
+import karva
+
+request_id = ContextVar("request_id")
+
+@karva.fixture
+def request_context():
+    token = request_id.set("abc123")
+    yield
+    request_id.reset(token)
+
+@karva.tags.timeout(60)
+def test_context(request_context):
+    assert request_id.get() == "abc123"
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_context(request_context=None)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_timeout_with_runtime_skip() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+@karva.tags.timeout(60)
+def test_skip():
+    karva.skip('not today')
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_timeout_with_expected_failure() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+@karva.tags.timeout(60)
+@karva.tags.expect_fail
+def test_expected_failure():
+    assert False
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_expected_failure
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_timeout_runs_fixture_teardown_before_next_test() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+events = []
+
+@karva.fixture
+def resource():
+    events.append('setup')
+    yield 'resource'
+    events.append('teardown')
+
+@karva.tags.timeout(60)
+def test_resource(resource):
+    assert events == ['setup']
+
+@karva.tags.timeout(60)
+def test_after_resource():
+    assert events == ['setup', 'teardown']
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test::test_resource(resource=resource)
+            PASS [TIME] test::test_after_resource
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_timeout_exposes_retry_environment() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import os
+import karva
+
+@karva.tags.timeout(60)
+def test_retry():
+    attempt = int(os.environ['KARVA_ATTEMPT'])
+    assert os.environ['KARVA_TOTAL_ATTEMPTS'] == '2'
+    assert attempt == 2
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_retry
+      TRY 2 PASS [TIME] test::test_retry
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_retry
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_timeout_exposes_parametrized_test_name() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import os
+import karva
+
+@karva.tags.timeout(60)
+@karva.tags.parametrize('value', [1, 2])
+def test_name(value):
+    assert os.environ['KARVA_TEST_NAME'] == f'test::test_name(value={value})'
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_name(value=1)
+            PASS [TIME] test::test_name(value=2)
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}

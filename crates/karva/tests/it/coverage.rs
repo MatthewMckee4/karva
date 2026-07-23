@@ -400,6 +400,44 @@ def test_add():
 }
 
 #[test]
+fn test_cov_tracks_timed_test_thread() {
+    let context = TestContext::with_file(
+        "test_timed.py",
+        r"
+def covered():
+    return 1
+
+def test_covered():
+    assert covered() == 1
+",
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--cov")
+            .arg("--timeout=60")
+            .arg("--status-level=none")
+            .arg("test_timed.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    Name            Stmts   Miss   Cover
+    [LONG-LINE]
+    test_timed.py       4      0    100%
+    [LONG-LINE]
+    TOTAL               4      0    100%
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
 fn test_cov_partial() {
     let context = TestContext::with_file(
         "test_partial.py",
