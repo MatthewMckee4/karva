@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.0.1-alpha.8
+
+### Bug Fixes
+
+- Preserve snapshot context for timed tests ([#1021](https://github.com/MatthewMckee4/karva/pull/1021))
+- Normalize command snapshot line endings ([#1017](https://github.com/MatthewMckee4/karva/pull/1017))
+- Avoid files for inline snapshot mismatches ([#1015](https://github.com/MatthewMckee4/karva/pull/1015))
+- Capture subprocess output with capfd ([#1002](https://github.com/MatthewMckee4/karva/pull/1002))
+
+### Documentation
+
+- Improve contributor guides ([#1019](https://github.com/MatthewMckee4/karva/pull/1019))
+- Document ANSI command snapshot filtering ([#1016](https://github.com/MatthewMckee4/karva/pull/1016))
+
+### Contributors
+
+- [@MatthewMckee4](https://github.com/MatthewMckee4)
+
 ## 0.0.1-alpha.7
 
 ### Bug Fixes
