@@ -42,6 +42,38 @@ def test_echo():
 }
 
 #[test]
+fn test_cmd_snapshot_with_timeout() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import sys
+
+import karva
+
+@karva.tags.timeout(60)
+def test_echo():
+    command = karva.Command(sys.executable).args(["-c", "print('hello')"])
+    karva.assert_cmd_snapshot(
+        command,
+        inline="success: true\nexit_code: 0\n----- stdout -----\nhello\n----- stderr -----",
+    )
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_echo
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_cmd_snapshot_creates_snap_new() {
     let context = TestContext::with_file(
         "test.py",

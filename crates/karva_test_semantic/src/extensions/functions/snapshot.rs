@@ -38,9 +38,16 @@ impl SnapshotContext {
     }
 }
 
+#[derive(Clone)]
 struct ActiveSettings {
     filters: Vec<(String, String)>,
     allow_duplicates: bool,
+}
+
+#[derive(Clone)]
+pub struct SnapshotThreadState {
+    context: SnapshotContext,
+    settings: Vec<ActiveSettings>,
 }
 
 thread_local! {
@@ -264,6 +271,20 @@ fn display_relative(path: &Utf8Path) -> String {
 pub fn set_snapshot_context(context: SnapshotContext) {
     SNAPSHOT_CONTEXT.with(|ctx| {
         *ctx.borrow_mut() = Some(context);
+    });
+}
+
+pub fn capture_snapshot_thread_state(context: SnapshotContext) -> SnapshotThreadState {
+    SnapshotThreadState {
+        context,
+        settings: SNAPSHOT_SETTINGS.with(|stack| stack.borrow().clone()),
+    }
+}
+
+pub fn set_snapshot_thread_state(state: SnapshotThreadState) {
+    set_snapshot_context(state.context);
+    SNAPSHOT_SETTINGS.with(|stack| {
+        *stack.borrow_mut() = state.settings;
     });
 }
 

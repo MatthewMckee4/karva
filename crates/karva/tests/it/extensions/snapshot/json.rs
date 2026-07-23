@@ -39,6 +39,32 @@ def test_data():
 }
 
 #[test]
+fn test_json_snapshot_with_timeout() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.tags.timeout(60)
+def test_data():
+    karva.assert_json_snapshot({"b": 2, "a": 1}, inline='{\n  "a": 1,\n  "b": 2\n}')
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_data
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_json_snapshot_uses_param_values_and_fixture_names() {
     let context = TestContext::with_file(
         "test.py",

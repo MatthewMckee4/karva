@@ -273,6 +273,78 @@ async def test_hello():
 }
 
 #[test]
+fn test_multiple_snapshots_with_timeout() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+@karva.tags.timeout(60)
+def test_multiple():
+    with karva.snapshot_settings(allow_duplicates=True):
+        karva.assert_snapshot('first')
+        karva.assert_snapshot('second')
+        ",
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--snapshot-update", "--status-level=none"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    assert_eq!(
+        context
+            .read_file("snapshots/test__test_multiple-0.snap")
+            .trim_end(),
+        "---\nsource: test.py:7::test_multiple\n---\nfirst"
+    );
+    assert_eq!(
+        context
+            .read_file("snapshots/test__test_multiple-1.snap")
+            .trim_end(),
+        "---\nsource: test.py:8::test_multiple\n---\nsecond"
+    );
+}
+
+#[test]
+fn test_parametrized_snapshots_with_timeout() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+@karva.tags.timeout(60)
+@karva.tags.parametrize('value', [1, 2])
+def test_value(value):
+    karva.assert_snapshot(value, inline=str(value))
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_value(value=1)
+            PASS [TIME] test::test_value(value=2)
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_snapshot_malformed_existing_file_fails_without_pending_snapshot() {
     let context = TestContext::with_files([
         (

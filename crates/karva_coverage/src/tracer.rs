@@ -98,6 +98,8 @@ impl CoverageSession {
             mon.call_method1("free_tool_id", (tool_id,))?;
         } else {
             py.import("sys")?.call_method1("settrace", (py.None(),))?;
+            py.import("threading")?
+                .call_method1("settrace", (py.None(),))?;
         }
 
         let borrowed = bound.borrow();
@@ -663,7 +665,8 @@ fn release_monitoring_tool(
 
 fn install_settrace(py: Python<'_>, tracer: &Py<CoverageTracer>) -> PyResult<()> {
     let trace = tracer.bind(py).getattr("trace")?;
-    py.import("sys")?.call_method1("settrace", (trace,))?;
+    py.import("sys")?.call_method1("settrace", (&trace,))?;
+    py.import("threading")?.call_method1("settrace", (trace,))?;
     Ok(())
 }
 

@@ -39,6 +39,37 @@ def test_filtered():
 }
 
 #[test]
+fn test_fixture_snapshot_settings_with_timeout() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture
+def snapshot_filter():
+    with karva.snapshot_settings(filters=[(r"\d+", "[id]")]):
+        yield
+
+@karva.tags.timeout(60)
+def test_filtered(snapshot_filter):
+    karva.assert_snapshot("request=123", inline="request=[id]")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_filtered(snapshot_filter=None)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_snapshot_filter_multiple() {
     let context = TestContext::with_file(
         "test.py",
