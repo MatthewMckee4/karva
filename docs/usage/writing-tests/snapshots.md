@@ -191,7 +191,7 @@ hello world
 
 The `source` field records the file, line number, and test name that produced the snapshot.
 
-When a test produces a new or changed snapshot, a `.snap.new` file is created alongside the existing `.snap` file. This pending file must be explicitly accepted or rejected before the test will pass.
+When a test produces a new or changed file-based snapshot, a `.snap.new` file is created alongside the existing `.snap` file. This pending file must be explicitly accepted or rejected before the test will pass.
 
 ## Inline Snapshots
 
@@ -218,6 +218,8 @@ karva test --snapshot-update
 ```
 
 Karva rewrites your source file, replacing `inline=""` with the actual value.
+
+A mismatch with an existing inline snapshot reports the diff without creating a snapshot file. Run with `--snapshot-update` to replace the inline value.
 
 ### Multiline Values
 

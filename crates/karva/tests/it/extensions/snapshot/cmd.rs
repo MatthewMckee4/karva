@@ -522,6 +522,8 @@ def test_inline_wrong():
 
     ----- stderr -----
     "#);
+
+    assert!(!context.root().join("snapshots").exists());
 }
 
 #[test]

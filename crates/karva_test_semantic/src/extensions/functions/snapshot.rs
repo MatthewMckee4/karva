@@ -478,7 +478,14 @@ fn handle_inline_snapshot(
         return Ok(());
     }
 
-    // Write a .snap.new with inline metadata so `karva snapshot accept` can rewrite the source
+    if !is_empty {
+        let diff = format_diff(&expected, actual);
+        return Err(SnapshotMismatchError::new_err(format!(
+            "Inline snapshot mismatch for '{test_name}'.\n{diff}"
+        )));
+    }
+
+    // New inline snapshots need metadata so `karva snapshot accept` can rewrite the source.
     let test_file_path = Utf8Path::new(test_file);
     let module_name = test_file_path.file_stem().unwrap_or("unknown");
     let snapshot_name = format!("{test_name}_inline_{lineno}");
@@ -502,17 +509,10 @@ fn handle_inline_snapshot(
         SnapshotMismatchError::new_err(format!("Failed to write pending inline snapshot: {e}"))
     })?;
 
-    if is_empty {
-        let pending = Utf8PathBuf::from(format!("{snap_path}.new"));
-        let display_path = display_relative(&pending);
-        return Err(SnapshotMismatchError::new_err(format!(
-            "New inline snapshot for '{test_name}'.\nRun `karva snapshot accept` to accept, or re-run with `--snapshot-update`.\nPending file: {display_path}"
-        )));
-    }
-
-    let diff = format_diff(&expected, actual);
+    let pending = Utf8PathBuf::from(format!("{snap_path}.new"));
+    let display_path = display_relative(&pending);
     Err(SnapshotMismatchError::new_err(format!(
-        "Inline snapshot mismatch for '{test_name}'.\n{diff}"
+        "New inline snapshot for '{test_name}'.\nRun `karva snapshot accept` to accept, or re-run with `--snapshot-update`.\nPending file: {display_path}"
     )))
 }
 
