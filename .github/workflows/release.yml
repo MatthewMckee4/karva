@@ -2,12 +2,6 @@ name: Release
 
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag to release (e.g., 1.0.0)"
-        required: true
-        default: dry-run
-        type: string
 
 env:
   PYTHON_VERSION: "3.14"
@@ -22,7 +16,6 @@ jobs:
       contents: read
     outputs:
       release-metadata: ${{ steps.seal-generate.outputs.metadata }}
-      tag: ${{ github.event.inputs.tag }}
 
     steps:
       - name: Checkout repository
@@ -93,12 +86,11 @@ jobs:
 
       - name: Create GitHub release
         env:
-          TAG: ${{ needs.generate-release.outputs.tag }}
           TITLE: ${{ steps.parse-metadata.outputs.title }}
           PRERELEASE: ${{ steps.parse-metadata.outputs.prerelease }}
         run: |
           ARGS=(
-            "$TAG"
+            "$TITLE"
             --title "$TITLE"
             --notes-file "$RUNNER_TEMP/release-notes.txt"
           )
