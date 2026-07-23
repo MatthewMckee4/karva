@@ -8,6 +8,7 @@ use pyo3::types::{PyAnyMethods, PyCFunction, PyDict, PyTuple};
 use pyo3::{PyResult, Python};
 use ruff_python_ast::Parameters;
 
+use crate::extensions::functions::snapshot::{SnapshotContext, set_snapshot_context};
 use crate::runner::FixtureArguments;
 
 const MAKE_SYNC_CODE: &std::ffi::CStr = c"
@@ -39,21 +40,13 @@ pub(crate) fn run_test_with_timeout(
     kwargs: &FixtureArguments,
     is_async: bool,
     seconds: f64,
-    snapshot_test_file: &str,
-    snapshot_test_name: &str,
+    snapshot_context: &SnapshotContext,
 ) -> PyResult<Py<PyAny>> {
     let kwargs_dict = kwargs.to_kwargs(py)?;
     if is_async {
         run_async_with_timeout(py, function, &kwargs_dict, seconds)
     } else {
-        run_sync_with_timeout(
-            py,
-            function,
-            &kwargs_dict,
-            seconds,
-            snapshot_test_file,
-            snapshot_test_name,
-        )
+        run_sync_with_timeout(py, function, &kwargs_dict, seconds, snapshot_context)
     }
 }
 
@@ -62,23 +55,18 @@ fn run_sync_with_timeout(
     function: &Py<PyAny>,
     kwargs_dict: &Bound<'_, PyDict>,
     seconds: f64,
-    snapshot_test_file: &str,
-    snapshot_test_name: &str,
+    snapshot_context: &SnapshotContext,
 ) -> PyResult<Py<PyAny>> {
     let concurrent_futures = py.import("concurrent.futures")?;
     let timeout_class = concurrent_futures.getattr("TimeoutError")?;
     // Snapshot context is thread-local, so the executor thread needs its own copy.
-    let snapshot_test_file = snapshot_test_file.to_owned();
-    let snapshot_test_name = snapshot_test_name.to_owned();
+    let snapshot_context = snapshot_context.clone();
     let initializer = PyCFunction::new_closure(
         py,
         None,
         None,
         move |_args: &Bound<'_, PyTuple>, _kwargs: Option<&Bound<'_, PyDict>>| -> PyResult<()> {
-            crate::extensions::functions::snapshot::set_snapshot_context(
-                snapshot_test_file.clone(),
-                snapshot_test_name.clone(),
-            );
+            set_snapshot_context(snapshot_context.clone());
             Ok(())
         },
     )?;

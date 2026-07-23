@@ -22,6 +22,7 @@ use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFuncti
 use crate::extensions::fixtures::{
     Finalizer, FixtureScope, HasFixtures, NormalizedFixture, missing_arguments_from_error,
 };
+use crate::extensions::functions::snapshot::{SnapshotContext, set_snapshot_context};
 use crate::extensions::tags::expect_fail::ExpectFailTag;
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
 use crate::extensions::tags::timeout::TimeoutTag;
@@ -639,18 +640,17 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         // Parameter values distinguish snapshot variants, but fixture values can be
         // machine-specific, so snapshot identity includes fixture names only. Use the
         // unqualified function name because `snapshot_path()` prepends the test file stem.
-        let snapshot_test_name = full_test_name(
-            py,
-            name.function_name().to_string(),
-            &function_arguments,
-            &stmt_function_def.parameters,
-            &fixture_names,
+        let snapshot_context = SnapshotContext::new(
+            test_module_path.to_string(),
+            full_test_name(
+                py,
+                name.function_name().to_string(),
+                &function_arguments,
+                &stmt_function_def.parameters,
+                &fixture_names,
+            ),
         );
-        let snapshot_test_file = test_module_path.to_string();
-        crate::extensions::functions::snapshot::set_snapshot_context(
-            snapshot_test_file.clone(),
-            snapshot_test_name.clone(),
-        );
+        set_snapshot_context(snapshot_context.clone());
 
         let custom_tag_names = tags.custom_tag_names();
         let qualified_name_str = qualified_test_name.to_string();
@@ -685,8 +685,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                     &function_arguments,
                     is_async,
                     seconds,
-                    &snapshot_test_file,
-                    &snapshot_test_name,
+                    &snapshot_context,
                 )
             } else {
                 let result = if function_arguments.is_empty() {

@@ -21,10 +21,21 @@ pyo3::create_exception!(
     pyo3::exceptions::PyAssertionError
 );
 
-struct SnapshotContext {
+#[derive(Clone)]
+pub struct SnapshotContext {
     test_file: String,
     test_name: String,
     counter: u32,
+}
+
+impl SnapshotContext {
+    pub fn new(test_file: String, test_name: String) -> Self {
+        Self {
+            test_file,
+            test_name,
+            counter: 0,
+        }
+    }
 }
 
 struct ActiveSettings {
@@ -250,13 +261,9 @@ fn display_relative(path: &Utf8Path) -> String {
 }
 
 /// Called by the test runner before each test to set snapshot context.
-pub fn set_snapshot_context(test_file: String, test_name: String) {
+pub fn set_snapshot_context(context: SnapshotContext) {
     SNAPSHOT_CONTEXT.with(|ctx| {
-        *ctx.borrow_mut() = Some(SnapshotContext {
-            test_file,
-            test_name,
-            counter: 0,
-        });
+        *ctx.borrow_mut() = Some(context);
     });
 }
 
