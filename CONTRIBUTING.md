@@ -168,17 +168,18 @@ formatter churn or unrelated cleanup with the change.
 
 ## Release Process
 
-Releases are automated. Maintainers use
-[`seal`](https://github.com/MatthewMckee4/seal) to update the version and
-create a release branch:
+Run the `Prepare release` workflow with the version bump to perform, such as `alpha` or an
+explicit version. The workflow runs `seal bump <version>` and opens the release pull request.
+
+To prepare a release locally, install [`seal`](https://github.com/MatthewMckee4/seal), then run:
 
 ```sh
 seal bump alpha
 seal bump <version>
 ```
 
-Open a pull request from the generated branch. The release workflow handles
-the remaining publication steps after merge.
+Seal creates the release branch, commits and pushes the changes, and opens a pull request. The
+release workflow handles the remaining publication steps after merge.
 
 ## GitHub Actions
 
