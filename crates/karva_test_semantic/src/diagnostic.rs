@@ -20,7 +20,10 @@ mod metadata;
 pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
 
 use crate::extensions::tags::parametrize::InvalidParametrizeError;
-use crate::runner::{FixtureArguments, FixtureCallError, FixtureChainEntry, FixtureCycleError};
+use crate::runner::{
+    FixtureArguments, FixtureCallError, FixtureChainEntry, FixtureResolutionEntry,
+    FixtureResolutionError,
+};
 use crate::utils::truncate_string;
 use crate::{Context, declare_diagnostic_type};
 
@@ -100,6 +103,16 @@ declare_diagnostic_type! {
     /// Raised when fixture dependencies form a cycle and cannot be resolved.
     pub static FIXTURE_CYCLE = {
         summary: "Fixture dependency cycle detected",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
+    /// ## Fixture scope mismatch
+    ///
+    /// Raised when a fixture depends on another fixture with a shorter lifetime.
+    pub static FIXTURE_SCOPE_MISMATCH = {
+        summary: "Fixture scope mismatch detected",
         severity: Severity::Error,
     }
 }
@@ -301,8 +314,16 @@ pub fn report_fixture_failure(context: &Context, py: Python, error: FixtureCallE
     );
 }
 
-pub fn report_fixture_cycle(context: &Context, error: FixtureCycleError) {
-    let FixtureCycleError { cycle } = error;
+pub fn report_fixture_resolution_error(context: &Context, error: FixtureResolutionError) {
+    match error {
+        FixtureResolutionError::Cycle { cycle } => report_fixture_cycle(context, &cycle),
+        FixtureResolutionError::ScopeMismatch { chain } => {
+            report_fixture_scope_mismatch(context, &chain);
+        }
+    }
+}
+
+fn report_fixture_cycle(context: &Context, cycle: &[FixtureResolutionEntry]) {
     let Some(first_fixture) = cycle.first() else {
         return;
     };
@@ -332,6 +353,62 @@ pub fn report_fixture_cycle(context: &Context, error: FixtureCycleError) {
 
     diagnostic.info(
         cycle
+            .iter()
+            .map(|fixture| fixture.name.as_str())
+            .collect::<Vec<_>>()
+            .join(" -> "),
+    );
+}
+
+fn report_fixture_scope_mismatch(context: &Context, chain: &[FixtureResolutionEntry]) {
+    let Some([dependent, dependency]) = chain.last_chunk::<2>() else {
+        return;
+    };
+
+    let builder = context.report_diagnostic(&FIXTURE_SCOPE_MISMATCH);
+    let mut diagnostic = builder.into_diagnostic(format!(
+        "{}-scoped fixture `{}` cannot use {}-scoped fixture `{}`",
+        dependent.scope.capitalised_name(),
+        dependent.name,
+        dependency.scope.name(),
+        dependency.name,
+    ));
+
+    annotate_function_name(
+        &mut diagnostic,
+        dependent.source_file.clone(),
+        &dependent.stmt_function_def,
+    );
+
+    for edge in chain.windows(2).take(chain.len().saturating_sub(2)) {
+        let [fixture, dependency] = edge else {
+            continue;
+        };
+        let mut sub = SubDiagnostic::new(
+            SubDiagnosticSeverity::Info,
+            format!("Fixture `{}` requires `{}`", fixture.name, dependency.name),
+        );
+        let span = Span::from(fixture.source_file.clone())
+            .with_range(fixture.stmt_function_def.name.range);
+        sub.annotate(Annotation::primary(span));
+        diagnostic.sub(sub);
+    }
+
+    let mut dependency_sub = SubDiagnostic::new(
+        SubDiagnosticSeverity::Info,
+        format!(
+            "Fixture `{}` has {} scope",
+            dependency.name,
+            dependency.scope.name()
+        ),
+    );
+    let span = Span::from(dependency.source_file.clone())
+        .with_range(dependency.stmt_function_def.name.range);
+    dependency_sub.annotate(Annotation::primary(span));
+    diagnostic.sub(dependency_sub);
+
+    diagnostic.info(
+        chain
             .iter()
             .map(|fixture| fixture.name.as_str())
             .collect::<Vec<_>>()

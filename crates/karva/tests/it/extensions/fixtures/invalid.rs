@@ -1,3 +1,4 @@
+use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
@@ -509,4 +510,193 @@ def test_with_fixture(my_fixture):
 
     ----- stderr -----
     ");
+}
+
+#[test]
+fn test_fixture_scope_mismatch() {
+    for framework in ["karva", "pytest"] {
+        let context = TestContext::with_file(
+            "test.py",
+            &format!(
+                r#"
+import {framework} as framework
+from pathlib import Path
+
+@framework.fixture
+def connection():
+    Path("connection-ran").touch()
+
+@framework.fixture(scope="session")
+def database(connection):
+    Path("database-ran").touch()
+
+def test_database(database):
+    Path("test-ran").touch()
+"#,
+            ),
+        );
+
+        allow_duplicates! {
+            assert_cmd_snapshot!(context.command(), @"
+            success: false
+            exit_code: 1
+            ----- stdout -----
+                Starting 1 test across 1 worker
+                    FAIL [TIME] test::test_database
+
+            diagnostics:
+
+            error[fixture-scope-mismatch]: Session-scoped fixture `database` cannot use function-scoped fixture `connection`
+              --> test.py:10:5
+               |
+            10 | def database(connection):
+               |     ^^^^^^^^
+               |
+            info: Fixture `connection` has function scope
+             --> test.py:6:5
+              |
+            6 | def connection():
+              |     ^^^^^^^^^^
+              |
+            info: database -> connection
+
+            ────────────
+                 Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+            ----- stderr -----
+            ");
+        }
+        assert!(!context.root().join("connection-ran").exists());
+        assert!(!context.root().join("database-ran").exists());
+        assert!(!context.root().join("test-ran").exists());
+    }
+}
+
+#[test]
+fn test_nested_async_generator_autouse_fixture_scope_mismatch() {
+    let context = TestContext::with_files([
+        (
+            "nested/conftest.py",
+            r#"
+import karva
+from pathlib import Path
+
+@karva.fixture
+def connection():
+    Path("connection-ran").touch()
+
+@karva.fixture(scope="package", auto_use=True)
+async def database(connection):
+    Path("database-ran").touch()
+    yield
+"#,
+        ),
+        (
+            "nested/test.py",
+            r#"
+from pathlib import Path
+
+def test_database():
+    Path("test-ran").touch()
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] nested.test::test_database
+
+    diagnostics:
+
+    error[fixture-scope-mismatch]: Package-scoped fixture `database` cannot use function-scoped fixture `connection`
+      --> nested/conftest.py:10:11
+       |
+    10 | async def database(connection):
+       |           ^^^^^^^^
+       |
+    info: Fixture `connection` has function scope
+     --> nested/conftest.py:6:5
+      |
+    6 | def connection():
+      |     ^^^^^^^^^^
+      |
+    info: database -> connection
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(!context.root().join("connection-ran").exists());
+    assert!(!context.root().join("database-ran").exists());
+    assert!(!context.root().join("test-ran").exists());
+}
+
+#[test]
+fn test_fixture_scope_mismatch_reports_dependency_chain() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+from pathlib import Path
+
+def dynamic_scope(*, fixture_name, config):
+    return "function"
+
+@karva.fixture(scope=dynamic_scope)
+def connection():
+    Path("fixture-ran").touch()
+
+@karva.fixture(scope="session")
+def repository(connection):
+    Path("fixture-ran").touch()
+
+@karva.fixture(scope="session")
+def database(repository):
+    Path("fixture-ran").touch()
+
+def test_database(database):
+    Path("test-ran").touch()
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_database
+
+    diagnostics:
+
+    error[fixture-scope-mismatch]: Session-scoped fixture `repository` cannot use function-scoped fixture `connection`
+      --> test.py:13:5
+       |
+    13 | def repository(connection):
+       |     ^^^^^^^^^^
+       |
+    info: Fixture `database` requires `repository`
+      --> test.py:17:5
+       |
+    17 | def database(repository):
+       |     ^^^^^^^^
+       |
+    info: Fixture `connection` has function scope
+     --> test.py:9:5
+      |
+    9 | def connection():
+      |     ^^^^^^^^^^
+      |
+    info: database -> repository -> connection
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(!context.root().join("fixture-ran").exists());
+    assert!(!context.root().join("test-ran").exists());
 }
