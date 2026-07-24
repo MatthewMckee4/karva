@@ -149,9 +149,13 @@ obvious from existing CI coverage.
 
 ## Opening a Pull Request
 
-Use the pull request template, link relevant issues, and add labels that match
-the affected area. Keep the pull request in draft while substantial work
-remains.
+Keep pull requests minimal and focused. Use the pull request template and link
+relevant issues. Add labels based on user-facing impact; if a pull request has
+no user-facing change, add only the `internal` label. CI performance changes
+use only the `ci` label; reserve `performance` for user-facing performance
+improvements.
+
+Keep the pull request in draft while substantial work remains.
 
 ### Summary
 
