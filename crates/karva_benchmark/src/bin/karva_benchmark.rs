@@ -540,26 +540,26 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
     let mut body = String::from(report.metric.marker());
     body.push('\n');
     writeln!(body, "### {}", verdict(report.metric, &summary))?;
-    writeln!(body)?;
-    writeln!(
-        body,
-        "Baseline: `{}`. Candidate: `{}`. {}",
-        report.baseline_label,
-        report.candidate_label,
-        report.metric.report_context()
-    )?;
-    writeln!(body)?;
-    write_summary_line(&mut body, ":zap:", summary.faster, "improved benchmark")?;
-    write_summary_line(&mut body, ":x:", summary.slower, "regressed benchmark")?;
-    write_summary_line(
-        &mut body,
-        ":white_check_mark:",
-        summary.unchanged,
-        "unchanged benchmark",
-    )?;
-    writeln!(body)?;
 
     if summary.slower > 0 {
+        writeln!(body)?;
+        writeln!(
+            body,
+            "Baseline: `{}`. Candidate: `{}`. {}",
+            report.baseline_label,
+            report.candidate_label,
+            report.metric.report_context()
+        )?;
+        writeln!(body)?;
+        write_summary_line(&mut body, ":zap:", summary.faster, "improved benchmark")?;
+        write_summary_line(&mut body, ":x:", summary.slower, "regressed benchmark")?;
+        write_summary_line(
+            &mut body,
+            ":white_check_mark:",
+            summary.unchanged,
+            "unchanged benchmark",
+        )?;
+        writeln!(body)?;
         writeln!(body, "> [!WARNING]")?;
         writeln!(
             body,
@@ -567,41 +567,54 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
             report.metric.warning_label()
         )?;
         writeln!(body)?;
-    }
 
-    let visible_projects = report
-        .projects
-        .iter()
-        .filter(|project| is_material_change(project.percent_change))
-        .collect::<Vec<_>>();
-
-    if visible_projects.is_empty() {
-        writeln!(
-            body,
-            "No project changed by at least {MATERIAL_CHANGE_PERCENT:.1}%."
+        body.push_str("#### Performance Changes\n\n");
+        write_project_table(
+            &mut body,
+            report.metric,
+            report
+                .projects
+                .iter()
+                .filter(|project| is_material_change(project.percent_change)),
         )?;
-        return Ok(body);
     }
 
-    body.push_str("#### Performance Changes\n\n");
+    writeln!(body)?;
+    writeln!(body, "<details>")?;
+    writeln!(body, "<summary>All benchmark scores</summary>")?;
+    writeln!(body)?;
+    write_project_table(&mut body, report.metric, &report.projects)?;
+    writeln!(body)?;
+    writeln!(body, "</details>")?;
+
+    Ok(body)
+}
+
+fn write_project_table<'a>(
+    body: &mut String,
+    metric: BenchmarkMetric,
+    projects: impl IntoIterator<Item = &'a ProjectComparison>,
+) -> std::result::Result<(), std::fmt::Error> {
+    use std::fmt::Write as _;
+
     body.push_str("|  | Mode | Benchmark | Base | Head | Change | Runs |\n");
     body.push_str("| --- | --- | --- | ---: | ---: | ---: | ---: |\n");
 
-    for project in visible_projects {
+    for project in projects {
         writeln!(
             body,
             "| {} | {} | `{}` | {} | {} | {} | {} |",
             trend_marker(project.percent_change),
-            report.metric.mode_label(),
+            metric.mode_label(),
             project.name,
-            report.metric.format_value(project.baseline.median),
-            report.metric.format_value(project.candidate.median),
+            metric.format_value(project.baseline.median),
+            metric.format_value(project.candidate.median),
             format_percent(project.percent_change),
             project.iterations,
         )?;
     }
 
-    Ok(body)
+    Ok(())
 }
 
 impl ReportSummary {
@@ -813,7 +826,7 @@ mod tests {
     };
 
     #[test]
-    fn markdown_report_omits_projects_under_material_change_threshold() {
+    fn markdown_report_renders_regressions() {
         let report = report_with_projects(vec![
             project("flat-project", 21, 1.0, 1.004),
             project("faster-project", 21, 1.0, 0.99),
@@ -822,37 +835,20 @@ mod tests {
 
         let markdown = markdown_report(&report).expect("report should render");
 
-        assert!(!markdown.contains("flat-project"));
-        assert!(markdown.contains(":zap: **1** improved benchmark"));
-        assert!(markdown.contains(":x: **1** regressed benchmark"));
-        assert!(markdown.contains(":white_check_mark: **1** unchanged benchmark"));
-        assert!(markdown.contains("> [!WARNING]"));
-        assert!(
-            markdown.contains(
-                "| :zap: | WallTime | `faster-project` | 1.000 s | 990.0 ms | -1.0% | 21 |"
-            )
-        );
-        assert!(
-            markdown
-                .contains("| :x: | WallTime | `slower-project` | 1.000 s | 1.012 s | +1.2% | 15 |")
-        );
+        insta::assert_snapshot!(markdown);
     }
 
     #[test]
-    fn markdown_report_says_when_all_projects_are_under_material_change_threshold() {
+    fn markdown_report_renders_unchanged_results() {
         let report = report_with_projects(vec![project("flat-project", 21, 1.0, 1.004)]);
 
         let markdown = markdown_report(&report).expect("report should render");
 
-        assert!(markdown.contains("No project changed by at least 1.0%."));
-        assert!(markdown.contains("Merging this PR will not alter performance"));
-        assert!(!markdown.contains("|  | Mode | Benchmark | Base | Head | Change | Runs |"));
-        assert!(!markdown.contains("> [!WARNING]"));
-        assert!(!markdown.contains("flat-project"));
+        insta::assert_snapshot!(markdown);
     }
 
     #[test]
-    fn markdown_report_renders_memory_metric() {
+    fn markdown_report_renders_memory_improvements() {
         let report = report_with_metric(
             BenchmarkMetric::Memory,
             vec![project("memory-project", 21, 100_000.0, 90_000.0)],
@@ -860,14 +856,7 @@ mod tests {
 
         let markdown = markdown_report(&report).expect("report should render");
 
-        assert!(markdown.contains("<!-- karva-memory-benchmark-comparison -->"));
-        assert!(markdown.contains("Merging this PR reduces memory usage"));
-        assert!(markdown.contains("median peak RSS"));
-        assert!(
-            markdown.contains(
-                "| :zap: | Memory | `memory-project` | 97.7 MiB | 87.9 MiB | -10.0% | 21 |"
-            )
-        );
+        insta::assert_snapshot!(markdown);
     }
 
     #[test]

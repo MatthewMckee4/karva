@@ -1,0 +1,33 @@
+---
+source: crates/karva_benchmark/src/bin/karva_benchmark.rs
+expression: markdown
+---
+<!-- karva-benchmark-comparison -->
+### Merging this PR may alter performance
+
+Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Lower is better.
+
+:zap: **1** improved benchmark
+:x: **1** regressed benchmark
+:white_check_mark: **1** unchanged benchmark
+
+> [!WARNING]
+> Benchmark regressions were detected. Review the wall-time changes before merging.
+
+#### Performance Changes
+
+|  | Mode | Benchmark | Base | Head | Change | Runs |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| :zap: | WallTime | `faster-project` | 1.000 s | 990.0 ms | -1.0% | 21 |
+| :x: | WallTime | `slower-project` | 1.000 s | 1.012 s | +1.2% | 15 |
+
+<details>
+<summary>All benchmark scores</summary>
+
+|  | Mode | Benchmark | Base | Head | Change | Runs |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| :white_check_mark: | WallTime | `flat-project` | 1.000 s | 1.004 s | +0.4% | 21 |
+| :zap: | WallTime | `faster-project` | 1.000 s | 990.0 ms | -1.0% | 21 |
+| :x: | WallTime | `slower-project` | 1.000 s | 1.012 s | +1.2% | 15 |
+
+</details>
