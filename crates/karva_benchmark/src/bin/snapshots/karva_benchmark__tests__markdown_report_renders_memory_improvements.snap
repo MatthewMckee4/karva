@@ -3,7 +3,7 @@ source: crates/karva_benchmark/src/bin/karva_benchmark.rs
 expression: markdown
 ---
 <!-- karva-memory-benchmark-comparison -->
-### Merging this PR reduces memory usage
+### :zap: Merging this PR reduces memory usage
 
 <details>
 <summary>All benchmark scores</summary>

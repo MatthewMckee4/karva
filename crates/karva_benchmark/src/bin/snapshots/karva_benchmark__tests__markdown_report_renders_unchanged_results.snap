@@ -3,7 +3,7 @@ source: crates/karva_benchmark/src/bin/karva_benchmark.rs
 expression: markdown
 ---
 <!-- karva-benchmark-comparison -->
-### Merging this PR will not alter performance
+### :white_check_mark: Merging this PR will not alter performance
 
 <details>
 <summary>All benchmark scores</summary>

@@ -3,7 +3,7 @@ source: crates/karva_benchmark/src/bin/karva_benchmark.rs
 expression: markdown
 ---
 <!-- karva-benchmark-comparison -->
-### Merging this PR may alter performance
+### :x: Merging this PR may alter performance
 
 Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Lower is better.
 

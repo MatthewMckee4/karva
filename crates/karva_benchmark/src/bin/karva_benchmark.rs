@@ -539,7 +539,8 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
     let summary = ReportSummary::new(&report.projects);
     let mut body = String::from(report.metric.marker());
     body.push('\n');
-    writeln!(body, "### {}", verdict(report.metric, &summary))?;
+    let (marker, verdict) = verdict(report.metric, &summary);
+    writeln!(body, "### {marker} {verdict}")?;
 
     if summary.slower > 0 {
         writeln!(body)?;
@@ -633,13 +634,13 @@ impl ReportSummary {
     }
 }
 
-fn verdict(metric: BenchmarkMetric, summary: &ReportSummary) -> &'static str {
+fn verdict(metric: BenchmarkMetric, summary: &ReportSummary) -> (&'static str, &'static str) {
     if summary.slower > 0 {
-        metric.regression_verdict()
+        (":x:", metric.regression_verdict())
     } else if summary.faster > 0 {
-        metric.improvement_verdict()
+        (":zap:", metric.improvement_verdict())
     } else {
-        metric.unchanged_verdict()
+        (":white_check_mark:", metric.unchanged_verdict())
     }
 }
 
