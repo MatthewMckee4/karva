@@ -1096,6 +1096,7 @@ dependencies = [
  "clap",
  "codspeed-divan-compat",
  "fs-err",
+ "insta",
  "karva_cache",
  "karva_cli",
  "karva_logging",
