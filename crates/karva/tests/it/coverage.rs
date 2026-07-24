@@ -908,6 +908,94 @@ def test_two():
 }
 
 #[test]
+fn test_cov_context_keeps_failed_retry_lines() {
+    let context = TestContext::with_files([
+        (
+            "src/app.py",
+            "def first_path():\n    return 1\n\ndef second_path():\n    return 2\n",
+        ),
+        (
+            "test_retry.py",
+            r#"
+import os
+from src.app import first_path, second_path
+
+def test_flaky():
+    if os.environ["KARVA_ATTEMPT"] == "1":
+        assert first_path() == 0
+    assert second_path() == 2
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args([
+                "--cov=src",
+                "--cov-context=test",
+                "--cov-report=json",
+                "--retry=1",
+                "--status-level=none",
+                "test_retry.py",
+            ]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test_retry::test_flaky
+
+    ----- stderr -----
+    "
+    );
+
+    let json = context.read_file("coverage.json");
+    insta::assert_snapshot!(json, @r#"
+    {
+      "meta": {
+        "format": 2,
+        "version": "karva",
+        "show_contexts": true
+      },
+      "files": {
+        "src/app.py": {
+          "executed_lines": [
+            1,
+            2,
+            4,
+            5
+          ],
+          "summary": {
+            "covered_lines": 4,
+            "num_statements": 4,
+            "percent_covered": 100.0,
+            "missing_lines": [],
+            "excluded_lines": []
+          },
+          "missing_lines": [],
+          "excluded_lines": [],
+          "contexts": {
+            "2": [
+              "test_retry::test_flaky"
+            ],
+            "5": [
+              "test_retry::test_flaky"
+            ]
+          }
+        }
+      },
+      "totals": {
+        "covered_lines": 4,
+        "num_statements": 4,
+        "percent_covered": 100.0
+      }
+    }
+    "#);
+}
+
+#[test]
 fn test_cov_report_cli_override_uses_default_path_when_config_path_is_stale() {
     let context = TestContext::with_files([
         (
