@@ -1,4 +1,5 @@
 use insta::assert_snapshot;
+use insta_cmd::assert_cmd_snapshot;
 use regex::Regex;
 
 use crate::common::TestContext;
@@ -111,12 +112,37 @@ def test_flaky():
         ),
     ]);
 
-    let output = context
-        .command_no_parallel()
-        .args(["--profile=ci", "--retry=1", "--status-level=none"])
-        .output()
-        .expect("run karva");
-    assert_eq!(output.status.code(), Some(1));
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--profile=ci", "--retry=1", "--status-level=none"]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    diagnostics:
+
+    error[test-failure]: Test `test_fail` failed
+     --> test_retry.py:4:5
+      |
+    4 | def test_fail():
+      |     ^^^^^^^^^
+      |
+    info: Test failed here
+     --> test_retry.py:5:5
+      |
+    5 |     assert False
+      |     ^^^^^^^^^^^^
+      |
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed (1 flaky), 1 failed, 0 skipped
+       FLAKY 2/2 [TIME] test_retry::test_flaky
+
+    ----- stderr -----
+    "
+    );
 
     let xml = normalize_junit_xml(&context.read_file("reports/test-results.xml"));
     assert_snapshot!(xml, @r#"
