@@ -3178,3 +3178,40 @@ def test_fast(): pass
     "
     );
 }
+
+#[test]
+fn test_slow_timeout_counts_all_retry_attempts() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+import time
+
+def test_slow_flaky():
+    time.sleep(0.1)
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+"#,
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
+            "--retry=1",
+            "--slow-timeout=0.15",
+            "--status-level=slow",
+        ]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_slow_flaky
+      TRY 2 PASS [TIME] test::test_slow_flaky
+            SLOW [TIME] test::test_slow_flaky
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped, 1 slow
+       FLAKY 2/2 [TIME] test::test_slow_flaky
+
+    ----- stderr -----
+    "
+    );
+}

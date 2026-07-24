@@ -84,3 +84,54 @@ def test_skip():
     </testsuites>
     "#);
 }
+
+#[test]
+fn junit_reports_final_retry_outcomes() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.ci.junit]
+path = "reports/test-results.xml"
+store-success-output = true
+"#,
+        ),
+        (
+            "test_retry.py",
+            r#"
+import os
+
+def test_fail():
+    assert False
+
+def test_flaky():
+    print(f"attempt {os.environ['KARVA_ATTEMPT']}")
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+"#,
+        ),
+    ]);
+
+    let output = context
+        .command_no_parallel()
+        .args(["--profile=ci", "--retry=1", "--status-level=none"])
+        .output()
+        .expect("run karva");
+    assert_eq!(output.status.code(), Some(1));
+
+    let xml = normalize_junit_xml(&context.read_file("reports/test-results.xml"));
+    assert_snapshot!(xml, @r#"
+    <?xml version="1.0" encoding="UTF-8"?>
+    <testsuites name="karva-tests" tests="2" failures="1" skipped="0" errors="0" time="[TIME]">
+      <testsuite name="test_retry" tests="2" failures="1" skipped="0" errors="0" time="[TIME]">
+        <testcase classname="test_retry" name="test_fail" time="[TIME]">
+          <failure message="test failed"/>
+        </testcase>
+        <testcase classname="test_retry" name="test_flaky" time="[TIME]">
+          <system-out>attempt 1
+    attempt 2
+    </system-out>
+        </testcase>
+      </testsuite>
+    </testsuites>
+    "#);
+}
