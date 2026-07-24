@@ -51,12 +51,41 @@ def test_skip():
         ),
     ]);
 
-    let output = context
-        .command_no_parallel()
-        .args(["--profile=ci", "--status-level=none"])
-        .output()
-        .expect("run karva");
-    assert_eq!(output.status.code(), Some(1));
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--profile=ci", "--status-level=none"]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    diagnostics:
+
+    error[test-failure]: Test `test_fail` failed
+     --> test_alpha.py:8:5
+      |
+    8 | def test_fail():
+      |     ^^^^^^^^^
+      |
+    info: Test failed here
+      --> test_alpha.py:11:5
+       |
+    11 |     assert False
+       |     ^^^^^^^^^^^^
+       |
+
+    captured stdout for test_alpha::test_fail:
+    fail stdout
+    captured stderr for test_alpha::test_fail:
+    fail stderr
+
+    ────────────
+         Summary [TIME] 3 tests run: 1 passed, 1 failed, 1 skipped
+
+    ----- stderr -----
+    "
+    );
 
     let xml = normalize_junit_xml(&context.read_file("reports/test-results.xml"));
     assert_snapshot!(xml, @r#"

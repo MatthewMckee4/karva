@@ -565,8 +565,16 @@ def test_second():
 
     let _ = context.command_no_parallel().output();
 
-    let output = context.snapshot("accept").output().expect("accept failed");
-    assert!(output.status.success(), "Expected accept to succeed");
+    assert_cmd_snapshot!(context.snapshot("accept"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Accepted: <temp_dir>/snapshots/test__test_second_inline_8.snap.new
+
+    1 snapshot(s) accepted.
+
+    ----- stderr -----
+    ");
 
     let source = context.read_file("test.py");
     assert!(
@@ -705,8 +713,17 @@ def test_second():
         "Expected old .snap.new at line 8 to still exist"
     );
 
-    let output = context.snapshot("accept").output().expect("accept failed");
-    assert!(output.status.success(), "Expected accept to succeed");
+    assert_cmd_snapshot!(context.snapshot("accept"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Accepted: <temp_dir>/snapshots/test__test_second_inline_12.snap.new
+    Accepted: <temp_dir>/snapshots/test__test_second_inline_8.snap.new
+
+    2 snapshot(s) accepted.
+
+    ----- stderr -----
+    ");
 
     let source = context.read_file("test.py");
     assert!(
@@ -740,8 +757,17 @@ def test_third():
 
     let _ = context.command_no_parallel().output();
 
-    let output = context.snapshot("accept").output().expect("accept failed");
-    assert!(output.status.success(), "Expected accept to succeed");
+    assert_cmd_snapshot!(context.snapshot("accept"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Accepted: <temp_dir>/snapshots/test__test_first_inline_5.snap.new
+    Accepted: <temp_dir>/snapshots/test__test_third_inline_11.snap.new
+
+    2 snapshot(s) accepted.
+
+    ----- stderr -----
+    ");
 
     let source = context.read_file("test.py");
     assert!(
@@ -848,8 +874,21 @@ def test_f():
 
     let _ = context.command_no_parallel().output();
 
-    let output = context.snapshot("accept").output().expect("accept failed");
-    assert!(output.status.success(), "Expected accept to succeed");
+    assert_cmd_snapshot!(context.snapshot("accept"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Accepted: <temp_dir>/snapshots/test__test_a_inline_5.snap.new
+    Accepted: <temp_dir>/snapshots/test__test_b_inline_8.snap.new
+    Accepted: <temp_dir>/snapshots/test__test_c_inline_11.snap.new
+    Accepted: <temp_dir>/snapshots/test__test_d_inline_14.snap.new
+    Accepted: <temp_dir>/snapshots/test__test_e_inline_17.snap.new
+    Accepted: <temp_dir>/snapshots/test__test_f_inline_20.snap.new
+
+    6 snapshot(s) accepted.
+
+    ----- stderr -----
+    ");
 
     let source = context.read_file("test.py");
     insta::assert_snapshot!(source, @r#"
@@ -931,8 +970,16 @@ def test_custom():
 
     let _ = context.command_no_parallel().output();
 
-    let output = context.snapshot("accept").output().expect("accept failed");
-    assert!(output.status.success(), "Expected accept to succeed");
+    assert_cmd_snapshot!(context.snapshot("accept"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Accepted: <temp_dir>/snapshots/test__test_custom_inline_9.snap.new
+
+    1 snapshot(s) accepted.
+
+    ----- stderr -----
+    ");
 
     let source = context.read_file("test.py");
     insta::assert_snapshot!(source, @r#"
