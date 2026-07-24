@@ -2,15 +2,10 @@ name: Release
 
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag to release (e.g., 1.0.0)"
-        required: true
-        default: dry-run
-        type: string
 
 env:
   PYTHON_VERSION: "3.14"
+  VERSION: "0.0.1-alpha.8"
 
 permissions: {}
 
@@ -22,7 +17,7 @@ jobs:
       contents: read
     outputs:
       release-metadata: ${{ steps.seal-generate.outputs.metadata }}
-      tag: ${{ github.event.inputs.tag }}
+      tag: ${{ env.VERSION }}
 
     steps:
       - name: Checkout repository
