@@ -1,14 +1,42 @@
 use pyo3::prelude::*;
 
-pub struct PythonOutputCapture {
+use karva_logging::{SavedStdout, save_stdout};
+
+pub struct OutputCapture {
+    file_descriptors: FileDescriptorCapture,
+    _saved_stdout: SavedStdout,
+}
+
+impl OutputCapture {
+    pub fn new(py: Python<'_>) -> PyResult<Self> {
+        let stdout = save_stdout()?;
+        let file_descriptors = FileDescriptorCapture::new(py)?;
+        file_descriptors.resume(py)?;
+        Ok(Self {
+            file_descriptors,
+            _saved_stdout: stdout,
+        })
+    }
+
+    pub fn start(&self, py: Python<'_>) -> PyResult<PythonOutputCapture<'_>> {
+        PythonOutputCapture::start(py, &self.file_descriptors)
+    }
+
+    pub fn stop(&self, py: Python<'_>) -> PyResult<()> {
+        self.file_descriptors.suspend(py)
+    }
+}
+
+pub struct PythonOutputCapture<'capture> {
     old_stdout: Py<PyAny>,
     old_stderr: Py<PyAny>,
     stdout: Py<PyAny>,
     stderr: Py<PyAny>,
+    file_descriptors: &'capture FileDescriptorCapture,
 }
 
-impl PythonOutputCapture {
-    pub fn start(py: Python<'_>) -> PyResult<Self> {
+impl<'capture> PythonOutputCapture<'capture> {
+    fn start(py: Python<'_>, file_descriptors: &'capture FileDescriptorCapture) -> PyResult<Self> {
         let sys = py.import("sys")?;
         let string_io = py.import("io")?.getattr("StringIO")?;
 
@@ -27,11 +55,21 @@ impl PythonOutputCapture {
             return Err(err);
         }
 
+        if let Err(err) = file_descriptors.start(py) {
+            if let Err(restore_err) = restore_stdio(&sys, &old_stdout, &old_stderr, py) {
+                tracing::warn!(
+                    "failed to restore Python output after file descriptor capture setup error: {restore_err}"
+                );
+            }
+            return Err(err);
+        }
+
         Ok(Self {
             old_stdout,
             old_stderr,
             stdout,
             stderr,
+            file_descriptors,
         })
     }
 
@@ -40,17 +78,207 @@ impl PythonOutputCapture {
         flush_current_streams(&sys);
 
         let restore_result = restore_stdio(&sys, &self.old_stdout, &self.old_stderr, py);
-        let stdout = self.stdout.bind(py).call_method0("getvalue")?.extract()?;
-        let stderr = self.stderr.bind(py).call_method0("getvalue")?.extract()?;
+        let stdout_result = self.stdout.bind(py).call_method0("getvalue")?.extract();
+        let stderr_result = self.stderr.bind(py).call_method0("getvalue")?.extract();
+        let file_descriptor_result = self.file_descriptors.finish(py);
         restore_result?;
+        let mut stdout: String = stdout_result?;
+        let mut stderr: String = stderr_result?;
+        let file_descriptor_output = file_descriptor_result?;
+        stdout.push_str(&file_descriptor_output.stdout);
+        stderr.push_str(&file_descriptor_output.stderr);
 
         Ok(CapturedPythonOutput { stdout, stderr })
     }
 }
 
+pub fn with_restored_file_descriptors<R>(
+    capture: Option<&PythonOutputCapture<'_>>,
+    py: Python<'_>,
+    f: impl FnOnce() -> R,
+) -> R {
+    let Some(capture) = capture else {
+        return f();
+    };
+    let current_file_descriptors = match SavedFileDescriptors::new(py) {
+        Ok(file_descriptors) => file_descriptors,
+        Err(err) => {
+            tracing::warn!("failed to save active file descriptors: {err}");
+            return f();
+        }
+    };
+    if let Err(err) = capture.file_descriptors.suspend(py) {
+        tracing::warn!("failed to suspend file descriptor output capture: {err}");
+        if let Err(restore_err) = current_file_descriptors.restore(py) {
+            tracing::warn!("failed to restore active file descriptors: {restore_err}");
+        }
+        return f();
+    }
+    let result = f();
+    if let Err(err) = current_file_descriptors.restore(py) {
+        tracing::warn!("failed to restore active file descriptors: {err}");
+    }
+    result
+}
+
 pub struct CapturedPythonOutput {
     pub stdout: String,
     pub stderr: String,
+}
+
+struct FileDescriptorCapture {
+    stdout: CaptureFile,
+    stderr: CaptureFile,
+    old: SavedFileDescriptors,
+}
+
+struct CaptureFile {
+    file: Py<PyAny>,
+    tell: Py<PyAny>,
+    seek: Py<PyAny>,
+    truncate: Py<PyAny>,
+    read: Py<PyAny>,
+}
+
+impl CaptureFile {
+    fn new(file: Bound<'_, PyAny>) -> PyResult<Self> {
+        let tell = file.getattr("tell")?.unbind();
+        let seek = file.getattr("seek")?.unbind();
+        let truncate = file.getattr("truncate")?.unbind();
+        let read = file.getattr("read")?.unbind();
+        Ok(Self {
+            file: file.unbind(),
+            tell,
+            seek,
+            truncate,
+            read,
+        })
+    }
+
+    fn position(&self, py: Python<'_>) -> PyResult<u64> {
+        self.tell.bind(py).call0()?.extract()
+    }
+
+    fn clear_if_needed(&self, py: Python<'_>) -> PyResult<()> {
+        if self.position(py)? == 0 {
+            return Ok(());
+        }
+        self.seek.bind(py).call1((0,))?;
+        self.truncate.bind(py).call1((0,))?;
+        Ok(())
+    }
+
+    fn read(&self, py: Python<'_>) -> PyResult<String> {
+        let end = self.position(py)?;
+        if end == 0 {
+            return Ok(String::new());
+        }
+        self.seek.bind(py).call1((0,))?;
+        let output = self
+            .read
+            .bind(py)
+            .call1((end,))?
+            .call_method1("decode", ("utf-8", "replace"))?
+            .extract();
+        self.seek.bind(py).call1((0,))?;
+        self.truncate.bind(py).call1((0,))?;
+        output
+    }
+}
+
+impl FileDescriptorCapture {
+    fn new(py: Python<'_>) -> PyResult<Self> {
+        let temporary_file = py.import("tempfile")?.getattr("TemporaryFile")?;
+        let stdout = CaptureFile::new(temporary_file.call1(("w+b",))?)?;
+        let stderr = CaptureFile::new(temporary_file.call1(("w+b",))?)?;
+        let old = SavedFileDescriptors::new(py)?;
+        Ok(Self {
+            stdout,
+            stderr,
+            old,
+        })
+    }
+
+    fn start(&self, py: Python<'_>) -> PyResult<()> {
+        self.stdout.clear_if_needed(py)?;
+        self.stderr.clear_if_needed(py)
+    }
+
+    fn finish(&self, py: Python<'_>) -> PyResult<CapturedPythonOutput> {
+        let stdout_result = self.stdout.read(py);
+        let stderr_result = self.stderr.read(py);
+        let stdout = stdout_result?;
+        let stderr = stderr_result?;
+        Ok(CapturedPythonOutput { stdout, stderr })
+    }
+
+    fn suspend(&self, py: Python<'_>) -> PyResult<()> {
+        if let Err(err) = self.old.restore(py) {
+            let os = py.import("os")?;
+            if let Err(restore_err) = redirect_descriptor(&os, py, &self.stdout.file, 1) {
+                tracing::warn!("failed to restore stdout capture after setup error: {restore_err}");
+            }
+            return Err(err);
+        }
+        Ok(())
+    }
+
+    fn resume(&self, py: Python<'_>) -> PyResult<()> {
+        let os = py.import("os")?;
+        redirect_descriptor(&os, py, &self.stdout.file, 1)?;
+        if let Err(err) = redirect_descriptor(&os, py, &self.stderr.file, 2) {
+            if let Err(restore_err) = redirect_descriptor(&os, py, &self.old.stdout, 1) {
+                tracing::warn!("failed to restore stdout after capture setup error: {restore_err}");
+            }
+            return Err(err);
+        }
+        Ok(())
+    }
+}
+
+struct SavedFileDescriptors {
+    stdout: Py<PyAny>,
+    stderr: Py<PyAny>,
+}
+
+impl SavedFileDescriptors {
+    fn new(py: Python<'_>) -> PyResult<Self> {
+        let os = py.import("os")?;
+        Ok(Self {
+            stdout: duplicate_descriptor(&os, 1)?,
+            stderr: duplicate_descriptor(&os, 2)?,
+        })
+    }
+
+    fn restore(&self, py: Python<'_>) -> PyResult<()> {
+        let os = py.import("os")?;
+        redirect_descriptor(&os, py, &self.stdout, 1)?;
+        redirect_descriptor(&os, py, &self.stderr, 2)
+    }
+}
+
+fn duplicate_descriptor(os: &Bound<'_, PyModule>, target: i32) -> PyResult<Py<PyAny>> {
+    let descriptor: i32 = os.call_method1("dup", (target,))?.extract()?;
+    match os.call_method1("fdopen", (descriptor, "wb")) {
+        Ok(file) => Ok(file.unbind()),
+        Err(err) => {
+            if let Err(close_err) = os.call_method1("close", (descriptor,)) {
+                tracing::warn!("failed to close duplicated file descriptor: {close_err}");
+            }
+            Err(err)
+        }
+    }
+}
+
+fn redirect_descriptor(
+    os: &Bound<'_, PyModule>,
+    py: Python<'_>,
+    file: &Py<PyAny>,
+    target: i32,
+) -> PyResult<()> {
+    let source: i32 = file.bind(py).call_method0("fileno")?.extract()?;
+    os.call_method1("dup2", (source, target))?;
+    Ok(())
 }
 
 fn flush_current_streams(sys: &Bound<'_, PyModule>) {

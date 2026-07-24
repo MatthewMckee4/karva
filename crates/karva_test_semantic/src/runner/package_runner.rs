@@ -26,7 +26,7 @@ use crate::extensions::functions::snapshot::{SnapshotContext, set_snapshot_conte
 use crate::extensions::tags::expect_fail::ExpectFailTag;
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
 use crate::extensions::tags::timeout::TimeoutTag;
-use crate::output_capture::PythonOutputCapture;
+use crate::output_capture::{OutputCapture, PythonOutputCapture, with_restored_file_descriptors};
 use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::runner::test_iterator::{TestVariant, TestVariantIterator};
 use crate::runner::{FinalizerCache, FixtureArguments, FixtureCache, FixtureCycleError};
@@ -58,16 +58,34 @@ pub struct PackageRunner<'ctx, 'a> {
     /// Used to enforce `--max-fail=N`: once this counter reaches the
     /// configured budget we stop scheduling new tests.
     failed_count: Cell<u32>,
+
+    output_capture: Option<OutputCapture>,
 }
 
 impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
-    pub(crate) fn new(context: &'ctx Context<'a>, coverage: Option<&'ctx CoverageSession>) -> Self {
+    pub(crate) fn new(
+        context: &'ctx Context<'a>,
+        coverage: Option<&'ctx CoverageSession>,
+        py: Python<'_>,
+    ) -> Self {
+        let output_capture = if context.settings().terminal().show_python_output {
+            None
+        } else {
+            match OutputCapture::new(py) {
+                Ok(capture) => Some(capture),
+                Err(err) => {
+                    tracing::warn!("failed to initialize Python output capture: {err}");
+                    None
+                }
+            }
+        };
         Self {
             context,
             fixture_cache: FixtureCache::default(),
             finalizer_cache: FinalizerCache::default(),
             coverage,
             failed_count: Cell::new(0),
+            output_capture,
         }
     }
 
@@ -139,12 +157,8 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         }
     }
 
-    fn start_output_capture(&self, py: Python<'_>) -> Option<PythonOutputCapture> {
-        if self.context.settings().terminal().show_python_output {
-            return None;
-        }
-
-        match PythonOutputCapture::start(py) {
+    fn start_output_capture(&self, py: Python<'_>) -> Option<PythonOutputCapture<'_>> {
+        match self.output_capture.as_ref()?.start(py) {
             Ok(capture) => Some(capture),
             Err(err) => {
                 tracing::warn!("failed to start Python output capture: {err}");
@@ -153,10 +167,18 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         }
     }
 
+    pub(crate) fn stop_output_capture(&self, py: Python<'_>) {
+        if let Some(capture) = self.output_capture.as_ref()
+            && let Err(err) = capture.stop(py)
+        {
+            tracing::warn!("failed to stop Python output capture: {err}");
+        }
+    }
+
     fn register_captured_output(
         &self,
         py: Python<'_>,
-        capture: Option<PythonOutputCapture>,
+        capture: Option<PythonOutputCapture<'_>>,
         test_name: &QualifiedTestName,
         result: &IndividualTestResultKind,
     ) {
@@ -519,6 +541,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         qualified_test_name: &QualifiedTestName,
         configured_retries: u32,
         expect_fail: bool,
+        output_capture: Option<&PythonOutputCapture<'_>>,
         mut run_test: impl FnMut() -> PyResult<TestCallOutcome>,
     ) -> RetryOutcome {
         let max_attempts = configured_retries.saturating_add(1);
@@ -544,9 +567,13 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 IndividualTestResultKind::Failed,
                 attempt_duration,
             );
+            if tracing::enabled!(tracing::Level::DEBUG) {
+                with_restored_file_descriptors(output_capture, py, || {
+                    tracing::debug!("Retrying test `{}`", qualified_test_name);
+                });
+            }
             was_retried = true;
 
-            tracing::debug!("Retrying test `{}`", qualified_test_name);
             retry_count -= 1;
             attempt += 1;
             attempt_start = std::time::Instant::now();
@@ -633,7 +660,11 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let qualified_test_name =
             QualifiedTestName::new(name.clone(), Some(computed_full_test_name));
 
-        tracing::debug!("Running test `{}`", qualified_test_name);
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            with_restored_file_descriptors(output_capture.as_ref(), py, || {
+                tracing::debug!("Running test `{}`", qualified_test_name);
+            });
+        }
 
         let test_name_env_result = set_test_name_env(py, &qualified_test_name.to_string());
 
@@ -722,6 +753,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             &qualified_test_name,
             configured_retries,
             expect_fail,
+            output_capture.as_ref(),
             run_test,
         );
         self.context.report_test_finished(&qualified_test_name);
@@ -735,13 +767,12 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         };
 
         let total_duration = start_time.elapsed();
+        let mut final_kind = None;
         self.maybe_register_slow(
             &qualified_test_name,
             total_duration,
             self.context.settings().slow_timeout_for(&eval_ctx),
         );
-
-        let mut final_kind = None;
         let passed = if was_retried {
             let passed_on = attempt;
             // `total_attempts` mirrors nextest: the maximum number of attempts
