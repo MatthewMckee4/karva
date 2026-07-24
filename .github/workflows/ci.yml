@@ -285,12 +285,15 @@ jobs:
         with:
           name: windows-test-artifacts
 
+      - name: "Restore cargo nextest"
+        run: Move-Item cargo-nextest.exe "$env:USERPROFILE\.cargo\bin\cargo-nextest.exe"
+
       - name: Run tests
         env:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
           KARVA_MAX_PARALLELISM: 2
         run: |
-          .\cargo-nextest.exe nextest run --profile ci --archive-file nextest-archive.tar.zst --partition hash:${{ matrix.partition }}/5
+          cargo nextest run --profile ci --archive-file nextest-archive.tar.zst --partition hash:${{ matrix.partition }}/5
 
   build-docs:
     name: "Build docs"
