@@ -167,6 +167,7 @@ jobs:
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           command: build
+          args: --profile test
 
       - name: Run tests
         env:
@@ -236,6 +237,7 @@ jobs:
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           command: build
+          args: --profile test
 
       - name: "Archive tests"
         run: cargo nextest archive --workspace --archive-file nextest-archive.tar.zst
