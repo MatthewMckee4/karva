@@ -160,3 +160,78 @@ def test_normal():
     ----- stderr -----
     ");
 }
+
+#[test]
+fn runignored_only_runs_skipped_parametrized_variants() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize("value", [
+    karva.param(1, tags=(karva.tags.skip("ignored"),)),
+    karva.param(2),
+])
+def test_value(value):
+    assert value == 1
+"#,
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--run-ignored", "only"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_value(value=1)
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 skipped
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn runignored_all_intersects_with_filter() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+@karva.tags.skip
+def test_selected():
+    pass
+
+@karva.tags.skip
+def test_filtered_ignored():
+    assert False
+
+def test_filtered_normal():
+    assert False
+",
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
+            "--run-ignored",
+            "all",
+            "-E",
+            "test(~selected)",
+        ]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 3 tests across 1 worker
+            PASS [TIME] test::test_selected
+    ────────────
+         Summary [TIME] 3 tests run: 1 passed, 2 skipped
+
+    ----- stderr -----
+    "
+    );
+}

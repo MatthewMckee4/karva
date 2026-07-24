@@ -1,4 +1,5 @@
 use insta::assert_snapshot;
+use insta_cmd::assert_cmd_snapshot;
 use serde_json::Value;
 
 use crate::common::TestContext;
@@ -33,16 +34,43 @@ fn writes_json_result_report() {
         "#,
     );
 
-    let output = context
-        .command_no_parallel()
-        .args([
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
             "--retry=1",
             "--status-level=none",
             "--result-output=reports/results.json",
-        ])
-        .output()
-        .expect("run karva");
-    assert_eq!(output.status.code(), Some(1));
+        ]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    diagnostics:
+
+    error[test-failure]: Test `test_fail` failed
+      --> test_report.py:10:5
+       |
+    10 | def test_fail():
+       |     ^^^^^^^^^
+       |
+    info: Test failed here
+      --> test_report.py:12:5
+       |
+    12 |     assert False
+       |     ^^^^^^^^^^^^
+       |
+
+    captured stderr for test_report::test_fail:
+    fail stderr
+    fail stderr
+
+    ────────────
+         Summary [TIME] 4 tests run: 2 passed (1 flaky), 1 failed, 1 skipped
+       FLAKY 2/2 [TIME] test_report::test_flaky
+
+    ----- stderr -----
+    "
+    );
 
     assert_snapshot!(normalize_result_json(&context.read_file("reports/results.json")), @r#"
     {
@@ -124,16 +152,38 @@ fn writes_jsonl_result_events() {
         ",
     );
 
-    let output = context
-        .command_no_parallel()
-        .args([
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
             "--status-level=none",
             "--result-output=reports/events.jsonl",
             "--result-format=jsonl",
-        ])
-        .output()
-        .expect("run karva");
-    assert_eq!(output.status.code(), Some(1));
+        ]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    diagnostics:
+
+    error[test-failure]: Test `test_fail` failed
+     --> test_events.py:5:5
+      |
+    5 | def test_fail():
+      |     ^^^^^^^^^
+      |
+    info: Test failed here
+     --> test_events.py:6:5
+      |
+    6 |     assert False
+      |     ^^^^^^^^^^^^
+      |
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
 
     assert_snapshot!(normalize_result_jsonl(&context.read_file("reports/events.jsonl")), @r#"
     {"duration_seconds":"[TIME]","full_name":"test_events::test_fail","module":"test_events","name":"test_fail","schema_version":1,"status":"failed","type":"test"}
@@ -147,15 +197,23 @@ fn writes_jsonl_result_events() {
 fn result_report_status_matches_no_tests_failure() {
     let context = TestContext::new();
 
-    let output = context
-        .command_no_parallel()
-        .args([
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
             "--status-level=none",
             "--result-output=reports/no-tests.json",
-        ])
-        .output()
-        .expect("run karva");
-    assert_eq!(output.status.code(), Some(1));
+        ]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+    error: no tests to run
+    (hint: use `--no-tests` to customize)
+
+    ----- stderr -----
+    "
+    );
 
     assert_snapshot!(normalize_result_json(&context.read_file("reports/no-tests.json")), @r#"
     {

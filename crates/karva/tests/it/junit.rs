@@ -1,4 +1,5 @@
 use insta::assert_snapshot;
+use insta_cmd::assert_cmd_snapshot;
 use regex::Regex;
 
 use crate::common::TestContext;
@@ -50,12 +51,41 @@ def test_skip():
         ),
     ]);
 
-    let output = context
-        .command_no_parallel()
-        .args(["--profile=ci", "--status-level=none"])
-        .output()
-        .expect("run karva");
-    assert_eq!(output.status.code(), Some(1));
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--profile=ci", "--status-level=none"]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    diagnostics:
+
+    error[test-failure]: Test `test_fail` failed
+     --> test_alpha.py:8:5
+      |
+    8 | def test_fail():
+      |     ^^^^^^^^^
+      |
+    info: Test failed here
+      --> test_alpha.py:11:5
+       |
+    11 |     assert False
+       |     ^^^^^^^^^^^^
+       |
+
+    captured stdout for test_alpha::test_fail:
+    fail stdout
+    captured stderr for test_alpha::test_fail:
+    fail stderr
+
+    ────────────
+         Summary [TIME] 3 tests run: 1 passed, 1 failed, 1 skipped
+
+    ----- stderr -----
+    "
+    );
 
     let xml = normalize_junit_xml(&context.read_file("reports/test-results.xml"));
     assert_snapshot!(xml, @r#"
@@ -79,6 +109,82 @@ def test_skip():
       <testsuite name="test_beta" tests="1" failures="0" skipped="1" errors="0" time="[TIME]">
         <testcase classname="test_beta" name="test_skip" time="[TIME]">
           <skipped message="skip &amp; wait"/>
+        </testcase>
+      </testsuite>
+    </testsuites>
+    "#);
+}
+
+#[test]
+fn junit_reports_final_retry_outcomes() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.ci.junit]
+path = "reports/test-results.xml"
+store-success-output = true
+"#,
+        ),
+        (
+            "test_retry.py",
+            r#"
+import os
+
+def test_fail():
+    assert False
+
+def test_flaky():
+    print(f"attempt {os.environ['KARVA_ATTEMPT']}")
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--profile=ci", "--retry=1", "--status-level=none"]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    diagnostics:
+
+    error[test-failure]: Test `test_fail` failed
+     --> test_retry.py:4:5
+      |
+    4 | def test_fail():
+      |     ^^^^^^^^^
+      |
+    info: Test failed here
+     --> test_retry.py:5:5
+      |
+    5 |     assert False
+      |     ^^^^^^^^^^^^
+      |
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed (1 flaky), 1 failed, 0 skipped
+       FLAKY 2/2 [TIME] test_retry::test_flaky
+
+    ----- stderr -----
+    "
+    );
+
+    let xml = normalize_junit_xml(&context.read_file("reports/test-results.xml"));
+    assert_snapshot!(xml, @r#"
+    <?xml version="1.0" encoding="UTF-8"?>
+    <testsuites name="karva-tests" tests="2" failures="1" skipped="0" errors="0" time="[TIME]">
+      <testsuite name="test_retry" tests="2" failures="1" skipped="0" errors="0" time="[TIME]">
+        <testcase classname="test_retry" name="test_fail" time="[TIME]">
+          <failure message="test failed"/>
+        </testcase>
+        <testcase classname="test_retry" name="test_flaky" time="[TIME]">
+          <system-out>attempt 1
+    attempt 2
+    </system-out>
         </testcase>
       </testsuite>
     </testsuites>

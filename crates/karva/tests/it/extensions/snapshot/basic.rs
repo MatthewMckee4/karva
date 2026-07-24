@@ -404,19 +404,34 @@ def test_hello():
         ("snapshots/test__test_hello.snap", "not a snapshot"),
     ]);
 
-    let output = context
-        .command_no_parallel()
-        .arg("--no-cache")
-        .output()
-        .expect("run karva");
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--no-cache"), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_hello
 
-    assert!(!output.status.success());
-    assert!(
-        stdout.contains("Failed to read snapshot: malformed snapshot file")
-            && stdout.contains("missing opening frontmatter separator"),
-        "{stdout}"
-    );
+    diagnostics:
+
+    error[test-failure]: Test `test_hello` failed
+     --> test.py:4:5
+      |
+    4 | def test_hello():
+      |     ^^^^^^^^^^
+      |
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot('hello world')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Failed to read snapshot: malformed snapshot file `<temp_dir>/snapshots/test__test_hello.snap`: missing opening frontmatter separator `---`
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
     assert!(
         !context
             .root()

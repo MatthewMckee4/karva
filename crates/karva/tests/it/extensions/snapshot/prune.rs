@@ -236,14 +236,28 @@ fn test_snapshot_prune_reports_source_read_errors() {
         "---\nsource: test.py:5::test_hello\n---\nhello\n",
     );
 
-    let output = context.snapshot("prune").output().expect("run prune");
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    #[cfg(unix)]
+    assert_cmd_snapshot!(context.snapshot("prune"), @"
+    success: false
+    exit_code: 2
+    ----- stdout -----
 
-    assert!(!output.status.success());
-    assert!(
-        stderr.contains("failed to read source file") && stderr.contains("test.py"),
-        "{stderr}"
-    );
+    ----- stderr -----
+    warning: Prune uses static analysis and may not detect all unreferenced snapshots.
+    Karva failed
+      Cause: failed to read source file `<temp_dir>/test.py`: failed to read from file `<temp_dir>/test.py`: Is a directory (os error 21)
+    ");
+    #[cfg(not(unix))]
+    assert_cmd_snapshot!(context.snapshot("prune"), @"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    warning: Prune uses static analysis and may not detect all unreferenced snapshots.
+    Karva failed
+      Cause: failed to read source file `<temp_dir>/test.py`: failed to open file `<temp_dir>/test.py`: Access is denied. (os error 5)
+    ");
     assert!(
         context
             .root()

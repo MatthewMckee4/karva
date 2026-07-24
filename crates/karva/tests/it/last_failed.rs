@@ -376,3 +376,54 @@ def test_fail(): assert True
     ----- stderr -----
     ");
 }
+
+#[test]
+fn last_failed_excludes_flaky_passes() {
+    let context = TestContext::with_file(
+        "test_a.py",
+        r#"
+import os
+
+def test_flaky():
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+
+def test_failure():
+    assert False
+
+def test_clean():
+    pass
+"#,
+    );
+
+    let _ = context
+        .command_no_parallel()
+        .arg("--retry=1")
+        .output()
+        .expect("run initial tests");
+
+    context.write_file(
+        "test_a.py",
+        r"
+def test_flaky():
+    assert False
+
+def test_failure():
+    pass
+
+def test_clean():
+    assert False
+",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--last-failed"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_a::test_failure
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
