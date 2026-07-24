@@ -72,6 +72,9 @@ karva test tests/test_example.py
 
 Contributions are welcome! See [CONTRIBUTING.md](https://github.com/MatthewMckee4/karva/blob/main/CONTRIBUTING.md) for more information.
 
+When snapshot output differs by platform, such as paths or operating system
+errors, use separate `#[cfg(unix)]` and `#[cfg(not(unix))]` snapshots.
+
 ## Support
 
 Use [GitHub issues](https://github.com/MatthewMckee4/karva/issues) for bug reports and feature requests, or join the [Discord](https://discord.gg/XG95vNz4Zu) for discussion.
