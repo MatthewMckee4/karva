@@ -1,4 +1,4 @@
-use std::{ffi::CString, ops::Deref, sync::Arc};
+use std::{collections::HashSet, ffi::CString, ops::Deref, sync::Arc};
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -17,7 +17,7 @@ mod use_fixtures;
 
 use custom::CustomTag;
 use expect_fail::ExpectFailTag;
-use parametrize::{ParametrizationArgs, ParametrizeTag};
+use parametrize::{InvalidParametrizeError, ParametrizationArgs, ParametrizeTag};
 use skip::SkipTag;
 use timeout::TimeoutTag;
 use use_fixtures::UseFixturesTag;
@@ -316,6 +316,26 @@ impl Tags {
             }
         }
         param_args
+    }
+
+    pub(crate) fn validate_parametrize(
+        &self,
+        function: &StmtFunctionDef,
+    ) -> Result<(), InvalidParametrizeError> {
+        let function_parameter_names = function
+            .parameters
+            .iter_non_variadic_params()
+            .map(|parameter| parameter.parameter.name.as_str())
+            .collect();
+        let mut seen_names = HashSet::new();
+
+        for tag in &self.inner {
+            if let Tag::Parametrize(parametrize) = tag {
+                parametrize.validate(&function_parameter_names, &mut seen_names)?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Get all required fixture names for the given test.

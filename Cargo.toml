@@ -84,6 +84,7 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
     "fmt",
 ] }
 tracing-tree = { version = "0.4.1" }
+unicode-ident = "1.0.24"
 uuid = { version = "1.23", features = ["v4"] }
 which = { version = "8.0" }
 wild = { version = "2" }

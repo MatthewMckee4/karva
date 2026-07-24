@@ -1,13 +1,70 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::fmt;
 use std::sync::Arc;
 
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use unicode_ident::{is_xid_continue, is_xid_start};
 
 use crate::extensions::functions::Param;
 use crate::extensions::tags::Tags;
+
+fn is_identifier(name: &str) -> bool {
+    let mut characters = name.chars();
+    characters
+        .next()
+        .is_some_and(|character| character == '_' || is_xid_start(character))
+        && characters.all(|character| character == '_' || is_xid_continue(character))
+}
+
+#[derive(Debug)]
+pub enum InvalidParametrizeError {
+    InvalidName(String),
+    DuplicateName(String),
+    EmptyCases,
+    WrongArity {
+        names: String,
+        case: usize,
+        expected: usize,
+        actual: usize,
+    },
+    UnknownName(String),
+}
+
+impl fmt::Display for InvalidParametrizeError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidName(name) if name.is_empty() => {
+                formatter.write_str("Parameter name cannot be empty")
+            }
+            Self::InvalidName(name) => {
+                write!(formatter, "`{name}` is not a valid Python identifier")
+            }
+            Self::DuplicateName(name) => {
+                write!(
+                    formatter,
+                    "Parameter `{name}` is parametrized more than once"
+                )
+            }
+            Self::EmptyCases => formatter.write_str("Parametrization has no cases"),
+            Self::WrongArity {
+                names,
+                case,
+                expected,
+                actual,
+            } => write!(
+                formatter,
+                "Expected {expected} values for `{names}`, but case {case} contains {actual}"
+            ),
+            Self::UnknownName(name) => write!(
+                formatter,
+                "Parameter `{name}` does not exist in the test function signature"
+            ),
+        }
+    }
+}
 
 /// A single set of parameter values for a parametrized test.
 ///
@@ -187,6 +244,47 @@ impl ParametrizeTag {
             parse_parametrize_args(&arg_names, &arg_values, globals)?;
 
         Ok(Some(Self::new(arg_names, parametrizations)))
+    }
+
+    pub(crate) fn validate<'a>(
+        &'a self,
+        function_parameter_names: &HashSet<&str>,
+        seen_names: &mut HashSet<&'a str>,
+    ) -> Result<(), InvalidParametrizeError> {
+        for name in &self.names {
+            if !is_identifier(name) {
+                return Err(InvalidParametrizeError::InvalidName(name.clone()));
+            }
+            if !seen_names.insert(name) {
+                return Err(InvalidParametrizeError::DuplicateName(name.clone()));
+            }
+        }
+
+        if self.parametrizations.is_empty() {
+            return Err(InvalidParametrizeError::EmptyCases);
+        }
+
+        let expected = self.names.len();
+        let names = self.names.join(",");
+        for (index, parametrization) in self.parametrizations.iter().enumerate() {
+            let actual = parametrization.values.len();
+            if actual != expected {
+                return Err(InvalidParametrizeError::WrongArity {
+                    names,
+                    case: index + 1,
+                    expected,
+                    actual,
+                });
+            }
+        }
+
+        for name in &self.names {
+            if !function_parameter_names.contains(name.as_str()) {
+                return Err(InvalidParametrizeError::UnknownName(name.clone()));
+            }
+        }
+
+        Ok(())
     }
 
     /// Returns each parameterize case.
