@@ -137,10 +137,14 @@ pinact run
 
 ## Pull Requests
 
-Use the pull request template and add relevant labels. Keep the summary and
-test plan concise. Write descriptions as prose, not bullet lists or
-checklists. Explain what changed and why; include implementation details only
-when reviewers need them.
+Keep pull requests minimal and focused. Use the pull request template and add
+labels based on user-facing impact. If a pull request has no user-facing
+change, add only the `internal` label. CI performance changes use only the `ci`
+label; reserve `performance` for user-facing performance improvements.
+
+Keep the summary and test plan concise. Write descriptions as prose, not bullet
+lists or checklists. Explain what changed and why; include implementation
+details only when reviewers need them.
 
 Use a descriptive one-line commit subject by default. Never add an AI tool as
 an author or co-author.
