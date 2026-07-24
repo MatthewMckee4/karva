@@ -45,6 +45,38 @@ def test_parametrize_with_fixture(a, fixture_value):
 }
 
 #[test]
+fn test_parametrized_variants_retry_independently() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+import karva
+
+@karva.tags.parametrize("value", [1, 2])
+def test_flaky(value):
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_flaky(value=1)
+      TRY 2 PASS [TIME] test::test_flaky(value=1)
+      TRY 1 FAIL [TIME] test::test_flaky(value=2)
+      TRY 2 PASS [TIME] test::test_flaky(value=2)
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed (2 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_flaky(value=1)
+       FLAKY 2/2 [TIME] test::test_flaky(value=2)
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_argument_order_matches_function_signature() {
     let test_context = TestContext::with_file(
         "test.py",
