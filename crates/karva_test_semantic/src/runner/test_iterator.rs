@@ -8,7 +8,7 @@ use crate::discovery::DiscoveredTestFunction;
 use crate::extensions::fixtures::{NormalizedFixture, RequiresFixtures};
 use crate::extensions::tags::Tags;
 use crate::extensions::tags::parametrize::ParametrizationArgs;
-use crate::runner::fixture_resolver::{FixtureResolutionError, RuntimeFixtureResolver};
+use crate::runner::fixture_resolver::{FixtureResolutionResult, RuntimeFixtureResolver};
 
 /// A single variant of a test to be executed.
 ///
@@ -93,7 +93,7 @@ impl<'a> TestVariantIterator<'a> {
         py: Python,
         test: &'a DiscoveredTestFunction,
         resolver: &mut RuntimeFixtureResolver,
-    ) -> Result<Self, FixtureResolutionError> {
+    ) -> FixtureResolutionResult<Self> {
         let test_params = test.tags.parametrize_args();
 
         let parametrize_param_names: HashSet<&str> = test_params

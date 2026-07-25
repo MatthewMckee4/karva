@@ -30,7 +30,7 @@ use crate::extensions::tags::timeout::TimeoutTag;
 use crate::output_capture::PythonOutputCapture;
 use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::runner::test_iterator::{TestVariant, TestVariantIterator};
-use crate::runner::{FinalizerCache, FixtureArguments, FixtureCache, FixtureResolutionError};
+use crate::runner::{FinalizerCache, FixtureArguments, FixtureCache, FixtureResolutionResult};
 use crate::utils::{
     full_test_name, run_coroutine, run_test_with_timeout, set_attempt_env, set_test_name_env,
     truncate_string,
@@ -244,7 +244,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         parents: &'b [&'b DiscoveredPackage],
         current: &'b (dyn HasFixtures<'b> + 'b),
         scope: FixtureScope,
-    ) -> Result<(), FixtureResolutionError> {
+    ) -> FixtureResolutionResult<()> {
         let mut resolver = RuntimeFixtureResolver::new(parents, current);
         let auto_use_fixtures = resolver.get_normalized_auto_use_fixtures(py, scope)?;
         let auto_use_errors = self.run_fixtures(py, &auto_use_fixtures);

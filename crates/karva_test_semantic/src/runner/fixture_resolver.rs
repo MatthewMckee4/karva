@@ -44,6 +44,8 @@ pub enum FixtureResolutionError {
     },
 }
 
+pub type FixtureResolutionResult<T> = Result<T, FixtureResolutionError>;
+
 impl FixtureResolutionEntry {
     fn new(fixture: &DiscoveredFixture) -> Self {
         Self {
@@ -95,8 +97,8 @@ impl<'a> FixturePath<'a> {
     fn enter<T>(
         &mut self,
         fixture: &'a DiscoveredFixture,
-        resolve: impl FnOnce(&mut Self) -> Result<T, FixtureResolutionError>,
-    ) -> Result<T, FixtureResolutionError> {
+        resolve: impl FnOnce(&mut Self) -> FixtureResolutionResult<T>,
+    ) -> FixtureResolutionResult<T> {
         if let Some(cycle_start) = self
             .fixtures
             .iter()
@@ -138,7 +140,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         py: Python,
         fixture: &'a DiscoveredFixture,
         path: &mut FixturePath<'a>,
-    ) -> Result<Rc<NormalizedFixture>, FixtureResolutionError> {
+    ) -> FixtureResolutionResult<Rc<NormalizedFixture>> {
         let cache_key = fixture.name().to_string();
 
         if fixture.scope() != FixtureScope::Function {
@@ -174,7 +176,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         &mut self,
         py: Python,
         scope: FixtureScope,
-    ) -> Result<Vec<Rc<NormalizedFixture>>, FixtureResolutionError> {
+    ) -> FixtureResolutionResult<Vec<Rc<NormalizedFixture>>> {
         let auto_use_fixtures = get_auto_use_fixtures(self.parents, self.current, scope);
         let mut path = FixturePath::default();
 
@@ -190,7 +192,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         py: Python,
         fixture_names: &[String],
         parametrize_param_names: &HashSet<&str>,
-    ) -> Result<Vec<Rc<NormalizedFixture>>, FixtureResolutionError> {
+    ) -> FixtureResolutionResult<Vec<Rc<NormalizedFixture>>> {
         let regular_fixture_names: Vec<String> = fixture_names
             .iter()
             .filter(|name| !parametrize_param_names.contains(name.as_str()))
@@ -206,7 +208,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         &mut self,
         py: Python,
         fixture_names: &[String],
-    ) -> Result<Vec<Rc<NormalizedFixture>>, FixtureResolutionError> {
+    ) -> FixtureResolutionResult<Vec<Rc<NormalizedFixture>>> {
         let mut path = FixturePath::default();
         self.get_dependent_fixtures(py, None, fixture_names, &mut path)
     }
@@ -218,7 +220,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         current_fixture: Option<&'a DiscoveredFixture>,
         fixture_names: &[String],
         path: &mut FixturePath<'a>,
-    ) -> Result<Vec<Rc<NormalizedFixture>>, FixtureResolutionError> {
+    ) -> FixtureResolutionResult<Vec<Rc<NormalizedFixture>>> {
         let mut normalized_fixtures = Vec::with_capacity(fixture_names.len());
 
         for dep_name in fixture_names {
