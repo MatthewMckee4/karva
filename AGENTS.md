@@ -56,6 +56,9 @@ Do not edit snapshot files or inline snapshot bodies manually. Regenerate them
 by running the relevant tests or Karva snapshot command, then review the
 generated diff. Do not accept unrelated snapshot changes.
 
+When snapshot output differs by platform, such as paths or operating system
+errors, use separate `#[cfg(unix)]` and `#[cfg(not(unix))]` snapshots.
+
 ## Running Clippy
 
 ```sh
@@ -98,6 +101,8 @@ pinact run
 
 ## Development Guidelines
 
+- Write `Karva` for the project and `karva` for the executable or package name.
+- Always invoke Karva as `uv run karva` in documentation commands and examples.
 - All significant changes must be tested. Add or update focused tests for
   behavior changes when existing coverage does not establish the intended
   behavior.

@@ -1,6 +1,7 @@
-# Karva (0.0.1-alpha.8)
+# Karva
 
 ![PyPI - Version](https://img.shields.io/pypi/v/karva)
+[![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?logo=discord&logoColor=white)](https://discord.gg/XG95vNz4Zu)
 
 A Python test framework, written in Rust.
 
@@ -18,7 +19,7 @@ Karva is intentionally narrower in scope than `pytest`. Not every pytest
 feature encourages high quality tests, and we'd rather omit features than
 ship ones that quietly make test suites worse. Karva draws on the Rust testing ecosystem,
 where projects like [uv](https://github.com/astral-sh/uv) and
-[ruff](https://github.com/astral-sh/ruff) show what a disciplined test suite
+[ruff](https://github.com/astral-sh/ruff) show what a high quality test suite
 can look like. By keeping the surface area small, we hope to nudge
 Python testing in the same direction.
 
@@ -31,25 +32,14 @@ and meeting the bar it sets is an explicit goal of this project.
 
 Karva is available as [`karva`](https://pypi.org/project/karva/) on PyPI.
 
-Use karva directly with `uvx`:
+Install karva with `uv`:
 
 ```bash
-uvx karva test
-uvx karva version
-```
-
-Or install karva with `uv`, or `pip`:
-
-```bash
-# With uv.
-uv tool install karva@latest
-
 # Add karva to your project.
 uv add --dev karva
-
-# With pip.
-pip install karva
 ```
+
+You can also install karva with `pip`, but we strongly recommend using `uv` instead.
 
 ### Usage
 
@@ -59,21 +49,18 @@ To run your tests, try any of the following:
 
 ```bash
 # Run all tests.
-karva test
+uv run karva test
 
 # Run tests in a specific directory.
-karva test tests/
+uv run karva test tests/
 
 # Run tests in a specific file.
-karva test tests/test_example.py
+uv run karva test tests/test_example.py
 ```
 
 ## Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](https://github.com/MatthewMckee4/karva/blob/main/CONTRIBUTING.md) for more information.
-
-When snapshot output differs by platform, such as paths or operating system
-errors, use separate `#[cfg(unix)]` and `#[cfg(not(unix))]` snapshots.
+Contributions are very welcome! See [CONTRIBUTING.md](https://github.com/MatthewMckee4/karva/blob/main/CONTRIBUTING.md) for more information.
 
 ## Support
 
