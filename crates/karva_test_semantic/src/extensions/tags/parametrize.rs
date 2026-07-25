@@ -17,8 +17,8 @@ use crate::extensions::tags::Tags;
 pub struct ParametrizeDiagnosticLocation {
     pub primary: TextRange,
     pub primary_message: String,
+    pub secondary: Option<(TextRange, String)>,
     pub related: Vec<(TextRange, String)>,
-    pub info: Option<String>,
 }
 
 #[derive(Debug, Error)]
@@ -76,11 +76,11 @@ impl InvalidParametrizeError {
                 Some(ParametrizeDiagnosticLocation {
                     primary,
                     primary_message: "duplicate parameter".to_string(),
+                    secondary: None,
                     related: ranges
                         .into_iter()
                         .map(|range| (range, "first parametrized here".to_string()))
                         .collect(),
-                    info: None,
                 })
             }
             Self::EmptyCases { names } => {
@@ -88,11 +88,11 @@ impl InvalidParametrizeError {
                 Some(ParametrizeDiagnosticLocation {
                     primary: syntax.values.map_or(syntax.decorator_range, Ranged::range),
                     primary_message: "no cases provided".to_string(),
+                    secondary: None,
                     related: syntax
                         .names
                         .map(|names| vec![(names.range(), "parameters declared here".to_string())])
                         .unwrap_or_default(),
-                    info: None,
                 })
             }
             Self::WrongArity {
@@ -116,11 +116,16 @@ impl InvalidParametrizeError {
                         "contains {actual} {}",
                         if *actual == 1 { "value" } else { "values" }
                     ),
+                    secondary: syntax.names.map(|names| {
+                        (
+                            names.range(),
+                            format!(
+                                "expects {expected} {}",
+                                if *expected == 1 { "value" } else { "values" }
+                            ),
+                        )
+                    }),
                     related: Vec::new(),
-                    info: Some(format!(
-                        "expects {expected} {}",
-                        if *expected == 1 { "value" } else { "values" }
-                    )),
                 })
             }
             Self::UnknownName { name } => {
@@ -142,11 +147,11 @@ fn name_diagnostic_location(
     Some(ParametrizeDiagnosticLocation {
         primary,
         primary_message: primary_message.to_string(),
+        secondary: None,
         related: vec![(
             function.parameters.range,
             "test parameters declared here".to_string(),
         )],
-        info: None,
     })
 }
 

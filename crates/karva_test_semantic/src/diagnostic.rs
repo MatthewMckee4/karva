@@ -485,6 +485,12 @@ pub fn report_invalid_parametrize(
         Annotation::primary(Span::from(source_file.clone()).with_range(location.primary))
             .message(location.primary_message),
     );
+    if let Some((range, message)) = location.secondary {
+        diagnostic.annotate(
+            Annotation::secondary(Span::from(source_file.clone()).with_range(range))
+                .message(message),
+        );
+    }
 
     for (range, message) in location.related {
         let mut sub = SubDiagnostic::new(SubDiagnosticSeverity::Info, message);
@@ -492,9 +498,6 @@ pub fn report_invalid_parametrize(
             Span::from(source_file.clone()).with_range(range),
         ));
         diagnostic.sub(sub);
-    }
-    if let Some(info) = location.info {
-        diagnostic.info(info);
     }
 }
 
