@@ -18,18 +18,10 @@ use tempfile::NamedTempFile;
 /// One of the well-known files in the cache directory hierarchy.
 #[derive(Clone, Copy)]
 pub enum CacheFile {
-    /// Per-worker JSON: aggregated `TestResultStats`.
-    Stats,
-    /// Per-worker JSON: structured run-level diagnostics.
-    RunDiagnostics,
+    /// Per-worker JSON: completed test results.
+    Results,
     /// Per-worker JSON: map of test id to wall-clock duration.
     Durations,
-    /// Per-worker JSON: list of failed test names.
-    FailedTests,
-    /// Per-worker JSON: list of `FlakyTest` records.
-    FlakyTests,
-    /// Per-worker JSON: final result records for executed test variants.
-    TestCases,
     /// Per-worker JSON: line-coverage data for sources tracked during the run.
     Coverage,
     /// Per-run empty sentinel marking that fail-fast was triggered.
@@ -46,12 +38,8 @@ impl CacheFile {
     /// Returns the on-disk filename for this artifact.
     pub const fn filename(self) -> &'static str {
         match self {
-            Self::Stats => "stats.json",
-            Self::RunDiagnostics => "run_diagnostics.json",
+            Self::Results => "results.json",
             Self::Durations => "durations.json",
-            Self::FailedTests => "failed_tests.json",
-            Self::FlakyTests => "flaky_tests.json",
-            Self::TestCases => "test_cases.json",
             Self::Coverage => "coverage.json",
             Self::FailFastSignal => "fail-fast",
             Self::LastFailed => "last-failed.json",
@@ -92,21 +80,6 @@ fn write_bytes(dir: &Utf8Path, file: CacheFile, content: &[u8]) -> Result<()> {
         .map_err(|err| err.error)
         .with_context(|| format!("failed to replace `{path}`"))?;
     Ok(())
-}
-
-/// Like [`write_json`], but skips writing entirely when `items` is empty.
-///
-/// Used for artifacts where an empty list carries no information and the file
-/// is treated as absent by readers.
-pub fn write_json_if_nonempty<T: Serialize>(
-    dir: &Utf8Path,
-    file: CacheFile,
-    items: &[T],
-) -> Result<()> {
-    if items.is_empty() {
-        return Ok(());
-    }
-    write_json(dir, file, &items)
 }
 
 /// Reads `dir/<file>` as JSON, or returns `Ok(None)` when the file does not exist.

@@ -12,9 +12,7 @@ use karva_diagnostic::{
 use ruff_db::diagnostic::DisplayDiagnosticConfig;
 use serde::{Deserialize, Serialize};
 
-use crate::artifact::{
-    CacheFile, read_json, read_text, write_json, write_json_if_nonempty, write_text,
-};
+use crate::artifact::{CacheFile, read_json, read_text, write_json, write_text};
 use crate::diagnostics::render_diagnostic;
 use crate::{RUN_PREFIX, RunHash, WORKER_PREFIX, worker_folder};
 
@@ -42,6 +40,16 @@ pub struct AggregatedResults {
     pub durations: HashMap<String, Duration>,
 }
 
+#[derive(Default, Serialize, Deserialize)]
+#[serde(default)]
+struct WorkerResults {
+    stats: TestResultStats,
+    run_diagnostics: Vec<RenderedDiagnostic>,
+    failed_tests: Vec<String>,
+    flaky_tests: Vec<FlakyTest>,
+    test_cases: Vec<TestCaseResult>,
+}
+
 impl AggregatedResults {
     pub fn register_interrupted_test(&mut self, name: &str, duration: Duration) {
         let function_name = base_test_name(name);
@@ -56,6 +64,14 @@ impl AggregatedResults {
             None,
         ));
         self.durations.insert(function_name, duration);
+    }
+
+    fn merge_worker(&mut self, worker: WorkerResults) {
+        self.stats.merge(&worker.stats);
+        self.run_diagnostics.extend(worker.run_diagnostics);
+        self.failed_tests.extend(worker.failed_tests);
+        self.flaky_tests.extend(worker.flaky_tests);
+        self.test_cases.extend(worker.test_cases);
     }
 }
 
@@ -173,17 +189,11 @@ impl RunCache {
             .iter()
             .map(|diagnostic| render_diagnostic(diagnostic, cwd, config))
             .collect::<Result<Vec<_>>>()?;
-        write_json_if_nonempty(&worker_dir, CacheFile::RunDiagnostics, &run_diagnostics)?;
-        write_json(&worker_dir, CacheFile::Stats, result.stats())?;
-        write_json(&worker_dir, CacheFile::Durations, result.durations())?;
-
         let failed_names: Vec<String> = result
             .failed_tests()
             .iter()
             .map(ToString::to_string)
             .collect();
-        write_json_if_nonempty(&worker_dir, CacheFile::FailedTests, &failed_names)?;
-        write_json_if_nonempty(&worker_dir, CacheFile::FlakyTests, result.flaky_tests())?;
         let test_cases = result
             .test_cases()
             .iter()
@@ -191,34 +201,27 @@ impl RunCache {
                 case.try_map_diagnostic(|diagnostic| render_diagnostic(diagnostic, cwd, config))
             })
             .collect::<Result<Vec<TestCaseResult>>>()?;
-        write_json_if_nonempty(&worker_dir, CacheFile::TestCases, &test_cases)?;
+
+        let worker_results = WorkerResults {
+            stats: result.stats().clone(),
+            run_diagnostics,
+            failed_tests: failed_names,
+            flaky_tests: result.flaky_tests().to_vec(),
+            test_cases,
+        };
+
+        write_json(&worker_dir, CacheFile::Durations, result.durations())?;
+        write_json(&worker_dir, CacheFile::Results, &worker_results)?;
         Ok(())
     }
 }
 
 /// Reads results from a single worker directory into the accumulator.
 fn read_worker_results(worker_dir: &Utf8Path, results: &mut AggregatedResults) -> Result<()> {
-    if let Some(stats) = read_json::<TestResultStats>(worker_dir, CacheFile::Stats)? {
-        results.stats.merge(&stats);
-    }
-
-    if let Some(diagnostics) =
-        read_json::<Vec<RenderedDiagnostic>>(worker_dir, CacheFile::RunDiagnostics)?
-    {
-        results.run_diagnostics.extend(diagnostics);
-    }
-
-    if let Some(failed) = read_json::<Vec<String>>(worker_dir, CacheFile::FailedTests)? {
-        results.failed_tests.extend(failed);
-    }
-
-    if let Some(flaky) = read_json::<Vec<FlakyTest>>(worker_dir, CacheFile::FlakyTests)? {
-        results.flaky_tests.extend(flaky);
-    }
-
-    if let Some(cases) = read_json::<Vec<TestCaseResult>>(worker_dir, CacheFile::TestCases)? {
-        results.test_cases.extend(cases);
-    }
+    let Some(worker_results) = read_json::<WorkerResults>(worker_dir, CacheFile::Results)? else {
+        return Ok(());
+    };
+    results.merge_worker(worker_results);
 
     if let Some(durations) =
         read_json::<HashMap<String, Duration>>(worker_dir, CacheFile::Durations)?
@@ -390,7 +393,21 @@ mod tests {
     ) {
         let worker_dir = dir.join(run_name).join(format!("worker-{worker_id}"));
         fs::create_dir_all(&worker_dir).unwrap();
-        fs::write(worker_dir.join(CacheFile::Stats.filename()), stats_json).unwrap();
+        write_worker_results(
+            &worker_dir,
+            &WorkerResults {
+                stats: serde_json::from_str(stats_json).unwrap(),
+                ..WorkerResults::default()
+            },
+        );
+    }
+
+    fn write_worker_results(worker_dir: &std::path::Path, results: &WorkerResults) {
+        fs::write(
+            worker_dir.join(CacheFile::Results.filename()),
+            serde_json::to_string(results).unwrap(),
+        )
+        .unwrap();
     }
 
     #[test]
@@ -453,6 +470,31 @@ mod tests {
 
         assert_eq!(results.stats.total(), 0);
         assert!(results.run_diagnostics.is_empty());
+    }
+
+    #[test]
+    fn aggregate_results_ignores_incomplete_worker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+        let run_hash = RunHash::from_existing("run-610");
+        let worker_dir = tmp.path().join(run_hash.dir_name()).join("worker-0");
+        fs::create_dir_all(&worker_dir).unwrap();
+
+        let durations = HashMap::from([(
+            "mod::test_uncommitted".to_string(),
+            Duration::from_millis(10),
+        )]);
+        fs::write(
+            worker_dir.join(CacheFile::Durations.filename()),
+            serde_json::to_string(&durations).unwrap(),
+        )
+        .unwrap();
+
+        let results = RunCache::new(&cache_dir, &run_hash)
+            .aggregate_results()
+            .unwrap();
+
+        assert!(results.durations.is_empty());
     }
 
     #[test]
@@ -679,16 +721,20 @@ mod tests {
         fs::create_dir_all(&worker0).unwrap();
         fs::create_dir_all(&worker1).unwrap();
 
-        fs::write(
-            worker0.join(CacheFile::FailedTests.filename()),
-            r#"["mod::test_a"]"#,
-        )
-        .unwrap();
-        fs::write(
-            worker1.join(CacheFile::FailedTests.filename()),
-            r#"["mod::test_b"]"#,
-        )
-        .unwrap();
+        write_worker_results(
+            &worker0,
+            &WorkerResults {
+                failed_tests: vec!["mod::test_a".to_string()],
+                ..WorkerResults::default()
+            },
+        );
+        write_worker_results(
+            &worker1,
+            &WorkerResults {
+                failed_tests: vec!["mod::test_b".to_string()],
+                ..WorkerResults::default()
+            },
+        );
 
         let mut d0 = HashMap::new();
         d0.insert("mod::test_a".to_string(), Duration::from_millis(10));
@@ -764,16 +810,20 @@ mod tests {
             )),
         );
 
-        fs::write(
-            worker0.join(CacheFile::TestCases.filename()),
-            serde_json::to_string(&[case0]).unwrap(),
-        )
-        .unwrap();
-        fs::write(
-            worker1.join(CacheFile::TestCases.filename()),
-            serde_json::to_string(&[case1]).unwrap(),
-        )
-        .unwrap();
+        write_worker_results(
+            &worker0,
+            &WorkerResults {
+                test_cases: vec![case0],
+                ..WorkerResults::default()
+            },
+        );
+        write_worker_results(
+            &worker1,
+            &WorkerResults {
+                test_cases: vec![case1],
+                ..WorkerResults::default()
+            },
+        );
 
         let cache = RunCache::new(&cache_dir, &run_hash);
         let mut cases = cache.aggregate_results().unwrap().test_cases;
