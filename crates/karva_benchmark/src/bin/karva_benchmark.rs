@@ -7,6 +7,7 @@
 use std::io::Write as _;
 use std::path::PathBuf;
 use std::process::{Command, Output};
+use std::sync::LazyLock;
 use std::time::Instant;
 use std::{collections::HashSet, io};
 
@@ -16,7 +17,9 @@ use clap::{Parser, ValueEnum};
 use fs_err::{self as fs, File};
 use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject, CLI_BENCHMARK_PROJECTS, WORKER_COUNT};
 use karva_static::ToolEnvVars;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+use similar::{Algorithm, TextDiff};
 
 const MATERIAL_CHANGE_PERCENT: f64 = 1.0;
 const FAST_PROJECT_ITERATIONS: usize = 21;
@@ -73,6 +76,9 @@ struct MergeReportsArgs {
 
     #[arg(long, value_name = "PATH")]
     output_markdown: PathBuf,
+
+    #[arg(long, value_name = "PATH")]
+    output_diagnostics_markdown: Option<PathBuf>,
 }
 
 #[derive(Debug, Serialize)]
@@ -103,6 +109,23 @@ struct ProjectComparison {
     baseline: Measurement,
     candidate: Measurement,
     percent_change: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    diagnostics: Option<DiagnosticComparison>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct DiagnosticComparison {
+    baseline: Option<TestStats>,
+    candidate: Option<TestStats>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    diff: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct TestStats {
+    passed: usize,
+    failed: usize,
+    skipped: usize,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -122,6 +145,7 @@ struct Subject<'a> {
     label: &'a str,
     wheel: &'a Utf8Path,
     values: &'a mut Vec<f64>,
+    diagnostic_output: &'a mut Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
@@ -135,6 +159,11 @@ struct KarvaInvocation {
     binary: Utf8PathBuf,
     path: std::ffi::OsString,
     args: Vec<String>,
+}
+
+struct RunMeasurement {
+    value: f64,
+    output: Output,
 }
 
 fn main() -> Result<()> {
@@ -180,17 +209,21 @@ fn compare(args: CompareArgs) -> Result<()> {
             .with_context(|| format!("Failed to prepare benchmark project `{}`", config.name))?;
         let mut baseline_values = Vec::with_capacity(args.iterations);
         let mut candidate_values = Vec::with_capacity(args.iterations);
+        let mut baseline_diagnostic_output = None;
+        let mut candidate_diagnostic_output = None;
 
         for iteration in 0..args.iterations {
             let mut baseline = Subject {
                 label: &args.baseline_label,
                 wheel: &baseline_wheel,
                 values: &mut baseline_values,
+                diagnostic_output: &mut baseline_diagnostic_output,
             };
             let mut candidate = Subject {
                 label: &args.candidate_label,
                 wheel: &candidate_wheel,
                 values: &mut candidate_values,
+                diagnostic_output: &mut candidate_diagnostic_output,
             };
 
             if iteration % 2 == 0 {
@@ -212,6 +245,12 @@ fn compare(args: CompareArgs) -> Result<()> {
             baseline,
             candidate,
             percent_change,
+            diagnostics: diagnostic_comparison(
+                baseline_diagnostic_output.as_deref(),
+                candidate_diagnostic_output.as_deref(),
+                &args.baseline_label,
+                &args.candidate_label,
+            ),
         });
     }
 
@@ -235,7 +274,12 @@ fn merge_reports(args: MergeReportsArgs) -> Result<()> {
     let output_markdown = utf8_path(args.output_markdown)?;
     let report = merge_report_files(&input_dir)?;
 
-    write_markdown(&output_markdown, &report)
+    write_markdown(&output_markdown, &report)?;
+    if let Some(path) = args.output_diagnostics_markdown {
+        write_diagnostics_markdown(&utf8_path(path)?, &report)?;
+    }
+
+    Ok(())
 }
 
 fn merge_report_files(input_dir: &Utf8Path) -> Result<ComparisonReport> {
@@ -360,16 +404,19 @@ fn run_subject(
     warm_project_cache(config, project_root)
         .with_context(|| format!("Failed to warm benchmark cache for `{}`", config.name))?;
 
-    let value = run_project_cli(metric, config, project_root)
+    let measurement = run_project_cli(metric, config, project_root)
         .with_context(|| format!("Failed to run `{}` with `{}`", config.name, subject.label))?;
-    subject.values.push(value);
+    subject.values.push(measurement.value);
+    if metric == BenchmarkMetric::WallTime && subject.diagnostic_output.is_none() {
+        *subject.diagnostic_output = Some(normalize_diagnostic_output(&measurement.output));
+    }
 
     eprintln!(
         "{} / {} / {}: {}",
         config.name,
         subject.label,
         metric.mode_label(),
-        metric.format_value(value)
+        metric.format_value(measurement.value)
     );
 
     Ok(())
@@ -379,7 +426,7 @@ fn run_project_cli(
     metric: BenchmarkMetric,
     config: &BenchmarkProject,
     project_root: &Utf8Path,
-) -> Result<f64> {
+) -> Result<RunMeasurement> {
     match metric {
         BenchmarkMetric::WallTime => run_project_wall_time(config, project_root),
         BenchmarkMetric::Memory => run_project_peak_rss_kib(config, project_root),
@@ -392,7 +439,10 @@ fn warm_project_cache(config: &BenchmarkProject, project_root: &Utf8Path) -> Res
     ensure_karva_success(&output, config)
 }
 
-fn run_project_wall_time(config: &BenchmarkProject, project_root: &Utf8Path) -> Result<f64> {
+fn run_project_wall_time(
+    config: &BenchmarkProject,
+    project_root: &Utf8Path,
+) -> Result<RunMeasurement> {
     let invocation = karva_invocation(config, project_root)?;
 
     let start = Instant::now();
@@ -401,10 +451,16 @@ fn run_project_wall_time(config: &BenchmarkProject, project_root: &Utf8Path) -> 
 
     ensure_karva_success(&output, config)?;
 
-    Ok(elapsed.as_secs_f64())
+    Ok(RunMeasurement {
+        value: elapsed.as_secs_f64(),
+        output,
+    })
 }
 
-fn run_project_peak_rss_kib(config: &BenchmarkProject, project_root: &Utf8Path) -> Result<f64> {
+fn run_project_peak_rss_kib(
+    config: &BenchmarkProject,
+    project_root: &Utf8Path,
+) -> Result<RunMeasurement> {
     #[cfg(target_os = "linux")]
     {
         let invocation = karva_invocation(config, project_root)?;
@@ -426,7 +482,10 @@ fn run_project_peak_rss_kib(config: &BenchmarkProject, project_root: &Utf8Path) 
             eprintln!("failed to remove memory benchmark report `{report_path}`: {err}");
         }
 
-        Ok(peak_rss_kib)
+        Ok(RunMeasurement {
+            value: peak_rss_kib,
+            output,
+        })
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -493,6 +552,70 @@ fn ensure_karva_success(output: &Output, config: &BenchmarkProject) -> Result<()
     Ok(())
 }
 
+fn normalize_diagnostic_output(output: &Output) -> String {
+    format!(
+        "stdout:\n{}\nstderr:\n{}",
+        normalize_diagnostic_text(&String::from_utf8_lossy(&output.stdout)),
+        normalize_diagnostic_text(&String::from_utf8_lossy(&output.stderr))
+    )
+}
+
+fn normalize_diagnostic_text(text: &str) -> String {
+    static DURATION: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\[\s*\d+\.\d{3}s\]").expect("duration regex should be valid")
+    });
+    static ADDRESS: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"0x[0-9a-fA-F]+").expect("address regex should be valid"));
+
+    let text = DURATION.replace_all(text, "[TIME]");
+    ADDRESS.replace_all(&text, "0xADDR").into_owned()
+}
+
+fn diagnostic_comparison(
+    baseline: Option<&str>,
+    candidate: Option<&str>,
+    baseline_label: &str,
+    candidate_label: &str,
+) -> Option<DiagnosticComparison> {
+    let (Some(baseline), Some(candidate)) = (baseline, candidate) else {
+        return None;
+    };
+
+    let diff = (baseline != candidate).then(|| {
+        TextDiff::configure()
+            .algorithm(Algorithm::Patience)
+            .diff_lines(baseline, candidate)
+            .unified_diff()
+            .context_radius(3)
+            .header(baseline_label, candidate_label)
+            .to_string()
+    });
+
+    Some(DiagnosticComparison {
+        baseline: parse_test_stats(baseline),
+        candidate: parse_test_stats(candidate),
+        diff,
+    })
+}
+
+fn parse_test_stats(output: &str) -> Option<TestStats> {
+    static SUMMARY: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"(?m)^\s*Summary \[TIME\] \d+ tests? run: (?P<passed>\d+) passed(?: \(\d+ flaky\))?(?:, (?P<failed>\d+) failed)?, (?P<skipped>\d+) skipped",
+        )
+        .expect("summary regex should be valid")
+    });
+
+    let captures = SUMMARY.captures(output)?;
+    Some(TestStats {
+        passed: captures.name("passed")?.as_str().parse().ok()?,
+        failed: captures
+            .name("failed")
+            .map_or(Some(0), |value| value.as_str().parse().ok())?,
+        skipped: captures.name("skipped")?.as_str().parse().ok()?,
+    })
+}
+
 #[cfg(target_os = "linux")]
 fn memory_report_path(project_root: &Utf8Path, project_name: &str) -> Utf8PathBuf {
     project_root.join(format!(
@@ -522,6 +645,13 @@ fn write_json(path: &Utf8Path, report: &ComparisonReport) -> Result<()> {
 fn write_markdown(path: &Utf8Path, report: &ComparisonReport) -> Result<()> {
     create_parent_dir(path)?;
     let body = markdown_report(report).context("Failed to render markdown benchmark report")?;
+    fs::write(path, body).with_context(|| format!("Failed to write `{path}`"))
+}
+
+fn write_diagnostics_markdown(path: &Utf8Path, report: &ComparisonReport) -> Result<()> {
+    create_parent_dir(path)?;
+    let body = diagnostics_markdown_report(report)
+        .context("Failed to render markdown diagnostics report")?;
     fs::write(path, body).with_context(|| format!("Failed to write `{path}`"))
 }
 
@@ -589,6 +719,87 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
     writeln!(body, "</details>")?;
 
     Ok(body)
+}
+
+fn diagnostics_markdown_report(
+    report: &ComparisonReport,
+) -> std::result::Result<String, std::fmt::Error> {
+    use std::fmt::Write as _;
+
+    let changed = report
+        .projects
+        .iter()
+        .filter(|project| {
+            project
+                .diagnostics
+                .as_ref()
+                .is_some_and(|diagnostics| diagnostics.diff.is_some())
+        })
+        .count();
+    let mut body = String::from("<!-- karva-diagnostic-comparison -->\n");
+    if changed == 0 {
+        body.push_str("### :white_check_mark: No diagnostic changes\n");
+    } else {
+        let suffix = if changed == 1 { "" } else { "s" };
+        writeln!(
+            body,
+            "### :warning: Diagnostic changes in {changed} project{suffix}"
+        )?;
+    }
+
+    body.push_str("\n<details>\n<summary>Test result comparison</summary>\n\n");
+    body.push_str("| Project | Previous | New |\n");
+    body.push_str("| --- | --- | --- |\n");
+    for project in &report.projects {
+        let diagnostics = project.diagnostics.as_ref();
+        let baseline = diagnostics.and_then(|diagnostics| diagnostics.baseline.as_ref());
+        let candidate = diagnostics.and_then(|diagnostics| diagnostics.candidate.as_ref());
+        writeln!(
+            body,
+            "| `{}` | {} | {} |",
+            project.name,
+            test_result(baseline),
+            test_result(candidate),
+        )?;
+    }
+    body.push_str("\n</details>\n");
+
+    for project in &report.projects {
+        let Some(diff) = project
+            .diagnostics
+            .as_ref()
+            .and_then(|diagnostics| diagnostics.diff.as_deref())
+        else {
+            continue;
+        };
+        writeln!(
+            body,
+            "\n<details>\n<summary><code>{}</code> concise output diff</summary>\n",
+            project.name
+        )?;
+        body.push_str("Durations and memory addresses are normalized.\n\n");
+        writeln!(body, "```diff\n{diff}```\n")?;
+        body.push_str("</details>\n");
+    }
+
+    Ok(body)
+}
+
+fn test_result(stats: Option<&TestStats>) -> String {
+    stats.map_or_else(
+        || "—".to_string(),
+        |stats| {
+            let icon = if stats.failed == 0 {
+                ":white_check_mark:"
+            } else {
+                ":x:"
+            };
+            format!(
+                "{icon} {} pass · {} fail · {} skip",
+                stats.passed, stats.failed, stats.skipped
+            )
+        },
+    )
 }
 
 fn write_project_table<'a>(
@@ -822,8 +1033,8 @@ mod tests {
 
     use super::{
         BenchmarkMetric, ComparisonReport, FAST_PROJECT_ITERATIONS, MEDIUM_PROJECT_ITERATIONS,
-        Measurement, ProjectComparison, karva_invocation, markdown_report, matrix_iterations,
-        trend,
+        Measurement, ProjectComparison, diagnostic_comparison, diagnostics_markdown_report,
+        karva_invocation, markdown_report, matrix_iterations, normalize_diagnostic_text, trend,
     };
 
     #[test]
@@ -836,7 +1047,37 @@ mod tests {
 
         let markdown = markdown_report(&report).expect("report should render");
 
-        insta::assert_snapshot!(markdown);
+        insta::assert_snapshot!(markdown, @"
+        <!-- karva-benchmark-comparison -->
+        ### :x: Merging this PR may alter performance
+
+        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Lower is better.
+
+        :zap: **1** improved benchmark
+        :x: **1** regressed benchmark
+        :white_check_mark: **1** unchanged benchmark
+
+        > [!WARNING]
+        > Benchmark regressions were detected. Review the wall-time changes before merging.
+
+        #### Performance Changes
+
+        |  | Mode | Benchmark | Base | Head | Change | Runs |
+        | --- | --- | --- | ---: | ---: | ---: | ---: |
+        | :zap: | WallTime | `faster-project` | 1.000 s | 990.0 ms | -1.0% | 21 |
+        | :x: | WallTime | `slower-project` | 1.000 s | 1.012 s | +1.2% | 15 |
+
+        <details>
+        <summary>All benchmark scores</summary>
+
+        |  | Mode | Benchmark | Base | Head | Change | Runs |
+        | --- | --- | --- | ---: | ---: | ---: | ---: |
+        | :white_check_mark: | WallTime | `flat-project` | 1.000 s | 1.004 s | +0.4% | 21 |
+        | :zap: | WallTime | `faster-project` | 1.000 s | 990.0 ms | -1.0% | 21 |
+        | :x: | WallTime | `slower-project` | 1.000 s | 1.012 s | +1.2% | 15 |
+
+        </details>
+        ");
     }
 
     #[test]
@@ -845,7 +1086,19 @@ mod tests {
 
         let markdown = markdown_report(&report).expect("report should render");
 
-        insta::assert_snapshot!(markdown);
+        insta::assert_snapshot!(markdown, @"
+        <!-- karva-benchmark-comparison -->
+        ### :white_check_mark: Merging this PR will not alter performance
+
+        <details>
+        <summary>All benchmark scores</summary>
+
+        |  | Mode | Benchmark | Base | Head | Change | Runs |
+        | --- | --- | --- | ---: | ---: | ---: | ---: |
+        | :white_check_mark: | WallTime | `flat-project` | 1.000 s | 1.004 s | +0.4% | 21 |
+
+        </details>
+        ");
     }
 
     #[test]
@@ -857,7 +1110,100 @@ mod tests {
 
         let markdown = markdown_report(&report).expect("report should render");
 
-        insta::assert_snapshot!(markdown);
+        insta::assert_snapshot!(markdown, @"
+        <!-- karva-memory-benchmark-comparison -->
+        ### :zap: Merging this PR reduces memory usage
+
+        <details>
+        <summary>All benchmark scores</summary>
+
+        |  | Mode | Benchmark | Base | Head | Change | Runs |
+        | --- | --- | --- | ---: | ---: | ---: | ---: |
+        | :zap: | Memory | `memory-project` | 97.7 MiB | 87.9 MiB | -10.0% | 21 |
+
+        </details>
+        ");
+    }
+
+    #[test]
+    fn diagnostics_report_renders_changes() {
+        let baseline = normalize_diagnostic_text(
+            "    PASS [   0.001s] test_hooks(hook=<function hook at 0x123abc>)\n\
+             Summary [   0.100s] 3 tests run: 2 passed, 1 skipped\n",
+        );
+        let candidate = normalize_diagnostic_text(
+            "    PASS [   0.900s] test_hooks(hook=<function hook at 0x456def>)\n\
+             new diagnostic\n\
+             Summary [   1.000s] 3 tests run: 1 passed, 1 failed, 1 skipped\n",
+        );
+        insta::assert_snapshot!(baseline, @"
+            PASS [TIME] test_hooks(hook=<function hook at 0xADDR>)
+        Summary [TIME] 3 tests run: 2 passed, 1 skipped
+        ");
+        let mut comparison = project("requests", 21, 1.0, 1.0);
+        comparison.diagnostics =
+            diagnostic_comparison(Some(&baseline), Some(&candidate), "main", "PR");
+
+        let markdown = diagnostics_markdown_report(&report_with_projects(vec![comparison]))
+            .expect("report should render");
+
+        insta::assert_snapshot!(markdown, @"
+        <!-- karva-diagnostic-comparison -->
+        ### :warning: Diagnostic changes in 1 project
+
+        <details>
+        <summary>Test result comparison</summary>
+
+        | Project | Previous | New |
+        | --- | --- | --- |
+        | `requests` | :white_check_mark: 2 pass · 0 fail · 1 skip | :x: 1 pass · 1 fail · 1 skip |
+
+        </details>
+
+        <details>
+        <summary><code>requests</code> concise output diff</summary>
+
+        Durations and memory addresses are normalized.
+
+        ```diff
+        --- main
+        +++ PR
+        @@ -1,2 +1,3 @@
+             PASS [TIME] test_hooks(hook=<function hook at 0xADDR>)
+        -Summary [TIME] 3 tests run: 2 passed, 1 skipped
+        +new diagnostic
+        +Summary [TIME] 3 tests run: 1 passed, 1 failed, 1 skipped
+        ```
+
+        </details>
+        ");
+    }
+
+    #[test]
+    fn diagnostics_report_omits_unchanged_diffs() {
+        let output = normalize_diagnostic_text(
+            "    PASS [   0.001s] test_pass\n\
+             Summary [   0.100s] 1 test run: 1 passed, 0 skipped\n",
+        );
+        let mut comparison = project("requests", 21, 1.0, 1.0);
+        comparison.diagnostics = diagnostic_comparison(Some(&output), Some(&output), "main", "PR");
+
+        let markdown = diagnostics_markdown_report(&report_with_projects(vec![comparison]))
+            .expect("report should render");
+
+        insta::assert_snapshot!(markdown, @"
+        <!-- karva-diagnostic-comparison -->
+        ### :white_check_mark: No diagnostic changes
+
+        <details>
+        <summary>Test result comparison</summary>
+
+        | Project | Previous | New |
+        | --- | --- | --- |
+        | `requests` | :white_check_mark: 1 pass · 0 fail · 0 skip | :white_check_mark: 1 pass · 0 fail · 0 skip |
+
+        </details>
+        ");
     }
 
     #[test]
@@ -919,6 +1265,7 @@ mod tests {
             baseline: measurement(baseline),
             candidate: measurement(candidate),
             percent_change: super::percent_change(baseline, candidate),
+            diagnostics: None,
         }
     }
 
