@@ -190,4 +190,20 @@ impl TestRunResult {
     pub fn test_cases(&self) -> &[TestExecutionResult] {
         &self.test_cases
     }
+
+    pub fn into_parts(
+        self,
+    ) -> (
+        Vec<Diagnostic>,
+        TestResultStats,
+        HashMap<QualifiedFunctionName, std::time::Duration>,
+        Vec<TestExecutionResult>,
+    ) {
+        (
+            self.run_diagnostics,
+            self.stats,
+            self.durations,
+            self.test_cases,
+        )
+    }
 }

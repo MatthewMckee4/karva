@@ -879,7 +879,7 @@ def test_no_such_fixture(not_a_real_fixture):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_no_such_fixture
+           ERROR [TIME] test::test_no_such_fixture
 
     failures:
 
@@ -894,7 +894,7 @@ def test_no_such_fixture(not_a_real_fixture):
     info: Missing fixtures: `not_a_real_fixture`
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");

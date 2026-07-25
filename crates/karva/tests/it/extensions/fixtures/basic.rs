@@ -819,7 +819,7 @@ Path(__file__).with_name('mypackage').joinpath('fixtures.py').unlink()
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test_invoke::test_invoke
+           ERROR [TIME] test_invoke::test_invoke
 
     failures:
 
@@ -838,7 +838,7 @@ Path(__file__).with_name('mypackage').joinpath('fixtures.py').unlink()
     error[failed-to-discover-imported-fixture]: Failed to discover imported fixture `invoke` from `<temp_dir>/mypackage/fixtures.py`: failed to open file `<temp_dir>/mypackage/fixtures.py`: No such file or directory (os error 2)
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");

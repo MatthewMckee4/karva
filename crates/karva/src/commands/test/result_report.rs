@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use crate::ExitStatus;
 
-const SCHEMA_VERSION: u8 = 3;
+const SCHEMA_VERSION: u8 = 2;
 
 pub(super) fn write_result_report(
     path: Option<&Utf8Path>,

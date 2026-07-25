@@ -27,7 +27,7 @@ fn test_invalid_pytest_fixture_scope() {
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_all_scopes
+           ERROR [TIME] test::test_all_scopes
 
     failures:
 
@@ -52,7 +52,7 @@ fn test_invalid_pytest_fixture_scope() {
     info: Invalid fixture scope: sessionss
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -78,7 +78,7 @@ def test_all_scopes(some_fixture: int) -> None:
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_all_scopes
+           ERROR [TIME] test::test_all_scopes
 
     failures:
 
@@ -103,7 +103,7 @@ def test_all_scopes(some_fixture: int) -> None:
     info: Invalid fixture scope: sessionss
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -126,7 +126,7 @@ fn test_missing_fixture() {
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_all_scopes
+           ERROR [TIME] test::test_all_scopes
 
     failures:
 
@@ -141,7 +141,7 @@ fn test_missing_fixture() {
     info: Missing fixtures: `missing_fixture`
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -506,7 +506,7 @@ def test_with_fixture(my_fixture):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_with_fixture
+           ERROR [TIME] test::test_with_fixture
 
     failures:
 
@@ -531,7 +531,7 @@ def test_with_fixture(my_fixture):
     info: Scope must be either a string or a callable
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");

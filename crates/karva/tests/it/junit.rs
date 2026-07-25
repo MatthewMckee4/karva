@@ -210,7 +210,7 @@ def test_flaky():
       |
 
     </failure>
-          <rerunFailure message="Test `test_fail` failed" type="test-failure">error[test-failure]: Test `test_fail` failed
+          <rerunFailure message="Test `test_fail` failed" type="test-failure" time="[TIME]">error[test-failure]: Test `test_fail` failed
      --&gt; test_retry.py:4:5
       |
     4 | def test_fail():
@@ -226,7 +226,7 @@ def test_flaky():
     </rerunFailure>
         </testcase>
         <testcase classname="test_retry" name="test_flaky" time="[TIME]">
-          <flakyFailure message="Test `test_flaky` failed" type="test-failure">error[test-failure]: Test `test_flaky` failed
+          <flakyFailure message="Test `test_flaky` failed" type="test-failure" time="[TIME]">error[test-failure]: Test `test_flaky` failed
      --&gt; test_retry.py:7:5
       |
     7 | def test_flaky():
@@ -327,6 +327,13 @@ def test_unreachable():
     raise AssertionError("test body ran")
 "#,
         ),
+        (
+            "test_failure.py",
+            r"
+def test_failure():
+    assert False
+",
+        ),
     ]);
 
     assert_cmd_snapshot!(
@@ -339,6 +346,21 @@ def test_unreachable():
     ----- stdout -----
 
     failures:
+
+    test_failure::test_failure:
+
+    error[test-failure]: Test `test_failure` failed
+     --> test_failure.py:2:5
+      |
+    2 | def test_failure():
+      |     ^^^^^^^^^^^^
+      |
+    info: Test failed here
+     --> test_failure.py:3:5
+      |
+    3 |     assert False
+      |     ^^^^^^^^^^^^
+      |
 
     test_fixture::test_unreachable:
 
@@ -357,7 +379,7 @@ def test_unreachable():
     info: setup failed
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+         Summary [TIME] 2 tests run: 0 passed, 1 failed, 1 error, 0 skipped
 
     ----- stderr -----
     "#
@@ -366,7 +388,25 @@ def test_unreachable():
     let xml = normalize_junit_xml(&context.read_file("reports/test-results.xml"));
     assert_snapshot!(xml, @r#"
     <?xml version="1.0" encoding="UTF-8"?>
-    <testsuites name="karva-tests" tests="1" failures="0" skipped="0" errors="1" time="[TIME]">
+    <testsuites name="karva-tests" tests="2" failures="1" skipped="0" errors="1" time="[TIME]">
+      <testsuite name="test_failure" tests="1" failures="1" skipped="0" errors="0" time="[TIME]">
+        <testcase classname="test_failure" name="test_failure" time="[TIME]">
+          <failure message="Test `test_failure` failed" type="test-failure">error[test-failure]: Test `test_failure` failed
+     --&gt; test_failure.py:2:5
+      |
+    2 | def test_failure():
+      |     ^^^^^^^^^^^^
+      |
+    info: Test failed here
+     --&gt; test_failure.py:3:5
+      |
+    3 |     assert False
+      |     ^^^^^^^^^^^^
+      |
+
+    </failure>
+        </testcase>
+      </testsuite>
       <testsuite name="test_fixture" tests="1" failures="0" skipped="0" errors="1" time="[TIME]">
         <testcase classname="test_fixture" name="test_unreachable" time="[TIME]">
           <error message="Fixture `broken_fixture` failed" type="fixture-failure">error[fixture-failure]: Fixture `broken_fixture` failed

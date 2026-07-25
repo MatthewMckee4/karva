@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 use anyhow::{Context as _, Result};
 use camino::Utf8Path;
 use karva_cache::AggregatedResults;
-use karva_diagnostic::{TestCaseOutcome, TestCaseResult};
+use karva_diagnostic::{RenderedDiagnostic, TestCaseAttempt, TestCaseOutcome, TestCaseResult};
 use karva_metadata::JunitSettings;
 use karva_project::path::absolute;
 
@@ -105,7 +105,7 @@ fn write_suite(
 }
 
 fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult) -> Result<()> {
-    let time = case.duration().as_secs_f64();
+    let time = junit_case_duration(case).as_secs_f64();
     let output = case.captured_output();
     let include_output = match case.outcome() {
         TestCaseOutcome::Passed => settings.store_success_output,
@@ -138,11 +138,30 @@ fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult)
         TestCaseOutcome::Failed {
             diagnostic,
             related,
-        } => write_diagnostic_element(xml, "failure", diagnostic, related)?,
+        } => {
+            if case.attempts().len() > 1
+                && let Some(first_attempt) = case.attempts().first()
+                && let Some(first_diagnostic) = first_attempt.outcome().diagnostic()
+            {
+                write_diagnostic_element(
+                    xml,
+                    "failure",
+                    first_diagnostic,
+                    first_attempt
+                        .outcome()
+                        .related_diagnostics()
+                        .iter()
+                        .chain(related),
+                    None,
+                )?;
+            } else {
+                write_diagnostic_element(xml, "failure", diagnostic, related, None)?;
+            }
+        }
         TestCaseOutcome::Error {
             diagnostic,
             related,
-        } => write_diagnostic_element(xml, "error", diagnostic, related)?,
+        } => write_diagnostic_element(xml, "error", diagnostic, related, None)?,
         TestCaseOutcome::Skipped { reason } => {
             if let Some(reason) = reason {
                 writeln!(xml, "      <skipped message=\"{}\"/>", escape_xml(reason))?;
@@ -163,41 +182,59 @@ fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult)
 }
 
 fn write_attempts(xml: &mut String, case: &TestCaseResult) -> Result<()> {
-    let element = if matches!(case.outcome(), TestCaseOutcome::Passed) {
-        "flakyFailure"
-    } else {
-        "rerunFailure"
-    };
-    for attempt in case
-        .attempts()
-        .iter()
-        .take(case.attempts().len().saturating_sub(1))
-    {
+    let attempts = case.attempts();
+    if attempts.len() <= 1 {
+        return Ok(());
+    }
+    match case.outcome() {
+        TestCaseOutcome::Passed => {
+            write_attempt_diagnostics(xml, "flakyFailure", &attempts[..attempts.len() - 1])
+        }
+        TestCaseOutcome::Failed { .. } => {
+            write_attempt_diagnostics(xml, "rerunFailure", &attempts[1..])
+        }
+        TestCaseOutcome::Error { .. } | TestCaseOutcome::Skipped { .. } => {
+            write_attempt_diagnostics(xml, "rerunFailure", &attempts[..attempts.len() - 1])
+        }
+    }
+}
+
+fn write_attempt_diagnostics(
+    xml: &mut String,
+    element: &str,
+    attempts: &[TestCaseAttempt],
+) -> Result<()> {
+    for attempt in attempts {
         if let Some(diagnostic) = attempt.outcome().diagnostic() {
             write_diagnostic_element(
                 xml,
                 element,
                 diagnostic,
                 attempt.outcome().related_diagnostics(),
+                Some(attempt.duration()),
             )?;
         }
     }
     Ok(())
 }
 
-fn write_diagnostic_element(
+fn write_diagnostic_element<'a>(
     xml: &mut String,
     element: &str,
-    diagnostic: &karva_diagnostic::RenderedDiagnostic,
-    related: &[karva_diagnostic::RenderedDiagnostic],
+    diagnostic: &RenderedDiagnostic,
+    related: impl IntoIterator<Item = &'a RenderedDiagnostic>,
+    duration: Option<std::time::Duration>,
 ) -> Result<()> {
     write!(
         xml,
-        "      <{element} message=\"{}\" type=\"{}\">{}",
+        "      <{element} message=\"{}\" type=\"{}\"",
         escape_xml(diagnostic.message()),
         escape_xml(diagnostic.code()),
-        escape_xml(diagnostic.rendered()),
     )?;
+    if let Some(duration) = duration {
+        write!(xml, " time=\"{:.6}\"", duration.as_secs_f64())?;
+    }
+    write!(xml, ">{}", escape_xml(diagnostic.rendered()))?;
     for diagnostic in related {
         write!(xml, "{}", escape_xml(diagnostic.rendered()))?;
     }
@@ -232,11 +269,32 @@ fn write_run_diagnostics_suite(
             escape_xml(diagnostic.code()),
             index + 1,
         )?;
-        write_diagnostic_element(xml, "error", diagnostic, &[])?;
+        write_diagnostic_element(xml, "error", diagnostic, &[], None)?;
         xml.push_str("    </testcase>\n");
     }
     xml.push_str("  </testsuite>\n");
     Ok(())
+}
+
+fn junit_case_duration(case: &TestCaseResult) -> std::time::Duration {
+    if case.attempts().len() > 1 {
+        match case.outcome() {
+            TestCaseOutcome::Passed => {
+                return case
+                    .attempts()
+                    .last()
+                    .map_or_else(|| case.duration(), TestCaseAttempt::duration);
+            }
+            TestCaseOutcome::Failed { .. } => {
+                return case
+                    .attempts()
+                    .first()
+                    .map_or_else(|| case.duration(), TestCaseAttempt::duration);
+            }
+            TestCaseOutcome::Error { .. } | TestCaseOutcome::Skipped { .. } => {}
+        }
+    }
+    case.duration()
 }
 
 fn write_captured_stream(xml: &mut String, element: &str, content: &str) -> Result<()> {

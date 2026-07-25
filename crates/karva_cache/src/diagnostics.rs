@@ -120,7 +120,7 @@ mod tests {
         ));
 
         let config = DisplayDiagnosticConfig::new("karva").context(0);
-        let rendered = render_diagnostic(&diagnostic, &cwd, &config).unwrap();
+        let rendered = render_diagnostic(&diagnostic, &cwd, &config).expect("render diagnostic");
 
         assert_eq!(rendered.code(), "test-failure");
         assert_eq!(rendered.message(), "Test `test_example` failed");
@@ -131,8 +131,9 @@ mod tests {
 
     #[test]
     fn keeps_machine_rendering_plain_when_terminal_uses_color() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let cwd = Utf8PathBuf::try_from(temp_dir.path().to_path_buf()).unwrap();
+        let temp_dir = tempfile::tempdir().expect("create temporary directory");
+        let cwd =
+            Utf8PathBuf::try_from(temp_dir.path().to_path_buf()).expect("temporary path is UTF-8");
         let diagnostic = Diagnostic::new(
             DiagnosticId::Lint(LintName::of("test-failure")),
             Severity::Error,
@@ -144,7 +145,7 @@ mod tests {
             &cwd,
             &DisplayDiagnosticConfig::new("karva").color(true),
         )
-        .unwrap();
+        .expect("render diagnostic");
 
         assert!(!rendered.rendered().contains('\u{1b}'));
         assert!(rendered.rendered_for_terminal().contains('\u{1b}'));

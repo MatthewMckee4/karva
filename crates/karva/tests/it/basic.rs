@@ -724,7 +724,7 @@ fn test_multiple_fixtures_not_found() {
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test_multiple_fixtures_not_found::test_multiple_fixtures_not_found
+           ERROR [TIME] test_multiple_fixtures_not_found::test_multiple_fixtures_not_found
 
     failures:
 
@@ -739,7 +739,7 @@ fn test_multiple_fixtures_not_found() {
     info: Missing fixtures: `a`, `b`, `c`
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -1022,7 +1022,7 @@ fn test_invalid_fixture() {
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_fixture_generator
+           ERROR [TIME] test::test_fixture_generator
 
     failures:
 
@@ -1047,7 +1047,7 @@ fn test_invalid_fixture() {
     info: Invalid fixture scope: ssession
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");

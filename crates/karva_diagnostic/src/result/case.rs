@@ -122,20 +122,20 @@ impl<D> TestCaseResult<D> {
     }
 
     pub fn try_map_diagnostic<T, E>(
-        &self,
+        self,
         mut map: impl FnMut(&D) -> Result<T, E>,
     ) -> Result<TestCaseResult<T>, E> {
         Ok(TestCaseResult {
-            module_name: self.module_name.clone(),
-            name: self.name.clone(),
-            full_name: self.full_name.clone(),
+            module_name: self.module_name,
+            name: self.name,
+            full_name: self.full_name,
             outcome: self.outcome.try_map_diagnostic(&mut map)?,
             duration: self.duration,
-            retry: self.retry.clone(),
-            captured_output: self.captured_output.clone(),
+            retry: self.retry,
+            captured_output: self.captured_output,
             attempts: self
                 .attempts
-                .iter()
+                .into_iter()
                 .map(|attempt| attempt.try_map_diagnostic(&mut map))
                 .collect::<Result<Vec<_>, _>>()?,
         })
@@ -171,7 +171,7 @@ impl<D> TestCaseAttempt<D> {
     }
 
     fn try_map_diagnostic<T, E>(
-        &self,
+        self,
         mut map: impl FnMut(&D) -> Result<T, E>,
     ) -> Result<TestCaseAttempt<T>, E> {
         Ok(TestCaseAttempt {
@@ -233,24 +233,14 @@ impl<D> TestCaseOutcome<D> {
     }
 
     pub fn error(diagnostic: D) -> Self {
-        Self::Error {
-            diagnostic,
-            related: Vec::new(),
-        }
+        Self::error_with_related(diagnostic, Vec::new())
     }
 
-    #[must_use]
-    pub fn with_related(mut self, related: Vec<D>) -> Self {
-        match &mut self {
-            Self::Failed {
-                related: existing, ..
-            }
-            | Self::Error {
-                related: existing, ..
-            } => *existing = related,
-            Self::Passed | Self::Skipped { .. } => {}
+    pub fn error_with_related(diagnostic: D, related: Vec<D>) -> Self {
+        Self::Error {
+            diagnostic,
+            related,
         }
-        self
     }
 
     pub fn is_failed(&self) -> bool {
@@ -295,7 +285,7 @@ impl<D> TestCaseOutcome<D> {
     }
 
     fn try_map_diagnostic<T, E>(
-        &self,
+        self,
         mut map: impl FnMut(&D) -> Result<T, E>,
     ) -> Result<TestCaseOutcome<T>, E> {
         Ok(match self {
@@ -304,19 +294,23 @@ impl<D> TestCaseOutcome<D> {
                 diagnostic,
                 related,
             } => TestCaseOutcome::Failed {
-                diagnostic: map(diagnostic)?,
-                related: related.iter().map(map).collect::<Result<Vec<_>, _>>()?,
+                diagnostic: map(&diagnostic)?,
+                related: related
+                    .into_iter()
+                    .map(|diagnostic| map(&diagnostic))
+                    .collect::<Result<Vec<_>, _>>()?,
             },
             Self::Error {
                 diagnostic,
                 related,
             } => TestCaseOutcome::Error {
-                diagnostic: map(diagnostic)?,
-                related: related.iter().map(map).collect::<Result<Vec<_>, _>>()?,
+                diagnostic: map(&diagnostic)?,
+                related: related
+                    .into_iter()
+                    .map(|diagnostic| map(&diagnostic))
+                    .collect::<Result<Vec<_>, _>>()?,
             },
-            Self::Skipped { reason } => TestCaseOutcome::Skipped {
-                reason: reason.clone(),
-            },
+            Self::Skipped { reason } => TestCaseOutcome::Skipped { reason },
         })
     }
 }

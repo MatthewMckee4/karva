@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use colored::Colorize;
 use karva_logging::time::format_duration_bracketed;
-use karva_python_semantic::QualifiedTestName;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,26 +17,6 @@ pub struct FlakyTest {
 }
 
 impl FlakyTest {
-    pub fn from_qualified_name(
-        test_name: &QualifiedTestName,
-        passed_on: u32,
-        total_attempts: u32,
-        duration: Duration,
-    ) -> Self {
-        Self {
-            module_name: test_name
-                .function_name()
-                .module_path()
-                .module_name()
-                .to_string(),
-            function_name: test_name.function_name().function_name().to_string(),
-            params: test_name.params().map(str::to_string),
-            passed_on,
-            total_attempts,
-            duration,
-        }
-    }
-
     pub fn from_display_name(
         module_name: &str,
         name: &str,

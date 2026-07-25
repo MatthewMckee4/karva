@@ -290,6 +290,67 @@ def test_something():
 }
 
 #[test]
+fn test_scoped_auto_use_setup_failure_runs_registered_finalizers() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture(scope="module", auto_use=True)
+def failing_teardown_fixture():
+    yield
+    raise RuntimeError("Teardown failed!")
+
+@karva.fixture(scope="module", auto_use=True)
+def failing_setup_fixture():
+    raise RuntimeError("Setup failed!")
+
+def test_unreachable():
+    raise AssertionError("test body ran")
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_unreachable
+
+    failures:
+
+    test::test_unreachable:
+
+    error[fixture-failure]: Fixture `failing_setup_fixture` failed
+      --> test.py:10:5
+       |
+    10 | def failing_setup_fixture():
+       |     ^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Fixture failed here
+      --> test.py:11:5
+       |
+    11 |     raise RuntimeError("Setup failed!")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Setup failed!
+
+    error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `failing_teardown_fixture`
+     --> test.py:5:5
+      |
+    5 | def failing_teardown_fixture():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Failed to reset fixture: Teardown failed!
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
 fn test_auto_use_fixture_with_failing_dependency() {
     let context = TestContext::with_file(
         "test.py",

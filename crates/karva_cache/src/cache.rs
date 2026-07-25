@@ -208,33 +208,32 @@ impl RunCache {
     pub fn write_result(
         &self,
         worker_id: usize,
-        result: &TestRunResult,
+        result: TestRunResult,
         cwd: &Utf8Path,
         config: &DisplayDiagnosticConfig,
     ) -> Result<()> {
         let worker_dir = self.worker_dir(worker_id);
         fs::create_dir_all(&worker_dir)?;
 
-        let run_diagnostics = result
-            .run_diagnostics()
+        let (run_diagnostics, stats, durations, test_cases) = result.into_parts();
+        let run_diagnostics = run_diagnostics
             .iter()
             .map(|diagnostic| render_diagnostic(diagnostic, cwd, config))
             .collect::<Result<Vec<_>>>()?;
-        let test_cases = result
-            .test_cases()
-            .iter()
+        let test_cases = test_cases
+            .into_iter()
             .map(|case| {
                 case.try_map_diagnostic(|diagnostic| render_diagnostic(diagnostic, cwd, config))
             })
             .collect::<Result<Vec<TestCaseResult>>>()?;
 
         let worker_results = WorkerResults {
-            slow: result.stats().slow(),
+            slow: stats.slow(),
             run_diagnostics,
             test_cases,
         };
 
-        write_json(&worker_dir, CacheFile::Durations, result.durations())?;
+        write_json(&worker_dir, CacheFile::Durations, &durations)?;
         write_json(&worker_dir, CacheFile::Results, &worker_results)?;
         Ok(())
     }
@@ -418,7 +417,8 @@ mod tests {
     ) {
         let worker_dir = dir.join(run_name).join(format!("worker-{worker_id}"));
         fs::create_dir_all(&worker_dir).unwrap();
-        let stats: TestResultStats = serde_json::from_str(stats_json).unwrap();
+        let stats: TestResultStats =
+            serde_json::from_str(stats_json).expect("deserialize test stats");
         let mut test_cases = Vec::new();
         for index in 0..stats.passed() {
             test_cases.push(TestCaseResult::from_display_name(
@@ -466,9 +466,9 @@ mod tests {
     fn write_worker_results(worker_dir: &std::path::Path, results: &WorkerResults) {
         fs::write(
             worker_dir.join(CacheFile::Results.filename()),
-            serde_json::to_string(results).unwrap(),
+            serde_json::to_string(results).expect("serialize worker results"),
         )
-        .unwrap();
+        .expect("write worker results");
     }
 
     #[test]
@@ -535,11 +535,12 @@ mod tests {
 
     #[test]
     fn aggregate_results_ignores_incomplete_worker() {
-        let tmp = tempfile::tempdir().unwrap();
-        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+        let tmp = tempfile::tempdir().expect("create temporary directory");
+        let cache_dir =
+            Utf8PathBuf::try_from(tmp.path().to_path_buf()).expect("temporary path is UTF-8");
         let run_hash = RunHash::from_existing("run-610");
         let worker_dir = tmp.path().join(run_hash.dir_name()).join("worker-0");
-        fs::create_dir_all(&worker_dir).unwrap();
+        fs::create_dir_all(&worker_dir).expect("create worker directory");
 
         let durations = HashMap::from([(
             "mod::test_uncommitted".to_string(),
@@ -547,13 +548,13 @@ mod tests {
         )]);
         fs::write(
             worker_dir.join(CacheFile::Durations.filename()),
-            serde_json::to_string(&durations).unwrap(),
+            serde_json::to_string(&durations).expect("serialize durations"),
         )
-        .unwrap();
+        .expect("write durations");
 
         let results = RunCache::new(&cache_dir, &run_hash)
             .aggregate_results()
-            .unwrap();
+            .expect("aggregate results");
 
         assert!(results.durations.is_empty());
     }
@@ -892,7 +893,10 @@ mod tests {
         );
 
         let cache = RunCache::new(&cache_dir, &run_hash);
-        let mut cases = cache.aggregate_results().unwrap().test_cases;
+        let mut cases = cache
+            .aggregate_results()
+            .expect("aggregate results")
+            .test_cases;
         cases.sort_by(|a, b| a.full_name().cmp(b.full_name()));
 
         assert_debug_snapshot!(cases, @r#"
