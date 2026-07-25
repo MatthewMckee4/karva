@@ -232,7 +232,11 @@ impl RunCache {
         };
 
         write_json(&worker_dir, CacheFile::Durations, &durations)?;
-        write_json(&worker_dir, CacheFile::Results, &worker_results)?;
+        write_text(
+            &worker_dir,
+            CacheFile::Results,
+            serde_json::to_vec(&worker_results)?,
+        )?;
         Ok(())
     }
 }

@@ -279,15 +279,14 @@ pub fn print_test_output(
 ) -> Result<()> {
     let mut details = printer.stream_for_details().lock();
 
-    let has_test_diagnostics = result
-        .test_cases
-        .iter()
-        .any(|case| case.outcome().is_non_success());
+    let has_test_diagnostics = !result.stats.is_success();
     let has_run_diagnostics = !result.run_diagnostics.is_empty();
     let has_diagnostics = has_test_diagnostics || has_run_diagnostics;
     let has_preceding_test_lines = result.stats.total() > 0;
 
-    write_test_failures_block(&mut details, result, has_preceding_test_lines)?;
+    if has_test_diagnostics {
+        write_test_failures_block(&mut details, result, has_preceding_test_lines)?;
+    }
     write_run_diagnostics_block(
         &mut details,
         result,
