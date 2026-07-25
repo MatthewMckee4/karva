@@ -229,15 +229,13 @@ pub fn report_failed_to_import_module(context: &Context, module_name: &str, erro
 pub fn report_failed_to_discover_imported_fixture(
     context: &Context,
     fixture_name: &str,
-    importing_source_file: SourceFile,
     source_path: &Utf8Path,
     error: &std::io::Error,
 ) {
-    let mut diagnostic = FAILED_TO_DISCOVER_IMPORTED_FIXTURE.diagnostic(format!(
+    let diagnostic = FAILED_TO_DISCOVER_IMPORTED_FIXTURE.diagnostic(format!(
         "Failed to discover imported fixture `{fixture_name}` from `{source_path}`: {error}"
     ));
 
-    diagnostic.annotate(Annotation::primary(Span::from(importing_source_file)));
     context.add_run_diagnostic(diagnostic);
 }
 
