@@ -67,6 +67,47 @@ class CaptureResult(NamedTuple):
     err: str
 
 
+class _CapturedStdin:
+    """Reject reads while Karva captures test output."""
+
+    _message = (
+        "stdin is unavailable while test output is captured\n\n"
+        "Pass input explicitly to the code under test, or use --no-capture for an\n"
+        "intentional interactive debugging session."
+    )
+
+    @property
+    def buffer(self) -> Self:
+        return self
+
+    def read(self, _size: int = -1) -> str:
+        raise OSError(self._message)
+
+    def read1(self, _size: int = -1) -> str:
+        raise OSError(self._message)
+
+    def readinto(self, _buffer: object) -> int:
+        raise OSError(self._message)
+
+    def readline(self, _size: int = -1) -> str:
+        raise OSError(self._message)
+
+    def readlines(self, _hint: int = -1) -> list[str]:
+        raise OSError(self._message)
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> str:
+        raise OSError(self._message)
+
+    def fileno(self) -> int:
+        raise OSError(self._message)
+
+    def isatty(self) -> bool:
+        return False
+
+
 class _CapsysDisabled:
     """Context manager that temporarily restores real stdout/stderr during capture."""
 

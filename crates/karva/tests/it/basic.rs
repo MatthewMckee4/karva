@@ -659,6 +659,85 @@ fn test_stdout() {
 }
 
 #[test]
+fn test_stdin_is_unavailable_while_captured() {
+    let context = TestContext::with_file(
+        "test_stdin.py",
+        r#"
+        import subprocess
+        import sys
+
+        MESSAGE = """stdin is unavailable while test output is captured
+
+        Pass input explicitly to the code under test, or use --no-capture for an
+        intentional interactive debugging session."""
+
+        def test_stdin():
+            readers = (
+                input,
+                sys.stdin.read,
+                sys.stdin.readline,
+                sys.stdin.readlines,
+                sys.stdin.fileno,
+                sys.stdin.buffer.read,
+                lambda: next(iter(sys.stdin)),
+            )
+            for read in readers:
+                try:
+                    read()
+                except OSError as error:
+                    assert str(error) == MESSAGE
+                else:
+                    raise AssertionError("stdin read succeeded")
+
+            child = subprocess.run(
+                [sys.executable, "-c", "import os; os.write(1, os.read(0, 1))"],
+                check=True,
+                stdout=subprocess.PIPE,
+                timeout=1,
+            )
+            assert child.stdout == b""
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_stdin::test_stdin
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_no_capture_preserves_stdin() {
+    let context = TestContext::with_file(
+        "test_stdin.py",
+        r"
+        import sys
+
+        def test_stdin():
+            assert sys.stdin is sys.__stdin__
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command().arg("--no-capture"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_stdin::test_stdin
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_failed_output_is_captured() {
     let context = TestContext::with_file(
         "test_failed_output.py",

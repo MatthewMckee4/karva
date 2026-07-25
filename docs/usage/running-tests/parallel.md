@@ -35,6 +35,8 @@ def database_url():
 
 By default, stdout/stderr from a test is captured and emitted only when the test fails or when `--show-output` / `-s` is set. This keeps parallel output legible — without capture, output from concurrent tests would interleave on the terminal.
 
+Captured tests cannot read from stdin, and child processes receive immediate EOF. Pass input explicitly to the code under test, or use `--no-capture` for an intentional interactive session.
+
 `--no-capture` disables capture entirely and forces a single worker, since uncaptured output from concurrent workers cannot safely interleave:
 
 ```bash
