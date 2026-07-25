@@ -99,7 +99,9 @@ def test_hello():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_hello
 
-    diagnostics:
+    failures:
+
+    test::test_hello:
 
     error[test-failure]: Test `test_hello` failed
      --> test.py:4:5
@@ -230,7 +232,9 @@ def test_both():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_both
 
-    diagnostics:
+    failures:
+
+    test::test_both:
 
     error[test-failure]: Test `test_both` failed
      --> test.py:4:5

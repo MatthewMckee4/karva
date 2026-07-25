@@ -468,7 +468,9 @@ def test_c():
             FAIL [TIME] test::test_a
             FAIL [TIME] test::test_b
 
-    diagnostics:
+    failures:
+
+    test::test_a:
 
     error[test-failure]: Test `test_a` failed
      --> test.py:2:5
@@ -482,6 +484,8 @@ def test_c():
     3 |     assert False
       |     ^^^^^^^^^^^^
       |
+
+    test::test_b:
 
     error[test-failure]: Test `test_b` failed
      --> test.py:5:5
@@ -571,7 +575,9 @@ def test_second():
         Starting 2 tests across 1 worker
             FAIL [TIME] test::test_first
 
-    diagnostics:
+    failures:
+
+    test::test_first:
 
     error[test-failure]: Test `test_first` failed
      --> test.py:2:5
@@ -628,7 +634,9 @@ def test_third():
             PASS [TIME] test::test_second
             FAIL [TIME] test::test_third
 
-    diagnostics:
+    failures:
+
+    test::test_first:
 
     error[test-failure]: Test `test_first` failed
      --> test.py:2:5
@@ -642,6 +650,8 @@ def test_third():
     3 |     assert False
       |     ^^^^^^^^^^^^
       |
+
+    test::test_third:
 
     error[test-failure]: Test `test_third` failed
      --> test.py:8:5
@@ -1199,7 +1209,9 @@ def test_second():
         Starting 2 tests across 1 worker
             FAIL [TIME] test::test_first
 
-    diagnostics:
+    failures:
+
+    test::test_first:
 
     error[test-failure]: Test `test_first` failed
      --> test.py:2:5

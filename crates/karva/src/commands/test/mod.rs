@@ -273,7 +273,7 @@ pub(super) fn print_run_timed_out(printer: Printer) -> std::io::Result<()> {
     writeln!(stdout, "\nerror: run timed out before all tests completed")
 }
 
-/// Print test output: diagnostics, durations, and result summary.
+/// Print test output: failures, run diagnostics, durations, and result summary.
 pub fn print_test_output(
     printer: Printer,
     start_time: Instant,
@@ -282,11 +282,21 @@ pub fn print_test_output(
 ) -> Result<()> {
     let mut details = printer.stream_for_details().lock();
 
-    let has_diagnostics = !result.diagnostics.is_empty();
+    let has_test_diagnostics = result
+        .test_cases
+        .iter()
+        .any(|case| case.outcome().is_failed());
+    let has_run_diagnostics = !result.diagnostics.is_empty();
+    let has_diagnostics = has_test_diagnostics || has_run_diagnostics;
     let has_captured_output = has_failed_captured_output(result);
     let has_preceding_test_lines = result.stats.total() > 0;
 
-    write_diagnostics_block(&mut details, result, has_preceding_test_lines)?;
+    write_test_failures_block(&mut details, result, has_preceding_test_lines)?;
+    write_run_diagnostics_block(
+        &mut details,
+        result,
+        has_preceding_test_lines && !has_test_diagnostics,
+    )?;
     write_captured_output_block(
         &mut details,
         result,
@@ -319,7 +329,39 @@ fn has_failed_captured_output(result: &AggregatedResults) -> bool {
         .any(|output| output.outcome().is_failed() && !output.is_empty())
 }
 
-fn write_diagnostics_block(
+fn write_test_failures_block(
+    stdout: &mut Stdout,
+    result: &AggregatedResults,
+    needs_leading_blank: bool,
+) -> Result<()> {
+    let failed_tests = result
+        .test_cases
+        .iter()
+        .filter_map(|case| {
+            case.outcome()
+                .diagnostic()
+                .map(|diagnostic| (case, diagnostic))
+        })
+        .collect::<Vec<_>>();
+    if failed_tests.is_empty() {
+        return Ok(());
+    }
+
+    if needs_leading_blank && stdout.is_enabled() {
+        writeln!(stdout)?;
+    }
+    writeln!(stdout, "failures:")?;
+    writeln!(stdout)?;
+    for (case, diagnostic) in failed_tests {
+        writeln!(stdout, "{}:", case.full_name())?;
+        writeln!(stdout)?;
+        write_rendered_diagnostic(stdout, diagnostic.rendered())?;
+    }
+
+    Ok(())
+}
+
+fn write_run_diagnostics_block(
     stdout: &mut Stdout,
     result: &AggregatedResults,
     needs_leading_blank: bool,
@@ -333,8 +375,21 @@ fn write_diagnostics_block(
     }
     writeln!(stdout, "diagnostics:")?;
     writeln!(stdout)?;
-    write!(stdout, "{}", result.diagnostics)?;
+    for diagnostic in &result.diagnostics {
+        write_rendered_diagnostic(stdout, diagnostic.rendered())?;
+    }
 
+    Ok(())
+}
+
+fn write_rendered_diagnostic(stdout: &mut Stdout, rendered: &str) -> Result<()> {
+    write!(stdout, "{rendered}")?;
+    if !rendered.ends_with('\n') {
+        writeln!(stdout)?;
+    }
+    if !rendered.ends_with("\n\n") {
+        writeln!(stdout)?;
+    }
     Ok(())
 }
 

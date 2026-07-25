@@ -11,7 +11,10 @@ use ruff_db::diagnostic::Diagnostic;
 
 use crate::reporter::Reporter;
 
-pub use case::{TestCaseOutcome, TestCaseResult, TestCaseRetry};
+pub use case::{
+    DiagnosticSeverity, RenderedDiagnostic, TestCaseOutcome, TestCaseResult, TestCaseRetry,
+    TestExecutionOutcome, TestExecutionResult,
+};
 pub use flaky::{DisplayFlakyTest, DisplayFlakyTests, FlakyTest};
 pub use kind::{IndividualTestResultKind, TestResultKind};
 pub use output::{CapturedTestOutcome, CapturedTestOutput};
@@ -22,9 +25,9 @@ pub use stats::TestResultStats;
 /// This is held in the test context and updated throughout the test run.
 #[derive(Debug, Clone, Default)]
 pub struct TestRunResult {
-    /// Diagnostics generated during test discovery, collection, and execution,
+    /// Diagnostics generated during test discovery and collection,
     /// in the order they were emitted.
-    diagnostics: Vec<Diagnostic>,
+    run_diagnostics: Vec<Diagnostic>,
 
     /// Stats generated during test execution.
     stats: TestResultStats,
@@ -39,7 +42,7 @@ pub struct TestRunResult {
     flaky_tests: Vec<FlakyTest>,
 
     /// Final outcome for each executed test variant.
-    test_cases: Vec<TestCaseResult>,
+    test_cases: Vec<TestExecutionResult>,
 
     /// Captured Python stdout/stderr for individual test variants.
     captured_outputs: Vec<CapturedTestOutput>,
@@ -67,12 +70,12 @@ fn diagnostic_display_ordering(a: &Diagnostic, b: &Diagnostic) -> std::cmp::Orde
 }
 
 impl TestRunResult {
-    pub fn diagnostics(&self) -> &[Diagnostic] {
-        &self.diagnostics
+    pub fn run_diagnostics(&self) -> &[Diagnostic] {
+        &self.run_diagnostics
     }
 
-    pub fn add_diagnostic(&mut self, diagnostic: Diagnostic) {
-        self.diagnostics.push(diagnostic);
+    pub fn add_run_diagnostic(&mut self, diagnostic: Diagnostic) {
+        self.run_diagnostics.push(diagnostic);
     }
 
     pub fn stats(&self) -> &TestResultStats {
@@ -100,20 +103,18 @@ impl TestRunResult {
     pub fn register_test_case_result(
         &mut self,
         test_case_name: &QualifiedTestName,
-        result: IndividualTestResultKind,
+        outcome: TestExecutionOutcome,
         duration: std::time::Duration,
         reporter: Option<&dyn Reporter>,
     ) {
+        let result = outcome.result_kind();
         self.stats.add(result.clone().into());
 
         let function_name = test_case_name.function_name().clone();
-        self.test_cases.push(TestCaseResult::new(
-            test_case_name,
-            TestCaseOutcome::from(&result),
-            duration,
-        ));
+        self.test_cases
+            .push(TestCaseResult::new(test_case_name, outcome, duration));
 
-        if matches!(result, IndividualTestResultKind::Failed) {
+        if matches!(&result, IndividualTestResultKind::Failed) {
             self.failed_tests.push(function_name.clone());
         }
 
@@ -140,25 +141,26 @@ impl TestRunResult {
     pub fn register_retried_result(
         &mut self,
         test_case_name: &QualifiedTestName,
-        result: &IndividualTestResultKind,
+        outcome: TestExecutionOutcome,
         duration: std::time::Duration,
         passed_on: u32,
         total_attempts: u32,
         _reporter: Option<&dyn Reporter>,
     ) {
+        let result = outcome.result_kind();
         self.stats.add(result.clone().into());
 
         let function_name = test_case_name.function_name().clone();
         self.test_cases.push(TestCaseResult::retried(
             test_case_name,
-            TestCaseOutcome::from(result),
+            outcome,
             duration,
             TestCaseRetry::new(passed_on, total_attempts),
         ));
 
-        if matches!(result, IndividualTestResultKind::Failed) {
+        if matches!(&result, IndividualTestResultKind::Failed) {
             self.failed_tests.push(function_name.clone());
-        } else if matches!(result, IndividualTestResultKind::Passed) {
+        } else if matches!(&result, IndividualTestResultKind::Passed) {
             self.stats.add(TestResultKind::Flaky);
             self.flaky_tests.push(FlakyTest::from_qualified_name(
                 test_case_name,
@@ -207,7 +209,7 @@ impl TestRunResult {
 
     #[must_use]
     pub fn into_sorted(mut self) -> Self {
-        self.diagnostics.sort_by(diagnostic_display_ordering);
+        self.run_diagnostics.sort_by(diagnostic_display_ordering);
         self.test_cases.sort_by(|a, b| {
             a.module_name()
                 .cmp(b.module_name())
@@ -230,7 +232,7 @@ impl TestRunResult {
         &self.flaky_tests
     }
 
-    pub fn test_cases(&self) -> &[TestCaseResult] {
+    pub fn test_cases(&self) -> &[TestExecutionResult] {
         &self.test_cases
     }
 

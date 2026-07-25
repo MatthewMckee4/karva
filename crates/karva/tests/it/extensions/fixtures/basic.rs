@@ -814,12 +814,24 @@ Path(__file__).with_name('mypackage').joinpath('fixtures.py').unlink()
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
             FAIL [TIME] test_invoke::test_invoke
+
+    failures:
+
+    test_invoke::test_invoke:
+
+    error[missing-fixtures]: Test `test_invoke` has missing fixtures
+     --> test_invoke.py:1:5
+      |
+    1 | def test_invoke(invoke): assert invoke == 'invoked'
+      |     ^^^^^^^^^^^
+      |
+    info: Missing fixtures: `invoke`
 
     diagnostics:
 
@@ -829,14 +841,6 @@ Path(__file__).with_name('mypackage').joinpath('fixtures.py').unlink()
     1 | from pathlib import Path
       | ^
       |
-
-    error[missing-fixtures]: Test `test_invoke` has missing fixtures
-     --> test_invoke.py:1:5
-      |
-    1 | def test_invoke(invoke): assert invoke == 'invoked'
-      |     ^^^^^^^^^^^
-      |
-    info: Missing fixtures: `invoke`
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

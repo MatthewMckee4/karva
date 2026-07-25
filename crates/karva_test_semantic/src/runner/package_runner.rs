@@ -4,20 +4,21 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use karva_coverage::CoverageSession;
-use karva_diagnostic::IndividualTestResultKind;
+use karva_diagnostic::{IndividualTestResultKind, TestExecutionOutcome};
 use karva_metadata::RunIgnoredMode;
 use karva_metadata::filter::EvalContext;
 use karva_python_semantic::{FunctionKind, QualifiedFunctionName, QualifiedTestName};
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
+use ruff_db::diagnostic::Diagnostic;
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
 
 use crate::Context;
 use crate::diagnostic::{
-    report_fixture_failure, report_fixture_resolution_error, report_invalid_parametrize,
-    report_missing_fixtures, report_test_failure, report_test_pass_on_expect_failure,
-    report_test_returned_value,
+    fixture_resolution_diagnostic, invalid_parametrize_diagnostic, missing_fixtures_diagnostic,
+    report_fixture_failure, test_failure_diagnostic, test_pass_on_expect_failure_diagnostic,
+    test_returned_value_diagnostic,
 };
 use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::{
@@ -106,34 +107,34 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         }
     }
 
-    fn register_failed_test(&self, test: &DiscoveredTestFunction) {
+    fn register_failed_test(&self, test: &DiscoveredTestFunction, diagnostic: Diagnostic) {
         self.context.register_test_case_result(
             &QualifiedTestName::new(test.name.clone(), None),
-            IndividualTestResultKind::Failed,
+            TestExecutionOutcome::Failed { diagnostic },
             std::time::Duration::ZERO,
         );
         self.record_outcome(false);
     }
 
-    fn register_failed_module_tests(&self, module: &DiscoveredModule) {
+    fn register_failed_module_tests(&self, module: &DiscoveredModule, diagnostic: &Diagnostic) {
         for test in module.test_functions() {
-            self.register_failed_test(test);
+            self.register_failed_test(test, diagnostic.clone());
             if self.max_fail_reached() {
                 return;
             }
         }
     }
 
-    fn register_failed_package_tests(&self, package: &DiscoveredPackage) {
+    fn register_failed_package_tests(&self, package: &DiscoveredPackage, diagnostic: &Diagnostic) {
         for module in package.modules().values() {
-            self.register_failed_module_tests(module);
+            self.register_failed_module_tests(module, diagnostic);
             if self.max_fail_reached() {
                 return;
             }
         }
 
         for child_package in package.packages().values() {
-            self.register_failed_package_tests(child_package);
+            self.register_failed_package_tests(child_package, diagnostic);
             if self.max_fail_reached() {
                 return;
             }
@@ -149,13 +150,12 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                     .tags
                     .validate_parametrize(&test_function.stmt_function_def)
                 {
-                    report_invalid_parametrize(
-                        self.context,
+                    let diagnostic = invalid_parametrize_diagnostic(
                         test_function.source_file.clone(),
                         &test_function.stmt_function_def,
                         &error,
                     );
-                    self.register_failed_test(test_function);
+                    self.register_failed_test(test_function, diagnostic);
                     valid = false;
                     if self.max_fail_reached() {
                         return false;
@@ -224,8 +224,8 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         // `if let Some(...)` gate: the session always exists, and if neither
         // slot contributes any autouse fixtures the walk returns an empty vec.
         if let Err(error) = self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session) {
-            report_fixture_resolution_error(self.context, error);
-            self.register_failed_package_tests(session);
+            let diagnostic = fixture_resolution_diagnostic(error);
+            self.register_failed_package_tests(session, &diagnostic);
             return;
         }
 
@@ -267,8 +267,8 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         parents: &[&DiscoveredPackage],
     ) -> bool {
         if let Err(error) = self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module) {
-            report_fixture_resolution_error(self.context, error);
-            self.register_failed_module_tests(module);
+            let diagnostic = fixture_resolution_diagnostic(error);
+            self.register_failed_module_tests(module, &diagnostic);
             return false;
         }
 
@@ -281,8 +281,8 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             let variants = match TestVariantIterator::new(py, test_function, &mut test_resolver) {
                 Ok(variants) => variants,
                 Err(error) => {
-                    report_fixture_resolution_error(self.context, error);
-                    self.register_failed_test(test_function);
+                    let diagnostic = fixture_resolution_diagnostic(error);
+                    self.register_failed_test(test_function, diagnostic);
                     passed = false;
                     if self.max_fail_reached() {
                         break;
@@ -330,8 +330,8 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             if let Err(error) =
                 self.run_auto_use_fixtures(py, parents, config_module, FixtureScope::Package)
             {
-                report_fixture_resolution_error(self.context, error);
-                self.register_failed_package_tests(package);
+                let diagnostic = fixture_resolution_diagnostic(error);
+                self.register_failed_package_tests(package, &diagnostic);
                 return false;
             }
         }
@@ -384,7 +384,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             if !filter.matches(&ctx) {
                 return Some(self.context.register_test_case_result(
                     &qualified,
-                    IndividualTestResultKind::Skipped { reason: None },
+                    TestExecutionOutcome::Skipped { reason: None },
                     std::time::Duration::ZERO,
                 ));
             }
@@ -395,7 +395,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 if let (true, reason) = tags.should_skip() {
                     return Some(self.context.register_test_case_result(
                         &QualifiedTestName::new(name.clone(), None),
-                        IndividualTestResultKind::Skipped { reason },
+                        TestExecutionOutcome::Skipped { reason },
                         std::time::Duration::ZERO,
                     ));
                 }
@@ -406,7 +406,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 if let (false, _) = tags.should_skip() {
                     return Some(self.context.register_test_case_result(
                         &QualifiedTestName::new(name.clone(), None),
-                        IndividualTestResultKind::Skipped { reason: None },
+                        TestExecutionOutcome::Skipped { reason: None },
                         std::time::Duration::ZERO,
                     ));
                 }
@@ -468,16 +468,15 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
     /// Classify a test result, handling `expect_fail` logic and error
     /// reporting. The provided `register` closure is invoked exactly once
-    /// with the final [`IndividualTestResultKind`] so the caller can choose
+    /// with the final [`TestExecutionOutcome`] so the caller can choose
     /// between `register_test_case_result` (for non-retried tests) and
     /// `register_retried_result` (for retried tests).
     fn classify_test_result(
-        &self,
         py: Python<'_>,
         test_result: PyResult<TestCallOutcome>,
         fixture_call_errors: Vec<FixtureCallError>,
         ctx: &VariantReportCtx<'_>,
-        register: impl FnOnce(IndividualTestResultKind) -> bool,
+        register: impl FnOnce(TestExecutionOutcome) -> bool,
     ) -> bool {
         let expect_fail = ctx
             .expect_fail_tag
@@ -486,65 +485,61 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
         let err = match test_result {
             Ok(TestCallOutcome::ReturnedValue(_)) if expect_fail => {
-                return register(IndividualTestResultKind::Passed);
+                return register(TestExecutionOutcome::Passed);
             }
             Ok(TestCallOutcome::ReturnedValue(value)) => {
-                report_test_returned_value(
-                    self.context,
+                let diagnostic = test_returned_value_diagnostic(
                     ctx.source_file.clone(),
                     ctx.stmt_function_def,
                     &value,
                 );
-                return register(IndividualTestResultKind::Failed);
+                return register(TestExecutionOutcome::Failed { diagnostic });
             }
             Ok(TestCallOutcome::ReturnedNone) if expect_fail => {
                 let reason = ctx.expect_fail_tag.as_ref().and_then(ExpectFailTag::reason);
-                report_test_pass_on_expect_failure(
-                    self.context,
+                let diagnostic = test_pass_on_expect_failure_diagnostic(
                     ctx.source_file.clone(),
                     ctx.stmt_function_def,
                     reason,
                 );
-                return register(IndividualTestResultKind::Failed);
+                return register(TestExecutionOutcome::Failed { diagnostic });
             }
-            Ok(TestCallOutcome::ReturnedNone) => return register(IndividualTestResultKind::Passed),
+            Ok(TestCallOutcome::ReturnedNone) => return register(TestExecutionOutcome::Passed),
             Err(err) => err,
         };
 
         if is_skip_exception(py, &err) {
-            return register(IndividualTestResultKind::Skipped {
+            return register(TestExecutionOutcome::Skipped {
                 reason: extract_skip_reason(py, &err),
             });
         }
 
         if expect_fail {
-            return register(IndividualTestResultKind::Passed);
+            return register(TestExecutionOutcome::Passed);
         }
 
         let missing_args = missing_arguments_from_error(ctx.name.function_name(), &err.to_string());
 
-        if missing_args.is_empty() {
-            report_test_failure(
-                self.context,
+        let diagnostic = if missing_args.is_empty() {
+            test_failure_diagnostic(
                 py,
                 ctx.source_file,
                 ctx.stmt_function_def,
                 ctx.function_arguments,
                 &err,
-            );
+            )
         } else {
-            report_missing_fixtures(
-                self.context,
+            missing_fixtures_diagnostic(
                 py,
                 ctx.source_file.clone(),
                 ctx.stmt_function_def,
                 &missing_args,
                 FunctionKind::Test,
                 fixture_call_errors,
-            );
-        }
+            )
+        };
 
-        register(IndividualTestResultKind::Failed)
+        register(TestExecutionOutcome::Failed { diagnostic })
     }
 
     /// Drive the test closure with the configured retry budget.
@@ -788,22 +783,37 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             // ran. This keeps `FLAKY M/T` readable as "passed on attempt M
             // out of an allowed T."
             let total_attempts = max_attempts;
-            self.classify_test_result(py, test_result, fixture_call_errors, &report_ctx, |kind| {
-                final_kind = Some(kind.clone());
-                self.context.register_retried_result(
-                    &qualified_test_name,
-                    &kind,
-                    total_duration,
-                    passed_on,
-                    total_attempts,
-                )
-            })
+            Self::classify_test_result(
+                py,
+                test_result,
+                fixture_call_errors,
+                &report_ctx,
+                |outcome| {
+                    final_kind = Some(outcome.result_kind());
+                    self.context.register_retried_result(
+                        &qualified_test_name,
+                        outcome,
+                        total_duration,
+                        passed_on,
+                        total_attempts,
+                    )
+                },
+            )
         } else {
-            self.classify_test_result(py, test_result, fixture_call_errors, &report_ctx, |kind| {
-                final_kind = Some(kind.clone());
-                self.context
-                    .register_test_case_result(&qualified_test_name, kind, total_duration)
-            })
+            Self::classify_test_result(
+                py,
+                test_result,
+                fixture_call_errors,
+                &report_ctx,
+                |outcome| {
+                    final_kind = Some(outcome.result_kind());
+                    self.context.register_test_case_result(
+                        &qualified_test_name,
+                        outcome,
+                        total_duration,
+                    )
+                },
+            )
         };
 
         for finalizer in test_finalizers.into_iter().rev() {

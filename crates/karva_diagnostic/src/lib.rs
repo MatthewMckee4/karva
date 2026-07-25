@@ -5,8 +5,9 @@ mod traceback;
 
 pub use reporter::{DummyReporter, Reporter, TestCaseReporter};
 pub use result::{
-    CapturedTestOutcome, CapturedTestOutput, DisplayFlakyTest, DisplayFlakyTests, FlakyTest,
-    IndividualTestResultKind, TestCaseOutcome, TestCaseResult, TestCaseRetry, TestResultKind,
+    CapturedTestOutcome, CapturedTestOutput, DiagnosticSeverity, DisplayFlakyTest,
+    DisplayFlakyTests, FlakyTest, IndividualTestResultKind, RenderedDiagnostic, TestCaseOutcome,
+    TestCaseResult, TestCaseRetry, TestExecutionOutcome, TestExecutionResult, TestResultKind,
     TestResultStats, TestRunResult,
 };
 

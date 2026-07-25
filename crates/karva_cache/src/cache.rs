@@ -6,8 +6,8 @@ use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use karva_diagnostic::{
-    CapturedTestOutput, FlakyTest, TestCaseOutcome, TestCaseResult, TestResultKind,
-    TestResultStats, TestRunResult,
+    CapturedTestOutput, FlakyTest, RenderedDiagnostic, TestCaseOutcome, TestCaseResult,
+    TestResultKind, TestResultStats, TestRunResult,
 };
 use ruff_db::diagnostic::DisplayDiagnosticConfig;
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::artifact::{
     CacheFile, read_json, read_text, write_json, write_json_if_nonempty, write_text,
 };
-use crate::diagnostics::write_diagnostics;
+use crate::diagnostics::render_diagnostic;
 use crate::{RUN_PREFIX, RunHash, WORKER_PREFIX, worker_folder};
 
 /// Snapshot of the test a worker is currently executing.
@@ -35,7 +35,7 @@ pub struct CurrentTest {
 #[derive(Default)]
 pub struct AggregatedResults {
     pub stats: TestResultStats,
-    pub diagnostics: String,
+    pub diagnostics: Vec<RenderedDiagnostic>,
     pub failed_tests: Vec<String>,
     pub flaky_tests: Vec<FlakyTest>,
     pub test_cases: Vec<TestCaseResult>,
@@ -50,7 +50,9 @@ impl AggregatedResults {
         self.failed_tests.push(function_name.clone());
         self.test_cases.push(TestCaseResult::from_display_name(
             name,
-            TestCaseOutcome::Failed,
+            TestCaseOutcome::Failed {
+                diagnostic: RenderedDiagnostic::interrupted(name),
+            },
             duration,
         ));
         self.durations.insert(function_name, duration);
@@ -166,7 +168,12 @@ impl RunCache {
         let worker_dir = self.worker_dir(worker_id);
         fs::create_dir_all(&worker_dir)?;
 
-        write_diagnostics(&worker_dir, result, cwd, config)?;
+        let run_diagnostics = result
+            .run_diagnostics()
+            .iter()
+            .map(|diagnostic| render_diagnostic(diagnostic, cwd, config))
+            .collect::<Result<Vec<_>>>()?;
+        write_json_if_nonempty(&worker_dir, CacheFile::Diagnostics, &run_diagnostics)?;
         write_json(&worker_dir, CacheFile::Stats, result.stats())?;
         write_json(&worker_dir, CacheFile::Durations, result.durations())?;
 
@@ -177,7 +184,14 @@ impl RunCache {
             .collect();
         write_json_if_nonempty(&worker_dir, CacheFile::FailedTests, &failed_names)?;
         write_json_if_nonempty(&worker_dir, CacheFile::FlakyTests, result.flaky_tests())?;
-        write_json_if_nonempty(&worker_dir, CacheFile::TestCases, result.test_cases())?;
+        let test_cases = result
+            .test_cases()
+            .iter()
+            .map(|case| {
+                case.try_map_diagnostic(|diagnostic| render_diagnostic(diagnostic, cwd, config))
+            })
+            .collect::<Result<Vec<TestCaseResult>>>()?;
+        write_json_if_nonempty(&worker_dir, CacheFile::TestCases, &test_cases)?;
         write_json_if_nonempty(
             &worker_dir,
             CacheFile::CapturedOutput,
@@ -194,8 +208,10 @@ fn read_worker_results(worker_dir: &Utf8Path, results: &mut AggregatedResults) -
         results.stats.merge(&stats);
     }
 
-    if let Some(content) = read_text(worker_dir, CacheFile::Diagnostics)? {
-        results.diagnostics.push_str(&content);
+    if let Some(diagnostics) =
+        read_json::<Vec<RenderedDiagnostic>>(worker_dir, CacheFile::Diagnostics)?
+    {
+        results.diagnostics.extend(diagnostics);
     }
 
     if let Some(failed) = read_json::<Vec<String>>(worker_dir, CacheFile::FailedTests)? {
@@ -838,7 +854,14 @@ mod tests {
                 module_name: "mod",
                 name: "test_slow(value=1)",
                 full_name: "mod::test_slow(value=1)",
-                outcome: Failed,
+                outcome: Failed {
+                    diagnostic: RenderedDiagnostic {
+                        code: "interrupted",
+                        severity: Error,
+                        message: "Test `mod::test_slow(value=1)` was interrupted",
+                        rendered: "error[interrupted]: Test `mod::test_slow(value=1)` was interrupted\n",
+                    },
+                },
                 duration: 42ms,
                 retry: None,
             },
@@ -846,7 +869,14 @@ mod tests {
                 module_name: "mod",
                 name: "test_legacy[value]",
                 full_name: "mod::test_legacy[value]",
-                outcome: Failed,
+                outcome: Failed {
+                    diagnostic: RenderedDiagnostic {
+                        code: "interrupted",
+                        severity: Error,
+                        message: "Test `mod::test_legacy[value]` was interrupted",
+                        rendered: "error[interrupted]: Test `mod::test_legacy[value]` was interrupted\n",
+                    },
+                },
                 duration: 24ms,
                 retry: None,
             },

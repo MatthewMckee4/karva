@@ -60,7 +60,9 @@ def test_skip():
     exit_code: 1
     ----- stdout -----
 
-    diagnostics:
+    failures:
+
+    test_alpha::test_fail:
 
     error[test-failure]: Test `test_fail` failed
      --> test_alpha.py:8:5
@@ -93,7 +95,20 @@ def test_skip():
     <testsuites name="karva-ci" tests="3" failures="1" skipped="1" errors="0" time="[TIME]">
       <testsuite name="test_alpha" tests="2" failures="1" skipped="0" errors="0" time="[TIME]">
         <testcase classname="test_alpha" name="test_fail" time="[TIME]">
-          <failure message="test failed"/>
+          <failure message="Test `test_fail` failed" type="test-failure">error[test-failure]: Test `test_fail` failed
+     --&gt; test_alpha.py:8:5
+      |
+    8 | def test_fail():
+      |     ^^^^^^^^^
+      |
+    info: Test failed here
+      --&gt; test_alpha.py:11:5
+       |
+    11 |     assert False
+       |     ^^^^^^^^^^^^
+       |
+
+    </failure>
           <system-out>fail stdout
     </system-out>
           <system-err>fail stderr
@@ -150,7 +165,9 @@ def test_flaky():
     exit_code: 1
     ----- stdout -----
 
-    diagnostics:
+    failures:
+
+    test_retry::test_fail:
 
     error[test-failure]: Test `test_fail` failed
      --> test_retry.py:4:5
@@ -179,7 +196,20 @@ def test_flaky():
     <testsuites name="karva-tests" tests="2" failures="1" skipped="0" errors="0" time="[TIME]">
       <testsuite name="test_retry" tests="2" failures="1" skipped="0" errors="0" time="[TIME]">
         <testcase classname="test_retry" name="test_fail" time="[TIME]">
-          <failure message="test failed"/>
+          <failure message="Test `test_fail` failed" type="test-failure">error[test-failure]: Test `test_fail` failed
+     --&gt; test_retry.py:4:5
+      |
+    4 | def test_fail():
+      |     ^^^^^^^^^
+      |
+    info: Test failed here
+     --&gt; test_retry.py:5:5
+      |
+    5 |     assert False
+      |     ^^^^^^^^^^^^
+      |
+
+    </failure>
         </testcase>
         <testcase classname="test_retry" name="test_flaky" time="[TIME]">
           <system-out>attempt 1

@@ -32,21 +32,25 @@ def test_with_fail_with_keyword_reason():
             FAIL [TIME] test::test_with_fail_with_no_reason
             FAIL [TIME] test::test_with_fail_with_keyword_reason
 
-    diagnostics:
+    failures:
 
-    error[test-failure]: Test `test_with_fail_with_reason` failed
-     --> test.py:4:5
-      |
-    4 | def test_with_fail_with_reason():
-      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
+    test::test_with_fail_with_keyword_reason:
+
+    error[test-failure]: Test `test_with_fail_with_keyword_reason` failed
+      --> test.py:10:5
+       |
+    10 | def test_with_fail_with_keyword_reason():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
     info: Test failed here
-     --> test.py:5:5
-      |
-    5 |     karva.fail('This is a custom failure message')
-      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
+      --> test.py:11:5
+       |
+    11 |     karva.fail(reason='This is a custom failure message')
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
     info: This is a custom failure message
+
+    test::test_with_fail_with_no_reason:
 
     error[test-failure]: Test `test_with_fail_with_no_reason` failed
      --> test.py:7:5
@@ -61,18 +65,20 @@ def test_with_fail_with_keyword_reason():
       |     ^^^^^^^^^^^^
       |
 
-    error[test-failure]: Test `test_with_fail_with_keyword_reason` failed
-      --> test.py:10:5
-       |
-    10 | def test_with_fail_with_keyword_reason():
-       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
+    test::test_with_fail_with_reason:
+
+    error[test-failure]: Test `test_with_fail_with_reason` failed
+     --> test.py:4:5
+      |
+    4 | def test_with_fail_with_reason():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: Test failed here
-      --> test.py:11:5
-       |
-    11 |     karva.fail(reason='This is a custom failure message')
-       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
+     --> test.py:5:5
+      |
+    5 |     karva.fail('This is a custom failure message')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: This is a custom failure message
 
     ────────────
@@ -104,7 +110,9 @@ def test_conditional_fail():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_conditional_fail
 
-    diagnostics:
+    failures:
+
+    test::test_conditional_fail:
 
     error[test-failure]: Test `test_conditional_fail` failed
      --> test.py:4:5
@@ -146,7 +154,9 @@ def test_raise_fail_error():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_raise_fail_error
 
-    diagnostics:
+    failures:
+
+    test::test_raise_fail_error:
 
     error[test-failure]: Test `test_raise_fail_error` failed
      --> test.py:4:5
@@ -370,7 +380,9 @@ def test_raises_no_exception():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_raises_no_exception
 
-    diagnostics:
+    failures:
+
+    test::test_raises_no_exception:
 
     error[test-failure]: Test `test_raises_no_exception` failed
      --> test.py:4:5
@@ -439,7 +451,9 @@ def test_raises_match_fails():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_raises_match_fails
 
-    diagnostics:
+    failures:
+
+    test::test_raises_match_fails:
 
     error[test-failure]: Test `test_raises_match_fails` failed
      --> test.py:4:5
@@ -482,7 +496,9 @@ def test_raises_wrong_type():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_raises_wrong_type
 
-    diagnostics:
+    failures:
+
+    test::test_raises_wrong_type:
 
     error[test-failure]: Test `test_raises_wrong_type` failed
      --> test.py:4:5

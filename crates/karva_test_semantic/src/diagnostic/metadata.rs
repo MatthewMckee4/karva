@@ -1,7 +1,5 @@
 use ruff_db::diagnostic::{Diagnostic, DiagnosticId, LintName, Severity};
 
-use crate::Context;
-
 /// Defines a type of diagnostic that can be reported during test execution.
 ///
 /// Each diagnostic type has a unique name, summary description, and severity level
@@ -37,76 +35,8 @@ macro_rules! declare_diagnostic_type {
     };
 }
 
-/// Builder for creating diagnostic guards with the appropriate context.
-///
-/// Used to construct diagnostics with the correct ID, severity, and context
-/// before they are finalized and reported.
-pub struct DiagnosticGuardBuilder<'ctx, 'a> {
-    /// Reference to the test execution context.
-    context: &'ctx Context<'a>,
-
-    /// Unique identifier for this diagnostic.
-    id: DiagnosticId,
-
-    /// Severity level for this diagnostic.
-    severity: Severity,
-}
-
-impl<'ctx, 'a> DiagnosticGuardBuilder<'ctx, 'a> {
-    pub(crate) fn new(
-        context: &'ctx Context<'a>,
-        diagnostic_type: &'static DiagnosticType,
-    ) -> Self {
-        DiagnosticGuardBuilder {
-            context,
-            id: DiagnosticId::Lint(diagnostic_type.name),
-            severity: diagnostic_type.severity,
-        }
-    }
-
-    /// Build a diagnostic guard with the given message.
-    pub(crate) fn into_diagnostic(
-        self,
-        message: impl std::fmt::Display,
-    ) -> DiagnosticGuard<'ctx, 'a> {
-        DiagnosticGuard {
-            context: self.context,
-            diag: Some(Diagnostic::new(self.id, self.severity, message)),
-        }
-    }
-}
-
-/// A guard that holds a diagnostic and reports it when dropped.
-///
-/// Allows mutation of the diagnostic before it is automatically
-/// reported to the test results when the guard goes out of scope.
-pub struct DiagnosticGuard<'ctx, 'a> {
-    /// Reference to the test execution context.
-    context: &'ctx Context<'a>,
-
-    /// The diagnostic being built, wrapped in Option for take-on-drop.
-    diag: Option<Diagnostic>,
-}
-
-/// Return a immutable borrow of the diagnostic in this guard.
-impl std::ops::Deref for DiagnosticGuard<'_, '_> {
-    type Target = Diagnostic;
-
-    fn deref(&self) -> &Diagnostic {
-        self.diag.as_ref().unwrap()
-    }
-}
-
-/// Return a mutable borrow of the diagnostic in this guard.
-impl std::ops::DerefMut for DiagnosticGuard<'_, '_> {
-    fn deref_mut(&mut self) -> &mut Diagnostic {
-        self.diag.as_mut().unwrap()
-    }
-}
-
-impl Drop for DiagnosticGuard<'_, '_> {
-    fn drop(&mut self) {
-        let diag = self.diag.take().unwrap();
-        self.context.result().add_diagnostic(diag);
+impl DiagnosticType {
+    pub(crate) fn diagnostic(&self, message: impl std::fmt::Display) -> Diagnostic {
+        Diagnostic::new(DiagnosticId::Lint(self.name), self.severity, message)
     }
 }

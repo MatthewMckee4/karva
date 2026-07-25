@@ -881,7 +881,9 @@ def test_no_such_fixture(not_a_real_fixture):
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_no_such_fixture
 
-    diagnostics:
+    failures:
+
+    test::test_no_such_fixture:
 
     error[missing-fixtures]: Test `test_no_such_fixture` has missing fixtures
      --> test.py:2:5

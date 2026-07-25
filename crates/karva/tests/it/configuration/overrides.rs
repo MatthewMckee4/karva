@@ -76,7 +76,9 @@ def test_flaky():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_flaky
 
-    diagnostics:
+    failures:
+
+    test::test_flaky:
 
     error[test-failure]: Test `test_flaky` failed
      --> test.py:2:5
@@ -133,7 +135,9 @@ def test_unit():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_unit
 
-    diagnostics:
+    failures:
+
+    test::test_unit:
 
     error[test-failure]: Test `test_unit` failed
      --> test.py:5:5
@@ -222,7 +226,9 @@ def test_slow():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_slow
 
-    diagnostics:
+    failures:
+
+    test::test_slow:
 
     error[test-failure]: Test `test_slow` failed
      --> test.py:6:5

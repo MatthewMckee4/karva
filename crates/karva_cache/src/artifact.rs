@@ -20,7 +20,7 @@ use tempfile::NamedTempFile;
 pub enum CacheFile {
     /// Per-worker JSON: aggregated `TestResultStats`.
     Stats,
-    /// Per-worker text: rendered diagnostics from discovery, collection, and execution.
+    /// Per-worker JSON: structured run-level diagnostics.
     Diagnostics,
     /// Per-worker JSON: map of test id to wall-clock duration.
     Durations,
@@ -49,7 +49,7 @@ impl CacheFile {
     pub const fn filename(self) -> &'static str {
         match self {
             Self::Stats => "stats.json",
-            Self::Diagnostics => "diagnostics.txt",
+            Self::Diagnostics => "diagnostics.json",
             Self::Durations => "durations.json",
             Self::FailedTests => "failed_tests.json",
             Self::FlakyTests => "flaky_tests.json",

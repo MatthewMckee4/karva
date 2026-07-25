@@ -5,13 +5,15 @@ use anyhow::{Context as _, Result};
 use camino::Utf8Path;
 use karva_cache::AggregatedResults;
 use karva_cli::ResultFormat;
-use karva_diagnostic::{CapturedTestOutput, TestCaseOutcome, TestCaseResult, TestCaseRetry};
+use karva_diagnostic::{
+    CapturedTestOutput, RenderedDiagnostic, TestCaseOutcome, TestCaseResult, TestCaseRetry,
+};
 use karva_project::path::absolute;
 use serde::Serialize;
 
 use crate::ExitStatus;
 
-const SCHEMA_VERSION: u8 = 1;
+const SCHEMA_VERSION: u8 = 2;
 
 pub(super) fn write_result_report(
     path: Option<&Utf8Path>,
@@ -99,7 +101,7 @@ struct RunReport<'a> {
     stats: StatsReport,
     tests: Vec<TestReport<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    diagnostics: Option<&'a str>,
+    diagnostics: Option<&'a [RenderedDiagnostic]>,
 }
 
 impl<'a> RunReport<'a> {
@@ -110,7 +112,8 @@ impl<'a> RunReport<'a> {
             .iter()
             .map(|case| TestReport::new(case, captured_outputs.get(case.full_name()).copied()))
             .collect();
-        let diagnostics = (!results.diagnostics.is_empty()).then_some(results.diagnostics.as_str());
+        let diagnostics =
+            (!results.diagnostics.is_empty()).then_some(results.diagnostics.as_slice());
 
         Self {
             schema_version: SCHEMA_VERSION,
@@ -177,14 +180,16 @@ struct TestReport<'a> {
     retry: Option<RetryReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     captured_output: Option<CapturedOutputReport<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    diagnostic: Option<&'a RenderedDiagnostic>,
 }
 
 impl<'a> TestReport<'a> {
     fn new(case: &'a TestCaseResult, output: Option<&'a CapturedTestOutput>) -> Self {
-        let (status, skip_reason) = match case.outcome() {
-            TestCaseOutcome::Passed => (TestStatus::Passed, None),
-            TestCaseOutcome::Failed => (TestStatus::Failed, None),
-            TestCaseOutcome::Skipped { reason } => (TestStatus::Skipped, reason.as_deref()),
+        let (status, skip_reason, diagnostic) = match case.outcome() {
+            TestCaseOutcome::Passed => (TestStatus::Passed, None, None),
+            TestCaseOutcome::Failed { diagnostic } => (TestStatus::Failed, None, Some(diagnostic)),
+            TestCaseOutcome::Skipped { reason } => (TestStatus::Skipped, reason.as_deref(), None),
         };
         let retry = case.retry().map(RetryReport::new);
         let flaky = matches!(case.outcome(), TestCaseOutcome::Passed) && retry.is_some();
@@ -201,6 +206,7 @@ impl<'a> TestReport<'a> {
             captured_output: output
                 .filter(|output| !output.is_empty())
                 .map(CapturedOutputReport::new),
+            diagnostic,
         }
     }
 }
@@ -247,7 +253,7 @@ impl<'a> CapturedOutputReport<'a> {
 
 #[derive(Serialize)]
 struct DiagnosticsEvent<'a> {
-    diagnostics: &'a str,
+    diagnostics: &'a [RenderedDiagnostic],
 }
 
 #[derive(Serialize)]

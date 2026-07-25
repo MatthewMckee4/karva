@@ -149,7 +149,9 @@ fn durations_with_failing_tests() {
             PASS [TIME] test_durations::test_pass
             FAIL [TIME] test_durations::test_fail
 
-    diagnostics:
+    failures:
+
+    test_durations::test_fail:
 
     error[test-failure]: Test `test_fail` failed
      --> test_durations.py:6:5

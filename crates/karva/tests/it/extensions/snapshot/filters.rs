@@ -200,7 +200,9 @@ def test_bad_regex():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_bad_regex
 
-    diagnostics:
+    failures:
+
+    test::test_bad_regex:
 
     error[test-failure]: Test `test_bad_regex` failed
      --> test.py:4:5

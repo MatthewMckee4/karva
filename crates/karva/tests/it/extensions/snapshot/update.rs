@@ -62,7 +62,9 @@ def test_hello():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_hello
 
-    diagnostics:
+    failures:
+
+    test::test_hello:
 
     error[test-failure]: Test `test_hello` failed
      --> test.py:4:5
@@ -145,7 +147,9 @@ def test_user_data():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_user_data
 
-    diagnostics:
+    failures:
+
+    test::test_user_data:
 
     error[test-failure]: Test `test_user_data` failed
      --> test.py:7:5
@@ -330,7 +334,9 @@ def test_second():
             PASS [TIME] test::test_first
             FAIL [TIME] test::test_second
 
-    diagnostics:
+    failures:
+
+    test::test_second:
 
     error[test-failure]: Test `test_second` failed
      --> test.py:7:5

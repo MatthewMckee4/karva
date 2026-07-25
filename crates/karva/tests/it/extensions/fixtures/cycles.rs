@@ -26,7 +26,9 @@ def test_cycle(value):
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_cycle
 
-    diagnostics:
+    failures:
+
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> test.py:6:5
@@ -75,7 +77,9 @@ def test_cycle(database):
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_cycle
 
-    diagnostics:
+    failures:
+
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> test.py:6:11
@@ -140,7 +144,9 @@ def test_cycle(database):
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_cycle
 
-    diagnostics:
+    failures:
+
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> conftest.py:6:5
@@ -202,7 +208,9 @@ def test_cycle(requested):
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_cycle
 
-    diagnostics:
+    failures:
+
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
       --> test.py:10:5
@@ -261,7 +269,9 @@ def test_cycle():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_cycle
 
-    diagnostics:
+    failures:
+
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> test.py:6:5
@@ -318,7 +328,25 @@ def test_cycle_two():
             FAIL [TIME] test::test_cycle_one
             FAIL [TIME] test::test_cycle_two
 
-    diagnostics:
+    failures:
+
+    test::test_cycle_one:
+
+    error[fixture-cycle]: Fixture dependency cycle detected
+     --> test.py:6:5
+      |
+    6 | def first(second):
+      |     ^^^^^
+      |
+    info: Fixture `second` requires `first`
+      --> test.py:10:5
+       |
+    10 | def second(first):
+       |     ^^^^^^
+       |
+    info: first -> second -> first
+
+    test::test_cycle_two:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> test.py:6:5
@@ -391,7 +419,25 @@ def test_nested_cycle():
             FAIL [TIME] test::test_cycle
             FAIL [TIME] nested.test_nested::test_nested_cycle
 
-    diagnostics:
+    failures:
+
+    nested.test_nested::test_nested_cycle:
+
+    error[fixture-cycle]: Fixture dependency cycle detected
+     --> conftest.py:6:5
+      |
+    6 | def first(second):
+      |     ^^^^^
+      |
+    info: Fixture `second` requires `first`
+      --> conftest.py:10:5
+       |
+    10 | def second(first):
+       |     ^^^^^^
+       |
+    info: first -> second -> first
+
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> conftest.py:6:5
@@ -453,7 +499,9 @@ def test_cycle():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_cycle
 
-    diagnostics:
+    failures:
+
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> conftest.py:6:5
@@ -507,7 +555,9 @@ def test_cycle():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_cycle
 
-    diagnostics:
+    failures:
+
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> test.py:6:5

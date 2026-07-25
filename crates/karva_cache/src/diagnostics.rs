@@ -2,53 +2,45 @@ use std::path::Path;
 
 use anyhow::{Result, bail};
 use camino::Utf8Path;
-use karva_diagnostic::TestRunResult;
+use karva_diagnostic::RenderedDiagnostic;
 use ruff_db::diagnostic::{
-    DisplayDiagnosticConfig, DisplayDiagnostics, DummyFileResolver, FileResolver, Input,
-    UnifiedFile,
+    Diagnostic, DisplayDiagnosticConfig, DummyFileResolver, FileResolver, Input, UnifiedFile,
 };
 use ruff_db::files::File;
 use ruff_notebook::NotebookIndex;
 
-use crate::artifact::{CacheFile, write_text};
-
-/// Renders diagnostics into the worker directory.
-///
 /// Karva creates diagnostics from `ruff_source_file::SourceFile` values, not
 /// from Ruff's ty/Salsa database. Validate that contract before entering
 /// Ruff's renderer so an unsupported span is reported as a cache write error
 /// instead of becoming a renderer panic.
-pub fn write_diagnostics(
-    worker_dir: &Utf8Path,
-    result: &TestRunResult,
+pub fn render_diagnostic(
+    diagnostic: &Diagnostic,
     cwd: &Utf8Path,
     config: &DisplayDiagnosticConfig,
-) -> Result<()> {
-    if result.diagnostics().is_empty() {
-        return Ok(());
-    }
-
-    ensure_source_file_spans(result)?;
+) -> Result<RenderedDiagnostic> {
+    ensure_source_file_spans(diagnostic)?;
 
     let resolver = DiagnosticFileResolver::new(cwd);
-    let output = DisplayDiagnostics::new(&resolver, config, result.diagnostics());
-    write_text(worker_dir, CacheFile::Diagnostics, output.to_string())
+    Ok(RenderedDiagnostic::new(
+        diagnostic.id().as_str(),
+        diagnostic.severity().into(),
+        diagnostic.primary_message(),
+        diagnostic.display(&resolver, config).to_string(),
+    ))
 }
 
-fn ensure_source_file_spans(result: &TestRunResult) -> Result<()> {
-    for diagnostic in result.diagnostics() {
-        for annotation in diagnostic
-            .primary_annotation()
-            .into_iter()
-            .chain(diagnostic.secondary_annotations())
-        {
-            ensure_source_file_span(annotation.get_span().file())?;
-        }
+fn ensure_source_file_spans(diagnostic: &Diagnostic) -> Result<()> {
+    for annotation in diagnostic
+        .primary_annotation()
+        .into_iter()
+        .chain(diagnostic.secondary_annotations())
+    {
+        ensure_source_file_span(annotation.get_span().file())?;
+    }
 
-        for sub_diagnostic in diagnostic.sub_diagnostics() {
-            for annotation in sub_diagnostic.annotations() {
-                ensure_source_file_span(annotation.get_span().file())?;
-            }
+    for sub_diagnostic in diagnostic.sub_diagnostics() {
+        for annotation in sub_diagnostic.annotations() {
+            ensure_source_file_span(annotation.get_span().file())?;
         }
     }
 
@@ -97,7 +89,6 @@ impl FileResolver for DiagnosticFileResolver<'_> {
 #[cfg(test)]
 mod tests {
     use camino::Utf8PathBuf;
-    use karva_diagnostic::TestRunResult;
     use ruff_db::diagnostic::{
         Annotation, Diagnostic, DiagnosticId, DisplayDiagnosticConfig, LintName, Severity, Span,
     };
@@ -107,11 +98,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn writes_source_file_diagnostics() {
+    fn renders_source_file_diagnostics() {
         let temp_dir = tempfile::tempdir().unwrap();
         let cwd = Utf8PathBuf::try_from(temp_dir.path().to_path_buf()).unwrap();
-        let worker_dir = cwd.join("worker-0");
-        std::fs::create_dir_all(&worker_dir).unwrap();
 
         let source = "def test_example():\n    assert False\n";
         let source_file =
@@ -125,16 +114,13 @@ mod tests {
             Span::from(source_file).with_range(TextRange::new(TextSize::new(4), TextSize::new(16))),
         ));
 
-        let mut result = TestRunResult::default();
-        result.add_diagnostic(diagnostic);
-
         let config = DisplayDiagnosticConfig::new("karva").context(0);
-        write_diagnostics(&worker_dir, &result, &cwd, &config).unwrap();
+        let rendered = render_diagnostic(&diagnostic, &cwd, &config).unwrap();
 
-        let rendered =
-            std::fs::read_to_string(CacheFile::Diagnostics.path_in(&worker_dir)).unwrap();
-        assert!(rendered.contains("test_sample.py"));
-        assert!(rendered.contains("Test `test_example` failed"));
-        assert!(rendered.contains("def test_example():"));
+        assert_eq!(rendered.code(), "test-failure");
+        assert_eq!(rendered.message(), "Test `test_example` failed");
+        assert!(rendered.rendered().contains("test_sample.py"));
+        assert!(rendered.rendered().contains("Test `test_example` failed"));
+        assert!(rendered.rendered().contains("def test_example():"));
     }
 }

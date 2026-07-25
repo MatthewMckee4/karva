@@ -21,7 +21,9 @@ fn last_failed_reruns_only_failures() {
         Starting 1 test across 1 worker
             FAIL [TIME] test_a::test_fail
 
-    diagnostics:
+    failures:
+
+    test_a::test_fail:
 
     error[test-failure]: Test `test_fail` failed
      --> test_a.py:3:5
@@ -62,7 +64,9 @@ fn last_failed_lf_alias() {
         Starting 1 test across 1 worker
             FAIL [TIME] test_a::test_fail
 
-    diagnostics:
+    failures:
+
+    test_a::test_fail:
 
     error[test-failure]: Test `test_fail` failed
      --> test_a.py:3:5
@@ -160,7 +164,9 @@ def test_fail_b(): assert False
     exit_code: 1
     ----- stdout -----
 
-    diagnostics:
+    failures:
+
+    test_a::test_fail_a:
 
     error[test-failure]: Test `test_fail_a` failed
      --> test_a.py:3:5
@@ -174,6 +180,8 @@ def test_fail_b(): assert False
     3 | def test_fail_a(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
+
+    test_b::test_fail_b:
 
     error[test-failure]: Test `test_fail_b` failed
      --> test_b.py:3:5
@@ -221,7 +229,9 @@ def test_fail_b(): assert False
         Starting 2 tests across 1 worker
             FAIL [TIME] test_a::test_fail_a
 
-    diagnostics:
+    failures:
+
+    test_a::test_fail_a:
 
     error[test-failure]: Test `test_fail_a` failed
      --> test_a.py:3:5
@@ -268,7 +278,9 @@ def test_fail_b(): assert False
     exit_code: 1
     ----- stdout -----
 
-    diagnostics:
+    failures:
+
+    test_a::test_fail_a:
 
     error[test-failure]: Test `test_fail_a` failed
      --> test_a.py:3:5
@@ -321,7 +333,9 @@ def test_new_fail(): assert False
     exit_code: 1
     ----- stdout -----
 
-    diagnostics:
+    failures:
+
+    test_a::test_fail:
 
     error[test-failure]: Test `test_fail` failed
      --> test_a.py:3:5

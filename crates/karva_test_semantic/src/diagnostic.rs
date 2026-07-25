@@ -17,8 +17,6 @@ use ruff_source_file::SourceFile;
 
 mod metadata;
 
-pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
-
 use crate::extensions::tags::parametrize::InvalidParametrizeError;
 use crate::runner::{
     FixtureArguments, FixtureCallError, FixtureChainEntry, FixtureResolutionEntry,
@@ -217,17 +215,15 @@ fn report_dependency_chain(
 }
 
 pub fn report_collection_error(context: &Context, error: &CollectionError) {
-    let builder = context.report_diagnostic(&FAILED_TO_COLLECT_MODULE);
-
-    builder.into_diagnostic(format!("Failed to collect python module: {error}"));
+    context.add_run_diagnostic(
+        FAILED_TO_COLLECT_MODULE.diagnostic(format!("Failed to collect python module: {error}")),
+    );
 }
 
 pub fn report_failed_to_import_module(context: &Context, module_name: &str, error: &str) {
-    let builder = context.report_diagnostic(&FAILED_TO_IMPORT_MODULE);
-
-    builder.into_diagnostic(format!(
+    context.add_run_diagnostic(FAILED_TO_IMPORT_MODULE.diagnostic(format!(
         "Failed to import python module `{module_name}`: {error}"
-    ));
+    )));
 }
 
 pub fn report_failed_to_discover_imported_fixture(
@@ -237,13 +233,12 @@ pub fn report_failed_to_discover_imported_fixture(
     source_path: &Utf8Path,
     error: &std::io::Error,
 ) {
-    let builder = context.report_diagnostic(&FAILED_TO_DISCOVER_IMPORTED_FIXTURE);
-
-    let mut diagnostic = builder.into_diagnostic(format!(
+    let mut diagnostic = FAILED_TO_DISCOVER_IMPORTED_FIXTURE.diagnostic(format!(
         "Failed to discover imported fixture `{fixture_name}` from `{source_path}`: {error}"
     ));
 
     diagnostic.annotate(Annotation::primary(Span::from(importing_source_file)));
+    context.add_run_diagnostic(diagnostic);
 }
 
 pub fn report_invalid_fixture(
@@ -253,9 +248,7 @@ pub fn report_invalid_fixture(
     stmt_function_def: &StmtFunctionDef,
     error: &PyErr,
 ) {
-    let builder = context.report_diagnostic(&INVALID_FIXTURE);
-
-    let mut diagnostic = builder.into_diagnostic(format!(
+    let mut diagnostic = INVALID_FIXTURE.diagnostic(format!(
         "Discovered an invalid fixture `{}`",
         stmt_function_def.name
     ));
@@ -267,6 +260,7 @@ pub fn report_invalid_fixture(
     if !error_string.is_empty() {
         diagnostic.info(indent_continuation_lines(&error_string));
     }
+    context.add_run_diagnostic(diagnostic);
 }
 
 pub fn report_invalid_fixture_finalizer(
@@ -275,9 +269,7 @@ pub fn report_invalid_fixture_finalizer(
     stmt_function_def: &StmtFunctionDef,
     reason: &str,
 ) {
-    let builder = context.report_diagnostic(&INVALID_FIXTURE_FINALIZER);
-
-    let mut diagnostic = builder.into_diagnostic(format!(
+    let mut diagnostic = INVALID_FIXTURE_FINALIZER.diagnostic(format!(
         "Discovered an invalid fixture finalizer `{}`",
         stmt_function_def.name
     ));
@@ -285,6 +277,7 @@ pub fn report_invalid_fixture_finalizer(
     annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
 
     diagnostic.info(reason);
+    context.add_run_diagnostic(diagnostic);
 }
 
 pub fn report_fixture_failure(context: &Context, py: Python, error: FixtureCallError) {
@@ -297,9 +290,7 @@ pub fn report_fixture_failure(context: &Context, py: Python, error: FixtureCallE
         dependency_chain,
     } = error;
 
-    let builder = context.report_diagnostic(&FIXTURE_FAILURE);
-
-    let mut diagnostic = builder.into_diagnostic(format!("Fixture `{fixture_name}` failed"));
+    let mut diagnostic = FIXTURE_FAILURE.diagnostic(format!("Fixture `{fixture_name}` failed"));
 
     report_dependency_chain(&mut diagnostic, &dependency_chain, &fixture_name);
 
@@ -312,32 +303,30 @@ pub fn report_fixture_failure(context: &Context, py: Python, error: FixtureCallE
         FunctionKind::Fixture,
         &error,
     );
+    context.add_run_diagnostic(diagnostic);
 }
 
-pub fn report_fixture_resolution_error(context: &Context, error: FixtureResolutionError) {
+pub fn fixture_resolution_diagnostic(error: FixtureResolutionError) -> Diagnostic {
     match error {
-        FixtureResolutionError::Cycle { cycle } => report_fixture_cycle(context, &cycle),
+        FixtureResolutionError::Cycle { cycle } => fixture_cycle_diagnostic(&cycle),
         FixtureResolutionError::ScopeMismatch {
             dependency_path,
             fixture,
             dependency,
-        } => report_fixture_scope_mismatch(context, &dependency_path, &fixture, &dependency),
+        } => fixture_scope_mismatch_diagnostic(&dependency_path, &fixture, &dependency),
     }
 }
 
-fn report_fixture_cycle(context: &Context, cycle: &[FixtureResolutionEntry]) {
-    let Some(first_fixture) = cycle.first() else {
-        return;
-    };
+fn fixture_cycle_diagnostic(cycle: &[FixtureResolutionEntry]) -> Diagnostic {
+    let mut diagnostic = FIXTURE_CYCLE.diagnostic("Fixture dependency cycle detected");
 
-    let builder = context.report_diagnostic(&FIXTURE_CYCLE);
-    let mut diagnostic = builder.into_diagnostic("Fixture dependency cycle detected");
-
-    annotate_function_name(
-        &mut diagnostic,
-        first_fixture.source_file.clone(),
-        &first_fixture.stmt_function_def,
-    );
+    if let Some(first_fixture) = cycle.first() {
+        annotate_function_name(
+            &mut diagnostic,
+            first_fixture.source_file.clone(),
+            &first_fixture.stmt_function_def,
+        );
+    }
 
     for dependency_edge in cycle.windows(2).skip(1) {
         let [fixture, dependency] = dependency_edge else {
@@ -360,16 +349,15 @@ fn report_fixture_cycle(context: &Context, cycle: &[FixtureResolutionEntry]) {
             .collect::<Vec<_>>()
             .join(" -> "),
     );
+    diagnostic
 }
 
-fn report_fixture_scope_mismatch(
-    context: &Context,
+fn fixture_scope_mismatch_diagnostic(
     dependency_path: &[FixtureResolutionEntry],
     fixture: &FixtureResolutionEntry,
     dependency: &FixtureResolutionEntry,
-) {
-    let builder = context.report_diagnostic(&FIXTURE_SCOPE_MISMATCH);
-    let mut diagnostic = builder.into_diagnostic(format!(
+) -> Diagnostic {
+    let mut diagnostic = FIXTURE_SCOPE_MISMATCH.diagnostic(format!(
         "Fixture `{}` with `{}` scope cannot depend on fixture `{}` with `{}` scope",
         fixture.name,
         fixture.scope.name(),
@@ -410,20 +398,18 @@ fn report_fixture_scope_mismatch(
         .with_range(dependency.stmt_function_def.name.range);
     dependency_sub.annotate(Annotation::primary(span));
     diagnostic.sub(dependency_sub);
+    diagnostic
 }
 
-pub fn report_missing_fixtures(
-    context: &Context,
+pub fn missing_fixtures_diagnostic(
     py: Python,
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
     missing_fixtures: &[String],
     function_kind: FunctionKind,
     fixture_call_errors: Vec<FixtureCallError>,
-) {
-    let builder = context.report_diagnostic(&MISSING_FIXTURES);
-
-    let mut diagnostic = builder.into_diagnostic(format!(
+) -> Diagnostic {
+    let mut diagnostic = MISSING_FIXTURES.diagnostic(format!(
         "{} `{}` has missing fixtures",
         function_kind.capitalised(),
         stmt_function_def.name
@@ -479,17 +465,15 @@ pub fn report_missing_fixtures(
             diagnostic.info(indent_continuation_lines(&error_string));
         }
     }
+    diagnostic
 }
 
-pub fn report_test_pass_on_expect_failure(
-    context: &Context,
+pub fn test_pass_on_expect_failure_diagnostic(
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
     reason: Option<String>,
-) {
-    let builder = context.report_diagnostic(&TEST_PASS_ON_EXPECT_FAILURE);
-
-    let mut diagnostic = builder.into_diagnostic(format!(
+) -> Diagnostic {
+    let mut diagnostic = TEST_PASS_ON_EXPECT_FAILURE.diagnostic(format!(
         "Test `{}` passes when expected to fail",
         stmt_function_def.name
     ));
@@ -499,20 +483,18 @@ pub fn report_test_pass_on_expect_failure(
     if let Some(reason) = reason {
         diagnostic.info(format!("Reason: {reason}"));
     }
+    diagnostic
 }
 
-pub fn report_test_failure(
-    context: &Context,
+pub fn test_failure_diagnostic(
     py: Python,
     source_file: &SourceFile,
     stmt_function_def: &StmtFunctionDef,
     arguments: &FixtureArguments,
     error: &PyErr,
-) {
-    let builder = context.report_diagnostic(&TEST_FAILURE);
-
+) -> Diagnostic {
     let mut diagnostic =
-        builder.into_diagnostic(format!("Test `{}` failed", stmt_function_def.name));
+        TEST_FAILURE.diagnostic(format!("Test `{}` failed", stmt_function_def.name));
 
     handle_failed_function_call(
         &mut diagnostic,
@@ -523,6 +505,7 @@ pub fn report_test_failure(
         FunctionKind::Test,
         error,
     );
+    diagnostic
 }
 
 pub fn report_generator_test(
@@ -530,28 +513,25 @@ pub fn report_generator_test(
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
 ) {
-    let builder = context.report_diagnostic(&INVALID_TEST);
-
-    let mut diagnostic = builder.into_diagnostic(format!(
+    let mut diagnostic = INVALID_TEST.diagnostic(format!(
         "Generator test `{}` is not supported",
         stmt_function_def.name
     ));
 
     annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
     diagnostic.info("Use `@karva.tags.parametrize` to define multiple test cases.");
+    context.add_run_diagnostic(diagnostic);
 }
 
-pub fn report_invalid_parametrize(
-    context: &Context,
+pub fn invalid_parametrize_diagnostic(
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
     error: &InvalidParametrizeError,
-) {
-    let builder = context.report_diagnostic(&INVALID_PARAMETRIZE);
-    let mut diagnostic = builder.into_diagnostic(error.to_string());
+) -> Diagnostic {
+    let mut diagnostic = INVALID_PARAMETRIZE.diagnostic(error.to_string());
     let Some(location) = error.diagnostic_location(stmt_function_def) else {
         annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
-        return;
+        return diagnostic;
     };
 
     diagnostic.annotate(
@@ -564,23 +544,22 @@ pub fn report_invalid_parametrize(
                 .message(secondary.message),
         );
     }
+    diagnostic
 }
 
-pub fn report_test_returned_value(
-    context: &Context,
+pub fn test_returned_value_diagnostic(
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
     returned_value: &str,
-) {
-    let builder = context.report_diagnostic(&TEST_RETURNED_VALUE);
-
-    let mut diagnostic = builder.into_diagnostic(format!(
+) -> Diagnostic {
+    let mut diagnostic = TEST_RETURNED_VALUE.diagnostic(format!(
         "Test `{}` returned `{returned_value}`",
         stmt_function_def.name
     ));
 
     annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
     diagnostic.info("Test functions must return None. Did you mean to use `assert`?");
+    diagnostic
 }
 
 fn handle_failed_function_call(

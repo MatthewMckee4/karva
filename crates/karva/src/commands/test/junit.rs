@@ -103,7 +103,7 @@ fn write_case(
     let output = captured_outputs.get(case.full_name()).copied();
     let include_output = match case.outcome() {
         TestCaseOutcome::Passed => settings.store_success_output,
-        TestCaseOutcome::Failed => settings.store_failure_output,
+        TestCaseOutcome::Failed { .. } => settings.store_failure_output,
         TestCaseOutcome::Skipped { .. } => false,
     };
     let has_output = include_output
@@ -125,8 +125,14 @@ fn write_case(
     xml.push_str(">\n");
     match case.outcome() {
         TestCaseOutcome::Passed => {}
-        TestCaseOutcome::Failed => {
-            xml.push_str("      <failure message=\"test failed\"/>\n");
+        TestCaseOutcome::Failed { diagnostic } => {
+            writeln!(
+                xml,
+                "      <failure message=\"{}\" type=\"{}\">{}</failure>",
+                escape_xml(diagnostic.message()),
+                escape_xml(diagnostic.code()),
+                escape_xml(diagnostic.rendered()),
+            )?;
         }
         TestCaseOutcome::Skipped { reason } => {
             if let Some(reason) = reason {

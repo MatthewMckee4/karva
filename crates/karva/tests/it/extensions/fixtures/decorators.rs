@@ -186,7 +186,9 @@ def test_fixtures_given_by_decorator(a, b):
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_fixtures_given_by_decorator
 
-    diagnostics:
+    failures:
+
+    test::test_fixtures_given_by_decorator:
 
     error[missing-fixtures]: Test `test_fixtures_given_by_decorator` has missing fixtures
       --> test.py:13:5

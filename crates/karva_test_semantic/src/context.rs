@@ -2,12 +2,11 @@ use std::cell::RefCell;
 
 use camino::Utf8Path;
 use karva_collector::CollectionSettings;
-use karva_diagnostic::{IndividualTestResultKind, Reporter, TestRunResult};
+use karva_diagnostic::{IndividualTestResultKind, Reporter, TestExecutionOutcome, TestRunResult};
 use karva_metadata::ProjectSettings;
 use karva_python_semantic::QualifiedTestName;
+use ruff_db::diagnostic::Diagnostic;
 use ruff_python_ast::PythonVersion;
-
-use crate::diagnostic::{DiagnosticGuardBuilder, DiagnosticType};
 
 /// Central context object that holds shared state for a test run.
 ///
@@ -87,22 +86,19 @@ impl<'a> Context<'a> {
     pub fn register_test_case_result(
         &self,
         test_case_name: &QualifiedTestName,
-        test_result: IndividualTestResultKind,
+        outcome: TestExecutionOutcome,
         duration: std::time::Duration,
     ) -> bool {
-        let result = matches!(
-            &test_result,
-            IndividualTestResultKind::Passed | IndividualTestResultKind::Skipped { .. }
-        );
+        let passed = !outcome.is_failed();
 
         self.result().register_test_case_result(
             test_case_name,
-            test_result,
+            outcome,
             duration,
             Some(self.reporter),
         );
 
-        result
+        passed
     }
 
     /// Forward a per-attempt outcome to the reporter. Does not touch
@@ -143,18 +139,15 @@ impl<'a> Context<'a> {
     pub fn register_retried_result(
         &self,
         test_case_name: &QualifiedTestName,
-        result: &IndividualTestResultKind,
+        outcome: TestExecutionOutcome,
         duration: std::time::Duration,
         passed_on: u32,
         total_attempts: u32,
     ) -> bool {
-        let passed = matches!(
-            result,
-            IndividualTestResultKind::Passed | IndividualTestResultKind::Skipped { .. }
-        );
+        let passed = !outcome.is_failed();
         self.result().register_retried_result(
             test_case_name,
-            result,
+            outcome,
             duration,
             passed_on,
             total_attempts,
@@ -174,11 +167,8 @@ impl<'a> Context<'a> {
             .register_captured_output(test_case_name, result, stdout, stderr);
     }
 
-    pub(crate) fn report_diagnostic<'ctx>(
-        &'ctx self,
-        rule: &'static DiagnosticType,
-    ) -> DiagnosticGuardBuilder<'ctx, 'a> {
-        DiagnosticGuardBuilder::new(self, rule)
+    pub(crate) fn add_run_diagnostic(&self, diagnostic: Diagnostic) {
+        self.result().add_run_diagnostic(diagnostic);
     }
 
     pub fn python_version(&self) -> PythonVersion {
