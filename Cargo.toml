@@ -65,6 +65,7 @@ ruff_notebook = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_options_metadata = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_python_ast = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_python_parser = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
+ruff_python_stdlib = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_python_trivia = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_source_file = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_text_size = { git = "https://github.com/astral-sh/ruff/", branch = "main" }

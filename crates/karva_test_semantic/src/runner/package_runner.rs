@@ -15,8 +15,9 @@ use ruff_source_file::SourceFile;
 
 use crate::Context;
 use crate::diagnostic::{
-    report_fixture_cycle, report_fixture_failure, report_missing_fixtures, report_test_failure,
-    report_test_pass_on_expect_failure, report_test_returned_value,
+    report_fixture_cycle, report_fixture_failure, report_invalid_parametrize,
+    report_missing_fixtures, report_test_failure, report_test_pass_on_expect_failure,
+    report_test_returned_value,
 };
 use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::{
@@ -139,6 +140,40 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         }
     }
 
+    fn validate_parametrization(&self, package: &DiscoveredPackage) -> bool {
+        let mut valid = true;
+
+        for module in package.modules().values() {
+            for test_function in module.test_functions() {
+                if let Err(error) = test_function
+                    .tags
+                    .validate_parametrize(&test_function.stmt_function_def)
+                {
+                    report_invalid_parametrize(
+                        self.context,
+                        test_function.source_file.clone(),
+                        &test_function.stmt_function_def,
+                        &error,
+                    );
+                    self.register_failed_test(test_function);
+                    valid = false;
+                    if self.max_fail_reached() {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        for child_package in package.packages().values() {
+            valid &= self.validate_parametrization(child_package);
+            if self.max_fail_reached() {
+                return false;
+            }
+        }
+
+        valid
+    }
+
     fn start_output_capture(&self, py: Python<'_>) -> Option<PythonOutputCapture> {
         if self.context.settings().terminal().show_python_output {
             return None;
@@ -179,6 +214,10 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
     ///
     /// The main entrypoint for actual test execution.
     pub(crate) fn execute(&self, py: Python<'_>, session: &DiscoveredPackage) {
+        if !self.validate_parametrization(session) {
+            return;
+        }
+
         // Resolve session-scoped auto-use fixtures using the session package
         // itself as the `HasFixtures` source so that the walk includes both
         // the user conftest at the session root and the framework module. No

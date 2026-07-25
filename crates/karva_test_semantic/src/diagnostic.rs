@@ -19,6 +19,7 @@ mod metadata;
 
 pub use metadata::{DiagnosticGuardBuilder, DiagnosticType};
 
+use crate::extensions::tags::parametrize::InvalidParametrizeError;
 use crate::runner::{FixtureArguments, FixtureCallError, FixtureChainEntry, FixtureCycleError};
 use crate::utils::truncate_string;
 use crate::{Context, declare_diagnostic_type};
@@ -31,6 +32,16 @@ declare_diagnostic_type! {
     /// because its source text was unavailable.
     pub static FAILED_TO_COLLECT_MODULE = {
         summary: "Failed to collect python module",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
+    /// ## Invalid parametrization
+    ///
+    /// Raised when a parametrization cannot produce valid test arguments.
+    pub static INVALID_PARAMETRIZE = {
+        summary: "Invalid parametrization",
         severity: Severity::Error,
     }
 }
@@ -455,6 +466,31 @@ pub fn report_generator_test(
 
     annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
     diagnostic.info("Use `@karva.tags.parametrize` to define multiple test cases.");
+}
+
+pub fn report_invalid_parametrize(
+    context: &Context,
+    source_file: SourceFile,
+    stmt_function_def: &StmtFunctionDef,
+    error: &InvalidParametrizeError,
+) {
+    let builder = context.report_diagnostic(&INVALID_PARAMETRIZE);
+    let mut diagnostic = builder.into_diagnostic(error.to_string());
+    let Some(location) = error.diagnostic_location(stmt_function_def) else {
+        annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
+        return;
+    };
+
+    diagnostic.annotate(
+        Annotation::primary(Span::from(source_file.clone()).with_range(location.primary.range))
+            .message(location.primary.message),
+    );
+    for secondary in location.secondary {
+        diagnostic.annotate(
+            Annotation::secondary(Span::from(source_file.clone()).with_range(secondary.range))
+                .message(secondary.message),
+        );
+    }
 }
 
 pub fn report_test_returned_value(
