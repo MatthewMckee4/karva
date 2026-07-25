@@ -1,4 +1,4 @@
-"""Karva is a Python test runner, written in Rust."""
+"""Karva is a Python test framework, written in Rust."""
 
 from karva._builtins import MockEnv
 from karva._karva import (

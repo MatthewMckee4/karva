@@ -1,4 +1,4 @@
-"""Karva is a Python test runner, written in Rust."""
+"""Karva is a Python test framework, written in Rust."""
 
 from __future__ import annotations
 
