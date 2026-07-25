@@ -482,22 +482,14 @@ pub fn report_invalid_parametrize(
     };
 
     diagnostic.annotate(
-        Annotation::primary(Span::from(source_file.clone()).with_range(location.primary))
-            .message(location.primary_message),
+        Annotation::primary(Span::from(source_file.clone()).with_range(location.primary.range))
+            .message(location.primary.message),
     );
-    if let Some((range, message)) = location.secondary {
+    for secondary in location.secondary {
         diagnostic.annotate(
-            Annotation::secondary(Span::from(source_file.clone()).with_range(range))
-                .message(message),
+            Annotation::secondary(Span::from(source_file.clone()).with_range(secondary.range))
+                .message(secondary.message),
         );
-    }
-
-    for (range, message) in location.related {
-        let mut sub = SubDiagnostic::new(SubDiagnosticSeverity::Info, message);
-        sub.annotate(Annotation::primary(
-            Span::from(source_file.clone()).with_range(range),
-        ));
-        diagnostic.sub(sub);
     }
 }
 

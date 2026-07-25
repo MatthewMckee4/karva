@@ -84,6 +84,315 @@ def fixture():
 }
 
 #[test]
+fn test_parametrize_rejects_wrong_arity_with_karva_keyword_arguments() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize(
+    arg_values=[(1, 2), (3,)],
+    arg_names=("left", "right"),
+)
+def test_value(left, right):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_value
+
+    diagnostics:
+
+    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1
+     --> test.py:5:25
+      |
+    5 |     arg_values=[(1, 2), (3,)],
+      |                         ^^^^ contains 1 value
+    6 |     arg_names=("left", "right"),
+      |               ----------------- expects 2 values
+      |
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn test_parametrize_rejects_wrong_arity_with_pytest_keyword_arguments() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import pytest
+
+@pytest.mark.parametrize(
+    argvalues=[(1, 2), (3,)],
+    argnames=("left," "right"),
+)
+def test_value(left, right):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_value
+
+    diagnostics:
+
+    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1
+     --> test.py:5:24
+      |
+    5 |     argvalues=[(1, 2), (3,)],
+      |                        ^^^^ contains 1 value
+    6 |     argnames=("left," "right"),
+      |               --------------- expects 2 values
+      |
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn test_parametrize_rejects_wrong_arity_with_aliased_decorator_and_named_values() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+CASES = [(1, 2), (3,)]
+cases = karva.tags.parametrize
+
+@cases(("left", "right"), CASES)
+def test_value(left, right):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_value
+
+    diagnostics:
+
+    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1
+     --> test.py:7:8
+      |
+    7 | @cases(("left", "right"), CASES)
+      |        -----------------  ^^^^^ contains 1 value
+      |        |
+      |        expects 2 values
+      |
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn test_parametrize_rejects_wrong_arity_with_unpacked_arguments() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+ARGS = ("left,right", [(1,)])
+KWARGS = {
+    "arg_names": "left,right",
+    "arg_values": [(1,)],
+}
+
+@karva.tags.parametrize(*ARGS)
+def test_args(left, right):
+    pass
+
+@karva.tags.parametrize(**KWARGS)
+def test_kwargs(left, right):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test::test_args
+            FAIL [TIME] test::test_kwargs
+
+    diagnostics:
+
+    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1
+      --> test.py:11:5
+       |
+    11 | def test_args(left, right):
+       |     ^^^^^^^^^
+       |
+
+    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1
+      --> test.py:15:5
+       |
+    15 | def test_kwargs(left, right):
+       |     ^^^^^^^^^^^
+       |
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_parametrize_rejects_wrong_arity_with_multiline_list_names() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+cases = karva.tags.parametrize
+
+@cases(
+    [
+        "left",
+        "right",
+    ],
+    [
+        (1, 2),
+        (3,),
+    ],
+)
+def test_value(left, right):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_value
+
+    diagnostics:
+
+    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1
+      --> test.py:13:9
+       |
+    13 |           (3,),
+       |           ^^^^ contains 1 value
+       |
+      ::: test.py:7:5
+       |
+     7 | /     [
+     8 | |         "left",
+     9 | |         "right",
+    10 | |     ],
+       | |_____- expects 2 values
+       |
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn test_parametrize_rejects_wrong_arity_on_matching_stacked_decorator() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize("left,right", [(1, 2)])
+@karva.tags.parametrize("left,right", [(3,)])
+def test_value(left, right):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_value
+
+    diagnostics:
+
+    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1
+     --> test.py:5:25
+      |
+    5 | @karva.tags.parametrize("left,right", [(3,)])
+      |                         ------------   ^^^^ contains 1 value
+      |                         |
+      |                         expects 2 values
+      |
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn test_parametrize_rejects_wrong_arity_for_one_name() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize("value", [karva.param(1, 2)])
+def test_value(value):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_value
+
+    diagnostics:
+
+    error[invalid-parametrize]: Expected 1 value for `value`, but case 1 contains 2
+     --> test.py:4:25
+      |
+    4 | @karva.tags.parametrize("value", [karva.param(1, 2)])
+      |                         -------   ^^^^^^^^^^^^^^^^^ contains 2 values
+      |                         |
+      |                         expects 1 value
+      |
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
 fn test_parametrize_rejects_duplicate_name_string() {
     let context = TestContext::with_file(
         "test.py",
@@ -121,6 +430,94 @@ def test_value(value):
     }
 }
 
+#[test]
+fn test_parametrize_rejects_duplicate_name_in_multiline_tuple() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize(
+    (
+        "value",
+        "value",
+    ),
+    [(1, 2)],
+)
+def test_value(value):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_value
+
+    diagnostics:
+
+    error[invalid-parametrize]: Parameter `value` is parametrized more than once
+     --> test.py:6:9
+      |
+    6 |         "value",
+      |         ------- first parametrized here
+    7 |         "value",
+      |         ^^^^^^^ duplicate parameter
+      |
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn test_parametrize_duplicate_diagnostic_ignores_unrelated_decorator_arguments() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def metadata(*args):
+    def decorate(function):
+        return function
+    return decorate
+
+@metadata(["value"], [1])
+@karva.tags.parametrize(["value", "value"], [(1, 2)])
+def test_value(value):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_value
+
+    diagnostics:
+
+    error[invalid-parametrize]: Parameter `value` is parametrized more than once
+      --> test.py:10:26
+       |
+    10 | @karva.tags.parametrize(["value", "value"], [(1, 2)])
+       |                          -------  ^^^^^^^ duplicate parameter
+       |                          |
+       |                          first parametrized here
+       |
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
 #[rstest]
 fn test_parametrize_rejects_duplicate_name_list(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
@@ -149,16 +546,12 @@ def test_value(value):
         diagnostics:
 
         error[invalid-parametrize]: Parameter `value` is parametrized more than once
-         --> test.py:5:24
-          |
-        5 | @parametrize(["value", "value"], [(1, 2)])
-          |                        ^^^^^^^ duplicate parameter
-          |
-        info: first parametrized here
          --> test.py:5:15
           |
         5 | @parametrize(["value", "value"], [(1, 2)])
-          |               ^^^^^^^
+          |               -------  ^^^^^^^ duplicate parameter
+          |               |
+          |               first parametrized here
           |
 
         ────────────
@@ -200,16 +593,12 @@ def test_value(value):
         diagnostics:
 
         error[invalid-parametrize]: Parameter `value` is parametrized more than once
-         --> test.py:6:14
-          |
-        6 | @parametrize("value", [2])
-          |              ^^^^^^^ duplicate parameter
-          |
-        info: first parametrized here
          --> test.py:5:14
           |
         5 | @parametrize("value", [1])
-          |              ^^^^^^^
+          |              ------- first parametrized here
+        6 | @parametrize("value", [2])
+          |              ^^^^^^^ duplicate parameter
           |
 
         ────────────
@@ -252,12 +641,8 @@ def test_value(value):
           |
         5 | @parametrize("missing", [1])
           |              ^^^^^^^^^ unknown parameter
-          |
-        info: test parameters declared here
-         --> test.py:6:15
-          |
         6 | def test_value(value):
-          |               ^^^^^^^
+          |               ------- test parameters declared here
           |
 
         ────────────
@@ -266,6 +651,46 @@ def test_value(value):
         ----- stderr -----
         "#);
     }
+}
+
+#[test]
+fn test_parametrize_rejects_unknown_name_with_aliased_decorator() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+cases = karva.tags.parametrize
+
+@cases(("value", "missing"), [(1, 2)])
+def test_value(value):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_value
+
+    diagnostics:
+
+    error[invalid-parametrize]: Parameter `missing` does not exist in the test function signature
+     --> test.py:6:18
+      |
+    6 | @cases(("value", "missing"), [(1, 2)])
+      |                  ^^^^^^^^^ unknown parameter
+    7 | def test_value(value):
+      |               ------- test parameters declared here
+      |
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 }
 
 #[rstest]
@@ -296,16 +721,12 @@ def test_value(value):
         diagnostics:
 
         error[invalid-parametrize]: Parametrization has no cases
-         --> test.py:5:23
-          |
-        5 | @parametrize("value", [])
-          |                       ^^ no cases provided
-          |
-        info: parameters declared here
          --> test.py:5:14
           |
         5 | @parametrize("value", [])
-          |              ^^^^^^^
+          |              -------  ^^ no cases provided
+          |              |
+          |              parameters declared here
           |
 
         ────────────
@@ -314,6 +735,46 @@ def test_value(value):
         ----- stderr -----
         "#);
     }
+}
+
+#[test]
+fn test_parametrize_rejects_empty_cases_with_aliased_keyword_arguments() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+cases = karva.tags.parametrize
+
+@cases(arg_values=(), arg_names=("value",))
+def test_value(value):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_value
+
+    diagnostics:
+
+    error[invalid-parametrize]: Parametrization has no cases
+     --> test.py:6:19
+      |
+    6 | @cases(arg_values=(), arg_names=("value",))
+      |                   ^^            ---------- parameters declared here
+      |                   |
+      |                   no cases provided
+      |
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 }
 
 #[rstest]
@@ -348,12 +809,8 @@ def test_value(value):
           |
         5 | @parametrize("", [1])
           |              ^^ empty parameter name
-          |
-        info: test parameters declared here
-         --> test.py:6:15
-          |
         6 | def test_value(value):
-          |               ^^^^^^^
+          |               ------- test parameters declared here
           |
 
         ────────────
@@ -396,12 +853,8 @@ def test_value(value):
           |
         5 | @parametrize("not valid", [1])
           |              ^^^^^^^^^^^ invalid parameter name
-          |
-        info: test parameters declared here
-         --> test.py:6:15
-          |
         6 | def test_value(value):
-          |               ^^^^^^^
+          |               ------- test parameters declared here
           |
 
         ────────────
