@@ -77,9 +77,9 @@ def test_skip():
        |     ^^^^^^^^^^^^
        |
 
-    captured stdout for test_alpha::test_fail:
+    captured stdout:
     fail stdout
-    captured stderr for test_alpha::test_fail:
+    captured stderr:
     fail stderr
 
     ────────────

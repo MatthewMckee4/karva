@@ -1,10 +1,10 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
 use anyhow::{Context as _, Result};
 use camino::Utf8Path;
 use karva_cache::AggregatedResults;
-use karva_diagnostic::{CapturedTestOutput, TestCaseOutcome, TestCaseResult};
+use karva_diagnostic::{TestCaseOutcome, TestCaseResult};
 use karva_metadata::JunitSettings;
 use karva_project::path::absolute;
 
@@ -31,7 +31,6 @@ pub(super) fn write_junit_report(
 }
 
 fn build_junit_xml(settings: &JunitSettings, results: &AggregatedResults) -> Result<String> {
-    let captured_outputs = captured_outputs_by_test(results);
     let suites = test_cases_by_module(&results.test_cases);
     let total_time = results
         .test_cases
@@ -51,7 +50,7 @@ fn build_junit_xml(settings: &JunitSettings, results: &AggregatedResults) -> Res
     )?;
 
     for (module_name, cases) in suites {
-        write_suite(&mut xml, settings, &captured_outputs, module_name, cases)?;
+        write_suite(&mut xml, settings, module_name, cases)?;
     }
 
     xml.push_str("</testsuites>\n");
@@ -61,7 +60,6 @@ fn build_junit_xml(settings: &JunitSettings, results: &AggregatedResults) -> Res
 fn write_suite(
     xml: &mut String,
     settings: &JunitSettings,
-    captured_outputs: &HashMap<&str, &CapturedTestOutput>,
     module_name: &str,
     cases: Vec<&TestCaseResult>,
 ) -> Result<()> {
@@ -86,21 +84,16 @@ fn write_suite(
     )?;
 
     for case in cases {
-        write_case(xml, settings, captured_outputs, case)?;
+        write_case(xml, settings, case)?;
     }
 
     xml.push_str("  </testsuite>\n");
     Ok(())
 }
 
-fn write_case(
-    xml: &mut String,
-    settings: &JunitSettings,
-    captured_outputs: &HashMap<&str, &CapturedTestOutput>,
-    case: &TestCaseResult,
-) -> Result<()> {
+fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult) -> Result<()> {
     let time = case.duration().as_secs_f64();
-    let output = captured_outputs.get(case.full_name()).copied();
+    let output = case.captured_output();
     let include_output = match case.outcome() {
         TestCaseOutcome::Passed => settings.store_success_output,
         TestCaseOutcome::Failed { .. } => settings.store_failure_output,
@@ -170,14 +163,6 @@ fn test_cases_by_module(cases: &[TestCaseResult]) -> BTreeMap<&str, Vec<&TestCas
             .push(case);
     }
     by_module
-}
-
-fn captured_outputs_by_test(results: &AggregatedResults) -> HashMap<&str, &CapturedTestOutput> {
-    results
-        .captured_outputs
-        .iter()
-        .map(|output| (output.test_name(), output))
-        .collect()
 }
 
 fn escape_xml(value: &str) -> String {

@@ -242,7 +242,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     }
 
     let exit_status = if result.stats.is_success()
-        && result.diagnostics.is_empty()
+        && result.run_diagnostics.is_empty()
         && !coverage_below_threshold
     {
         ExitStatus::Success
@@ -262,7 +262,7 @@ fn coverage_report_path(
 }
 
 fn no_tests_collected(result: &AggregatedResults) -> bool {
-    result.stats.total() == 0 && result.diagnostics.is_empty()
+    result.stats.total() == 0 && result.run_diagnostics.is_empty()
 }
 
 /// Print the message shown when a run is stopped by `--run-timeout`.
@@ -286,9 +286,8 @@ pub fn print_test_output(
         .test_cases
         .iter()
         .any(|case| case.outcome().is_failed());
-    let has_run_diagnostics = !result.diagnostics.is_empty();
+    let has_run_diagnostics = !result.run_diagnostics.is_empty();
     let has_diagnostics = has_test_diagnostics || has_run_diagnostics;
-    let has_captured_output = has_failed_captured_output(result);
     let has_preceding_test_lines = result.stats.total() > 0;
 
     write_test_failures_block(&mut details, result, has_preceding_test_lines)?;
@@ -297,17 +296,12 @@ pub fn print_test_output(
         result,
         has_preceding_test_lines && !has_test_diagnostics,
     )?;
-    write_captured_output_block(
-        &mut details,
-        result,
-        has_preceding_test_lines && !has_diagnostics,
-    )?;
 
     write_durations_block(
         &mut details,
         &result.durations,
         durations,
-        has_preceding_test_lines && !has_diagnostics && !has_captured_output,
+        has_preceding_test_lines && !has_diagnostics,
     )?;
 
     drop(details);
@@ -320,13 +314,6 @@ pub fn print_test_output(
     write!(summary, "{}", DisplayFlakyTests::new(&result.flaky_tests))?;
 
     Ok(())
-}
-
-fn has_failed_captured_output(result: &AggregatedResults) -> bool {
-    result
-        .captured_outputs
-        .iter()
-        .any(|output| output.outcome().is_failed() && !output.is_empty())
 }
 
 fn write_test_failures_block(
@@ -356,6 +343,11 @@ fn write_test_failures_block(
         writeln!(stdout, "{}:", case.full_name())?;
         writeln!(stdout)?;
         write_rendered_diagnostic(stdout, diagnostic.rendered())?;
+        if let Some(output) = case.captured_output() {
+            write_captured_stream(stdout, "stdout", output.stdout())?;
+            write_captured_stream(stdout, "stderr", output.stderr())?;
+            writeln!(stdout)?;
+        }
     }
 
     Ok(())
@@ -366,7 +358,7 @@ fn write_run_diagnostics_block(
     result: &AggregatedResults,
     needs_leading_blank: bool,
 ) -> Result<()> {
-    if result.diagnostics.is_empty() {
+    if result.run_diagnostics.is_empty() {
         return Ok(());
     }
 
@@ -375,7 +367,7 @@ fn write_run_diagnostics_block(
     }
     writeln!(stdout, "diagnostics:")?;
     writeln!(stdout)?;
-    for diagnostic in &result.diagnostics {
+    for diagnostic in &result.run_diagnostics {
         write_rendered_diagnostic(stdout, diagnostic.rendered())?;
     }
 
@@ -393,46 +385,12 @@ fn write_rendered_diagnostic(stdout: &mut Stdout, rendered: &str) -> Result<()> 
     Ok(())
 }
 
-fn write_captured_output_block(
-    stdout: &mut Stdout,
-    result: &AggregatedResults,
-    needs_leading_blank: bool,
-) -> Result<()> {
-    let mut failed_outputs: Vec<_> = result
-        .captured_outputs
-        .iter()
-        .filter(|output| output.outcome().is_failed() && !output.is_empty())
-        .collect();
-    if failed_outputs.is_empty() {
-        return Ok(());
-    }
-
-    failed_outputs.sort_by_key(|output| output.test_name());
-
-    if needs_leading_blank && stdout.is_enabled() {
-        writeln!(stdout)?;
-    }
-
-    for output in failed_outputs {
-        write_captured_stream(stdout, "stdout", output.test_name(), output.stdout())?;
-        write_captured_stream(stdout, "stderr", output.test_name(), output.stderr())?;
-    }
-    writeln!(stdout)?;
-
-    Ok(())
-}
-
-fn write_captured_stream(
-    stdout: &mut Stdout,
-    stream_name: &str,
-    test_name: &str,
-    content: &str,
-) -> Result<()> {
+fn write_captured_stream(stdout: &mut Stdout, stream_name: &str, content: &str) -> Result<()> {
     if content.is_empty() {
         return Ok(());
     }
 
-    writeln!(stdout, "captured {stream_name} for {test_name}:")?;
+    writeln!(stdout, "captured {stream_name}:")?;
     write!(stdout, "{content}")?;
     if !content.ends_with('\n') {
         writeln!(stdout)?;

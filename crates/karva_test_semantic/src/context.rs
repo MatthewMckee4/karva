@@ -2,7 +2,9 @@ use std::cell::RefCell;
 
 use camino::Utf8Path;
 use karva_collector::CollectionSettings;
-use karva_diagnostic::{IndividualTestResultKind, Reporter, TestExecutionOutcome, TestRunResult};
+use karva_diagnostic::{
+    CapturedTestOutput, IndividualTestResultKind, Reporter, TestExecutionOutcome, TestRunResult,
+};
 use karva_metadata::ProjectSettings;
 use karva_python_semantic::QualifiedTestName;
 use ruff_db::diagnostic::Diagnostic;
@@ -88,6 +90,7 @@ impl<'a> Context<'a> {
         test_case_name: &QualifiedTestName,
         outcome: TestExecutionOutcome,
         duration: std::time::Duration,
+        captured_output: Option<CapturedTestOutput>,
     ) -> bool {
         let passed = !outcome.is_failed();
 
@@ -95,6 +98,7 @@ impl<'a> Context<'a> {
             test_case_name,
             outcome,
             duration,
+            captured_output,
             Some(self.reporter),
         );
 
@@ -143,6 +147,7 @@ impl<'a> Context<'a> {
         duration: std::time::Duration,
         passed_on: u32,
         total_attempts: u32,
+        captured_output: Option<CapturedTestOutput>,
     ) -> bool {
         let passed = !outcome.is_failed();
         self.result().register_retried_result(
@@ -151,20 +156,9 @@ impl<'a> Context<'a> {
             duration,
             passed_on,
             total_attempts,
-            Some(self.reporter),
+            captured_output,
         );
         passed
-    }
-
-    pub fn register_captured_output(
-        &self,
-        test_case_name: &QualifiedTestName,
-        result: &IndividualTestResultKind,
-        stdout: String,
-        stderr: String,
-    ) {
-        self.result()
-            .register_captured_output(test_case_name, result, stdout, stderr);
     }
 
     pub(crate) fn add_run_diagnostic(&self, diagnostic: Diagnostic) {

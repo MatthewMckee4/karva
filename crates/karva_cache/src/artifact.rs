@@ -21,7 +21,7 @@ pub enum CacheFile {
     /// Per-worker JSON: aggregated `TestResultStats`.
     Stats,
     /// Per-worker JSON: structured run-level diagnostics.
-    Diagnostics,
+    RunDiagnostics,
     /// Per-worker JSON: map of test id to wall-clock duration.
     Durations,
     /// Per-worker JSON: list of failed test names.
@@ -30,8 +30,6 @@ pub enum CacheFile {
     FlakyTests,
     /// Per-worker JSON: final result records for executed test variants.
     TestCases,
-    /// Per-worker JSON: captured Python stdout/stderr records by exact test name.
-    CapturedOutput,
     /// Per-worker JSON: line-coverage data for sources tracked during the run.
     Coverage,
     /// Per-run empty sentinel marking that fail-fast was triggered.
@@ -49,12 +47,11 @@ impl CacheFile {
     pub const fn filename(self) -> &'static str {
         match self {
             Self::Stats => "stats.json",
-            Self::Diagnostics => "diagnostics.json",
+            Self::RunDiagnostics => "run_diagnostics.json",
             Self::Durations => "durations.json",
             Self::FailedTests => "failed_tests.json",
             Self::FlakyTests => "flaky_tests.json",
             Self::TestCases => "test_cases.json",
-            Self::CapturedOutput => "captured_output.json",
             Self::Coverage => "coverage.json",
             Self::FailFastSignal => "fail-fast",
             Self::LastFailed => "last-failed.json",

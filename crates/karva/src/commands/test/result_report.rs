@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
@@ -54,12 +53,14 @@ fn build_jsonl_report(report: &RunReport<'_>) -> Result<String> {
     for test in &report.tests {
         push_jsonl_event(&mut output, "test", test)?;
     }
-    if let Some(diagnostics) = report.diagnostics {
-        push_jsonl_event(
-            &mut output,
-            "diagnostics",
-            &DiagnosticsEvent { diagnostics },
-        )?;
+    if let Some(diagnostics) = report.run_diagnostics {
+        for diagnostic in diagnostics {
+            push_jsonl_event(
+                &mut output,
+                "run_diagnostic",
+                &RunDiagnosticEvent { diagnostic },
+            )?;
+        }
     }
     push_jsonl_event(
         &mut output,
@@ -101,19 +102,14 @@ struct RunReport<'a> {
     stats: StatsReport,
     tests: Vec<TestReport<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    diagnostics: Option<&'a [RenderedDiagnostic]>,
+    run_diagnostics: Option<&'a [RenderedDiagnostic]>,
 }
 
 impl<'a> RunReport<'a> {
     fn new(results: &'a AggregatedResults, elapsed: Duration, status: RunStatus) -> Self {
-        let captured_outputs = captured_outputs_by_test(results);
-        let tests = results
-            .test_cases
-            .iter()
-            .map(|case| TestReport::new(case, captured_outputs.get(case.full_name()).copied()))
-            .collect();
-        let diagnostics =
-            (!results.diagnostics.is_empty()).then_some(results.diagnostics.as_slice());
+        let tests = results.test_cases.iter().map(TestReport::new).collect();
+        let run_diagnostics =
+            (!results.run_diagnostics.is_empty()).then_some(results.run_diagnostics.as_slice());
 
         Self {
             schema_version: SCHEMA_VERSION,
@@ -121,7 +117,7 @@ impl<'a> RunReport<'a> {
             elapsed_seconds: elapsed.as_secs_f64(),
             stats: StatsReport::new(results),
             tests,
-            diagnostics,
+            run_diagnostics,
         }
     }
 }
@@ -185,7 +181,7 @@ struct TestReport<'a> {
 }
 
 impl<'a> TestReport<'a> {
-    fn new(case: &'a TestCaseResult, output: Option<&'a CapturedTestOutput>) -> Self {
+    fn new(case: &'a TestCaseResult) -> Self {
         let (status, skip_reason, diagnostic) = match case.outcome() {
             TestCaseOutcome::Passed => (TestStatus::Passed, None, None),
             TestCaseOutcome::Failed { diagnostic } => (TestStatus::Failed, None, Some(diagnostic)),
@@ -203,9 +199,7 @@ impl<'a> TestReport<'a> {
             skip_reason,
             flaky,
             retry,
-            captured_output: output
-                .filter(|output| !output.is_empty())
-                .map(CapturedOutputReport::new),
+            captured_output: case.captured_output().map(CapturedOutputReport::new),
             diagnostic,
         }
     }
@@ -252,8 +246,8 @@ impl<'a> CapturedOutputReport<'a> {
 }
 
 #[derive(Serialize)]
-struct DiagnosticsEvent<'a> {
-    diagnostics: &'a [RenderedDiagnostic],
+struct RunDiagnosticEvent<'a> {
+    diagnostic: &'a RenderedDiagnostic,
 }
 
 #[derive(Serialize)]
@@ -269,12 +263,4 @@ struct RunFinishedEvent {
 )]
 fn is_false(value: &bool) -> bool {
     !*value
-}
-
-fn captured_outputs_by_test(results: &AggregatedResults) -> HashMap<&str, &CapturedTestOutput> {
-    results
-        .captured_outputs
-        .iter()
-        .map(|output| (output.test_name(), output))
-        .collect()
 }

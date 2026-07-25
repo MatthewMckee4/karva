@@ -23,7 +23,7 @@ pub fn render_diagnostic(
     let resolver = DiagnosticFileResolver::new(cwd);
     Ok(RenderedDiagnostic::new(
         diagnostic.id().as_str(),
-        diagnostic.severity().into(),
+        diagnostic.severity(),
         diagnostic.primary_message(),
         diagnostic.display(&resolver, config).to_string(),
     ))

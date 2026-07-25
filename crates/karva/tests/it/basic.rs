@@ -702,9 +702,9 @@ fn test_failed_output_is_captured() {
        |     ^^^^^^^^^^^^
        |
 
-    captured stdout for test_failed_output::test_fail_with_output:
+    captured stdout:
     stdout from failure
-    captured stderr for test_failed_output::test_fail_with_output:
+    captured stderr:
     stderr from failure
 
     ────────────

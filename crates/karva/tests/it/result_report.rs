@@ -62,7 +62,7 @@ fn writes_json_result_report() {
        |     ^^^^^^^^^^^^
        |
 
-    captured stderr for test_report::test_fail:
+    captured stderr:
     fail stderr
     fail stderr
 
@@ -235,7 +235,8 @@ fn keeps_run_diagnostics_separate_from_tests() {
 
     assert_snapshot!(normalize_result_json(&context.read_file("reports/import.json")), @r#"
     {
-      "diagnostics": [
+      "elapsed_seconds": "[TIME]",
+      "run_diagnostics": [
         {
           "code": "failed-to-import-module",
           "message": "Failed to import python module `test_import`: No module named 'missing_result_report_dependency'",
@@ -243,7 +244,6 @@ fn keeps_run_diagnostics_separate_from_tests() {
           "severity": "error"
         }
       ],
-      "elapsed_seconds": "[TIME]",
       "schema_version": 2,
       "stats": {
         "failed": 0,
@@ -257,6 +257,48 @@ fn keeps_run_diagnostics_separate_from_tests() {
       "tests": []
     }
     "#);
+}
+
+#[test]
+fn writes_jsonl_run_diagnostic_events() {
+    let context = TestContext::with_file(
+        "test_import.py",
+        r"
+        import missing_result_report_dependency
+
+        def test_unreachable():
+            pass
+        ",
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
+            "--status-level=none",
+            "--result-output=reports/import.jsonl",
+            "--result-format=jsonl",
+        ]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test_import`: No module named 'missing_result_report_dependency'
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    assert_snapshot!(
+        normalize_result_jsonl(&context.read_file("reports/import.jsonl")),
+        @r#"
+    {"diagnostic":{"code":"failed-to-import-module","message":"Failed to import python module `test_import`: No module named 'missing_result_report_dependency'","rendered":"error[failed-to-import-module]: Failed to import python module `test_import`: No module named 'missing_result_report_dependency'\n\n","severity":"error"},"schema_version":2,"type":"run_diagnostic"}
+    {"elapsed_seconds":"[TIME]","schema_version":2,"stats":{"failed":0,"flaky":0,"passed":0,"skipped":0,"slow":0,"total":0},"status":"failed","type":"run_finished"}
+    "#
+    );
 }
 
 #[test]

@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use karva_coverage::CoverageSession;
-use karva_diagnostic::{IndividualTestResultKind, TestExecutionOutcome};
+use karva_diagnostic::{CapturedTestOutput, IndividualTestResultKind, TestExecutionOutcome};
 use karva_metadata::RunIgnoredMode;
 use karva_metadata::filter::EvalContext;
 use karva_python_semantic::{FunctionKind, QualifiedFunctionName, QualifiedTestName};
@@ -112,6 +112,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             &QualifiedTestName::new(test.name.clone(), None),
             TestExecutionOutcome::Failed { diagnostic },
             std::time::Duration::ZERO,
+            None,
         );
         self.record_outcome(false);
     }
@@ -188,25 +189,21 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         }
     }
 
-    fn register_captured_output(
-        &self,
+    fn finish_output_capture(
         py: Python<'_>,
         capture: Option<PythonOutputCapture>,
-        test_name: &QualifiedTestName,
-        result: &IndividualTestResultKind,
-    ) {
-        let Some(capture) = capture else {
-            return;
-        };
+    ) -> Option<CapturedTestOutput> {
+        let capture = capture?;
 
         match capture.finish(py) {
-            Ok(output) => self.context.register_captured_output(
-                test_name,
-                result,
-                output.stdout,
-                output.stderr,
-            ),
-            Err(err) => tracing::warn!("failed to finish Python output capture: {err}"),
+            Ok(output) => {
+                let output = CapturedTestOutput::new(output.stdout, output.stderr);
+                (!output.is_empty()).then_some(output)
+            }
+            Err(err) => {
+                tracing::warn!("failed to finish Python output capture: {err}");
+                None
+            }
         }
     }
 
@@ -386,6 +383,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                     &qualified,
                     TestExecutionOutcome::Skipped { reason: None },
                     std::time::Duration::ZERO,
+                    None,
                 ));
             }
         }
@@ -397,6 +395,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                         &QualifiedTestName::new(name.clone(), None),
                         TestExecutionOutcome::Skipped { reason },
                         std::time::Duration::ZERO,
+                        None,
                     ));
                 }
             }
@@ -408,6 +407,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                         &QualifiedTestName::new(name.clone(), None),
                         TestExecutionOutcome::Skipped { reason: None },
                         std::time::Duration::ZERO,
+                        None,
                     ));
                 }
             }
@@ -466,18 +466,13 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         (function_arguments, fixture_call_errors, test_finalizers)
     }
 
-    /// Classify a test result, handling `expect_fail` logic and error
-    /// reporting. The provided `register` closure is invoked exactly once
-    /// with the final [`TestExecutionOutcome`] so the caller can choose
-    /// between `register_test_case_result` (for non-retried tests) and
-    /// `register_retried_result` (for retried tests).
+    /// Classify a test result, handling `expect_fail` logic and diagnostics.
     fn classify_test_result(
         py: Python<'_>,
         test_result: PyResult<TestCallOutcome>,
         fixture_call_errors: Vec<FixtureCallError>,
         ctx: &VariantReportCtx<'_>,
-        register: impl FnOnce(TestExecutionOutcome) -> bool,
-    ) -> bool {
+    ) -> TestExecutionOutcome {
         let expect_fail = ctx
             .expect_fail_tag
             .as_ref()
@@ -485,7 +480,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
         let err = match test_result {
             Ok(TestCallOutcome::ReturnedValue(_)) if expect_fail => {
-                return register(TestExecutionOutcome::Passed);
+                return TestExecutionOutcome::Passed;
             }
             Ok(TestCallOutcome::ReturnedValue(value)) => {
                 let diagnostic = test_returned_value_diagnostic(
@@ -493,7 +488,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                     ctx.stmt_function_def,
                     &value,
                 );
-                return register(TestExecutionOutcome::Failed { diagnostic });
+                return TestExecutionOutcome::Failed { diagnostic };
             }
             Ok(TestCallOutcome::ReturnedNone) if expect_fail => {
                 let reason = ctx.expect_fail_tag.as_ref().and_then(ExpectFailTag::reason);
@@ -502,20 +497,20 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                     ctx.stmt_function_def,
                     reason,
                 );
-                return register(TestExecutionOutcome::Failed { diagnostic });
+                return TestExecutionOutcome::Failed { diagnostic };
             }
-            Ok(TestCallOutcome::ReturnedNone) => return register(TestExecutionOutcome::Passed),
+            Ok(TestCallOutcome::ReturnedNone) => return TestExecutionOutcome::Passed,
             Err(err) => err,
         };
 
         if is_skip_exception(py, &err) {
-            return register(TestExecutionOutcome::Skipped {
+            return TestExecutionOutcome::Skipped {
                 reason: extract_skip_reason(py, &err),
-            });
+            };
         }
 
         if expect_fail {
-            return register(TestExecutionOutcome::Passed);
+            return TestExecutionOutcome::Passed;
         }
 
         let missing_args = missing_arguments_from_error(ctx.name.function_name(), &err.to_string());
@@ -539,7 +534,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             )
         };
 
-        register(TestExecutionOutcome::Failed { diagnostic })
+        TestExecutionOutcome::Failed { diagnostic }
     }
 
     /// Drive the test closure with the configured retry budget.
@@ -775,71 +770,35 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             self.context.settings().slow_timeout_for(&eval_ctx),
         );
 
-        let mut final_kind = None;
-        let passed = if was_retried {
-            let passed_on = attempt;
-            // `total_attempts` mirrors nextest: the maximum number of attempts
-            // the test was allowed (`retries + 1`), not just the count that
-            // ran. This keeps `FLAKY M/T` readable as "passed on attempt M
-            // out of an allowed T."
-            let total_attempts = max_attempts;
-            Self::classify_test_result(
-                py,
-                test_result,
-                fixture_call_errors,
-                &report_ctx,
-                |outcome| {
-                    final_kind = Some(outcome.result_kind());
-                    self.context.register_retried_result(
-                        &qualified_test_name,
-                        outcome,
-                        total_duration,
-                        passed_on,
-                        total_attempts,
-                    )
-                },
-            )
-        } else {
-            Self::classify_test_result(
-                py,
-                test_result,
-                fixture_call_errors,
-                &report_ctx,
-                |outcome| {
-                    final_kind = Some(outcome.result_kind());
-                    self.context.register_test_case_result(
-                        &qualified_test_name,
-                        outcome,
-                        total_duration,
-                    )
-                },
-            )
-        };
+        let outcome = Self::classify_test_result(py, test_result, fixture_call_errors, &report_ctx);
 
         for finalizer in test_finalizers.into_iter().rev() {
             finalizer.run(self.context, py);
         }
 
         self.clean_up_scope(py, FixtureScope::Function);
-        match final_kind.as_ref() {
-            Some(kind) => {
-                self.register_captured_output(py, output_capture, &qualified_test_name, kind);
-            }
-            None => {
-                if let Some(capture) = output_capture
-                    && let Err(err) = capture.finish(py)
-                {
-                    tracing::warn!(
-                        "discarded Python output capture for `{qualified_test_name}` after missing result kind: {err}"
-                    );
-                }
-            }
-        }
+        let captured_output = Self::finish_output_capture(py, output_capture);
         if let Some(coverage) = self.coverage {
             coverage.set_current_context(py, None);
         }
 
-        passed
+        if was_retried {
+            self.context.register_retried_result(
+                &qualified_test_name,
+                outcome,
+                total_duration,
+                attempt,
+                max_attempts,
+                captured_output,
+            )
+        } else {
+            self.context.register_test_case_result(
+                &qualified_test_name,
+                outcome,
+                total_duration,
+                captured_output,
+            )
+        }
     }
 
     /// Run a fixture

@@ -1,4 +1,5 @@
 mod case;
+mod diagnostic;
 mod flaky;
 mod kind;
 mod output;
@@ -12,12 +13,12 @@ use ruff_db::diagnostic::Diagnostic;
 use crate::reporter::Reporter;
 
 pub use case::{
-    DiagnosticSeverity, RenderedDiagnostic, TestCaseOutcome, TestCaseResult, TestCaseRetry,
-    TestExecutionOutcome, TestExecutionResult,
+    TestCaseOutcome, TestCaseResult, TestCaseRetry, TestExecutionOutcome, TestExecutionResult,
 };
+pub use diagnostic::RenderedDiagnostic;
 pub use flaky::{DisplayFlakyTest, DisplayFlakyTests, FlakyTest};
 pub use kind::{IndividualTestResultKind, TestResultKind};
-pub use output::{CapturedTestOutcome, CapturedTestOutput};
+pub use output::CapturedTestOutput;
 pub use stats::TestResultStats;
 
 /// Represents the result of a test run.
@@ -25,8 +26,7 @@ pub use stats::TestResultStats;
 /// This is held in the test context and updated throughout the test run.
 #[derive(Debug, Clone, Default)]
 pub struct TestRunResult {
-    /// Diagnostics generated during test discovery and collection,
-    /// in the order they were emitted.
+    /// Diagnostics that describe the run rather than one test case.
     run_diagnostics: Vec<Diagnostic>,
 
     /// Stats generated during test execution.
@@ -43,9 +43,6 @@ pub struct TestRunResult {
 
     /// Final outcome for each executed test variant.
     test_cases: Vec<TestExecutionResult>,
-
-    /// Captured Python stdout/stderr for individual test variants.
-    captured_outputs: Vec<CapturedTestOutput>,
 }
 
 /// Orders diagnostics for display.
@@ -82,37 +79,24 @@ impl TestRunResult {
         &self.stats
     }
 
-    pub fn register_captured_output(
-        &mut self,
-        test_case_name: &QualifiedTestName,
-        result: &IndividualTestResultKind,
-        stdout: String,
-        stderr: String,
-    ) {
-        let output = CapturedTestOutput::new(
-            test_case_name.to_string(),
-            CapturedTestOutcome::from(result),
-            stdout,
-            stderr,
-        );
-        if !output.is_empty() {
-            self.captured_outputs.push(output);
-        }
-    }
-
     pub fn register_test_case_result(
         &mut self,
         test_case_name: &QualifiedTestName,
         outcome: TestExecutionOutcome,
         duration: std::time::Duration,
+        captured_output: Option<CapturedTestOutput>,
         reporter: Option<&dyn Reporter>,
     ) {
         let result = outcome.result_kind();
         self.stats.add(result.clone().into());
 
         let function_name = test_case_name.function_name().clone();
-        self.test_cases
-            .push(TestCaseResult::new(test_case_name, outcome, duration));
+        self.test_cases.push(TestCaseResult::new(
+            test_case_name,
+            outcome,
+            duration,
+            captured_output,
+        ));
 
         if matches!(&result, IndividualTestResultKind::Failed) {
             self.failed_tests.push(function_name.clone());
@@ -145,7 +129,7 @@ impl TestRunResult {
         duration: std::time::Duration,
         passed_on: u32,
         total_attempts: u32,
-        _reporter: Option<&dyn Reporter>,
+        captured_output: Option<CapturedTestOutput>,
     ) {
         let result = outcome.result_kind();
         self.stats.add(result.clone().into());
@@ -156,6 +140,7 @@ impl TestRunResult {
             outcome,
             duration,
             TestCaseRetry::new(passed_on, total_attempts),
+            captured_output,
         ));
 
         if matches!(&result, IndividualTestResultKind::Failed) {
@@ -215,8 +200,6 @@ impl TestRunResult {
                 .cmp(b.module_name())
                 .then_with(|| a.name().cmp(b.name()))
         });
-        self.captured_outputs
-            .sort_by(|a, b| a.test_name().cmp(b.test_name()));
         self
     }
 
@@ -234,9 +217,5 @@ impl TestRunResult {
 
     pub fn test_cases(&self) -> &[TestExecutionResult] {
         &self.test_cases
-    }
-
-    pub fn captured_outputs(&self) -> &[CapturedTestOutput] {
-        &self.captured_outputs
     }
 }

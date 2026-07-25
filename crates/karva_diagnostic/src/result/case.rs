@@ -1,10 +1,12 @@
 use std::time::Duration;
 
 use karva_python_semantic::QualifiedTestName;
-use ruff_db::diagnostic::{Diagnostic, Severity};
+use ruff_db::diagnostic::Diagnostic;
 use serde::{Deserialize, Serialize};
 
+use super::diagnostic::RenderedDiagnostic;
 use super::kind::IndividualTestResultKind;
+use super::output::CapturedTestOutput;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TestCaseResult<D = RenderedDiagnostic> {
@@ -15,6 +17,8 @@ pub struct TestCaseResult<D = RenderedDiagnostic> {
     duration: Duration,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     retry: Option<TestCaseRetry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    captured_output: Option<CapturedTestOutput>,
 }
 
 impl<D> TestCaseResult<D> {
@@ -22,6 +26,7 @@ impl<D> TestCaseResult<D> {
         test_case_name: &QualifiedTestName,
         outcome: TestCaseOutcome<D>,
         duration: Duration,
+        captured_output: Option<CapturedTestOutput>,
     ) -> Self {
         let function_name = test_case_name.function_name();
         let module_name = function_name.module_path().module_name().to_string();
@@ -39,6 +44,7 @@ impl<D> TestCaseResult<D> {
             outcome,
             duration,
             retry: None,
+            captured_output,
         }
     }
 
@@ -47,8 +53,9 @@ impl<D> TestCaseResult<D> {
         outcome: TestCaseOutcome<D>,
         duration: Duration,
         retry: TestCaseRetry,
+        captured_output: Option<CapturedTestOutput>,
     ) -> Self {
-        let mut result = Self::new(test_case_name, outcome, duration);
+        let mut result = Self::new(test_case_name, outcome, duration, captured_output);
         result.retry = Some(retry);
         result
     }
@@ -57,6 +64,7 @@ impl<D> TestCaseResult<D> {
         full_name: &str,
         outcome: TestCaseOutcome<D>,
         duration: Duration,
+        captured_output: Option<CapturedTestOutput>,
     ) -> Self {
         let (module_name, name) = full_name
             .split_once("::")
@@ -71,6 +79,7 @@ impl<D> TestCaseResult<D> {
             outcome,
             duration,
             retry: None,
+            captured_output,
         }
     }
 
@@ -98,6 +107,10 @@ impl<D> TestCaseResult<D> {
         self.retry.as_ref()
     }
 
+    pub fn captured_output(&self) -> Option<&CapturedTestOutput> {
+        self.captured_output.as_ref()
+    }
+
     pub fn try_map_diagnostic<T, E>(
         &self,
         map: impl FnOnce(&D) -> Result<T, E>,
@@ -109,6 +122,7 @@ impl<D> TestCaseResult<D> {
             outcome: self.outcome.try_map_diagnostic(map)?,
             duration: self.duration,
             retry: self.retry.clone(),
+            captured_output: self.captured_output.clone(),
         })
     }
 }
@@ -188,73 +202,3 @@ impl<D> TestCaseOutcome<D> {
 
 pub type TestExecutionResult = TestCaseResult<Diagnostic>;
 pub type TestExecutionOutcome = TestCaseOutcome<Diagnostic>;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RenderedDiagnostic {
-    code: String,
-    severity: DiagnosticSeverity,
-    message: String,
-    rendered: String,
-}
-
-impl RenderedDiagnostic {
-    pub fn new(
-        code: impl Into<String>,
-        severity: DiagnosticSeverity,
-        message: impl Into<String>,
-        rendered: impl Into<String>,
-    ) -> Self {
-        Self {
-            code: code.into(),
-            severity,
-            message: message.into(),
-            rendered: rendered.into(),
-        }
-    }
-
-    pub fn interrupted(test_name: &str) -> Self {
-        let message = format!("Test `{test_name}` was interrupted");
-        Self::new(
-            "interrupted",
-            DiagnosticSeverity::Error,
-            &message,
-            format!("error[interrupted]: {message}\n"),
-        )
-    }
-
-    pub fn code(&self) -> &str {
-        &self.code
-    }
-
-    pub fn severity(&self) -> DiagnosticSeverity {
-        self.severity
-    }
-
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-
-    pub fn rendered(&self) -> &str {
-        &self.rendered
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DiagnosticSeverity {
-    Info,
-    Warning,
-    Error,
-    Fatal,
-}
-
-impl From<Severity> for DiagnosticSeverity {
-    fn from(value: Severity) -> Self {
-        match value {
-            Severity::Info => Self::Info,
-            Severity::Warning => Self::Warning,
-            Severity::Error => Self::Error,
-            Severity::Fatal => Self::Fatal,
-        }
-    }
-}
