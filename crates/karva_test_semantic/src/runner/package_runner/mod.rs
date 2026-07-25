@@ -15,6 +15,7 @@ use crate::extensions::fixtures::FixtureScope;
 use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::runner::test_iterator::TestVariantIterator;
 use crate::runner::{FinalizerCache, FixtureCache};
+use crate::unhandled_exceptions::UnhandledExceptionCapture;
 
 mod fixture;
 mod outcome;
@@ -36,6 +37,8 @@ pub struct PackageRunner<'context, 'settings> {
     finalizer_cache: FinalizerCache,
     /// Active coverage session for this worker, when coverage is enabled.
     coverage: Option<&'context CoverageSession>,
+    /// Captures exceptions that Python cannot propagate through the test call.
+    exception_capture: Option<&'context UnhandledExceptionCapture>,
     /// Failed variants observed so far, used to enforce `max-fail`.
     failed_count: Cell<u32>,
 }
@@ -45,12 +48,14 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
     pub(crate) fn new(
         context: &'context Context<'settings>,
         coverage: Option<&'context CoverageSession>,
+        exception_capture: Option<&'context UnhandledExceptionCapture>,
     ) -> Self {
         Self {
             context,
             fixture_cache: FixtureCache::default(),
             finalizer_cache: FinalizerCache::default(),
             coverage,
+            exception_capture,
             failed_count: Cell::new(0),
         }
     }

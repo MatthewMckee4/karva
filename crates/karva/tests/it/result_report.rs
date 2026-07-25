@@ -621,6 +621,95 @@ fn writes_jsonl_run_diagnostic_records() {
 }
 
 #[test]
+fn unhandled_thread_exception_is_failed_in_json_result_report() {
+    let context = TestContext::with_file(
+        "test_thread.py",
+        r#"
+from threading import Thread
+
+
+def test_background_work():
+    thread = Thread(
+        target=lambda: 1 / 0,
+        name="background",
+    )
+    thread.start()
+    thread.join()
+"#,
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
+            "--status-level=none",
+            "--result-output=reports/results.json",
+        ]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test_thread::test_background_work:
+
+    error[unhandled-thread-exception]: Unhandled exception `ZeroDivisionError` in thread `background`
+     --> test_thread.py:5:5
+      |
+    5 | def test_background_work():
+      |     ^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Exception raised here
+     --> test_thread.py:7:9
+      |
+    7 |         target=lambda: 1 / 0,
+      |         ^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: ZeroDivisionError: division by zero
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    assert_snapshot!(
+        context.read_file("reports/results.json"),
+        @r#"
+    {
+      "schema_version": 2,
+      "status": "failed",
+      "elapsed_seconds": "[TIME]",
+      "stats": {
+        "total": 1,
+        "passed": 0,
+        "failed": 1,
+        "errors": 0,
+        "skipped": 0,
+        "flaky": 0,
+        "slow": 0
+      },
+      "tests": [
+        {
+          "module": "test_thread",
+          "name": "test_background_work",
+          "full_name": "test_thread::test_background_work",
+          "status": "failed",
+          "duration_seconds": "[TIME]",
+          "diagnostic": {
+            "code": "unhandled-thread-exception",
+            "severity": "error",
+            "message": "Unhandled exception `ZeroDivisionError` in thread `background`",
+            "rendered": "error[unhandled-thread-exception]: Unhandled exception `ZeroDivisionError` in thread `background`\n --> test_thread.py:5:5\n  |/n5 | def test_background_work():\n  |     ^^^^^^^^^^^^^^^^^^^^\n  |/ninfo: Exception raised here\n --> test_thread.py:7:9\n  |/n7 |         target=lambda: 1 / 0,\n  |         ^^^^^^^^^^^^^^^^^^^^^\n  |/ninfo: ZeroDivisionError: division by zero\n\n"
+          }
+        }
+      ]
+    }
+    "#
+    );
+}
+
+#[test]
 fn result_report_status_matches_no_tests_failure() {
     let context = TestContext::new();
 

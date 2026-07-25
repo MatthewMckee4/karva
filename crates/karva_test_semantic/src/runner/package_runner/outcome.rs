@@ -210,6 +210,46 @@ pub(super) fn attach_finalizer_diagnostics(
     }
 }
 
+/// Attaches unhandled Python exceptions while preserving an existing primary failure.
+pub(super) fn attach_unhandled_diagnostics(
+    outcome: TestExecutionOutcome,
+    mut diagnostics: Vec<Diagnostic>,
+) -> TestExecutionOutcome {
+    if diagnostics.is_empty() {
+        return outcome;
+    }
+
+    match outcome {
+        TestExecutionOutcome::Failed {
+            diagnostic,
+            mut related,
+        } => {
+            related.append(&mut diagnostics);
+            TestExecutionOutcome::Failed {
+                diagnostic,
+                related,
+            }
+        }
+        TestExecutionOutcome::Error {
+            diagnostic,
+            mut related,
+        } => {
+            related.append(&mut diagnostics);
+            TestExecutionOutcome::Error {
+                diagnostic,
+                related,
+            }
+        }
+        TestExecutionOutcome::Passed | TestExecutionOutcome::Skipped { .. } => {
+            let diagnostic = diagnostics.remove(0);
+            TestExecutionOutcome::Failed {
+                diagnostic,
+                related: diagnostics,
+            }
+        }
+    }
+}
+
 /// Applies a full-lifecycle `fail-slow` budget to one attempt outcome.
 pub(super) fn apply_fail_slow_budget(
     outcome: TestExecutionOutcome,

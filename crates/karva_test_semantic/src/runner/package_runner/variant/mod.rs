@@ -28,6 +28,8 @@ mod attempt;
 
 use attempt::{PreparedTestAttempt, TestLifecycleAttempt};
 
+use super::outcome::attach_unhandled_diagnostics;
+
 impl PackageRunner<'_, '_> {
     /// Runs one concrete parameter and fixture combination.
     pub(super) fn execute_test_variant(&self, py: Python<'_>, variant: TestVariant<'_>) -> bool {
@@ -100,6 +102,10 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             return result;
         }
 
+        let active_test_name = self.test.name.to_string();
+        if let Some(capture) = self.package_runner.exception_capture {
+            capture.set_active_test(Some(&active_test_name));
+        }
         let output_capture = self.start_output_capture();
         let retry_params = self.params.clone();
         let first_params = std::mem::take(&mut self.params);
@@ -284,8 +290,27 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         settings: &VariantSettings,
         output_capture: Option<PythonOutputCapture>,
         prior_attempts: Vec<TestLifecycleAttempt>,
-        final_attempt: TestLifecycleAttempt,
+        mut final_attempt: TestLifecycleAttempt,
     ) -> bool {
+        let unhandled_diagnostics =
+            self.package_runner
+                .exception_capture
+                .map_or_else(Vec::new, |capture| {
+                    capture.set_active_test(None);
+                    capture
+                        .take_events_for(&self.test.name.to_string())
+                        .iter()
+                        .map(|event| {
+                            crate::diagnostic::unhandled_exception_diagnostic(
+                                self.py,
+                                event,
+                                Some((&self.test.source_file, &self.test.stmt_function_def)),
+                            )
+                        })
+                        .collect()
+                });
+        final_attempt.outcome =
+            attach_unhandled_diagnostics(final_attempt.outcome, unhandled_diagnostics);
         self.set_coverage_context(None);
         let captured_output = finish_output_capture(self.py, output_capture);
         let total_duration = prior_attempts

@@ -9,6 +9,7 @@ use karva_collector::CollectionError;
 use karva_diagnostic::Traceback;
 use karva_logging::time::format_duration;
 use karva_python_semantic::FunctionKind;
+use pyo3::types::PyTypeMethods;
 use pyo3::{PyErr, Python};
 use ruff_db::diagnostic::{
     Annotation, Diagnostic, Severity, Span, SubDiagnostic, SubDiagnosticSeverity,
@@ -23,6 +24,7 @@ use crate::runner::{
     FixtureArguments, FixtureCallError, FixtureChainEntry, FixtureResolutionEntry,
     FixtureResolutionError,
 };
+use crate::unhandled_exceptions::{UnhandledExceptionEvent, UnhandledExceptionKind};
 use crate::utils::truncate_string;
 use crate::{Context, declare_diagnostic_type};
 
@@ -153,6 +155,26 @@ declare_diagnostic_type! {
     /// If a test raises an exception, we will raise this error.
     pub static TEST_FAILURE = {
         summary: "Test raises exception when run",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
+    /// ## Unhandled thread exception
+    ///
+    /// Raised when a background thread exits because of an unhandled exception.
+    pub static UNHANDLED_THREAD_EXCEPTION = {
+        summary: "A thread raised an unhandled exception",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
+    /// ## Unraisable exception
+    ///
+    /// Raised when Python reports an exception through `sys.unraisablehook`.
+    pub static UNRAISABLE_EXCEPTION = {
+        summary: "Python could not raise an exception normally",
         severity: Severity::Error,
     }
 }
@@ -480,6 +502,74 @@ pub fn test_failure_diagnostic(
         FunctionKind::Test,
         error,
     );
+    diagnostic
+}
+
+pub fn unhandled_exception_diagnostic(
+    py: Python<'_>,
+    event: &UnhandledExceptionEvent,
+    test: Option<(&SourceFile, &StmtFunctionDef)>,
+) -> Diagnostic {
+    let exception_type = event
+        .error
+        .get_type(py)
+        .name()
+        .map_or_else(|_| "Python exception".to_string(), |name| name.to_string());
+    let (diagnostic_type, message) = match &event.kind {
+        UnhandledExceptionKind::Thread { name } => (
+            &UNHANDLED_THREAD_EXCEPTION,
+            format!(
+                "Unhandled exception `{exception_type}` in thread `{}`",
+                truncate_string(name)
+            ),
+        ),
+        UnhandledExceptionKind::Unraisable { .. } => (
+            &UNRAISABLE_EXCEPTION,
+            format!("Unraisable exception `{exception_type}`"),
+        ),
+    };
+    let mut diagnostic = diagnostic_type.diagnostic(message);
+
+    if let Some((source_file, stmt_function_def)) = test {
+        annotate_function_name(&mut diagnostic, source_file.clone(), stmt_function_def);
+    }
+
+    match &event.kind {
+        UnhandledExceptionKind::Thread { .. } => {}
+        UnhandledExceptionKind::Unraisable {
+            context, object, ..
+        } => {
+            if let Some(context) = context {
+                diagnostic.info(context);
+            }
+            diagnostic.info(format!("Object: `{}`", truncate_string(object)));
+        }
+    }
+
+    let traceback = match test {
+        Some((source_file, _)) => Traceback::from_error_with_source(py, &event.error, source_file),
+        None => Traceback::from_error(py, &event.error),
+    };
+    if let Some(Traceback {
+        lines: _,
+        error_source_file,
+        location,
+    }) = traceback
+    {
+        let mut sub = SubDiagnostic::new(
+            SubDiagnosticSeverity::Info,
+            "Exception raised here".to_string(),
+        );
+        sub.annotate(Annotation::primary(
+            Span::from(error_source_file).with_range(location),
+        ));
+        diagnostic.sub(sub);
+    }
+
+    let error_message = event.error.value(py).to_string();
+    if !error_message.is_empty() {
+        diagnostic.info(format!("{exception_type}: {error_message}"));
+    }
     diagnostic
 }
 

@@ -17,5 +17,6 @@ mod result_report;
 mod run_ignored;
 mod run_timeout;
 mod show_config;
+mod unhandled_exceptions;
 mod version;
 mod watch;

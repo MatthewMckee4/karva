@@ -7,6 +7,7 @@ mod output_capture;
 mod py_attach;
 mod python;
 mod runner;
+mod unhandled_exceptions;
 pub mod utils;
 
 pub(crate) use context::Context;
@@ -20,9 +21,11 @@ use karva_metadata::ProjectSettings;
 use karva_project::path::{TestPath, TestPathError};
 use ruff_python_ast::PythonVersion;
 
+use crate::diagnostic::unhandled_exception_diagnostic;
 use crate::discovery::StandardDiscoverer;
 use crate::py_attach::attach_with_output;
 use crate::runner::PackageRunner;
+use crate::unhandled_exceptions::UnhandledExceptionCapture;
 
 /// Run tests given the system, settings, Python version, reporter, and test paths.
 ///
@@ -39,6 +42,13 @@ pub fn run_tests(
     let context = Context::new(cwd, settings, python_version, reporter);
 
     attach_with_output(settings.terminal().show_python_output, |py| {
+        let exception_capture = match UnhandledExceptionCapture::start(py) {
+            Ok(capture) => Some(capture),
+            Err(err) => {
+                tracing::warn!("failed to install Python exception hooks: {err}");
+                None
+            }
+        };
         let cov_session = coverage.and_then(|cfg| match CoverageSession::start(py, cwd, cfg) {
             Ok(session) => Some(session),
             Err(err) => {
@@ -49,12 +59,25 @@ pub fn run_tests(
 
         let session = StandardDiscoverer::new(&context).discover_with_py(py, test_paths);
 
-        PackageRunner::new(&context, cov_session.as_ref()).execute(py, &session);
+        PackageRunner::new(&context, cov_session.as_ref(), exception_capture.as_ref())
+            .execute(py, &session);
 
         if let Some(cov_session) = cov_session
             && let Err(err) = cov_session.stop_and_save(py)
         {
             tracing::error!("Failed to save coverage data: {err}");
+        }
+
+        if let Some(exception_capture) = exception_capture {
+            match exception_capture.finish(py) {
+                Ok(events) => {
+                    for event in events {
+                        context
+                            .add_run_diagnostic(unhandled_exception_diagnostic(py, &event, None));
+                    }
+                }
+                Err(err) => tracing::warn!("failed to restore Python exception hooks: {err}"),
+            }
         }
 
         context.into_result()
