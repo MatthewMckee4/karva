@@ -36,15 +36,6 @@ impl FixtureScope {
             Self::Session => "session",
         }
     }
-
-    pub(crate) fn capitalised_name(self) -> &'static str {
-        match self {
-            Self::Function => "Function",
-            Self::Module => "Module",
-            Self::Package => "Package",
-            Self::Session => "Session",
-        }
-    }
 }
 
 impl TryFrom<String> for FixtureScope {

@@ -34,8 +34,14 @@ pub struct FixtureResolutionEntry {
 }
 
 pub enum FixtureResolutionError {
-    Cycle { cycle: Vec<FixtureResolutionEntry> },
-    ScopeMismatch { chain: Vec<FixtureResolutionEntry> },
+    Cycle {
+        cycle: Vec<FixtureResolutionEntry>,
+    },
+    ScopeMismatch {
+        dependency_path: Vec<FixtureResolutionEntry>,
+        fixture: FixtureResolutionEntry,
+        dependency: FixtureResolutionEntry,
+    },
 }
 
 impl FixtureResolutionEntry {
@@ -61,15 +67,22 @@ impl FixtureResolutionError {
         Self::Cycle { cycle }
     }
 
-    fn scope_mismatch(path: &[&DiscoveredFixture], dependency: &DiscoveredFixture) -> Self {
-        let chain = path
+    fn scope_mismatch(
+        dependency_path: &[&DiscoveredFixture],
+        fixture: &DiscoveredFixture,
+        dependency: &DiscoveredFixture,
+    ) -> Self {
+        let dependency_path = dependency_path
             .iter()
             .copied()
-            .chain(std::iter::once(dependency))
             .map(FixtureResolutionEntry::new)
             .collect();
 
-        Self::ScopeMismatch { chain }
+        Self::ScopeMismatch {
+            dependency_path,
+            fixture: FixtureResolutionEntry::new(fixture),
+            dependency: FixtureResolutionEntry::new(dependency),
+        }
     }
 }
 
@@ -215,8 +228,13 @@ impl<'a> RuntimeFixtureResolver<'a> {
                 if let Some(current_fixture) = current_fixture
                     && !current_fixture.scope().can_use(fixture.scope())
                 {
+                    let dependency_path = path
+                        .fixtures
+                        .split_last()
+                        .map_or(&[][..], |(_, dependency_path)| dependency_path);
                     return Err(FixtureResolutionError::scope_mismatch(
-                        &path.fixtures,
+                        dependency_path,
+                        current_fixture,
                         fixture,
                     ));
                 }

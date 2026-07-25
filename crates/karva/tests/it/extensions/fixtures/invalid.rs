@@ -546,19 +546,18 @@ def test_database(database):
 
             diagnostics:
 
-            error[fixture-scope-mismatch]: Session-scoped fixture `database` cannot use function-scoped fixture `connection`
+            error[fixture-scope-mismatch]: Fixture `database` with session scope cannot depend on fixture `connection` with function scope
               --> test.py:10:5
                |
             10 | def database(connection):
                |     ^^^^^^^^
                |
-            info: Fixture `connection` has function scope
+            info: Fixture `connection` is defined with function scope
              --> test.py:6:5
               |
             6 | def connection():
               |     ^^^^^^^^^^
               |
-            info: database -> connection
 
             ────────────
                  Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -611,19 +610,18 @@ def test_database():
 
     diagnostics:
 
-    error[fixture-scope-mismatch]: Package-scoped fixture `database` cannot use function-scoped fixture `connection`
+    error[fixture-scope-mismatch]: Fixture `database` with package scope cannot depend on fixture `connection` with function scope
       --> nested/conftest.py:10:11
        |
     10 | async def database(connection):
        |           ^^^^^^^^
        |
-    info: Fixture `connection` has function scope
+    info: Fixture `connection` is defined with function scope
      --> nested/conftest.py:6:5
       |
     6 | def connection():
       |     ^^^^^^^^^^
       |
-    info: database -> connection
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -672,25 +670,24 @@ def test_database(database):
 
     diagnostics:
 
-    error[fixture-scope-mismatch]: Session-scoped fixture `repository` cannot use function-scoped fixture `connection`
+    error[fixture-scope-mismatch]: Fixture `repository` with session scope cannot depend on fixture `connection` with function scope
       --> test.py:13:5
        |
     13 | def repository(connection):
        |     ^^^^^^^^^^
        |
-    info: Fixture `database` requires `repository`
+    info: Fixture `database` depends on fixture `repository`
       --> test.py:17:5
        |
     17 | def database(repository):
        |     ^^^^^^^^
        |
-    info: Fixture `connection` has function scope
+    info: Fixture `connection` is defined with function scope
      --> test.py:9:5
       |
     9 | def connection():
       |     ^^^^^^^^^^
       |
-    info: database -> repository -> connection
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
