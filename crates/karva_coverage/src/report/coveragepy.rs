@@ -1,48 +1,57 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Write;
-use std::process::{Command, Output, Stdio};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use camino::Utf8Path;
 use fs_err as fs;
-use pyo3::types::PyAnyMethods;
-use pyo3::{PyResult, Python};
-use serde::Serialize;
+use rusqlite::{Connection, Transaction, params};
 
 use super::CoverageFilters;
 use super::combined_rows;
 use super::shared::{FileRow, total_percent};
 
 const COVERAGE_SCHEMA_VERSION: u32 = 7;
-const SQLITE_MODULE: &str = "karva._coverage_sqlite";
-
-#[cfg(debug_assertions)]
-const SQLITE_WRITER: &str = include_str!("../../../../python/karva/_coverage_sqlite.py");
-
-#[derive(Serialize)]
-struct SqlitePayload {
-    has_arcs: bool,
-    files: Vec<SqliteFileRow>,
-}
-
-#[derive(Serialize)]
-struct SqliteFileRow {
-    path: String,
-    contexts: Vec<SqliteContextRow>,
-    arcs: Vec<SqliteArcContextRow>,
-}
-
-#[derive(Serialize)]
-struct SqliteContextRow {
-    context: String,
-    numbits: Vec<u8>,
-}
-
-#[derive(Serialize)]
-struct SqliteArcContextRow {
-    context: String,
-    arcs: Vec<[i32; 2]>,
-}
+const COVERAGE_SCHEMA: &str = "
+    CREATE TABLE coverage_schema (
+        version integer
+    );
+    CREATE TABLE meta (
+        key text,
+        value text,
+        unique (key)
+    );
+    CREATE TABLE file (
+        id integer primary key,
+        path text,
+        unique (path)
+    );
+    CREATE TABLE context (
+        id integer primary key,
+        context text,
+        unique (context)
+    );
+    CREATE TABLE line_bits (
+        file_id integer,
+        context_id integer,
+        numbits blob,
+        foreign key (file_id) references file (id),
+        foreign key (context_id) references context (id),
+        unique (file_id, context_id)
+    );
+    CREATE TABLE arc (
+        file_id integer,
+        context_id integer,
+        fromno integer,
+        tono integer,
+        foreign key (file_id) references file (id),
+        foreign key (context_id) references context (id),
+        unique (file_id, context_id, fromno, tono)
+    );
+    CREATE TABLE tracer (
+        file_id integer primary key,
+        tracer text,
+        foreign key (file_id) references file (id)
+    );
+";
 
 pub fn write_coveragepy_sqlite(
     cwd: &Utf8Path,
@@ -72,139 +81,82 @@ pub fn write_coveragepy_sqlite(
 }
 
 fn write_sqlite_file(output: &Utf8Path, rows: &[FileRow]) -> Result<()> {
-    let payload_json = serde_json::to_string(&sqlite_payload(rows))
-        .context("failed to serialize coverage.py data")?;
-    let python = python_executable().context("failed to locate Python for coverage data file")?;
+    let mut connection = Connection::open(output.as_std_path())
+        .with_context(|| format!("failed to create coverage data file {output}"))?;
+    let transaction = connection
+        .transaction()
+        .context("failed to start coverage data transaction")?;
+    transaction
+        .execute_batch(COVERAGE_SCHEMA)
+        .context("failed to create coverage.py schema")?;
+    transaction.execute(
+        "INSERT INTO coverage_schema (version) VALUES (?)",
+        [COVERAGE_SCHEMA_VERSION],
+    )?;
+    transaction.execute(
+        "INSERT INTO meta (key, value) VALUES (?, ?)",
+        ["version", "karva"],
+    )?;
+    transaction.execute(
+        "INSERT INTO meta (key, value) VALUES (?, ?)",
+        [
+            "has_arcs",
+            if rows.iter().any(|row| row.branches_enabled) {
+                "1"
+            } else {
+                "0"
+            },
+        ],
+    )?;
 
-    let output_status =
-        run_python_sqlite_writer(&python, &["-m", SQLITE_MODULE], output, &payload_json)?;
-    if output_status.status.success() {
-        return Ok(());
-    }
+    let mut context_ids = BTreeMap::new();
+    for row in rows {
+        transaction.execute("INSERT INTO file (path) VALUES (?)", [&row.absolute_name])?;
+        let file_id = transaction.last_insert_rowid();
 
-    #[cfg(debug_assertions)]
-    if module_not_found(&output_status.stderr) {
-        let output_status =
-            run_python_sqlite_writer(&python, &["-c", SQLITE_WRITER], output, &payload_json)?;
-        if output_status.status.success() {
-            return Ok(());
+        for (context, lines) in lines_by_context(row) {
+            if lines.is_empty() {
+                continue;
+            }
+            let context_id = context_id(&transaction, &mut context_ids, &context)?;
+            transaction.execute(
+                "INSERT INTO line_bits (file_id, context_id, numbits) VALUES (?, ?, ?)",
+                params![file_id, context_id, nums_to_numbits(&lines)],
+            )?;
         }
-        return python_writer_error(&output_status);
-    }
 
-    python_writer_error(&output_status)
-}
-
-fn run_python_sqlite_writer(
-    python: &str,
-    mode_args: &[&str],
-    output: &Utf8Path,
-    payload_json: &str,
-) -> Result<Output> {
-    let mut child = Command::new(python)
-        .args(mode_args)
-        .arg(output.as_str())
-        .arg(COVERAGE_SCHEMA_VERSION.to_string())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .with_context(|| format!("failed to start Python sqlite writer `{python}`"))?;
-
-    let stdin = child
-        .stdin
-        .as_mut()
-        .context("failed to open Python sqlite writer stdin")?;
-    stdin
-        .write_all(payload_json.as_bytes())
-        .context("failed to send coverage.py data to Python sqlite writer")?;
-
-    child
-        .wait_with_output()
-        .context("failed to wait for Python sqlite writer")
-}
-
-#[cfg(debug_assertions)]
-fn module_not_found(stderr: &[u8]) -> bool {
-    String::from_utf8_lossy(stderr).contains("No module named")
-}
-
-fn python_writer_error(output_status: &Output) -> Result<()> {
-    let stderr = String::from_utf8_lossy(&output_status.stderr);
-    bail!("Python sqlite writer failed: {}", stderr.trim());
-}
-
-fn sqlite_payload(rows: &[FileRow]) -> SqlitePayload {
-    SqlitePayload {
-        has_arcs: rows.iter().any(|row| row.branches_enabled),
-        files: rows
-            .iter()
-            .map(|row| SqliteFileRow {
-                path: row.absolute_name.clone(),
-                contexts: lines_by_context(row)
-                    .into_iter()
-                    .filter(|(_, lines)| !lines.is_empty())
-                    .map(|(context, lines)| SqliteContextRow {
-                        context,
-                        numbits: nums_to_numbits(&lines),
-                    })
-                    .collect(),
-                arcs: arcs_by_context(row)
-                    .into_iter()
-                    .filter(|(_, arcs)| !arcs.is_empty())
-                    .map(|(context, arcs)| SqliteArcContextRow {
-                        context,
-                        arcs: arcs.into_iter().map(|arc| [arc.from, arc.to]).collect(),
-                    })
-                    .collect(),
-            })
-            .collect(),
-    }
-}
-
-fn python_executable() -> Result<String> {
-    Python::initialize();
-    let executable = Python::attach(|py| -> PyResult<String> {
-        py.import("sys")?.getattr("executable")?.extract()
-    })?;
-    if is_python_executable(&executable) && python_has_sqlite(&executable) {
-        return Ok(executable);
-    }
-
-    for candidate in python_candidates() {
-        if python_has_sqlite(candidate) {
-            return Ok((*candidate).to_string());
+        for (context, arcs) in arcs_by_context(row) {
+            if arcs.is_empty() {
+                continue;
+            }
+            let context_id = context_id(&transaction, &mut context_ids, &context)?;
+            for arc in arcs {
+                transaction.execute(
+                    "INSERT INTO arc (file_id, context_id, fromno, tono) VALUES (?, ?, ?, ?)",
+                    params![file_id, context_id, arc.from, arc.to],
+                )?;
+            }
         }
     }
 
-    Ok(executable)
+    transaction
+        .commit()
+        .context("failed to commit coverage data")
 }
 
-fn is_python_executable(executable: &str) -> bool {
-    Utf8Path::new(executable)
-        .file_stem()
-        .is_some_and(|stem| stem.starts_with("python"))
-}
+fn context_id(
+    transaction: &Transaction<'_>,
+    context_ids: &mut BTreeMap<String, i64>,
+    context: &str,
+) -> Result<i64> {
+    if let Some(context_id) = context_ids.get(context) {
+        return Ok(*context_id);
+    }
 
-fn python_has_sqlite(executable: &str) -> bool {
-    Command::new(executable)
-        .arg("-c")
-        .arg("import sqlite3")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
-}
-
-#[cfg(windows)]
-fn python_candidates() -> &'static [&'static str] {
-    &["python", "py"]
-}
-
-#[cfg(not(windows))]
-fn python_candidates() -> &'static [&'static str] {
-    &["python3", "python"]
+    transaction.execute("INSERT INTO context (context) VALUES (?)", [context])?;
+    let context_id = transaction.last_insert_rowid();
+    context_ids.insert(context.to_string(), context_id);
+    Ok(context_id)
 }
 
 fn lines_by_context(row: &FileRow) -> BTreeMap<String, BTreeSet<u32>> {
