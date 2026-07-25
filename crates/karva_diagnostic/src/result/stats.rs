@@ -12,6 +12,7 @@ use super::kind::TestResultKind;
 pub struct TestResultStats {
     passed: usize,
     failed: usize,
+    errors: usize,
     skipped: usize,
     flaky: usize,
     slow: usize,
@@ -21,16 +22,17 @@ impl TestResultStats {
     /// Total number of tests run. `Flaky` is a marker on a passing test and
     /// is not counted as a separate test.
     pub fn total(&self) -> usize {
-        self.passed() + self.failed() + self.skipped()
+        self.passed() + self.failed() + self.errors() + self.skipped()
     }
 
     pub fn is_success(&self) -> bool {
-        self.failed() == 0
+        self.failed() == 0 && self.errors() == 0
     }
 
     pub fn merge(&mut self, other: &Self) {
         self.passed += other.passed;
         self.failed += other.failed;
+        self.errors += other.errors;
         self.skipped += other.skipped;
         self.flaky += other.flaky;
         self.slow += other.slow;
@@ -42,6 +44,10 @@ impl TestResultStats {
 
     pub fn failed(&self) -> usize {
         self.failed
+    }
+
+    pub fn errors(&self) -> usize {
+        self.errors
     }
 
     pub fn skipped(&self) -> usize {
@@ -60,14 +66,15 @@ impl TestResultStats {
         match kind {
             TestResultKind::Passed => self.passed += 1,
             TestResultKind::Failed => self.failed += 1,
+            TestResultKind::Error => self.errors += 1,
             TestResultKind::Skipped => self.skipped += 1,
             TestResultKind::Flaky => self.flaky += 1,
             TestResultKind::Slow => self.slow += 1,
         }
     }
 
-    pub fn display(&self, start_time: Instant) -> DisplayTestResultStats<'_> {
-        DisplayTestResultStats::new(self, start_time)
+    pub fn display(&self, start_time: Instant, success: bool) -> DisplayTestResultStats<'_> {
+        DisplayTestResultStats::new(self, start_time, success)
     }
 }
 
@@ -81,6 +88,7 @@ impl Serialize for TestResultStats {
         let counts = [
             (TestResultKind::Passed, self.passed),
             (TestResultKind::Failed, self.failed),
+            (TestResultKind::Error, self.errors),
             (TestResultKind::Skipped, self.skipped),
             (TestResultKind::Flaky, self.flaky),
             (TestResultKind::Slow, self.slow),
@@ -120,12 +128,13 @@ impl<'de> Deserialize<'de> for TestResultStats {
                     let kind = TestResultKind::from_str(&key).map_err(|_| {
                         de::Error::unknown_field(
                             &key,
-                            &["passed", "failed", "skipped", "flaky", "slow"],
+                            &["passed", "failed", "error", "skipped", "flaky", "slow"],
                         )
                     })?;
                     match kind {
                         TestResultKind::Passed => stats.passed = value,
                         TestResultKind::Failed => stats.failed = value,
+                        TestResultKind::Error => stats.errors = value,
                         TestResultKind::Skipped => stats.skipped = value,
                         TestResultKind::Flaky => stats.flaky = value,
                         TestResultKind::Slow => stats.slow = value,
@@ -143,23 +152,27 @@ impl<'de> Deserialize<'de> for TestResultStats {
 pub struct DisplayTestResultStats<'a> {
     stats: &'a TestResultStats,
     start_time: Instant,
+    success: bool,
 }
 
 impl<'a> DisplayTestResultStats<'a> {
-    fn new(stats: &'a TestResultStats, start_time: Instant) -> Self {
-        Self { stats, start_time }
+    fn new(stats: &'a TestResultStats, start_time: Instant, success: bool) -> Self {
+        Self {
+            stats,
+            start_time,
+            success,
+        }
     }
 }
 
 impl fmt::Display for DisplayTestResultStats<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let success = self.stats.is_success();
         let elapsed = self.start_time.elapsed();
 
         writeln!(f, "{}", "─".repeat(12))?;
 
         let label = format!("{:>12}", "Summary");
-        if success {
+        if self.success {
             write!(f, "{}", label.green().bold())?;
         } else {
             write!(f, "{}", label.red().bold())?;
@@ -181,6 +194,22 @@ impl fmt::Display for DisplayTestResultStats<'_> {
                     .red()
                     .bold()
                     .to_string(),
+            );
+        }
+        if self.stats.errors() > 0 {
+            parts.push(
+                format!(
+                    "{} {}",
+                    self.stats.errors(),
+                    if self.stats.errors() == 1 {
+                        "error"
+                    } else {
+                        "errors"
+                    }
+                )
+                .red()
+                .bold()
+                .to_string(),
             );
         }
         parts.push(

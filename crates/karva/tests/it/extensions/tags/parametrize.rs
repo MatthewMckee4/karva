@@ -52,10 +52,12 @@ def fixture():
         exit_code: 1
         ----- stdout -----
             Starting 3 tests across 1 worker
-                FAIL [TIME] test::test_too_few
-                FAIL [TIME] test::test_too_many
+               ERROR [TIME] test::test_too_few
+               ERROR [TIME] test::test_too_many
 
-        diagnostics:
+        failures:
+
+        test::test_too_few:
 
         error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1 value
          --> test.py:5:14
@@ -65,6 +67,8 @@ def fixture():
           |              |
           |              expects 2 values
           |
+
+        test::test_too_many:
 
         error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 3 values
          --> test.py:9:14
@@ -76,7 +80,7 @@ def fixture():
           |
 
         ────────────
-             Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+             Summary [TIME] 2 tests run: 0 passed, 2 errors, 0 skipped
 
         ----- stderr -----
         "#);
@@ -104,9 +108,11 @@ def test_value(left, right):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
-    diagnostics:
+    failures:
+
+    test::test_value:
 
     error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1 value
      --> test.py:5:25
@@ -118,7 +124,7 @@ def test_value(left, right):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -145,9 +151,11 @@ def test_value(left, right):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
-    diagnostics:
+    failures:
+
+    test::test_value:
 
     error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1 value
      --> test.py:5:24
@@ -159,7 +167,7 @@ def test_value(left, right):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -186,9 +194,11 @@ def test_value(left, right):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
-    diagnostics:
+    failures:
+
+    test::test_value:
 
     error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1 value
      --> test.py:7:8
@@ -200,7 +210,7 @@ def test_value(left, right):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -234,10 +244,12 @@ def test_kwargs(left, right):
     exit_code: 1
     ----- stdout -----
         Starting 2 tests across 1 worker
-            FAIL [TIME] test::test_args
-            FAIL [TIME] test::test_kwargs
+           ERROR [TIME] test::test_args
+           ERROR [TIME] test::test_kwargs
 
-    diagnostics:
+    failures:
+
+    test::test_args:
 
     error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1 value
       --> test.py:11:5
@@ -245,6 +257,8 @@ def test_kwargs(left, right):
     11 | def test_args(left, right):
        |     ^^^^^^^^^
        |
+
+    test::test_kwargs:
 
     error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1 value
       --> test.py:15:5
@@ -254,7 +268,7 @@ def test_kwargs(left, right):
        |
 
     ────────────
-         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+         Summary [TIME] 2 tests run: 0 passed, 2 errors, 0 skipped
 
     ----- stderr -----
     ");
@@ -289,9 +303,11 @@ def test_value(left, right):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
-    diagnostics:
+    failures:
+
+    test::test_value:
 
     error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1 value
       --> test.py:13:9
@@ -309,7 +325,7 @@ def test_value(left, right):
        |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -334,9 +350,11 @@ def test_value(left, right):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
-    diagnostics:
+    failures:
+
+    test::test_value:
 
     error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1 value
      --> test.py:5:25
@@ -348,7 +366,7 @@ def test_value(left, right):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -372,9 +390,11 @@ def test_value(value):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
-    diagnostics:
+    failures:
+
+    test::test_value:
 
     error[invalid-parametrize]: Expected 1 value for `value`, but case 1 contains 2 values
      --> test.py:4:25
@@ -386,7 +406,7 @@ def test_value(value):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -411,9 +431,11 @@ def test_value(value):
         exit_code: 1
         ----- stdout -----
             Starting 1 test across 1 worker
-                FAIL [TIME] test::test_value
+               ERROR [TIME] test::test_value
 
-        diagnostics:
+        failures:
+
+        test::test_value:
 
         error[invalid-parametrize]: Parameter `value` is parametrized more than once
          --> test.py:4:25
@@ -423,7 +445,7 @@ def test_value(value):
           |
 
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         "#);
@@ -454,9 +476,11 @@ def test_value(value):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
-    diagnostics:
+    failures:
+
+    test::test_value:
 
     error[invalid-parametrize]: Parameter `value` is parametrized more than once
      --> test.py:6:9
@@ -468,7 +492,7 @@ def test_value(value):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -498,9 +522,11 @@ def test_value(value):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
-    diagnostics:
+    failures:
+
+    test::test_value:
 
     error[invalid-parametrize]: Parameter `value` is parametrized more than once
       --> test.py:10:26
@@ -512,7 +538,7 @@ def test_value(value):
        |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -541,9 +567,11 @@ def test_value(value):
         exit_code: 1
         ----- stdout -----
             Starting 1 test across 1 worker
-                FAIL [TIME] test::test_value
+               ERROR [TIME] test::test_value
 
-        diagnostics:
+        failures:
+
+        test::test_value:
 
         error[invalid-parametrize]: Parameter `value` is parametrized more than once
          --> test.py:5:15
@@ -555,7 +583,7 @@ def test_value(value):
           |
 
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         "#);
@@ -588,9 +616,11 @@ def test_value(value):
         exit_code: 1
         ----- stdout -----
             Starting 1 test across 1 worker
-                FAIL [TIME] test::test_value
+               ERROR [TIME] test::test_value
 
-        diagnostics:
+        failures:
+
+        test::test_value:
 
         error[invalid-parametrize]: Parameter `value` is parametrized more than once
          --> test.py:5:14
@@ -602,7 +632,7 @@ def test_value(value):
           |
 
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         "#);
@@ -632,9 +662,11 @@ def test_value(value):
         exit_code: 1
         ----- stdout -----
             Starting 1 test across 1 worker
-                FAIL [TIME] test::test_value
+               ERROR [TIME] test::test_value
 
-        diagnostics:
+        failures:
+
+        test::test_value:
 
         error[invalid-parametrize]: Parameter `missing` does not exist in the test function signature
          --> test.py:5:14
@@ -646,7 +678,7 @@ def test_value(value):
           |
 
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         "#);
@@ -673,9 +705,11 @@ def test_value(value):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
-    diagnostics:
+    failures:
+
+    test::test_value:
 
     error[invalid-parametrize]: Parameter `missing` does not exist in the test function signature
      --> test.py:6:18
@@ -687,7 +721,7 @@ def test_value(value):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -716,9 +750,11 @@ def test_value(value):
         exit_code: 1
         ----- stdout -----
             Starting 1 test across 1 worker
-                FAIL [TIME] test::test_value
+               ERROR [TIME] test::test_value
 
-        diagnostics:
+        failures:
+
+        test::test_value:
 
         error[invalid-parametrize]: Parametrization has no cases
          --> test.py:5:14
@@ -730,7 +766,7 @@ def test_value(value):
           |
 
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         "#);
@@ -757,9 +793,11 @@ def test_value(value):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
-    diagnostics:
+    failures:
+
+    test::test_value:
 
     error[invalid-parametrize]: Parametrization has no cases
      --> test.py:6:19
@@ -771,7 +809,7 @@ def test_value(value):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -800,9 +838,11 @@ def test_value(value):
         exit_code: 1
         ----- stdout -----
             Starting 1 test across 1 worker
-                FAIL [TIME] test::test_value
+               ERROR [TIME] test::test_value
 
-        diagnostics:
+        failures:
+
+        test::test_value:
 
         error[invalid-parametrize]: Parameter name cannot be empty
          --> test.py:5:14
@@ -814,7 +854,7 @@ def test_value(value):
           |
 
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         "#);
@@ -844,9 +884,11 @@ def test_value(value):
         exit_code: 1
         ----- stdout -----
             Starting 1 test across 1 worker
-                FAIL [TIME] test::test_value
+               ERROR [TIME] test::test_value
 
-        diagnostics:
+        failures:
+
+        test::test_value:
 
         error[invalid-parametrize]: `not valid` is not a valid Python identifier
          --> test.py:5:14
@@ -858,7 +900,7 @@ def test_value(value):
           |
 
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         "#);
@@ -899,11 +941,41 @@ def test_invalid(
     exit_code: 1
     ----- stdout -----
         Starting 3 tests across 1 worker
-            FAIL [TIME] test::test_unknown
-            FAIL [TIME] test::test_empty
-            FAIL [TIME] test::test_invalid
+           ERROR [TIME] test::test_unknown
+           ERROR [TIME] test::test_empty
+           ERROR [TIME] test::test_invalid
 
-    diagnostics:
+    failures:
+
+    test::test_empty:
+
+    error[invalid-parametrize]: Parameter name cannot be empty
+      --> test.py:12:25
+       |
+    12 |   @karva.tags.parametrize("", [1])
+       |                           ^^ empty parameter name
+    13 |   def test_empty(
+       |  _______________-
+    14 | |     value,
+    15 | | ):
+       | |_- available parameter
+       |
+
+    test::test_invalid:
+
+    error[invalid-parametrize]: `not valid` is not a valid Python identifier
+      --> test.py:18:25
+       |
+    18 |   @karva.tags.parametrize("not valid", [1])
+       |                           ^^^^^^^^^^^ invalid parameter name
+    19 |   def test_invalid(
+       |  _________________-
+    20 | |     value: int = 1,
+    21 | | ):
+       | |_- available parameter
+       |
+
+    test::test_unknown:
 
     error[invalid-parametrize]: Parameter `missing` does not exist in the test function signature
      --> test.py:4:25
@@ -919,32 +991,8 @@ def test_invalid(
       | |_- available parameters
       |
 
-    error[invalid-parametrize]: Parameter name cannot be empty
-      --> test.py:12:25
-       |
-    12 |   @karva.tags.parametrize("", [1])
-       |                           ^^ empty parameter name
-    13 |   def test_empty(
-       |  _______________-
-    14 | |     value,
-    15 | | ):
-       | |_- available parameter
-       |
-
-    error[invalid-parametrize]: `not valid` is not a valid Python identifier
-      --> test.py:18:25
-       |
-    18 |   @karva.tags.parametrize("not valid", [1])
-       |                           ^^^^^^^^^^^ invalid parameter name
-    19 |   def test_invalid(
-       |  _________________-
-    20 | |     value: int = 1,
-    21 | | ):
-       | |_- available parameter
-       |
-
     ────────────
-         Summary [TIME] 3 tests run: 0 passed, 3 failed, 0 skipped
+         Summary [TIME] 3 tests run: 0 passed, 3 errors, 0 skipped
 
     ----- stderr -----
     "#);
@@ -1044,7 +1092,9 @@ def test_order(third, second, first):
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_order(third=3, second=2, first=1)
 
-    diagnostics:
+    failures:
+
+    test::test_order(third=3, second=2, first=1):
 
     error[test-failure]: Test `test_order` failed
       --> test.py:14:5

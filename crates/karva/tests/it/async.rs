@@ -76,7 +76,9 @@ async def test_async_fails():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_async_fails
 
-    diagnostics:
+    failures:
+
+    test::test_async_fails:
 
     error[test-failure]: Test `test_async_fails` failed
      --> test.py:4:11

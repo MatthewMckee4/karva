@@ -226,7 +226,6 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                 report_failed_to_discover_imported_fixture(
                     self.context,
                     name,
-                    self.module.source_file(),
                     utf8_file_name,
                     &err,
                 );

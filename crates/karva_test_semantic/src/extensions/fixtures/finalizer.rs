@@ -5,8 +5,9 @@ use pyo3::types::PyIterator;
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
 
-use crate::Context;
-use crate::diagnostic::report_invalid_fixture_finalizer;
+use ruff_db::diagnostic::Diagnostic;
+
+use crate::diagnostic::invalid_fixture_finalizer_diagnostic;
 use crate::extensions::fixtures::FixtureScope;
 use crate::utils::run_coroutine;
 
@@ -41,7 +42,7 @@ pub struct Finalizer {
 }
 
 impl Finalizer {
-    pub(crate) fn run(self, context: &Context, py: Python<'_>) {
+    pub(crate) fn run(self, py: Python<'_>) -> Option<Diagnostic> {
         let invalid_finalizer_reason = if self.is_async {
             self.run_async_teardown(py)
         } else {
@@ -52,8 +53,13 @@ impl Finalizer {
             && let Some(stmt_function_def) = self.stmt_function_def
             && let Some(source_file) = self.source_file
         {
-            report_invalid_fixture_finalizer(context, source_file, &stmt_function_def, &reason);
+            return Some(invalid_fixture_finalizer_diagnostic(
+                source_file,
+                &stmt_function_def,
+                &reason,
+            ));
         }
+        None
     }
 
     /// Runs teardown for a sync generator fixture.

@@ -226,7 +226,9 @@ def test_poem():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_poem
 
-    diagnostics:
+    failures:
+
+    test::test_poem:
 
     error[test-failure]: Test `test_poem` failed
      --> test.py:4:5

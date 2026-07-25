@@ -82,7 +82,9 @@ def test_hello():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_hello
 
-    diagnostics:
+    failures:
+
+    test::test_hello:
 
     error[test-failure]: Test `test_hello` failed
      --> test.py:4:5

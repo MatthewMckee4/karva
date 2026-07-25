@@ -27,7 +27,19 @@ fn test_invalid_pytest_fixture_scope() {
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_all_scopes
+           ERROR [TIME] test::test_all_scopes
+
+    failures:
+
+    test::test_all_scopes:
+
+    error[missing-fixtures]: Test `test_all_scopes` has missing fixtures
+     --> test.py:8:5
+      |
+    8 | def test_all_scopes(
+      |     ^^^^^^^^^^^^^^^
+      |
+    info: Missing fixtures: `some_fixture`
 
     diagnostics:
 
@@ -39,16 +51,8 @@ fn test_invalid_pytest_fixture_scope() {
       |
     info: Invalid fixture scope: sessionss
 
-    error[missing-fixtures]: Test `test_all_scopes` has missing fixtures
-     --> test.py:8:5
-      |
-    8 | def test_all_scopes(
-      |     ^^^^^^^^^^^^^^^
-      |
-    info: Missing fixtures: `some_fixture`
-
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -74,7 +78,19 @@ def test_all_scopes(some_fixture: int) -> None:
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_all_scopes
+           ERROR [TIME] test::test_all_scopes
+
+    failures:
+
+    test::test_all_scopes:
+
+    error[missing-fixtures]: Test `test_all_scopes` has missing fixtures
+     --> test.py:7:5
+      |
+    7 | def test_all_scopes(some_fixture: int) -> None:
+      |     ^^^^^^^^^^^^^^^
+      |
+    info: Missing fixtures: `some_fixture`
 
     diagnostics:
 
@@ -86,16 +102,8 @@ def test_all_scopes(some_fixture: int) -> None:
       |
     info: Invalid fixture scope: sessionss
 
-    error[missing-fixtures]: Test `test_all_scopes` has missing fixtures
-     --> test.py:7:5
-      |
-    7 | def test_all_scopes(some_fixture: int) -> None:
-      |     ^^^^^^^^^^^^^^^
-      |
-    info: Missing fixtures: `some_fixture`
-
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -118,9 +126,11 @@ fn test_missing_fixture() {
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_all_scopes
+           ERROR [TIME] test::test_all_scopes
 
-    diagnostics:
+    failures:
+
+    test::test_all_scopes:
 
     error[missing-fixtures]: Test `test_all_scopes` has missing fixtures
      --> test.py:2:5
@@ -131,7 +141,7 @@ fn test_missing_fixture() {
     info: Missing fixtures: `missing_fixture`
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -158,18 +168,19 @@ fn test_fixture_fails_to_run() {
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_failing_fixture
+           ERROR [TIME] test::test_failing_fixture
 
-    diagnostics:
+    failures:
 
-    error[missing-fixtures]: Test `test_failing_fixture` has missing fixtures
-     --> test.py:8:5
+    test::test_failing_fixture:
+
+    error[fixture-failure]: Fixture `failing_fixture` failed
+     --> test.py:5:5
       |
-    8 | def test_failing_fixture(failing_fixture):
-      |     ^^^^^^^^^^^^^^^^^^^^
+    5 | def failing_fixture():
+      |     ^^^^^^^^^^^^^^^
       |
-    info: Missing fixtures: `failing_fixture`
-    info: Fixture `failing_fixture` failed here
+    info: Fixture failed here
      --> test.py:6:5
       |
     6 |     raise Exception('Fixture failed')
@@ -178,7 +189,7 @@ fn test_fixture_fails_to_run() {
     info: Fixture failed
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -205,21 +216,22 @@ fn test_fixture_missing_fixtures() {
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_failing_fixture
+           ERROR [TIME] test::test_failing_fixture
 
-    diagnostics:
+    failures:
 
-    error[missing-fixtures]: Test `test_failing_fixture` has missing fixtures
-     --> test.py:8:5
+    test::test_failing_fixture:
+
+    error[fixture-failure]: Fixture `failing_fixture` failed
+     --> test.py:5:5
       |
-    8 | def test_failing_fixture(failing_fixture):
-      |     ^^^^^^^^^^^^^^^^^^^^
+    5 | def failing_fixture(missing_fixture):
+      |     ^^^^^^^^^^^^^^^
       |
-    info: Missing fixtures: `failing_fixture`
     info: failing_fixture() missing 1 required positional argument: 'missing_fixture'
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -245,7 +257,9 @@ fn missing_arguments_in_nested_function() {
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_failing_fixture
 
-    diagnostics:
+    failures:
+
+    test::test_failing_fixture:
 
     error[test-failure]: Test `test_failing_fixture` failed
      --> test.py:2:5
@@ -291,18 +305,19 @@ fn test_failing_yield_fixture() {
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_failing_fixture
+           ERROR [TIME] test::test_failing_fixture
 
-    diagnostics:
+    failures:
 
-    error[missing-fixtures]: Test `test_failing_fixture` has missing fixtures
-      --> test.py:10:5
-       |
-    10 | def test_failing_fixture(fixture):
-       |     ^^^^^^^^^^^^^^^^^^^^
-       |
-    info: Missing fixtures: `fixture`
-    info: Fixture `fixture` failed here
+    test::test_failing_fixture:
+
+    error[fixture-failure]: Fixture `fixture` failed
+     --> test.py:5:5
+      |
+    5 | def fixture():
+      |     ^^^^^^^
+      |
+    info: Fixture failed here
      --> test.py:7:9
       |
     7 |         raise ValueError('foo')
@@ -311,7 +326,7 @@ fn test_failing_yield_fixture() {
     info: foo
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -339,9 +354,11 @@ fn test_fixture_generator_two_yields() {
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_fixture_generator(fixture_generator=1)
+           ERROR [TIME] test::test_fixture_generator(fixture_generator=1)
 
-    diagnostics:
+    failures:
+
+    test::test_fixture_generator(fixture_generator=1):
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
@@ -352,7 +369,7 @@ fn test_fixture_generator_two_yields() {
     info: Fixture had more than one yield statement
 
     ────────────
-         Summary [TIME] 1 test run: 1 passed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -380,9 +397,11 @@ fn test_fixture_generator_fail_in_teardown() {
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_fixture_generator(fixture_generator=1)
+           ERROR [TIME] test::test_fixture_generator(fixture_generator=1)
 
-    diagnostics:
+    failures:
+
+    test::test_fixture_generator(fixture_generator=1):
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
@@ -393,7 +412,7 @@ fn test_fixture_generator_fail_in_teardown() {
     info: Failed to reset fixture: fixture-error
 
     ────────────
-         Summary [TIME] 1 test run: 1 passed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -428,17 +447,18 @@ fn test_fixture_dependency_chain_failure() {
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_with_db
+           ERROR [TIME] test::test_with_db
 
-    diagnostics:
+    failures:
 
-    error[missing-fixtures]: Test `test_with_db` has missing fixtures
-      --> test.py:16:5
-       |
-    16 | def test_with_db(db):
-       |     ^^^^^^^^^^^^
-       |
-    info: Missing fixtures: `db`
+    test::test_with_db:
+
+    error[fixture-failure]: Fixture `config` failed
+     --> test.py:5:5
+      |
+    5 | def config():
+      |     ^^^^^^
+      |
     info: Fixture `db` requires `connection`
       --> test.py:13:5
        |
@@ -451,7 +471,7 @@ fn test_fixture_dependency_chain_failure() {
     9 | def connection(config):
       |     ^^^^^^^^^^
       |
-    info: Fixture `config` failed here
+    info: Fixture failed here
      --> test.py:6:5
       |
     6 |     raise Exception('config failed')
@@ -460,7 +480,7 @@ fn test_fixture_dependency_chain_failure() {
     info: config failed
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -486,7 +506,19 @@ def test_with_fixture(my_fixture):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_with_fixture
+           ERROR [TIME] test::test_with_fixture
+
+    failures:
+
+    test::test_with_fixture:
+
+    error[missing-fixtures]: Test `test_with_fixture` has missing fixtures
+     --> test.py:7:5
+      |
+    7 | def test_with_fixture(my_fixture):
+      |     ^^^^^^^^^^^^^^^^^
+      |
+    info: Missing fixtures: `my_fixture`
 
     diagnostics:
 
@@ -498,16 +530,8 @@ def test_with_fixture(my_fixture):
       |
     info: Scope must be either a string or a callable
 
-    error[missing-fixtures]: Test `test_with_fixture` has missing fixtures
-     --> test.py:7:5
-      |
-    7 | def test_with_fixture(my_fixture):
-      |     ^^^^^^^^^^^^^^^^^
-      |
-    info: Missing fixtures: `my_fixture`
-
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -542,9 +566,11 @@ def test_database(database):
         exit_code: 1
         ----- stdout -----
             Starting 1 test across 1 worker
-                FAIL [TIME] test::test_database
+               ERROR [TIME] test::test_database
 
-        diagnostics:
+        failures:
+
+        test::test_database:
 
         error[fixture-scope-mismatch]: Fixture `database` with `session` scope cannot depend on fixture `connection` with `function` scope
           --> test.py:10:5
@@ -560,7 +586,7 @@ def test_database(database):
           |
 
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         ");
@@ -605,9 +631,11 @@ def test_database():
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] nested.test::test_database
+           ERROR [TIME] nested.test::test_database
 
-    diagnostics:
+    failures:
+
+    nested.test::test_database:
 
     error[fixture-scope-mismatch]: Fixture `database` with `package` scope cannot depend on fixture `connection` with `function` scope
       --> nested/conftest.py:10:11
@@ -623,7 +651,7 @@ def test_database():
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -665,9 +693,11 @@ def test_database(database):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_database
+           ERROR [TIME] test::test_database
 
-    diagnostics:
+    failures:
+
+    test::test_database:
 
     error[fixture-scope-mismatch]: Fixture `repository` with `session` scope cannot depend on fixture `connection` with `function` scope
       --> test.py:13:5
@@ -689,7 +719,7 @@ def test_database(database):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -731,9 +761,11 @@ def test_scopes(package_fixture):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_scopes
+           ERROR [TIME] test::test_scopes
 
-    diagnostics:
+    failures:
+
+    test::test_scopes:
 
     error[fixture-scope-mismatch]: Fixture `session_fixture` with `session` scope cannot depend on fixture `module_fixture` with `module` scope
       --> test.py:14:5
@@ -755,7 +787,7 @@ def test_scopes(package_fixture):
        |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");

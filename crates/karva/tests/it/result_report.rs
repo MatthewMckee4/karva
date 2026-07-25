@@ -21,6 +21,9 @@ fn writes_json_result_report() {
             print("fail stderr", file=sys.stderr)
             assert False
 
+        def test_error(missing_fixture):
+            pass
+
         @karva.tags.skip("skip reason")
         def test_skip():
             assert False
@@ -37,6 +40,7 @@ fn writes_json_result_report() {
     assert_cmd_snapshot!(
         context.command_no_parallel().args([
             "--retry=1",
+            "--color=always",
             "--status-level=none",
             "--result-output=reports/results.json",
         ]),
@@ -45,7 +49,19 @@ fn writes_json_result_report() {
     exit_code: 1
     ----- stdout -----
 
-    diagnostics:
+    failures:
+
+    test_report::test_error:
+
+    error[missing-fixtures]: Test `test_error` has missing fixtures
+      --> test_report.py:14:5
+       |
+    14 | def test_error(missing_fixture):
+       |     ^^^^^^^^^^
+       |
+    info: Missing fixtures: `missing_fixture`
+
+    test_report::test_fail:
 
     error[test-failure]: Test `test_fail` failed
       --> test_report.py:10:5
@@ -60,36 +76,81 @@ fn writes_json_result_report() {
        |     ^^^^^^^^^^^^
        |
 
-    captured stderr for test_report::test_fail:
+    captured stderr:
     fail stderr
     fail stderr
 
     ────────────
-         Summary [TIME] 4 tests run: 2 passed (1 flaky), 1 failed, 1 skipped
+         Summary [TIME] 5 tests run: 2 passed (1 flaky), 1 failed, 1 error, 1 skipped
        FLAKY 2/2 [TIME] test_report::test_flaky
 
     ----- stderr -----
     "
     );
 
-    assert_snapshot!(normalize_result_json(&context.read_file("reports/results.json")), @r#"
+    let report = context.read_file("reports/results.json");
+    assert!(!report.contains('\u{1b}'));
+    assert_snapshot!(normalize_result_json(&report), @r#"
     {
-      "diagnostics": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n",
       "elapsed_seconds": "[TIME]",
-      "schema_version": 1,
+      "schema_version": 2,
       "stats": {
+        "errors": 1,
         "failed": 1,
         "flaky": 1,
         "passed": 2,
         "skipped": 1,
         "slow": 0,
-        "total": 4
+        "total": 5
       },
       "status": "failed",
       "tests": [
         {
+          "diagnostic": {
+            "code": "missing-fixtures",
+            "message": "Test `test_error` has missing fixtures",
+            "rendered": "error[missing-fixtures]: Test `test_error` has missing fixtures\n  --> test_report.py:14:5\n   |/n14 | def test_error(missing_fixture):\n   |     ^^^^^^^^^^\n   |/ninfo: Missing fixtures: `missing_fixture`\n\n",
+            "severity": "error"
+          },
+          "duration_seconds": "[TIME]",
+          "full_name": "test_report::test_error",
+          "module": "test_report",
+          "name": "test_error",
+          "status": "error"
+        },
+        {
+          "attempts": [
+            {
+              "attempt": 1,
+              "diagnostic": {
+                "code": "test-failure",
+                "message": "Test `test_fail` failed",
+                "rendered": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n",
+                "severity": "error"
+              },
+              "duration_seconds": "[TIME]",
+              "status": "failed"
+            },
+            {
+              "attempt": 2,
+              "diagnostic": {
+                "code": "test-failure",
+                "message": "Test `test_fail` failed",
+                "rendered": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n",
+                "severity": "error"
+              },
+              "duration_seconds": "[TIME]",
+              "status": "failed"
+            }
+          ],
           "captured_output": {
             "stderr": "fail stderr/nfail stderr\n"
+          },
+          "diagnostic": {
+            "code": "test-failure",
+            "message": "Test `test_fail` failed",
+            "rendered": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n",
+            "severity": "error"
           },
           "duration_seconds": "[TIME]",
           "full_name": "test_report::test_fail",
@@ -102,6 +163,24 @@ fn writes_json_result_report() {
           "status": "failed"
         },
         {
+          "attempts": [
+            {
+              "attempt": 1,
+              "diagnostic": {
+                "code": "test-failure",
+                "message": "Test `test_flaky` failed",
+                "rendered": "error[test-failure]: Test `test_flaky` failed\n  --> test_report.py:21:5\n   |/n21 | def test_flaky():\n   |     ^^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:26:5\n   |/n26 |     assert count >= 1\n   |     ^^^^^^^^^^^^^^^^^\n   |\n\n",
+                "severity": "error"
+              },
+              "duration_seconds": "[TIME]",
+              "status": "failed"
+            },
+            {
+              "attempt": 2,
+              "duration_seconds": "[TIME]",
+              "status": "passed"
+            }
+          ],
           "captured_output": {
             "stdout": "flaky attempt 1/nflaky attempt 2\n"
           },
@@ -140,7 +219,7 @@ fn writes_json_result_report() {
 }
 
 #[test]
-fn writes_jsonl_result_events() {
+fn writes_jsonl_result_records() {
     let context = TestContext::with_file(
         "test_events.py",
         r"
@@ -163,7 +242,9 @@ fn writes_jsonl_result_events() {
     exit_code: 1
     ----- stdout -----
 
-    diagnostics:
+    failures:
+
+    test_events::test_fail:
 
     error[test-failure]: Test `test_fail` failed
      --> test_events.py:5:5
@@ -186,11 +267,213 @@ fn writes_jsonl_result_events() {
     );
 
     assert_snapshot!(normalize_result_jsonl(&context.read_file("reports/events.jsonl")), @r#"
-    {"duration_seconds":"[TIME]","full_name":"test_events::test_fail","module":"test_events","name":"test_fail","schema_version":1,"status":"failed","type":"test"}
-    {"duration_seconds":"[TIME]","full_name":"test_events::test_pass","module":"test_events","name":"test_pass","schema_version":1,"status":"passed","type":"test"}
-    {"diagnostics":"error[test-failure]: Test `test_fail` failed\n --> test_events.py:5:5\n  |/n5 | def test_fail():\n  |     ^^^^^^^^^\n  |/ninfo: Test failed here\n --> test_events.py:6:5\n  |/n6 |     assert False\n  |     ^^^^^^^^^^^^\n  |\n\n","schema_version":1,"type":"diagnostics"}
-    {"elapsed_seconds":"[TIME]","schema_version":1,"stats":{"failed":1,"flaky":0,"passed":1,"skipped":0,"slow":0,"total":2},"status":"failed","type":"run_finished"}
+    {"diagnostic":{"code":"test-failure","message":"Test `test_fail` failed","rendered":"error[test-failure]: Test `test_fail` failed\n --> test_events.py:5:5\n  |/n5 | def test_fail():\n  |     ^^^^^^^^^\n  |/ninfo: Test failed here\n --> test_events.py:6:5\n  |/n6 |     assert False\n  |     ^^^^^^^^^^^^\n  |\n\n","severity":"error"},"duration_seconds":"[TIME]","full_name":"test_events::test_fail","module":"test_events","name":"test_fail","schema_version":2,"status":"failed","type":"test"}
+    {"duration_seconds":"[TIME]","full_name":"test_events::test_pass","module":"test_events","name":"test_pass","schema_version":2,"status":"passed","type":"test"}
+    {"elapsed_seconds":"[TIME]","schema_version":2,"stats":{"errors":0,"failed":1,"flaky":0,"passed":1,"skipped":0,"slow":0,"total":2},"status":"failed","type":"run_finished"}
     "#);
+}
+
+#[test]
+fn writes_related_test_diagnostics() {
+    let context = TestContext::with_file(
+        "test_related.py",
+        r#"
+        import karva
+
+        @karva.fixture
+        def broken_teardown():
+            yield
+            raise RuntimeError("teardown failed")
+
+        def test_failure(broken_teardown):
+            assert False
+        "#,
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
+            "--status-level=none",
+            "--result-output=reports/related.json",
+        ]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test_related::test_failure(broken_teardown=None):
+
+    error[test-failure]: Test `test_failure` failed
+     --> test_related.py:9:5
+      |
+    9 | def test_failure(broken_teardown):
+      |     ^^^^^^^^^^^^
+      |
+    info: Test ran with arguments:
+    info: `broken_teardown`: `None`
+    info: Test failed here
+      --> test_related.py:10:5
+       |
+    10 |     assert False
+       |     ^^^^^^^^^^^^
+       |
+
+    error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `broken_teardown`
+     --> test_related.py:5:5
+      |
+    5 | def broken_teardown():
+      |     ^^^^^^^^^^^^^^^
+      |
+    info: Failed to reset fixture: teardown failed
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    assert_snapshot!(normalize_result_json(&context.read_file("reports/related.json")), @r#"
+    {
+      "elapsed_seconds": "[TIME]",
+      "schema_version": 2,
+      "stats": {
+        "errors": 0,
+        "failed": 1,
+        "flaky": 0,
+        "passed": 0,
+        "skipped": 0,
+        "slow": 0,
+        "total": 1
+      },
+      "status": "failed",
+      "tests": [
+        {
+          "diagnostic": {
+            "code": "test-failure",
+            "message": "Test `test_failure` failed",
+            "rendered": "error[test-failure]: Test `test_failure` failed\n --> test_related.py:9:5\n  |/n9 | def test_failure(broken_teardown):\n  |     ^^^^^^^^^^^^\n  |/ninfo: Test ran with arguments:/ninfo: `broken_teardown`: `None`/ninfo: Test failed here\n  --> test_related.py:10:5\n   |/n10 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n",
+            "severity": "error"
+          },
+          "duration_seconds": "[TIME]",
+          "full_name": "test_related::test_failure(broken_teardown=None)",
+          "module": "test_related",
+          "name": "test_failure(broken_teardown=None)",
+          "related_diagnostics": [
+            {
+              "code": "invalid-fixture-finalizer",
+              "message": "Discovered an invalid fixture finalizer `broken_teardown`",
+              "rendered": "error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `broken_teardown`\n --> test_related.py:5:5\n  |/n5 | def broken_teardown():\n  |     ^^^^^^^^^^^^^^^\n  |/ninfo: Failed to reset fixture: teardown failed\n\n",
+              "severity": "error"
+            }
+          ],
+          "status": "failed"
+        }
+      ]
+    }
+    "#);
+}
+
+#[test]
+fn keeps_run_diagnostics_separate_from_tests() {
+    let context = TestContext::with_file(
+        "test_import.py",
+        r"
+        import missing_result_report_dependency
+
+        def test_unreachable():
+            pass
+        ",
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
+            "--status-level=none",
+            "--result-output=reports/import.json",
+        ]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test_import`: No module named 'missing_result_report_dependency'
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    assert_snapshot!(normalize_result_json(&context.read_file("reports/import.json")), @r#"
+    {
+      "elapsed_seconds": "[TIME]",
+      "run_diagnostics": [
+        {
+          "code": "failed-to-import-module",
+          "message": "Failed to import python module `test_import`: No module named 'missing_result_report_dependency'",
+          "rendered": "error[failed-to-import-module]: Failed to import python module `test_import`: No module named 'missing_result_report_dependency'\n\n",
+          "severity": "error"
+        }
+      ],
+      "schema_version": 2,
+      "stats": {
+        "errors": 0,
+        "failed": 0,
+        "flaky": 0,
+        "passed": 0,
+        "skipped": 0,
+        "slow": 0,
+        "total": 0
+      },
+      "status": "failed",
+      "tests": []
+    }
+    "#);
+}
+
+#[test]
+fn writes_jsonl_run_diagnostic_records() {
+    let context = TestContext::with_file(
+        "test_import.py",
+        r"
+        import missing_result_report_dependency
+
+        def test_unreachable():
+            pass
+        ",
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
+            "--status-level=none",
+            "--result-output=reports/import.jsonl",
+            "--result-format=jsonl",
+        ]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test_import`: No module named 'missing_result_report_dependency'
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    assert_snapshot!(
+        normalize_result_jsonl(&context.read_file("reports/import.jsonl")),
+        @r#"
+    {"diagnostic":{"code":"failed-to-import-module","message":"Failed to import python module `test_import`: No module named 'missing_result_report_dependency'","rendered":"error[failed-to-import-module]: Failed to import python module `test_import`: No module named 'missing_result_report_dependency'\n\n","severity":"error"},"schema_version":2,"type":"run_diagnostic"}
+    {"elapsed_seconds":"[TIME]","schema_version":2,"stats":{"errors":0,"failed":0,"flaky":0,"passed":0,"skipped":0,"slow":0,"total":0},"status":"failed","type":"run_finished"}
+    "#
+    );
 }
 
 #[test]
@@ -218,8 +501,9 @@ fn result_report_status_matches_no_tests_failure() {
     assert_snapshot!(normalize_result_json(&context.read_file("reports/no-tests.json")), @r#"
     {
       "elapsed_seconds": "[TIME]",
-      "schema_version": 1,
+      "schema_version": 2,
       "stats": {
+        "errors": 0,
         "failed": 0,
         "flaky": 0,
         "passed": 0,

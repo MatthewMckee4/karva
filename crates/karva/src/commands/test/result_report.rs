@@ -1,17 +1,19 @@
-use std::collections::HashMap;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
 use camino::Utf8Path;
 use karva_cache::AggregatedResults;
 use karva_cli::ResultFormat;
-use karva_diagnostic::{CapturedTestOutput, TestCaseOutcome, TestCaseResult, TestCaseRetry};
+use karva_diagnostic::{
+    CapturedTestOutput, RenderedDiagnostic, TestCaseAttempt, TestCaseOutcome, TestCaseResult,
+    TestCaseRetry,
+};
 use karva_project::path::absolute;
 use serde::Serialize;
 
 use crate::ExitStatus;
 
-const SCHEMA_VERSION: u8 = 1;
+const SCHEMA_VERSION: u8 = 2;
 
 pub(super) fn write_result_report(
     path: Option<&Utf8Path>,
@@ -50,19 +52,23 @@ pub(super) fn write_result_report(
 fn build_jsonl_report(report: &RunReport<'_>) -> Result<String> {
     let mut output = String::new();
     for test in &report.tests {
-        push_jsonl_event(&mut output, "test", test)?;
+        push_jsonl_record(&mut output, "test", test)?;
     }
-    if let Some(diagnostics) = report.diagnostics {
-        push_jsonl_event(
-            &mut output,
-            "diagnostics",
-            &DiagnosticsEvent { diagnostics },
-        )?;
+    if let Some(diagnostics) = &report.run_diagnostics {
+        for diagnostic in diagnostics {
+            push_jsonl_record(
+                &mut output,
+                "run_diagnostic",
+                &RunDiagnosticRecord {
+                    diagnostic: *diagnostic,
+                },
+            )?;
+        }
     }
-    push_jsonl_event(
+    push_jsonl_record(
         &mut output,
         "run_finished",
-        &RunFinishedEvent {
+        &RunFinishedRecord {
             status: report.status,
             elapsed_seconds: report.elapsed_seconds,
             stats: report.stats,
@@ -71,19 +77,23 @@ fn build_jsonl_report(report: &RunReport<'_>) -> Result<String> {
     Ok(output)
 }
 
-fn push_jsonl_event<T: Serialize>(output: &mut String, kind: &'static str, data: &T) -> Result<()> {
-    let event = JsonlEvent {
+fn push_jsonl_record<T: Serialize>(
+    output: &mut String,
+    kind: &'static str,
+    data: &T,
+) -> Result<()> {
+    let record = JsonlRecord {
         schema_version: SCHEMA_VERSION,
         kind,
         data,
     };
-    output.push_str(&serde_json::to_string(&event)?);
+    output.push_str(&serde_json::to_string(&record)?);
     output.push('\n');
     Ok(())
 }
 
 #[derive(Serialize)]
-struct JsonlEvent<'a, T> {
+struct JsonlRecord<'a, T> {
     schema_version: u8,
     #[serde(rename = "type")]
     kind: &'a str,
@@ -99,18 +109,19 @@ struct RunReport<'a> {
     stats: StatsReport,
     tests: Vec<TestReport<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    diagnostics: Option<&'a str>,
+    run_diagnostics: Option<Vec<DiagnosticReport<'a>>>,
 }
 
 impl<'a> RunReport<'a> {
     fn new(results: &'a AggregatedResults, elapsed: Duration, status: RunStatus) -> Self {
-        let captured_outputs = captured_outputs_by_test(results);
-        let tests = results
-            .test_cases
-            .iter()
-            .map(|case| TestReport::new(case, captured_outputs.get(case.full_name()).copied()))
-            .collect();
-        let diagnostics = (!results.diagnostics.is_empty()).then_some(results.diagnostics.as_str());
+        let tests = results.test_cases.iter().map(TestReport::new).collect();
+        let run_diagnostics = (!results.run_diagnostics.is_empty()).then(|| {
+            results
+                .run_diagnostics
+                .iter()
+                .map(DiagnosticReport::new)
+                .collect()
+        });
 
         Self {
             schema_version: SCHEMA_VERSION,
@@ -118,7 +129,7 @@ impl<'a> RunReport<'a> {
             elapsed_seconds: elapsed.as_secs_f64(),
             stats: StatsReport::new(results),
             tests,
-            diagnostics,
+            run_diagnostics,
         }
     }
 }
@@ -144,6 +155,7 @@ struct StatsReport {
     total: usize,
     passed: usize,
     failed: usize,
+    errors: usize,
     skipped: usize,
     flaky: usize,
     slow: usize,
@@ -155,6 +167,7 @@ impl StatsReport {
             total: results.stats.total(),
             passed: results.stats.passed(),
             failed: results.stats.failed(),
+            errors: results.stats.errors(),
             skipped: results.stats.skipped(),
             flaky: results.stats.flaky(),
             slow: results.stats.slow(),
@@ -177,14 +190,25 @@ struct TestReport<'a> {
     retry: Option<RetryReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     captured_output: Option<CapturedOutputReport<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    diagnostic: Option<DiagnosticReport<'a>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    related_diagnostics: Vec<DiagnosticReport<'a>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    attempts: Vec<AttemptReport<'a>>,
 }
 
 impl<'a> TestReport<'a> {
-    fn new(case: &'a TestCaseResult, output: Option<&'a CapturedTestOutput>) -> Self {
-        let (status, skip_reason) = match case.outcome() {
-            TestCaseOutcome::Passed => (TestStatus::Passed, None),
-            TestCaseOutcome::Failed => (TestStatus::Failed, None),
-            TestCaseOutcome::Skipped { reason } => (TestStatus::Skipped, reason.as_deref()),
+    fn new(case: &'a TestCaseResult) -> Self {
+        let (status, skip_reason, diagnostic) = match case.outcome() {
+            TestCaseOutcome::Passed => (TestStatus::Passed, None, None),
+            TestCaseOutcome::Failed { diagnostic, .. } => {
+                (TestStatus::Failed, None, Some(diagnostic))
+            }
+            TestCaseOutcome::Error { diagnostic, .. } => {
+                (TestStatus::Error, None, Some(diagnostic))
+            }
+            TestCaseOutcome::Skipped { reason } => (TestStatus::Skipped, reason.as_deref(), None),
         };
         let retry = case.retry().map(RetryReport::new);
         let flaky = matches!(case.outcome(), TestCaseOutcome::Passed) && retry.is_some();
@@ -198,9 +222,53 @@ impl<'a> TestReport<'a> {
             skip_reason,
             flaky,
             retry,
-            captured_output: output
-                .filter(|output| !output.is_empty())
-                .map(CapturedOutputReport::new),
+            captured_output: case.captured_output().map(CapturedOutputReport::new),
+            diagnostic: diagnostic.map(DiagnosticReport::new),
+            related_diagnostics: case
+                .outcome()
+                .related_diagnostics()
+                .iter()
+                .map(DiagnosticReport::new)
+                .collect(),
+            attempts: case.attempts().iter().map(AttemptReport::new).collect(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct AttemptReport<'a> {
+    attempt: u32,
+    status: TestStatus,
+    duration_seconds: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    diagnostic: Option<DiagnosticReport<'a>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    related_diagnostics: Vec<DiagnosticReport<'a>>,
+}
+
+impl<'a> AttemptReport<'a> {
+    fn new(attempt: &'a TestCaseAttempt) -> Self {
+        let (status, diagnostic) = match attempt.outcome() {
+            TestCaseOutcome::Passed => (TestStatus::Passed, None),
+            TestCaseOutcome::Failed { diagnostic, .. } => {
+                (TestStatus::Failed, Some(DiagnosticReport::new(diagnostic)))
+            }
+            TestCaseOutcome::Error { diagnostic, .. } => {
+                (TestStatus::Error, Some(DiagnosticReport::new(diagnostic)))
+            }
+            TestCaseOutcome::Skipped { .. } => (TestStatus::Skipped, None),
+        };
+        Self {
+            attempt: attempt.attempt(),
+            status,
+            duration_seconds: attempt.duration().as_secs_f64(),
+            diagnostic,
+            related_diagnostics: attempt
+                .outcome()
+                .related_diagnostics()
+                .iter()
+                .map(DiagnosticReport::new)
+                .collect(),
         }
     }
 }
@@ -210,6 +278,7 @@ impl<'a> TestReport<'a> {
 enum TestStatus {
     Passed,
     Failed,
+    Error,
     Skipped,
 }
 
@@ -246,12 +315,31 @@ impl<'a> CapturedOutputReport<'a> {
 }
 
 #[derive(Serialize)]
-struct DiagnosticsEvent<'a> {
-    diagnostics: &'a str,
+struct RunDiagnosticRecord<'a> {
+    diagnostic: DiagnosticReport<'a>,
+}
+
+#[derive(Clone, Copy, Serialize)]
+struct DiagnosticReport<'a> {
+    code: &'a str,
+    severity: &'static str,
+    message: &'a str,
+    rendered: &'a str,
+}
+
+impl<'a> DiagnosticReport<'a> {
+    fn new(diagnostic: &'a RenderedDiagnostic) -> Self {
+        Self {
+            code: diagnostic.code(),
+            severity: diagnostic.severity_name(),
+            message: diagnostic.message(),
+            rendered: diagnostic.rendered(),
+        }
+    }
 }
 
 #[derive(Serialize)]
-struct RunFinishedEvent {
+struct RunFinishedRecord {
     status: RunStatus,
     elapsed_seconds: f64,
     stats: StatsReport,
@@ -263,12 +351,4 @@ struct RunFinishedEvent {
 )]
 fn is_false(value: &bool) -> bool {
     !*value
-}
-
-fn captured_outputs_by_test(results: &AggregatedResults) -> HashMap<&str, &CapturedTestOutput> {
-    results
-        .captured_outputs
-        .iter()
-        .map(|output| (output.test_name(), output))
-        .collect()
 }

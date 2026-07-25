@@ -51,7 +51,9 @@ def test_slow():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_slow
 
-    diagnostics:
+    failures:
+
+    test::test_slow:
 
     error[test-failure]: Test `test_slow` failed
      --> test.py:6:5
@@ -89,7 +91,9 @@ async def test_slow_async():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_slow_async
 
-    diagnostics:
+    failures:
+
+    test::test_slow_async:
 
     error[test-failure]: Test `test_slow_async` failed
      --> test.py:6:11
@@ -233,7 +237,9 @@ def test_1(sleep_for):
             FAIL [TIME] test::test_1(sleep_for=2.0)
             PASS [TIME] test::test_1(sleep_for=0.0)
 
-    diagnostics:
+    failures:
+
+    test::test_1(sleep_for=2.0):
 
     error[test-failure]: Test `test_1` failed
      --> test.py:7:5
@@ -301,7 +307,9 @@ def test_always_slow():
       TRY 1 FAIL [TIME] test::test_always_slow
       TRY 2 FAIL [TIME] test::test_always_slow
 
-    diagnostics:
+    failures:
+
+    test::test_always_slow:
 
     error[test-failure]: Test `test_always_slow` failed
      --> test.py:6:5
@@ -339,7 +347,9 @@ def test_slow():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_slow
 
-    diagnostics:
+    failures:
+
+    test::test_slow:
 
     error[test-failure]: Test `test_slow` failed
      --> test.py:4:5
@@ -472,7 +482,9 @@ def test_slow():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_slow
 
-    diagnostics:
+    failures:
+
+    test::test_slow:
 
     error[test-failure]: Test `test_slow` failed
      --> test.py:4:5

@@ -1,26 +1,34 @@
 use std::time::Duration;
 
 use karva_python_semantic::QualifiedTestName;
+use ruff_db::diagnostic::Diagnostic;
 use serde::{Deserialize, Serialize};
 
+use super::diagnostic::RenderedDiagnostic;
 use super::kind::IndividualTestResultKind;
+use super::output::CapturedTestOutput;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TestCaseResult {
+pub struct TestCaseResult<D = RenderedDiagnostic> {
     module_name: String,
     name: String,
     full_name: String,
-    outcome: TestCaseOutcome,
+    outcome: TestCaseOutcome<D>,
     duration: Duration,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     retry: Option<TestCaseRetry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    captured_output: Option<CapturedTestOutput>,
+    #[serde(default = "Vec::new", skip_serializing_if = "Vec::is_empty")]
+    attempts: Vec<TestCaseAttempt<D>>,
 }
 
-impl TestCaseResult {
+impl<D> TestCaseResult<D> {
     pub fn new(
         test_case_name: &QualifiedTestName,
-        outcome: TestCaseOutcome,
+        outcome: TestCaseOutcome<D>,
         duration: Duration,
+        captured_output: Option<CapturedTestOutput>,
     ) -> Self {
         let function_name = test_case_name.function_name();
         let module_name = function_name.module_path().module_name().to_string();
@@ -38,24 +46,30 @@ impl TestCaseResult {
             outcome,
             duration,
             retry: None,
+            captured_output,
+            attempts: Vec::new(),
         }
     }
 
     pub fn retried(
         test_case_name: &QualifiedTestName,
-        outcome: TestCaseOutcome,
+        outcome: TestCaseOutcome<D>,
         duration: Duration,
         retry: TestCaseRetry,
+        captured_output: Option<CapturedTestOutput>,
+        attempts: Vec<TestCaseAttempt<D>>,
     ) -> Self {
-        let mut result = Self::new(test_case_name, outcome, duration);
+        let mut result = Self::new(test_case_name, outcome, duration, captured_output);
         result.retry = Some(retry);
+        result.attempts = attempts;
         result
     }
 
     pub fn from_display_name(
         full_name: &str,
-        outcome: TestCaseOutcome,
+        outcome: TestCaseOutcome<D>,
         duration: Duration,
+        captured_output: Option<CapturedTestOutput>,
     ) -> Self {
         let (module_name, name) = full_name
             .split_once("::")
@@ -70,6 +84,8 @@ impl TestCaseResult {
             outcome,
             duration,
             retry: None,
+            captured_output,
+            attempts: Vec::new(),
         }
     }
 
@@ -85,7 +101,7 @@ impl TestCaseResult {
         &self.full_name
     }
 
-    pub fn outcome(&self) -> &TestCaseOutcome {
+    pub fn outcome(&self) -> &TestCaseOutcome<D> {
         &self.outcome
     }
 
@@ -95,6 +111,74 @@ impl TestCaseResult {
 
     pub fn retry(&self) -> Option<&TestCaseRetry> {
         self.retry.as_ref()
+    }
+
+    pub fn captured_output(&self) -> Option<&CapturedTestOutput> {
+        self.captured_output.as_ref()
+    }
+
+    pub fn attempts(&self) -> &[TestCaseAttempt<D>] {
+        &self.attempts
+    }
+
+    pub fn try_map_diagnostic<T, E>(
+        self,
+        mut map: impl FnMut(&D) -> Result<T, E>,
+    ) -> Result<TestCaseResult<T>, E> {
+        Ok(TestCaseResult {
+            module_name: self.module_name,
+            name: self.name,
+            full_name: self.full_name,
+            outcome: self.outcome.try_map_diagnostic(&mut map)?,
+            duration: self.duration,
+            retry: self.retry,
+            captured_output: self.captured_output,
+            attempts: self
+                .attempts
+                .into_iter()
+                .map(|attempt| attempt.try_map_diagnostic(&mut map))
+                .collect::<Result<Vec<_>, _>>()?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TestCaseAttempt<D = RenderedDiagnostic> {
+    attempt: u32,
+    outcome: TestCaseOutcome<D>,
+    duration: Duration,
+}
+
+impl<D> TestCaseAttempt<D> {
+    pub fn new(attempt: u32, outcome: TestCaseOutcome<D>, duration: Duration) -> Self {
+        Self {
+            attempt,
+            outcome,
+            duration,
+        }
+    }
+
+    pub fn attempt(&self) -> u32 {
+        self.attempt
+    }
+
+    pub fn outcome(&self) -> &TestCaseOutcome<D> {
+        &self.outcome
+    }
+
+    pub fn duration(&self) -> Duration {
+        self.duration
+    }
+
+    fn try_map_diagnostic<T, E>(
+        self,
+        mut map: impl FnMut(&D) -> Result<T, E>,
+    ) -> Result<TestCaseAttempt<T>, E> {
+        Ok(TestCaseAttempt {
+            attempt: self.attempt,
+            outcome: self.outcome.try_map_diagnostic(&mut map)?,
+            duration: self.duration,
+        })
     }
 }
 
@@ -123,30 +207,114 @@ impl TestCaseRetry {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum TestCaseOutcome {
+pub enum TestCaseOutcome<D = RenderedDiagnostic> {
     Passed,
-    Failed,
-    Skipped { reason: Option<String> },
+    Failed {
+        diagnostic: D,
+        #[serde(default = "Vec::new", skip_serializing_if = "Vec::is_empty")]
+        related: Vec<D>,
+    },
+    Error {
+        diagnostic: D,
+        #[serde(default = "Vec::new", skip_serializing_if = "Vec::is_empty")]
+        related: Vec<D>,
+    },
+    Skipped {
+        reason: Option<String>,
+    },
 }
 
-impl TestCaseOutcome {
+impl<D> TestCaseOutcome<D> {
+    pub fn failed(diagnostic: D) -> Self {
+        Self::Failed {
+            diagnostic,
+            related: Vec::new(),
+        }
+    }
+
+    pub fn error(diagnostic: D) -> Self {
+        Self::error_with_related(diagnostic, Vec::new())
+    }
+
+    pub fn error_with_related(diagnostic: D, related: Vec<D>) -> Self {
+        Self::Error {
+            diagnostic,
+            related,
+        }
+    }
+
     pub fn is_failed(&self) -> bool {
-        matches!(self, Self::Failed)
+        matches!(self, Self::Failed { .. })
+    }
+
+    pub fn is_error(&self) -> bool {
+        matches!(self, Self::Error { .. })
+    }
+
+    pub fn is_non_success(&self) -> bool {
+        matches!(self, Self::Failed { .. } | Self::Error { .. })
     }
 
     pub fn is_skipped(&self) -> bool {
         matches!(self, Self::Skipped { .. })
     }
-}
 
-impl From<&IndividualTestResultKind> for TestCaseOutcome {
-    fn from(value: &IndividualTestResultKind) -> Self {
-        match value {
-            IndividualTestResultKind::Passed => Self::Passed,
-            IndividualTestResultKind::Failed => Self::Failed,
-            IndividualTestResultKind::Skipped { reason } => Self::Skipped {
+    pub fn diagnostic(&self) -> Option<&D> {
+        match self {
+            Self::Failed { diagnostic, .. } | Self::Error { diagnostic, .. } => Some(diagnostic),
+            Self::Passed | Self::Skipped { .. } => None,
+        }
+    }
+
+    pub fn related_diagnostics(&self) -> &[D] {
+        match self {
+            Self::Failed { related, .. } | Self::Error { related, .. } => related,
+            Self::Passed | Self::Skipped { .. } => &[],
+        }
+    }
+
+    pub fn result_kind(&self) -> IndividualTestResultKind {
+        match self {
+            Self::Passed => IndividualTestResultKind::Passed,
+            Self::Failed { .. } => IndividualTestResultKind::Failed,
+            Self::Error { .. } => IndividualTestResultKind::Error,
+            Self::Skipped { reason } => IndividualTestResultKind::Skipped {
                 reason: reason.clone(),
             },
         }
     }
+
+    fn try_map_diagnostic<T, E>(
+        self,
+        mut map: impl FnMut(&D) -> Result<T, E>,
+    ) -> Result<TestCaseOutcome<T>, E> {
+        Ok(match self {
+            Self::Passed => TestCaseOutcome::Passed,
+            Self::Failed {
+                diagnostic,
+                related,
+            } => TestCaseOutcome::Failed {
+                diagnostic: map(&diagnostic)?,
+                related: related
+                    .into_iter()
+                    .map(|diagnostic| map(&diagnostic))
+                    .collect::<Result<Vec<_>, _>>()?,
+            },
+            Self::Error {
+                diagnostic,
+                related,
+            } => TestCaseOutcome::Error {
+                diagnostic: map(&diagnostic)?,
+                related: related
+                    .into_iter()
+                    .map(|diagnostic| map(&diagnostic))
+                    .collect::<Result<Vec<_>, _>>()?,
+            },
+            Self::Skipped { reason } => TestCaseOutcome::Skipped { reason },
+        })
+    }
 }
+
+pub type TestExecutionResult = TestCaseResult<Diagnostic>;
+pub type TestExecutionOutcome = TestCaseOutcome<Diagnostic>;
+pub type TestExecutionAttempt = TestCaseAttempt<Diagnostic>;

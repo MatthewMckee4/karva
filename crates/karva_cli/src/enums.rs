@@ -80,7 +80,7 @@ pub enum ResultFormat {
     #[value(name = "json")]
     Json,
 
-    /// Write newline-delimited JSON events.
+    /// Write newline-delimited JSON records.
     #[value(name = "jsonl")]
     Jsonl,
 }

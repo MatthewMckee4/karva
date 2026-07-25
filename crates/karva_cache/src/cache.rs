@@ -6,16 +6,14 @@ use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use karva_diagnostic::{
-    CapturedTestOutput, FlakyTest, TestCaseOutcome, TestCaseResult, TestResultKind,
+    FlakyTest, RenderedDiagnostic, TestCaseOutcome, TestCaseResult, TestResultKind,
     TestResultStats, TestRunResult,
 };
 use ruff_db::diagnostic::DisplayDiagnosticConfig;
 use serde::{Deserialize, Serialize};
 
-use crate::artifact::{
-    CacheFile, read_json, read_text, write_json, write_json_if_nonempty, write_text,
-};
-use crate::diagnostics::write_diagnostics;
+use crate::artifact::{CacheFile, read_json, read_text, write_json, write_text};
+use crate::diagnostics::render_diagnostic;
 use crate::{RUN_PREFIX, RunHash, WORKER_PREFIX, worker_folder};
 
 /// Snapshot of the test a worker is currently executing.
@@ -35,25 +33,74 @@ pub struct CurrentTest {
 #[derive(Default)]
 pub struct AggregatedResults {
     pub stats: TestResultStats,
-    pub diagnostics: String,
+    pub run_diagnostics: Vec<RenderedDiagnostic>,
     pub failed_tests: Vec<String>,
     pub flaky_tests: Vec<FlakyTest>,
     pub test_cases: Vec<TestCaseResult>,
-    pub captured_outputs: Vec<CapturedTestOutput>,
     pub durations: HashMap<String, Duration>,
 }
 
+#[derive(Default, Serialize, Deserialize)]
+struct WorkerResults {
+    stats: TestResultStats,
+    run_diagnostics: Vec<RenderedDiagnostic>,
+    test_cases: Vec<TestCaseResult>,
+}
+
 impl AggregatedResults {
+    pub fn is_success(&self) -> bool {
+        self.stats.is_success()
+            && !self
+                .run_diagnostics
+                .iter()
+                .any(RenderedDiagnostic::is_error)
+    }
+
+    pub fn has_run_errors(&self) -> bool {
+        self.run_diagnostics
+            .iter()
+            .any(RenderedDiagnostic::is_error)
+    }
+
     pub fn register_interrupted_test(&mut self, name: &str, duration: Duration) {
         let function_name = base_test_name(name);
         self.stats.add(TestResultKind::Failed);
         self.failed_tests.push(function_name.clone());
         self.test_cases.push(TestCaseResult::from_display_name(
             name,
-            TestCaseOutcome::Failed,
+            TestCaseOutcome::failed(RenderedDiagnostic::interrupted(name)),
             duration,
+            None,
         ));
         self.durations.insert(function_name, duration);
+    }
+
+    fn merge_worker(&mut self, worker: WorkerResults) {
+        for diagnostic in worker.run_diagnostics {
+            if !self.run_diagnostics.contains(&diagnostic) {
+                self.run_diagnostics.push(diagnostic);
+            }
+        }
+        self.stats.merge(&worker.stats);
+        if !worker.stats.is_success() || worker.stats.flaky() > 0 {
+            for case in &worker.test_cases {
+                if case.outcome().is_non_success() {
+                    self.failed_tests.push(base_test_name(case.full_name()));
+                }
+                if let Some(retry) = case.retry()
+                    && matches!(case.outcome(), TestCaseOutcome::Passed)
+                {
+                    self.flaky_tests.push(FlakyTest::from_display_name(
+                        case.module_name(),
+                        case.name(),
+                        retry.attempts(),
+                        retry.max_attempts(),
+                        case.duration(),
+                    ));
+                }
+            }
+        }
+        self.test_cases.extend(worker.test_cases);
     }
 }
 
@@ -159,62 +206,47 @@ impl RunCache {
     pub fn write_result(
         &self,
         worker_id: usize,
-        result: &TestRunResult,
+        result: TestRunResult,
         cwd: &Utf8Path,
         config: &DisplayDiagnosticConfig,
     ) -> Result<()> {
         let worker_dir = self.worker_dir(worker_id);
         fs::create_dir_all(&worker_dir)?;
 
-        write_diagnostics(&worker_dir, result, cwd, config)?;
-        write_json(&worker_dir, CacheFile::Stats, result.stats())?;
-        write_json(&worker_dir, CacheFile::Durations, result.durations())?;
-
-        let failed_names: Vec<String> = result
-            .failed_tests()
+        let (run_diagnostics, stats, durations, test_cases) = result.into_parts();
+        let run_diagnostics = run_diagnostics
             .iter()
-            .map(ToString::to_string)
-            .collect();
-        write_json_if_nonempty(&worker_dir, CacheFile::FailedTests, &failed_names)?;
-        write_json_if_nonempty(&worker_dir, CacheFile::FlakyTests, result.flaky_tests())?;
-        write_json_if_nonempty(&worker_dir, CacheFile::TestCases, result.test_cases())?;
-        write_json_if_nonempty(
-            &worker_dir,
-            CacheFile::CapturedOutput,
-            result.captured_outputs(),
-        )?;
+            .map(|diagnostic| render_diagnostic(diagnostic, cwd, config))
+            .collect::<Result<Vec<_>>>()?;
+        let test_cases = test_cases
+            .into_iter()
+            .map(|case| {
+                case.try_map_diagnostic(|diagnostic| render_diagnostic(diagnostic, cwd, config))
+            })
+            .collect::<Result<Vec<TestCaseResult>>>()?;
 
+        let worker_results = WorkerResults {
+            stats,
+            run_diagnostics,
+            test_cases,
+        };
+
+        write_json(&worker_dir, CacheFile::Durations, &durations)?;
+        write_text(
+            &worker_dir,
+            CacheFile::Results,
+            serde_json::to_vec(&worker_results)?,
+        )?;
         Ok(())
     }
 }
 
 /// Reads results from a single worker directory into the accumulator.
 fn read_worker_results(worker_dir: &Utf8Path, results: &mut AggregatedResults) -> Result<()> {
-    if let Some(stats) = read_json::<TestResultStats>(worker_dir, CacheFile::Stats)? {
-        results.stats.merge(&stats);
-    }
-
-    if let Some(content) = read_text(worker_dir, CacheFile::Diagnostics)? {
-        results.diagnostics.push_str(&content);
-    }
-
-    if let Some(failed) = read_json::<Vec<String>>(worker_dir, CacheFile::FailedTests)? {
-        results.failed_tests.extend(failed);
-    }
-
-    if let Some(flaky) = read_json::<Vec<FlakyTest>>(worker_dir, CacheFile::FlakyTests)? {
-        results.flaky_tests.extend(flaky);
-    }
-
-    if let Some(cases) = read_json::<Vec<TestCaseResult>>(worker_dir, CacheFile::TestCases)? {
-        results.test_cases.extend(cases);
-    }
-
-    if let Some(outputs) =
-        read_json::<Vec<CapturedTestOutput>>(worker_dir, CacheFile::CapturedOutput)?
-    {
-        results.captured_outputs.extend(outputs);
-    }
+    let Some(worker_results) = read_json::<WorkerResults>(worker_dir, CacheFile::Results)? else {
+        return Ok(());
+    };
+    results.merge_worker(worker_results);
 
     if let Some(durations) =
         read_json::<HashMap<String, Duration>>(worker_dir, CacheFile::Durations)?
@@ -362,6 +394,8 @@ mod tests {
 
     use camino::Utf8PathBuf;
     use insta::assert_debug_snapshot;
+    use karva_diagnostic::CapturedTestOutput;
+    use ruff_db::diagnostic::Severity;
 
     use super::*;
 
@@ -385,7 +419,58 @@ mod tests {
     ) {
         let worker_dir = dir.join(run_name).join(format!("worker-{worker_id}"));
         fs::create_dir_all(&worker_dir).unwrap();
-        fs::write(worker_dir.join(CacheFile::Stats.filename()), stats_json).unwrap();
+        let stats: TestResultStats =
+            serde_json::from_str(stats_json).expect("deserialize test stats");
+        let mut test_cases = Vec::new();
+        for index in 0..stats.passed() {
+            test_cases.push(TestCaseResult::from_display_name(
+                &format!("mod::test_passed_{index}"),
+                TestCaseOutcome::Passed,
+                Duration::ZERO,
+                None,
+            ));
+        }
+        for index in 0..stats.failed() {
+            test_cases.push(failed_case(&format!("mod::test_failed_{index}")));
+        }
+        for index in 0..stats.skipped() {
+            test_cases.push(TestCaseResult::from_display_name(
+                &format!("mod::test_skipped_{index}"),
+                TestCaseOutcome::Skipped { reason: None },
+                Duration::ZERO,
+                None,
+            ));
+        }
+        write_worker_results(
+            &worker_dir,
+            &WorkerResults {
+                stats,
+                run_diagnostics: Vec::new(),
+                test_cases,
+            },
+        );
+    }
+
+    fn failed_case(name: &str) -> TestCaseResult {
+        TestCaseResult::from_display_name(
+            name,
+            TestCaseOutcome::failed(RenderedDiagnostic::new(
+                "test-failure",
+                Severity::Error,
+                "failed",
+                "error[test-failure]: failed\n",
+            )),
+            Duration::ZERO,
+            None,
+        )
+    }
+
+    fn write_worker_results(worker_dir: &std::path::Path, results: &WorkerResults) {
+        fs::write(
+            worker_dir.join(CacheFile::Results.filename()),
+            serde_json::to_string(results).expect("serialize worker results"),
+        )
+        .expect("write worker results");
     }
 
     #[test]
@@ -447,7 +532,38 @@ mod tests {
         let results = cache.aggregate_results().unwrap();
 
         assert_eq!(results.stats.total(), 0);
-        assert!(results.diagnostics.is_empty());
+        assert!(results.run_diagnostics.is_empty());
+    }
+
+    #[test]
+    fn aggregate_results_ignores_incomplete_worker() {
+        let tmp = tempfile::tempdir().expect("create temporary directory");
+        let cache_dir =
+            Utf8PathBuf::try_from(tmp.path().to_path_buf()).expect("temporary path is UTF-8");
+        let run_hash = RunHash::from_existing("run-610");
+        let worker_dir = tmp.path().join(run_hash.dir_name()).join("worker-0");
+        fs::create_dir_all(&worker_dir).expect("create worker directory");
+
+        let durations = HashMap::from([(
+            "mod::test_uncommitted".to_string(),
+            Duration::from_millis(10),
+        )]);
+        fs::write(
+            worker_dir.join(CacheFile::Durations.filename()),
+            serde_json::to_string(&durations).expect("serialize durations"),
+        )
+        .expect("write durations");
+
+        let results = RunCache::new(&cache_dir, &run_hash)
+            .aggregate_results()
+            .expect("aggregate results");
+
+        assert!(results.durations.is_empty());
+    }
+
+    #[test]
+    fn worker_results_reject_missing_fields() {
+        assert!(serde_json::from_str::<WorkerResults>("{}").is_err());
     }
 
     #[test]
@@ -673,17 +789,27 @@ mod tests {
         let worker1 = run_dir.join("worker-1");
         fs::create_dir_all(&worker0).unwrap();
         fs::create_dir_all(&worker1).unwrap();
+        let mut worker0_stats = TestResultStats::default();
+        worker0_stats.add(TestResultKind::Failed);
+        let mut worker1_stats = TestResultStats::default();
+        worker1_stats.add(TestResultKind::Failed);
 
-        fs::write(
-            worker0.join(CacheFile::FailedTests.filename()),
-            r#"["mod::test_a"]"#,
-        )
-        .unwrap();
-        fs::write(
-            worker1.join(CacheFile::FailedTests.filename()),
-            r#"["mod::test_b"]"#,
-        )
-        .unwrap();
+        write_worker_results(
+            &worker0,
+            &WorkerResults {
+                stats: worker0_stats,
+                test_cases: vec![failed_case("mod::test_a")],
+                ..WorkerResults::default()
+            },
+        );
+        write_worker_results(
+            &worker1,
+            &WorkerResults {
+                stats: worker1_stats,
+                test_cases: vec![failed_case("mod::test_b")],
+                ..WorkerResults::default()
+            },
+        );
 
         let mut d0 = HashMap::new();
         d0.insert("mod::test_a".to_string(), Duration::from_millis(10));
@@ -729,7 +855,7 @@ mod tests {
     }
 
     #[test]
-    fn aggregate_results_merges_captured_output_across_workers() {
+    fn aggregate_results_merges_test_output_across_workers() {
         let tmp = tempfile::tempdir().unwrap();
         let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
         let run_hash = RunHash::from_existing("run-710");
@@ -739,48 +865,85 @@ mod tests {
         let worker1 = run_dir.join("worker-1");
         fs::create_dir_all(&worker0).unwrap();
         fs::create_dir_all(&worker1).unwrap();
+        let mut worker0_stats = TestResultStats::default();
+        worker0_stats.add(TestResultKind::Passed);
+        let mut worker1_stats = TestResultStats::default();
+        worker1_stats.add(TestResultKind::Passed);
 
-        let output0 = CapturedTestOutput::new(
-            "mod::test_a".to_string(),
-            karva_diagnostic::CapturedTestOutcome::Failed,
-            "worker 0 stdout\n".to_string(),
-            String::new(),
+        let case0: TestCaseResult = TestCaseResult::from_display_name(
+            "mod::test_a",
+            TestCaseOutcome::Passed,
+            Duration::ZERO,
+            Some(CapturedTestOutput::new(
+                "worker 0 stdout\n".to_string(),
+                String::new(),
+            )),
         );
-        let output1 = CapturedTestOutput::new(
-            "mod::test_b".to_string(),
-            karva_diagnostic::CapturedTestOutcome::Passed,
-            String::new(),
-            "worker 1 stderr\n".to_string(),
+        let case1: TestCaseResult = TestCaseResult::from_display_name(
+            "mod::test_b",
+            TestCaseOutcome::Passed,
+            Duration::ZERO,
+            Some(CapturedTestOutput::new(
+                String::new(),
+                "worker 1 stderr\n".to_string(),
+            )),
         );
 
-        fs::write(
-            worker0.join(CacheFile::CapturedOutput.filename()),
-            serde_json::to_string(&[output0]).unwrap(),
-        )
-        .unwrap();
-        fs::write(
-            worker1.join(CacheFile::CapturedOutput.filename()),
-            serde_json::to_string(&[output1]).unwrap(),
-        )
-        .unwrap();
+        write_worker_results(
+            &worker0,
+            &WorkerResults {
+                stats: worker0_stats,
+                test_cases: vec![case0],
+                ..WorkerResults::default()
+            },
+        );
+        write_worker_results(
+            &worker1,
+            &WorkerResults {
+                stats: worker1_stats,
+                test_cases: vec![case1],
+                ..WorkerResults::default()
+            },
+        );
 
         let cache = RunCache::new(&cache_dir, &run_hash);
-        let mut outputs = cache.aggregate_results().unwrap().captured_outputs;
-        outputs.sort_by(|a, b| a.test_name().cmp(b.test_name()));
+        let mut cases = cache
+            .aggregate_results()
+            .expect("aggregate results")
+            .test_cases;
+        cases.sort_by(|a, b| a.full_name().cmp(b.full_name()));
 
-        assert_debug_snapshot!(outputs, @r#"
+        assert_debug_snapshot!(cases, @r#"
         [
-            CapturedTestOutput {
-                test_name: "mod::test_a",
-                outcome: Failed,
-                stdout: "worker 0 stdout\n",
-                stderr: "",
-            },
-            CapturedTestOutput {
-                test_name: "mod::test_b",
+            TestCaseResult {
+                module_name: "mod",
+                name: "test_a",
+                full_name: "mod::test_a",
                 outcome: Passed,
-                stdout: "",
-                stderr: "worker 1 stderr\n",
+                duration: 0ns,
+                retry: None,
+                captured_output: Some(
+                    CapturedTestOutput {
+                        stdout: "worker 0 stdout\n",
+                        stderr: "",
+                    },
+                ),
+                attempts: [],
+            },
+            TestCaseResult {
+                module_name: "mod",
+                name: "test_b",
+                full_name: "mod::test_b",
+                outcome: Passed,
+                duration: 0ns,
+                retry: None,
+                captured_output: Some(
+                    CapturedTestOutput {
+                        stdout: "",
+                        stderr: "worker 1 stderr\n",
+                    },
+                ),
+                attempts: [],
             },
         ]
         "#);
@@ -838,17 +1001,39 @@ mod tests {
                 module_name: "mod",
                 name: "test_slow(value=1)",
                 full_name: "mod::test_slow(value=1)",
-                outcome: Failed,
+                outcome: Failed {
+                    diagnostic: RenderedDiagnostic {
+                        code: "interrupted",
+                        severity: Error,
+                        message: "Test `mod::test_slow(value=1)` was interrupted",
+                        rendered: "error[interrupted]: Test `mod::test_slow(value=1)` was interrupted\n",
+                        colored_rendered: None,
+                    },
+                    related: [],
+                },
                 duration: 42ms,
                 retry: None,
+                captured_output: None,
+                attempts: [],
             },
             TestCaseResult {
                 module_name: "mod",
                 name: "test_legacy[value]",
                 full_name: "mod::test_legacy[value]",
-                outcome: Failed,
+                outcome: Failed {
+                    diagnostic: RenderedDiagnostic {
+                        code: "interrupted",
+                        severity: Error,
+                        message: "Test `mod::test_legacy[value]` was interrupted",
+                        rendered: "error[interrupted]: Test `mod::test_legacy[value]` was interrupted\n",
+                        colored_rendered: None,
+                    },
+                    related: [],
+                },
                 duration: 24ms,
                 retry: None,
+                captured_output: None,
+                attempts: [],
             },
         ]
         "#);

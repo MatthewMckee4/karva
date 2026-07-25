@@ -24,9 +24,11 @@ def test_cycle(value):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_cycle
+           ERROR [TIME] test::test_cycle
 
-    diagnostics:
+    failures:
+
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> test.py:6:5
@@ -37,7 +39,7 @@ def test_cycle(value):
     info: value -> value
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -73,9 +75,11 @@ def test_cycle(database):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_cycle
+           ERROR [TIME] test::test_cycle
 
-    diagnostics:
+    failures:
+
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> test.py:6:11
@@ -92,7 +96,7 @@ def test_cycle(database):
     info: database -> client -> database
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -138,9 +142,11 @@ def test_cycle(database):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_cycle
+           ERROR [TIME] test::test_cycle
 
-    diagnostics:
+    failures:
+
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> conftest.py:6:5
@@ -157,7 +163,7 @@ def test_cycle(database):
     info: database -> client -> database
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -200,9 +206,11 @@ def test_cycle(requested):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_cycle
+           ERROR [TIME] test::test_cycle
 
-    diagnostics:
+    failures:
+
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
       --> test.py:10:5
@@ -225,7 +233,7 @@ def test_cycle(requested):
     info: first -> second -> third -> first
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -259,9 +267,11 @@ def test_cycle():
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_cycle
+           ERROR [TIME] test::test_cycle
 
-    diagnostics:
+    failures:
+
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> test.py:6:5
@@ -278,7 +288,7 @@ def test_cycle():
     info: first -> second -> first
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -315,10 +325,13 @@ def test_cycle_two():
     exit_code: 1
     ----- stdout -----
         Starting 2 tests across 1 worker
-            FAIL [TIME] test::test_cycle_one
-            FAIL [TIME] test::test_cycle_two
+           ERROR [TIME] test::test_cycle_one
+           ERROR [TIME] test::test_cycle_two
 
-    diagnostics:
+    failures:
+
+    test::test_cycle_one:
+    test::test_cycle_two:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> test.py:6:5
@@ -335,7 +348,7 @@ def test_cycle_two():
     info: first -> second -> first
 
     ────────────
-         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+         Summary [TIME] 2 tests run: 0 passed, 2 errors, 0 skipped
 
     ----- stderr -----
     ");
@@ -388,10 +401,13 @@ def test_nested_cycle():
     exit_code: 1
     ----- stdout -----
         Starting 2 tests across 1 worker
-            FAIL [TIME] test::test_cycle
-            FAIL [TIME] nested.test_nested::test_nested_cycle
+           ERROR [TIME] test::test_cycle
+           ERROR [TIME] nested.test_nested::test_nested_cycle
 
-    diagnostics:
+    failures:
+
+    nested.test_nested::test_nested_cycle:
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> conftest.py:6:5
@@ -408,7 +424,7 @@ def test_nested_cycle():
     info: first -> second -> first
 
     ────────────
-         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+         Summary [TIME] 2 tests run: 0 passed, 2 errors, 0 skipped
 
     ----- stderr -----
     ");
@@ -451,9 +467,11 @@ def test_cycle():
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_cycle
+           ERROR [TIME] test::test_cycle
 
-    diagnostics:
+    failures:
+
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> conftest.py:6:5
@@ -470,7 +488,7 @@ def test_cycle():
     info: first -> second -> first
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -505,9 +523,11 @@ def test_cycle():
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_cycle
+           ERROR [TIME] test::test_cycle
 
-    diagnostics:
+    failures:
+
+    test::test_cycle:
 
     error[fixture-cycle]: Fixture dependency cycle detected
      --> test.py:6:5
@@ -524,7 +544,7 @@ def test_cycle():
     info: first -> second -> first
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");

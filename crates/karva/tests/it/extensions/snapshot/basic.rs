@@ -22,7 +22,9 @@ def test_hello():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_hello
 
-    diagnostics:
+    failures:
+
+    test::test_hello:
 
     error[test-failure]: Test `test_hello` failed
      --> test.py:4:5
@@ -192,7 +194,9 @@ def test_hello():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_hello
 
-    diagnostics:
+    failures:
+
+    test::test_hello:
 
     error[test-failure]: Test `test_hello` failed
      --> test.py:4:5
@@ -411,7 +415,9 @@ def test_hello():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_hello
 
-    diagnostics:
+    failures:
+
+    test::test_hello:
 
     error[test-failure]: Test `test_hello` failed
      --> test.py:4:5
@@ -478,7 +484,9 @@ def test_hello():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_hello
 
-    diagnostics:
+    failures:
+
+    test::test_hello:
 
     error[test-failure]: Test `test_hello` failed
      --> test.py:4:5
@@ -690,7 +698,9 @@ def test_two():
             PASS [TIME] test::test_one
             FAIL [TIME] test::test_two
 
-    diagnostics:
+    failures:
+
+    test::test_two:
 
     error[test-failure]: Test `test_two` failed
      --> test.py:7:5
@@ -832,7 +842,9 @@ def test_multi():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_multi
 
-    diagnostics:
+    failures:
+
+    test::test_multi:
 
     error[test-failure]: Test `test_multi` failed
      --> test.py:4:5

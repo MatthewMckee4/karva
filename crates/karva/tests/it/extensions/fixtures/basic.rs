@@ -814,21 +814,16 @@ Path(__file__).with_name('mypackage').joinpath('fixtures.py').unlink()
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @r"
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test_invoke::test_invoke
+           ERROR [TIME] test_invoke::test_invoke
 
-    diagnostics:
+    failures:
 
-    error[failed-to-discover-imported-fixture]: Failed to discover imported fixture `invoke` from `<temp_dir>/mypackage/fixtures.py`: failed to open file `<temp_dir>/mypackage/fixtures.py`: No such file or directory (os error 2)
-     --> conftest.py:1:1
-      |
-    1 | from pathlib import Path
-      | ^
-      |
+    test_invoke::test_invoke:
 
     error[missing-fixtures]: Test `test_invoke` has missing fixtures
      --> test_invoke.py:1:5
@@ -838,8 +833,12 @@ Path(__file__).with_name('mypackage').joinpath('fixtures.py').unlink()
       |
     info: Missing fixtures: `invoke`
 
+    diagnostics:
+
+    error[failed-to-discover-imported-fixture]: Failed to discover imported fixture `invoke` from `<temp_dir>/mypackage/fixtures.py`: failed to open file `<temp_dir>/mypackage/fixtures.py`: No such file or directory (os error 2)
+
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");

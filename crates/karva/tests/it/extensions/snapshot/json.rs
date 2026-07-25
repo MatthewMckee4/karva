@@ -384,7 +384,9 @@ def test_not_json():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_not_json
 
-    diagnostics:
+    failures:
+
+    test::test_not_json:
 
     error[test-failure]: Test `test_not_json` failed
      --> test.py:4:5
@@ -441,7 +443,9 @@ def test_json():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_json
 
-    diagnostics:
+    failures:
+
+    test::test_json:
 
     error[test-failure]: Test `test_json` failed
      --> test.py:4:5

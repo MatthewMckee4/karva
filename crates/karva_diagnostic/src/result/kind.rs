@@ -6,6 +6,7 @@
 pub enum IndividualTestResultKind {
     Passed,
     Failed,
+    Error,
     Skipped { reason: Option<String> },
 }
 
@@ -18,6 +19,7 @@ pub enum IndividualTestResultKind {
 pub enum TestResultKind {
     Passed,
     Failed,
+    Error,
     Skipped,
     /// A test that passed only after at least one retry. Tracked alongside
     /// (not instead of) `Passed` so the summary can show how many of the
@@ -34,6 +36,7 @@ impl TestResultKind {
         match self {
             Self::Passed => "passed",
             Self::Failed => "failed",
+            Self::Error => "error",
             Self::Skipped => "skipped",
             Self::Flaky => "flaky",
             Self::Slow => "slow",
@@ -44,6 +47,7 @@ impl TestResultKind {
         match s {
             "passed" => Ok(Self::Passed),
             "failed" => Ok(Self::Failed),
+            "error" => Ok(Self::Error),
             "skipped" => Ok(Self::Skipped),
             "flaky" => Ok(Self::Flaky),
             "slow" => Ok(Self::Slow),
@@ -57,6 +61,7 @@ impl From<IndividualTestResultKind> for TestResultKind {
         match val {
             IndividualTestResultKind::Passed => Self::Passed,
             IndividualTestResultKind::Failed => Self::Failed,
+            IndividualTestResultKind::Error => Self::Error,
             IndividualTestResultKind::Skipped { .. } => Self::Skipped,
         }
     }

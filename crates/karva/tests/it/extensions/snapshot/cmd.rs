@@ -94,7 +94,9 @@ def test_echo():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_echo
 
-    diagnostics:
+    failures:
+
+    test::test_echo:
 
     error[test-failure]: Test `test_echo` failed
      --> test.py:5:5
@@ -525,7 +527,9 @@ def test_inline_wrong():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_inline_wrong
 
-    diagnostics:
+    failures:
+
+    test::test_inline_wrong:
 
     error[test-failure]: Test `test_inline_wrong` failed
      --> test.py:5:5
@@ -608,7 +612,9 @@ def test_change():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_change
 
-    diagnostics:
+    failures:
+
+    test::test_change:
 
     error[test-failure]: Test `test_change` failed
      --> test.py:5:5
@@ -660,7 +666,9 @@ def test_bad_cmd():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_bad_cmd
 
-    diagnostics:
+    failures:
+
+    test::test_bad_cmd:
 
     error[test-failure]: Test `test_bad_cmd` failed
      --> test.py:4:5
@@ -1035,7 +1043,9 @@ def test_both_args():
         Starting 1 test across 1 worker
             FAIL [TIME] test::test_both_args
 
-    diagnostics:
+    failures:
+
+    test::test_both_args:
 
     error[test-failure]: Test `test_both_args` failed
      --> test.py:5:5

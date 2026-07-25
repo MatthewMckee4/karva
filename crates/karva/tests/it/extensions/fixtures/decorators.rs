@@ -184,9 +184,11 @@ def test_fixtures_given_by_decorator(a, b):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_fixtures_given_by_decorator
+           ERROR [TIME] test::test_fixtures_given_by_decorator
 
-    diagnostics:
+    failures:
+
+    test::test_fixtures_given_by_decorator:
 
     error[missing-fixtures]: Test `test_fixtures_given_by_decorator` has missing fixtures
       --> test.py:13:5
@@ -197,7 +199,7 @@ def test_fixtures_given_by_decorator(a, b):
     info: Missing fixtures: `b`
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");

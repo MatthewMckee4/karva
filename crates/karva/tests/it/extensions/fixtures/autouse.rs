@@ -210,18 +210,38 @@ def test_something_else():
 "#,
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @"
-    success: true
-    exit_code: 0
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
     ----- stdout -----
         Starting 2 tests across 1 worker
-            PASS [TIME] test::test_something
-            PASS [TIME] test::test_something_else
+           ERROR [TIME] test::test_something
+           ERROR [TIME] test::test_something_else
+
+    failures:
+
+    test::test_something:
+    test::test_something_else:
+
+    error[fixture-failure]: Fixture `failing_fixture` failed
+     --> test.py:5:5
+      |
+    5 | def failing_fixture():
+      |     ^^^^^^^^^^^^^^^
+      |
+    info: Fixture failed here
+     --> test.py:6:5
+      |
+    6 |     raise RuntimeError("Setup failed!")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Setup failed!
+
     ────────────
-         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+         Summary [TIME] 2 tests run: 0 passed, 2 errors, 0 skipped
 
     ----- stderr -----
-    ");
+    "#);
 }
 
 #[test]
@@ -248,9 +268,11 @@ def test_something():
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_something
+           ERROR [TIME] test::test_something
 
-    diagnostics:
+    failures:
+
+    test::test_something:
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `failing_teardown_fixture`
      --> test.py:5:5
@@ -261,10 +283,71 @@ def test_something():
     info: Failed to reset fixture: Teardown failed!
 
     ────────────
-         Summary [TIME] 1 test run: 1 passed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
+}
+
+#[test]
+fn test_scoped_auto_use_setup_failure_runs_registered_finalizers() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture(scope="module", auto_use=True)
+def failing_teardown_fixture():
+    yield
+    raise RuntimeError("Teardown failed!")
+
+@karva.fixture(scope="module", auto_use=True)
+def failing_setup_fixture():
+    raise RuntimeError("Setup failed!")
+
+def test_unreachable():
+    raise AssertionError("test body ran")
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_unreachable
+
+    failures:
+
+    test::test_unreachable:
+
+    error[fixture-failure]: Fixture `failing_setup_fixture` failed
+      --> test.py:10:5
+       |
+    10 | def failing_setup_fixture():
+       |     ^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Fixture failed here
+      --> test.py:11:5
+       |
+    11 |     raise RuntimeError("Setup failed!")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Setup failed!
+
+    error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `failing_teardown_fixture`
+     --> test.py:5:5
+      |
+    5 | def failing_teardown_fixture():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Failed to reset fixture: Teardown failed!
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    "#);
 }
 
 #[test]
@@ -287,17 +370,42 @@ def test_something():
 "#,
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @"
-    success: true
-    exit_code: 0
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_something
+           ERROR [TIME] test::test_something
+
+    failures:
+
+    test::test_something:
+
+    error[fixture-failure]: Fixture `failing_dep` failed
+     --> test.py:5:5
+      |
+    5 | def failing_dep():
+      |     ^^^^^^^^^^^
+      |
+    info: Fixture `auto_fixture` requires `failing_dep`
+     --> test.py:9:5
+      |
+    9 | def auto_fixture(failing_dep):
+      |     ^^^^^^^^^^^^
+      |
+    info: Fixture failed here
+     --> test.py:6:5
+      |
+    6 |     raise ValueError("Dependency failed!")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Dependency failed!
+
     ────────────
-         Summary [TIME] 1 test run: 1 passed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
-    ");
+    "#);
 }
 
 #[test]
@@ -324,10 +432,13 @@ def test_second():
     exit_code: 1
     ----- stdout -----
         Starting 2 tests across 1 worker
-            PASS [TIME] test::test_first
-            PASS [TIME] test::test_second
+           ERROR [TIME] test::test_first
+           ERROR [TIME] test::test_second
 
-    diagnostics:
+    failures:
+
+    test::test_first:
+    test::test_second:
 
     error[fixture-failure]: Fixture `failing_scoped_fixture` failed
      --> test.py:5:5
@@ -344,7 +455,7 @@ def test_second():
     info: Scoped fixture failed!
 
     ────────────
-         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+         Summary [TIME] 2 tests run: 0 passed, 2 errors, 0 skipped
 
     ----- stderr -----
     "#);

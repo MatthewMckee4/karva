@@ -57,10 +57,17 @@ def test_slow():
 
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    assert_snapshot!(stdout, @r"
+    assert_snapshot!(stdout, @"
         Starting 1 test across 1 worker
       Cancelling due to interrupt: 1 test still running
           SIGINT [TIME] test_slow::test_slow
+
+    failures:
+
+    test_slow::test_slow:
+
+    error[interrupted]: Test `test_slow::test_slow` was interrupted
+
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
     ");

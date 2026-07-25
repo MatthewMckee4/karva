@@ -241,10 +241,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         return Ok(exit_status);
     }
 
-    let exit_status = if result.stats.is_success()
-        && result.diagnostics.is_empty()
-        && !coverage_below_threshold
-    {
+    let exit_status = if result.is_success() && !coverage_below_threshold {
         ExitStatus::Success
     } else {
         ExitStatus::Failure
@@ -262,7 +259,7 @@ fn coverage_report_path(
 }
 
 fn no_tests_collected(result: &AggregatedResults) -> bool {
-    result.stats.total() == 0 && result.diagnostics.is_empty()
+    result.stats.total() == 0 && !result.has_run_errors()
 }
 
 /// Print the message shown when a run is stopped by `--run-timeout`.
@@ -273,7 +270,7 @@ pub(super) fn print_run_timed_out(printer: Printer) -> std::io::Result<()> {
     writeln!(stdout, "\nerror: run timed out before all tests completed")
 }
 
-/// Print test output: diagnostics, durations, and result summary.
+/// Print test output: failures, run diagnostics, durations, and result summary.
 pub fn print_test_output(
     printer: Printer,
     start_time: Instant,
@@ -282,49 +279,101 @@ pub fn print_test_output(
 ) -> Result<()> {
     let mut details = printer.stream_for_details().lock();
 
-    let has_diagnostics = !result.diagnostics.is_empty();
-    let has_captured_output = has_failed_captured_output(result);
+    let has_test_diagnostics = !result.stats.is_success();
+    let has_run_diagnostics = !result.run_diagnostics.is_empty();
+    let has_diagnostics = has_test_diagnostics || has_run_diagnostics;
     let has_preceding_test_lines = result.stats.total() > 0;
 
-    write_diagnostics_block(&mut details, result, has_preceding_test_lines)?;
-    write_captured_output_block(
+    if has_test_diagnostics {
+        write_test_failures_block(&mut details, result, has_preceding_test_lines)?;
+    }
+    write_run_diagnostics_block(
         &mut details,
         result,
-        has_preceding_test_lines && !has_diagnostics,
+        has_preceding_test_lines && !has_test_diagnostics,
     )?;
 
     write_durations_block(
         &mut details,
         &result.durations,
         durations,
-        has_preceding_test_lines && !has_diagnostics && !has_captured_output,
+        has_preceding_test_lines && !has_diagnostics,
     )?;
 
     drop(details);
 
+    let success = result.is_success();
     let mut summary = printer
-        .stream_for_summary(result.stats.is_success(), result.stats.flaky() > 0)
+        .stream_for_summary(success, result.stats.flaky() > 0)
         .lock();
 
-    write!(summary, "{}", result.stats.display(start_time))?;
+    write!(summary, "{}", result.stats.display(start_time, success))?;
     write!(summary, "{}", DisplayFlakyTests::new(&result.flaky_tests))?;
 
     Ok(())
 }
 
-fn has_failed_captured_output(result: &AggregatedResults) -> bool {
-    result
-        .captured_outputs
-        .iter()
-        .any(|output| output.outcome().is_failed() && !output.is_empty())
-}
-
-fn write_diagnostics_block(
+fn write_test_failures_block(
     stdout: &mut Stdout,
     result: &AggregatedResults,
     needs_leading_blank: bool,
 ) -> Result<()> {
-    if result.diagnostics.is_empty() {
+    let failed_tests = result
+        .test_cases
+        .iter()
+        .filter(|case| case.outcome().diagnostic().is_some())
+        .collect::<Vec<_>>();
+    if failed_tests.is_empty() {
+        return Ok(());
+    }
+
+    if needs_leading_blank && stdout.is_enabled() {
+        writeln!(stdout)?;
+    }
+    writeln!(stdout, "failures:")?;
+    writeln!(stdout)?;
+    let mut emitted = vec![false; failed_tests.len()];
+    for (index, case) in failed_tests.iter().enumerate() {
+        if emitted[index] {
+            continue;
+        }
+        emitted[index] = true;
+        let Some(diagnostic) = case.outcome().diagnostic() else {
+            continue;
+        };
+        writeln!(stdout, "{}:", case.full_name())?;
+        if case.captured_output().is_none() {
+            for (other_index, other) in failed_tests.iter().enumerate().skip(index + 1) {
+                if other.captured_output().is_none()
+                    && other.outcome().diagnostic() == Some(diagnostic)
+                    && other.outcome().related_diagnostics() == case.outcome().related_diagnostics()
+                {
+                    emitted[other_index] = true;
+                    writeln!(stdout, "{}:", other.full_name())?;
+                }
+            }
+        }
+        writeln!(stdout)?;
+        write_rendered_diagnostic(stdout, diagnostic.rendered_for_terminal())?;
+        for diagnostic in case.outcome().related_diagnostics() {
+            write_rendered_diagnostic(stdout, diagnostic.rendered_for_terminal())?;
+        }
+        if let Some(output) = case.captured_output() {
+            write_captured_stream(stdout, "stdout", output.stdout())?;
+            write_captured_stream(stdout, "stderr", output.stderr())?;
+            writeln!(stdout)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn write_run_diagnostics_block(
+    stdout: &mut Stdout,
+    result: &AggregatedResults,
+    needs_leading_blank: bool,
+) -> Result<()> {
+    if result.run_diagnostics.is_empty() {
         return Ok(());
     }
 
@@ -333,51 +382,30 @@ fn write_diagnostics_block(
     }
     writeln!(stdout, "diagnostics:")?;
     writeln!(stdout)?;
-    write!(stdout, "{}", result.diagnostics)?;
+    for diagnostic in &result.run_diagnostics {
+        write_rendered_diagnostic(stdout, diagnostic.rendered_for_terminal())?;
+    }
 
     Ok(())
 }
 
-fn write_captured_output_block(
-    stdout: &mut Stdout,
-    result: &AggregatedResults,
-    needs_leading_blank: bool,
-) -> Result<()> {
-    let mut failed_outputs: Vec<_> = result
-        .captured_outputs
-        .iter()
-        .filter(|output| output.outcome().is_failed() && !output.is_empty())
-        .collect();
-    if failed_outputs.is_empty() {
-        return Ok(());
-    }
-
-    failed_outputs.sort_by_key(|output| output.test_name());
-
-    if needs_leading_blank && stdout.is_enabled() {
+fn write_rendered_diagnostic(stdout: &mut Stdout, rendered: &str) -> Result<()> {
+    write!(stdout, "{rendered}")?;
+    if !rendered.ends_with('\n') {
         writeln!(stdout)?;
     }
-
-    for output in failed_outputs {
-        write_captured_stream(stdout, "stdout", output.test_name(), output.stdout())?;
-        write_captured_stream(stdout, "stderr", output.test_name(), output.stderr())?;
+    if !rendered.ends_with("\n\n") {
+        writeln!(stdout)?;
     }
-    writeln!(stdout)?;
-
     Ok(())
 }
 
-fn write_captured_stream(
-    stdout: &mut Stdout,
-    stream_name: &str,
-    test_name: &str,
-    content: &str,
-) -> Result<()> {
+fn write_captured_stream(stdout: &mut Stdout, stream_name: &str, content: &str) -> Result<()> {
     if content.is_empty() {
         return Ok(());
     }
 
-    writeln!(stdout, "captured {stream_name} for {test_name}:")?;
+    writeln!(stdout, "captured {stream_name}:")?;
     write!(stdout, "{content}")?;
     if !content.ends_with('\n') {
         writeln!(stdout)?;

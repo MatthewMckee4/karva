@@ -134,7 +134,7 @@ karva test [OPTIONS] [PATH]...
 <p>Possible values:</p>
 <ul>
 <li><code>json</code>:  Write one JSON document with the full run result</li>
-<li><code>jsonl</code>:  Write newline-delimited JSON events</li>
+<li><code>jsonl</code>:  Write newline-delimited JSON records</li>
 </ul></dd><dt id="karva-test--result-output"><a href="#karva-test--result-output"><code>--result-output</code></a> <i>path</i></dt><dd><p>Write machine-readable test results to this path</p>
 </dd><dt id="karva-test--retry"><a href="#karva-test--retry"><code>--retry</code></a> <i>retry</i></dt><dd><p>When set, the test will retry failed tests up to this number of times</p>
 </dd><dt id="karva-test--run-ignored"><a href="#karva-test--run-ignored"><code>--run-ignored</code></a> <i>run-ignored</i></dt><dd><p>Run ignored tests</p>

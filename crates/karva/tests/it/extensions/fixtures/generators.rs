@@ -120,9 +120,11 @@ async def test_bad(bad_fixture):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_bad(bad_fixture=1)
+           ERROR [TIME] test::test_bad(bad_fixture=1)
 
-    diagnostics:
+    failures:
+
+    test::test_bad(bad_fixture=1):
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `bad_fixture`
      --> test.py:4:11
@@ -133,7 +135,7 @@ async def test_bad(bad_fixture):
     info: Fixture had more than one yield statement
 
     ────────────
-         Summary [TIME] 1 test run: 1 passed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -160,9 +162,11 @@ async def test_error(error_fixture):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_error(error_fixture=1)
+           ERROR [TIME] test::test_error(error_fixture=1)
 
-    diagnostics:
+    failures:
+
+    test::test_error(error_fixture=1):
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `error_fixture`
      --> test.py:4:11
@@ -173,7 +177,7 @@ async def test_error(error_fixture):
     info: Failed to reset fixture: teardown failed
 
     ────────────
-         Summary [TIME] 1 test run: 1 passed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
