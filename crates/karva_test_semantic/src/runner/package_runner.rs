@@ -15,7 +15,7 @@ use ruff_source_file::SourceFile;
 
 use crate::Context;
 use crate::diagnostic::{
-    report_fixture_cycle, report_fixture_failure, report_invalid_parametrize,
+    report_fixture_failure, report_fixture_resolution_error, report_invalid_parametrize,
     report_missing_fixtures, report_test_failure, report_test_pass_on_expect_failure,
     report_test_returned_value,
 };
@@ -30,7 +30,7 @@ use crate::extensions::tags::timeout::TimeoutTag;
 use crate::output_capture::PythonOutputCapture;
 use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::runner::test_iterator::{TestVariant, TestVariantIterator};
-use crate::runner::{FinalizerCache, FixtureArguments, FixtureCache, FixtureCycleError};
+use crate::runner::{FinalizerCache, FixtureArguments, FixtureCache, FixtureResolutionResult};
 use crate::utils::{
     full_test_name, run_coroutine, run_test_with_timeout, set_attempt_env, set_test_name_env,
     truncate_string,
@@ -224,7 +224,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         // `if let Some(...)` gate: the session always exists, and if neither
         // slot contributes any autouse fixtures the walk returns an empty vec.
         if let Err(error) = self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session) {
-            report_fixture_cycle(self.context, error);
+            report_fixture_resolution_error(self.context, error);
             self.register_failed_package_tests(session);
             return;
         }
@@ -244,7 +244,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         parents: &'b [&'b DiscoveredPackage],
         current: &'b (dyn HasFixtures<'b> + 'b),
         scope: FixtureScope,
-    ) -> Result<(), FixtureCycleError> {
+    ) -> FixtureResolutionResult<()> {
         let mut resolver = RuntimeFixtureResolver::new(parents, current);
         let auto_use_fixtures = resolver.get_normalized_auto_use_fixtures(py, scope)?;
         let auto_use_errors = self.run_fixtures(py, &auto_use_fixtures);
@@ -267,7 +267,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         parents: &[&DiscoveredPackage],
     ) -> bool {
         if let Err(error) = self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module) {
-            report_fixture_cycle(self.context, error);
+            report_fixture_resolution_error(self.context, error);
             self.register_failed_module_tests(module);
             return false;
         }
@@ -281,7 +281,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             let variants = match TestVariantIterator::new(py, test_function, &mut test_resolver) {
                 Ok(variants) => variants,
                 Err(error) => {
-                    report_fixture_cycle(self.context, error);
+                    report_fixture_resolution_error(self.context, error);
                     self.register_failed_test(test_function);
                     passed = false;
                     if self.max_fail_reached() {
@@ -330,7 +330,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             if let Err(error) =
                 self.run_auto_use_fixtures(py, parents, config_module, FixtureScope::Package)
             {
-                report_fixture_cycle(self.context, error);
+                report_fixture_resolution_error(self.context, error);
                 self.register_failed_package_tests(package);
                 return false;
             }

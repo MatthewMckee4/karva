@@ -22,6 +22,20 @@ impl FixtureScope {
             Session => &[Session],
         }
     }
+
+    /// Return whether a fixture with this scope may use `dependency`.
+    pub(crate) fn can_use(self, dependency: Self) -> bool {
+        self.scopes_above().contains(&dependency)
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Function => "function",
+            Self::Module => "module",
+            Self::Package => "package",
+            Self::Session => "session",
+        }
+    }
 }
 
 impl TryFrom<String> for FixtureScope {
@@ -92,5 +106,28 @@ mod tests {
         assert_eq!(Module.scopes_above(), &[Module, Package, Session]);
         assert_eq!(Package.scopes_above(), &[Package, Session]);
         assert_eq!(Session.scopes_above(), &[Session]);
+    }
+
+    #[test]
+    fn fixtures_can_only_use_same_or_broader_scopes() {
+        assert!(Function.can_use(Function));
+        assert!(Function.can_use(Module));
+        assert!(Function.can_use(Package));
+        assert!(Function.can_use(Session));
+
+        assert!(!Module.can_use(Function));
+        assert!(Module.can_use(Module));
+        assert!(Module.can_use(Package));
+        assert!(Module.can_use(Session));
+
+        assert!(!Package.can_use(Function));
+        assert!(!Package.can_use(Module));
+        assert!(Package.can_use(Package));
+        assert!(Package.can_use(Session));
+
+        assert!(!Session.can_use(Function));
+        assert!(!Session.can_use(Module));
+        assert!(!Session.can_use(Package));
+        assert!(Session.can_use(Session));
     }
 }

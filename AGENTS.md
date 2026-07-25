@@ -109,6 +109,9 @@ pinact run
   crate, Python, worker, or CLI boundaries. Command integration tests should
   use snapshots. Do not call `.output()` only to assert the exit status;
   snapshot the exit code, stdout, and stderr together.
+- Use `#[rstest]` with `#[values(...)]` when an integration test exercises the
+  same behavior across frameworks or inputs. Do not loop over those cases
+  inside the test body.
 - Keep changes focused. Do not expand the task to unrelated issues.
 - Before writing significant new code, look for existing utilities or
   mechanisms that solve the problem. Prefer fixing the underlying
