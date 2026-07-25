@@ -42,7 +42,7 @@ pub struct AggregatedResults {
 
 #[derive(Default, Serialize, Deserialize)]
 struct WorkerResults {
-    slow: usize,
+    stats: TestResultStats,
     run_diagnostics: Vec<RenderedDiagnostic>,
     test_cases: Vec<TestCaseResult>,
 }
@@ -81,28 +81,26 @@ impl AggregatedResults {
                 self.run_diagnostics.push(diagnostic);
             }
         }
-        for _ in 0..worker.slow {
-            self.stats.add(TestResultKind::Slow);
-        }
-        for case in worker.test_cases {
-            self.stats.add(case.outcome().result_kind().into());
-            if case.outcome().is_non_success() {
-                self.failed_tests.push(base_test_name(case.full_name()));
+        self.stats.merge(&worker.stats);
+        if !worker.stats.is_success() || worker.stats.flaky() > 0 {
+            for case in &worker.test_cases {
+                if case.outcome().is_non_success() {
+                    self.failed_tests.push(base_test_name(case.full_name()));
+                }
+                if let Some(retry) = case.retry()
+                    && matches!(case.outcome(), TestCaseOutcome::Passed)
+                {
+                    self.flaky_tests.push(FlakyTest::from_display_name(
+                        case.module_name(),
+                        case.name(),
+                        retry.attempts(),
+                        retry.max_attempts(),
+                        case.duration(),
+                    ));
+                }
             }
-            if let Some(retry) = case.retry()
-                && matches!(case.outcome(), TestCaseOutcome::Passed)
-            {
-                self.stats.add(TestResultKind::Flaky);
-                self.flaky_tests.push(FlakyTest::from_display_name(
-                    case.module_name(),
-                    case.name(),
-                    retry.attempts(),
-                    retry.max_attempts(),
-                    case.duration(),
-                ));
-            }
-            self.test_cases.push(case);
         }
+        self.test_cases.extend(worker.test_cases);
     }
 }
 
@@ -228,7 +226,7 @@ impl RunCache {
             .collect::<Result<Vec<TestCaseResult>>>()?;
 
         let worker_results = WorkerResults {
-            slow: stats.slow(),
+            stats,
             run_diagnostics,
             test_cases,
         };
@@ -442,7 +440,7 @@ mod tests {
         write_worker_results(
             &worker_dir,
             &WorkerResults {
-                slow: stats.slow(),
+                stats,
                 run_diagnostics: Vec::new(),
                 test_cases,
             },
@@ -787,10 +785,15 @@ mod tests {
         let worker1 = run_dir.join("worker-1");
         fs::create_dir_all(&worker0).unwrap();
         fs::create_dir_all(&worker1).unwrap();
+        let mut worker0_stats = TestResultStats::default();
+        worker0_stats.add(TestResultKind::Failed);
+        let mut worker1_stats = TestResultStats::default();
+        worker1_stats.add(TestResultKind::Failed);
 
         write_worker_results(
             &worker0,
             &WorkerResults {
+                stats: worker0_stats,
                 test_cases: vec![failed_case("mod::test_a")],
                 ..WorkerResults::default()
             },
@@ -798,6 +801,7 @@ mod tests {
         write_worker_results(
             &worker1,
             &WorkerResults {
+                stats: worker1_stats,
                 test_cases: vec![failed_case("mod::test_b")],
                 ..WorkerResults::default()
             },
@@ -857,6 +861,10 @@ mod tests {
         let worker1 = run_dir.join("worker-1");
         fs::create_dir_all(&worker0).unwrap();
         fs::create_dir_all(&worker1).unwrap();
+        let mut worker0_stats = TestResultStats::default();
+        worker0_stats.add(TestResultKind::Passed);
+        let mut worker1_stats = TestResultStats::default();
+        worker1_stats.add(TestResultKind::Passed);
 
         let case0: TestCaseResult = TestCaseResult::from_display_name(
             "mod::test_a",
@@ -880,6 +888,7 @@ mod tests {
         write_worker_results(
             &worker0,
             &WorkerResults {
+                stats: worker0_stats,
                 test_cases: vec![case0],
                 ..WorkerResults::default()
             },
@@ -887,6 +896,7 @@ mod tests {
         write_worker_results(
             &worker1,
             &WorkerResults {
+                stats: worker1_stats,
                 test_cases: vec![case1],
                 ..WorkerResults::default()
             },
