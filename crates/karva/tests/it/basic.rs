@@ -1660,6 +1660,47 @@ def test_pass():
     ");
 }
 
+#[test]
+fn test_two_failed_imports_both_reported() {
+    let context = TestContext::with_files([
+        (
+            "test_bad_a.py",
+            r"
+import nonexistent_module_abc
+
+def test_a():
+    assert True
+            ",
+        ),
+        (
+            "test_bad_b.py",
+            r"
+import nonexistent_module_xyz
+
+def test_b():
+    assert True
+            ",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test_bad_a`: No module named 'nonexistent_module_abc'
+
+    error[failed-to-import-module]: Failed to import python module `test_bad_b`: No module named 'nonexistent_module_xyz'
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
 /// `--max-fail=2` should run exactly two failing tests and then stop scheduling
 /// the rest. The summary reflects only the tests that actually ran.
 #[test]

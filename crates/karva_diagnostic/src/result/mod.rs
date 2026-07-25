@@ -45,6 +45,27 @@ pub struct TestRunResult {
     captured_outputs: Vec<CapturedTestOutput>,
 }
 
+/// Orders diagnostics for display.
+///
+/// `Diagnostic::ruff_start_ordering` panics when either diagnostic has no
+/// primary span pointing at a `SourceFile`, which is the case for karva
+/// diagnostics like `failed-to-import-module` that describe a whole module
+/// rather than a location within it. Diagnostics with a source file sort by
+/// that ordering first; span-less diagnostics sort after them, by id and
+/// then message, so they still appear rather than being dropped or causing
+/// the sort to panic.
+fn diagnostic_display_ordering(a: &Diagnostic, b: &Diagnostic) -> std::cmp::Ordering {
+    match (a.ruff_source_file(), b.ruff_source_file()) {
+        (Some(_), Some(_)) => a.ruff_start_ordering(b),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a
+            .id()
+            .cmp(&b.id())
+            .then_with(|| a.primary_message().cmp(b.primary_message())),
+    }
+}
+
 impl TestRunResult {
     pub fn diagnostics(&self) -> &[Diagnostic] {
         &self.diagnostics
@@ -186,7 +207,7 @@ impl TestRunResult {
 
     #[must_use]
     pub fn into_sorted(mut self) -> Self {
-        self.diagnostics.sort_by(Diagnostic::ruff_start_ordering);
+        self.diagnostics.sort_by(diagnostic_display_ordering);
         self.test_cases.sort_by(|a, b| {
             a.module_name()
                 .cmp(b.module_name())
