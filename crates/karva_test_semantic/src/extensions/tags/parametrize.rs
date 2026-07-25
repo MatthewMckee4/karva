@@ -1,68 +1,239 @@
 use std::collections::{HashMap, HashSet};
-use std::fmt;
 use std::sync::Arc;
 
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use unicode_ident::{is_xid_continue, is_xid_start};
+use ruff_python_ast::{Expr, StmtFunctionDef};
+use ruff_python_stdlib::identifiers::is_identifier;
+use ruff_text_size::{Ranged, TextRange};
+use thiserror::Error;
 
 use crate::extensions::functions::Param;
 use crate::extensions::tags::Tags;
 
-fn is_identifier(name: &str) -> bool {
-    let mut characters = name.chars();
-    characters
-        .next()
-        .is_some_and(|character| character == '_' || is_xid_start(character))
-        && characters.all(|character| character == '_' || is_xid_continue(character))
+#[derive(Debug)]
+pub struct ParametrizeDiagnosticLocation {
+    pub primary: TextRange,
+    pub primary_message: String,
+    pub related: Vec<(TextRange, String)>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum InvalidParametrizeError {
-    InvalidName(String),
-    DuplicateName(String),
-    EmptyCases,
+    #[error("Parameter name cannot be empty")]
+    EmptyName,
+    #[error("`{name}` is not a valid Python identifier")]
+    InvalidName { name: String },
+    #[error("Parameter `{name}` is parametrized more than once")]
+    DuplicateName { name: String },
+    #[error("Parametrization has no cases")]
+    EmptyCases { names: String },
+    #[error("Expected {expected} values for `{names}`, but case {case} contains {actual}")]
     WrongArity {
         names: String,
         case: usize,
         expected: usize,
         actual: usize,
     },
-    UnknownName(String),
+    #[error("Parameter `{name}` does not exist in the test function signature")]
+    UnknownName { name: String },
 }
 
-impl fmt::Display for InvalidParametrizeError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+struct ParametrizeSyntax<'a> {
+    decorator_range: TextRange,
+    names: Option<&'a Expr>,
+    values: Option<&'a Expr>,
+}
+
+impl InvalidParametrizeError {
+    pub fn diagnostic_location(
+        &self,
+        function: &StmtFunctionDef,
+    ) -> Option<ParametrizeDiagnosticLocation> {
+        let syntaxes = parametrize_syntaxes(function);
+
         match self {
-            Self::InvalidName(name) if name.is_empty() => {
-                formatter.write_str("Parameter name cannot be empty")
+            Self::EmptyName => {
+                name_diagnostic_location(&syntaxes, "", "empty parameter name", function)
             }
-            Self::InvalidName(name) => {
-                write!(formatter, "`{name}` is not a valid Python identifier")
+            Self::InvalidName { name } => {
+                name_diagnostic_location(&syntaxes, name, "invalid parameter name", function)
             }
-            Self::DuplicateName(name) => {
-                write!(
-                    formatter,
-                    "Parameter `{name}` is parametrized more than once"
-                )
+            Self::DuplicateName { name } => {
+                let mut ranges = Vec::new();
+                for syntax in &syntaxes {
+                    for range in name_ranges(syntax.names, name) {
+                        if !ranges.contains(&range) {
+                            ranges.push(range);
+                        }
+                    }
+                }
+
+                let primary = ranges.pop()?;
+                Some(ParametrizeDiagnosticLocation {
+                    primary,
+                    primary_message: "duplicate parameter".to_string(),
+                    related: ranges
+                        .into_iter()
+                        .map(|range| (range, "first parametrized here".to_string()))
+                        .collect(),
+                })
             }
-            Self::EmptyCases => formatter.write_str("Parametrization has no cases"),
+            Self::EmptyCases { names } => {
+                let syntax = syntax_for_names(&syntaxes, names)?;
+                Some(ParametrizeDiagnosticLocation {
+                    primary: syntax.values.map_or(syntax.decorator_range, Ranged::range),
+                    primary_message: "no cases provided".to_string(),
+                    related: syntax
+                        .names
+                        .map(|names| vec![(names.range(), "parameters declared here".to_string())])
+                        .unwrap_or_default(),
+                })
+            }
             Self::WrongArity {
                 names,
                 case,
                 expected,
                 actual,
-            } => write!(
-                formatter,
-                "Expected {expected} values for `{names}`, but case {case} contains {actual}"
-            ),
-            Self::UnknownName(name) => write!(
-                formatter,
-                "Parameter `{name}` does not exist in the test function signature"
-            ),
+            } => {
+                let syntax = syntax_for_names(&syntaxes, names)?;
+                let primary = syntax
+                    .values
+                    .and_then(sequence_elements)
+                    .and_then(|rows| rows.get(case - 1))
+                    .map_or_else(
+                        || syntax.values.map_or(syntax.decorator_range, Ranged::range),
+                        Ranged::range,
+                    );
+                Some(ParametrizeDiagnosticLocation {
+                    primary,
+                    primary_message: format!("contains {actual} values"),
+                    related: syntax
+                        .names
+                        .map(|names| vec![(names.range(), format!("expects {expected} values"))])
+                        .unwrap_or_default(),
+                })
+            }
+            Self::UnknownName { name } => {
+                name_diagnostic_location(&syntaxes, name, "unknown parameter", function)
+            }
         }
+    }
+}
+
+fn name_diagnostic_location(
+    syntaxes: &[ParametrizeSyntax<'_>],
+    name: &str,
+    primary_message: &str,
+    function: &StmtFunctionDef,
+) -> Option<ParametrizeDiagnosticLocation> {
+    let primary = syntaxes
+        .iter()
+        .find_map(|syntax| name_ranges(syntax.names, name).into_iter().next())?;
+    Some(ParametrizeDiagnosticLocation {
+        primary,
+        primary_message: primary_message.to_string(),
+        related: vec![(
+            function.parameters.range,
+            "test parameters declared here".to_string(),
+        )],
+    })
+}
+
+fn parametrize_syntaxes(function: &StmtFunctionDef) -> Vec<ParametrizeSyntax<'_>> {
+    function
+        .decorator_list
+        .iter()
+        .filter_map(|decorator| {
+            let Expr::Call(call) = &decorator.expression else {
+                return None;
+            };
+            if !is_parametrize_function(&call.func) {
+                return None;
+            }
+            Some(ParametrizeSyntax {
+                decorator_range: decorator.range,
+                names: call.arguments.find_argument_value("argnames", 0),
+                values: call.arguments.find_argument_value("argvalues", 1),
+            })
+        })
+        .collect()
+}
+
+fn is_parametrize_function(expression: &Expr) -> bool {
+    match expression {
+        Expr::Name(name) => name.id == "parametrize",
+        Expr::Attribute(attribute) => attribute.attr.id == "parametrize",
+        _ => false,
+    }
+}
+
+fn syntax_for_names<'a>(
+    syntaxes: &'a [ParametrizeSyntax<'a>],
+    names: &str,
+) -> Option<&'a ParametrizeSyntax<'a>> {
+    syntaxes.iter().find(|syntax| {
+        syntax
+            .names
+            .and_then(normalized_names)
+            .is_some_and(|syntax_names| syntax_names.join(",") == names)
+    })
+}
+
+fn normalized_names(expression: &Expr) -> Option<Vec<&str>> {
+    match expression {
+        Expr::StringLiteral(string) => {
+            Some(string.value.to_str().split(',').map(str::trim).collect())
+        }
+        Expr::List(list) => list.elts.iter().map(string_value).collect(),
+        Expr::Tuple(tuple) => tuple.elts.iter().map(string_value).collect(),
+        _ => None,
+    }
+}
+
+fn string_value(expression: &Expr) -> Option<&str> {
+    let Expr::StringLiteral(string) = expression else {
+        return None;
+    };
+    Some(string.value.to_str())
+}
+
+fn name_ranges(expression: Option<&Expr>, target: &str) -> Vec<TextRange> {
+    let Some(expression) = expression else {
+        return Vec::new();
+    };
+    match expression {
+        Expr::StringLiteral(string) => string
+            .value
+            .to_str()
+            .split(',')
+            .map(str::trim)
+            .filter(|name| *name == target)
+            .map(|_| expression.range())
+            .collect(),
+        Expr::List(list) => list
+            .elts
+            .iter()
+            .filter(|element| string_value(element) == Some(target))
+            .map(Ranged::range)
+            .collect(),
+        Expr::Tuple(tuple) => tuple
+            .elts
+            .iter()
+            .filter(|element| string_value(element) == Some(target))
+            .map(Ranged::range)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn sequence_elements(expression: &Expr) -> Option<&[Expr]> {
+    match expression {
+        Expr::List(list) => Some(&list.elts),
+        Expr::Tuple(tuple) => Some(&tuple.elts),
+        _ => None,
     }
 }
 
@@ -252,16 +423,21 @@ impl ParametrizeTag {
         seen_names: &mut HashSet<&'a str>,
     ) -> Result<(), InvalidParametrizeError> {
         for name in &self.names {
+            if name.is_empty() {
+                return Err(InvalidParametrizeError::EmptyName);
+            }
             if !is_identifier(name) {
-                return Err(InvalidParametrizeError::InvalidName(name.clone()));
+                return Err(InvalidParametrizeError::InvalidName { name: name.clone() });
             }
             if !seen_names.insert(name) {
-                return Err(InvalidParametrizeError::DuplicateName(name.clone()));
+                return Err(InvalidParametrizeError::DuplicateName { name: name.clone() });
             }
         }
 
         if self.parametrizations.is_empty() {
-            return Err(InvalidParametrizeError::EmptyCases);
+            return Err(InvalidParametrizeError::EmptyCases {
+                names: self.names.join(","),
+            });
         }
 
         let expected = self.names.len();
@@ -280,7 +456,7 @@ impl ParametrizeTag {
 
         for name in &self.names {
             if !function_parameter_names.contains(name.as_str()) {
-                return Err(InvalidParametrizeError::UnknownName(name.clone()));
+                return Err(InvalidParametrizeError::UnknownName { name: name.clone() });
             }
         }
 

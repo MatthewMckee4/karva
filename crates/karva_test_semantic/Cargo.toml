@@ -28,9 +28,11 @@ ruff_db = { workspace = true }
 ruff_macros = { workspace = true }
 ruff_python_ast = { workspace = true }
 ruff_python_parser = { workspace = true }
+ruff_python_stdlib = { workspace = true }
 ruff_source_file = { workspace = true }
+ruff_text_size = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }
-unicode-ident = { workspace = true }
 
 [dev-dependencies]
 regex = { workspace = true }

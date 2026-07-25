@@ -476,7 +476,23 @@ pub fn report_invalid_parametrize(
 ) {
     let builder = context.report_diagnostic(&INVALID_PARAMETRIZE);
     let mut diagnostic = builder.into_diagnostic(error.to_string());
-    annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
+    let Some(location) = error.diagnostic_location(stmt_function_def) else {
+        annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
+        return;
+    };
+
+    diagnostic.annotate(
+        Annotation::primary(Span::from(source_file.clone()).with_range(location.primary))
+            .message(location.primary_message),
+    );
+
+    for (range, message) in location.related {
+        let mut sub = SubDiagnostic::new(SubDiagnosticSeverity::Info, message);
+        sub.annotate(Annotation::primary(
+            Span::from(source_file.clone()).with_range(range),
+        ));
+        diagnostic.sub(sub);
+    }
 }
 
 pub fn report_test_returned_value(

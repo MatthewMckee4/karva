@@ -65,6 +65,7 @@ ruff_notebook = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_options_metadata = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_python_ast = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_python_parser = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
+ruff_python_stdlib = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_python_trivia = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_source_file = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_text_size = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
@@ -84,7 +85,6 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
     "fmt",
 ] }
 tracing-tree = { version = "0.4.1" }
-unicode-ident = "1.0.24"
 uuid = { version = "1.23", features = ["v4"] }
 which = { version = "8.0" }
 wild = { version = "2" }
