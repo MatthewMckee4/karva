@@ -159,7 +159,8 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     // reached (or exceeded) its configured max-fail budget. The budget is
     // enforced locally per worker inside `PackageRunner`, so hitting any
     // failure here while `max_fail` is set means we ran out of budget.
-    let failed_count = u32::try_from(result.stats().failed()).unwrap_or(u32::MAX);
+    let failed_count =
+        u32::try_from(result.stats().failed() + result.stats().errors()).unwrap_or(u32::MAX);
     if settings.max_fail().is_exceeded_by(failed_count) {
         cache.write_fail_fast_signal()?;
     }

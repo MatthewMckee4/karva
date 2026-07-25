@@ -210,11 +210,180 @@ def test_flaky():
       |
 
     </failure>
+          <rerunFailure message="Test `test_fail` failed" type="test-failure">error[test-failure]: Test `test_fail` failed
+     --&gt; test_retry.py:4:5
+      |
+    4 | def test_fail():
+      |     ^^^^^^^^^
+      |
+    info: Test failed here
+     --&gt; test_retry.py:5:5
+      |
+    5 |     assert False
+      |     ^^^^^^^^^^^^
+      |
+
+    </rerunFailure>
         </testcase>
         <testcase classname="test_retry" name="test_flaky" time="[TIME]">
+          <flakyFailure message="Test `test_flaky` failed" type="test-failure">error[test-failure]: Test `test_flaky` failed
+     --&gt; test_retry.py:7:5
+      |
+    7 | def test_flaky():
+      |     ^^^^^^^^^^
+      |
+    info: Test failed here
+     --&gt; test_retry.py:9:5
+      |
+    9 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+
+    </flakyFailure>
           <system-out>attempt 1
     attempt 2
     </system-out>
+        </testcase>
+      </testsuite>
+    </testsuites>
+    "#);
+}
+
+#[test]
+fn junit_reports_run_diagnostics_as_errors() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.ci.junit]
+path = "reports/test-results.xml"
+"#,
+        ),
+        (
+            "test_import.py",
+            r"
+import missing_junit_dependency
+
+def test_unreachable():
+    pass
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--profile=ci", "--status-level=none"]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test_import`: No module named 'missing_junit_dependency'
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let xml = normalize_junit_xml(&context.read_file("reports/test-results.xml"));
+    assert_snapshot!(xml, @r#"
+    <?xml version="1.0" encoding="UTF-8"?>
+    <testsuites name="karva-tests" tests="1" failures="0" skipped="0" errors="1" time="[TIME]">
+      <testsuite name="karva-tests::run" tests="1" failures="0" skipped="0" errors="1" time="[TIME]">
+        <testcase classname="karva.run" name="failed-to-import-module-1" time="[TIME]">
+          <error message="Failed to import python module `test_import`: No module named &apos;missing_junit_dependency&apos;" type="failed-to-import-module">error[failed-to-import-module]: Failed to import python module `test_import`: No module named &apos;missing_junit_dependency&apos;
+
+    </error>
+        </testcase>
+      </testsuite>
+    </testsuites>
+    "#);
+}
+
+#[test]
+fn junit_distinguishes_fixture_errors_from_test_failures() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.ci.junit]
+path = "reports/test-results.xml"
+"#,
+        ),
+        (
+            "test_fixture.py",
+            r#"
+import karva
+
+@karva.fixture(auto_use=True)
+def broken_fixture():
+    raise RuntimeError("setup failed")
+
+def test_unreachable():
+    raise AssertionError("test body ran")
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--profile=ci", "--status-level=none"]),
+        @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test_fixture::test_unreachable:
+
+    error[fixture-failure]: Fixture `broken_fixture` failed
+     --> test_fixture.py:5:5
+      |
+    5 | def broken_fixture():
+      |     ^^^^^^^^^^^^^^
+      |
+    info: Fixture failed here
+     --> test_fixture.py:6:5
+      |
+    6 |     raise RuntimeError("setup failed")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: setup failed
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    "#
+    );
+
+    let xml = normalize_junit_xml(&context.read_file("reports/test-results.xml"));
+    assert_snapshot!(xml, @r#"
+    <?xml version="1.0" encoding="UTF-8"?>
+    <testsuites name="karva-tests" tests="1" failures="0" skipped="0" errors="1" time="[TIME]">
+      <testsuite name="test_fixture" tests="1" failures="0" skipped="0" errors="1" time="[TIME]">
+        <testcase classname="test_fixture" name="test_unreachable" time="[TIME]">
+          <error message="Fixture `broken_fixture` failed" type="fixture-failure">error[fixture-failure]: Fixture `broken_fixture` failed
+     --&gt; test_fixture.py:5:5
+      |
+    5 | def broken_fixture():
+      |     ^^^^^^^^^^^^^^
+      |
+    info: Fixture failed here
+     --&gt; test_fixture.py:6:5
+      |
+    6 |     raise RuntimeError(&quot;setup failed&quot;)
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: setup failed
+
+    </error>
         </testcase>
       </testsuite>
     </testsuites>

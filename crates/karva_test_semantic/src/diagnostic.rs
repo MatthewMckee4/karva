@@ -263,12 +263,11 @@ pub fn report_invalid_fixture(
     context.add_run_diagnostic(diagnostic);
 }
 
-pub fn report_invalid_fixture_finalizer(
-    context: &Context,
+pub fn invalid_fixture_finalizer_diagnostic(
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
     reason: &str,
-) {
+) -> Diagnostic {
     let mut diagnostic = INVALID_FIXTURE_FINALIZER.diagnostic(format!(
         "Discovered an invalid fixture finalizer `{}`",
         stmt_function_def.name
@@ -277,10 +276,10 @@ pub fn report_invalid_fixture_finalizer(
     annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
 
     diagnostic.info(reason);
-    context.add_run_diagnostic(diagnostic);
+    diagnostic
 }
 
-pub fn report_fixture_failure(context: &Context, py: Python, error: FixtureCallError) {
+pub fn fixture_failure_diagnostic(py: Python, error: FixtureCallError) -> Diagnostic {
     let FixtureCallError {
         fixture_name,
         error,
@@ -303,7 +302,7 @@ pub fn report_fixture_failure(context: &Context, py: Python, error: FixtureCallE
         FunctionKind::Fixture,
         &error,
     );
-    context.add_run_diagnostic(diagnostic);
+    diagnostic
 }
 
 pub fn fixture_resolution_diagnostic(error: FixtureResolutionError) -> Diagnostic {
@@ -402,12 +401,10 @@ fn fixture_scope_mismatch_diagnostic(
 }
 
 pub fn missing_fixtures_diagnostic(
-    py: Python,
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
     missing_fixtures: &[String],
     function_kind: FunctionKind,
-    fixture_call_errors: Vec<FixtureCallError>,
 ) -> Diagnostic {
     let mut diagnostic = MISSING_FIXTURES.diagnostic(format!(
         "{} `{}` has missing fixtures",
@@ -431,40 +428,6 @@ pub fn missing_fixtures_diagnostic(
         stmt_function_def.name,
     ));
 
-    for FixtureCallError {
-        error,
-        fixture_name,
-        source_file,
-        dependency_chain,
-        ..
-    } in fixture_call_errors
-    {
-        report_dependency_chain(&mut diagnostic, &dependency_chain, &fixture_name);
-
-        if let Some(Traceback {
-            lines: _,
-            error_source_file,
-            location,
-        }) = Traceback::from_error_with_source(py, &error, &source_file)
-        {
-            let mut sub = SubDiagnostic::new(
-                SubDiagnosticSeverity::Info,
-                format!("Fixture `{fixture_name}` failed here"),
-            );
-
-            let secondary_span = Span::from(error_source_file).with_range(location);
-
-            sub.annotate(Annotation::primary(secondary_span));
-
-            diagnostic.sub(sub);
-        }
-
-        let error_string = error.value(py).to_string();
-
-        if !error_string.is_empty() {
-            diagnostic.info(indent_continuation_lines(&error_string));
-        }
-    }
     diagnostic
 }
 

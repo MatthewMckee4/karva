@@ -71,11 +71,16 @@ fn show_for_status_level(level: StatusLevel, kind: &IndividualTestResultKind) ->
     match level {
         StatusLevel::None => false,
         StatusLevel::Fail | StatusLevel::Retry | StatusLevel::Slow => {
-            matches!(kind, IndividualTestResultKind::Failed)
+            matches!(
+                kind,
+                IndividualTestResultKind::Failed | IndividualTestResultKind::Error
+            )
         }
         StatusLevel::Pass => matches!(
             kind,
-            IndividualTestResultKind::Failed | IndividualTestResultKind::Passed
+            IndividualTestResultKind::Failed
+                | IndividualTestResultKind::Error
+                | IndividualTestResultKind::Passed
         ),
         StatusLevel::Skip | StatusLevel::All => true,
     }
@@ -389,6 +394,7 @@ fn count_digits(n: u32) -> usize {
 enum ResultLabel {
     Pass,
     Fail,
+    Error,
     Skip,
     Slow,
 }
@@ -398,6 +404,7 @@ impl ResultLabel {
         match self {
             Self::Pass => "PASS",
             Self::Fail => "FAIL",
+            Self::Error => "ERROR",
             Self::Skip => "SKIP",
             Self::Slow => "SLOW",
         }
@@ -407,7 +414,7 @@ impl ResultLabel {
         let text = self.text();
         match self {
             Self::Pass => text.green().bold().to_string(),
-            Self::Fail => text.red().bold().to_string(),
+            Self::Fail | Self::Error => text.red().bold().to_string(),
             Self::Skip | Self::Slow => text.yellow().bold().to_string(),
         }
     }
@@ -418,6 +425,7 @@ impl From<&IndividualTestResultKind> for ResultLabel {
         match kind {
             IndividualTestResultKind::Passed => Self::Pass,
             IndividualTestResultKind::Failed => Self::Fail,
+            IndividualTestResultKind::Error => Self::Error,
             IndividualTestResultKind::Skipped { .. } => Self::Skip,
         }
     }

@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
+use ruff_db::diagnostic::Diagnostic;
 
-use crate::Context;
 use crate::extensions::fixtures::{Finalizer, FixtureScope};
 use crate::runner::scoped_storage::ScopedStorage;
 
@@ -23,16 +23,16 @@ impl FinalizerCache {
 
     pub(crate) fn run_and_clear_scope(
         &self,
-        context: &Context,
         py: Python<'_>,
         scope: FixtureScope,
-    ) {
+    ) -> Vec<Diagnostic> {
         // Run finalizers in reverse order (LIFO)
         self.storage
             .get(scope)
             .borrow_mut()
             .drain(..)
             .rev()
-            .for_each(|finalizer| finalizer.run(context, py));
+            .filter_map(|finalizer| finalizer.run(py))
+            .collect()
     }
 }

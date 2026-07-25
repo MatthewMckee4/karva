@@ -467,7 +467,7 @@ fn test_fail_concise_output() {
     ----- stdout -----
         Starting 3 tests across 1 worker
             FAIL [TIME] test_fail::test_1(fixture_1=1)
-            FAIL [TIME] test_fail::test_2
+           ERROR [TIME] test_fail::test_2
             FAIL [TIME] test_fail::test_3
 
     failures:
@@ -476,20 +476,18 @@ fn test_fail_concise_output() {
 
     test_fail.py:9:5: error[test-failure] Test `test_1` failed
 
+    test_fail.py:5:5: error[invalid-fixture-finalizer] Discovered an invalid fixture finalizer `fixture_1`
+
     test_fail::test_2:
 
-    test_fail.py:16:5: error[missing-fixtures] Test `test_2` has missing fixtures: `fixture_2`
+    test_fail.py:13:5: error[fixture-failure] Fixture `fixture_2` failed
 
     test_fail::test_3:
 
     test_fail.py:19:5: error[test-failure] Test `test_3` failed
 
-    diagnostics:
-
-    test_fail.py:5:5: error[invalid-fixture-finalizer] Discovered an invalid fixture finalizer `fixture_1`
-
     ────────────
-         Summary [TIME] 3 tests run: 0 passed, 3 failed, 0 skipped
+         Summary [TIME] 3 tests run: 0 passed, 2 failed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -881,9 +879,11 @@ fn test_fixture_generator_two_yields_passing_test() {
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_fixture_generator(fixture_generator=1)
+           ERROR [TIME] test::test_fixture_generator(fixture_generator=1)
 
-    diagnostics:
+    failures:
+
+    test::test_fixture_generator(fixture_generator=1):
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
@@ -894,7 +894,7 @@ fn test_fixture_generator_two_yields_passing_test() {
     info: Fixture had more than one yield statement
 
     ────────────
-         Summary [TIME] 1 test run: 1 passed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -943,8 +943,6 @@ fn test_fixture_generator_two_yields_failing_test() {
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
        |
 
-    diagnostics:
-
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
       |
@@ -982,9 +980,11 @@ fn test_fixture_generator_fail_in_teardown() {
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_fixture_generator(fixture_generator=1)
+           ERROR [TIME] test::test_fixture_generator(fixture_generator=1)
 
-    diagnostics:
+    failures:
+
+    test::test_fixture_generator(fixture_generator=1):
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
@@ -995,7 +995,7 @@ fn test_fixture_generator_fail_in_teardown() {
     info: Failed to reset fixture: fixture error
 
     ────────────
-         Summary [TIME] 1 test run: 1 passed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -1433,21 +1433,20 @@ def test_2(y): pass
     exit_code: 1
     ----- stdout -----
         Starting 2 tests across 1 worker
-            FAIL [TIME] test_file::test_1
+           ERROR [TIME] test_file::test_1
             PASS [TIME] test_file::test_2(y=1)
 
     failures:
 
     test_file::test_1:
 
-    error[missing-fixtures]: Test `test_1` has missing fixtures
-     --> test_file.py:3:5
+    error[fixture-failure]: Fixture `x` failed
+     --> foo.py:5:5
       |
-    3 | def test_1(x): pass
-      |     ^^^^^^
+    5 | def x():
+      |     ^
       |
-    info: Missing fixtures: `x`
-    info: Fixture `x` failed here
+    info: Fixture failed here
      --> foo.py:6:5
       |
     6 |     raise ValueError('Invalid fixture')
@@ -1456,7 +1455,7 @@ def test_2(y): pass
     info: Invalid fixture
 
     ────────────
-         Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+         Summary [TIME] 2 tests run: 1 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");

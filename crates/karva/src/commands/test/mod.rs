@@ -241,10 +241,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         return Ok(exit_status);
     }
 
-    let exit_status = if result.stats.is_success()
-        && result.run_diagnostics.is_empty()
-        && !coverage_below_threshold
-    {
+    let exit_status = if result.is_success() && !coverage_below_threshold {
         ExitStatus::Success
     } else {
         ExitStatus::Failure
@@ -262,7 +259,7 @@ fn coverage_report_path(
 }
 
 fn no_tests_collected(result: &AggregatedResults) -> bool {
-    result.stats.total() == 0 && result.run_diagnostics.is_empty()
+    result.stats.total() == 0 && !result.has_run_errors()
 }
 
 /// Print the message shown when a run is stopped by `--run-timeout`.
@@ -285,7 +282,7 @@ pub fn print_test_output(
     let has_test_diagnostics = result
         .test_cases
         .iter()
-        .any(|case| case.outcome().is_failed());
+        .any(|case| case.outcome().is_non_success());
     let has_run_diagnostics = !result.run_diagnostics.is_empty();
     let has_diagnostics = has_test_diagnostics || has_run_diagnostics;
     let has_preceding_test_lines = result.stats.total() > 0;
@@ -306,11 +303,12 @@ pub fn print_test_output(
 
     drop(details);
 
+    let success = result.is_success();
     let mut summary = printer
-        .stream_for_summary(result.stats.is_success(), result.stats.flaky() > 0)
+        .stream_for_summary(success, result.stats.flaky() > 0)
         .lock();
 
-    write!(summary, "{}", result.stats.display(start_time))?;
+    write!(summary, "{}", result.stats.display(start_time, success))?;
     write!(summary, "{}", DisplayFlakyTests::new(&result.flaky_tests))?;
 
     Ok(())
@@ -324,11 +322,7 @@ fn write_test_failures_block(
     let failed_tests = result
         .test_cases
         .iter()
-        .filter_map(|case| {
-            case.outcome()
-                .diagnostic()
-                .map(|diagnostic| (case, diagnostic))
-        })
+        .filter(|case| case.outcome().diagnostic().is_some())
         .collect::<Vec<_>>();
     if failed_tests.is_empty() {
         return Ok(());
@@ -339,10 +333,32 @@ fn write_test_failures_block(
     }
     writeln!(stdout, "failures:")?;
     writeln!(stdout)?;
-    for (case, diagnostic) in failed_tests {
+    let mut emitted = vec![false; failed_tests.len()];
+    for (index, case) in failed_tests.iter().enumerate() {
+        if emitted[index] {
+            continue;
+        }
+        emitted[index] = true;
+        let Some(diagnostic) = case.outcome().diagnostic() else {
+            continue;
+        };
         writeln!(stdout, "{}:", case.full_name())?;
+        if case.captured_output().is_none() {
+            for (other_index, other) in failed_tests.iter().enumerate().skip(index + 1) {
+                if other.captured_output().is_none()
+                    && other.outcome().diagnostic() == Some(diagnostic)
+                    && other.outcome().related_diagnostics() == case.outcome().related_diagnostics()
+                {
+                    emitted[other_index] = true;
+                    writeln!(stdout, "{}:", other.full_name())?;
+                }
+            }
+        }
         writeln!(stdout)?;
-        write_rendered_diagnostic(stdout, diagnostic.rendered())?;
+        write_rendered_diagnostic(stdout, diagnostic.rendered_for_terminal())?;
+        for diagnostic in case.outcome().related_diagnostics() {
+            write_rendered_diagnostic(stdout, diagnostic.rendered_for_terminal())?;
+        }
         if let Some(output) = case.captured_output() {
             write_captured_stream(stdout, "stdout", output.stdout())?;
             write_captured_stream(stdout, "stderr", output.stderr())?;
@@ -368,7 +384,7 @@ fn write_run_diagnostics_block(
     writeln!(stdout, "diagnostics:")?;
     writeln!(stdout)?;
     for diagnostic in &result.run_diagnostics {
-        write_rendered_diagnostic(stdout, diagnostic.rendered())?;
+        write_rendered_diagnostic(stdout, diagnostic.rendered_for_terminal())?;
     }
 
     Ok(())

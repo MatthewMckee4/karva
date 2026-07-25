@@ -41,25 +41,34 @@ pub struct AggregatedResults {
 }
 
 #[derive(Default, Serialize, Deserialize)]
-#[serde(default)]
 struct WorkerResults {
-    stats: TestResultStats,
+    slow: usize,
     run_diagnostics: Vec<RenderedDiagnostic>,
-    failed_tests: Vec<String>,
-    flaky_tests: Vec<FlakyTest>,
     test_cases: Vec<TestCaseResult>,
 }
 
 impl AggregatedResults {
+    pub fn is_success(&self) -> bool {
+        self.stats.is_success()
+            && !self
+                .run_diagnostics
+                .iter()
+                .any(RenderedDiagnostic::is_error)
+    }
+
+    pub fn has_run_errors(&self) -> bool {
+        self.run_diagnostics
+            .iter()
+            .any(RenderedDiagnostic::is_error)
+    }
+
     pub fn register_interrupted_test(&mut self, name: &str, duration: Duration) {
         let function_name = base_test_name(name);
         self.stats.add(TestResultKind::Failed);
         self.failed_tests.push(function_name.clone());
         self.test_cases.push(TestCaseResult::from_display_name(
             name,
-            TestCaseOutcome::Failed {
-                diagnostic: RenderedDiagnostic::interrupted(name),
-            },
+            TestCaseOutcome::failed(RenderedDiagnostic::interrupted(name)),
             duration,
             None,
         ));
@@ -67,11 +76,33 @@ impl AggregatedResults {
     }
 
     fn merge_worker(&mut self, worker: WorkerResults) {
-        self.stats.merge(&worker.stats);
-        self.run_diagnostics.extend(worker.run_diagnostics);
-        self.failed_tests.extend(worker.failed_tests);
-        self.flaky_tests.extend(worker.flaky_tests);
-        self.test_cases.extend(worker.test_cases);
+        for diagnostic in worker.run_diagnostics {
+            if !self.run_diagnostics.contains(&diagnostic) {
+                self.run_diagnostics.push(diagnostic);
+            }
+        }
+        for _ in 0..worker.slow {
+            self.stats.add(TestResultKind::Slow);
+        }
+        for case in worker.test_cases {
+            self.stats.add(case.outcome().result_kind().into());
+            if case.outcome().is_non_success() {
+                self.failed_tests.push(base_test_name(case.full_name()));
+            }
+            if let Some(retry) = case.retry()
+                && matches!(case.outcome(), TestCaseOutcome::Passed)
+            {
+                self.stats.add(TestResultKind::Flaky);
+                self.flaky_tests.push(FlakyTest::from_display_name(
+                    case.module_name(),
+                    case.name(),
+                    retry.attempts(),
+                    retry.max_attempts(),
+                    case.duration(),
+                ));
+            }
+            self.test_cases.push(case);
+        }
     }
 }
 
@@ -189,11 +220,6 @@ impl RunCache {
             .iter()
             .map(|diagnostic| render_diagnostic(diagnostic, cwd, config))
             .collect::<Result<Vec<_>>>()?;
-        let failed_names: Vec<String> = result
-            .failed_tests()
-            .iter()
-            .map(ToString::to_string)
-            .collect();
         let test_cases = result
             .test_cases()
             .iter()
@@ -203,10 +229,8 @@ impl RunCache {
             .collect::<Result<Vec<TestCaseResult>>>()?;
 
         let worker_results = WorkerResults {
-            stats: result.stats().clone(),
+            slow: result.stats().slow(),
             run_diagnostics,
-            failed_tests: failed_names,
-            flaky_tests: result.flaky_tests().to_vec(),
             test_cases,
         };
 
@@ -370,6 +394,7 @@ mod tests {
     use camino::Utf8PathBuf;
     use insta::assert_debug_snapshot;
     use karva_diagnostic::CapturedTestOutput;
+    use ruff_db::diagnostic::Severity;
 
     use super::*;
 
@@ -393,13 +418,49 @@ mod tests {
     ) {
         let worker_dir = dir.join(run_name).join(format!("worker-{worker_id}"));
         fs::create_dir_all(&worker_dir).unwrap();
+        let stats: TestResultStats = serde_json::from_str(stats_json).unwrap();
+        let mut test_cases = Vec::new();
+        for index in 0..stats.passed() {
+            test_cases.push(TestCaseResult::from_display_name(
+                &format!("mod::test_passed_{index}"),
+                TestCaseOutcome::Passed,
+                Duration::ZERO,
+                None,
+            ));
+        }
+        for index in 0..stats.failed() {
+            test_cases.push(failed_case(&format!("mod::test_failed_{index}")));
+        }
+        for index in 0..stats.skipped() {
+            test_cases.push(TestCaseResult::from_display_name(
+                &format!("mod::test_skipped_{index}"),
+                TestCaseOutcome::Skipped { reason: None },
+                Duration::ZERO,
+                None,
+            ));
+        }
         write_worker_results(
             &worker_dir,
             &WorkerResults {
-                stats: serde_json::from_str(stats_json).unwrap(),
-                ..WorkerResults::default()
+                slow: stats.slow(),
+                run_diagnostics: Vec::new(),
+                test_cases,
             },
         );
+    }
+
+    fn failed_case(name: &str) -> TestCaseResult {
+        TestCaseResult::from_display_name(
+            name,
+            TestCaseOutcome::failed(RenderedDiagnostic::new(
+                "test-failure",
+                Severity::Error,
+                "failed",
+                "error[test-failure]: failed\n",
+            )),
+            Duration::ZERO,
+            None,
+        )
     }
 
     fn write_worker_results(worker_dir: &std::path::Path, results: &WorkerResults) {
@@ -495,6 +556,11 @@ mod tests {
             .unwrap();
 
         assert!(results.durations.is_empty());
+    }
+
+    #[test]
+    fn worker_results_reject_missing_fields() {
+        assert!(serde_json::from_str::<WorkerResults>("{}").is_err());
     }
 
     #[test]
@@ -724,14 +790,14 @@ mod tests {
         write_worker_results(
             &worker0,
             &WorkerResults {
-                failed_tests: vec!["mod::test_a".to_string()],
+                test_cases: vec![failed_case("mod::test_a")],
                 ..WorkerResults::default()
             },
         );
         write_worker_results(
             &worker1,
             &WorkerResults {
-                failed_tests: vec!["mod::test_b".to_string()],
+                test_cases: vec![failed_case("mod::test_b")],
                 ..WorkerResults::default()
             },
         );
@@ -844,6 +910,7 @@ mod tests {
                         stderr: "",
                     },
                 ),
+                attempts: [],
             },
             TestCaseResult {
                 module_name: "mod",
@@ -858,6 +925,7 @@ mod tests {
                         stderr: "worker 1 stderr\n",
                     },
                 ),
+                attempts: [],
             },
         ]
         "#);
@@ -921,11 +989,14 @@ mod tests {
                         severity: Error,
                         message: "Test `mod::test_slow(value=1)` was interrupted",
                         rendered: "error[interrupted]: Test `mod::test_slow(value=1)` was interrupted\n",
+                        colored_rendered: None,
                     },
+                    related: [],
                 },
                 duration: 42ms,
                 retry: None,
                 captured_output: None,
+                attempts: [],
             },
             TestCaseResult {
                 module_name: "mod",
@@ -937,11 +1008,14 @@ mod tests {
                         severity: Error,
                         message: "Test `mod::test_legacy[value]` was interrupted",
                         rendered: "error[interrupted]: Test `mod::test_legacy[value]` was interrupted\n",
+                        colored_rendered: None,
                     },
+                    related: [],
                 },
                 duration: 24ms,
                 retry: None,
                 captured_output: None,
+                attempts: [],
             },
         ]
         "#);

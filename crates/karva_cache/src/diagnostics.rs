@@ -21,12 +21,17 @@ pub fn render_diagnostic(
     ensure_source_file_spans(diagnostic)?;
 
     let resolver = DiagnosticFileResolver::new(cwd);
+    let rendered = diagnostic
+        .display(&resolver, &config.clone().color(false))
+        .to_string();
+    let colored_rendered = diagnostic.display(&resolver, config).to_string();
     Ok(RenderedDiagnostic::new(
         diagnostic.id().as_str(),
         diagnostic.severity(),
         diagnostic.primary_message(),
-        diagnostic.display(&resolver, config).to_string(),
-    ))
+        rendered,
+    )
+    .with_colored_rendered(colored_rendered))
 }
 
 fn ensure_source_file_spans(diagnostic: &Diagnostic) -> Result<()> {
@@ -122,5 +127,26 @@ mod tests {
         assert!(rendered.rendered().contains("test_sample.py"));
         assert!(rendered.rendered().contains("Test `test_example` failed"));
         assert!(rendered.rendered().contains("def test_example():"));
+    }
+
+    #[test]
+    fn keeps_machine_rendering_plain_when_terminal_uses_color() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cwd = Utf8PathBuf::try_from(temp_dir.path().to_path_buf()).unwrap();
+        let diagnostic = Diagnostic::new(
+            DiagnosticId::Lint(LintName::of("test-failure")),
+            Severity::Error,
+            "failed",
+        );
+
+        let rendered = render_diagnostic(
+            &diagnostic,
+            &cwd,
+            &DisplayDiagnosticConfig::new("karva").color(true),
+        )
+        .unwrap();
+
+        assert!(!rendered.rendered().contains('\u{1b}'));
+        assert!(rendered.rendered_for_terminal().contains('\u{1b}'));
     }
 }

@@ -13,7 +13,8 @@ use ruff_db::diagnostic::Diagnostic;
 use crate::reporter::Reporter;
 
 pub use case::{
-    TestCaseOutcome, TestCaseResult, TestCaseRetry, TestExecutionOutcome, TestExecutionResult,
+    TestCaseAttempt, TestCaseOutcome, TestCaseResult, TestCaseRetry, TestExecutionAttempt,
+    TestExecutionOutcome, TestExecutionResult,
 };
 pub use diagnostic::RenderedDiagnostic;
 pub use flaky::{DisplayFlakyTest, DisplayFlakyTests, FlakyTest};
@@ -34,12 +35,6 @@ pub struct TestRunResult {
 
     /// The duration of each test function.
     durations: HashMap<QualifiedFunctionName, std::time::Duration>,
-
-    /// Names of tests that failed during this run.
-    failed_tests: Vec<QualifiedFunctionName>,
-
-    /// Tests that passed only after at least one retry.
-    flaky_tests: Vec<FlakyTest>,
 
     /// Final outcome for each executed test variant.
     test_cases: Vec<TestExecutionResult>,
@@ -98,10 +93,6 @@ impl TestRunResult {
             captured_output,
         ));
 
-        if matches!(&result, IndividualTestResultKind::Failed) {
-            self.failed_tests.push(function_name.clone());
-        }
-
         if let Some(reporter) = reporter {
             reporter.report_test_case_result(test_case_name, result, duration);
         }
@@ -117,19 +108,15 @@ impl TestRunResult {
     /// `report_test_case_result` line — the per-attempt `TRY N STATUS`
     /// lines are the user-visible output for a retried test.
     ///
-    /// `passed_on` is the 1-indexed attempt number that ultimately succeeded
-    /// (only meaningful when `result` is `Passed`). `total_attempts` mirrors
-    /// nextest's `FLAKY M/T` denominator: the maximum number of attempts the
-    /// test was allowed (`retries + 1`), not just the count that ran.
     /// When the final outcome is `Passed`, the test is counted as flaky.
     pub fn register_retried_result(
         &mut self,
         test_case_name: &QualifiedTestName,
         outcome: TestExecutionOutcome,
         duration: std::time::Duration,
-        passed_on: u32,
-        total_attempts: u32,
+        retry: TestCaseRetry,
         captured_output: Option<CapturedTestOutput>,
+        attempts: Vec<TestExecutionAttempt>,
     ) {
         let result = outcome.result_kind();
         self.stats.add(result.clone().into());
@@ -139,20 +126,13 @@ impl TestRunResult {
             test_case_name,
             outcome,
             duration,
-            TestCaseRetry::new(passed_on, total_attempts),
+            retry,
             captured_output,
+            attempts,
         ));
 
-        if matches!(&result, IndividualTestResultKind::Failed) {
-            self.failed_tests.push(function_name.clone());
-        } else if matches!(&result, IndividualTestResultKind::Passed) {
+        if matches!(&result, IndividualTestResultKind::Passed) {
             self.stats.add(TestResultKind::Flaky);
-            self.flaky_tests.push(FlakyTest::from_qualified_name(
-                test_case_name,
-                passed_on,
-                total_attempts,
-                duration,
-            ));
         }
 
         self.durations
@@ -205,14 +185,6 @@ impl TestRunResult {
 
     pub fn durations(&self) -> &HashMap<QualifiedFunctionName, std::time::Duration> {
         &self.durations
-    }
-
-    pub fn failed_tests(&self) -> &[QualifiedFunctionName] {
-        &self.failed_tests
-    }
-
-    pub fn flaky_tests(&self) -> &[FlakyTest] {
-        &self.flaky_tests
     }
 
     pub fn test_cases(&self) -> &[TestExecutionResult] {

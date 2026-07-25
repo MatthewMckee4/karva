@@ -4,7 +4,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use karva_coverage::CoverageSession;
-use karva_diagnostic::{CapturedTestOutput, IndividualTestResultKind, TestExecutionOutcome};
+use karva_diagnostic::{
+    CapturedTestOutput, IndividualTestResultKind, TestCaseRetry, TestExecutionAttempt,
+    TestExecutionOutcome,
+};
 use karva_metadata::RunIgnoredMode;
 use karva_metadata::filter::EvalContext;
 use karva_python_semantic::{FunctionKind, QualifiedFunctionName, QualifiedTestName};
@@ -16,8 +19,8 @@ use ruff_source_file::SourceFile;
 
 use crate::Context;
 use crate::diagnostic::{
-    fixture_resolution_diagnostic, invalid_parametrize_diagnostic, missing_fixtures_diagnostic,
-    report_fixture_failure, test_failure_diagnostic, test_pass_on_expect_failure_diagnostic,
+    fixture_failure_diagnostic, fixture_resolution_diagnostic, invalid_parametrize_diagnostic,
+    missing_fixtures_diagnostic, test_failure_diagnostic, test_pass_on_expect_failure_diagnostic,
     test_returned_value_diagnostic,
 };
 use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
@@ -31,7 +34,7 @@ use crate::extensions::tags::timeout::TimeoutTag;
 use crate::output_capture::PythonOutputCapture;
 use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::runner::test_iterator::{TestVariant, TestVariantIterator};
-use crate::runner::{FinalizerCache, FixtureArguments, FixtureCache, FixtureResolutionResult};
+use crate::runner::{FinalizerCache, FixtureArguments, FixtureCache};
 use crate::utils::{
     full_test_name, run_coroutine, run_test_with_timeout, set_attempt_env, set_test_name_env,
     truncate_string,
@@ -107,35 +110,49 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         }
     }
 
-    fn register_failed_test(&self, test: &DiscoveredTestFunction, diagnostic: Diagnostic) {
+    fn register_error_test(
+        &self,
+        test: &DiscoveredTestFunction,
+        diagnostic: Diagnostic,
+        related: Vec<Diagnostic>,
+    ) {
         self.context.register_test_case_result(
             &QualifiedTestName::new(test.name.clone(), None),
-            TestExecutionOutcome::Failed { diagnostic },
+            TestExecutionOutcome::error(diagnostic).with_related(related),
             std::time::Duration::ZERO,
             None,
         );
         self.record_outcome(false);
     }
 
-    fn register_failed_module_tests(&self, module: &DiscoveredModule, diagnostic: &Diagnostic) {
+    fn register_error_module_tests(
+        &self,
+        module: &DiscoveredModule,
+        diagnostic: &Diagnostic,
+        related: &[Diagnostic],
+    ) {
         for test in module.test_functions() {
-            self.register_failed_test(test, diagnostic.clone());
+            self.register_error_test(test, diagnostic.clone(), related.to_vec());
             if self.max_fail_reached() {
                 return;
             }
         }
     }
 
-    fn register_failed_package_tests(&self, package: &DiscoveredPackage, diagnostic: &Diagnostic) {
+    fn register_error_package_tests(
+        &self,
+        package: &DiscoveredPackage,
+        diagnostic: &Diagnostic,
+        related: &[Diagnostic],
+    ) {
         for module in package.modules().values() {
-            self.register_failed_module_tests(module, diagnostic);
+            self.register_error_module_tests(module, diagnostic, related);
             if self.max_fail_reached() {
                 return;
             }
         }
-
         for child_package in package.packages().values() {
-            self.register_failed_package_tests(child_package, diagnostic);
+            self.register_error_package_tests(child_package, diagnostic, related);
             if self.max_fail_reached() {
                 return;
             }
@@ -156,7 +173,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                         &test_function.stmt_function_def,
                         &error,
                     );
-                    self.register_failed_test(test_function, diagnostic);
+                    self.register_error_test(test_function, diagnostic, Vec::new());
                     valid = false;
                     if self.max_fail_reached() {
                         return false;
@@ -220,15 +237,17 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         // the user conftest at the session root and the framework module. No
         // `if let Some(...)` gate: the session always exists, and if neither
         // slot contributes any autouse fixtures the walk returns an empty vec.
-        if let Err(error) = self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session) {
-            let diagnostic = fixture_resolution_diagnostic(error);
-            self.register_failed_package_tests(session, &diagnostic);
+        if let Err(mut diagnostics) =
+            self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session)
+        {
+            let diagnostic = diagnostics.remove(0);
+            self.register_error_package_tests(session, &diagnostic, &diagnostics);
             return;
         }
 
         self.execute_package(py, session, &[]);
 
-        self.clean_up_scope(py, FixtureScope::Session);
+        self.report_scope_cleanup(py, FixtureScope::Session);
     }
 
     /// Resolve and run auto-use fixtures for `scope`. Resolution cycles are
@@ -241,15 +260,20 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         parents: &'b [&'b DiscoveredPackage],
         current: &'b (dyn HasFixtures<'b> + 'b),
         scope: FixtureScope,
-    ) -> FixtureResolutionResult<()> {
+    ) -> Result<(), Vec<Diagnostic>> {
         let mut resolver = RuntimeFixtureResolver::new(parents, current);
-        let auto_use_fixtures = resolver.get_normalized_auto_use_fixtures(py, scope)?;
+        let auto_use_fixtures = resolver
+            .get_normalized_auto_use_fixtures(py, scope)
+            .map_err(|error| vec![fixture_resolution_diagnostic(error)])?;
         let auto_use_errors = self.run_fixtures(py, &auto_use_fixtures);
-        for error in auto_use_errors {
-            report_fixture_failure(self.context, py, error);
+        if auto_use_errors.is_empty() {
+            Ok(())
+        } else {
+            Err(auto_use_errors
+                .into_iter()
+                .map(|error| fixture_failure_diagnostic(py, error))
+                .collect())
         }
-
-        Ok(())
     }
 
     /// Execute a module.
@@ -263,9 +287,11 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         module: &DiscoveredModule,
         parents: &[&DiscoveredPackage],
     ) -> bool {
-        if let Err(error) = self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module) {
-            let diagnostic = fixture_resolution_diagnostic(error);
-            self.register_failed_module_tests(module, &diagnostic);
+        if let Err(mut diagnostics) =
+            self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module)
+        {
+            let diagnostic = diagnostics.remove(0);
+            self.register_error_module_tests(module, &diagnostic, &diagnostics);
             return false;
         }
 
@@ -279,7 +305,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 Ok(variants) => variants,
                 Err(error) => {
                     let diagnostic = fixture_resolution_diagnostic(error);
-                    self.register_failed_test(test_function, diagnostic);
+                    self.register_error_test(test_function, diagnostic, Vec::new());
                     passed = false;
                     if self.max_fail_reached() {
                         break;
@@ -304,7 +330,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             }
         }
 
-        self.clean_up_scope(py, FixtureScope::Module);
+        self.report_scope_cleanup(py, FixtureScope::Module);
 
         passed
     }
@@ -324,11 +350,11 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         new_parents.push(package);
 
         if let Some(config_module) = package.configuration_module_impl() {
-            if let Err(error) =
+            if let Err(mut diagnostics) =
                 self.run_auto_use_fixtures(py, parents, config_module, FixtureScope::Package)
             {
-                let diagnostic = fixture_resolution_diagnostic(error);
-                self.register_failed_package_tests(package, &diagnostic);
+                let diagnostic = diagnostics.remove(0);
+                self.register_error_package_tests(package, &diagnostic, &diagnostics);
                 return false;
             }
         }
@@ -353,7 +379,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             }
         }
 
-        self.clean_up_scope(py, FixtureScope::Package);
+        self.report_scope_cleanup(py, FixtureScope::Package);
 
         passed
     }
@@ -470,7 +496,6 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
     fn classify_test_result(
         py: Python<'_>,
         test_result: PyResult<TestCallOutcome>,
-        fixture_call_errors: Vec<FixtureCallError>,
         ctx: &VariantReportCtx<'_>,
     ) -> TestExecutionOutcome {
         let expect_fail = ctx
@@ -488,7 +513,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                     ctx.stmt_function_def,
                     &value,
                 );
-                return TestExecutionOutcome::Failed { diagnostic };
+                return TestExecutionOutcome::failed(diagnostic);
             }
             Ok(TestCallOutcome::ReturnedNone) if expect_fail => {
                 let reason = ctx.expect_fail_tag.as_ref().and_then(ExpectFailTag::reason);
@@ -497,7 +522,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                     ctx.stmt_function_def,
                     reason,
                 );
-                return TestExecutionOutcome::Failed { diagnostic };
+                return TestExecutionOutcome::failed(diagnostic);
             }
             Ok(TestCallOutcome::ReturnedNone) => return TestExecutionOutcome::Passed,
             Err(err) => err,
@@ -525,16 +550,14 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             )
         } else {
             missing_fixtures_diagnostic(
-                py,
                 ctx.source_file.clone(),
                 ctx.stmt_function_def,
                 &missing_args,
                 FunctionKind::Test,
-                fixture_call_errors,
             )
         };
 
-        TestExecutionOutcome::Failed { diagnostic }
+        TestExecutionOutcome::failed(diagnostic)
     }
 
     /// Drive the test closure with the configured retry budget.
@@ -551,36 +574,38 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         mut run_test: impl FnMut() -> PyResult<TestCallOutcome>,
     ) -> RetryOutcome {
         let max_attempts = configured_retries.saturating_add(1);
-        let mut run_attempt =
-            |attempt| set_attempt_env(py, attempt, max_attempts).and_then(|()| run_test());
-
+        let mut run_attempt = |attempt| {
+            let start = std::time::Instant::now();
+            let result = set_attempt_env(py, attempt, max_attempts).and_then(|()| run_test());
+            TestCallAttempt {
+                attempt,
+                result,
+                duration: start.elapsed(),
+            }
+        };
         let mut attempt: u32 = 1;
-        let mut attempt_start = std::time::Instant::now();
-        let mut test_result = run_attempt(attempt);
-
+        let mut current_attempt = run_attempt(attempt);
         let mut retry_count = configured_retries;
         let mut was_retried = false;
-        let mut final_attempt_duration = attempt_start.elapsed();
+        let mut attempts = Vec::new();
 
         while retry_count > 0 {
-            if !should_retry_result(py, &test_result, expect_fail) {
+            if !should_retry_result(py, &current_attempt.result, expect_fail) {
                 break;
             }
-            let attempt_duration = attempt_start.elapsed();
             self.context.report_test_attempt(
                 qualified_test_name,
                 attempt,
                 IndividualTestResultKind::Failed,
-                attempt_duration,
+                current_attempt.duration,
             );
+            attempts.push(current_attempt);
             was_retried = true;
 
             tracing::debug!("Retrying test `{}`", qualified_test_name);
             retry_count -= 1;
             attempt += 1;
-            attempt_start = std::time::Instant::now();
-            test_result = run_attempt(attempt);
-            final_attempt_duration = attempt_start.elapsed();
+            current_attempt = run_attempt(attempt);
         }
 
         if was_retried {
@@ -590,20 +615,21 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             //   TRY 2 PASS ...   (or TRY 2 FAIL for an exhausted retry)
             // The diagnostic for the final attempt (if any) is collected by
             // `classify_test_result` and shown in the end-of-run block.
-            let final_kind = attempt_result_kind(py, &test_result);
+            let final_kind = attempt_result_kind(py, &current_attempt.result);
             self.context.report_test_attempt(
                 qualified_test_name,
                 attempt,
                 final_kind,
-                final_attempt_duration,
+                current_attempt.duration,
             );
         }
+        attempts.push(current_attempt);
 
         RetryOutcome {
-            test_result,
             attempt,
             max_attempts,
             was_retried,
+            attempts,
         }
     }
 
@@ -661,8 +687,42 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
 
         let qualified_test_name =
             QualifiedTestName::new(name.clone(), Some(computed_full_test_name));
+        let custom_tag_names = tags.custom_tag_names();
+        let qualified_name_str = qualified_test_name.to_string();
+        let eval_ctx = karva_metadata::filter::EvalContext {
+            test_name: &qualified_name_str,
+            tags: &custom_tag_names,
+        };
 
         tracing::debug!("Running test `{}`", qualified_test_name);
+
+        if !fixture_call_errors.is_empty() {
+            let mut diagnostics = fixture_call_errors
+                .into_iter()
+                .map(|error| fixture_failure_diagnostic(py, error))
+                .collect::<Vec<_>>();
+            diagnostics.extend(
+                test_finalizers
+                    .into_iter()
+                    .rev()
+                    .filter_map(|finalizer| finalizer.run(py)),
+            );
+            diagnostics.extend(self.clean_up_scope(py, FixtureScope::Function));
+            let captured_output = Self::finish_output_capture(py, output_capture);
+            let duration = start_time.elapsed();
+            self.maybe_register_slow(
+                &qualified_test_name,
+                duration,
+                self.context.settings().slow_timeout_for(&eval_ctx),
+            );
+            let diagnostic = diagnostics.remove(0);
+            return self.context.register_test_case_result(
+                &qualified_test_name,
+                TestExecutionOutcome::error(diagnostic).with_related(diagnostics),
+                duration,
+                captured_output,
+            );
+        }
 
         let test_name_env_result = set_test_name_env(py, &qualified_test_name.to_string());
 
@@ -679,13 +739,6 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 &fixture_names,
             ),
         );
-
-        let custom_tag_names = tags.custom_tag_names();
-        let qualified_name_str = qualified_test_name.to_string();
-        let eval_ctx = karva_metadata::filter::EvalContext {
-            test_name: &qualified_name_str,
-            tags: &custom_tag_names,
-        };
 
         let async_patch_result = if stmt_function_def.is_async {
             crate::utils::patch_async_test_function(py, &function)
@@ -742,10 +795,10 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             coverage.set_current_context(py, Some(&qualified_name_str));
         }
         let RetryOutcome {
-            test_result,
             attempt,
             max_attempts,
             was_retried,
+            attempts,
         } = self.run_with_retries(
             py,
             &qualified_test_name,
@@ -770,13 +823,28 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             self.context.settings().slow_timeout_for(&eval_ctx),
         );
 
-        let outcome = Self::classify_test_result(py, test_result, fixture_call_errors, &report_ctx);
+        let execution_attempts = attempts
+            .into_iter()
+            .map(|attempt| {
+                TestExecutionAttempt::new(
+                    attempt.attempt,
+                    Self::classify_test_result(py, attempt.result, &report_ctx),
+                    attempt.duration,
+                )
+            })
+            .collect::<Vec<_>>();
+        let Some(final_attempt) = execution_attempts.last() else {
+            return false;
+        };
+        let outcome = final_attempt.outcome().clone();
 
-        for finalizer in test_finalizers.into_iter().rev() {
-            finalizer.run(self.context, py);
-        }
-
-        self.clean_up_scope(py, FixtureScope::Function);
+        let mut finalizer_diagnostics = test_finalizers
+            .into_iter()
+            .rev()
+            .filter_map(|finalizer| finalizer.run(py))
+            .collect::<Vec<_>>();
+        finalizer_diagnostics.extend(self.clean_up_scope(py, FixtureScope::Function));
+        let outcome = attach_finalizer_diagnostics(outcome, finalizer_diagnostics);
         let captured_output = Self::finish_output_capture(py, output_capture);
         if let Some(coverage) = self.coverage {
             coverage.set_current_context(py, None);
@@ -787,9 +855,9 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 &qualified_test_name,
                 outcome,
                 total_duration,
-                attempt,
-                max_attempts,
+                TestCaseRetry::new(attempt, max_attempts),
                 captured_output,
+                execution_attempts,
             )
         } else {
             self.context.register_test_case_result(
@@ -880,11 +948,16 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
     /// Cleans up the fixtures and finalizers for a given scope.
     ///
     /// This should be run after the given scope has finished execution.
-    fn clean_up_scope(&self, py: Python, scope: FixtureScope) {
-        self.finalizer_cache
-            .run_and_clear_scope(self.context, py, scope);
-
+    fn clean_up_scope(&self, py: Python, scope: FixtureScope) -> Vec<Diagnostic> {
+        let diagnostics = self.finalizer_cache.run_and_clear_scope(py, scope);
         self.fixture_cache.clear_fixtures(scope);
+        diagnostics
+    }
+
+    fn report_scope_cleanup(&self, py: Python, scope: FixtureScope) {
+        for diagnostic in self.clean_up_scope(py, scope) {
+            self.context.add_run_diagnostic(diagnostic);
+        }
     }
 
     /// Runs the fixtures for a given scope.
@@ -1009,6 +1082,42 @@ fn returned_value_repr(py: Python<'_>, value: &Py<PyAny>) -> String {
     }
 }
 
+fn attach_finalizer_diagnostics(
+    outcome: TestExecutionOutcome,
+    mut diagnostics: Vec<Diagnostic>,
+) -> TestExecutionOutcome {
+    if diagnostics.is_empty() {
+        return outcome;
+    }
+
+    match outcome {
+        TestExecutionOutcome::Failed {
+            diagnostic,
+            mut related,
+        } => {
+            related.append(&mut diagnostics);
+            TestExecutionOutcome::Failed {
+                diagnostic,
+                related,
+            }
+        }
+        TestExecutionOutcome::Error {
+            diagnostic,
+            mut related,
+        } => {
+            related.append(&mut diagnostics);
+            TestExecutionOutcome::Error {
+                diagnostic,
+                related,
+            }
+        }
+        TestExecutionOutcome::Passed | TestExecutionOutcome::Skipped { .. } => {
+            let diagnostic = diagnostics.remove(0);
+            TestExecutionOutcome::error(diagnostic).with_related(diagnostics)
+        }
+    }
+}
+
 enum TestCallOutcome {
     ReturnedNone,
     ReturnedValue(String),
@@ -1016,13 +1125,19 @@ enum TestCallOutcome {
 
 /// Outcome of driving a test through the configured retry budget.
 struct RetryOutcome {
-    test_result: PyResult<TestCallOutcome>,
     /// The attempt number on which the test produced its final result.
     attempt: u32,
     /// The maximum number of attempts the test was allowed (`retries + 1`).
     max_attempts: u32,
     /// `true` if at least one retry occurred.
     was_retried: bool,
+    attempts: Vec<TestCallAttempt>,
+}
+
+struct TestCallAttempt {
+    attempt: u32,
+    result: PyResult<TestCallOutcome>,
+    duration: std::time::Duration,
 }
 
 /// Immutable per-variant state threaded into [`PackageRunner::classify_test_result`].

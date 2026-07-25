@@ -32,26 +32,34 @@ pub(super) fn write_junit_report(
 
 fn build_junit_xml(settings: &JunitSettings, results: &AggregatedResults) -> Result<String> {
     let suites = test_cases_by_module(&results.test_cases);
+    let run_errors = results
+        .run_diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.is_error())
+        .count();
     let total_time = results
         .test_cases
         .iter()
-        .map(|case| case.duration().as_secs_f64())
-        .sum::<f64>();
+        .map(TestCaseResult::duration)
+        .sum::<std::time::Duration>()
+        .as_secs_f64();
 
     let mut xml = String::new();
     xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     writeln!(
         xml,
-        "<testsuites name=\"{}\" tests=\"{}\" failures=\"{}\" skipped=\"{}\" errors=\"0\" time=\"{total_time:.6}\">",
+        "<testsuites name=\"{}\" tests=\"{}\" failures=\"{}\" skipped=\"{}\" errors=\"{}\" time=\"{total_time:.6}\">",
         escape_xml(&settings.report_name),
-        results.stats.total(),
+        results.stats.total() + run_errors,
         results.stats.failed(),
         results.stats.skipped(),
+        results.stats.errors() + run_errors,
     )?;
 
     for (module_name, cases) in suites {
         write_suite(&mut xml, settings, module_name, cases)?;
     }
+    write_run_diagnostics_suite(&mut xml, settings, &results.run_diagnostics)?;
 
     xml.push_str("</testsuites>\n");
     Ok(xml)
@@ -72,14 +80,19 @@ fn write_suite(
         .iter()
         .filter(|case| case.outcome().is_skipped())
         .count();
+    let errors = cases
+        .iter()
+        .filter(|case| case.outcome().is_error())
+        .count();
     let time = cases
         .iter()
-        .map(|case| case.duration().as_secs_f64())
-        .sum::<f64>();
+        .map(|case| case.duration())
+        .sum::<std::time::Duration>()
+        .as_secs_f64();
 
     writeln!(
         xml,
-        "  <testsuite name=\"{}\" tests=\"{tests}\" failures=\"{failures}\" skipped=\"{skipped}\" errors=\"0\" time=\"{time:.6}\">",
+        "  <testsuite name=\"{}\" tests=\"{tests}\" failures=\"{failures}\" skipped=\"{skipped}\" errors=\"{errors}\" time=\"{time:.6}\">",
         escape_xml(module_name),
     )?;
 
@@ -96,12 +109,16 @@ fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult)
     let output = case.captured_output();
     let include_output = match case.outcome() {
         TestCaseOutcome::Passed => settings.store_success_output,
-        TestCaseOutcome::Failed { .. } => settings.store_failure_output,
+        TestCaseOutcome::Failed { .. } | TestCaseOutcome::Error { .. } => {
+            settings.store_failure_output
+        }
         TestCaseOutcome::Skipped { .. } => false,
     };
     let has_output = include_output
         && output.is_some_and(|output| !output.stdout().is_empty() || !output.stderr().is_empty());
-    let is_self_closing = matches!(case.outcome(), TestCaseOutcome::Passed) && !has_output;
+    let has_reruns = case.attempts().len() > 1;
+    let is_self_closing =
+        matches!(case.outcome(), TestCaseOutcome::Passed) && !has_output && !has_reruns;
 
     write!(
         xml,
@@ -118,15 +135,14 @@ fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult)
     xml.push_str(">\n");
     match case.outcome() {
         TestCaseOutcome::Passed => {}
-        TestCaseOutcome::Failed { diagnostic } => {
-            writeln!(
-                xml,
-                "      <failure message=\"{}\" type=\"{}\">{}</failure>",
-                escape_xml(diagnostic.message()),
-                escape_xml(diagnostic.code()),
-                escape_xml(diagnostic.rendered()),
-            )?;
-        }
+        TestCaseOutcome::Failed {
+            diagnostic,
+            related,
+        } => write_diagnostic_element(xml, "failure", diagnostic, related)?,
+        TestCaseOutcome::Error {
+            diagnostic,
+            related,
+        } => write_diagnostic_element(xml, "error", diagnostic, related)?,
         TestCaseOutcome::Skipped { reason } => {
             if let Some(reason) = reason {
                 writeln!(xml, "      <skipped message=\"{}\"/>", escape_xml(reason))?;
@@ -135,6 +151,7 @@ fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult)
             }
         }
     }
+    write_attempts(xml, case)?;
 
     if has_output && let Some(output) = output {
         write_captured_stream(xml, "system-out", output.stdout())?;
@@ -142,6 +159,83 @@ fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult)
     }
 
     xml.push_str("    </testcase>\n");
+    Ok(())
+}
+
+fn write_attempts(xml: &mut String, case: &TestCaseResult) -> Result<()> {
+    let element = if matches!(case.outcome(), TestCaseOutcome::Passed) {
+        "flakyFailure"
+    } else {
+        "rerunFailure"
+    };
+    for attempt in case
+        .attempts()
+        .iter()
+        .take(case.attempts().len().saturating_sub(1))
+    {
+        if let Some(diagnostic) = attempt.outcome().diagnostic() {
+            write_diagnostic_element(
+                xml,
+                element,
+                diagnostic,
+                attempt.outcome().related_diagnostics(),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn write_diagnostic_element(
+    xml: &mut String,
+    element: &str,
+    diagnostic: &karva_diagnostic::RenderedDiagnostic,
+    related: &[karva_diagnostic::RenderedDiagnostic],
+) -> Result<()> {
+    write!(
+        xml,
+        "      <{element} message=\"{}\" type=\"{}\">{}",
+        escape_xml(diagnostic.message()),
+        escape_xml(diagnostic.code()),
+        escape_xml(diagnostic.rendered()),
+    )?;
+    for diagnostic in related {
+        write!(xml, "{}", escape_xml(diagnostic.rendered()))?;
+    }
+    writeln!(xml, "</{element}>")?;
+    Ok(())
+}
+
+fn write_run_diagnostics_suite(
+    xml: &mut String,
+    settings: &JunitSettings,
+    diagnostics: &[karva_diagnostic::RenderedDiagnostic],
+) -> Result<()> {
+    let diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.is_error())
+        .collect::<Vec<_>>();
+    if diagnostics.is_empty() {
+        return Ok(());
+    }
+
+    writeln!(
+        xml,
+        "  <testsuite name=\"{}::run\" tests=\"{}\" failures=\"0\" skipped=\"0\" errors=\"{}\" time=\"0.000000\">",
+        escape_xml(&settings.report_name),
+        diagnostics.len(),
+        diagnostics.len(),
+    )?;
+    for (index, diagnostic) in diagnostics.iter().enumerate() {
+        writeln!(
+            xml,
+            "    <testcase classname=\"karva.run\" name=\"{}-{}\" time=\"0.000000\">",
+            escape_xml(diagnostic.code()),
+            index + 1,
+        )?;
+        write_diagnostic_element(xml, "error", diagnostic, &[])?;
+        xml.push_str("    </testcase>\n");
+    }
+    xml.push_str("  </testsuite>\n");
     Ok(())
 }
 

@@ -38,6 +38,27 @@ impl FlakyTest {
         }
     }
 
+    pub fn from_display_name(
+        module_name: &str,
+        name: &str,
+        passed_on: u32,
+        total_attempts: u32,
+        duration: Duration,
+    ) -> Self {
+        let parameter_start = name.find(['(', '[']);
+        let (function_name, params) = parameter_start.map_or((name, None), |index| {
+            (&name[..index], Some(name[index..].to_string()))
+        });
+        Self {
+            module_name: module_name.to_string(),
+            function_name: function_name.to_string(),
+            params,
+            passed_on,
+            total_attempts,
+            duration,
+        }
+    }
+
     pub fn display(&self) -> DisplayFlakyTest<'_> {
         DisplayFlakyTest(self)
     }

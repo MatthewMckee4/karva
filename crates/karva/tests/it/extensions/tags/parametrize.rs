@@ -52,8 +52,8 @@ def fixture():
         exit_code: 1
         ----- stdout -----
             Starting 3 tests across 1 worker
-                FAIL [TIME] test::test_too_few
-                FAIL [TIME] test::test_too_many
+               ERROR [TIME] test::test_too_few
+               ERROR [TIME] test::test_too_many
 
         failures:
 
@@ -80,7 +80,7 @@ def fixture():
           |
 
         ────────────
-             Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+             Summary [TIME] 2 tests run: 0 passed, 2 errors, 0 skipped
 
         ----- stderr -----
         "#);
@@ -108,7 +108,7 @@ def test_value(left, right):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
     failures:
 
@@ -124,7 +124,7 @@ def test_value(left, right):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -151,7 +151,7 @@ def test_value(left, right):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
     failures:
 
@@ -167,7 +167,7 @@ def test_value(left, right):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -194,7 +194,7 @@ def test_value(left, right):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
     failures:
 
@@ -210,7 +210,7 @@ def test_value(left, right):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -244,8 +244,8 @@ def test_kwargs(left, right):
     exit_code: 1
     ----- stdout -----
         Starting 2 tests across 1 worker
-            FAIL [TIME] test::test_args
-            FAIL [TIME] test::test_kwargs
+           ERROR [TIME] test::test_args
+           ERROR [TIME] test::test_kwargs
 
     failures:
 
@@ -268,7 +268,7 @@ def test_kwargs(left, right):
        |
 
     ────────────
-         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+         Summary [TIME] 2 tests run: 0 passed, 2 errors, 0 skipped
 
     ----- stderr -----
     ");
@@ -303,7 +303,7 @@ def test_value(left, right):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
     failures:
 
@@ -325,7 +325,7 @@ def test_value(left, right):
        |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -350,7 +350,7 @@ def test_value(left, right):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
     failures:
 
@@ -366,7 +366,7 @@ def test_value(left, right):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -390,7 +390,7 @@ def test_value(value):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
     failures:
 
@@ -406,7 +406,7 @@ def test_value(value):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -431,7 +431,7 @@ def test_value(value):
         exit_code: 1
         ----- stdout -----
             Starting 1 test across 1 worker
-                FAIL [TIME] test::test_value
+               ERROR [TIME] test::test_value
 
         failures:
 
@@ -445,7 +445,7 @@ def test_value(value):
           |
 
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         "#);
@@ -476,7 +476,7 @@ def test_value(value):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
     failures:
 
@@ -492,7 +492,7 @@ def test_value(value):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -522,7 +522,7 @@ def test_value(value):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
     failures:
 
@@ -538,7 +538,7 @@ def test_value(value):
        |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -567,7 +567,7 @@ def test_value(value):
         exit_code: 1
         ----- stdout -----
             Starting 1 test across 1 worker
-                FAIL [TIME] test::test_value
+               ERROR [TIME] test::test_value
 
         failures:
 
@@ -583,7 +583,7 @@ def test_value(value):
           |
 
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         "#);
@@ -616,7 +616,7 @@ def test_value(value):
         exit_code: 1
         ----- stdout -----
             Starting 1 test across 1 worker
-                FAIL [TIME] test::test_value
+               ERROR [TIME] test::test_value
 
         failures:
 
@@ -632,7 +632,7 @@ def test_value(value):
           |
 
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         "#);
@@ -662,7 +662,7 @@ def test_value(value):
         exit_code: 1
         ----- stdout -----
             Starting 1 test across 1 worker
-                FAIL [TIME] test::test_value
+               ERROR [TIME] test::test_value
 
         failures:
 
@@ -678,7 +678,7 @@ def test_value(value):
           |
 
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         "#);
@@ -705,7 +705,7 @@ def test_value(value):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
     failures:
 
@@ -721,7 +721,7 @@ def test_value(value):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -750,7 +750,7 @@ def test_value(value):
         exit_code: 1
         ----- stdout -----
             Starting 1 test across 1 worker
-                FAIL [TIME] test::test_value
+               ERROR [TIME] test::test_value
 
         failures:
 
@@ -766,7 +766,7 @@ def test_value(value):
           |
 
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         "#);
@@ -793,7 +793,7 @@ def test_value(value):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_value
+           ERROR [TIME] test::test_value
 
     failures:
 
@@ -809,7 +809,7 @@ def test_value(value):
       |
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -838,7 +838,7 @@ def test_value(value):
         exit_code: 1
         ----- stdout -----
             Starting 1 test across 1 worker
-                FAIL [TIME] test::test_value
+               ERROR [TIME] test::test_value
 
         failures:
 
@@ -854,7 +854,7 @@ def test_value(value):
           |
 
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         "#);
@@ -884,7 +884,7 @@ def test_value(value):
         exit_code: 1
         ----- stdout -----
             Starting 1 test across 1 worker
-                FAIL [TIME] test::test_value
+               ERROR [TIME] test::test_value
 
         failures:
 
@@ -900,7 +900,7 @@ def test_value(value):
           |
 
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         "#);
@@ -941,9 +941,9 @@ def test_invalid(
     exit_code: 1
     ----- stdout -----
         Starting 3 tests across 1 worker
-            FAIL [TIME] test::test_unknown
-            FAIL [TIME] test::test_empty
-            FAIL [TIME] test::test_invalid
+           ERROR [TIME] test::test_unknown
+           ERROR [TIME] test::test_empty
+           ERROR [TIME] test::test_invalid
 
     failures:
 
@@ -992,7 +992,7 @@ def test_invalid(
       |
 
     ────────────
-         Summary [TIME] 3 tests run: 0 passed, 3 failed, 0 skipped
+         Summary [TIME] 3 tests run: 0 passed, 3 errors, 0 skipped
 
     ----- stderr -----
     "#);

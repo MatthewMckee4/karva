@@ -3,7 +3,8 @@ use std::cell::RefCell;
 use camino::Utf8Path;
 use karva_collector::CollectionSettings;
 use karva_diagnostic::{
-    CapturedTestOutput, IndividualTestResultKind, Reporter, TestExecutionOutcome, TestRunResult,
+    CapturedTestOutput, IndividualTestResultKind, Reporter, TestCaseRetry, TestExecutionAttempt,
+    TestExecutionOutcome, TestRunResult,
 };
 use karva_metadata::ProjectSettings;
 use karva_python_semantic::QualifiedTestName;
@@ -92,7 +93,7 @@ impl<'a> Context<'a> {
         duration: std::time::Duration,
         captured_output: Option<CapturedTestOutput>,
     ) -> bool {
-        let passed = !outcome.is_failed();
+        let passed = !outcome.is_non_success();
 
         self.result().register_test_case_result(
             test_case_name,
@@ -145,18 +146,18 @@ impl<'a> Context<'a> {
         test_case_name: &QualifiedTestName,
         outcome: TestExecutionOutcome,
         duration: std::time::Duration,
-        passed_on: u32,
-        total_attempts: u32,
+        retry: TestCaseRetry,
         captured_output: Option<CapturedTestOutput>,
+        attempts: Vec<TestExecutionAttempt>,
     ) -> bool {
-        let passed = !outcome.is_failed();
+        let passed = !outcome.is_non_success();
         self.result().register_retried_result(
             test_case_name,
             outcome,
             duration,
-            passed_on,
-            total_attempts,
+            retry,
             captured_output,
+            attempts,
         );
         passed
     }

@@ -8,6 +8,8 @@ pub struct RenderedDiagnostic {
     severity: Severity,
     message: String,
     rendered: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    colored_rendered: Option<String>,
 }
 
 impl RenderedDiagnostic {
@@ -22,7 +24,16 @@ impl RenderedDiagnostic {
             severity,
             message: message.into(),
             rendered: rendered.into(),
+            colored_rendered: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_colored_rendered(mut self, rendered: String) -> Self {
+        if rendered != self.rendered {
+            self.colored_rendered = Some(rendered);
+        }
+        self
     }
 
     pub fn interrupted(test_name: &str) -> Self {
@@ -43,12 +54,29 @@ impl RenderedDiagnostic {
         self.severity
     }
 
+    pub fn severity_name(&self) -> &'static str {
+        match self.severity {
+            Severity::Info => "info",
+            Severity::Warning => "warning",
+            Severity::Error => "error",
+            Severity::Fatal => "fatal",
+        }
+    }
+
+    pub fn is_error(&self) -> bool {
+        matches!(self.severity, Severity::Error | Severity::Fatal)
+    }
+
     pub fn message(&self) -> &str {
         &self.message
     }
 
     pub fn rendered(&self) -> &str {
         &self.rendered
+    }
+
+    pub fn rendered_for_terminal(&self) -> &str {
+        self.colored_rendered.as_deref().unwrap_or(&self.rendered)
     }
 }
 
@@ -67,13 +95,19 @@ mod tests {
 
     #[test]
     fn serializes_ruff_severity() {
-        let diagnostic =
-            RenderedDiagnostic::new("test-failure", Severity::Error, "failed", "rendered");
+        for (severity, name) in [
+            (Severity::Info, "info"),
+            (Severity::Warning, "warning"),
+            (Severity::Error, "error"),
+            (Severity::Fatal, "fatal"),
+        ] {
+            let diagnostic =
+                RenderedDiagnostic::new("test-failure", severity, "failed", "rendered");
+            let json = serde_json::to_string(&diagnostic).unwrap();
+            let roundtrip: RenderedDiagnostic = serde_json::from_str(&json).unwrap();
 
-        let json = serde_json::to_string(&diagnostic).unwrap();
-        let roundtrip: RenderedDiagnostic = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(roundtrip, diagnostic);
-        assert!(json.contains(r#""severity":"error""#));
+            assert_eq!(roundtrip, diagnostic);
+            assert!(json.contains(&format!(r#""severity":"{name}""#)));
+        }
     }
 }
