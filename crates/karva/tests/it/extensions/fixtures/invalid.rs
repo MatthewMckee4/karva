@@ -1,5 +1,6 @@
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
+use rstest::rstest;
 
 use crate::common::TestContext;
 
@@ -512,13 +513,12 @@ def test_with_fixture(my_fixture):
     ");
 }
 
-#[test]
-fn test_fixture_scope_mismatch() {
-    for framework in ["karva", "pytest"] {
-        let context = TestContext::with_file(
-            "test.py",
-            &format!(
-                r#"
+#[rstest]
+fn test_fixture_scope_mismatch(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
 import {framework} as framework
 from pathlib import Path
 
@@ -533,42 +533,41 @@ def database(connection):
 def test_database(database):
     Path("test-ran").touch()
 "#,
-            ),
-        );
+        ),
+    );
 
-        allow_duplicates! {
-            assert_cmd_snapshot!(context.command(), @"
-            success: false
-            exit_code: 1
-            ----- stdout -----
-                Starting 1 test across 1 worker
-                    FAIL [TIME] test::test_database
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                FAIL [TIME] test::test_database
 
-            diagnostics:
+        diagnostics:
 
-            error[fixture-scope-mismatch]: Fixture `database` with `session` scope cannot depend on fixture `connection` with `function` scope
-              --> test.py:10:5
-               |
-            10 | def database(connection):
-               |     ^^^^^^^^
-               |
-            info: Fixture `connection` has `function` scope
-             --> test.py:6:5
-              |
-            6 | def connection():
-              |     ^^^^^^^^^^
-              |
+        error[fixture-scope-mismatch]: Fixture `database` with `session` scope cannot depend on fixture `connection` with `function` scope
+          --> test.py:10:5
+           |
+        10 | def database(connection):
+           |     ^^^^^^^^
+           |
+        info: Fixture `connection` has `function` scope
+         --> test.py:6:5
+          |
+        6 | def connection():
+          |     ^^^^^^^^^^
+          |
 
-            ────────────
-                 Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
 
-            ----- stderr -----
-            ");
-        }
-        assert!(!context.root().join("connection-ran").exists());
-        assert!(!context.root().join("database-ran").exists());
-        assert!(!context.root().join("test-ran").exists());
+        ----- stderr -----
+        ");
     }
+    assert!(!context.root().join("connection-ran").exists());
+    assert!(!context.root().join("database-ran").exists());
+    assert!(!context.root().join("test-ran").exists());
 }
 
 #[test]
