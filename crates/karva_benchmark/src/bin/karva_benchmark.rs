@@ -940,7 +940,37 @@ mod tests {
 
         let markdown = markdown_report(&report).expect("report should render");
 
-        insta::assert_snapshot!(markdown);
+        insta::assert_snapshot!(markdown, @"
+        <!-- karva-benchmark-comparison -->
+        ### :x: Merging this PR may alter performance
+
+        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Lower is better.
+
+        :zap: **1** improved benchmark
+        :x: **1** regressed benchmark
+        :white_check_mark: **1** unchanged benchmark
+
+        > [!WARNING]
+        > Benchmark regressions were detected. Review the wall-time changes before merging.
+
+        #### Performance Changes
+
+        |  | Mode | Benchmark | Base | Head | Change | Runs |
+        | --- | --- | --- | ---: | ---: | ---: | ---: |
+        | :zap: | WallTime | `faster-project` | 1.000 s | 990.0 ms | -1.0% | 21 |
+        | :x: | WallTime | `slower-project` | 1.000 s | 1.012 s | +1.2% | 15 |
+
+        <details>
+        <summary>All benchmark scores</summary>
+
+        |  | Mode | Benchmark | Base | Head | Change | Runs |
+        | --- | --- | --- | ---: | ---: | ---: | ---: |
+        | :white_check_mark: | WallTime | `flat-project` | 1.000 s | 1.004 s | +0.4% | 21 |
+        | :zap: | WallTime | `faster-project` | 1.000 s | 990.0 ms | -1.0% | 21 |
+        | :x: | WallTime | `slower-project` | 1.000 s | 1.012 s | +1.2% | 15 |
+
+        </details>
+        ");
     }
 
     #[test]
@@ -949,7 +979,19 @@ mod tests {
 
         let markdown = markdown_report(&report).expect("report should render");
 
-        insta::assert_snapshot!(markdown);
+        insta::assert_snapshot!(markdown, @"
+        <!-- karva-benchmark-comparison -->
+        ### :white_check_mark: Merging this PR will not alter performance
+
+        <details>
+        <summary>All benchmark scores</summary>
+
+        |  | Mode | Benchmark | Base | Head | Change | Runs |
+        | --- | --- | --- | ---: | ---: | ---: | ---: |
+        | :white_check_mark: | WallTime | `flat-project` | 1.000 s | 1.004 s | +0.4% | 21 |
+
+        </details>
+        ");
     }
 
     #[test]
@@ -961,7 +1003,19 @@ mod tests {
 
         let markdown = markdown_report(&report).expect("report should render");
 
-        insta::assert_snapshot!(markdown);
+        insta::assert_snapshot!(markdown, @"
+        <!-- karva-memory-benchmark-comparison -->
+        ### :zap: Merging this PR reduces memory usage
+
+        <details>
+        <summary>All benchmark scores</summary>
+
+        |  | Mode | Benchmark | Base | Head | Change | Runs |
+        | --- | --- | --- | ---: | ---: | ---: | ---: |
+        | :zap: | Memory | `memory-project` | 97.7 MiB | 87.9 MiB | -10.0% | 21 |
+
+        </details>
+        ");
     }
 
     #[test]
@@ -972,12 +1026,7 @@ mod tests {
         let candidate = normalize_diagnostic_text(
             "    PASS [   0.900s] test_hooks(hook=<function hook at 0x456def>)\nnew diagnostic\n",
         );
-        assert_eq!(
-            baseline,
-            normalize_diagnostic_text(
-                "    PASS [   2.500s] test_hooks(hook=<function hook at 0xabcdef>)\n"
-            )
-        );
+        insta::assert_snapshot!(baseline, @"    PASS [TIME] test_hooks(hook=<function hook at 0xADDR>)");
         let mut comparison = project("requests", 21, 1.0, 1.0);
         comparison.diagnostic_diff =
             diagnostic_diff(Some(&baseline), Some(&candidate), "main", "PR");
@@ -985,12 +1034,37 @@ mod tests {
         let markdown =
             markdown_report(&report_with_projects(vec![comparison])).expect("report should render");
 
-        assert!(markdown.contains("#### Diagnostic Changes"));
-        assert!(markdown.contains("<summary><code>requests</code></summary>"));
-        assert!(markdown.contains("+new diagnostic"));
-        assert!(!markdown.contains("0x123abc"));
-        assert!(!markdown.contains("0x456def"));
-        assert!(!markdown.contains("0.900s"));
+        insta::assert_snapshot!(markdown, @"
+        <!-- karva-benchmark-comparison -->
+        ### :white_check_mark: Merging this PR will not alter performance
+
+        #### Diagnostic Changes
+
+        Durations and memory addresses are normalized before comparing test output.
+
+        <details>
+        <summary><code>requests</code></summary>
+
+        ```diff
+        --- main
+        +++ PR
+        @@ -1 +1,2 @@
+             PASS [TIME] test_hooks(hook=<function hook at 0xADDR>)
+        +new diagnostic
+        ```
+
+        </details>
+
+
+        <details>
+        <summary>All benchmark scores</summary>
+
+        |  | Mode | Benchmark | Base | Head | Change | Runs |
+        | --- | --- | --- | ---: | ---: | ---: | ---: |
+        | :white_check_mark: | WallTime | `requests` | 1.000 s | 1.000 s | +0.0% | 21 |
+
+        </details>
+        ");
     }
 
     #[test]
