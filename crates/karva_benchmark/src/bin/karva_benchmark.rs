@@ -76,6 +76,9 @@ struct MergeReportsArgs {
 
     #[arg(long, value_name = "PATH")]
     output_markdown: PathBuf,
+
+    #[arg(long, value_name = "PATH")]
+    output_diagnostics_markdown: Option<PathBuf>,
 }
 
 #[derive(Debug, Serialize)]
@@ -107,7 +110,22 @@ struct ProjectComparison {
     candidate: Measurement,
     percent_change: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    diagnostic_diff: Option<String>,
+    diagnostics: Option<DiagnosticComparison>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct DiagnosticComparison {
+    baseline: Option<TestStats>,
+    candidate: Option<TestStats>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    diff: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct TestStats {
+    passed: usize,
+    failed: usize,
+    skipped: usize,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -227,7 +245,7 @@ fn compare(args: CompareArgs) -> Result<()> {
             baseline,
             candidate,
             percent_change,
-            diagnostic_diff: diagnostic_diff(
+            diagnostics: diagnostic_comparison(
                 baseline_diagnostic_output.as_deref(),
                 candidate_diagnostic_output.as_deref(),
                 &args.baseline_label,
@@ -256,7 +274,12 @@ fn merge_reports(args: MergeReportsArgs) -> Result<()> {
     let output_markdown = utf8_path(args.output_markdown)?;
     let report = merge_report_files(&input_dir)?;
 
-    write_markdown(&output_markdown, &report)
+    write_markdown(&output_markdown, &report)?;
+    if let Some(path) = args.output_diagnostics_markdown {
+        write_diagnostics_markdown(&utf8_path(path)?, &report)?;
+    }
+
+    Ok(())
 }
 
 fn merge_report_files(input_dir: &Utf8Path) -> Result<ComparisonReport> {
@@ -548,28 +571,49 @@ fn normalize_diagnostic_text(text: &str) -> String {
     ADDRESS.replace_all(&text, "0xADDR").into_owned()
 }
 
-fn diagnostic_diff(
+fn diagnostic_comparison(
     baseline: Option<&str>,
     candidate: Option<&str>,
     baseline_label: &str,
     candidate_label: &str,
-) -> Option<String> {
+) -> Option<DiagnosticComparison> {
     let (Some(baseline), Some(candidate)) = (baseline, candidate) else {
         return None;
     };
-    if baseline == candidate {
-        return None;
-    }
 
-    Some(
+    let diff = (baseline != candidate).then(|| {
         TextDiff::configure()
             .algorithm(Algorithm::Patience)
             .diff_lines(baseline, candidate)
             .unified_diff()
             .context_radius(3)
             .header(baseline_label, candidate_label)
-            .to_string(),
-    )
+            .to_string()
+    });
+
+    Some(DiagnosticComparison {
+        baseline: parse_test_stats(baseline),
+        candidate: parse_test_stats(candidate),
+        diff,
+    })
+}
+
+fn parse_test_stats(output: &str) -> Option<TestStats> {
+    static SUMMARY: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"(?m)^\s*Summary \[TIME\] \d+ tests? run: (?P<passed>\d+) passed(?: \(\d+ flaky\))?(?:, (?P<failed>\d+) failed)?, (?P<skipped>\d+) skipped",
+        )
+        .expect("summary regex should be valid")
+    });
+
+    let captures = SUMMARY.captures(output)?;
+    Some(TestStats {
+        passed: captures.name("passed")?.as_str().parse().ok()?,
+        failed: captures
+            .name("failed")
+            .map_or(Some(0), |value| value.as_str().parse().ok())?,
+        skipped: captures.name("skipped")?.as_str().parse().ok()?,
+    })
 }
 
 #[cfg(target_os = "linux")]
@@ -601,6 +645,13 @@ fn write_json(path: &Utf8Path, report: &ComparisonReport) -> Result<()> {
 fn write_markdown(path: &Utf8Path, report: &ComparisonReport) -> Result<()> {
     create_parent_dir(path)?;
     let body = markdown_report(report).context("Failed to render markdown benchmark report")?;
+    fs::write(path, body).with_context(|| format!("Failed to write `{path}`"))
+}
+
+fn write_diagnostics_markdown(path: &Utf8Path, report: &ComparisonReport) -> Result<()> {
+    create_parent_dir(path)?;
+    let body = diagnostics_markdown_report(report)
+        .context("Failed to render markdown diagnostics report")?;
     fs::write(path, body).with_context(|| format!("Failed to write `{path}`"))
 }
 
@@ -659,31 +710,6 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
         )?;
     }
 
-    let diagnostic_changes = report
-        .projects
-        .iter()
-        .filter_map(|project| {
-            project
-                .diagnostic_diff
-                .as_deref()
-                .map(|diff| (project.name.as_str(), diff))
-        })
-        .collect::<Vec<_>>();
-    if !diagnostic_changes.is_empty() {
-        body.push_str("\n#### Diagnostic Changes\n\n");
-        body.push_str(
-            "Durations and memory addresses are normalized before comparing test output.\n\n",
-        );
-        for (project, diff) in diagnostic_changes {
-            writeln!(
-                body,
-                "<details>\n<summary><code>{project}</code></summary>\n"
-            )?;
-            writeln!(body, "```diff\n{diff}```\n")?;
-            writeln!(body, "</details>\n")?;
-        }
-    }
-
     writeln!(body)?;
     writeln!(body, "<details>")?;
     writeln!(body, "<summary>All benchmark scores</summary>")?;
@@ -693,6 +719,80 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
     writeln!(body, "</details>")?;
 
     Ok(body)
+}
+
+fn diagnostics_markdown_report(
+    report: &ComparisonReport,
+) -> std::result::Result<String, std::fmt::Error> {
+    use std::fmt::Write as _;
+
+    let changed = report
+        .projects
+        .iter()
+        .filter(|project| {
+            project
+                .diagnostics
+                .as_ref()
+                .is_some_and(|diagnostics| diagnostics.diff.is_some())
+        })
+        .count();
+    let mut body = String::from("<!-- karva-diagnostic-comparison -->\n");
+    if changed == 0 {
+        body.push_str("### :white_check_mark: No diagnostic changes\n");
+    } else {
+        let suffix = if changed == 1 { "" } else { "s" };
+        writeln!(
+            body,
+            "### :warning: Diagnostic changes in {changed} project{suffix}"
+        )?;
+    }
+
+    body.push_str("\n<details>\n<summary>Test result comparison</summary>\n\n");
+    body.push_str(
+        "| Project | Previous pass | Previous fail | Previous skip | New pass | New fail | New skip |\n",
+    );
+    body.push_str("| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n");
+    for project in &report.projects {
+        let diagnostics = project.diagnostics.as_ref();
+        let baseline = diagnostics.and_then(|diagnostics| diagnostics.baseline.as_ref());
+        let candidate = diagnostics.and_then(|diagnostics| diagnostics.candidate.as_ref());
+        writeln!(
+            body,
+            "| `{}` | {} | {} | {} | {} | {} | {} |",
+            project.name,
+            stat(baseline.map(|stats| stats.passed)),
+            stat(baseline.map(|stats| stats.failed)),
+            stat(baseline.map(|stats| stats.skipped)),
+            stat(candidate.map(|stats| stats.passed)),
+            stat(candidate.map(|stats| stats.failed)),
+            stat(candidate.map(|stats| stats.skipped)),
+        )?;
+    }
+    body.push_str("\n</details>\n");
+
+    for project in &report.projects {
+        let Some(diff) = project
+            .diagnostics
+            .as_ref()
+            .and_then(|diagnostics| diagnostics.diff.as_deref())
+        else {
+            continue;
+        };
+        writeln!(
+            body,
+            "\n<details>\n<summary><code>{}</code> concise output diff</summary>\n",
+            project.name
+        )?;
+        body.push_str("Durations and memory addresses are normalized.\n\n");
+        writeln!(body, "```diff\n{diff}```\n")?;
+        body.push_str("</details>\n");
+    }
+
+    Ok(body)
+}
+
+fn stat(value: Option<usize>) -> String {
+    value.map_or_else(|| "—".to_string(), |value| value.to_string())
 }
 
 fn write_project_table<'a>(
@@ -926,8 +1026,8 @@ mod tests {
 
     use super::{
         BenchmarkMetric, ComparisonReport, FAST_PROJECT_ITERATIONS, MEDIUM_PROJECT_ITERATIONS,
-        Measurement, ProjectComparison, diagnostic_diff, karva_invocation, markdown_report,
-        matrix_iterations, normalize_diagnostic_text, trend,
+        Measurement, ProjectComparison, diagnostic_comparison, diagnostics_markdown_report,
+        karva_invocation, markdown_report, matrix_iterations, normalize_diagnostic_text, trend,
     };
 
     #[test]
@@ -1019,49 +1119,81 @@ mod tests {
     }
 
     #[test]
-    fn diagnostic_changes_are_normalized_and_rendered() {
+    fn diagnostics_report_renders_changes() {
         let baseline = normalize_diagnostic_text(
-            "    PASS [   0.001s] test_hooks(hook=<function hook at 0x123abc>)\n",
+            "    PASS [   0.001s] test_hooks(hook=<function hook at 0x123abc>)\n\
+             Summary [   0.100s] 3 tests run: 2 passed, 1 skipped\n",
         );
         let candidate = normalize_diagnostic_text(
-            "    PASS [   0.900s] test_hooks(hook=<function hook at 0x456def>)\nnew diagnostic\n",
+            "    PASS [   0.900s] test_hooks(hook=<function hook at 0x456def>)\n\
+             new diagnostic\n\
+             Summary [   1.000s] 3 tests run: 1 passed, 1 failed, 1 skipped\n",
         );
-        insta::assert_snapshot!(baseline, @"    PASS [TIME] test_hooks(hook=<function hook at 0xADDR>)");
+        insta::assert_snapshot!(baseline, @"
+            PASS [TIME] test_hooks(hook=<function hook at 0xADDR>)
+        Summary [TIME] 3 tests run: 2 passed, 1 skipped
+        ");
         let mut comparison = project("requests", 21, 1.0, 1.0);
-        comparison.diagnostic_diff =
-            diagnostic_diff(Some(&baseline), Some(&candidate), "main", "PR");
+        comparison.diagnostics =
+            diagnostic_comparison(Some(&baseline), Some(&candidate), "main", "PR");
 
-        let markdown =
-            markdown_report(&report_with_projects(vec![comparison])).expect("report should render");
+        let markdown = diagnostics_markdown_report(&report_with_projects(vec![comparison]))
+            .expect("report should render");
 
         insta::assert_snapshot!(markdown, @"
-        <!-- karva-benchmark-comparison -->
-        ### :white_check_mark: Merging this PR will not alter performance
-
-        #### Diagnostic Changes
-
-        Durations and memory addresses are normalized before comparing test output.
+        <!-- karva-diagnostic-comparison -->
+        ### :warning: Diagnostic changes in 1 project
 
         <details>
-        <summary><code>requests</code></summary>
+        <summary>Test result comparison</summary>
+
+        | Project | Previous pass | Previous fail | Previous skip | New pass | New fail | New skip |
+        | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+        | `requests` | 2 | 0 | 1 | 1 | 1 | 1 |
+
+        </details>
+
+        <details>
+        <summary><code>requests</code> concise output diff</summary>
+
+        Durations and memory addresses are normalized.
 
         ```diff
         --- main
         +++ PR
-        @@ -1 +1,2 @@
+        @@ -1,2 +1,3 @@
              PASS [TIME] test_hooks(hook=<function hook at 0xADDR>)
+        -Summary [TIME] 3 tests run: 2 passed, 1 skipped
         +new diagnostic
+        +Summary [TIME] 3 tests run: 1 passed, 1 failed, 1 skipped
         ```
 
         </details>
+        ");
+    }
 
+    #[test]
+    fn diagnostics_report_omits_unchanged_diffs() {
+        let output = normalize_diagnostic_text(
+            "    PASS [   0.001s] test_pass\n\
+             Summary [   0.100s] 1 test run: 1 passed, 0 skipped\n",
+        );
+        let mut comparison = project("requests", 21, 1.0, 1.0);
+        comparison.diagnostics = diagnostic_comparison(Some(&output), Some(&output), "main", "PR");
+
+        let markdown = diagnostics_markdown_report(&report_with_projects(vec![comparison]))
+            .expect("report should render");
+
+        insta::assert_snapshot!(markdown, @"
+        <!-- karva-diagnostic-comparison -->
+        ### :white_check_mark: No diagnostic changes
 
         <details>
-        <summary>All benchmark scores</summary>
+        <summary>Test result comparison</summary>
 
-        |  | Mode | Benchmark | Base | Head | Change | Runs |
-        | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :white_check_mark: | WallTime | `requests` | 1.000 s | 1.000 s | +0.0% | 21 |
+        | Project | Previous pass | Previous fail | Previous skip | New pass | New fail | New skip |
+        | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+        | `requests` | 1 | 0 | 0 | 1 | 0 | 0 |
 
         </details>
         ");
@@ -1126,7 +1258,7 @@ mod tests {
             baseline: measurement(baseline),
             candidate: measurement(candidate),
             percent_change: super::percent_change(baseline, candidate),
-            diagnostic_diff: None,
+            diagnostics: None,
         }
     }
 
