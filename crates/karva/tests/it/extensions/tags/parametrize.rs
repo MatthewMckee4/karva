@@ -57,7 +57,7 @@ def fixture():
 
         diagnostics:
 
-        error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1
+        error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1 value
          --> test.py:5:14
           |
         5 | @parametrize("left,right", [(1, 2), (3,)])
@@ -66,7 +66,7 @@ def fixture():
           |              expects 2 values
           |
 
-        error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 3
+        error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 3 values
          --> test.py:9:14
           |
         9 | @parametrize("left,right", [(1, 2), (3, 4, 5)])
@@ -108,7 +108,7 @@ def test_value(left, right):
 
     diagnostics:
 
-    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1
+    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1 value
      --> test.py:5:25
       |
     5 |     arg_values=[(1, 2), (3,)],
@@ -149,7 +149,7 @@ def test_value(left, right):
 
     diagnostics:
 
-    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1
+    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1 value
      --> test.py:5:24
       |
     5 |     argvalues=[(1, 2), (3,)],
@@ -190,7 +190,7 @@ def test_value(left, right):
 
     diagnostics:
 
-    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1
+    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1 value
      --> test.py:7:8
       |
     7 | @cases(("left", "right"), CASES)
@@ -239,14 +239,14 @@ def test_kwargs(left, right):
 
     diagnostics:
 
-    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1
+    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1 value
       --> test.py:11:5
        |
     11 | def test_args(left, right):
        |     ^^^^^^^^^
        |
 
-    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1
+    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1 value
       --> test.py:15:5
        |
     15 | def test_kwargs(left, right):
@@ -293,7 +293,7 @@ def test_value(left, right):
 
     diagnostics:
 
-    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1
+    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1 value
       --> test.py:13:9
        |
     13 |           (3,),
@@ -338,7 +338,7 @@ def test_value(left, right):
 
     diagnostics:
 
-    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1
+    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1 value
      --> test.py:5:25
       |
     5 | @karva.tags.parametrize("left,right", [(3,)])
@@ -376,7 +376,7 @@ def test_value(value):
 
     diagnostics:
 
-    error[invalid-parametrize]: Expected 1 value for `value`, but case 1 contains 2
+    error[invalid-parametrize]: Expected 1 value for `value`, but case 1 contains 2 values
      --> test.py:4:25
       |
     4 | @karva.tags.parametrize("value", [karva.param(1, 2)])
@@ -640,9 +640,9 @@ def test_value(value):
          --> test.py:5:14
           |
         5 | @parametrize("missing", [1])
-          |              ^^^^^^^^^ unknown parameter
+          |              ^^^^^^^^^ not accepted by test
         6 | def test_value(value):
-          |               ------- test parameters declared here
+          |               ------- available parameter
           |
 
         ────────────
@@ -681,9 +681,9 @@ def test_value(value):
      --> test.py:6:18
       |
     6 | @cases(("value", "missing"), [(1, 2)])
-      |                  ^^^^^^^^^ unknown parameter
+      |                  ^^^^^^^^^ not accepted by test
     7 | def test_value(value):
-      |               ------- test parameters declared here
+      |               ------- available parameter
       |
 
     ────────────
@@ -810,7 +810,7 @@ def test_value(value):
         5 | @parametrize("", [1])
           |              ^^ empty parameter name
         6 | def test_value(value):
-          |               ------- test parameters declared here
+          |               ------- available parameter
           |
 
         ────────────
@@ -854,7 +854,7 @@ def test_value(value):
         5 | @parametrize("not valid", [1])
           |              ^^^^^^^^^^^ invalid parameter name
         6 | def test_value(value):
-          |               ------- test parameters declared here
+          |               ------- available parameter
           |
 
         ────────────
@@ -863,6 +863,91 @@ def test_value(value):
         ----- stderr -----
         "#);
     }
+}
+
+#[test]
+fn test_parametrize_name_diagnostics_with_multiline_function_parameters() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize("missing", [1])
+def test_unknown(
+    value,
+    *,
+    other,
+):
+    pass
+
+@karva.tags.parametrize("", [1])
+def test_empty(
+    value,
+):
+    pass
+
+@karva.tags.parametrize("not valid", [1])
+def test_invalid(
+    value: int = 1,
+):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 3 tests across 1 worker
+            FAIL [TIME] test::test_unknown
+            FAIL [TIME] test::test_empty
+            FAIL [TIME] test::test_invalid
+
+    diagnostics:
+
+    error[invalid-parametrize]: Parameter `missing` does not exist in the test function signature
+     --> test.py:4:25
+      |
+    4 |   @karva.tags.parametrize("missing", [1])
+      |                           ^^^^^^^^^ not accepted by test
+    5 |   def test_unknown(
+      |  _________________-
+    6 | |     value,
+    7 | |     *,
+    8 | |     other,
+    9 | | ):
+      | |_- available parameters
+      |
+
+    error[invalid-parametrize]: Parameter name cannot be empty
+      --> test.py:12:25
+       |
+    12 |   @karva.tags.parametrize("", [1])
+       |                           ^^ empty parameter name
+    13 |   def test_empty(
+       |  _______________-
+    14 | |     value,
+    15 | | ):
+       | |_- available parameter
+       |
+
+    error[invalid-parametrize]: `not valid` is not a valid Python identifier
+      --> test.py:18:25
+       |
+    18 |   @karva.tags.parametrize("not valid", [1])
+       |                           ^^^^^^^^^^^ invalid parameter name
+    19 |   def test_invalid(
+       |  _________________-
+    20 | |     value: int = 1,
+    21 | | ):
+       | |_- available parameter
+       |
+
+    ────────────
+         Summary [TIME] 3 tests run: 0 passed, 3 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 }
 
 #[test]

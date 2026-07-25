@@ -49,8 +49,9 @@ pub enum InvalidParametrizeError {
     #[error("Parametrization has no cases")]
     EmptyCases { names: String },
     #[error(
-        "Expected {expected} {} for `{names}`, but case {case} contains {actual}",
-        value_noun(*expected)
+        "Expected {expected} {} for `{names}`, but case {case} contains {actual} {}",
+        value_noun(*expected),
+        value_noun(*actual)
     )]
     WrongArity {
         names: String,
@@ -159,7 +160,7 @@ impl InvalidParametrizeError {
                 })
             }
             Self::UnknownName { name } => {
-                name_diagnostic_location(&syntaxes, name, "unknown parameter", function)
+                name_diagnostic_location(&syntaxes, name, "not accepted by test", function)
             }
         }
     }
@@ -177,11 +178,17 @@ fn name_diagnostic_location(
         .collect::<Vec<_>>();
     let syntax = select_unambiguous_syntax(matching)?;
     let primary = name_ranges(syntax.names, name).into_iter().next()?;
+    let parameter_count = function.parameters.iter_non_variadic_params().count();
+    let parameters_message = match parameter_count {
+        0 => "test accepts no parameters",
+        1 => "available parameter",
+        _ => "available parameters",
+    };
     Some(ParametrizeDiagnosticLocation {
         primary: ParametrizeAnnotation::new(primary, primary_message),
         secondary: vec![ParametrizeAnnotation::new(
             function.parameters.range,
-            "test parameters declared here",
+            parameters_message,
         )],
     })
 }
