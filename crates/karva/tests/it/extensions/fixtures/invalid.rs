@@ -546,13 +546,13 @@ def test_database(database):
 
             diagnostics:
 
-            error[fixture-scope-mismatch]: Fixture `database` with session scope cannot depend on fixture `connection` with function scope
+            error[fixture-scope-mismatch]: Fixture `database` with `session` scope cannot depend on fixture `connection` with `function` scope
               --> test.py:10:5
                |
             10 | def database(connection):
                |     ^^^^^^^^
                |
-            info: Fixture `connection` is defined with function scope
+            info: Fixture `connection` has `function` scope
              --> test.py:6:5
               |
             6 | def connection():
@@ -610,13 +610,13 @@ def test_database():
 
     diagnostics:
 
-    error[fixture-scope-mismatch]: Fixture `database` with package scope cannot depend on fixture `connection` with function scope
+    error[fixture-scope-mismatch]: Fixture `database` with `package` scope cannot depend on fixture `connection` with `function` scope
       --> nested/conftest.py:10:11
        |
     10 | async def database(connection):
        |           ^^^^^^^^
        |
-    info: Fixture `connection` is defined with function scope
+    info: Fixture `connection` has `function` scope
      --> nested/conftest.py:6:5
       |
     6 | def connection():
@@ -670,7 +670,7 @@ def test_database(database):
 
     diagnostics:
 
-    error[fixture-scope-mismatch]: Fixture `repository` with session scope cannot depend on fixture `connection` with function scope
+    error[fixture-scope-mismatch]: Fixture `repository` with `session` scope cannot depend on fixture `connection` with `function` scope
       --> test.py:13:5
        |
     13 | def repository(connection):
@@ -682,7 +682,7 @@ def test_database(database):
     17 | def database(repository):
        |     ^^^^^^^^
        |
-    info: Fixture `connection` is defined with function scope
+    info: Fixture `connection` has `function` scope
      --> test.py:9:5
       |
     9 | def connection():

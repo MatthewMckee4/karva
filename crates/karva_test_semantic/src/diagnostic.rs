@@ -370,7 +370,7 @@ fn report_fixture_scope_mismatch(
 ) {
     let builder = context.report_diagnostic(&FIXTURE_SCOPE_MISMATCH);
     let mut diagnostic = builder.into_diagnostic(format!(
-        "Fixture `{}` with {} scope cannot depend on fixture `{}` with {} scope",
+        "Fixture `{}` with `{}` scope cannot depend on fixture `{}` with `{}` scope",
         fixture.name,
         fixture.scope.name(),
         dependency.name,
@@ -401,7 +401,7 @@ fn report_fixture_scope_mismatch(
     let mut dependency_sub = SubDiagnostic::new(
         SubDiagnosticSeverity::Info,
         format!(
-            "Fixture `{}` is defined with {} scope",
+            "Fixture `{}` has `{}` scope",
             dependency.name,
             dependency.scope.name()
         ),
