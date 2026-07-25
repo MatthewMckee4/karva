@@ -194,7 +194,7 @@ def test_value(left, right):
      --> test.py:7:8
       |
     7 | @cases(("left", "right"), CASES)
-      |        -----------------  ^^^^^ contains 1 value
+      |        -----------------  ^^^^^ case 2 contains 1 value
       |        |
       |        expects 2 values
       |

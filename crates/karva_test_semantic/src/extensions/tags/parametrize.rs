@@ -138,13 +138,20 @@ impl InvalidParametrizeError {
                         .and_then(expression_arity)
                         .is_some_and(|arity| arity == *actual)
                 })?;
-                let primary = case_expression(syntax, *case)
-                    .map_or_else(|| syntax.values.range(), Ranged::range);
+                let (primary, primary_message) =
+                    if let Some(expression) = case_expression(syntax, *case) {
+                        (
+                            expression.range(),
+                            format!("contains {actual} {}", value_noun(*actual)),
+                        )
+                    } else {
+                        (
+                            syntax.values.range(),
+                            format!("case {case} contains {actual} {}", value_noun(*actual)),
+                        )
+                    };
                 Some(ParametrizeDiagnosticLocation {
-                    primary: ParametrizeAnnotation::new(
-                        primary,
-                        format!("contains {actual} {}", value_noun(*actual)),
-                    ),
+                    primary: ParametrizeAnnotation::new(primary, primary_message),
                     secondary: vec![ParametrizeAnnotation::new(
                         syntax.names.range(),
                         format!("expects {expected} {}", value_noun(*expected)),
