@@ -748,24 +748,18 @@ fn diagnostics_markdown_report(
     }
 
     body.push_str("\n<details>\n<summary>Test result comparison</summary>\n\n");
-    body.push_str(
-        "| Project | Previous pass | Previous fail | Previous skip | New pass | New fail | New skip |\n",
-    );
-    body.push_str("| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n");
+    body.push_str("| Project | Previous | New |\n");
+    body.push_str("| --- | --- | --- |\n");
     for project in &report.projects {
         let diagnostics = project.diagnostics.as_ref();
         let baseline = diagnostics.and_then(|diagnostics| diagnostics.baseline.as_ref());
         let candidate = diagnostics.and_then(|diagnostics| diagnostics.candidate.as_ref());
         writeln!(
             body,
-            "| `{}` | {} | {} | {} | {} | {} | {} |",
+            "| `{}` | {} | {} |",
             project.name,
-            stat(baseline.map(|stats| stats.passed)),
-            stat(baseline.map(|stats| stats.failed)),
-            stat(baseline.map(|stats| stats.skipped)),
-            stat(candidate.map(|stats| stats.passed)),
-            stat(candidate.map(|stats| stats.failed)),
-            stat(candidate.map(|stats| stats.skipped)),
+            test_result(baseline),
+            test_result(candidate),
         )?;
     }
     body.push_str("\n</details>\n");
@@ -791,8 +785,21 @@ fn diagnostics_markdown_report(
     Ok(body)
 }
 
-fn stat(value: Option<usize>) -> String {
-    value.map_or_else(|| "—".to_string(), |value| value.to_string())
+fn test_result(stats: Option<&TestStats>) -> String {
+    stats.map_or_else(
+        || "—".to_string(),
+        |stats| {
+            let icon = if stats.failed == 0 {
+                ":white_check_mark:"
+            } else {
+                ":x:"
+            };
+            format!(
+                "{icon} {} pass · {} fail · {} skip",
+                stats.passed, stats.failed, stats.skipped
+            )
+        },
+    )
 }
 
 fn write_project_table<'a>(
@@ -1147,9 +1154,9 @@ mod tests {
         <details>
         <summary>Test result comparison</summary>
 
-        | Project | Previous pass | Previous fail | Previous skip | New pass | New fail | New skip |
-        | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-        | `requests` | 2 | 0 | 1 | 1 | 1 | 1 |
+        | Project | Previous | New |
+        | --- | --- | --- |
+        | `requests` | :white_check_mark: 2 pass · 0 fail · 1 skip | :x: 1 pass · 1 fail · 1 skip |
 
         </details>
 
@@ -1191,9 +1198,9 @@ mod tests {
         <details>
         <summary>Test result comparison</summary>
 
-        | Project | Previous pass | Previous fail | Previous skip | New pass | New fail | New skip |
-        | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-        | `requests` | 1 | 0 | 0 | 1 | 0 | 0 |
+        | Project | Previous | New |
+        | --- | --- | --- |
+        | `requests` | :white_check_mark: 1 pass · 0 fail · 0 skip | :white_check_mark: 1 pass · 0 fail · 0 skip |
 
         </details>
         ");
