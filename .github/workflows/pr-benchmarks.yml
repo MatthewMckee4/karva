@@ -141,7 +141,7 @@ jobs:
     name: "compare benchmarks (${{ matrix.project }})"
 
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     needs:
       - benchmark-projects
@@ -184,7 +184,7 @@ jobs:
           name: benchmark-wheels
           path: ${{ runner.temp }}/benchmark-wheels
 
-      - name: Compare benchmarks
+      - name: Compare wall-time and memory benchmarks
         env:
           BASE_LABEL: main (${{ needs.build-wheels.outputs.base_short }})
           HEAD_LABEL: PR (${{ needs.build-wheels.outputs.head_short }})
@@ -196,7 +196,8 @@ jobs:
           base_wheel=$(find "${RUNNER_TEMP}/benchmark-wheels/base" -maxdepth 1 -name "karva-*.whl" -print -quit)
           head_wheel=$(find "${RUNNER_TEMP}/benchmark-wheels/head" -maxdepth 1 -name "karva-*.whl" -print -quit)
           report_dir="${RUNNER_TEMP}/benchmark-reports"
-          mkdir -p "${report_dir}"
+          memory_report_dir="${RUNNER_TEMP}/benchmark-memory-reports"
+          mkdir -p "${report_dir}" "${memory_report_dir}"
 
           target/release/karva-benchmark compare \
             --metric wall-time \
@@ -209,73 +210,6 @@ jobs:
             --output-json "${report_dir}/${PROJECT}.json" \
             --output-markdown "${report_dir}/${PROJECT}.md"
 
-      - name: Upload benchmark report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: benchmark-report-${{ matrix.project }}
-          path: ${{ runner.temp }}/benchmark-reports/${{ matrix.project }}.json
-
-  compare-memory-benchmarks:
-    name: "compare memory benchmarks (${{ matrix.project }})"
-
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    needs:
-      - benchmark-projects
-      - build-wheels
-
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.benchmark-projects.outputs.matrix) }}
-
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-
-      - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
-        id: setup-python
-        with:
-          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
-
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-        with:
-          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
-
-      - name: Build benchmark runner
-        env:
-          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
-        run: cargo build -p karva_benchmark --bin karva-benchmark --release
-
-      - name: Download benchmark wheels
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: benchmark-wheels
-          path: ${{ runner.temp }}/benchmark-wheels
-
-      - name: Compare memory benchmarks
-        env:
-          BASE_LABEL: main (${{ needs.build-wheels.outputs.base_short }})
-          HEAD_LABEL: PR (${{ needs.build-wheels.outputs.head_short }})
-          ITERATIONS: ${{ matrix.iterations }}
-          PROJECT: ${{ matrix.project }}
-        run: |
-          set -euo pipefail
-
-          base_wheel=$(find "${RUNNER_TEMP}/benchmark-wheels/base" -maxdepth 1 -name "karva-*.whl" -print -quit)
-          head_wheel=$(find "${RUNNER_TEMP}/benchmark-wheels/head" -maxdepth 1 -name "karva-*.whl" -print -quit)
-          report_dir="${RUNNER_TEMP}/benchmark-memory-reports"
-          mkdir -p "${report_dir}"
-
           target/release/karva-benchmark compare \
             --metric memory \
             --baseline-label "${BASE_LABEL}" \
@@ -284,8 +218,14 @@ jobs:
             --candidate-wheel "${head_wheel}" \
             --iterations "${ITERATIONS}" \
             --project "${PROJECT}" \
-            --output-json "${report_dir}/${PROJECT}.json" \
-            --output-markdown "${report_dir}/${PROJECT}.md"
+            --output-json "${memory_report_dir}/${PROJECT}.json" \
+            --output-markdown "${memory_report_dir}/${PROJECT}.md"
+
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: benchmark-report-${{ matrix.project }}
+          path: ${{ runner.temp }}/benchmark-reports/${{ matrix.project }}.json
 
       - name: Upload memory benchmark report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -333,6 +273,13 @@ jobs:
           merge-multiple: true
           path: ${{ runner.temp }}/benchmark-reports
 
+      - name: Download memory benchmark reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: benchmark-memory-report-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/benchmark-memory-reports
+
       - name: Merge benchmark reports
         env:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
@@ -340,6 +287,14 @@ jobs:
           cargo run -p karva_benchmark --bin karva-benchmark -- merge-reports \
             --input-dir "${RUNNER_TEMP}/benchmark-reports" \
             --output-markdown "${RUNNER_TEMP}/benchmark-report.md"
+
+      - name: Merge memory benchmark reports
+        env:
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
+        run: |
+          cargo run -p karva_benchmark --bin karva-benchmark -- merge-reports \
+            --input-dir "${RUNNER_TEMP}/benchmark-memory-reports" \
+            --output-markdown "${RUNNER_TEMP}/benchmark-memory-report.md"
 
       - name: Comment benchmark report
         if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
@@ -368,54 +323,6 @@ jobs:
             gh api --method POST "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
               --input "${payload_path}"
           fi
-
-  comment-memory:
-    name: "comment memory benchmark report"
-
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
-
-    needs:
-      - compare-memory-benchmarks
-
-    if: ${{ needs.compare-memory-benchmarks.result == 'success' }}
-
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-
-      - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
-        id: setup-python
-        with:
-          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
-
-      - name: Download memory benchmark reports
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: benchmark-memory-report-*
-          merge-multiple: true
-          path: ${{ runner.temp }}/benchmark-memory-reports
-
-      - name: Merge memory benchmark reports
-        env:
-          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
-        run: |
-          cargo run -p karva_benchmark --bin karva-benchmark -- merge-reports \
-            --input-dir "${RUNNER_TEMP}/benchmark-memory-reports" \
-            --output-markdown "${RUNNER_TEMP}/benchmark-memory-report.md"
 
       - name: Comment memory benchmark report
         if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}

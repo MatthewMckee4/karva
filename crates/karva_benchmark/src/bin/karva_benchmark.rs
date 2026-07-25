@@ -7,6 +7,7 @@
 use std::io::Write as _;
 use std::path::PathBuf;
 use std::process::{Command, Output};
+use std::sync::LazyLock;
 use std::time::Instant;
 use std::{collections::HashSet, io};
 
@@ -16,7 +17,9 @@ use clap::{Parser, ValueEnum};
 use fs_err::{self as fs, File};
 use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject, CLI_BENCHMARK_PROJECTS, WORKER_COUNT};
 use karva_static::ToolEnvVars;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+use similar::{Algorithm, TextDiff};
 
 const MATERIAL_CHANGE_PERCENT: f64 = 1.0;
 const FAST_PROJECT_ITERATIONS: usize = 21;
@@ -103,6 +106,8 @@ struct ProjectComparison {
     baseline: Measurement,
     candidate: Measurement,
     percent_change: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    diagnostic_diff: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -122,6 +127,7 @@ struct Subject<'a> {
     label: &'a str,
     wheel: &'a Utf8Path,
     values: &'a mut Vec<f64>,
+    diagnostic_output: &'a mut Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
@@ -135,6 +141,11 @@ struct KarvaInvocation {
     binary: Utf8PathBuf,
     path: std::ffi::OsString,
     args: Vec<String>,
+}
+
+struct RunMeasurement {
+    value: f64,
+    output: Output,
 }
 
 fn main() -> Result<()> {
@@ -180,17 +191,21 @@ fn compare(args: CompareArgs) -> Result<()> {
             .with_context(|| format!("Failed to prepare benchmark project `{}`", config.name))?;
         let mut baseline_values = Vec::with_capacity(args.iterations);
         let mut candidate_values = Vec::with_capacity(args.iterations);
+        let mut baseline_diagnostic_output = None;
+        let mut candidate_diagnostic_output = None;
 
         for iteration in 0..args.iterations {
             let mut baseline = Subject {
                 label: &args.baseline_label,
                 wheel: &baseline_wheel,
                 values: &mut baseline_values,
+                diagnostic_output: &mut baseline_diagnostic_output,
             };
             let mut candidate = Subject {
                 label: &args.candidate_label,
                 wheel: &candidate_wheel,
                 values: &mut candidate_values,
+                diagnostic_output: &mut candidate_diagnostic_output,
             };
 
             if iteration % 2 == 0 {
@@ -212,6 +227,12 @@ fn compare(args: CompareArgs) -> Result<()> {
             baseline,
             candidate,
             percent_change,
+            diagnostic_diff: diagnostic_diff(
+                baseline_diagnostic_output.as_deref(),
+                candidate_diagnostic_output.as_deref(),
+                &args.baseline_label,
+                &args.candidate_label,
+            ),
         });
     }
 
@@ -360,16 +381,19 @@ fn run_subject(
     warm_project_cache(config, project_root)
         .with_context(|| format!("Failed to warm benchmark cache for `{}`", config.name))?;
 
-    let value = run_project_cli(metric, config, project_root)
+    let measurement = run_project_cli(metric, config, project_root)
         .with_context(|| format!("Failed to run `{}` with `{}`", config.name, subject.label))?;
-    subject.values.push(value);
+    subject.values.push(measurement.value);
+    if metric == BenchmarkMetric::WallTime && subject.diagnostic_output.is_none() {
+        *subject.diagnostic_output = Some(normalize_diagnostic_output(&measurement.output));
+    }
 
     eprintln!(
         "{} / {} / {}: {}",
         config.name,
         subject.label,
         metric.mode_label(),
-        metric.format_value(value)
+        metric.format_value(measurement.value)
     );
 
     Ok(())
@@ -379,7 +403,7 @@ fn run_project_cli(
     metric: BenchmarkMetric,
     config: &BenchmarkProject,
     project_root: &Utf8Path,
-) -> Result<f64> {
+) -> Result<RunMeasurement> {
     match metric {
         BenchmarkMetric::WallTime => run_project_wall_time(config, project_root),
         BenchmarkMetric::Memory => run_project_peak_rss_kib(config, project_root),
@@ -392,7 +416,10 @@ fn warm_project_cache(config: &BenchmarkProject, project_root: &Utf8Path) -> Res
     ensure_karva_success(&output, config)
 }
 
-fn run_project_wall_time(config: &BenchmarkProject, project_root: &Utf8Path) -> Result<f64> {
+fn run_project_wall_time(
+    config: &BenchmarkProject,
+    project_root: &Utf8Path,
+) -> Result<RunMeasurement> {
     let invocation = karva_invocation(config, project_root)?;
 
     let start = Instant::now();
@@ -401,10 +428,16 @@ fn run_project_wall_time(config: &BenchmarkProject, project_root: &Utf8Path) -> 
 
     ensure_karva_success(&output, config)?;
 
-    Ok(elapsed.as_secs_f64())
+    Ok(RunMeasurement {
+        value: elapsed.as_secs_f64(),
+        output,
+    })
 }
 
-fn run_project_peak_rss_kib(config: &BenchmarkProject, project_root: &Utf8Path) -> Result<f64> {
+fn run_project_peak_rss_kib(
+    config: &BenchmarkProject,
+    project_root: &Utf8Path,
+) -> Result<RunMeasurement> {
     #[cfg(target_os = "linux")]
     {
         let invocation = karva_invocation(config, project_root)?;
@@ -426,7 +459,10 @@ fn run_project_peak_rss_kib(config: &BenchmarkProject, project_root: &Utf8Path) 
             eprintln!("failed to remove memory benchmark report `{report_path}`: {err}");
         }
 
-        Ok(peak_rss_kib)
+        Ok(RunMeasurement {
+            value: peak_rss_kib,
+            output,
+        })
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -491,6 +527,49 @@ fn ensure_karva_success(output: &Output, config: &BenchmarkProject) -> Result<()
     );
 
     Ok(())
+}
+
+fn normalize_diagnostic_output(output: &Output) -> String {
+    format!(
+        "stdout:\n{}\nstderr:\n{}",
+        normalize_diagnostic_text(&String::from_utf8_lossy(&output.stdout)),
+        normalize_diagnostic_text(&String::from_utf8_lossy(&output.stderr))
+    )
+}
+
+fn normalize_diagnostic_text(text: &str) -> String {
+    static DURATION: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\[\s*\d+\.\d{3}s\]").expect("duration regex should be valid")
+    });
+    static ADDRESS: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"0x[0-9a-fA-F]+").expect("address regex should be valid"));
+
+    let text = DURATION.replace_all(text, "[TIME]");
+    ADDRESS.replace_all(&text, "0xADDR").into_owned()
+}
+
+fn diagnostic_diff(
+    baseline: Option<&str>,
+    candidate: Option<&str>,
+    baseline_label: &str,
+    candidate_label: &str,
+) -> Option<String> {
+    let (Some(baseline), Some(candidate)) = (baseline, candidate) else {
+        return None;
+    };
+    if baseline == candidate {
+        return None;
+    }
+
+    Some(
+        TextDiff::configure()
+            .algorithm(Algorithm::Patience)
+            .diff_lines(baseline, candidate)
+            .unified_diff()
+            .context_radius(3)
+            .header(baseline_label, candidate_label)
+            .to_string(),
+    )
 }
 
 #[cfg(target_os = "linux")]
@@ -578,6 +657,31 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
                 .iter()
                 .filter(|project| is_material_change(project.percent_change)),
         )?;
+    }
+
+    let diagnostic_changes = report
+        .projects
+        .iter()
+        .filter_map(|project| {
+            project
+                .diagnostic_diff
+                .as_deref()
+                .map(|diff| (project.name.as_str(), diff))
+        })
+        .collect::<Vec<_>>();
+    if !diagnostic_changes.is_empty() {
+        body.push_str("\n#### Diagnostic Changes\n\n");
+        body.push_str(
+            "Durations and memory addresses are normalized before comparing test output.\n\n",
+        );
+        for (project, diff) in diagnostic_changes {
+            writeln!(
+                body,
+                "<details>\n<summary><code>{project}</code></summary>\n"
+            )?;
+            writeln!(body, "```diff\n{diff}```\n")?;
+            writeln!(body, "</details>\n")?;
+        }
     }
 
     writeln!(body)?;
@@ -822,8 +926,8 @@ mod tests {
 
     use super::{
         BenchmarkMetric, ComparisonReport, FAST_PROJECT_ITERATIONS, MEDIUM_PROJECT_ITERATIONS,
-        Measurement, ProjectComparison, karva_invocation, markdown_report, matrix_iterations,
-        trend,
+        Measurement, ProjectComparison, diagnostic_diff, karva_invocation, markdown_report,
+        matrix_iterations, normalize_diagnostic_text, trend,
     };
 
     #[test]
@@ -858,6 +962,35 @@ mod tests {
         let markdown = markdown_report(&report).expect("report should render");
 
         insta::assert_snapshot!(markdown);
+    }
+
+    #[test]
+    fn diagnostic_changes_are_normalized_and_rendered() {
+        let baseline = normalize_diagnostic_text(
+            "    PASS [   0.001s] test_hooks(hook=<function hook at 0x123abc>)\n",
+        );
+        let candidate = normalize_diagnostic_text(
+            "    PASS [   0.900s] test_hooks(hook=<function hook at 0x456def>)\nnew diagnostic\n",
+        );
+        assert_eq!(
+            baseline,
+            normalize_diagnostic_text(
+                "    PASS [   2.500s] test_hooks(hook=<function hook at 0xabcdef>)\n"
+            )
+        );
+        let mut comparison = project("requests", 21, 1.0, 1.0);
+        comparison.diagnostic_diff =
+            diagnostic_diff(Some(&baseline), Some(&candidate), "main", "PR");
+
+        let markdown =
+            markdown_report(&report_with_projects(vec![comparison])).expect("report should render");
+
+        assert!(markdown.contains("#### Diagnostic Changes"));
+        assert!(markdown.contains("<summary><code>requests</code></summary>"));
+        assert!(markdown.contains("+new diagnostic"));
+        assert!(!markdown.contains("0x123abc"));
+        assert!(!markdown.contains("0x456def"));
+        assert!(!markdown.contains("0.900s"));
     }
 
     #[test]
@@ -919,6 +1052,7 @@ mod tests {
             baseline: measurement(baseline),
             candidate: measurement(candidate),
             percent_change: super::percent_change(baseline, candidate),
+            diagnostic_diff: None,
         }
     }
 
