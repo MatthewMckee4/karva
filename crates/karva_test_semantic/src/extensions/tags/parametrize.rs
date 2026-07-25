@@ -18,6 +18,7 @@ pub struct ParametrizeDiagnosticLocation {
     pub primary: TextRange,
     pub primary_message: String,
     pub related: Vec<(TextRange, String)>,
+    pub info: Option<String>,
 }
 
 #[derive(Debug, Error)]
@@ -79,6 +80,7 @@ impl InvalidParametrizeError {
                         .into_iter()
                         .map(|range| (range, "first parametrized here".to_string()))
                         .collect(),
+                    info: None,
                 })
             }
             Self::EmptyCases { names } => {
@@ -90,6 +92,7 @@ impl InvalidParametrizeError {
                         .names
                         .map(|names| vec![(names.range(), "parameters declared here".to_string())])
                         .unwrap_or_default(),
+                    info: None,
                 })
             }
             Self::WrongArity {
@@ -109,11 +112,15 @@ impl InvalidParametrizeError {
                     );
                 Some(ParametrizeDiagnosticLocation {
                     primary,
-                    primary_message: format!("contains {actual} values"),
-                    related: syntax
-                        .names
-                        .map(|names| vec![(names.range(), format!("expects {expected} values"))])
-                        .unwrap_or_default(),
+                    primary_message: format!(
+                        "contains {actual} {}",
+                        if *actual == 1 { "value" } else { "values" }
+                    ),
+                    related: Vec::new(),
+                    info: Some(format!(
+                        "expects {expected} {}",
+                        if *expected == 1 { "value" } else { "values" }
+                    )),
                 })
             }
             Self::UnknownName { name } => {
@@ -139,6 +146,7 @@ fn name_diagnostic_location(
             function.parameters.range,
             "test parameters declared here".to_string(),
         )],
+        info: None,
     })
 }
 

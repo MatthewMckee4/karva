@@ -493,6 +493,9 @@ pub fn report_invalid_parametrize(
         ));
         diagnostic.sub(sub);
     }
+    if let Some(info) = location.info {
+        diagnostic.info(info);
+    }
 }
 
 pub fn report_test_returned_value(

@@ -61,14 +61,9 @@ def fixture():
          --> test.py:5:37
           |
         5 | @parametrize("left,right", [(1, 2), (3,)])
-          |                                     ^^^^ contains 1 values
+          |                                     ^^^^ contains 1 value
           |
         info: expects 2 values
-         --> test.py:5:14
-          |
-        5 | @parametrize("left,right", [(1, 2), (3,)])
-          |              ^^^^^^^^^^^^
-          |
 
         error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 3
          --> test.py:9:37
@@ -77,11 +72,6 @@ def fixture():
           |                                     ^^^^^^^^^ contains 3 values
           |
         info: expects 2 values
-         --> test.py:9:14
-          |
-        9 | @parametrize("left,right", [(1, 2), (3, 4, 5)])
-          |              ^^^^^^^^^^^^
-          |
 
         ────────────
              Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
