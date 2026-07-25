@@ -696,3 +696,69 @@ def test_database(database):
     assert!(!context.root().join("fixture-ran").exists());
     assert!(!context.root().join("test-ran").exists());
 }
+
+#[test]
+fn test_fixture_scope_mismatch_reports_first_invalid_edge() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+from pathlib import Path
+
+@karva.fixture
+def function_fixture():
+    Path("fixture-ran").touch()
+
+@karva.fixture(scope="module")
+def module_fixture(function_fixture):
+    Path("fixture-ran").touch()
+
+@karva.fixture(scope="session")
+def session_fixture(module_fixture):
+    Path("fixture-ran").touch()
+
+@karva.fixture(scope="package")
+def package_fixture(session_fixture):
+    Path("fixture-ran").touch()
+
+def test_scopes(package_fixture):
+    Path("test-ran").touch()
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_scopes
+
+    diagnostics:
+
+    error[fixture-scope-mismatch]: Fixture `session_fixture` with `session` scope cannot depend on fixture `module_fixture` with `module` scope
+      --> test.py:14:5
+       |
+    14 | def session_fixture(module_fixture):
+       |     ^^^^^^^^^^^^^^^
+       |
+    info: Fixture `package_fixture` depends on fixture `session_fixture`
+      --> test.py:18:5
+       |
+    18 | def package_fixture(session_fixture):
+       |     ^^^^^^^^^^^^^^^
+       |
+    info: Fixture `module_fixture` has `module` scope
+      --> test.py:10:5
+       |
+    10 | def module_fixture(function_fixture):
+       |     ^^^^^^^^^^^^^^
+       |
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(!context.root().join("fixture-ran").exists());
+    assert!(!context.root().join("test-ran").exists());
+}
