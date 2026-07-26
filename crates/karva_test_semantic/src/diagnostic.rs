@@ -295,14 +295,13 @@ pub fn report_duplicate_fixture(
     first_definition: &StmtFunctionDef,
     duplicate_definition: &StmtFunctionDef,
 ) {
-    let builder = context.report_diagnostic(&DUPLICATE_FIXTURE);
-
-    let mut diagnostic = builder.into_diagnostic(format!(
+    let mut diagnostic = DUPLICATE_FIXTURE.diagnostic(format!(
         "Fixture `{fixture_name}` is defined more than once"
     ));
 
     annotate_function_name(&mut diagnostic, source_file.clone(), duplicate_definition);
     annotate_first_definition(&mut diagnostic, source_file, fixture_name, first_definition);
+    context.add_run_diagnostic(diagnostic);
 }
 
 pub fn report_duplicate_test(
@@ -312,13 +311,12 @@ pub fn report_duplicate_test(
     first_definition: &StmtFunctionDef,
     duplicate_definition: &StmtFunctionDef,
 ) {
-    let builder = context.report_diagnostic(&DUPLICATE_TEST);
-
     let mut diagnostic =
-        builder.into_diagnostic(format!("Test `{test_name}` is defined more than once"));
+        DUPLICATE_TEST.diagnostic(format!("Test `{test_name}` is defined more than once"));
 
     annotate_function_name(&mut diagnostic, source_file.clone(), duplicate_definition);
     annotate_first_definition(&mut diagnostic, source_file, test_name, first_definition);
+    context.add_run_diagnostic(diagnostic);
 }
 
 pub fn report_invalid_fixture(
