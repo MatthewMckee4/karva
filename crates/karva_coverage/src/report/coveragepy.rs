@@ -81,6 +81,7 @@ pub fn write_coveragepy_sqlite(
 }
 
 fn write_sqlite_file(output: &Utf8Path, rows: &[FileRow]) -> Result<()> {
+    let has_arcs = rows.iter().any(|row| row.branches_enabled);
     let mut connection = Connection::open(output.as_std_path())
         .with_context(|| format!("failed to create coverage data file {output}"))?;
     let transaction = connection
@@ -99,42 +100,39 @@ fn write_sqlite_file(output: &Utf8Path, rows: &[FileRow]) -> Result<()> {
     )?;
     transaction.execute(
         "INSERT INTO meta (key, value) VALUES (?, ?)",
-        [
-            "has_arcs",
-            if rows.iter().any(|row| row.branches_enabled) {
-                "1"
-            } else {
-                "0"
-            },
-        ],
+        ["has_arcs", if has_arcs { "1" } else { "0" }],
     )?;
 
-    let mut context_ids = BTreeMap::new();
-    for row in rows {
-        transaction.execute("INSERT INTO file (path) VALUES (?)", [&row.absolute_name])?;
-        let file_id = transaction.last_insert_rowid();
+    {
+        let mut insert_arc = transaction
+            .prepare("INSERT INTO arc (file_id, context_id, fromno, tono) VALUES (?, ?, ?, ?)")?;
+        let mut context_ids = BTreeMap::new();
+        for row in rows {
+            transaction.execute("INSERT INTO file (path) VALUES (?)", [&row.absolute_name])?;
+            let file_id = transaction.last_insert_rowid();
 
-        for (context, lines) in lines_by_context(row) {
-            if lines.is_empty() {
-                continue;
+            // coverage.py data files contain either lines or arcs, never both.
+            if !has_arcs {
+                for (context, lines) in lines_by_context(row) {
+                    if lines.is_empty() {
+                        continue;
+                    }
+                    let context_id = context_id(&transaction, &mut context_ids, &context)?;
+                    transaction.execute(
+                        "INSERT INTO line_bits (file_id, context_id, numbits) VALUES (?, ?, ?)",
+                        params![file_id, context_id, nums_to_numbits(&lines)],
+                    )?;
+                }
             }
-            let context_id = context_id(&transaction, &mut context_ids, &context)?;
-            transaction.execute(
-                "INSERT INTO line_bits (file_id, context_id, numbits) VALUES (?, ?, ?)",
-                params![file_id, context_id, nums_to_numbits(&lines)],
-            )?;
-        }
 
-        for (context, arcs) in arcs_by_context(row) {
-            if arcs.is_empty() {
-                continue;
-            }
-            let context_id = context_id(&transaction, &mut context_ids, &context)?;
-            for arc in arcs {
-                transaction.execute(
-                    "INSERT INTO arc (file_id, context_id, fromno, tono) VALUES (?, ?, ?, ?)",
-                    params![file_id, context_id, arc.from, arc.to],
-                )?;
+            for (context, arcs) in arcs_by_context(row) {
+                if arcs.is_empty() {
+                    continue;
+                }
+                let context_id = context_id(&transaction, &mut context_ids, &context)?;
+                for arc in arcs {
+                    insert_arc.execute(params![file_id, context_id, arc.from, arc.to])?;
+                }
             }
         }
     }
@@ -230,6 +228,7 @@ mod tests {
     use crate::data::{BranchArc, BranchEntry, FileEntry, WorkerFile};
 
     type CoverageData = (u32, String, u32, Vec<(String, String)>);
+    type ArcCoverageData = (String, u32, Vec<(i32, i32)>);
 
     #[test]
     fn nums_to_numbits_matches_coverage_py_format() {
@@ -348,9 +347,10 @@ mod tests {
         write_coveragepy_sqlite(&root, &[worker_file], &output, &CoverageFilters::default())
             .expect("write coverage.py sqlite");
 
-        let (has_arcs, arcs) = query_arc_data(&output, &app).expect("query arc data");
+        let (has_arcs, line_bits, arcs) = query_arc_data(&output, &app).expect("query arc data");
 
         assert_eq!(has_arcs, "1");
+        assert_eq!(line_bits, 0);
         assert_eq!(arcs, vec![(-1, 1), (1, 2), (2, 3), (3, -1)]);
     }
 
@@ -395,7 +395,7 @@ finally:
         })
     }
 
-    fn query_arc_data(output: &Utf8Path, app: &Utf8Path) -> PyResult<(String, Vec<(i32, i32)>)> {
+    fn query_arc_data(output: &Utf8Path, app: &Utf8Path) -> PyResult<ArcCoverageData> {
         Python::initialize();
         Python::attach(|py| {
             let locals = PyDict::new(py);
@@ -409,6 +409,7 @@ conn = sqlite3.connect(output)
 try:
     result = (
         conn.execute("SELECT value FROM meta WHERE key = 'has_arcs'").fetchone()[0],
+        conn.execute("SELECT COUNT(*) FROM line_bits").fetchone()[0],
         list(conn.execute(
             """
                 SELECT arc.fromno, arc.tono
