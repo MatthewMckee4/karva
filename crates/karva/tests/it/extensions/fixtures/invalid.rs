@@ -121,11 +121,13 @@ from pathlib import Path
 def mark(name):
     Path(name).write_text("ran")
 
-@karva.fixture(name="shared", auto_use=True)
+fixture_name = "shared"
+
+@karva.fixture(name=fixture_name, auto_use=True)
 def first_fixture():
     mark("first.txt")
 
-@pytest.fixture(name="shared", autouse=True)
+@pytest.fixture(name=fixture_name, autouse=True)
 def second_fixture():
     mark("second.txt")
 
@@ -144,15 +146,15 @@ def test_ok():
     diagnostics:
 
     error[duplicate-fixture]: Fixture `shared` is defined more than once
-      --> test.py:14:5
+      --> test.py:16:5
        |
-    14 | def second_fixture():
+    16 | def second_fixture():
        |     ^^^^^^^^^^^^^^
        |
     info: First definition of `shared` is here
-      --> test.py:10:5
+      --> test.py:12:5
        |
-    10 | def first_fixture():
+    12 | def first_fixture():
        |     ^^^^^^^^^^^^^
        |
 

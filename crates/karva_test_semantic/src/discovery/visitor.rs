@@ -4,13 +4,14 @@ use std::rc::Rc;
 
 use camino::Utf8Path;
 use fs_err as fs;
-use karva_python_semantic::{ModulePath, is_fixture};
+use karva_python_semantic::ModulePath;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
 use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
 use ruff_python_ast::{Expr, PythonVersion, Stmt, StmtFunctionDef};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 use ruff_source_file::SourceFileBuilder;
+use ruff_text_size::TextRange;
 
 use crate::Context;
 use crate::diagnostic::{
@@ -80,12 +81,13 @@ impl<'ctx, 'py, 'a, 'b> FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
 }
 
 impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
-    fn process_fixture_function(&mut self, stmt_function_def: StmtFunctionDef) {
+    fn process_fixture_function(
+        &mut self,
+        stmt_function_def: StmtFunctionDef,
+    ) -> Option<DiscoveredFixture> {
         self.try_import_module();
 
-        let Some(py_module) = self.py_module.as_ref() else {
-            return;
-        };
+        let py_module = self.py_module.as_ref()?;
 
         let is_generator_function = is_generator(&stmt_function_def);
 
@@ -99,7 +101,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             self.module.source_file(),
             is_generator_function,
         ) {
-            Ok(fixture_def) => self.module.add_fixture(fixture_def),
+            Ok(fixture_def) => Some(fixture_def),
             Err(e) => {
                 report_invalid_fixture(
                     self.context,
@@ -108,6 +110,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                     &stmt_function_def,
                     &e,
                 );
+                None
             }
         }
     }
@@ -281,6 +284,7 @@ pub fn discover(
     let duplicate_test_indices = duplicate_definition_indices(
         &test_function_defs,
         |test_function_def| test_function_def.name.to_string(),
+        |test_function_def| test_function_def.range,
         |name, first_definition, duplicate_definition| {
             report_duplicate_test(
                 context,
@@ -305,26 +309,34 @@ pub fn discover(
         visitor.process_test_function(test_function_def);
     }
 
+    let mut fixtures = Vec::with_capacity(fixture_function_defs.len());
+    for fixture_function_def in fixture_function_defs {
+        if let Some(fixture) = visitor.process_fixture_function(fixture_function_def) {
+            fixtures.push(fixture);
+        }
+    }
+
     let duplicate_fixture_indices = duplicate_definition_indices(
-        &fixture_function_defs,
-        fixture_definition_name,
+        &fixtures,
+        |fixture| fixture.name().function_name().to_string(),
+        |fixture| fixture.stmt_function_def().range,
         |name, first_definition, duplicate_definition| {
             report_duplicate_fixture(
                 context,
                 visitor.module.source_file(),
                 name,
-                first_definition,
-                duplicate_definition,
+                first_definition.stmt_function_def(),
+                duplicate_definition.stmt_function_def(),
             );
         },
     );
 
-    for (index, fixture_function_def) in fixture_function_defs.into_iter().enumerate() {
+    for (index, fixture) in fixtures.into_iter().enumerate() {
         if duplicate_fixture_indices.contains(&index) {
             continue;
         }
 
-        visitor.process_fixture_function(fixture_function_def);
+        visitor.module.add_fixture(fixture);
     }
 
     if is_conftest || context.settings().test().try_import_fixtures {
@@ -332,10 +344,11 @@ pub fn discover(
     }
 }
 
-fn duplicate_definition_indices(
-    definitions: &[StmtFunctionDef],
-    mut name: impl FnMut(&StmtFunctionDef) -> String,
-    mut report: impl FnMut(&str, &StmtFunctionDef, &StmtFunctionDef),
+fn duplicate_definition_indices<T>(
+    definitions: &[T],
+    mut name: impl FnMut(&T) -> String,
+    mut range: impl FnMut(&T) -> TextRange,
+    mut report: impl FnMut(&str, &T, &T),
 ) -> HashSet<usize> {
     let mut seen: HashMap<String, usize> = HashMap::new();
     let mut duplicates: HashSet<usize> = HashSet::new();
@@ -345,7 +358,7 @@ fn duplicate_definition_indices(
 
         if let Some(first_index) = seen.get(&definition_name) {
             let first_definition = &definitions[*first_index];
-            if first_definition.range == definition.range {
+            if range(first_definition) == range(definition) {
                 duplicates.insert(index);
                 continue;
             }
@@ -359,46 +372,6 @@ fn duplicate_definition_indices(
     }
 
     duplicates
-}
-
-fn fixture_definition_name(stmt_function_def: &StmtFunctionDef) -> String {
-    stmt_function_def
-        .decorator_list
-        .iter()
-        .find_map(|decorator| {
-            fixture_name_from_decorator(&decorator.expression, stmt_function_def.name.as_str())
-        })
-        .unwrap_or_else(|| stmt_function_def.name.to_string())
-}
-
-fn fixture_name_from_decorator(expr: &Expr, default_name: &str) -> Option<String> {
-    match expr {
-        Expr::Call(call) if is_fixture(call.func.as_ref()) => Some(
-            explicit_fixture_name(call)
-                .map(ToOwned::to_owned)
-                .unwrap_or_else(|| default_name.to_string()),
-        ),
-        _ if is_fixture(expr) => Some(default_name.to_string()),
-        _ => None,
-    }
-}
-
-fn explicit_fixture_name(call: &ruff_python_ast::ExprCall) -> Option<&str> {
-    call.arguments.keywords.iter().find_map(|keyword| {
-        if keyword.arg.as_ref().is_some_and(|arg| arg == "name") {
-            string_literal_value(&keyword.value)
-        } else {
-            None
-        }
-    })
-}
-
-fn string_literal_value(expr: &Expr) -> Option<&str> {
-    if let Expr::StringLiteral(string_literal) = expr {
-        Some(string_literal.value.to_str())
-    } else {
-        None
-    }
 }
 
 /// Returns `true` if the function body contains a yield or yield-from expression.
