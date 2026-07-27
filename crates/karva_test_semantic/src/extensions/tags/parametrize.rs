@@ -484,9 +484,23 @@ pub(super) fn apply_parametrize_ids(
         return Ok(());
     }
     if ids.is_callable() {
-        return Err(PyValueError::new_err(
-            "callable parametrize IDs are not supported",
-        ));
+        let py = ids.py();
+        for parametrization in parametrizations {
+            if parametrization.id.is_some() {
+                continue;
+            }
+            let mut parts = Vec::with_capacity(parametrization.values.len());
+            for value in &parametrization.values {
+                let generated = ids.call1((value.bind(py),))?;
+                if generated.is_none() {
+                    parts.push(value.bind(py).to_string());
+                } else {
+                    parts.push(generated.to_string());
+                }
+            }
+            parametrization.id = Some(parts.join("-"));
+        }
+        return Ok(());
     }
     let ids = ids.extract::<Vec<Option<String>>>().map_err(|_| {
         PyValueError::new_err("parametrize ids must be a sequence of strings or None")

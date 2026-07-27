@@ -88,6 +88,21 @@ def test_checkout(card, expected):
     assert checkout(card) == expected
 ```
 
+`ids` can also be a function. It is called for each parameter value, and returned
+parts are joined with `-`:
+
+```python title="test.py"
+import karva
+
+@karva.tags.parametrize(
+    "status,expected",
+    [("paid", True), ("declined", False)],
+    ids=lambda value: value.upper() if isinstance(value, str) else None,
+)
+def test_status(status, expected):
+    assert is_successful(status) is expected
+```
+
 IDs combine with `-` when multiple parametrize tags are stacked.
 
 ## Params

@@ -1261,6 +1261,13 @@ import {framework}
 @{parametrize}("value", [1, 2], ids=["one", "two"])
 def test_value(value):
     assert value > 0
+
+def parameter_id(value):
+    return value.upper() if isinstance(value, str) else None
+
+@{parametrize}("number,label", [(1, "one"), (2, "two")], ids=parameter_id)
+def test_pair(number, label):
+    assert number == {{"one": 1, "two": 2}}[label]
 "#,
             parametrize = get_parametrize_function(framework),
         ),
@@ -1271,11 +1278,13 @@ def test_value(value):
         success: true
         exit_code: 0
         ----- stdout -----
-            Starting 1 test across 1 worker
+            Starting 2 tests across 1 worker
                 PASS [TIME] test::test_value(one)
                 PASS [TIME] test::test_value(two)
+                PASS [TIME] test::test_pair(1-ONE)
+                PASS [TIME] test::test_pair(2-TWO)
         ────────────
-             Summary [TIME] 2 tests run: 2 passed, 0 skipped
+             Summary [TIME] 4 tests run: 4 passed, 0 skipped
 
         ----- stderr -----
         ");
