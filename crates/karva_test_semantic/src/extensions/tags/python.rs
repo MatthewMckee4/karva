@@ -128,7 +128,7 @@ pub mod tags {
 
     use super::{CustomTagBuilder, PyTag, PyTags};
     use crate::extensions::functions::python::Param;
-    use crate::extensions::tags::parametrize::parse_parametrize_args;
+    use crate::extensions::tags::parametrize::{apply_parametrize_ids, parse_parametrize_args};
     use crate::extensions::tags::python::PyTestFunction;
 
     /// Handle dynamic attribute access for custom tags.
@@ -140,14 +140,18 @@ pub mod tags {
     }
 
     #[pyfunction]
+    #[pyo3(signature = (arg_names, arg_values, ids = None))]
     fn parametrize(
         arg_names: &Bound<'_, PyAny>,
         arg_values: &Bound<'_, PyAny>,
+        ids: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<PyTags> {
         const PARAMETRIZE_TYPE_ERROR: &str = "Expected a string or a list of strings for the arg_names, and a list of lists of objects for the arg_values";
 
-        let (names, parametrization) = parse_parametrize_args(arg_names, arg_values, None)
+        let (names, mut parametrization) = parse_parametrize_args(arg_names, arg_values, None)
             .map_err(|_| PyErr::new::<PyTypeError, _>(PARAMETRIZE_TYPE_ERROR))?;
+        apply_parametrize_ids(ids, &mut parametrization)
+            .map_err(|error| PyErr::new::<PyTypeError, _>(error.to_string()))?;
 
         Ok(PyTags {
             inner: vec![PyTag::Parametrize {

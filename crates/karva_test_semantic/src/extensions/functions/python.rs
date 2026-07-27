@@ -3,7 +3,7 @@ use std::sync::Arc;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 
-use crate::extensions::tags::parametrize::Parametrization;
+use crate::extensions::tags::parametrize::{Parametrization, default_param_id};
 use crate::extensions::tags::{Tag, Tags};
 
 // SkipError exception that can be raised to skip tests at runtime with an optional reason
@@ -20,6 +20,12 @@ pub struct Param {
 
     /// Tags associated with this parametrization
     pub(crate) tags: Tags,
+
+    /// Explicit display ID.
+    pub(crate) id: Option<String>,
+
+    /// Value-derived display ID for partially explicit stacked parametrization.
+    pub(crate) default_id: String,
 }
 
 impl Param {
@@ -32,14 +38,29 @@ impl Param {
             );
         }
 
+        let values = values.into_iter().map(Arc::new).collect::<Vec<_>>();
         Ok(Self {
-            values: values.into_iter().map(Arc::new).collect(),
+            default_id: default_param_id(py, &values),
+            values,
             tags: Tags::new(new_tags),
+            id: None,
         })
     }
 
-    pub(crate) fn from_parametrization(Parametrization { values, tags }: Parametrization) -> Self {
-        Self { values, tags }
+    pub(crate) fn from_parametrization(
+        Parametrization {
+            values,
+            tags,
+            id,
+            default_id,
+        }: Parametrization,
+    ) -> Self {
+        Self {
+            values,
+            tags,
+            id,
+            default_id,
+        }
     }
 }
 

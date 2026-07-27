@@ -49,6 +49,8 @@ struct VariantRunner<'runner, 'context, 'settings, 'test, 'py> {
     test: &'test crate::discovery::DiscoveredTestFunction,
     /// Parameter values reused when a retry prepares fresh fixtures.
     params: HashMap<String, Arc<Py<PyAny>>>,
+    /// User-defined parameter ID used in the displayed test name.
+    id: Option<String>,
     /// Fixtures passed as Python keyword arguments.
     fixture_dependencies: Rc<[Rc<NormalizedFixture>]>,
     /// Fixtures run for side effects but omitted from test arguments.
@@ -75,6 +77,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let TestVariant {
             test,
             params,
+            id,
             fixture_dependencies,
             use_fixture_dependencies,
             auto_use_fixtures,
@@ -86,6 +89,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             py,
             test,
             params,
+            id,
             fixture_dependencies,
             use_fixture_dependencies,
             auto_use_fixtures,
@@ -194,13 +198,17 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .filter(|fixture| fixture.name.module_path().module_name() == "karva._builtins")
             .map(|fixture| fixture.function_name())
             .collect::<Vec<_>>();
-        let full_name = full_test_name(
-            self.py,
-            name.to_string(),
-            function_arguments,
-            &self.test.stmt_function_def.parameters,
-            &framework_fixture_names,
-        );
+        let full_name = if let Some(id) = &self.id {
+            format!("{name}({id})")
+        } else {
+            full_test_name(
+                self.py,
+                name.to_string(),
+                function_arguments,
+                &self.test.stmt_function_def.parameters,
+                &framework_fixture_names,
+            )
+        };
         let qualified_test_name = QualifiedTestName::new(name.clone(), Some(full_name));
         let qualified_name = qualified_test_name.to_string();
         let custom_tag_names = self.tags.custom_tag_names();

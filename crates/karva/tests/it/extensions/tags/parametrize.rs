@@ -1250,6 +1250,143 @@ fn test_parametrize_multiple_args_single_string(#[values("pytest", "karva")] fra
     }
 }
 
+#[rstest]
+fn test_parametrize_with_ids(#[values("pytest", "karva")] framework: &str) {
+    let test_context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+import {framework}
+
+@{parametrize}("value", [1, 2], ids=["one", "two"])
+def test_value(value):
+    assert value > 0
+"#,
+            parametrize = get_parametrize_function(framework),
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(test_context.command(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_value(one)
+                PASS [TIME] test::test_value(two)
+        ────────────
+             Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[test]
+fn test_pytest_parametrize_ids_use_pytest_positional_index() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r#"
+import pytest
+
+@pytest.mark.parametrize("value", [1, 2], False, ["one", "two"])
+def test_value(value):
+    assert value > 0
+"#,
+    );
+
+    assert_cmd_snapshot!(test_context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_value(one)
+            PASS [TIME] test::test_value(two)
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[rstest]
+fn test_stacked_parametrize_combines_ids(#[values("pytest", "karva")] framework: &str) {
+    let test_context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+import {framework}
+
+@{parametrize}("left", [1, 2], ids=["one", "two"])
+@{parametrize}("right", [3, 4], ids=["three", "four"])
+def test_values(left, right):
+    assert left < right
+"#,
+            parametrize = get_parametrize_function(framework),
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(test_context.command(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_values(three-one)
+                PASS [TIME] test::test_values(three-two)
+                PASS [TIME] test::test_values(four-one)
+                PASS [TIME] test::test_values(four-two)
+        ────────────
+             Summary [TIME] 4 tests run: 4 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn test_parametrize_rejects_duplicate_ids(#[values("pytest", "karva")] framework: &str) {
+    let test_context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+import {framework}
+
+@{parametrize}("value", [1, 2], ids=["same", "same"])
+def test_value(value):
+    pass
+"#,
+            parametrize = get_parametrize_function(framework),
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(test_context.command(), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+               ERROR [TIME] test::test_value
+
+        failures:
+
+        test::test_value:
+
+        error[invalid-parametrize]: Parameter ID `same` is used more than once
+         --> test.py:5:5
+          |
+        5 | def test_value(value):
+          |     ^^^^^^^^^^
+          |
+
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
 #[test]
 fn test_parametrize_with_pytest_param_single_arg() {
     let test_context = TestContext::with_file(
@@ -1259,7 +1396,7 @@ import pytest
 
 @pytest.mark.parametrize("a", [
     pytest.param(1),
-    pytest.param(2),
+    pytest.param(2, id="two"),
     pytest.param(3),
 ])
 def test_single_arg(a):
@@ -1273,7 +1410,7 @@ def test_single_arg(a):
     ----- stdout -----
         Starting 1 test across 1 worker
             PASS [TIME] test::test_single_arg(a=1)
-            PASS [TIME] test::test_single_arg(a=2)
+            PASS [TIME] test::test_single_arg(two)
             PASS [TIME] test::test_single_arg(a=3)
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
