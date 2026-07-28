@@ -183,8 +183,7 @@ seal bump <version>
 ```
 
 Seal creates the release branch, commits and pushes the changes, and opens a pull request. The
-release workflow handles the remaining publication steps after merge. Its release version is
-updated by `seal bump`, so running the workflow requires no version input.
+release workflow handles the remaining publication steps after merge.
 
 ## GitHub Actions
 
