@@ -135,6 +135,10 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
         push_value_arg(&mut cli_args, "--slow-timeout", threshold.as_secs_f64());
     }
 
+    if let Some(budget) = settings.test().fail_slow {
+        push_value_arg(&mut cli_args, "--fail-slow", budget.as_secs_f64());
+    }
+
     if let Some(timeout) = settings.test().timeout {
         push_value_arg(&mut cli_args, "--timeout", timeout.as_secs_f64());
     }
@@ -165,6 +169,7 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
             "retries": ovr.retries,
             "timeout": ovr.timeout.map(|t| t.0),
             "slow-timeout": ovr.slow_timeout.map(|t| t.0),
+            "fail-slow": ovr.fail_slow.map(|t| t.0),
         });
         push_value_arg(&mut cli_args, "--override-json", json);
     }

@@ -41,3 +41,4 @@ Fixture setup runs before the timeout starts, so a slow fixture does not count t
 ## See also
 
 - [Slow tests](../failure-handling/slow-tests.md) for `--slow-timeout`, which only flags slow tests rather than failing them.
+- [Fail slow](../failure-handling/fail-slow.md) for `@karva.tags.fail_slow`, which fails a test that exceeds a duration budget without killing it mid-execution.

@@ -99,6 +99,39 @@ impl Combine for TestTimeoutSecs {
     }
 }
 
+/// A per-test duration budget expressed in seconds.
+///
+/// Wraps `f64` for the same reason as [`SlowTimeoutSecs`]. Unlike
+/// [`SlowTimeoutSecs`] (informational) or [`TestTimeoutSecs`] (kills the
+/// test mid-flight), a test exceeding this budget is allowed to finish its
+/// full lifecycle — including fixture teardown — and is then reported as a
+/// failure (see [`crate::settings::TestSettings::fail_slow`]).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct FailSlowSecs(pub f64);
+
+impl Eq for FailSlowSecs {}
+
+impl FailSlowSecs {
+    pub fn as_duration(self) -> Option<Duration> {
+        if self.0.is_finite() && self.0 > 0.0 {
+            Some(Duration::from_secs_f64(self.0))
+        } else {
+            None
+        }
+    }
+}
+
+impl Combine for FailSlowSecs {
+    #[inline(always)]
+    fn combine_with(&mut self, _other: Self) {}
+
+    #[inline]
+    fn combine(self, _other: Self) -> Self {
+        self
+    }
+}
+
 /// A global run timeout expressed in seconds.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -199,6 +232,8 @@ pub struct OverrideSettings {
     pub timeout: Option<TestTimeoutSecs>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slow_timeout: Option<SlowTimeoutSecs>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fail_slow: Option<FailSlowSecs>,
 }
 
 impl OverrideSettings {
@@ -279,6 +314,20 @@ impl ProjectSettings {
             return secs.as_duration();
         }
         self.test.slow_timeout
+    }
+
+    /// Resolve the fail-slow duration budget for a single test.
+    ///
+    /// First match wins. A matching override with a non-positive value
+    /// disables the budget for that test even when the profile sets one.
+    /// Unlike [`Self::timeout_for`], this never kills a running test — it
+    /// only determines, after the fact, whether the full lifecycle
+    /// (setup + call + teardown) took too long.
+    pub fn fail_slow_for(&self, ctx: &EvalContext<'_>) -> Option<Duration> {
+        if let Some(secs) = self.first_matching_override(ctx, |ovr| ovr.fail_slow) {
+            return secs.as_duration();
+        }
+        self.test.fail_slow
     }
 
     pub fn set_filter(&mut self, filter: FiltersetSet) {
@@ -394,6 +443,15 @@ pub struct TestSettings {
         serialize_with = "serialize_duration_secs"
     )]
     pub slow_timeout: Option<Duration>,
+    /// Duration budget for a test's full lifecycle (setup + call +
+    /// teardown). `None` disables budget checking. Unlike `timeout`, a test
+    /// exceeding this budget is allowed to finish (including teardown)
+    /// before being reported as a failure.
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_duration_secs"
+    )]
+    pub fail_slow: Option<Duration>,
     /// Hard per-test timeout. Tests that run longer than this duration are
     /// killed and reported as failures. `None` disables the hard timeout
     /// (tests may still set their own limit via `@karva.tags.timeout`).

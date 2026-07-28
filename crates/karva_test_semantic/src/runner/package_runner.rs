@@ -19,9 +19,9 @@ use ruff_source_file::SourceFile;
 
 use crate::Context;
 use crate::diagnostic::{
-    fixture_failure_diagnostic, fixture_resolution_diagnostic, invalid_parametrize_diagnostic,
-    missing_fixtures_diagnostic, test_failure_diagnostic, test_pass_on_expect_failure_diagnostic,
-    test_returned_value_diagnostic,
+    fail_slow_exceeded_diagnostic, fixture_failure_diagnostic, fixture_resolution_diagnostic,
+    invalid_parametrize_diagnostic, missing_fixtures_diagnostic, test_failure_diagnostic,
+    test_pass_on_expect_failure_diagnostic, test_returned_value_diagnostic,
 };
 use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::{
@@ -29,6 +29,7 @@ use crate::extensions::fixtures::{
 };
 use crate::extensions::functions::snapshot::{SnapshotContext, set_snapshot_context};
 use crate::extensions::tags::expect_fail::ExpectFailTag;
+use crate::extensions::tags::fail_slow::FailSlowTag;
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
 use crate::extensions::tags::timeout::TimeoutTag;
 use crate::output_capture::PythonOutputCapture;
@@ -676,6 +677,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             &auto_use_fixtures,
             params,
         );
+        let setup_duration = start_time.elapsed();
 
         let fixture_names = fixture_dependencies
             .iter()
@@ -702,6 +704,11 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             test_name: &qualified_name_str,
             tags: &custom_tag_names,
         };
+        let fail_slow_budget = tags
+            .fail_slow_tag()
+            .map(FailSlowTag::seconds)
+            .map(std::time::Duration::from_secs_f64)
+            .or_else(|| self.context.settings().fail_slow_for(&eval_ctx));
 
         tracing::debug!("Running test `{}`", qualified_test_name);
 
@@ -724,6 +731,17 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 duration,
                 self.context.settings().slow_timeout_for(&eval_ctx),
             );
+            if let Some(budget) = fail_slow_budget
+                && duration > budget
+            {
+                diagnostics.push(fail_slow_exceeded_diagnostic(
+                    source_file,
+                    &stmt_function_def,
+                    budget,
+                    duration,
+                    "setup",
+                ));
+            }
             let diagnostic = diagnostics.remove(0);
             return self.context.register_test_case_result(
                 &qualified_test_name,
@@ -836,20 +854,42 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let final_attempt_outcome =
             Self::classify_test_result(py, final_attempt.result, &report_ctx);
 
+        let teardown_start = std::time::Instant::now();
         let mut finalizer_diagnostics = test_finalizers
             .into_iter()
             .rev()
             .filter_map(|finalizer| finalizer.run(py))
             .collect::<Vec<_>>();
         finalizer_diagnostics.extend(self.clean_up_scope(py, FixtureScope::Function));
+        let teardown_duration = teardown_start.elapsed();
         let captured_output = Self::finish_output_capture(py, output_capture);
         if let Some(coverage) = self.coverage {
             coverage.set_current_context(py, None);
         }
 
+        // Teardown-inclusive lifecycle duration, used only for the
+        // `fail-slow` budget check below. Distinct from `total_duration`
+        // (captured before teardown), which is what gets reported for
+        // `slow-timeout` and shown in PASS/FAIL lines and machine-readable
+        // reports.
+        let lifecycle_duration = start_time.elapsed();
+        let phase_durations = PhaseDurations {
+            setup: setup_duration,
+            call: final_attempt_duration,
+            teardown: teardown_duration,
+        };
+
         if prior_attempts.is_empty() {
             let outcome =
                 attach_finalizer_diagnostics(final_attempt_outcome, finalizer_diagnostics);
+            let outcome = apply_fail_slow_budget(
+                outcome,
+                lifecycle_duration,
+                phase_durations,
+                fail_slow_budget,
+                &source_file,
+                &stmt_function_def,
+            );
             self.context.register_test_case_result(
                 &qualified_test_name,
                 outcome,
@@ -874,6 +914,14 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             ));
             let outcome =
                 attach_finalizer_diagnostics(final_attempt_outcome, finalizer_diagnostics);
+            let outcome = apply_fail_slow_budget(
+                outcome,
+                lifecycle_duration,
+                phase_durations,
+                fail_slow_budget,
+                &source_file,
+                &stmt_function_def,
+            );
             self.context.register_retried_result(
                 &qualified_test_name,
                 outcome,
@@ -1132,6 +1180,70 @@ fn attach_finalizer_diagnostics(
             let diagnostic = diagnostics.remove(0);
             TestExecutionOutcome::error_with_related(diagnostic, diagnostics)
         }
+    }
+}
+
+/// Per-phase timings for a single test execution, used to attribute a
+/// `fail-slow` diagnostic to the slowest phase of the test's lifecycle.
+///
+/// `call` is the final (reported) attempt's duration only. When a test was
+/// retried, earlier attempts are not summed in here — the diagnostic
+/// attributes slowness within the attempt that actually determined the
+/// outcome, not the cumulative cost of every retry.
+#[derive(Clone, Copy)]
+struct PhaseDurations {
+    setup: std::time::Duration,
+    call: std::time::Duration,
+    teardown: std::time::Duration,
+}
+
+impl PhaseDurations {
+    fn slowest(&self) -> &'static str {
+        let mut slowest = ("setup", self.setup);
+        for candidate in [("call", self.call), ("teardown", self.teardown)] {
+            if candidate.1 > slowest.1 {
+                slowest = candidate;
+            }
+        }
+        slowest.0
+    }
+}
+
+/// Fail a test whose full lifecycle exceeded its `fail-slow` budget.
+///
+/// A test that otherwise passed becomes an ordinary `Failed` outcome. A
+/// test that already failed or errored keeps its original diagnostic as
+/// the primary cause and gets the budget diagnostic appended as related
+/// context (via [`attach_finalizer_diagnostics`], which already implements
+/// this composition), so both are visible. A skipped test never ran its
+/// lifecycle and is left untouched.
+fn apply_fail_slow_budget(
+    outcome: TestExecutionOutcome,
+    lifecycle_duration: std::time::Duration,
+    phases: PhaseDurations,
+    budget: Option<std::time::Duration>,
+    source_file: &SourceFile,
+    stmt_function_def: &StmtFunctionDef,
+) -> TestExecutionOutcome {
+    let Some(budget) = budget else {
+        return outcome;
+    };
+    if lifecycle_duration <= budget {
+        return outcome;
+    }
+
+    let fail_slow_diagnostic = fail_slow_exceeded_diagnostic(
+        source_file.clone(),
+        stmt_function_def,
+        budget,
+        lifecycle_duration,
+        phases.slowest(),
+    );
+
+    match outcome {
+        TestExecutionOutcome::Passed => TestExecutionOutcome::failed(fail_slow_diagnostic),
+        TestExecutionOutcome::Skipped { reason } => TestExecutionOutcome::Skipped { reason },
+        other => attach_finalizer_diagnostics(other, vec![fail_slow_diagnostic]),
     }
 }
 

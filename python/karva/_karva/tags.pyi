@@ -46,3 +46,14 @@ def timeout(seconds: float) -> Tags:
     Fixture setup runs before the timeout starts, so slow fixtures do not
     count toward the limit.
     """
+
+def fail_slow(seconds: float) -> Tags:
+    """Fail the current test if its full lifecycle takes longer than ``seconds``.
+
+    Unlike ``timeout``, this never kills the test early: fixture setup, the
+    test call, and fixture teardown are always allowed to finish so cleanup
+    is never skipped. Once the lifecycle completes, the test is reported as
+    a failure if the total duration exceeded the configured budget.
+
+    This is a coarse regression budget, not a benchmarking tool.
+    """

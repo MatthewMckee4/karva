@@ -32,6 +32,9 @@ pub enum PyTag {
     #[pyo3(name = "timeout")]
     Timeout { seconds: f64 },
 
+    #[pyo3(name = "fail_slow")]
+    FailSlow { seconds: f64 },
+
     #[pyo3(name = "custom")]
     Custom {
         tag_name: String,
@@ -62,6 +65,7 @@ impl PyTag {
                 reason: reason.clone(),
             },
             Self::Timeout { seconds } => Self::Timeout { seconds: *seconds },
+            Self::FailSlow { seconds } => Self::FailSlow { seconds: *seconds },
             Self::Custom {
                 tag_name,
                 tag_args,
@@ -255,6 +259,18 @@ pub mod tags {
         }
         Ok(PyTags {
             inner: vec![PyTag::Timeout { seconds }],
+        })
+    }
+
+    #[pyfunction]
+    fn fail_slow(seconds: f64) -> PyResult<PyTags> {
+        if !(seconds.is_finite() && seconds > 0.0) {
+            return Err(PyErr::new::<PyTypeError, _>(
+                "fail_slow seconds must be a finite, positive number",
+            ));
+        }
+        Ok(PyTags {
+            inner: vec![PyTag::FailSlow { seconds }],
         })
     }
 }

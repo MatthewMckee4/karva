@@ -44,7 +44,7 @@ retries = 0
 
 In this example tests tagged `network` retry up to five times, tests tagged `unit` never retry, and everything else falls back to `retry = 1`. Overrides defined in a named profile (`[[profile.ci.overrides]]`) take precedence over those defined under `default`.
 
-The same `[[profile.<name>.overrides]]` block also supports `timeout` and `slow-timeout` fields, mirroring the [profile-level timeout](../../configuration/configuration.md) and slow-test threshold. A matching override with a non-positive value disables the corresponding limit for that test, even when the profile sets one.
+The same `[[profile.<name>.overrides]]` block also supports `timeout`, `slow-timeout`, and `fail-slow` fields, mirroring the [profile-level timeout](../../configuration/configuration.md), slow-test threshold, and [fail-slow budget](fail-slow.md). A matching override with a non-positive value disables the corresponding limit for that test, even when the profile sets one.
 
 ```toml
 [profile.default.test]

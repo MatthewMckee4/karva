@@ -406,6 +406,38 @@ fail-fast = true
 
 ---
 
+### `fail-slow`
+
+Duration budget (in seconds) for a test's full lifecycle (fixture
+setup, the test call, and fixture teardown).
+
+When set, a test is allowed to run to completion — including
+teardown, so cleanup is never skipped — and is then reported as a
+failure if the full lifecycle took longer than this budget. Tests
+can override the limit individually with
+[`@karva.tags.fail_slow`](https://docs.karva.dev/usage/failure-handling/fail-slow/),
+which takes precedence over the configured default.
+
+This is distinct from [`timeout`](#timeout), which kills a test
+mid-execution, and [`slow_timeout`](#slow-timeout), which is purely
+informational and never fails a test.
+
+Defaults to unset, which disables budget checking unless a tag is
+applied to the test.
+
+**Default value**: `null`
+
+**Type**: `float (seconds)`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.test]
+fail-slow = 0.25
+```
+
+---
+
 ### `max-fail`
 
 Stop scheduling new tests once this many tests have failed.
