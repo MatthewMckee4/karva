@@ -4,9 +4,9 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use karva_logging::{FinalStatusLevel, StatusLevel, TerminalColor};
 use karva_metadata::{
-    CovFailUnder, CoverageOptions, FailSlowSecs, MaxFail, Options, OverrideOptions,
-    RunTimeoutSecs, SlowTimeoutSecs, SrcOptions, TerminalOptions, TerminationGracePeriodSecs,
-    TestOptions, TestTimeoutSecs,
+    CovFailUnder, CoverageOptions, FailSlowSecs, MaxFail, Options, OverrideOptions, RunTimeoutSecs,
+    SlowTimeoutSecs, SrcOptions, TerminalOptions, TerminationGracePeriodSecs, TestOptions,
+    TestTimeoutSecs,
 };
 use karva_static::EnvVars;
 
