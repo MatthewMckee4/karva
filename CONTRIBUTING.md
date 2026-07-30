@@ -1,126 +1,23 @@
-# Contributing to Karva
+# Contributing
 
-Welcome, and thanks for contributing to Karva.
-
-## Finding Ways to Help
+## Before Starting
 
 [`contributor-friendly`](https://github.com/MatthewMckee4/karva/issues?q=is%3Aissue%20state%3Aopen%20label%3Acontributor-friendly)
-issues are ready for community contributions.
+issues are ready for contributions.
 [`bug`](https://github.com/MatthewMckee4/karva/issues?q=is%3Aissue%20state%3Aopen%20label%3Abug)
 issues are also good candidates when the expected behavior is clear.
 
 Comment before starting work so another contributor does not duplicate it and
 the maintainer can confirm the issue is current. Discuss larger changes and
-new features before opening a pull request; they can affect Karva's deliberately
-small scope and long-term maintenance burden.
+new features first; they can affect Karva's deliberately small scope and
+maintenance burden.
 
 Use [GitHub issues](https://github.com/MatthewMckee4/karva/issues/new) for bug
 reports, feature proposals, and documentation problems.
 
-## The Basics
-
-### Prerequisites
-
-Karva development requires:
-
-- The [Rust toolchain](https://www.rust-lang.org/tools/install).
-- [uv](https://docs.astral.sh/uv/getting-started/installation/) for Python
-  environments and tools.
-- [just](https://just.systems/) for project recipes.
-
-We recommend [nextest](https://nexte.st/) for faster Rust test runs:
-
-```sh
-cargo install cargo-nextest --locked
-```
-
-Install the optional repository hooks with:
-
-```sh
-uvx prek install
-```
-
-### Development
-
-Run Karva from the repository root with a debug build:
-
-```sh
-cargo run test tests/test_add.py
-```
-
-The full test recipe builds a development wheel automatically. Some
-integration tests compare Karva with pytest and require pytest in the Python
-environment used by the test runner. Avoid relying on a project-local uv
-environment for these tests.
-
-### Project Structure
-
-Karva uses a main process plus worker subprocesses. The `karva` binary
-discovers and partitions tests, starts `karva-worker` processes, then combines
-their cached results. Workers embed Python and execute tests. The binaries
-communicate only through CLI arguments and the shared cache directory.
-
-All Rust crates live under `crates/`:
-
-- `karva` contains the main CLI and orchestration entry point.
-- `karva_worker` embeds Python and runs assigned tests.
-- `karva_cli` contains command types shared by both binaries.
-- `karva_runner`, `karva_project`, `karva_collector`, and `karva_combine`
-  implement discovery, partitioning, process management, and result
-  aggregation.
-- `karva_test_semantic` implements Python test execution and extensions.
-- `karva_cache`, `karva_diagnostic`, `karva_logging`, `karva_metadata`, and
-  `karva_static` provide shared infrastructure.
-- `karva_python` builds the Python wheel and exposes the binaries.
-- `karva_dev` contains documentation generators.
-- `karva_benchmark` contains wall-time benchmarks and benchmark projects.
-
-Python packaging files live under `python/`, documentation under `docs/`, and
-CLI integration tests under `crates/karva/tests/it/`.
-
-## Testing
-
-Run the full suite:
-
-```sh
-just test
-```
-
-Pass standard `cargo nextest` or `cargo test` arguments for focused runs:
-
-```sh
-just test -p karva_cache
-just test -p karva test_name
-```
-
-`just test` builds the wheel with `uvx maturin build`, then runs nextest when
-available and falls back to `cargo test`.
-
-Before opening a pull request, run relevant focused tests and the validation
-sweep:
-
-```sh
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-uvx prek run -a
-```
-
-GitHub Actions runs tests on Linux, macOS, and Windows. Platform-specific
-behavior should have focused coverage where practical.
-
-### Snapshot Tests
-
-Prefer integration tests when behavior crosses crate, Python, worker, or CLI
-boundaries. Command integration tests should use snapshots so diagnostics and
-exit behavior remain visible.
-
-Review every snapshot change before accepting it. Check for unexpected
-`.snap.new` files before finishing, and never include unrelated snapshot
-updates in a pull request.
-
 ## Documentation
 
-Karva uses [Zensical](https://zensical.org/) for its documentation site. Build
-the site with:
+Build the [Zensical](https://zensical.org/) documentation:
 
 ```sh
 uv run --script scripts/prepare_docs.py
@@ -134,63 +31,17 @@ arguments, or environment variable definitions:
 cargo run -p karva_dev generate-all
 ```
 
-Files under `docs/reference/` and
-`docs/configuration/configuration.md` are generated. Their headers identify
-the source to edit.
-
-## Benchmarks
-
-The pull request benchmark workflow compares base and PR wheels against pinned
-projects. It reports median wall time and peak memory in a PR comment. Keep
-benchmark projects deterministic and pin external inputs.
-
-Performance changes should include benchmark evidence when the impact is not
-obvious from existing CI coverage.
+Files under `docs/reference/` and `docs/configuration/configuration.md` are
+generated; their headers identify the source.
 
 ## Opening a Pull Request
 
 Keep pull requests minimal and focused. Use the pull request template and link
-relevant issues. Add labels based on user-facing impact; if a pull request has
-no user-facing change, add only the `internal` label. CI performance changes
-use only the `ci` label; reserve `performance` for user-facing performance
-improvements.
+relevant issues. Keep it draft while substantial work remains.
 
-Keep the pull request in draft while substantial work remains.
+Write the summary and test plan as concise prose, not lists. If CI is the only
+test plan, write `ci`. Keep commits focused with descriptive one-line subjects.
+Do not mix formatter churn with logic changes or add AI tools as authors.
 
-### Summary
-
-Explain what changed and why in concise prose. Include implementation details
-only when reviewers need them to understand the design or trade-offs.
-
-### Test Plan
-
-State what you verified in one short sentence. If CI is the only remaining
-validation, write `ci`.
-
-Keep commits focused and use descriptive one-line subjects. Do not mix
-formatter churn or unrelated cleanup with the change.
-
-## Release Process
-
-Run the `Prepare release` workflow with the version bump to perform, such as `alpha` or an
-explicit version. The workflow runs `seal bump <version>` and opens the release pull request.
-
-To prepare a release locally, install [`seal`](https://github.com/MatthewMckee4/seal), then run:
-
-```sh
-seal bump alpha
-seal bump <version>
-```
-
-Seal creates the release branch, commits and pushes the changes, and opens a pull request. The
-release workflow handles the remaining publication steps after merge.
-
-## GitHub Actions
-
-Actions must be pinned to full commit SHAs. After editing a workflow, run:
-
-```sh
-pinact run
-```
-
-Review generated workflow changes before committing them.
+Use only the `internal` label when nothing changes for users and only `ci` for
+CI performance changes. Reserve `performance` for user-facing improvements.
