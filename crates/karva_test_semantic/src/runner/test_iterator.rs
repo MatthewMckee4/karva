@@ -32,6 +32,8 @@ pub(super) struct TestVariant<'a> {
     /// caller can unwrap without a Python refcount bump.
     pub(super) params: HashMap<String, Arc<Py<PyAny>>>,
 
+    pub id: Option<String>,
+
     /// Fixtures to be passed as arguments to the test function.
     pub(super) fixture_dependencies: Rc<[Rc<NormalizedFixture>]>,
 
@@ -149,6 +151,7 @@ impl<'a> Iterator for TestVariantIterator<'a> {
 
         Some(TestVariant {
             test: self.test,
+            id: param_args.id().map(str::to_string),
             params: param_args.values,
             fixture_dependencies: Rc::clone(&self.fixture_dependencies),
             use_fixture_dependencies: Rc::clone(&self.use_fixture_dependencies),

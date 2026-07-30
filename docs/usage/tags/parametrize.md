@@ -72,6 +72,39 @@ def test_function(a: int, b: int):
 
 This runs `test_function` four times with all combinations of `a` and `b`.
 
+## IDs
+
+Use `ids` to give parameter sets stable, readable names:
+
+```python title="test.py"
+import karva
+
+@karva.tags.parametrize(
+    "card,expected",
+    [(valid_card, "paid"), (expired_card, "declined")],
+    ids=["valid-card", "expired-card"],
+)
+def test_checkout(card, expected):
+    assert checkout(card) == expected
+```
+
+`ids` can also be a function. It is called for each parameter value, and returned
+parts are joined with `-`:
+
+```python title="test.py"
+import karva
+
+@karva.tags.parametrize(
+    "status,expected",
+    [("paid", True), ("declined", False)],
+    ids=lambda value: value.upper() if isinstance(value, str) else None,
+)
+def test_status(status, expected):
+    assert is_successful(status) is expected
+```
+
+IDs combine with `-` when multiple parametrize tags are stacked.
+
 ## Params
 
 You can use `karva.param` (similar to `pytest.param`) to attach tags to individual parameter sets:

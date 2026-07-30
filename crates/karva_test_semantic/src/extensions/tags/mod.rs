@@ -339,6 +339,19 @@ impl Tags {
             }
         }
 
+        let mut seen_ids = HashSet::new();
+        for params in self.parametrize_args() {
+            let Some(id) = params.id() else {
+                continue;
+            };
+            if id.is_empty() {
+                return Err(InvalidParametrizeError::EmptyId);
+            }
+            if !seen_ids.insert(id.to_string()) {
+                return Err(InvalidParametrizeError::DuplicateId { id: id.to_string() });
+            }
+        }
+
         Ok(())
     }
 

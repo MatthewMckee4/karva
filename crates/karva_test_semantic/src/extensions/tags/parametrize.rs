@@ -61,6 +61,10 @@ pub enum InvalidParametrizeError {
     },
     #[error("Parameter `{name}` does not exist in the test function signature")]
     UnknownName { name: String },
+    #[error("Parameter ID cannot be empty")]
+    EmptyId,
+    #[error("Parameter ID `{id}` is used more than once")]
+    DuplicateId { id: String },
 }
 
 struct ParametrizeSyntax<'a> {
@@ -162,6 +166,7 @@ impl InvalidParametrizeError {
             Self::UnknownName { name } => {
                 name_diagnostic_location(&syntaxes, name, "not accepted by test", function)
             }
+            Self::EmptyId | Self::DuplicateId { .. } => None,
         }
     }
 }
@@ -355,6 +360,12 @@ pub struct Parametrization {
 
     /// Tags specific to this parameter set (e.g., marks on pytest.param).
     pub(crate) tags: Tags,
+
+    /// Explicit display ID.
+    pub(crate) id: Option<String>,
+
+    /// Value-derived display ID for partially explicit stacked parametrization.
+    pub(crate) default_id: String,
 }
 
 impl Parametrization {
@@ -368,6 +379,8 @@ impl From<PyRef<'_, Param>> for Parametrization {
         Self {
             values: param.values.clone(),
             tags: param.tags.clone(),
+            id: param.id.clone(),
+            default_id: param.default_id.clone(),
         }
     }
 }
@@ -383,6 +396,9 @@ pub struct ParametrizationArgs {
 
     /// Combined tags from all parameter sets.
     pub(crate) tags: Tags,
+
+    id: String,
+    has_explicit_id: bool,
 }
 
 impl ParametrizationArgs {
@@ -393,7 +409,25 @@ impl ParametrizationArgs {
     pub(crate) fn extend(&mut self, other: Self) {
         self.values.extend(other.values);
         self.tags.extend(&other.tags);
+        if !self.id.is_empty() && !other.id.is_empty() {
+            self.id.push('-');
+        }
+        self.id.push_str(&other.id);
+        self.has_explicit_id |= other.has_explicit_id;
     }
+
+    pub(crate) fn id(&self) -> Option<&str> {
+        self.has_explicit_id.then_some(self.id.as_str())
+    }
+}
+
+pub fn default_param_id(py: Python<'_>, values: &[Arc<Py<PyAny>>]) -> String {
+    values
+        .iter()
+        .filter_map(|value| value.cast_bound::<PyAny>(py).ok())
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("-")
 }
 
 /// Normalize argument names from Python into a `Vec<String>`.
@@ -439,6 +473,56 @@ pub(super) fn parse_parametrize_args(
     Ok((names, parametrizations))
 }
 
+pub(super) fn apply_parametrize_ids(
+    ids: Option<&Bound<'_, PyAny>>,
+    parametrizations: &mut [Parametrization],
+) -> PyResult<()> {
+    let Some(ids) = ids else {
+        return Ok(());
+    };
+    if ids.is_none() {
+        return Ok(());
+    }
+    if ids.is_callable() {
+        let py = ids.py();
+        for parametrization in parametrizations {
+            if parametrization.id.is_some() {
+                continue;
+            }
+            let mut parts = Vec::with_capacity(parametrization.values.len());
+            for value in &parametrization.values {
+                let generated = ids.call1((value.bind(py),))?;
+                if generated.is_none() {
+                    parts.push(value.bind(py).to_string());
+                } else {
+                    parts.push(generated.to_string());
+                }
+            }
+            parametrization.id = Some(parts.join("-"));
+        }
+        return Ok(());
+    }
+    let ids = ids.extract::<Vec<Option<String>>>().map_err(|_| {
+        PyValueError::new_err("parametrize ids must be a sequence of strings or None")
+    })?;
+    if ids.is_empty() {
+        return Ok(());
+    }
+    if ids.len() != parametrizations.len() {
+        return Err(PyValueError::new_err(format!(
+            "{} parameter sets specified, with different number of ids: {}",
+            parametrizations.len(),
+            ids.len()
+        )));
+    }
+    for (parametrization, id) in parametrizations.iter_mut().zip(ids) {
+        if parametrization.id.is_none() {
+            parametrization.id = id;
+        }
+    }
+    Ok(())
+}
+
 /// Represents different argument names and values that can be given to a test.
 ///
 /// This is most useful to repeat a test multiple times with different arguments instead of duplicating the test.
@@ -458,9 +542,15 @@ pub struct ParametrizeTag {
 /// - `@pytest.mark.parametrize(argnames="x", argvalues=[1, 2])` - both kwargs
 /// - `@pytest.mark.parametrize("x", argvalues=[1, 2])` - mixed
 /// - `@pytest.mark.parametrize(argnames="x", [1, 2])` - mixed
+struct ExtractedParametrizeArgs<'py> {
+    names: Bound<'py, PyAny>,
+    values: Bound<'py, PyAny>,
+    ids: Option<Bound<'py, PyAny>>,
+}
+
 fn extract_parametrize_args<'py>(
     py_mark: &Bound<'py, PyAny>,
-) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+) -> PyResult<ExtractedParametrizeArgs<'py>> {
     // Try to get argnames from positional args first, then kwargs
     let arg_names = py_mark
         .getattr("args")
@@ -483,7 +573,21 @@ fn extract_parametrize_args<'py>(
         })
         .map_err(|_| PyValueError::new_err("pytest parametrize mark requires argvalues"))?;
 
-    Ok((arg_names, arg_values))
+    let ids = py_mark
+        .getattr("args")
+        .and_then(|args| args.get_item(3))
+        .or_else(|_| {
+            py_mark
+                .getattr("kwargs")
+                .and_then(|kwargs| kwargs.get_item("ids"))
+        })
+        .ok();
+
+    Ok(ExtractedParametrizeArgs {
+        names: arg_names,
+        values: arg_values,
+        ids,
+    })
 }
 
 impl ParametrizeTag {
@@ -503,9 +607,13 @@ impl ParametrizeTag {
                     |Param {
                          values: param_values,
                          tags,
+                         id,
+                         default_id,
                      }| Parametrization {
                         values: param_values,
                         tags,
+                        id,
+                        default_id,
                     },
                 )
                 .collect(),
@@ -516,10 +624,10 @@ impl ParametrizeTag {
         py_mark: &Bound<'_, PyAny>,
         globals: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<Self>> {
-        let (arg_names, arg_values) = extract_parametrize_args(py_mark)?;
+        let ExtractedParametrizeArgs { names, values, ids } = extract_parametrize_args(py_mark)?;
 
-        let (arg_names, parametrizations) =
-            parse_parametrize_args(&arg_names, &arg_values, globals)?;
+        let (arg_names, mut parametrizations) = parse_parametrize_args(&names, &values, globals)?;
+        apply_parametrize_ids(ids.as_ref(), &mut parametrizations)?;
 
         Ok(Some(Self::new(arg_names, parametrizations)))
     }
@@ -585,6 +693,11 @@ impl ParametrizeTag {
             let current_param_args = ParametrizationArgs {
                 values: current_parameratisation,
                 tags: parametrization.tags().clone(),
+                id: parametrization
+                    .id
+                    .clone()
+                    .unwrap_or_else(|| parametrization.default_id.clone()),
+                has_explicit_id: parametrization.id.is_some(),
             };
             param_args.push(current_param_args);
         }
@@ -604,6 +717,8 @@ pub(super) fn handle_custom_parametrize_param(
     let default_parametrization = || Parametrization {
         values: vec![Arc::clone(&param_arc)],
         tags: Tags::default(),
+        id: None,
+        default_id: default_param_id(py, &[Arc::clone(&param_arc)]),
     };
 
     if let Ok(param_bound) = param_arc.cast_bound::<Param>(py) {
@@ -647,11 +762,27 @@ pub(super) fn handle_custom_parametrize_param(
             }
         };
 
-        Ok(Parametrization { values, tags })
-    } else if expect_multiple && let Ok(params) = bound_param.extract::<Vec<Py<PyAny>>>() {
+        let parameter_id = bound_param.getattr("id")?;
+        let id = if parameter_id.is_none() {
+            None
+        } else {
+            Some(parameter_id.extract::<String>()?)
+        };
+        let default_id = default_param_id(py, &values);
+
         Ok(Parametrization {
-            values: params.into_iter().map(Arc::new).collect(),
+            values,
+            tags,
+            id,
+            default_id,
+        })
+    } else if expect_multiple && let Ok(params) = bound_param.extract::<Vec<Py<PyAny>>>() {
+        let values = params.into_iter().map(Arc::new).collect::<Vec<_>>();
+        Ok(Parametrization {
+            default_id: default_param_id(py, &values),
+            values,
             tags: Tags::default(),
+            id: None,
         })
     } else {
         Ok(default_parametrization())
