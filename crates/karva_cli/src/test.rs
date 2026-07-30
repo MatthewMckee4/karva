@@ -4,7 +4,7 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use karva_logging::{FinalStatusLevel, StatusLevel, TerminalColor};
 use karva_metadata::{
-    CovFailUnder, CoverageOptions, MaxFail, Options, OverrideOptions, RunTimeoutSecs,
+    CovFailUnder, CoverageOptions, FailSlowSecs, MaxFail, Options, OverrideOptions, RunTimeoutSecs,
     SlowTimeoutSecs, SrcOptions, TerminalOptions, TerminationGracePeriodSecs, TestOptions,
     TestTimeoutSecs,
 };
@@ -126,6 +126,23 @@ pub struct SubTestCommand {
     /// Accepts fractional seconds such as `--timeout=120` or `--timeout=0.5`.
     #[clap(long, value_name = "SECONDS", help_heading = "Runner options")]
     pub timeout: Option<f64>,
+
+    /// Duration budget, in seconds, for a test's full lifecycle.
+    ///
+    /// Unlike `--timeout`, a test is always allowed to finish — including
+    /// fixture teardown — before being reported as a failure if the total
+    /// duration exceeded this budget. A test-level
+    /// [`@karva.tags.fail_slow`] decorator overrides the default for that
+    /// specific test.
+    ///
+    /// Accepts fractional seconds such as `--fail-slow=1` or `--fail-slow=0.25`.
+    #[clap(
+        long,
+        value_name = "SECONDS",
+        value_parser = parse_fail_slow,
+        help_heading = "Runner options"
+    )]
+    pub fail_slow: Option<f64>,
 
     /// Update snapshots directly instead of creating pending `.snap.new` files.
     ///
@@ -445,6 +462,7 @@ impl SubTestCommand {
                 retry: self.retry,
                 no_tests: self.no_tests.map(Into::into),
                 slow_timeout: self.slow_timeout.map(SlowTimeoutSecs),
+                fail_slow: self.fail_slow.map(FailSlowSecs),
                 timeout: self.timeout.map(TestTimeoutSecs),
                 // `run-timeout` is a main-process-only option and is never
                 // forwarded to workers, so it lives on `TestCommand` rather
@@ -494,6 +512,18 @@ impl TestCommand {
 /// [`OverrideOptions`] schema (including filter validation).
 fn parse_override_json(raw: &str) -> Result<OverrideOptions, String> {
     serde_json::from_str(raw).map_err(|err| err.to_string())
+}
+
+fn parse_fail_slow(raw: &str) -> Result<f64, String> {
+    let value: f64 = raw
+        .parse()
+        .map_err(|err| format!("`{raw}` is not a valid number: {err}"))?;
+    if FailSlowSecs(value).as_duration().is_none() {
+        return Err(format!(
+            "must be a finite, positive duration supported by this platform, got `{raw}`"
+        ));
+    }
+    Ok(value)
 }
 
 /// Parse and validate a `--cov-fail-under=N` argument.
@@ -607,5 +637,17 @@ mod tests {
                 path: Some(Utf8PathBuf::from("build/htmlcov")),
             })
         );
+    }
+
+    #[test]
+    fn fail_slow_flag_parses_into_sub_command() {
+        let command = TestCommand::parse_from(["karva-test", "--fail-slow=0.25"]);
+        assert_eq!(command.sub_command.fail_slow, Some(0.25));
+    }
+
+    #[test]
+    fn fail_slow_flag_rejects_unrepresentable_duration() {
+        assert!(TestCommand::try_parse_from(["karva-test", "--fail-slow=1e-300"]).is_err());
+        assert!(TestCommand::try_parse_from(["karva-test", "--fail-slow=1e300"]).is_err());
     }
 }

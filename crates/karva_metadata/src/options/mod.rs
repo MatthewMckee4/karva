@@ -15,9 +15,9 @@ pub use overrides::ProjectOptionsOverrides;
 use crate::filter::{FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
 use crate::settings::{
-    CovFailUnder, CoverageSettings, JunitSettings, NoTestsMode, OverrideSettings, ProjectSettings,
-    RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs, SrcSettings, TerminalSettings,
-    TerminationGracePeriodSecs, TestSettings, TestTimeoutSecs,
+    CovFailUnder, CoverageSettings, FailSlowSecs, JunitSettings, NoTestsMode, OverrideSettings,
+    ProjectSettings, RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs, SrcSettings,
+    TerminalSettings, TerminationGracePeriodSecs, TestSettings, TestTimeoutSecs,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata)]
@@ -111,6 +111,12 @@ pub struct OverrideOptions {
     /// disables slow tracking for the matching test.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slow_timeout: Option<SlowTimeoutSecs>,
+
+    /// Duration budget (in seconds) for a matching test's full lifecycle.
+    /// Mirrors the profile-level [`fail-slow`](#fail-slow) field. A
+    /// non-positive value disables the budget for the matching test.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fail_slow: Option<FailSlowSecs>,
 }
 
 impl OverrideOptions {
@@ -120,6 +126,7 @@ impl OverrideOptions {
             retries: self.retries,
             timeout: self.timeout,
             slow_timeout: self.slow_timeout,
+            fail_slow: self.fail_slow,
         }
     }
 }
@@ -374,6 +381,32 @@ pub struct TestOptions {
     )]
     pub timeout: Option<TestTimeoutSecs>,
 
+    /// Duration budget (in seconds) for a test's full lifecycle (fixture
+    /// setup, the test call, and fixture teardown).
+    ///
+    /// When set, a test is allowed to run to completion — including
+    /// teardown, so cleanup is never skipped — and is then reported as a
+    /// failure if the full lifecycle took longer than this budget. Tests
+    /// can override the limit individually with
+    /// [`@karva.tags.fail_slow`](https://docs.karva.dev/usage/failure-handling/fail-slow/),
+    /// which takes precedence over the configured default.
+    ///
+    /// This is distinct from [`timeout`](#timeout), which kills a test
+    /// mid-execution, and [`slow_timeout`](#slow-timeout), which is purely
+    /// informational and never fails a test.
+    ///
+    /// Defaults to unset, which disables budget checking unless a tag is
+    /// applied to the test.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"null"#,
+        value_type = "float (seconds)",
+        example = r#"
+            fail-slow = 0.25
+        "#
+    )]
+    pub fail_slow: Option<FailSlowSecs>,
+
     /// Wall-clock limit (in seconds) for the entire run.
     ///
     /// When the run takes longer than this duration, karva stops the
@@ -430,6 +463,7 @@ impl TestOptions {
             run_ignored: RunIgnoredMode::default(),
             no_tests: self.no_tests.unwrap_or_default(),
             slow_timeout: self.slow_timeout.and_then(SlowTimeoutSecs::as_duration),
+            fail_slow: self.fail_slow.and_then(FailSlowSecs::as_duration),
             timeout: self.timeout.and_then(TestTimeoutSecs::as_duration),
             run_timeout: self.run_timeout.and_then(RunTimeoutSecs::as_duration),
             termination_grace_period: self
@@ -815,7 +849,7 @@ nonsense = 42
           |
         4 | nonsense = 42
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `test-function-prefix`, `fail-fast`, `max-fail`, `try-import-fixtures`, `retry`, `no-tests`, `slow-timeout`, `timeout`, `run-timeout`, `termination-grace-period`
+        unknown field `nonsense`, expected one of `test-function-prefix`, `fail-fast`, `max-fail`, `try-import-fixtures`, `retry`, `no-tests`, `slow-timeout`, `timeout`, `fail-slow`, `run-timeout`, `termination-grace-period`
         "
         );
     }
@@ -915,6 +949,7 @@ max-fail = 0
             no_tests: None,
             slow_timeout: None,
             timeout: None,
+            fail_slow: None,
             run_timeout: None,
             termination_grace_period: None,
         }
@@ -946,6 +981,7 @@ max-fail = 0
             no_tests: None,
             slow_timeout: None,
             timeout: None,
+            fail_slow: None,
             run_timeout: None,
             termination_grace_period: None,
         }
@@ -1010,6 +1046,7 @@ retry = 2
                 no_tests: None,
                 slow_timeout: None,
                 timeout: None,
+                fail_slow: None,
                 run_timeout: None,
                 termination_grace_period: None,
             },
@@ -1068,6 +1105,7 @@ retry = 5
                 no_tests: None,
                 slow_timeout: None,
                 timeout: None,
+                fail_slow: None,
                 run_timeout: None,
                 termination_grace_period: None,
             },
@@ -1638,5 +1676,70 @@ slow-timeout = 30.0
             settings.slow_timeout_for(&other),
             Some(std::time::Duration::from_secs(1))
         );
+    }
+
+    #[test]
+    fn fail_slow_for_picks_first_matching_override() {
+        let toml = r#"
+[profile.default.test]
+fail-slow = 1.0
+
+[[profile.default.overrides]]
+filter = "tag(slow)"
+fail-slow = 30.0
+
+[[profile.default.overrides]]
+filter = "tag(unit)"
+fail-slow = 0
+"#;
+        let resolved = Config::from_toml_str(toml)
+            .expect("parse")
+            .resolve_profile(None)
+            .expect("resolves");
+        let settings = resolved.to_settings();
+        let slow = crate::filter::EvalContext {
+            test_name: "test::a",
+            tags: &["slow"],
+        };
+        let unit = crate::filter::EvalContext {
+            test_name: "test::b",
+            tags: &["unit"],
+        };
+        let other = crate::filter::EvalContext {
+            test_name: "test::c",
+            tags: &[],
+        };
+        assert_eq!(
+            settings.fail_slow_for(&slow),
+            Some(std::time::Duration::from_secs(30))
+        );
+        // `fail-slow = 0` on a matching override disables the budget.
+        assert_eq!(settings.fail_slow_for(&unit), None);
+        assert_eq!(
+            settings.fail_slow_for(&other),
+            Some(std::time::Duration::from_secs(1))
+        );
+    }
+
+    #[test]
+    fn fail_slow_rejects_unrepresentable_config_duration() {
+        for value in ["1e-300", "1e300"] {
+            let profile = format!(
+                r"
+[profile.default.test]
+fail-slow = {value}
+"
+            );
+            assert!(Config::from_toml_str(&profile).is_err());
+
+            let override_value = format!(
+                r#"
+[[profile.default.overrides]]
+filter = "tag(slow)"
+fail-slow = {value}
+"#
+            );
+            assert!(Config::from_toml_str(&override_value).is_err());
+        }
     }
 }

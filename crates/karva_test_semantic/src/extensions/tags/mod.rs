@@ -9,6 +9,7 @@ use crate::extensions::tags::python::{PyTag, PyTags, PyTestFunction};
 
 pub mod custom;
 pub mod expect_fail;
+pub mod fail_slow;
 pub mod parametrize;
 pub mod python;
 pub mod skip;
@@ -17,6 +18,7 @@ mod use_fixtures;
 
 use custom::CustomTag;
 use expect_fail::ExpectFailTag;
+use fail_slow::FailSlowTag;
 use parametrize::{InvalidParametrizeError, ParametrizationArgs, ParametrizeTag};
 use skip::SkipTag;
 use timeout::TimeoutTag;
@@ -106,6 +108,7 @@ pub enum Tag {
     Skip(SkipTag),
     ExpectFail(ExpectFailTag),
     Timeout(TimeoutTag),
+    FailSlow(FailSlowTag),
     Custom(CustomTag),
 }
 
@@ -192,6 +195,7 @@ impl Tag {
                 Self::ExpectFail(ExpectFailTag::new(conditions.clone(), reason.clone()))
             }
             PyTag::Timeout { seconds } => Self::Timeout(TimeoutTag::new(*seconds)),
+            PyTag::FailSlow { seconds } => Self::FailSlow(FailSlowTag::new(*seconds)),
             PyTag::Custom {
                 tag_name,
                 tag_args,
@@ -391,6 +395,16 @@ impl Tags {
         for tag in &self.inner {
             if let Tag::Timeout(timeout_tag) = tag {
                 return Some(*timeout_tag);
+            }
+        }
+        None
+    }
+
+    /// Return the `FailSlowTag` if it exists.
+    pub(crate) fn fail_slow_tag(&self) -> Option<FailSlowTag> {
+        for tag in &self.inner {
+            if let Tag::FailSlow(fail_slow_tag) = tag {
+                return Some(*fail_slow_tag);
             }
         }
         None

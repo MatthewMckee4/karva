@@ -331,3 +331,96 @@ def test_unit():
     "
     );
 }
+
+/// A matching override's `fail-slow` overrides the profile-level value.
+#[test]
+fn override_fail_slow_fails_matching_test() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[[profile.default.overrides]]
+filter = "tag(slow)"
+fail-slow = 0.1
+"#,
+        ),
+        (
+            "test.py",
+            r"
+import time
+import karva
+
+@karva.tags.slow
+def test_slow():
+    time.sleep(0.3)
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_slow
+
+    failures:
+
+    test::test_slow:
+
+    error[fail-slow-exceeded]: Test `test_slow` exceeded its fail-slow budget
+     --> test.py:6:5
+      |
+    6 | def test_slow():
+      |     ^^^^^^^^^
+      |
+    info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: call)
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+/// `fail-slow = 0` on a matching override disables the budget even when
+/// the profile sets one.
+#[test]
+fn override_fail_slow_zero_disables_profile_budget() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.test]
+fail-slow = 0.1
+
+[[profile.default.overrides]]
+filter = "tag(integration)"
+fail-slow = 0
+"#,
+        ),
+        (
+            "test.py",
+            r"
+import time
+import karva
+
+@karva.tags.integration
+def test_long_lived():
+    time.sleep(0.3)
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_long_lived
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}

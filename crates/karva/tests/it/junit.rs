@@ -11,6 +11,19 @@ fn normalize_junit_xml(xml: &str) -> String {
         .to_string()
 }
 
+fn normalize_junit_xml_with_min_duration(xml: &str, minimum: f64) -> String {
+    let test_case_time =
+        Regex::new(r#"(<testcase [^>]*time=")([0-9.]+)(")"#).expect("valid testcase time regex");
+    let xml = test_case_time.replace_all(xml, |captures: &regex::Captures<'_>| {
+        let duration = captures[2]
+            .parse::<f64>()
+            .expect("testcase duration should be numeric");
+        let comparison = if duration >= minimum { ">=" } else { "<" };
+        format!(r"{}[{comparison}{minimum}s]{}", &captures[1], &captures[3])
+    });
+    normalize_junit_xml(&xml)
+}
+
 #[test]
 fn writes_junit_xml_report() {
     let context = TestContext::with_files([
@@ -247,6 +260,88 @@ def test_flaky():
       </testsuite>
     </testsuites>
     "#);
+}
+
+#[test]
+fn junit_reports_fail_slow_teardown_duration() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.ci.junit]
+path = "reports/test-results.xml"
+"#,
+        ),
+        (
+            "test_fail_slow.py",
+            r"
+import time
+import karva
+
+@karva.fixture
+def resource():
+    yield
+    time.sleep(0.4)
+
+@karva.tags.fail_slow(0.2)
+def test_resource(resource):
+    pass
+            ",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--profile=ci", "--status-level=none"]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test_fail_slow::test_resource(resource=None):
+
+    error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget
+      --> test_fail_slow.py:11:5
+       |
+    11 | def test_resource(resource):
+       |     ^^^^^^^^^^^^^
+       |
+    info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    assert_snapshot!(
+        normalize_junit_xml_with_min_duration(
+            &context.read_file("reports/test-results.xml"),
+            0.4,
+        ),
+        @r#"
+    <?xml version="1.0" encoding="UTF-8"?>
+    <testsuites name="karva-tests" tests="1" failures="1" skipped="0" errors="0" time="[TIME]">
+      <testsuite name="test_fail_slow" tests="1" failures="1" skipped="0" errors="0" time="[TIME]">
+        <testcase classname="test_fail_slow" name="test_resource(resource=None)" time="[>=0.4s]">
+          <failure message="Test `test_resource` exceeded its fail-slow budget" type="fail-slow-exceeded">error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget
+      --&gt; test_fail_slow.py:11:5
+       |
+    11 | def test_resource(resource):
+       |     ^^^^^^^^^^^^^
+       |
+    info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)
+
+    </failure>
+        </testcase>
+      </testsuite>
+    </testsuites>
+    "#
+    );
 }
 
 #[test]

@@ -7,6 +7,7 @@
 use camino::Utf8Path;
 use karva_collector::CollectionError;
 use karva_diagnostic::Traceback;
+use karva_logging::time::format_duration;
 use karva_python_semantic::FunctionKind;
 use pyo3::{PyErr, Python};
 use ruff_db::diagnostic::{
@@ -172,6 +173,19 @@ declare_diagnostic_type! {
     /// If a test returns anything other than `None`, we will raise this error.
     pub static TEST_RETURNED_VALUE = {
         summary: "Test returned a non-None value",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
+    /// ## Fail-slow budget exceeded
+    ///
+    /// Raised when a test's full lifecycle (fixture setup, the test call,
+    /// and fixture teardown) takes longer than its configured `fail-slow`
+    /// budget. Unlike a hard `timeout`, the test always runs to completion
+    /// before this diagnostic is produced.
+    pub static FAIL_SLOW_EXCEEDED = {
+        summary: "Test exceeded its fail-slow duration budget",
         severity: Severity::Error,
     }
 }
@@ -520,6 +534,34 @@ pub fn test_returned_value_diagnostic(
 
     annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
     diagnostic.info("Test functions must return None. Did you mean to use `assert`?");
+    diagnostic
+}
+
+/// Build the diagnostic for a test whose full lifecycle exceeded its
+/// configured `fail-slow` budget.
+///
+/// `actual` and `slowest_phase` describe the measured setup, call, and
+/// teardown phases for one attempt.
+pub fn fail_slow_exceeded_diagnostic(
+    source_file: SourceFile,
+    stmt_function_def: &StmtFunctionDef,
+    budget: std::time::Duration,
+    actual: std::time::Duration,
+    slowest_phase: &str,
+) -> Diagnostic {
+    let mut diagnostic = FAIL_SLOW_EXCEEDED.diagnostic(format!(
+        "Test `{}` exceeded its fail-slow budget",
+        stmt_function_def.name
+    ));
+
+    annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
+
+    diagnostic.info(format!(
+        "Configured budget: {}, actual duration: {} (slowest phase: {slowest_phase})",
+        format_duration(budget),
+        format_duration(actual),
+    ));
+
     diagnostic
 }
 

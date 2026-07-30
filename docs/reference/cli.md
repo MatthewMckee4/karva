@@ -70,7 +70,10 @@ karva test [OPTIONS] [PATH]...
 <ul>
 <li><code>true</code></li>
 <li><code>false</code></li>
-</ul></dd><dt id="karva-test--filter"><a href="#karva-test--filter"><code>--filter</code></a>, <code>-E</code> <i>filter-expressions</i></dt><dd><p>Filter tests using a filterset expression.</p>
+</ul></dd><dt id="karva-test--fail-slow"><a href="#karva-test--fail-slow"><code>--fail-slow</code></a> <i>seconds</i></dt><dd><p>Duration budget, in seconds, for a test's full lifecycle.</p>
+<p>Unlike <code>--timeout</code>, a test is always allowed to finish — including fixture teardown — before being reported as a failure if the total duration exceeded this budget. A test-level &#91;<code>@karva.tags.fail_slow</code>&#93; decorator overrides the default for that specific test.</p>
+<p>Accepts fractional seconds such as <code>--fail-slow=1</code> or <code>--fail-slow=0.25</code>.</p>
+</dd><dt id="karva-test--filter"><a href="#karva-test--filter"><code>--filter</code></a>, <code>-E</code> <i>filter-expressions</i></dt><dd><p>Filter tests using a filterset expression.</p>
 <p>Predicates: <code>test(&lt;matcher&gt;)</code> matches the fully qualified test name; <code>tag(&lt;matcher&gt;)</code> matches any custom tag on the test.</p>
 <p>Matchers: <code>=exact</code>, <code>~substring</code>, <code>/regex/</code>, <code>#glob</code>. The default is substring for <code>test()</code> and exact for <code>tag()</code>. String bodies may be quoted (<code>&quot;...&quot;</code>) to allow spaces or reserved characters.</p>
 <p>Operators: <code>&amp;</code> / <code>and</code>, <code>|</code> / <code>or</code>, <code>not</code> / <code>!</code>, and <code>-</code> as shorthand for &quot;and not&quot;. Use parentheses for grouping. <code>and</code> binds tighter than <code>or</code>.</p>
