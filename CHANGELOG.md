@@ -27,7 +27,6 @@
 - [@BitWeaverDev](https://github.com/BitWeaverDev)
 - [@MatthewMckee4](https://github.com/MatthewMckee4)
 - [@arimu1](https://github.com/arimu1)
-- [@github-actions[bot]](https://github.com/github-actions[bot])
 
 ## 0.0.1-alpha.8
 
