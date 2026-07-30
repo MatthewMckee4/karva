@@ -221,11 +221,9 @@ def test_slow_and_wrong():
     ");
 }
 
-/// The budget is only known after the full lifecycle (including teardown)
-/// completes, so a slow-but-passing attempt is never retried purely for
-/// slowness — it runs once and is reported as an ordinary failure.
+/// A fail-slow failure consumes the retry budget like any other failure.
 #[test]
-fn test_fail_slow_is_not_retried_even_with_retry_configured() {
+fn test_fail_slow_retries_to_a_fast_attempt() {
     let context = TestContext::with_file(
         "test.py",
         r"
@@ -237,31 +235,21 @@ attempts = [0]
 @karva.tags.fail_slow(0.1)
 def test_slow():
     attempts[0] += 1
-    time.sleep(0.3)
+    if attempts[0] == 1:
+        time.sleep(0.3)
         ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=2"), @"
-    success: false
-    exit_code: 1
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+    success: true
+    exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_slow
-
-    failures:
-
-    test::test_slow:
-
-    error[fail-slow-exceeded]: Test `test_slow` exceeded its fail-slow budget
-     --> test.py:8:5
-      |
-    8 | def test_slow():
-      |     ^^^^^^^^^
-      |
-    info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: call)
-
+      TRY 1 FAIL [TIME] test::test_slow
+      TRY 2 PASS [TIME] test::test_slow
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_slow
 
     ----- stderr -----
     ");
@@ -269,7 +257,7 @@ def test_slow():
 
 #[rstest]
 fn test_fail_slow_invalid_seconds_rejected(
-    #[values("0", "-1", "float('nan')", "float('inf')")] arg: &str,
+    #[values("0", "-1", "float('nan')", "float('inf')", "1e-300", "1e300")] arg: &str,
 ) {
     let context = TestContext::with_file(
         "test.py",
@@ -292,7 +280,7 @@ def test_1():
             Starting 1 test across 1 worker
         diagnostics:
 
-        error[failed-to-import-module]: Failed to import python module `test`: fail_slow seconds must be a finite, positive number
+        error[failed-to-import-module]: Failed to import python module `test`: fail_slow seconds must be a finite, positive duration supported by this platform
 
         ────────────
              Summary [TIME] 0 tests run: 0 passed, 0 skipped
@@ -300,6 +288,178 @@ def test_1():
         ----- stderr -----
         ");
     }
+}
+
+#[test]
+fn test_fail_slow_does_not_sum_retry_attempts() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+import time
+import karva
+
+@karva.tags.fail_slow(0.2)
+def test_retry():
+    time.sleep(0.15)
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_retry
+      TRY 2 PASS [TIME] test::test_retry
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_retry
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_fail_slow_sets_attempt_environment_before_retry_fixture_setup() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+import time
+import karva
+
+fixture_attempts = []
+
+@karva.fixture
+def resource():
+    fixture_attempts.append(os.environ.get("KARVA_ATTEMPT"))
+    yield
+    if len(fixture_attempts) == 1:
+        time.sleep(0.3)
+
+@karva.tags.fail_slow(0.2)
+def test_retry(resource):
+    if os.environ["KARVA_ATTEMPT"] == "2":
+        assert fixture_attempts[-1] == "2"
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_retry(resource=None)
+      TRY 2 PASS [TIME] test::test_retry(resource=None)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_retry(resource=None)
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_fail_slow_setup_error_reports_slow_teardown() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import time
+import karva
+
+@karva.fixture
+def established():
+    yield
+    time.sleep(0.4)
+
+@karva.fixture
+def broken(established):
+    raise RuntimeError("setup failed")
+
+@karva.tags.fail_slow(0.2)
+def test_example(broken):
+    pass
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_example
+
+    failures:
+
+    test::test_example:
+
+    error[fixture-failure]: Fixture `broken` failed
+      --> test.py:11:5
+       |
+    11 | def broken(established):
+       |     ^^^^^^
+       |
+    info: Fixture ran with arguments:
+    info: `established`: `None`
+    info: Fixture failed here
+      --> test.py:12:5
+       |
+    12 |     raise RuntimeError("setup failed")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: setup failed
+
+    error[fail-slow-exceeded]: Test `test_example` exceeded its fail-slow budget
+      --> test.py:15:5
+       |
+    15 | def test_example(broken):
+       |     ^^^^^^^^^^^^
+       |
+    info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn test_fail_slow_excludes_test_name_rendering() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import time
+import karva
+
+class SlowString:
+    def __str__(self):
+        time.sleep(0.3)
+        return "value"
+
+@karva.fixture
+def value():
+    return SlowString()
+
+@karva.tags.fail_slow(0.2)
+def test_example(value):
+    pass
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_example(value=value)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 }
 
 #[test]

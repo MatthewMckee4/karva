@@ -120,6 +120,7 @@ impl PyTags {
 
 #[pymodule]
 pub mod tags {
+    use karva_metadata::FailSlowSecs;
     use pyo3::IntoPyObjectExt;
     use pyo3::exceptions::PyTypeError;
     use pyo3::prelude::*;
@@ -264,9 +265,9 @@ pub mod tags {
 
     #[pyfunction]
     fn fail_slow(seconds: f64) -> PyResult<PyTags> {
-        if !(seconds.is_finite() && seconds > 0.0) {
+        if FailSlowSecs(seconds).as_duration().is_none() {
             return Err(PyErr::new::<PyTypeError, _>(
-                "fail_slow seconds must be a finite, positive number",
+                "fail_slow seconds must be a finite, positive duration supported by this platform",
             ));
         }
         Ok(PyTags {

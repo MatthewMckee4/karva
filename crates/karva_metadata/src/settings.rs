@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use karva_combine::Combine;
 use karva_logging::{FinalStatusLevel, StatusLevel};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::filter::{EvalContext, FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
@@ -106,7 +106,7 @@ impl Combine for TestTimeoutSecs {
 /// test mid-flight), a test exceeding this budget is allowed to finish its
 /// full lifecycle — including fixture teardown — and is then reported as a
 /// failure (see [`crate::settings::TestSettings::fail_slow`]).
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct FailSlowSecs(pub f64);
 
@@ -115,10 +115,27 @@ impl Eq for FailSlowSecs {}
 impl FailSlowSecs {
     pub fn as_duration(self) -> Option<Duration> {
         if self.0.is_finite() && self.0 > 0.0 {
-            Some(Duration::from_secs_f64(self.0))
+            Duration::try_from_secs_f64(self.0)
+                .ok()
+                .filter(|duration| !duration.is_zero())
         } else {
             None
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for FailSlowSecs {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let seconds = f64::deserialize(deserializer)?;
+        if !seconds.is_finite() || (seconds > 0.0 && Self(seconds).as_duration().is_none()) {
+            return Err(serde::de::Error::custom(
+                "fail-slow must be a finite duration supported by this platform",
+            ));
+        }
+        Ok(Self(seconds))
     }
 }
 

@@ -540,11 +540,8 @@ pub fn test_returned_value_diagnostic(
 /// Build the diagnostic for a test whose full lifecycle exceeded its
 /// configured `fail-slow` budget.
 ///
-/// `actual` and `slowest_phase` describe the lifecycle that was actually
-/// measured (setup, call, and — except for the fixture-setup-failure path —
-/// teardown), which is distinct from the test's officially reported
-/// duration (captured before teardown, used for `slow-timeout` and
-/// reporting).
+/// `actual` and `slowest_phase` describe the measured setup, call, and
+/// teardown phases for one attempt.
 pub fn fail_slow_exceeded_diagnostic(
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,

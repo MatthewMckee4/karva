@@ -274,6 +274,134 @@ fn writes_jsonl_result_records() {
 }
 
 #[test]
+fn fail_slow_reports_teardown_duration_in_json_and_jsonl() {
+    let context = TestContext::with_file(
+        "test_fail_slow.py",
+        r"
+import time
+import karva
+
+@karva.fixture
+def resource():
+    yield
+    time.sleep(0.4)
+
+@karva.tags.fail_slow(0.2)
+def test_resource(resource):
+    pass
+        ",
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
+            "--status-level=none",
+            "--result-output=reports/results.json",
+        ]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test_fail_slow::test_resource(resource=None):
+
+    error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget
+      --> test_fail_slow.py:11:5
+       |
+    11 | def test_resource(resource):
+       |     ^^^^^^^^^^^^^
+       |
+    info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    assert_snapshot!(
+        normalize_result_json_with_min_duration(
+            &context.read_file("reports/results.json"),
+            0.4,
+        ),
+        @r#"
+    {
+      "elapsed_seconds": "[TIME]",
+      "schema_version": 2,
+      "stats": {
+        "errors": 0,
+        "failed": 1,
+        "flaky": 0,
+        "passed": 0,
+        "skipped": 0,
+        "slow": 0,
+        "total": 1
+      },
+      "status": "failed",
+      "tests": [
+        {
+          "diagnostic": {
+            "code": "fail-slow-exceeded",
+            "message": "Test `test_resource` exceeded its fail-slow budget",
+            "rendered": "error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget\n  --> test_fail_slow.py:11:5\n   |/n11 | def test_resource(resource):\n   |     ^^^^^^^^^^^^^\n   |/ninfo: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)\n\n",
+            "severity": "error"
+          },
+          "duration_seconds": "[>=0.4s]",
+          "full_name": "test_fail_slow::test_resource(resource=None)",
+          "module": "test_fail_slow",
+          "name": "test_resource(resource=None)",
+          "status": "failed"
+        }
+      ]
+    }
+    "#
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
+            "--status-level=none",
+            "--result-output=reports/results.jsonl",
+            "--result-format=jsonl",
+        ]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test_fail_slow::test_resource(resource=None):
+
+    error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget
+      --> test_fail_slow.py:11:5
+       |
+    11 | def test_resource(resource):
+       |     ^^^^^^^^^^^^^
+       |
+    info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    assert_snapshot!(
+        normalize_result_jsonl_with_min_duration(
+            &context.read_file("reports/results.jsonl"),
+            0.4,
+        ),
+        @r#"
+    {"diagnostic":{"code":"fail-slow-exceeded","message":"Test `test_resource` exceeded its fail-slow budget","rendered":"error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget\n  --> test_fail_slow.py:11:5\n   |/n11 | def test_resource(resource):\n   |     ^^^^^^^^^^^^^\n   |/ninfo: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)\n\n","severity":"error"},"duration_seconds":"[>=0.4s]","full_name":"test_fail_slow::test_resource(resource=None)","module":"test_fail_slow","name":"test_resource(resource=None)","schema_version":2,"status":"failed","type":"test"}
+    {"elapsed_seconds":"[TIME]","schema_version":2,"stats":{"errors":0,"failed":1,"flaky":0,"passed":0,"skipped":0,"slow":0,"total":1},"status":"failed","type":"run_finished"}
+    "#
+    );
+}
+
+#[test]
 fn writes_related_test_diagnostics() {
     let context = TestContext::with_file(
         "test_related.py",
@@ -518,7 +646,18 @@ fn result_report_status_matches_no_tests_failure() {
 }
 
 fn normalize_result_json(raw: &str) -> String {
+    normalize_result_json_with_optional_min_duration(raw, None)
+}
+
+fn normalize_result_json_with_min_duration(raw: &str, minimum: f64) -> String {
+    normalize_result_json_with_optional_min_duration(raw, Some(minimum))
+}
+
+fn normalize_result_json_with_optional_min_duration(raw: &str, minimum: Option<f64>) -> String {
     let mut value: Value = serde_json::from_str(raw).expect("parse result report");
+    if let Some(minimum) = minimum {
+        classify_test_durations(&mut value, minimum);
+    }
     redact_times(&mut value);
     let mut output = serde_json::to_string_pretty(&value).expect("serialize result report");
     output.push('\n');
@@ -526,10 +665,21 @@ fn normalize_result_json(raw: &str) -> String {
 }
 
 fn normalize_result_jsonl(raw: &str) -> String {
+    normalize_result_jsonl_with_optional_min_duration(raw, None)
+}
+
+fn normalize_result_jsonl_with_min_duration(raw: &str, minimum: f64) -> String {
+    normalize_result_jsonl_with_optional_min_duration(raw, Some(minimum))
+}
+
+fn normalize_result_jsonl_with_optional_min_duration(raw: &str, minimum: Option<f64>) -> String {
     let mut output = raw
         .lines()
         .map(|line| {
             let mut value: Value = serde_json::from_str(line).expect("parse result event");
+            if let Some(minimum) = minimum {
+                classify_test_durations(&mut value, minimum);
+            }
             redact_times(&mut value);
             serde_json::to_string(&value).expect("serialize result event")
         })
@@ -537,6 +687,28 @@ fn normalize_result_jsonl(raw: &str) -> String {
         .join("\n");
     output.push('\n');
     output
+}
+
+fn classify_test_durations(value: &mut Value, minimum: f64) {
+    match value {
+        Value::Array(values) => {
+            for value in values {
+                classify_test_durations(value, minimum);
+            }
+        }
+        Value::Object(map) => {
+            for (key, value) in map {
+                if key == "duration_seconds" {
+                    let duration = value.as_f64().expect("test duration should be numeric");
+                    let comparison = if duration >= minimum { ">=" } else { "<" };
+                    *value = Value::String(format!("[{comparison}{minimum}s]"));
+                } else {
+                    classify_test_durations(value, minimum);
+                }
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+    }
 }
 
 fn redact_times(value: &mut Value) {
@@ -548,7 +720,7 @@ fn redact_times(value: &mut Value) {
         }
         Value::Object(map) => {
             for (key, value) in map {
-                if key == "duration_seconds" || key == "elapsed_seconds" {
+                if (key == "duration_seconds" || key == "elapsed_seconds") && value.is_number() {
                     *value = Value::String("[TIME]".to_string());
                 } else {
                     redact_times(value);

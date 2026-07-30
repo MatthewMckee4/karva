@@ -7,8 +7,9 @@ This is a coarse regression budget, not a benchmarking tool: it does not add sta
 ## Basic usage
 
 ```python title="test.py"
-import karva
 import time
+
+import karva
 
 @karva.tags.fail_slow(0.25)
 def test_index_lookup():
@@ -22,7 +23,7 @@ The threshold accepts fractional seconds (`@karva.tags.fail_slow(0.05)`).
 Use the `fail-slow` setting (or `--fail-slow=SECONDS` on the CLI) to apply the same budget to every test in the project:
 
 ```bash
-karva test --fail-slow=1.0
+uv run karva test --fail-slow=1.0
 ```
 
 ```toml
@@ -36,11 +37,13 @@ A test-level `@karva.tags.fail_slow` always wins over the configured default, an
 
 The budget covers the test's entire lifecycle: fixture setup, the test call, and fixture teardown. Unlike [`@karva.tags.timeout`](../tags/timeout.md), which kills a test mid-execution, `fail-slow` never interrupts a running test — it lets setup, the call, and teardown all finish, then compares the total duration against the budget.
 
+Only work performed within an individual test attempt counts toward its budget. Module, package, and session cleanup happens outside any single attempt and is not assigned to a test. Function-scoped fixtures are recreated for each retry.
+
 If a test already fails for another reason (an assertion, a fixture error, a teardown error) and also exceeds its budget, both are reported: the original failure stays the primary cause, and the exceeded budget is noted alongside it.
 
 ## Retries
 
-The budget is checked once, after the test's full lifecycle — including any [retries](retries.md) triggered by a genuine failure in the test body — has finished. Retries are never triggered by exceeding the budget alone: a test that passes on its first attempt but runs over budget fails once, without being retried. If a retried test's final attempt both fails for another reason and exceeds the budget, both are reported together, as described above.
+Each attempt is checked independently after its full lifecycle finishes. Exceeding the budget is an ordinary retryable failure: a later attempt that stays within budget makes the test flaky. Time from earlier attempts never counts against a later attempt's budget.
 
 ## See also
 

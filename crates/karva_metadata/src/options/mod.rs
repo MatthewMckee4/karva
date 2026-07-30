@@ -1720,4 +1720,26 @@ fail-slow = 0
             Some(std::time::Duration::from_secs(1))
         );
     }
+
+    #[test]
+    fn fail_slow_rejects_unrepresentable_config_duration() {
+        for value in ["1e-300", "1e300"] {
+            let profile = format!(
+                r"
+[profile.default.test]
+fail-slow = {value}
+"
+            );
+            assert!(Config::from_toml_str(&profile).is_err());
+
+            let override_value = format!(
+                r#"
+[[profile.default.overrides]]
+filter = "tag(slow)"
+fail-slow = {value}
+"#
+            );
+            assert!(Config::from_toml_str(&override_value).is_err());
+        }
+    }
 }

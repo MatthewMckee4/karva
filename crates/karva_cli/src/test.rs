@@ -136,7 +136,12 @@ pub struct SubTestCommand {
     /// specific test.
     ///
     /// Accepts fractional seconds such as `--fail-slow=1` or `--fail-slow=0.25`.
-    #[clap(long, value_name = "SECONDS", help_heading = "Runner options")]
+    #[clap(
+        long,
+        value_name = "SECONDS",
+        value_parser = parse_fail_slow,
+        help_heading = "Runner options"
+    )]
     pub fail_slow: Option<f64>,
 
     /// Update snapshots directly instead of creating pending `.snap.new` files.
@@ -509,6 +514,18 @@ fn parse_override_json(raw: &str) -> Result<OverrideOptions, String> {
     serde_json::from_str(raw).map_err(|err| err.to_string())
 }
 
+fn parse_fail_slow(raw: &str) -> Result<f64, String> {
+    let value: f64 = raw
+        .parse()
+        .map_err(|err| format!("`{raw}` is not a valid number: {err}"))?;
+    if FailSlowSecs(value).as_duration().is_none() {
+        return Err(format!(
+            "must be a finite, positive duration supported by this platform, got `{raw}`"
+        ));
+    }
+    Ok(value)
+}
+
 /// Parse and validate a `--cov-fail-under=N` argument.
 ///
 /// Accepts any finite percentage in `0..=100`.
@@ -626,5 +643,11 @@ mod tests {
     fn fail_slow_flag_parses_into_sub_command() {
         let command = TestCommand::parse_from(["karva-test", "--fail-slow=0.25"]);
         assert_eq!(command.sub_command.fail_slow, Some(0.25));
+    }
+
+    #[test]
+    fn fail_slow_flag_rejects_unrepresentable_duration() {
+        assert!(TestCommand::try_parse_from(["karva-test", "--fail-slow=1e-300"]).is_err());
+        assert!(TestCommand::try_parse_from(["karva-test", "--fail-slow=1e300"]).is_err());
     }
 }

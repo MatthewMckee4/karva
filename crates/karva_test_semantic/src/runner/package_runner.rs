@@ -5,8 +5,7 @@ use std::sync::Arc;
 
 use karva_coverage::CoverageSession;
 use karva_diagnostic::{
-    CapturedTestOutput, IndividualTestResultKind, TestCaseRetry, TestExecutionAttempt,
-    TestExecutionOutcome,
+    CapturedTestOutput, TestCaseRetry, TestExecutionAttempt, TestExecutionOutcome,
 };
 use karva_metadata::RunIgnoredMode;
 use karva_metadata::filter::EvalContext;
@@ -569,80 +568,6 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         }
     }
 
-    /// Drive the test closure with the configured retry budget.
-    ///
-    /// Emits a per-attempt report after every failed retry and, when at
-    /// least one retry occurred, after the final attempt as well, so the
-    /// reporter sees the same `TRY N PASS|FAIL` ordering as nextest.
-    fn run_with_retries(
-        &self,
-        py: Python<'_>,
-        qualified_test_name: &QualifiedTestName,
-        configured_retries: u32,
-        expect_fail: bool,
-        mut run_test: impl FnMut() -> PyResult<TestCallOutcome>,
-    ) -> RetryOutcome {
-        let max_attempts = configured_retries.saturating_add(1);
-        let mut run_attempt = |attempt| {
-            let start = std::time::Instant::now();
-            let result = set_attempt_env(py, attempt, max_attempts).and_then(|()| run_test());
-            TestCallAttempt {
-                attempt,
-                result,
-                duration: start.elapsed(),
-            }
-        };
-        let mut attempt: u32 = 1;
-        let mut current_attempt = run_attempt(attempt);
-        let mut retry_count = configured_retries;
-        let mut prior_attempts = Vec::new();
-
-        while retry_count > 0 {
-            if !should_retry_result(
-                py,
-                &current_attempt.result,
-                expect_fail,
-                qualified_test_name.function_name().function_name(),
-            ) {
-                break;
-            }
-            self.context.report_test_attempt(
-                qualified_test_name,
-                attempt,
-                IndividualTestResultKind::Failed,
-                current_attempt.duration,
-            );
-            prior_attempts.push(current_attempt);
-
-            tracing::debug!("Retrying test `{}`", qualified_test_name);
-            retry_count -= 1;
-            attempt += 1;
-            current_attempt = run_attempt(attempt);
-        }
-
-        if !prior_attempts.is_empty() {
-            // Emit the per-attempt line for the final attempt so output
-            // ordering matches nextest:
-            //   TRY 1 FAIL ...
-            //   TRY 2 PASS ...   (or TRY 2 FAIL for an exhausted retry)
-            // The diagnostic for the final attempt (if any) is collected by
-            // `classify_test_result` and shown in the end-of-run block.
-            let final_kind = attempt_result_kind(py, &current_attempt.result);
-            self.context.report_test_attempt(
-                qualified_test_name,
-                attempt,
-                final_kind,
-                current_attempt.duration,
-            );
-        }
-
-        RetryOutcome {
-            max_attempts,
-            prior_attempts,
-            final_attempt: current_attempt,
-        }
-    }
-
     /// Run a test variant (a specific combination of parametrize values and fixtures).
     fn execute_test_variant(&self, py: Python<'_>, variant: TestVariant<'_>) -> bool {
         let tags = variant.resolved_tags();
@@ -667,9 +592,10 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         }
 
         let output_capture = self.start_output_capture(py);
-        let start_time = std::time::Instant::now();
         let expect_fail_tag = tags.expect_fail_tag();
+        let retry_params = params.clone();
 
+        let setup_start = std::time::Instant::now();
         let (function_arguments, fixture_call_errors, test_finalizers) = self.setup_test_fixtures(
             py,
             &fixture_dependencies,
@@ -677,7 +603,12 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             &auto_use_fixtures,
             params,
         );
-        let setup_duration = start_time.elapsed();
+        let first_attempt = PreparedTestAttempt {
+            function_arguments,
+            fixture_call_errors,
+            test_finalizers,
+            setup_duration: setup_start.elapsed(),
+        };
 
         let fixture_names = fixture_dependencies
             .iter()
@@ -691,7 +622,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let computed_full_test_name = full_test_name(
             py,
             name.to_string(),
-            &function_arguments,
+            &first_attempt.function_arguments,
             &stmt_function_def.parameters,
             &framework_fixture_names,
         );
@@ -707,49 +638,10 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         let fail_slow_budget = tags
             .fail_slow_tag()
             .map(FailSlowTag::seconds)
-            .map(std::time::Duration::from_secs_f64)
+            .and_then(|seconds| std::time::Duration::try_from_secs_f64(seconds).ok())
             .or_else(|| self.context.settings().fail_slow_for(&eval_ctx));
 
         tracing::debug!("Running test `{}`", qualified_test_name);
-
-        if !fixture_call_errors.is_empty() {
-            let mut diagnostics = fixture_call_errors
-                .into_iter()
-                .map(|error| fixture_failure_diagnostic(py, error))
-                .collect::<Vec<_>>();
-            diagnostics.extend(
-                test_finalizers
-                    .into_iter()
-                    .rev()
-                    .filter_map(|finalizer| finalizer.run(py)),
-            );
-            diagnostics.extend(self.clean_up_scope(py, FixtureScope::Function));
-            let captured_output = Self::finish_output_capture(py, output_capture);
-            let duration = start_time.elapsed();
-            self.maybe_register_slow(
-                &qualified_test_name,
-                duration,
-                self.context.settings().slow_timeout_for(&eval_ctx),
-            );
-            if let Some(budget) = fail_slow_budget
-                && duration > budget
-            {
-                diagnostics.push(fail_slow_exceeded_diagnostic(
-                    source_file,
-                    &stmt_function_def,
-                    budget,
-                    duration,
-                    "setup",
-                ));
-            }
-            let diagnostic = diagnostics.remove(0);
-            return self.context.register_test_case_result(
-                &qualified_test_name,
-                TestExecutionOutcome::error_with_related(diagnostic, diagnostics),
-                duration,
-                captured_output,
-            );
-        }
 
         let test_name_env_result = set_test_name_env(py, &qualified_test_name.to_string());
 
@@ -761,7 +653,7 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
             full_test_name(
                 py,
                 name.function_name().to_string(),
-                &function_arguments,
+                &first_attempt.function_arguments,
                 &stmt_function_def.parameters,
                 &fixture_names,
             ),
@@ -779,41 +671,9 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
                 .timeout_for(&eval_ctx)
                 .map(|d| d.as_secs_f64())
         });
-        let run_test = || {
-            set_snapshot_context(snapshot_context.clone());
-            if let Err(err) = &test_name_env_result {
-                return Err(err.clone_ref(py));
-            }
-            if let Err(err) = &async_patch_result {
-                return Err(err.clone_ref(py));
-            }
-            let result = if let Some(seconds) = timeout_seconds {
-                run_test_with_timeout(
-                    py,
-                    &function,
-                    &function_arguments,
-                    is_async,
-                    seconds,
-                    &snapshot_context,
-                )
-            } else {
-                let result = if function_arguments.is_empty() {
-                    function.call0(py)
-                } else {
-                    let py_dict = function_arguments.to_kwargs(py)?;
-                    function.call(py, (), Some(&py_dict))
-                };
-                if is_async {
-                    result.and_then(|coroutine| run_coroutine(py, coroutine))
-                } else {
-                    result
-                }
-            };
-
-            result.map(|value| reject_non_none_return(py, &value))
-        };
 
         let configured_retries = self.context.settings().retry_for(&eval_ctx);
+        let max_attempts = configured_retries.saturating_add(1);
         let expect_fail = expect_fail_tag
             .as_ref()
             .is_some_and(ExpectFailTag::should_expect_fail);
@@ -821,107 +681,228 @@ impl<'ctx, 'a> PackageRunner<'ctx, 'a> {
         if let Some(coverage) = self.coverage {
             coverage.set_current_context(py, Some(&qualified_name_str));
         }
-        let RetryOutcome {
-            max_attempts,
-            prior_attempts,
-            final_attempt,
-        } = self.run_with_retries(
-            py,
-            &qualified_test_name,
-            configured_retries,
-            expect_fail,
-            run_test,
-        );
-        self.context.report_test_finished(&qualified_test_name);
+        let mut attempt_number = 1;
+        let mut prepared_attempt = Some(first_attempt);
+        let mut prior_attempts = Vec::new();
 
-        let report_ctx = VariantReportCtx {
-            name: &name,
-            source_file: &source_file,
-            stmt_function_def: &stmt_function_def,
-            function_arguments: &function_arguments,
-            expect_fail_tag,
+        let final_attempt = loop {
+            let attempt_env_result = set_attempt_env(py, attempt_number, max_attempts);
+            let prepared = if let Some(prepared) = prepared_attempt.take() {
+                prepared
+            } else {
+                if let Some(coverage) = self.coverage {
+                    coverage.set_current_context(py, None);
+                }
+                let setup_start = std::time::Instant::now();
+                let (function_arguments, fixture_call_errors, test_finalizers) = self
+                    .setup_test_fixtures(
+                        py,
+                        &fixture_dependencies,
+                        &use_fixture_dependencies,
+                        &auto_use_fixtures,
+                        retry_params.clone(),
+                    );
+                if let Some(coverage) = self.coverage {
+                    coverage.set_current_context(py, Some(&qualified_name_str));
+                }
+                PreparedTestAttempt {
+                    function_arguments,
+                    fixture_call_errors,
+                    test_finalizers,
+                    setup_duration: setup_start.elapsed(),
+                }
+            };
+
+            let PreparedTestAttempt {
+                function_arguments,
+                fixture_call_errors,
+                test_finalizers,
+                setup_duration,
+            } = prepared;
+
+            let (outcome, duration, retryable) = if fixture_call_errors.is_empty() {
+                set_snapshot_context(snapshot_context.clone());
+                let prepared_call = attempt_env_result.and_then(|()| {
+                    if let Err(err) = &test_name_env_result {
+                        return Err(err.clone_ref(py));
+                    }
+                    if let Err(err) = &async_patch_result {
+                        return Err(err.clone_ref(py));
+                    }
+                    if function_arguments.is_empty() || timeout_seconds.is_some() {
+                        Ok(None)
+                    } else {
+                        function_arguments.to_kwargs(py).map(Some)
+                    }
+                });
+                let (test_result, call_duration) = match prepared_call {
+                    Ok(py_dict) => {
+                        let call_start = std::time::Instant::now();
+                        let result = if let Some(seconds) = timeout_seconds {
+                            run_test_with_timeout(
+                                py,
+                                &function,
+                                &function_arguments,
+                                is_async,
+                                seconds,
+                                &snapshot_context,
+                            )
+                        } else {
+                            let result = if let Some(py_dict) = py_dict {
+                                function.call(py, (), Some(&py_dict))
+                            } else {
+                                function.call0(py)
+                            };
+                            if is_async {
+                                result.and_then(|coroutine| run_coroutine(py, coroutine))
+                            } else {
+                                result
+                            }
+                        };
+                        let call_duration = call_start.elapsed();
+                        (
+                            result.map(|value| reject_non_none_return(py, &value)),
+                            call_duration,
+                        )
+                    }
+                    Err(err) => (Err(err), std::time::Duration::ZERO),
+                };
+                let retryable_result = should_retry_result(
+                    py,
+                    &test_result,
+                    expect_fail,
+                    qualified_test_name.function_name().function_name(),
+                );
+                let report_ctx = VariantReportCtx {
+                    name: &name,
+                    source_file: &source_file,
+                    stmt_function_def: &stmt_function_def,
+                    function_arguments: &function_arguments,
+                    expect_fail_tag: expect_fail_tag.clone(),
+                };
+                let outcome = Self::classify_test_result(py, test_result, &report_ctx);
+                let skipped = outcome.is_skipped();
+
+                let teardown_start = std::time::Instant::now();
+                let mut finalizer_diagnostics = test_finalizers
+                    .into_iter()
+                    .rev()
+                    .filter_map(|finalizer| finalizer.run(py))
+                    .collect::<Vec<_>>();
+                finalizer_diagnostics.extend(self.clean_up_scope(py, FixtureScope::Function));
+                let phases = PhaseDurations {
+                    setup: setup_duration,
+                    call: call_duration,
+                    teardown: teardown_start.elapsed(),
+                };
+                let duration = phases.total();
+                let budget_exceeded = fail_slow_budget.is_some_and(|budget| duration > budget);
+                let outcome = attach_finalizer_diagnostics(outcome, finalizer_diagnostics);
+                let outcome = apply_fail_slow_budget(
+                    outcome,
+                    duration,
+                    phases,
+                    fail_slow_budget,
+                    &source_file,
+                    &stmt_function_def,
+                );
+                (
+                    outcome,
+                    duration,
+                    retryable_result || (budget_exceeded && !skipped),
+                )
+            } else {
+                let mut diagnostics = fixture_call_errors
+                    .into_iter()
+                    .map(|error| fixture_failure_diagnostic(py, error))
+                    .collect::<Vec<_>>();
+                let teardown_start = std::time::Instant::now();
+                diagnostics.extend(
+                    test_finalizers
+                        .into_iter()
+                        .rev()
+                        .filter_map(|finalizer| finalizer.run(py)),
+                );
+                diagnostics.extend(self.clean_up_scope(py, FixtureScope::Function));
+                let phases = PhaseDurations {
+                    setup: setup_duration,
+                    call: std::time::Duration::ZERO,
+                    teardown: teardown_start.elapsed(),
+                };
+                let duration = phases.total();
+                let budget_exceeded = fail_slow_budget.is_some_and(|budget| duration > budget);
+                let diagnostic = diagnostics.remove(0);
+                let outcome = TestExecutionOutcome::error_with_related(diagnostic, diagnostics);
+                let outcome = apply_fail_slow_budget(
+                    outcome,
+                    duration,
+                    phases,
+                    fail_slow_budget,
+                    &source_file,
+                    &stmt_function_def,
+                );
+                (outcome, duration, budget_exceeded)
+            };
+
+            let attempt = TestLifecycleAttempt {
+                attempt: attempt_number,
+                outcome,
+                duration,
+            };
+            if retryable && attempt_number < max_attempts {
+                self.context.report_test_attempt(
+                    &qualified_test_name,
+                    attempt_number,
+                    attempt.outcome.result_kind(),
+                    duration,
+                );
+                prior_attempts.push(attempt);
+                tracing::debug!("Retrying test `{}`", qualified_test_name);
+                attempt_number += 1;
+            } else {
+                break attempt;
+            }
         };
 
-        let total_duration = start_time.elapsed();
+        if let Some(coverage) = self.coverage {
+            coverage.set_current_context(py, None);
+        }
+        let captured_output = Self::finish_output_capture(py, output_capture);
+        let total_duration = prior_attempts
+            .iter()
+            .map(|attempt| attempt.duration)
+            .sum::<std::time::Duration>()
+            .saturating_add(final_attempt.duration);
+        if !prior_attempts.is_empty() {
+            self.context.report_test_attempt(
+                &qualified_test_name,
+                final_attempt.attempt,
+                final_attempt.outcome.result_kind(),
+                final_attempt.duration,
+            );
+        }
         self.maybe_register_slow(
             &qualified_test_name,
             total_duration,
             self.context.settings().slow_timeout_for(&eval_ctx),
         );
-
-        let final_attempt_number = final_attempt.attempt;
-        let final_attempt_duration = final_attempt.duration;
-        let final_attempt_outcome =
-            Self::classify_test_result(py, final_attempt.result, &report_ctx);
-
-        let teardown_start = std::time::Instant::now();
-        let mut finalizer_diagnostics = test_finalizers
-            .into_iter()
-            .rev()
-            .filter_map(|finalizer| finalizer.run(py))
-            .collect::<Vec<_>>();
-        finalizer_diagnostics.extend(self.clean_up_scope(py, FixtureScope::Function));
-        let teardown_duration = teardown_start.elapsed();
-        let captured_output = Self::finish_output_capture(py, output_capture);
-        if let Some(coverage) = self.coverage {
-            coverage.set_current_context(py, None);
-        }
-
-        // Teardown-inclusive lifecycle duration, used only for the
-        // `fail-slow` budget check below. Distinct from `total_duration`
-        // (captured before teardown), which is what gets reported for
-        // `slow-timeout` and shown in PASS/FAIL lines and machine-readable
-        // reports.
-        let lifecycle_duration = start_time.elapsed();
-        let phase_durations = PhaseDurations {
-            setup: setup_duration,
-            call: final_attempt_duration,
-            teardown: teardown_duration,
-        };
+        self.context.report_test_finished(&qualified_test_name);
 
         if prior_attempts.is_empty() {
-            let outcome =
-                attach_finalizer_diagnostics(final_attempt_outcome, finalizer_diagnostics);
-            let outcome = apply_fail_slow_budget(
-                outcome,
-                lifecycle_duration,
-                phase_durations,
-                fail_slow_budget,
-                &source_file,
-                &stmt_function_def,
-            );
             self.context.register_test_case_result(
                 &qualified_test_name,
-                outcome,
+                final_attempt.outcome,
                 total_duration,
                 captured_output,
             )
         } else {
+            let final_attempt_number = final_attempt.attempt;
+            let outcome = final_attempt.outcome.clone();
             let mut execution_attempts = prior_attempts
                 .into_iter()
-                .map(|attempt| {
-                    TestExecutionAttempt::new(
-                        attempt.attempt,
-                        Self::classify_test_result(py, attempt.result, &report_ctx),
-                        attempt.duration,
-                    )
-                })
+                .map(TestLifecycleAttempt::into_execution_attempt)
                 .collect::<Vec<_>>();
-            execution_attempts.push(TestExecutionAttempt::new(
-                final_attempt_number,
-                final_attempt_outcome.clone(),
-                final_attempt_duration,
-            ));
-            let outcome =
-                attach_finalizer_diagnostics(final_attempt_outcome, finalizer_diagnostics);
-            let outcome = apply_fail_slow_budget(
-                outcome,
-                lifecycle_duration,
-                phase_durations,
-                fail_slow_budget,
-                &source_file,
-                &stmt_function_def,
-            );
+            execution_attempts.push(final_attempt.into_execution_attempt());
             self.context.register_retried_result(
                 &qualified_test_name,
                 outcome,
@@ -1103,20 +1084,6 @@ fn reject_non_none_return(py: Python<'_>, value: &Py<PyAny>) -> TestCallOutcome 
     }
 }
 
-fn attempt_result_kind(
-    py: Python<'_>,
-    test_result: &PyResult<TestCallOutcome>,
-) -> IndividualTestResultKind {
-    match test_result {
-        Ok(TestCallOutcome::ReturnedNone) => IndividualTestResultKind::Passed,
-        Ok(TestCallOutcome::ReturnedValue(_)) => IndividualTestResultKind::Failed,
-        Err(err) if is_skip_exception(py, err) => IndividualTestResultKind::Skipped {
-            reason: extract_skip_reason(py, err),
-        },
-        Err(_) => IndividualTestResultKind::Failed,
-    }
-}
-
 fn should_retry_result(
     py: Python<'_>,
     test_result: &PyResult<TestCallOutcome>,
@@ -1183,13 +1150,7 @@ fn attach_finalizer_diagnostics(
     }
 }
 
-/// Per-phase timings for a single test execution, used to attribute a
-/// `fail-slow` diagnostic to the slowest phase of the test's lifecycle.
-///
-/// `call` is the final (reported) attempt's duration only. When a test was
-/// retried, earlier attempts are not summed in here — the diagnostic
-/// attributes slowness within the attempt that actually determined the
-/// outcome, not the cumulative cost of every retry.
+/// Per-phase timings for one complete test attempt.
 #[derive(Clone, Copy)]
 struct PhaseDurations {
     setup: std::time::Duration,
@@ -1198,6 +1159,12 @@ struct PhaseDurations {
 }
 
 impl PhaseDurations {
+    fn total(&self) -> std::time::Duration {
+        self.setup
+            .saturating_add(self.call)
+            .saturating_add(self.teardown)
+    }
+
     fn slowest(&self) -> &'static str {
         let mut slowest = ("setup", self.setup);
         for candidate in [("call", self.call), ("teardown", self.teardown)] {
@@ -1252,18 +1219,23 @@ enum TestCallOutcome {
     ReturnedValue(String),
 }
 
-/// Outcome of driving a test through the configured retry budget.
-struct RetryOutcome {
-    /// The maximum number of attempts the test was allowed (`retries + 1`).
-    max_attempts: u32,
-    prior_attempts: Vec<TestCallAttempt>,
-    final_attempt: TestCallAttempt,
+struct PreparedTestAttempt {
+    function_arguments: FixtureArguments,
+    fixture_call_errors: Vec<FixtureCallError>,
+    test_finalizers: Vec<Finalizer>,
+    setup_duration: std::time::Duration,
 }
 
-struct TestCallAttempt {
+struct TestLifecycleAttempt {
     attempt: u32,
-    result: PyResult<TestCallOutcome>,
+    outcome: TestExecutionOutcome,
     duration: std::time::Duration,
+}
+
+impl TestLifecycleAttempt {
+    fn into_execution_attempt(self) -> TestExecutionAttempt {
+        TestExecutionAttempt::new(self.attempt, self.outcome, self.duration)
+    }
 }
 
 /// Immutable per-variant state threaded into [`PackageRunner::classify_test_result`].
