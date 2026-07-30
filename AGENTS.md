@@ -1,8 +1,43 @@
+## Boil the ocean
+
+When planning, do not be afraid to suggest seemingly insane solutions. We are
+rethinking what it means to make a Python test framework. Karva needs to be
+cross-platform while having an amazing developer experience. It should feel
+familiar to pytest users so developers and agents can transition easily. We
+want execution to be extremely efficient, with memory and CPU usage as low as
+possible, without compromising that developer experience.
+
+## Every number needs a receipt
+
+A limit without a measurement is a landmine. Before writing any number (a
+maximum test count, a byte cap, a timeout), measure the real thing first, then
+size it as a tripwire. Capacity is free until touched (reserve big, commit
+lazily, never zero an arena eagerly), so be generous. If normal use hits a
+budget, the budget is wrong. Remeasure and update the receipt.
+
+## A limit developers can hit is a limit they must see
+
+Developers will not read our code. Their agents read our errors. An agent can
+fix a named limit with the requested and allowed values. It cannot fix a blank
+window. Every budget failure names the budget, the limit, and the request: at
+validation time if knowable there, loudly at runtime if not. A silent budget is
+worse than no budget.
+
+## Fight for the "obvious" solution
+
+Measure twice, cut once: understand the problem fully before building, because
+cleverness is what gets written when you have not. The biggest simplicity win
+is refusing to solve problems we do not have. Good code is the simplest thing
+that delivers full functionality and performance, with nothing traded away and
+nothing bolted on. Push back when you see a more obvious way.
+
 # Karva Repository
 
 This repository contains Karva, a Python test framework implemented as a Rust
 workspace with PyO3. Rust crates use the `karva_*` naming convention and live
 under `crates/`.
+
+## Architecture
 
 Karva runs tests through a main `karva` process and `karva-worker`
 subprocesses. The binaries do not link against each other. They communicate
@@ -11,148 +46,49 @@ Python.
 
 ## Code Review Rules
 
-When reviewing a branch or pull request, be deliberately nitpicky. Report not
-only bugs and regressions, but also architectural and maintenance risks, weak
-test coverage, unclear code, unnecessary complexity, and meaningful style or
-consistency issues. Order findings by severity, cite files and lines, and
-distinguish blockers from non-blocking improvements. Number each review point
-for easy reference in subsequent review discussion.
+Be deliberately nitpicky. Report bugs, regressions, architectural and
+maintenance risks, weak tests, unclear code, unnecessary complexity, and
+meaningful consistency issues. Number findings, order them by severity, cite
+files and lines, and distinguish blockers from improvements.
 
-## Running Tests
-
-Run all tests:
-
-```sh
-just test
-```
-
-Run tests for a specific crate:
-
-```sh
-just test -p karva_cache
-```
-
-Run a specific test:
-
-```sh
-just test -p karva test_name
-```
-
-`just test` builds the Python wheel with `uvx maturin build` before running
-the Rust test suite.
-
-### Fallback Without Nextest
-
-The `just test` recipe uses `cargo nextest run` when `cargo-nextest` is
-installed and falls back to `cargo test` automatically. Arguments shown above
-work with either runner.
-
-### Snapshot Updates
-
-After running tests, always review every snapshot that was added or updated.
-Check for pending `.snap.new` files if affected tests use Karva snapshots.
-
-Do not edit snapshot files or inline snapshot bodies manually. Regenerate them
-by running the relevant tests or Karva snapshot command, then review the
-generated diff. Do not accept unrelated snapshot changes.
-
-When snapshot output differs by platform, such as paths or operating system
-errors, use separate `#[cfg(unix)]` and `#[cfg(not(unix))]` snapshots.
-
-## Running Clippy
-
-```sh
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-```
-
-## Running Debug Builds
-
-Use debug builds, not `--release`, while developing. Release builds lack debug
-assertions and take longer to compile.
-
-Run Karva against a test file:
-
-```sh
-cargo run test tests/test_add.py
-```
-
-## Generated Documentation
-
-Reference files under `docs/reference/` and
-`docs/configuration/configuration.md` are generated. Their headers identify
-the source file to change.
-
-After changing configuration options, CLI arguments, environment variable
-definitions, or their reference documentation, regenerate all references:
-
-```sh
-cargo run -p karva_dev generate-all
-```
-
-Review the generated diff before committing it.
-
-## GitHub Actions
-
-Actions must be pinned to full commit SHAs. After changing a workflow, run:
-
-```sh
-pinact run
-```
-
-## Development Guidelines
+## Development
 
 - Write `Karva` for the project and `karva` for the executable or package name.
 - Always invoke Karva as `uv run karva` in documentation commands and examples.
-- All significant changes must be tested. Add or update focused tests for
-  behavior changes when existing coverage does not establish the intended
-  behavior.
-- Look for an existing test file before creating a new one.
-- Get the relevant tests to pass. If the tests were not run, the change is not
-  done.
-- Follow existing code style. Check neighboring files for patterns.
-- Prefer integration tests under `crates/karva/tests/it/` when behavior crosses
-  crate, Python, worker, or CLI boundaries. Command integration tests should
-  use snapshots. Do not call `.output()` only to assert the exit status;
-  snapshot the exit code, stdout, and stderr together.
-- Use `#[rstest]` with `#[values(...)]` when an integration test exercises the
-  same behavior across frameworks or inputs. Do not loop over those cases
-  inside the test body.
-- Keep changes focused. Do not expand the task to unrelated issues.
-- Before writing significant new code, look for existing utilities or
-  mechanisms that solve the problem. Prefer fixing the underlying
-  architectural problem over adding a localized workaround. Ask for guidance
-  when the larger change is unclear.
 - Prefer narrow visibility because this workspace is generally its own
-  consumer. Do not add workarounds solely to avoid `pub`; make an item public
-  when another workspace crate needs it and that produces the cleaner design.
-- Keep Rust imports at the top of the file, never locally inside functions.
+  consumer; use `pub` when another workspace crate genuinely needs an item.
+- Keep Rust imports at the top of files and prefer short imports.
 - Avoid `panic!`, `unreachable!`, `.unwrap()`, unsafe code, and Clippy ignores.
   Encode constraints in the type system.
-- Prefer `if let` for fallibility. Prefer let chains over nested `if let`
-  statements when they reduce indentation.
-- If a Clippy lint must be suppressed, prefer `#[expect()]` over `#[allow()]`.
-  Delete unused code instead of suppressing dead-code warnings.
-- Prefer short imports over fully qualified paths.
-- Do not use comments to narrate code. Use them to explain invariants and why
-  unusual decisions were made. Prefer plain language that makes sense without
-  prior context.
-- Avoid redundant comments and section separators in tests. Prefer function
-  comments over inline comments.
-- Consider whether public APIs, flags, defaults, configuration, environment
-  variables, or CLI changes require documentation updates.
-- Run `uvx prek run --files <path1> <path2>` during iteration and pass every
-  changed file. Run `uvx prek run -a` before finishing.
+- Prefer `if let` and let chains for fallibility.
+- Use `#[expect(...)]` rather than `#[allow(...)]` when suppressing a lint.
 
-## Pull Requests
+## Tests
 
-Keep pull requests minimal and focused. Use the pull request template and add
-labels based on user-facing impact. If a pull request has no user-facing
-change, add only the `internal` label. CI performance changes use only the `ci`
-label; reserve `performance` for user-facing performance improvements.
+- Add focused tests when existing coverage does not establish changed behavior.
+- Prefer integration tests under `crates/karva/tests/it/` for behavior crossing
+  crate, Python, worker, or CLI boundaries.
+- Snapshot command exit code, stdout, and stderr together. Do not call
+  `.output()` only to assert success.
+- Use `#[rstest]` with `#[values(...)]` instead of loops for repeated cases.
+- Never edit snapshots manually. Regenerate them, review every changed snapshot,
+  and check for `.snap.new` files.
+- Use separate `#[cfg(unix)]` and `#[cfg(not(unix))]` snapshots for
+  platform-dependent output.
 
-Keep the summary and test plan concise. Write descriptions as prose, not bullet
-lists or checklists. Explain what changed and why; include implementation
-details only when reviewers need them.
+## Verification
 
-Use a descriptive one-line commit subject by default. Never add an AI tool as
-an author or co-author.
+- Focused tests: `just test -p <crate> [test_name]`.
+- Full suite: `just test`. It builds the Python wheel first and uses nextest
+  when installed, otherwise `cargo test`.
+- Clippy: `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
+- Run Karva with debug builds: `cargo run test tests/test_add.py`.
+- After configuration, CLI, environment variable, or reference changes, run
+  `cargo run -p karva_dev generate-all` and review generated files.
+- After workflow changes, run `pinact run`; actions must use full commit SHAs.
+- During iteration, run `uvx prek run --files <paths>`. Before finishing, run
+  `uvx prek run -a`.
+
+## Contributor Workflow
+
+See `CONTRIBUTING.md` for documentation and pull requests.
