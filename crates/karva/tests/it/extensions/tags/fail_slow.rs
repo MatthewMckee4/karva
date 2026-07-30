@@ -299,9 +299,11 @@ import os
 import time
 import karva
 
-@karva.tags.fail_slow(0.2)
+# A 0.15s sleep exceeded a 0.2s budget on macOS CI. Keep enough headroom for
+# one attempt while two 1s attempts still exceed the per-attempt budget.
+@karva.tags.fail_slow(1.5)
 def test_retry():
-    time.sleep(0.15)
+    time.sleep(1)
     assert os.environ["KARVA_ATTEMPT"] == "2"
         "#,
     );
