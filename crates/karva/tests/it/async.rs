@@ -166,7 +166,7 @@ def test_teardown_ran():
     exit_code: 0
     ----- stdout -----
         Starting 2 tests across 1 worker
-            PASS [TIME] test::test_async_gen_fixture(async_resource=resource)
+            PASS [TIME] test::test_async_gen_fixture(async_resource='resource')
             PASS [TIME] test::test_teardown_ran
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped

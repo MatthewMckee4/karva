@@ -4,7 +4,7 @@ use camino::Utf8Path;
 use karva_static::WorkerEnvVars;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyAnyMethods, PyCFunction, PyDict, PyTuple};
+use pyo3::types::{PyAnyMethods, PyCFunction, PyDict, PyString, PyTuple};
 use pyo3::{PyResult, Python};
 use ruff_python_ast::Parameters;
 
@@ -221,6 +221,40 @@ pub(crate) fn set_test_name_env(py: Python<'_>, qualified_name: &str) -> PyResul
     Ok(())
 }
 
+pub(crate) fn display_value(value: &Bound<'_, PyAny>) -> String {
+    if value.is_instance_of::<PyString>()
+        && let Ok(repr) = value.repr()
+    {
+        repr.to_string()
+    } else {
+        value.to_string()
+    }
+}
+
+fn truncated_display_value(value: &Bound<'_, PyAny>) -> String {
+    let display = display_value(value);
+    if display.chars().count() <= TRUNCATE_LENGTH {
+        return display;
+    }
+    if value.is_instance_of::<PyString>()
+        && let Ok(raw_value) = value.extract::<String>()
+    {
+        let mut truncated = raw_value.chars().take(TRUNCATE_LENGTH).collect::<String>();
+        loop {
+            let candidate = PyString::new(value.py(), &format!("{truncated}..."));
+            if let Ok(repr) = candidate.repr()
+                && repr.to_string().chars().count() <= TRUNCATE_LENGTH
+            {
+                return repr.to_string();
+            }
+            if truncated.pop().is_none() {
+                break;
+            }
+        }
+    }
+    truncate_string(&display)
+}
+
 /// Adds a directory path to Python's sys.path at the specified index.
 pub(crate) fn add_to_sys_path(py: Python<'_>, path: &Utf8Path, index: isize) -> PyResult<()> {
     let sys_module = py.import("sys")?;
@@ -248,7 +282,7 @@ pub(crate) fn full_test_name(
             if name_only_arguments.contains(&key.as_str()) {
                 let _ = write!(args_str, "{truncated_key}");
             } else if let Ok(value) = value.cast_bound::<PyAny>(py) {
-                let trimmed_value_str = truncate_string(&value.to_string());
+                let trimmed_value_str = truncated_display_value(value);
                 let _ = write!(args_str, "{truncated_key}={trimmed_value_str}");
             }
         }

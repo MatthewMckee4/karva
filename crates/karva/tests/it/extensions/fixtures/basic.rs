@@ -732,7 +732,7 @@ def invoke():
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test_invoke::test_invoke(invoke=invoked)
+            PASS [TIME] test_invoke::test_invoke(invoke='invoked')
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -776,7 +776,7 @@ def test_uses_imported_fixture(imported_fixture):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test_imported_fixture::test_uses_imported_fixture(imported_fixture=imported)
+            PASS [TIME] test_imported_fixture::test_uses_imported_fixture(imported_fixture='imported')
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 

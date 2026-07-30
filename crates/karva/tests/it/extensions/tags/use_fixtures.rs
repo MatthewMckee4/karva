@@ -97,7 +97,7 @@ def test_combined_fixtures(param_fixture):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_combined_fixtures(param_fixture=param_value)
+            PASS [TIME] test::test_combined_fixtures(param_fixture='param_value')
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -308,7 +308,7 @@ def test_mixed_fixtures(shared_fixture):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_mixed_fixtures(shared_fixture=shared_value)
+            PASS [TIME] test::test_mixed_fixtures(shared_fixture='shared_value')
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 

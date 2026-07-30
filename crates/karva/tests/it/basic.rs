@@ -1281,11 +1281,11 @@ def test_1(fixture_very_very_very_very_very_long_name):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test_file::test_1(fixture_very_very_very_very...=fixture_very_very_very_very...)
+            FAIL [TIME] test_file::test_1(fixture_very_very_very_very...='fixture_very_very_very_ve...')
 
     failures:
 
-    test_file::test_1(fixture_very_very_very_very...=fixture_very_very_very_very...):
+    test_file::test_1(fixture_very_very_very_very...='fixture_very_very_very_ve...'):
 
     error[test-failure]: Test `test_1` failed
      --> test_file.py:8:5

@@ -142,12 +142,12 @@ def test_after():
     exit_code: 1
     ----- stdout -----
         Starting 2 tests across 1 worker
-            FAIL [TIME] test::test_slow(resource=resource)
+            FAIL [TIME] test::test_slow(resource='resource')
             PASS [TIME] test::test_after
 
     failures:
 
-    test::test_slow(resource=resource):
+    test::test_slow(resource='resource'):
 
     error[fail-slow-exceeded]: Test `test_slow` exceeded its fail-slow budget
       --> test.py:14:5

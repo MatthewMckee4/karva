@@ -1291,6 +1291,57 @@ def test_pair(number, label):
     }
 }
 
+#[rstest]
+fn test_parametrize_quotes_default_string_ids(#[values("pytest", "karva")] framework: &str) {
+    let test_context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+import {framework}
+
+@{framework}.fixture
+def label():
+    return "fixture"
+
+@{parametrize}("value", ["plain", "can't"])
+def test_strings(label, value):
+    assert label == "fixture"
+
+@{parametrize}("left", ["one"])
+@{parametrize}("right", [2], ids=["two"])
+def test_stacked(left, right):
+    assert left == "one"
+    assert right == 2
+
+def no_id(value):
+    return None
+
+@{parametrize}("value", ["callable"], ids=no_id)
+def test_callable(value):
+    assert value == "callable"
+"#,
+            parametrize = get_parametrize_function(framework),
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(test_context.command(), @r#"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 3 tests across 1 worker
+                PASS [TIME] test::test_strings(label='fixture', value='plain')
+                PASS [TIME] test::test_strings(label='fixture', value="can't")
+                PASS [TIME] test::test_stacked(two-'one')
+                PASS [TIME] test::test_callable('callable')
+        ────────────
+             Summary [TIME] 4 tests run: 4 passed, 0 skipped
+
+        ----- stderr -----
+        "#);
+    }
+}
+
 #[test]
 fn test_pytest_parametrize_ids_use_pytest_positional_index() {
     let test_context = TestContext::with_file(
