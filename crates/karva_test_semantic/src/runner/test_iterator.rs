@@ -1,3 +1,5 @@
+//! Expansion of one discovered test into executable parameter/fixture variants.
+
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -23,24 +25,24 @@ use crate::runner::fixture_resolver::{FixtureResolutionResult, RuntimeFixtureRes
 pub(super) struct TestVariant<'a> {
     /// Reference to the original discovered test function. Borrowed from the
     /// surrounding module, which outlives the iterator.
-    pub test: &'a DiscoveredTestFunction,
+    pub(super) test: &'a DiscoveredTestFunction,
 
     /// Parameter values for this variant (from @parametrize). Moved out of
     /// the owning `ParametrizationArgs` so that `Arc::try_unwrap` in the
     /// caller can unwrap without a Python refcount bump.
-    pub params: HashMap<String, Arc<Py<PyAny>>>,
+    pub(super) params: HashMap<String, Arc<Py<PyAny>>>,
 
     /// Fixtures to be passed as arguments to the test function.
-    pub fixture_dependencies: Rc<[Rc<NormalizedFixture>]>,
+    pub(super) fixture_dependencies: Rc<[Rc<NormalizedFixture>]>,
 
     /// Fixtures from @usefixtures (run for side effects, not passed as args).
-    pub use_fixture_dependencies: Rc<[Rc<NormalizedFixture>]>,
+    pub(super) use_fixture_dependencies: Rc<[Rc<NormalizedFixture>]>,
 
     /// Auto-use fixtures that run automatically before this test.
-    pub auto_use_fixtures: Rc<[Rc<NormalizedFixture>]>,
+    pub(super) auto_use_fixtures: Rc<[Rc<NormalizedFixture>]>,
 
     /// Combined tags from the test and its parameter set.
-    pub tags: Tags,
+    pub(super) tags: Tags,
 }
 
 impl TestVariant<'_> {
@@ -76,17 +78,21 @@ impl TestVariant<'_> {
 /// module and shares fixture lists between variants via `Rc<[…]>`, so
 /// producing N variants costs N refcount bumps rather than N deep clones.
 pub(super) struct TestVariantIterator<'a> {
+    /// Discovered Python function shared by all emitted variants.
     test: &'a DiscoveredTestFunction,
     /// Consumed as we iterate, so `values` and `tags` on each
     /// `ParametrizationArgs` are moved into the emitted variant (not cloned).
     param_args: std::vec::IntoIter<ParametrizationArgs>,
+    /// Resolved fixtures passed as test arguments.
     fixture_dependencies: Rc<[Rc<NormalizedFixture>]>,
+    /// Resolved side-effect-only fixtures.
     use_fixture_dependencies: Rc<[Rc<NormalizedFixture>]>,
+    /// Resolved function-scoped auto-use fixtures.
     auto_use_fixtures: Rc<[Rc<NormalizedFixture>]>,
 }
 
 impl<'a> TestVariantIterator<'a> {
-    /// Create a new iterator for the given test function.
+    /// Creates an iterator for one discovered test function.
     ///
     /// Resolves fixtures and computes all parametrize variants.
     pub(super) fn new(
