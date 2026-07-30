@@ -36,7 +36,7 @@ fn test_fixture_basic(#[values("pytest", "karva")] framework: &str) {
         exit_code: 0
         ----- stdout -----
             Starting 1 test across 1 worker
-                PASS [TIME] test::test_with_fixture(my_fixture=value)
+                PASS [TIME] test::test_with_fixture(my_fixture='value')
         ────────────
              Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -126,8 +126,8 @@ fn test_fixture_module_scope(#[values("pytest", "karva")] framework: &str) {
         exit_code: 0
         ----- stdout -----
             Starting 2 tests across 1 worker
-                PASS [TIME] test::test_first(module_fixture=MODULE)
-                PASS [TIME] test::test_second(module_fixture=MODULE)
+                PASS [TIME] test::test_first(module_fixture='MODULE')
+                PASS [TIME] test::test_second(module_fixture='MODULE')
         ────────────
              Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
@@ -170,7 +170,7 @@ fn test_fixture_with_generator(#[values("pytest", "karva")] framework: &str) {
         exit_code: 0
         ----- stdout -----
             Starting 2 tests across 1 worker
-                PASS [TIME] test::test_with_setup(setup_fixture=resource)
+                PASS [TIME] test::test_with_setup(setup_fixture='resource')
                 PASS [TIME] test::test_verify_finalizer_ran
         ────────────
              Summary [TIME] 2 tests run: 2 passed, 0 skipped
@@ -260,7 +260,7 @@ fn test_fixture_with_multiple_fixtures(#[values("pytest", "karva")] framework: &
         exit_code: 0
         ----- stdout -----
             Starting 1 test across 1 worker
-                PASS [TIME] test::test_combination(number=100, letter=X)
+                PASS [TIME] test::test_combination(number=100, letter='X')
         ────────────
              Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -296,8 +296,8 @@ fn test_fixture_with_test_parametrize(#[values("pytest", "karva")] framework: &s
         exit_code: 0
         ----- stdout -----
             Starting 1 test across 1 worker
-                PASS [TIME] test::test_both(fixture_value=fixture_value, test_param=10)
-                PASS [TIME] test::test_both(fixture_value=fixture_value, test_param=20)
+                PASS [TIME] test::test_both(fixture_value='fixture_value', test_param=10)
+                PASS [TIME] test::test_both(fixture_value='fixture_value', test_param=20)
         ────────────
              Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
@@ -343,7 +343,7 @@ fn test_fixture_generator_finalizer_order(#[values("pytest", "karva")] framework
         exit_code: 0
         ----- stdout -----
             Starting 2 tests across 1 worker
-                PASS [TIME] test::test_one(ordered_fixture=value)
+                PASS [TIME] test::test_one(ordered_fixture='value')
                 PASS [TIME] test::test_check_order
         ────────────
              Summary [TIME] 2 tests run: 2 passed, 0 skipped
@@ -467,7 +467,7 @@ fn test_fixture_finalizer_with_state(#[values("pytest", "karva")] framework: &st
         exit_code: 0
         ----- stdout -----
             Starting 2 tests across 1 worker
-                PASS [TIME] test::test_uses_resource(resource=resource)
+                PASS [TIME] test::test_uses_resource(resource='resource')
                 PASS [TIME] test::test_all_cleaned_up
         ────────────
              Summary [TIME] 2 tests run: 2 passed, 0 skipped
@@ -527,7 +527,7 @@ fn test_complex_fixture_generator_finalizer_order(#[values("pytest", "karva")] f
         exit_code: 0
         ----- stdout -----
             Starting 2 tests across 1 worker
-                PASS [TIME] test::test_one(ordered_fixture=value1, ordered_fixture2=value2)
+                PASS [TIME] test::test_one(ordered_fixture='value1', ordered_fixture2='value2')
                 PASS [TIME] test::test_check_order
         ────────────
              Summary [TIME] 2 tests run: 2 passed, 0 skipped

@@ -619,7 +619,7 @@ def test_after_resource():
     exit_code: 0
     ----- stdout -----
         Starting 2 tests across 1 worker
-            PASS [TIME] test::test_resource(resource=resource)
+            PASS [TIME] test::test_resource(resource='resource')
             PASS [TIME] test::test_after_resource
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped

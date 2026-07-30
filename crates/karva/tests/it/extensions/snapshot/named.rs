@@ -365,26 +365,26 @@ def test_translate(lang):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_translate(lang=en)
-            PASS [TIME] test::test_translate(lang=fr)
+            PASS [TIME] test::test_translate(lang='en')
+            PASS [TIME] test::test_translate(lang='fr')
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
     ----- stderr -----
     ");
 
-    let en = context.read_file("snapshots/test__test_translate--greeting(lang=en).snap");
-    insta::assert_snapshot!(en, @r"
+    let en = context.read_file("snapshots/test__test_translate--greeting(lang='en').snap");
+    insta::assert_snapshot!(en, @"
     ---
-    source: test.py:6::test_translate(lang=en)
+    source: test.py:6::test_translate(lang='en')
     ---
     hello_en
     ");
 
-    let fr = context.read_file("snapshots/test__test_translate--greeting(lang=fr).snap");
-    insta::assert_snapshot!(fr, @r"
+    let fr = context.read_file("snapshots/test__test_translate--greeting(lang='fr').snap");
+    insta::assert_snapshot!(fr, @"
     ---
-    source: test.py:6::test_translate(lang=fr)
+    source: test.py:6::test_translate(lang='fr')
     ---
     hello_fr
     ");

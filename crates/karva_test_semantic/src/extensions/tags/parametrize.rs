@@ -12,6 +12,7 @@ use thiserror::Error;
 
 use crate::extensions::functions::Param;
 use crate::extensions::tags::Tags;
+use crate::utils::display_value;
 
 #[derive(Debug)]
 pub struct ParametrizeAnnotation {
@@ -425,7 +426,7 @@ pub fn default_param_id(py: Python<'_>, values: &[Arc<Py<PyAny>>]) -> String {
     values
         .iter()
         .filter_map(|value| value.cast_bound::<PyAny>(py).ok())
-        .map(ToString::to_string)
+        .map(display_value)
         .collect::<Vec<_>>()
         .join("-")
 }
@@ -493,7 +494,7 @@ pub(super) fn apply_parametrize_ids(
             for value in &parametrization.values {
                 let generated = ids.call1((value.bind(py),))?;
                 if generated.is_none() {
-                    parts.push(value.bind(py).to_string());
+                    parts.push(display_value(value.bind(py)));
                 } else {
                     parts.push(generated.to_string());
                 }
