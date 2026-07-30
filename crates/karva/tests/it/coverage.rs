@@ -2,21 +2,6 @@ use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
 
-fn normalize_xml_report(xml: &str) -> String {
-    let start = xml.find("<coverage version=\"1.0\" timestamp=\"").unwrap();
-    let end = xml[start..]
-        .find(" lines-valid=")
-        .map(|offset| start + offset)
-        .unwrap();
-
-    let mut normalized = xml.to_string();
-    normalized.replace_range(
-        start..end,
-        "<coverage version=\"1.0\" timestamp=\"[TIMESTAMP]\"",
-    );
-    normalized
-}
-
 #[test]
 fn test_no_cov_no_coverage_table() {
     let context = TestContext::with_file(
@@ -595,8 +580,7 @@ def test_only_covered():
     "
     );
 
-    let xml = normalize_xml_report(&context.read_file("coverage.xml"));
-    insta::assert_snapshot!(xml, @r#"
+    insta::assert_snapshot!(context.read_file("coverage.xml"), @r#"
     <?xml version="1.0" ?>
     <coverage version="1.0" timestamp="[TIMESTAMP]" lines-valid="6" lines-covered="5" line-rate="0.8333" branches-covered="0" branches-valid="0" branch-rate="0.0000" complexity="0.0">
       <sources>
@@ -666,8 +650,7 @@ def test_only_covered():
     "
     );
 
-    let xml = normalize_xml_report(&context.read_file("build/coverage.xml"));
-    insta::assert_snapshot!(xml, @r#"
+    insta::assert_snapshot!(context.read_file("build/coverage.xml"), @r#"
     <?xml version="1.0" ?>
     <coverage version="1.0" timestamp="[TIMESTAMP]" lines-valid="6" lines-covered="5" line-rate="0.8333" branches-covered="0" branches-valid="0" branch-rate="0.0000" complexity="0.0">
       <sources>
