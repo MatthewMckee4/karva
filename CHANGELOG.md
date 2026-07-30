@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.0.1-alpha.9
+
+### Bug Fixes
+
+- Fix diagnostic sort panic with multiple import failures ([#1035](https://github.com/MatthewMckee4/karva/pull/1035))
+- Enforce fixture scope compatibility ([#1033](https://github.com/MatthewMckee4/karva/pull/1033))
+- Validate parametrization before test execution ([#1032](https://github.com/MatthewMckee4/karva/pull/1032))
+- Reset snapshot state between retry attempts ([#1025](https://github.com/MatthewMckee4/karva/pull/1025))
+- Expand timeout interaction coverage ([#1024](https://github.com/MatthewMckee4/karva/pull/1024))
+
+### Diagnostics
+
+- Tie failure diagnostics to test results ([#1041](https://github.com/MatthewMckee4/karva/pull/1041))
+
+### Documentation
+
+- Refine project documentation and release metadata ([#1039](https://github.com/MatthewMckee4/karva/pull/1039))
+
+### Tags & Marks
+
+- Add fail-slow duration budget for tests ([#1052](https://github.com/MatthewMckee4/karva/pull/1052))
+
+### Contributors
+
+- [@BitWeaverDev](https://github.com/BitWeaverDev)
+- [@MatthewMckee4](https://github.com/MatthewMckee4)
+- [@arimu1](https://github.com/arimu1)
+- [@github-actions[bot]](https://github.com/github-actions[bot])
+
 ## 0.0.1-alpha.8
 
 ### Bug Fixes

@@ -1063,7 +1063,7 @@ dependencies = [
 
 [[package]]
 name = "karva"
-version = "0.0.1-alpha.8"
+version = "0.0.1-alpha.9"
 dependencies = [
  "anyhow",
  "argfile",
@@ -1304,7 +1304,7 @@ dependencies = [
 
 [[package]]
 name = "karva_python"
-version = "0.0.1-alpha.8"
+version = "0.0.1-alpha.9"
 dependencies = [
  "karva",
  "karva_test_semantic",
@@ -1398,7 +1398,7 @@ dependencies = [
 
 [[package]]
 name = "karva_version"
-version = "0.0.1-alpha.8"
+version = "0.0.1-alpha.9"
 
 [[package]]
 name = "karva_worker"
