@@ -1,3 +1,5 @@
+//! Shared storage primitive for state isolated by fixture scope.
+
 use std::cell::RefCell;
 
 use crate::extensions::fixtures::FixtureScope;
@@ -8,13 +10,18 @@ use crate::extensions::fixtures::FixtureScope;
 /// four-field struct and `match`-based accessor.
 #[derive(Debug, Default)]
 pub(super) struct ScopedStorage<T: Default> {
+    /// Values retained for the complete worker session.
     session: RefCell<T>,
+    /// Values retained while one discovered package executes.
     package: RefCell<T>,
+    /// Values retained while one test module executes.
     module: RefCell<T>,
+    /// Values retained for one concrete test attempt.
     function: RefCell<T>,
 }
 
 impl<T: Default> ScopedStorage<T> {
+    /// Returns interior-mutable storage belonging to `scope`.
     pub(super) fn get(&self, scope: FixtureScope) -> &RefCell<T> {
         match scope {
             FixtureScope::Session => &self.session,

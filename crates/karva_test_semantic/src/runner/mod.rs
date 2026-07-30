@@ -1,3 +1,10 @@
+//! Runtime execution for discovered tests and fixtures.
+//!
+//! `PackageRunner` owns run-wide state and package traversal. Its child
+//! modules own fixture setup/teardown, variant retries, and outcome policy.
+//! Resolver and iterator modules prepare fixture graphs and concrete variants
+//! before those lifecycle layers execute them.
+
 mod finalizer_cache;
 mod fixture_arguments;
 mod fixture_cache;

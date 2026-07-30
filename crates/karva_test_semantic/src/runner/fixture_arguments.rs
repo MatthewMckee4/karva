@@ -1,3 +1,5 @@
+//! Python keyword arguments prepared from fixtures and parametrization.
+
 use std::collections::HashMap;
 
 use pyo3::prelude::*;
@@ -7,22 +9,27 @@ use ruff_python_ast::Parameters;
 /// Keyword arguments resolved for a test or fixture call.
 #[derive(Default)]
 pub struct FixtureArguments {
+    /// Python values keyed by test or fixture parameter name.
     inner: HashMap<String, Py<PyAny>>,
 }
 
 impl FixtureArguments {
+    /// Inserts one named Python argument.
     pub fn insert(&mut self, name: String, value: Py<PyAny>) -> Option<Py<PyAny>> {
         self.inner.insert(name, value)
     }
 
+    /// Returns whether no arguments were prepared.
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
 
+    /// Iterates arguments in unspecified hash-map order.
     pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, Py<PyAny>> {
         self.inner.iter()
     }
 
+    /// Iterates arguments by Python signature position, then name.
     pub fn iter_in_signature_order<'a>(
         &'a self,
         parameters: &Parameters,
@@ -38,6 +45,7 @@ impl FixtureArguments {
         arguments.into_iter()
     }
 
+    /// Builds a Python keyword-argument dictionary.
     pub fn to_kwargs<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let kwargs = PyDict::new(py);
         for (key, value) in self {

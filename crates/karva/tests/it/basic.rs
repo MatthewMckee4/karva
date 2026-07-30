@@ -2122,7 +2122,7 @@ def test_1(): pass
     1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `tmp_path_factory` as a fixture
     1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `tmpdir_factory` as a fixture
     1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `recwarn` as a fixture
-    1   [TIME] DEBUG karva_test_semantic::runner::package_runner Running test `test::test_1`
+    1   [TIME] DEBUG karva_test_semantic::runner::package_runner::variant Running test `test::test_1`
     1   [TIME] INFO karva_runner::orchestration Worker 0 completed successfully in [TIME]
     1   [TIME] INFO karva_runner::orchestration All workers completed
     ");

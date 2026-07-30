@@ -1,3 +1,5 @@
+//! Runtime fixture graph lookup, normalization, and structural validation.
+
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
@@ -21,30 +23,46 @@ use crate::extensions::fixtures::{
 /// session-level autouse fixtures visibility into `framework_module` via
 /// the `HasFixtures` impl on `DiscoveredPackage`.
 pub(super) struct RuntimeFixtureResolver<'a> {
+    /// Package chain searched from session root toward the current module.
     parents: &'a [&'a DiscoveredPackage],
+    /// Fixture provider at the active package, module, or session scope.
     current: &'a (dyn HasFixtures<'a> + 'a),
+    /// Normalized non-function fixtures reused within this resolution pass.
     fixture_cache: HashMap<String, Rc<NormalizedFixture>>,
 }
 
+/// Source-backed fixture metadata retained for resolution diagnostics.
 pub struct FixtureResolutionEntry {
+    /// Fixture function name.
     pub(crate) name: String,
+    /// Declared lifetime scope.
     pub(crate) scope: FixtureScope,
+    /// Fixture definition used to locate the diagnostic.
     pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
+    /// Source containing the fixture definition.
     pub(crate) source_file: SourceFile,
 }
 
+/// Structural failure discovered while resolving a fixture graph.
 pub enum FixtureResolutionError {
+    /// Dependency graph revisits an active fixture.
     Cycle {
+        /// Ordered cycle path, including the repeated final entry.
         cycle: Vec<FixtureResolutionEntry>,
     },
+    /// Narrower-lived fixture is requested by a broader-lived fixture.
     ScopeMismatch {
+        /// Fixtures traversed before reaching the incompatible edge.
         dependency_path: Vec<FixtureResolutionEntry>,
+        /// Fixture declaring the incompatible dependency.
         fixture: FixtureResolutionEntry,
+        /// Dependency whose scope cannot satisfy its consumer.
         dependency: FixtureResolutionEntry,
     },
 }
 
-pub type FixtureResolutionResult<T> = Result<T, FixtureResolutionError>;
+/// Result returned while resolving a fixture graph.
+pub(super) type FixtureResolutionResult<T> = Result<T, FixtureResolutionError>;
 
 impl FixtureResolutionEntry {
     fn new(fixture: &DiscoveredFixture) -> Self {
@@ -90,10 +108,12 @@ impl FixtureResolutionError {
 
 #[derive(Default)]
 struct FixturePath<'a> {
+    /// Active DFS stack used to identify the exact cycle segment.
     fixtures: Vec<&'a DiscoveredFixture>,
 }
 
 impl<'a> FixturePath<'a> {
+    /// Runs one recursive resolution step while maintaining the DFS stack.
     fn enter<T>(
         &mut self,
         fixture: &'a DiscoveredFixture,
@@ -118,6 +138,7 @@ impl<'a> FixturePath<'a> {
 }
 
 impl<'a> RuntimeFixtureResolver<'a> {
+    /// Creates a resolver for one current fixture provider and package chain.
     pub(super) fn new(
         parents: &'a [&'a DiscoveredPackage],
         current: &'a (dyn HasFixtures<'a> + 'a),
@@ -129,7 +150,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         }
     }
 
-    /// Normalize a fixture and its dependencies recursively.
+    /// Normalizes a fixture and its dependencies recursively.
     ///
     /// Function-scoped fixtures are NOT cached because their built-in dependencies
     /// (e.g. `tmp_path`) must be fresh for each test invocation. Broader-scoped
@@ -171,7 +192,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         Ok(result)
     }
 
-    /// Get normalized auto-use fixtures for a given scope.
+    /// Returns normalized auto-use fixtures for a given scope.
     pub(super) fn get_normalized_auto_use_fixtures(
         &mut self,
         py: Python,
@@ -186,7 +207,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
             .collect()
     }
 
-    /// Resolve fixture dependencies for a test, excluding parametrize params.
+    /// Resolves test dependencies, excluding names supplied by parametrization.
     pub(super) fn resolve_test_fixtures(
         &mut self,
         py: Python,
@@ -203,7 +224,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         self.get_dependent_fixtures(py, None, &regular_fixture_names, &mut path)
     }
 
-    /// Resolve `use_fixtures` dependencies.
+    /// Resolves fixtures requested only for their side effects.
     pub(super) fn resolve_use_fixtures(
         &mut self,
         py: Python,
@@ -213,7 +234,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         self.get_dependent_fixtures(py, None, fixture_names, &mut path)
     }
 
-    /// Get dependent fixtures for a list of fixture names.
+    /// Resolves a list of names and validates every dependency scope edge.
     fn get_dependent_fixtures(
         &mut self,
         py: Python,
