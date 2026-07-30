@@ -90,128 +90,128 @@ fn writes_json_result_report() {
 
     let report = context.read_file("reports/results.json");
     assert!(!report.contains('\u{1b}'));
-    assert_snapshot!(normalize_result_json(&report), @r#"
+    assert_snapshot!(report, @r#"
     {
-      "elapsed_seconds": "[TIME]",
       "schema_version": 2,
-      "stats": {
-        "errors": 1,
-        "failed": 1,
-        "flaky": 1,
-        "passed": 2,
-        "skipped": 1,
-        "slow": 0,
-        "total": 5
-      },
       "status": "failed",
+      "elapsed_seconds": "[TIME]",
+      "stats": {
+        "total": 5,
+        "passed": 2,
+        "failed": 1,
+        "errors": 1,
+        "skipped": 1,
+        "flaky": 1,
+        "slow": 0
+      },
       "tests": [
         {
-          "diagnostic": {
-            "code": "missing-fixtures",
-            "message": "Test `test_error` has missing fixtures",
-            "rendered": "error[missing-fixtures]: Test `test_error` has missing fixtures\n  --> test_report.py:14:5\n   |/n14 | def test_error(missing_fixture):\n   |     ^^^^^^^^^^\n   |/ninfo: Missing fixtures: `missing_fixture`\n\n",
-            "severity": "error"
-          },
-          "duration_seconds": "[TIME]",
-          "full_name": "test_report::test_error",
           "module": "test_report",
           "name": "test_error",
-          "status": "error"
+          "full_name": "test_report::test_error",
+          "status": "error",
+          "duration_seconds": "[TIME]",
+          "diagnostic": {
+            "code": "missing-fixtures",
+            "severity": "error",
+            "message": "Test `test_error` has missing fixtures",
+            "rendered": "error[missing-fixtures]: Test `test_error` has missing fixtures\n  --> test_report.py:14:5\n   |/n14 | def test_error(missing_fixture):\n   |     ^^^^^^^^^^\n   |/ninfo: Missing fixtures: `missing_fixture`\n\n"
+          }
         },
         {
-          "attempts": [
-            {
-              "attempt": 1,
-              "diagnostic": {
-                "code": "test-failure",
-                "message": "Test `test_fail` failed",
-                "rendered": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n",
-                "severity": "error"
-              },
-              "duration_seconds": "[TIME]",
-              "status": "failed"
-            },
-            {
-              "attempt": 2,
-              "diagnostic": {
-                "code": "test-failure",
-                "message": "Test `test_fail` failed",
-                "rendered": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n",
-                "severity": "error"
-              },
-              "duration_seconds": "[TIME]",
-              "status": "failed"
-            }
-          ],
+          "module": "test_report",
+          "name": "test_fail",
+          "full_name": "test_report::test_fail",
+          "status": "failed",
+          "duration_seconds": "[TIME]",
+          "retry": {
+            "attempts": 2,
+            "max_attempts": 2
+          },
           "captured_output": {
             "stderr": "fail stderr/nfail stderr\n"
           },
           "diagnostic": {
             "code": "test-failure",
+            "severity": "error",
             "message": "Test `test_fail` failed",
-            "rendered": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n",
-            "severity": "error"
+            "rendered": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n"
           },
-          "duration_seconds": "[TIME]",
-          "full_name": "test_report::test_fail",
-          "module": "test_report",
-          "name": "test_fail",
-          "retry": {
-            "attempts": 2,
-            "max_attempts": 2
-          },
-          "status": "failed"
-        },
-        {
           "attempts": [
             {
               "attempt": 1,
+              "status": "failed",
+              "duration_seconds": "[TIME]",
               "diagnostic": {
                 "code": "test-failure",
-                "message": "Test `test_flaky` failed",
-                "rendered": "error[test-failure]: Test `test_flaky` failed\n  --> test_report.py:21:5\n   |/n21 | def test_flaky():\n   |     ^^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:26:5\n   |/n26 |     assert count >= 1\n   |     ^^^^^^^^^^^^^^^^^\n   |\n\n",
-                "severity": "error"
-              },
-              "duration_seconds": "[TIME]",
-              "status": "failed"
+                "severity": "error",
+                "message": "Test `test_fail` failed",
+                "rendered": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n"
+              }
             },
             {
               "attempt": 2,
+              "status": "failed",
               "duration_seconds": "[TIME]",
-              "status": "passed"
+              "diagnostic": {
+                "code": "test-failure",
+                "severity": "error",
+                "message": "Test `test_fail` failed",
+                "rendered": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n"
+              }
             }
-          ],
-          "captured_output": {
-            "stdout": "flaky attempt 1/nflaky attempt 2\n"
-          },
-          "duration_seconds": "[TIME]",
-          "flaky": true,
-          "full_name": "test_report::test_flaky",
+          ]
+        },
+        {
           "module": "test_report",
           "name": "test_flaky",
+          "full_name": "test_report::test_flaky",
+          "status": "passed",
+          "duration_seconds": "[TIME]",
+          "flaky": true,
           "retry": {
             "attempts": 2,
             "max_attempts": 2
           },
-          "status": "passed"
+          "captured_output": {
+            "stdout": "flaky attempt 1/nflaky attempt 2\n"
+          },
+          "attempts": [
+            {
+              "attempt": 1,
+              "status": "failed",
+              "duration_seconds": "[TIME]",
+              "diagnostic": {
+                "code": "test-failure",
+                "severity": "error",
+                "message": "Test `test_flaky` failed",
+                "rendered": "error[test-failure]: Test `test_flaky` failed\n  --> test_report.py:21:5\n   |/n21 | def test_flaky():\n   |     ^^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:26:5\n   |/n26 |     assert count >= 1\n   |     ^^^^^^^^^^^^^^^^^\n   |\n\n"
+              }
+            },
+            {
+              "attempt": 2,
+              "status": "passed",
+              "duration_seconds": "[TIME]"
+            }
+          ]
         },
         {
-          "captured_output": {
-            "stdout": "pass stdout\n"
-          },
-          "duration_seconds": "[TIME]",
-          "full_name": "test_report::test_pass",
           "module": "test_report",
           "name": "test_pass",
-          "status": "passed"
+          "full_name": "test_report::test_pass",
+          "status": "passed",
+          "duration_seconds": "[TIME]",
+          "captured_output": {
+            "stdout": "pass stdout\n"
+          }
         },
         {
-          "duration_seconds": "[TIME]",
-          "full_name": "test_report::test_skip",
           "module": "test_report",
           "name": "test_skip",
-          "skip_reason": "skip reason",
-          "status": "skipped"
+          "full_name": "test_report::test_skip",
+          "status": "skipped",
+          "duration_seconds": "[TIME]",
+          "skip_reason": "skip reason"
         }
       ]
     }
@@ -266,10 +266,10 @@ fn writes_jsonl_result_records() {
     "
     );
 
-    assert_snapshot!(normalize_result_jsonl(&context.read_file("reports/events.jsonl")), @r#"
-    {"diagnostic":{"code":"test-failure","message":"Test `test_fail` failed","rendered":"error[test-failure]: Test `test_fail` failed\n --> test_events.py:5:5\n  |/n5 | def test_fail():\n  |     ^^^^^^^^^\n  |/ninfo: Test failed here\n --> test_events.py:6:5\n  |/n6 |     assert False\n  |     ^^^^^^^^^^^^\n  |\n\n","severity":"error"},"duration_seconds":"[TIME]","full_name":"test_events::test_fail","module":"test_events","name":"test_fail","schema_version":2,"status":"failed","type":"test"}
-    {"duration_seconds":"[TIME]","full_name":"test_events::test_pass","module":"test_events","name":"test_pass","schema_version":2,"status":"passed","type":"test"}
-    {"elapsed_seconds":"[TIME]","schema_version":2,"stats":{"errors":0,"failed":1,"flaky":0,"passed":1,"skipped":0,"slow":0,"total":2},"status":"failed","type":"run_finished"}
+    assert_snapshot!(context.read_file("reports/events.jsonl"), @r#"
+    {"schema_version":2,"type":"test","module":"test_events","name":"test_fail","full_name":"test_events::test_fail","status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"test-failure","severity":"error","message":"Test `test_fail` failed","rendered":"error[test-failure]: Test `test_fail` failed\n --> test_events.py:5:5\n  |/n5 | def test_fail():\n  |     ^^^^^^^^^\n  |/ninfo: Test failed here\n --> test_events.py:6:5\n  |/n6 |     assert False\n  |     ^^^^^^^^^^^^\n  |\n\n"}}
+    {"schema_version":2,"type":"test","module":"test_events","name":"test_pass","full_name":"test_events::test_pass","status":"passed","duration_seconds":"[TIME]"}
+    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":2,"passed":1,"failed":1,"errors":0,"skipped":0,"flaky":0,"slow":0}}
     "#);
 }
 
@@ -321,38 +321,43 @@ def test_resource(resource):
     "
     );
 
+    let report = context.read_file("reports/results.json");
+    let report_value: Value = serde_json::from_str(&report).expect("parse result report");
+    assert!(
+        report_value["tests"][0]["duration_seconds"]
+            .as_f64()
+            .expect("test duration should be numeric")
+            >= 0.4
+    );
     assert_snapshot!(
-        normalize_result_json_with_min_duration(
-            &context.read_file("reports/results.json"),
-            0.4,
-        ),
+        report,
         @r#"
     {
-      "elapsed_seconds": "[TIME]",
       "schema_version": 2,
-      "stats": {
-        "errors": 0,
-        "failed": 1,
-        "flaky": 0,
-        "passed": 0,
-        "skipped": 0,
-        "slow": 0,
-        "total": 1
-      },
       "status": "failed",
+      "elapsed_seconds": "[TIME]",
+      "stats": {
+        "total": 1,
+        "passed": 0,
+        "failed": 1,
+        "errors": 0,
+        "skipped": 0,
+        "flaky": 0,
+        "slow": 0
+      },
       "tests": [
         {
-          "diagnostic": {
-            "code": "fail-slow-exceeded",
-            "message": "Test `test_resource` exceeded its fail-slow budget",
-            "rendered": "error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget\n  --> test_fail_slow.py:11:5\n   |/n11 | def test_resource(resource):\n   |     ^^^^^^^^^^^^^\n   |/ninfo: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)\n\n",
-            "severity": "error"
-          },
-          "duration_seconds": "[>=0.4s]",
-          "full_name": "test_fail_slow::test_resource(resource=None)",
           "module": "test_fail_slow",
           "name": "test_resource(resource=None)",
-          "status": "failed"
+          "full_name": "test_fail_slow::test_resource(resource=None)",
+          "status": "failed",
+          "duration_seconds": "[TIME]",
+          "diagnostic": {
+            "code": "fail-slow-exceeded",
+            "severity": "error",
+            "message": "Test `test_resource` exceeded its fail-slow budget",
+            "rendered": "error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget\n  --> test_fail_slow.py:11:5\n   |/n11 | def test_resource(resource):\n   |     ^^^^^^^^^^^^^\n   |/ninfo: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)\n\n"
+          }
         }
       ]
     }
@@ -389,14 +394,25 @@ def test_resource(resource):
     "
     );
 
+    let report = context.read_file("reports/results.jsonl");
+    let test: Value = serde_json::from_str(
+        report
+            .lines()
+            .next()
+            .expect("result report should contain a test record"),
+    )
+    .expect("parse test record");
+    assert!(
+        test["duration_seconds"]
+            .as_f64()
+            .expect("test duration should be numeric")
+            >= 0.4
+    );
     assert_snapshot!(
-        normalize_result_jsonl_with_min_duration(
-            &context.read_file("reports/results.jsonl"),
-            0.4,
-        ),
+        report,
         @r#"
-    {"diagnostic":{"code":"fail-slow-exceeded","message":"Test `test_resource` exceeded its fail-slow budget","rendered":"error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget\n  --> test_fail_slow.py:11:5\n   |/n11 | def test_resource(resource):\n   |     ^^^^^^^^^^^^^\n   |/ninfo: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)\n\n","severity":"error"},"duration_seconds":"[>=0.4s]","full_name":"test_fail_slow::test_resource(resource=None)","module":"test_fail_slow","name":"test_resource(resource=None)","schema_version":2,"status":"failed","type":"test"}
-    {"elapsed_seconds":"[TIME]","schema_version":2,"stats":{"errors":0,"failed":1,"flaky":0,"passed":0,"skipped":0,"slow":0,"total":1},"status":"failed","type":"run_finished"}
+    {"schema_version":2,"type":"test","module":"test_fail_slow","name":"test_resource(resource=None)","full_name":"test_fail_slow::test_resource(resource=None)","status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"fail-slow-exceeded","severity":"error","message":"Test `test_resource` exceeded its fail-slow budget","rendered":"error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget\n  --> test_fail_slow.py:11:5\n   |/n11 | def test_resource(resource):\n   |     ^^^^^^^^^^^^^\n   |/ninfo: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)\n\n"}}
+    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":0,"failed":1,"errors":0,"skipped":0,"flaky":0,"slow":0}}
     "#
     );
 }
@@ -462,41 +478,41 @@ fn writes_related_test_diagnostics() {
     "
     );
 
-    assert_snapshot!(normalize_result_json(&context.read_file("reports/related.json")), @r#"
+    assert_snapshot!(context.read_file("reports/related.json"), @r#"
     {
-      "elapsed_seconds": "[TIME]",
       "schema_version": 2,
-      "stats": {
-        "errors": 0,
-        "failed": 1,
-        "flaky": 0,
-        "passed": 0,
-        "skipped": 0,
-        "slow": 0,
-        "total": 1
-      },
       "status": "failed",
+      "elapsed_seconds": "[TIME]",
+      "stats": {
+        "total": 1,
+        "passed": 0,
+        "failed": 1,
+        "errors": 0,
+        "skipped": 0,
+        "flaky": 0,
+        "slow": 0
+      },
       "tests": [
         {
-          "diagnostic": {
-            "code": "test-failure",
-            "message": "Test `test_failure` failed",
-            "rendered": "error[test-failure]: Test `test_failure` failed\n --> test_related.py:9:5\n  |/n9 | def test_failure(broken_teardown):\n  |     ^^^^^^^^^^^^\n  |/ninfo: Test ran with arguments:/ninfo: `broken_teardown`: `None`/ninfo: Test failed here\n  --> test_related.py:10:5\n   |/n10 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n",
-            "severity": "error"
-          },
-          "duration_seconds": "[TIME]",
-          "full_name": "test_related::test_failure(broken_teardown=None)",
           "module": "test_related",
           "name": "test_failure(broken_teardown=None)",
+          "full_name": "test_related::test_failure(broken_teardown=None)",
+          "status": "failed",
+          "duration_seconds": "[TIME]",
+          "diagnostic": {
+            "code": "test-failure",
+            "severity": "error",
+            "message": "Test `test_failure` failed",
+            "rendered": "error[test-failure]: Test `test_failure` failed\n --> test_related.py:9:5\n  |/n9 | def test_failure(broken_teardown):\n  |     ^^^^^^^^^^^^\n  |/ninfo: Test ran with arguments:/ninfo: `broken_teardown`: `None`/ninfo: Test failed here\n  --> test_related.py:10:5\n   |/n10 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n"
+          },
           "related_diagnostics": [
             {
               "code": "invalid-fixture-finalizer",
+              "severity": "error",
               "message": "Discovered an invalid fixture finalizer `broken_teardown`",
-              "rendered": "error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `broken_teardown`\n --> test_related.py:5:5\n  |/n5 | def broken_teardown():\n  |     ^^^^^^^^^^^^^^^\n  |/ninfo: Failed to reset fixture: teardown failed\n\n",
-              "severity": "error"
+              "rendered": "error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `broken_teardown`\n --> test_related.py:5:5\n  |/n5 | def broken_teardown():\n  |     ^^^^^^^^^^^^^^^\n  |/ninfo: Failed to reset fixture: teardown failed\n\n"
             }
-          ],
-          "status": "failed"
+          ]
         }
       ]
     }
@@ -535,29 +551,29 @@ fn keeps_run_diagnostics_separate_from_tests() {
     "
     );
 
-    assert_snapshot!(normalize_result_json(&context.read_file("reports/import.json")), @r#"
+    assert_snapshot!(context.read_file("reports/import.json"), @r#"
     {
+      "schema_version": 2,
+      "status": "failed",
       "elapsed_seconds": "[TIME]",
+      "stats": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "flaky": 0,
+        "slow": 0
+      },
+      "tests": [],
       "run_diagnostics": [
         {
           "code": "failed-to-import-module",
+          "severity": "error",
           "message": "Failed to import python module `test_import`: No module named 'missing_result_report_dependency'",
-          "rendered": "error[failed-to-import-module]: Failed to import python module `test_import`: No module named 'missing_result_report_dependency'\n\n",
-          "severity": "error"
+          "rendered": "error[failed-to-import-module]: Failed to import python module `test_import`: No module named 'missing_result_report_dependency'\n\n"
         }
-      ],
-      "schema_version": 2,
-      "stats": {
-        "errors": 0,
-        "failed": 0,
-        "flaky": 0,
-        "passed": 0,
-        "skipped": 0,
-        "slow": 0,
-        "total": 0
-      },
-      "status": "failed",
-      "tests": []
+      ]
     }
     "#);
 }
@@ -596,10 +612,10 @@ fn writes_jsonl_run_diagnostic_records() {
     );
 
     assert_snapshot!(
-        normalize_result_jsonl(&context.read_file("reports/import.jsonl")),
+        context.read_file("reports/import.jsonl"),
         @r#"
-    {"diagnostic":{"code":"failed-to-import-module","message":"Failed to import python module `test_import`: No module named 'missing_result_report_dependency'","rendered":"error[failed-to-import-module]: Failed to import python module `test_import`: No module named 'missing_result_report_dependency'\n\n","severity":"error"},"schema_version":2,"type":"run_diagnostic"}
-    {"elapsed_seconds":"[TIME]","schema_version":2,"stats":{"errors":0,"failed":0,"flaky":0,"passed":0,"skipped":0,"slow":0,"total":0},"status":"failed","type":"run_finished"}
+    {"schema_version":2,"type":"run_diagnostic","diagnostic":{"code":"failed-to-import-module","severity":"error","message":"Failed to import python module `test_import`: No module named 'missing_result_report_dependency'","rendered":"error[failed-to-import-module]: Failed to import python module `test_import`: No module named 'missing_result_report_dependency'\n\n"}}
+    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":0,"passed":0,"failed":0,"errors":0,"skipped":0,"flaky":0,"slow":0}}
     "#
     );
 }
@@ -626,107 +642,21 @@ fn result_report_status_matches_no_tests_failure() {
     "
     );
 
-    assert_snapshot!(normalize_result_json(&context.read_file("reports/no-tests.json")), @r#"
+    assert_snapshot!(context.read_file("reports/no-tests.json"), @r#"
     {
-      "elapsed_seconds": "[TIME]",
       "schema_version": 2,
-      "stats": {
-        "errors": 0,
-        "failed": 0,
-        "flaky": 0,
-        "passed": 0,
-        "skipped": 0,
-        "slow": 0,
-        "total": 0
-      },
       "status": "failed",
+      "elapsed_seconds": "[TIME]",
+      "stats": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "flaky": 0,
+        "slow": 0
+      },
       "tests": []
     }
     "#);
-}
-
-fn normalize_result_json(raw: &str) -> String {
-    normalize_result_json_with_optional_min_duration(raw, None)
-}
-
-fn normalize_result_json_with_min_duration(raw: &str, minimum: f64) -> String {
-    normalize_result_json_with_optional_min_duration(raw, Some(minimum))
-}
-
-fn normalize_result_json_with_optional_min_duration(raw: &str, minimum: Option<f64>) -> String {
-    let mut value: Value = serde_json::from_str(raw).expect("parse result report");
-    if let Some(minimum) = minimum {
-        classify_test_durations(&mut value, minimum);
-    }
-    redact_times(&mut value);
-    let mut output = serde_json::to_string_pretty(&value).expect("serialize result report");
-    output.push('\n');
-    output
-}
-
-fn normalize_result_jsonl(raw: &str) -> String {
-    normalize_result_jsonl_with_optional_min_duration(raw, None)
-}
-
-fn normalize_result_jsonl_with_min_duration(raw: &str, minimum: f64) -> String {
-    normalize_result_jsonl_with_optional_min_duration(raw, Some(minimum))
-}
-
-fn normalize_result_jsonl_with_optional_min_duration(raw: &str, minimum: Option<f64>) -> String {
-    let mut output = raw
-        .lines()
-        .map(|line| {
-            let mut value: Value = serde_json::from_str(line).expect("parse result event");
-            if let Some(minimum) = minimum {
-                classify_test_durations(&mut value, minimum);
-            }
-            redact_times(&mut value);
-            serde_json::to_string(&value).expect("serialize result event")
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    output.push('\n');
-    output
-}
-
-fn classify_test_durations(value: &mut Value, minimum: f64) {
-    match value {
-        Value::Array(values) => {
-            for value in values {
-                classify_test_durations(value, minimum);
-            }
-        }
-        Value::Object(map) => {
-            for (key, value) in map {
-                if key == "duration_seconds" {
-                    let duration = value.as_f64().expect("test duration should be numeric");
-                    let comparison = if duration >= minimum { ">=" } else { "<" };
-                    *value = Value::String(format!("[{comparison}{minimum}s]"));
-                } else {
-                    classify_test_durations(value, minimum);
-                }
-            }
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
-    }
-}
-
-fn redact_times(value: &mut Value) {
-    match value {
-        Value::Array(values) => {
-            for value in values {
-                redact_times(value);
-            }
-        }
-        Value::Object(map) => {
-            for (key, value) in map {
-                if (key == "duration_seconds" || key == "elapsed_seconds") && value.is_number() {
-                    *value = Value::String("[TIME]".to_string());
-                } else {
-                    redact_times(value);
-                }
-            }
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
-    }
 }
