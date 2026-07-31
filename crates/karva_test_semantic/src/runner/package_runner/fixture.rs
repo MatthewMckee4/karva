@@ -23,7 +23,7 @@ impl PackageRunner<'_, '_> {
     /// Resolves and runs auto-use fixtures at the start of one scope.
     ///
     /// `current` is the fixture provider for the scope: the session package,
-    /// a test module, or a package configuration module. Resolution failures
+    /// a test module, or a package. Resolution failures
     /// trigger cleanup for the partially initialized scope before returning.
     pub(super) fn run_auto_use_fixtures<'a>(
         &self,

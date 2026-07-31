@@ -18,10 +18,9 @@ use crate::extensions::fixtures::{
 /// Unlike pre-normalization, this resolver finds and normalizes fixtures
 /// on-demand when tests need them. `current` is typed as a trait object so
 /// callers may pass either a test module (normal test / module-autouse
-/// resolution), a conftest module (package-autouse resolution), or the
-/// session package itself (session-autouse resolution) — the latter gives
-/// session-level autouse fixtures visibility into `framework_module` via
-/// the `HasFixtures` impl on `DiscoveredPackage`.
+/// resolution), a package (package-autouse resolution), or the session package
+/// itself (session-autouse resolution). Package providers expose both user and
+/// framework fixtures through their `HasFixtures` implementation.
 pub(super) struct RuntimeFixtureResolver<'a> {
     /// Package chain searched from session root toward the current module.
     parents: &'a [&'a DiscoveredPackage],
@@ -58,6 +57,13 @@ pub enum FixtureResolutionError {
         fixture: FixtureResolutionEntry,
         /// Dependency whose scope cannot satisfy its consumer.
         dependency: FixtureResolutionEntry,
+    },
+    /// Fixture requires names that cannot be resolved.
+    MissingFixtures {
+        /// Fixture declaring the missing dependencies.
+        fixture: FixtureResolutionEntry,
+        /// Unresolved dependency names.
+        missing_fixtures: Vec<String>,
     },
 }
 
@@ -243,6 +249,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         path: &mut FixturePath<'a>,
     ) -> FixtureResolutionResult<Vec<Rc<NormalizedFixture>>> {
         let mut normalized_fixtures = Vec::with_capacity(fixture_names.len());
+        let mut missing_fixtures = Vec::new();
 
         for dep_name in fixture_names {
             if let Some(fixture) =
@@ -263,12 +270,23 @@ impl<'a> RuntimeFixtureResolver<'a> {
                 }
                 let normalized = self.normalize_fixture(py, fixture, path)?;
                 normalized_fixtures.push(normalized);
-            } else if let Some(fixture) = current_fixture
-                && fixture.name().function_name() == dep_name
-            {
-                let normalized = self.normalize_fixture(py, fixture, path)?;
-                normalized_fixtures.push(normalized);
+            } else if let Some(fixture) = current_fixture {
+                if fixture.name().function_name() == dep_name {
+                    let normalized = self.normalize_fixture(py, fixture, path)?;
+                    normalized_fixtures.push(normalized);
+                } else {
+                    missing_fixtures.push(dep_name.clone());
+                }
             }
+        }
+
+        if let Some(fixture) = current_fixture
+            && !missing_fixtures.is_empty()
+        {
+            return Err(FixtureResolutionError::MissingFixtures {
+                fixture: FixtureResolutionEntry::new(fixture),
+                missing_fixtures,
+            });
         }
 
         Ok(normalized_fixtures)
