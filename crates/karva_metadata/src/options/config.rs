@@ -15,9 +15,9 @@ pub const DEFAULT_PROFILE: &str = "default";
 
 /// File-level configuration: a collection of named profiles.
 ///
-/// Mirrors nextest: every option group lives inside `[profile.<name>]`. The
-/// implicit `default` profile is always available; other profiles inherit
-/// from it (and can override individual fields).
+/// Every option group lives inside `[profile.<name>]`. The implicit `default`
+/// profile is always available; named profiles inherit from it and can
+/// override individual fields.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
