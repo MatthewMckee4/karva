@@ -19,7 +19,7 @@ use crate::verbosity::Verbosity;
 pub struct SubTestCommand {
     /// List of files or directories to test.
     #[clap(
-        help = "List of files, directories, or test functions to test [default: the project root]",
+        help = "List of files, directories, or test functions to test [default: tests if it exists, otherwise the project root]",
         value_name = "PATH"
     )]
     pub paths: Vec<String>,

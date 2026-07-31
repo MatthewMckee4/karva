@@ -126,6 +126,34 @@ def test_in_other(): pass
 }
 
 #[test]
+fn test_defaults_to_tests_directory_when_present() {
+    let context = TestContext::with_files([
+        (
+            "tests/test_in_tests.py",
+            r"
+def test_in_tests(): pass
+",
+        ),
+        (
+            "test_in_root.py",
+            r"
+def test_in_root(): pass
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command().arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_src_include_single_file() {
     let context = TestContext::with_files([
         (
