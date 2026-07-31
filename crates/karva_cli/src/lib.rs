@@ -51,6 +51,13 @@ pub enum Command {
     /// Print the resolved configuration karva would run with.
     ShowConfig(ShowConfigCommand),
 
+    /// Generate shell completion.
+    #[command(hide = true)]
+    GenerateShellCompletion {
+        /// The shell to generate the completion script for.
+        shell: clap_complete_command::Shell,
+    },
+
     /// Display Karva's version
     Version,
 }

@@ -31,3 +31,51 @@ Or to get the version of karva you're using:
 ```bash
 karva version
 ```
+
+## Shell autocompletion
+
+Karva supports autocompletion for most shells. Run `echo $SHELL` if you are
+unsure which shell you use.
+
+### Bash
+
+```bash
+echo 'eval "$(uv run karva generate-shell-completion bash)"' >> ~/.bashrc
+```
+
+### Zsh
+
+```bash
+echo 'eval "$(uv run karva generate-shell-completion zsh)"' >> ~/.zshrc
+```
+
+### fish
+
+```bash
+echo 'uv run karva generate-shell-completion fish | source' > ~/.config/fish/completions/karva.fish
+```
+
+### Elvish
+
+```bash
+echo 'eval (uv run karva generate-shell-completion elvish | slurp)' >> ~/.elvish/rc.elv
+```
+
+### PowerShell / pwsh
+
+```powershell
+if (!(Test-Path -Path $PROFILE)) {
+  New-Item -ItemType File -Path $PROFILE -Force
+}
+Add-Content -Path $PROFILE -Value '(& uv run karva generate-shell-completion powershell) | Out-String | Invoke-Expression'
+```
+
+### Nushell
+
+```nu
+mkdir ($nu.user-autoload-dirs | first)
+uv run karva generate-shell-completion nushell | save --force ($nu.user-autoload-dirs | first | path join karva.nu)
+```
+
+Restart your shell or source its configuration file after installing the
+completion script.

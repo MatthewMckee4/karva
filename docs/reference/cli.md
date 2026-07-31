@@ -414,6 +414,26 @@ karva show-config [OPTIONS]
 <p>Defaults to <code>default</code>.</p>
 <p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd></dl>
 
+## karva generate-shell-completion
+
+Generate shell completion
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva generate-shell-completion <SHELL>
+```
+
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-generate-shell-completion--shell"><a href="#karva-generate-shell-completion--shell"><code>SHELL</code></a></dt><dd><p>The shell to generate the completion script for</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-generate-shell-completion--help"><a href="#karva-generate-shell-completion--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
+
 ## karva version
 
 Display Karva's version
