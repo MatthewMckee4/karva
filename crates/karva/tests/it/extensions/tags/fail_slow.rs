@@ -403,12 +403,6 @@ def test_example(broken):
     11 | def broken(established):
        |     ^^^^^^
        |
-    info: Test `test_example` requires fixture `broken`
-      --> test.py:15:5
-       |
-    15 | def test_example(broken):
-       |     ^^^^^^^^^^^^
-       |
     info: Fixture ran with arguments:
     info: `established`: `None`
     info: Fixture failed here

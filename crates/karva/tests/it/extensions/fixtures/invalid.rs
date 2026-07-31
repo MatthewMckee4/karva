@@ -240,12 +240,6 @@ fn test_fixture_fails_to_run() {
     5 | def failing_fixture():
       |     ^^^^^^^^^^^^^^^
       |
-    info: Test `test_failing_fixture` requires fixture `failing_fixture`
-     --> test.py:8:5
-      |
-    8 | def test_failing_fixture(failing_fixture):
-      |     ^^^^^^^^^^^^^^^^^^^^
-      |
     info: Fixture failed here
      --> test.py:6:5
       |
@@ -386,12 +380,6 @@ fn test_failing_yield_fixture() {
     5 | def fixture():
       |     ^^^^^^^
       |
-    info: Test `test_failing_fixture` requires fixture `fixture`
-      --> test.py:10:5
-       |
-    10 | def test_failing_fixture(fixture):
-       |     ^^^^^^^^^^^^^^^^^^^^
-       |
     info: Fixture failed here
      --> test.py:7:9
       |
@@ -534,12 +522,6 @@ fn test_fixture_dependency_chain_failure() {
     5 | def config():
       |     ^^^^^^
       |
-    info: Test `test_with_db` requires fixture `db`
-      --> test.py:16:5
-       |
-    16 | def test_with_db(db):
-       |     ^^^^^^^^^^^^
-       |
     info: Fixture `db` requires `connection`
       --> test.py:13:5
        |

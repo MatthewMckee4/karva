@@ -1446,12 +1446,6 @@ def test_2(y): pass
     5 | def x():
       |     ^
       |
-    info: Test `test_1` requires fixture `x`
-     --> test_file.py:3:5
-      |
-    3 | def test_1(x): pass
-      |     ^^^^^^
-      |
     info: Fixture failed here
      --> foo.py:6:5
       |
