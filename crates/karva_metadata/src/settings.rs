@@ -17,6 +17,7 @@ pub enum RunIgnoredMode {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum NoTestsMode {
     #[default]
@@ -43,6 +44,7 @@ impl Combine for NoTestsMode {
 /// equality is used (`NaN` is not a valid value because the option is
 /// validated at parse time).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct SlowTimeoutSecs(pub f64);
 
@@ -74,6 +76,7 @@ impl Combine for SlowTimeoutSecs {
 /// this duration are killed and reported as failures (see
 /// [`crate::settings::TestSettings::timeout`]).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct TestTimeoutSecs(pub f64);
 
@@ -107,6 +110,7 @@ impl Combine for TestTimeoutSecs {
 /// full lifecycle — including fixture teardown — and is then reported as a
 /// failure (see [`crate::settings::TestSettings::fail_slow`]).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct FailSlowSecs(pub f64);
 
@@ -151,6 +155,7 @@ impl Combine for FailSlowSecs {
 
 /// A global run timeout expressed in seconds.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct RunTimeoutSecs(pub f64);
 
@@ -178,6 +183,7 @@ impl Combine for RunTimeoutSecs {
 
 /// Grace period between graceful termination and force-kill, in seconds.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct TerminationGracePeriodSecs(pub f64);
 
@@ -210,6 +216,7 @@ impl Combine for TerminationGracePeriodSecs {
 /// straightforward. `NaN` is rejected at parse time so bit-wise equality is
 /// safe here.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct CovFailUnder(pub f64);
 

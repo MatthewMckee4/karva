@@ -1,289 +1,597 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": false,
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Config",
   "description": "File-level configuration: a collection of named profiles.\n\nMirrors nextest: every option group lives inside `[profile.<name>]`. The\nimplicit `default` profile is always available; other profiles inherit\nfrom it (and can override individual fields).",
+  "type": "object",
   "properties": {
     "profile": {
+      "type": "object",
       "additionalProperties": {
-        "additionalProperties": false,
-        "properties": {
-          "coverage": {
-            "additionalProperties": false,
-            "properties": {
-              "branch": {
-                "default": false,
-                "description": "Whether to measure branch coverage in addition to line coverage.",
-                "type": "boolean"
-              },
-              "fail-under": {
-                "default": null,
-                "description": "Minimum total coverage percentage required for the run to succeed.\n\nWhen set, the test command exits with a non-zero status if the\nreported `TOTAL` coverage is below this value, even when every test\npassed. Has no effect when tests already failed (the exit code is\nalready non-zero).",
-                "maximum": 100,
-                "minimum": 0,
-                "type": "number"
-              },
-              "include": {
-                "default": null,
-                "description": "Include only coverage report files matching these globs.\n\nGlobs are matched against the project-relative file path shown in the\ncoverage report, such as `src/package/module.py`. When unset, all files\nunder the configured coverage sources are included unless omitted.",
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              "omit": {
-                "default": null,
-                "description": "Exclude coverage report files matching these globs.\n\nGlobs are matched against the project-relative file path shown in the\ncoverage report, such as `src/package/module.py`. Omit filters are\napplied after include filters.",
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              "report": {
-                "default": "term",
-                "description": "Coverage report type.\n\n`term` (default) prints a compact terminal table.\n`term-missing` extends it with a `Missing` column listing the\nuncovered line numbers per file.",
-                "enum": [
-                  "term",
-                  "term-missing",
-                  "xml",
-                  "json",
-                  "html"
-                ],
-                "type": "string"
-              },
-              "report-path": {
-                "default": null,
-                "description": "Optional output path for machine-readable coverage reports.\n\nWhen `report = \"xml\"` or `report = \"json\"`, this path controls where\nthe file is written. When `report = \"html\"`, it controls the output\ndirectory. If omitted, karva writes to `coverage.xml`,\n`coverage.json`, or `htmlcov/` in the project root.",
-                "type": "string"
-              },
-              "sources": {
-                "default": null,
-                "description": "Source paths to measure coverage for.\n\nEquivalent to passing `--cov=<path>` on the command line; may be\nlisted multiple times. An empty entry (`\"\"`) measures the current\nworking directory, matching pytest-cov's bare `--cov`.",
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              }
-            },
-            "type": "object"
-          },
-          "junit": {
-            "additionalProperties": false,
-            "properties": {
-              "path": {
-                "default": null,
-                "description": "Output path for the `JUnit` XML report.\n\nWhen unset, no `JUnit` report is written.",
-                "type": "string"
-              },
-              "report-name": {
-                "default": "karva-tests",
-                "description": "Name of the top-level `JUnit` test suite collection.",
-                "type": "string"
-              },
-              "store-failure-output": {
-                "default": true,
-                "description": "Whether to include captured stdout and stderr for failing tests.",
-                "type": "boolean"
-              },
-              "store-success-output": {
-                "default": false,
-                "description": "Whether to include captured stdout and stderr for passing tests.",
-                "type": "boolean"
-              }
-            },
-            "type": "object"
-          },
-          "overrides": {
-            "default": [],
-            "items": {
-              "additionalProperties": false,
-              "description": "A single per-test override entry.\n\nMirrors `[[profile.<name>.overrides]]` in `karva.toml`. Each override\npairs a filter expression with one or more option fields to apply when\nthe filter matches a given test.",
-              "properties": {
-                "fail-slow": {
-                  "default": null,
-                  "description": "Duration budget (in seconds) for a matching test's full lifecycle.\nMirrors the profile-level [`fail-slow`](#fail-slow) field. A\nnon-positive value disables the budget for the matching test.",
-                  "type": "number"
-                },
-                "filter": {
-                  "description": "A filter expression evaluated against each test. Tests whose name\nor tags match the expression pick up this override's settings.",
-                  "type": "string"
-                },
-                "retries": {
-                  "default": null,
-                  "description": "Number of times to retry a matching test before giving up. Mirrors\nthe profile-level [`retry`](#retry) field.",
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "slow-timeout": {
-                  "default": null,
-                  "description": "Threshold (in seconds) above which a matching test is flagged as\nslow. Mirrors the profile-level\n[`slow-timeout`](#slow-timeout) field. A non-positive value\ndisables slow tracking for the matching test.",
-                  "type": "number"
-                },
-                "timeout": {
-                  "default": null,
-                  "description": "Hard per-test timeout, in seconds, applied to matching tests.\nMirrors the profile-level [`timeout`](#timeout) field. A value of\n`0` (or any non-positive value) disables the hard timeout for the\nmatching test.",
-                  "type": "number"
-                }
-              },
-              "required": [
-                "filter"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "src": {
-            "additionalProperties": false,
-            "properties": {
-              "include": {
-                "default": null,
-                "description": "A list of files and directories to check.\nIncluding a file or directory will make it so that it (and its contents)\nare tested.\nWhen unset, Karva checks the `tests` directory if it exists, otherwise\nit checks the project root.\n\n- `tests` matches a directory named `tests`\n- `tests/test.py` matches a file named `test.py` in the `tests` directory",
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              "respect-ignore-files": {
-                "default": true,
-                "description": "Whether to automatically exclude files that are ignored by `.ignore`,\n`.gitignore`, `.git/info/exclude`, and global `gitignore` files.\nEnabled by default.",
-                "type": "boolean"
-              }
-            },
-            "type": "object"
-          },
-          "terminal": {
-            "additionalProperties": false,
-            "properties": {
-              "final-status-level": {
-                "default": "pass",
-                "description": "Test summary information to display at the end of the run.\n\nModeled after `cargo-nextest`'s `--final-status-level`. Levels are\ncumulative in the same way as [`status_level`](#status-level).\n\nDefaults to `pass`.",
-                "enum": [
-                  "none",
-                  "fail",
-                  "retry",
-                  "slow",
-                  "pass",
-                  "skip",
-                  "all"
-                ],
-                "type": "string"
-              },
-              "output-format": {
-                "default": "full",
-                "description": "The format to use for printing diagnostic messages.\n\nDefaults to `full`.",
-                "enum": [
-                  "full",
-                  "concise"
-                ],
-                "type": "string"
-              },
-              "show-python-output": {
-                "default": true,
-                "description": "Whether to show the python output.\n\nThis is the output the `print` goes to etc.",
-                "type": "boolean"
-              },
-              "status-level": {
-                "default": "pass",
-                "description": "Test result statuses to display during the run.\n\nModeled after `cargo-nextest`'s `--status-level`. Levels are\ncumulative: `pass` shows passing and failed tests, `skip` adds\nskipped tests on top, and so on. `retry` and `slow` are accepted\nfor forward-compatibility but currently behave like `fail`.\n\nDefaults to `pass`.",
-                "enum": [
-                  "none",
-                  "fail",
-                  "retry",
-                  "slow",
-                  "pass",
-                  "skip",
-                  "all"
-                ],
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
-          "test": {
-            "additionalProperties": false,
-            "properties": {
-              "fail-fast": {
-                "default": false,
-                "description": "Whether to stop at the first test failure.\n\nThis is a legacy alias for [`max_fail`](#max-fail): `true`\ncorresponds to `max-fail = 1` and `false` leaves the limit unset.\nWhen both are set, `max-fail` takes precedence.\n\nDefaults to `false`.",
-                "type": "boolean"
-              },
-              "fail-slow": {
-                "default": null,
-                "description": "Duration budget (in seconds) for a test's full lifecycle (fixture\nsetup, the test call, and fixture teardown).\n\nWhen set, a test is allowed to run to completion — including\nteardown, so cleanup is never skipped — and is then reported as a\nfailure if the full lifecycle took longer than this budget. Tests\ncan override the limit individually with\n[`@karva.tags.fail_slow`](https://docs.karva.dev/usage/failure-handling/fail-slow/),\nwhich takes precedence over the configured default.\n\nThis is distinct from [`timeout`](#timeout), which kills a test\nmid-execution, and [`slow_timeout`](#slow-timeout), which is purely\ninformational and never fails a test.\n\nDefaults to unset, which disables budget checking unless a tag is\napplied to the test.",
-                "type": "number"
-              },
-              "max-fail": {
-                "default": "unlimited",
-                "description": "Stop scheduling new tests once this many tests have failed.\n\nAccepts a positive integer. Omitting the field (the default) lets\nevery test run regardless of how many fail. Setting `max-fail = 1`\nis equivalent to the legacy `fail-fast = true`.\n\nWhen both [`fail_fast`](#fail-fast) and `max-fail` are set,\n`max-fail` takes precedence.",
-                "minimum": 1,
-                "type": "integer"
-              },
-              "no-tests": {
-                "default": "auto",
-                "description": "Configures behavior when no tests are found to run.\n\n`auto` (the default) fails when no filter expressions were given, and\npasses silently when filters were given. Use `fail` to always fail,\n`warn` to always warn, or `pass` to always succeed silently.",
-                "enum": [
-                  "auto",
-                  "pass",
-                  "warn",
-                  "fail"
-                ],
-                "type": "string"
-              },
-              "retry": {
-                "default": 0,
-                "description": "When set, we will retry failed tests up to this number of times.",
-                "minimum": 0,
-                "type": "integer"
-              },
-              "run-timeout": {
-                "default": null,
-                "description": "Wall-clock limit (in seconds) for the entire run.\n\nWhen the run takes longer than this duration, karva stops the\nremaining workers and exits with a failure status. This is a safety\nnet for CI to bound runaway suites; it does not affect individual\ntest results that already completed.\n\nDefaults to unset, which lets the run take as long as it needs.",
-                "type": "number"
-              },
-              "slow-timeout": {
-                "default": null,
-                "description": "Threshold (in seconds) after which a test is flagged as slow.\n\nWhen set, tests that take longer than this duration are reported with\na `SLOW` status line and counted in the run summary. The `SLOW` line\nis gated on `--status-level=slow` (or higher); the summary always\nshows the slow count when `--final-status-level=slow` is set.\n\nDefaults to unset, which disables slow-test detection.",
-                "type": "number"
-              },
-              "termination-grace-period": {
-                "default": 10.0,
-                "description": "Grace period (in seconds) between graceful worker termination and\nforce-kill.\n\nKarva uses this when stopping workers because of Ctrl+C, fail-fast, or\n`run-timeout`. Set to `0` to send the force-kill signal immediately\nafter the graceful termination signal.\n\nDefaults to 10 seconds.",
-                "type": "number"
-              },
-              "test-function-prefix": {
-                "default": "test",
-                "description": "The prefix to use for test functions.\n\nDefaults to `test`.",
-                "type": "string"
-              },
-              "timeout": {
-                "default": null,
-                "description": "Hard per-test timeout (in seconds).\n\nWhen set, every test that runs longer than this duration is killed\nand reported as a failure. Tests can override the limit individually\nwith [`@karva.tags.timeout`](https://docs.karva.dev/usage/tags/timeout/),\nwhich takes precedence over the configured default.\n\nDefaults to unset, which disables hard timeouts unless a tag is\napplied to the test.",
-                "type": "number"
-              },
-              "try-import-fixtures": {
-                "default": false,
-                "description": "When set, we will try to import functions in each test file as well as parsing the ast to find them.\n\nThis is often slower, so it is not recommended for most projects.",
-                "type": "boolean"
-              }
-            },
-            "type": "object"
-          }
-        },
-        "type": "object"
-      },
-      "propertyNames": {
-        "not": {
-          "pattern": "^default-"
-        },
-        "pattern": "^[A-Za-z0-9_-]+$"
-      },
-      "type": "object"
+        "$ref": "#/definitions/Options"
+      }
     },
     "required-version": {
-      "default": null,
       "description": "`SemVer` requirement that the running karva binary must satisfy.\n\nWhen set, karva refuses to run if the installed version does not\nmatch the requirement. This is useful in CI and for shared\nrepositories where every developer should be on a known-good\nversion.",
-      "type": "string"
+      "type": [
+        "string",
+        "null"
+      ]
     }
   },
-  "title": "Karva configuration",
-  "type": "object"
+  "additionalProperties": false,
+  "definitions": {
+    "CovFailUnder": {
+      "description": "A coverage threshold expressed as a percentage (`0..=100`).\n\nWraps `f64` for the same reason as [`SlowTimeoutSecs`]: keeps the\nsurrounding [`crate::options::CoverageOptions`] `Eq`/`Combine` derives\nstraightforward. `NaN` is rejected at parse time so bit-wise equality is\nsafe here.",
+      "type": "number",
+      "format": "double"
+    },
+    "CovReport": {
+      "description": "Coverage report type.",
+      "oneOf": [
+        {
+          "description": "Compact terminal table (default).",
+          "type": "string",
+          "const": "term"
+        },
+        {
+          "description": "Terminal table with a `Missing` column listing uncovered line numbers.",
+          "type": "string",
+          "const": "term-missing"
+        },
+        {
+          "description": "Cobertura XML written to disk for CI integrations.",
+          "type": "string",
+          "const": "xml"
+        },
+        {
+          "description": "JSON written to disk for machine-readable coverage consumption.",
+          "type": "string",
+          "const": "json"
+        },
+        {
+          "description": "HTML written to disk for interactive browsing.",
+          "type": "string",
+          "const": "html"
+        }
+      ]
+    },
+    "CoverageOptions": {
+      "type": "object",
+      "properties": {
+        "branch": {
+          "description": "Whether to measure branch coverage in addition to line coverage.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "fail-under": {
+          "description": "Minimum total coverage percentage required for the run to succeed.\n\nWhen set, the test command exits with a non-zero status if the\nreported `TOTAL` coverage is below this value, even when every test\npassed. Has no effect when tests already failed (the exit code is\nalready non-zero).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CovFailUnder"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "include": {
+          "description": "Include only coverage report files matching these globs.\n\nGlobs are matched against the project-relative file path shown in the\ncoverage report, such as `src/package/module.py`. When unset, all files\nunder the configured coverage sources are included unless omitted.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "omit": {
+          "description": "Exclude coverage report files matching these globs.\n\nGlobs are matched against the project-relative file path shown in the\ncoverage report, such as `src/package/module.py`. Omit filters are\napplied after include filters.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "report": {
+          "description": "Coverage report type.\n\n`term` (default) prints a compact terminal table.\n`term-missing` extends it with a `Missing` column listing the\nuncovered line numbers per file.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CovReport"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "report-path": {
+          "description": "Optional output path for machine-readable coverage reports.\n\nWhen `report = \"xml\"` or `report = \"json\"`, this path controls where\nthe file is written. When `report = \"html\"`, it controls the output\ndirectory. If omitted, karva writes to `coverage.xml`,\n`coverage.json`, or `htmlcov/` in the project root.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sources": {
+          "description": "Source paths to measure coverage for.\n\nEquivalent to passing `--cov=<path>` on the command line; may be\nlisted multiple times. An empty entry (`\"\"`) measures the current\nworking directory, matching pytest-cov's bare `--cov`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "FailSlowSecs": {
+      "description": "A per-test duration budget expressed in seconds.\n\nWraps `f64` for the same reason as [`SlowTimeoutSecs`]. Unlike\n[`SlowTimeoutSecs`] (informational) or [`TestTimeoutSecs`] (kills the\ntest mid-flight), a test exceeding this budget is allowed to finish its\nfull lifecycle — including fixture teardown — and is then reported as a\nfailure (see [`crate::settings::TestSettings::fail_slow`]).",
+      "type": "number",
+      "format": "double"
+    },
+    "FinalStatusLevel": {
+      "description": "Which final summary information to display at the end of the run.\n\nModeled after `cargo-nextest`'s `--final-status-level`. Levels are\ncumulative in the same way as [`StatusLevel`].",
+      "oneOf": [
+        {
+          "description": "Don't display the summary line or any diagnostic blocks.",
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "description": "Only display the summary line and diagnostics on failure.",
+          "type": "string",
+          "const": "fail"
+        },
+        {
+          "description": "Display the summary line plus diagnostics on failure or when any\ntest was retried. The summary line gains a `N retried` count whenever\na retry happened.",
+          "type": "string",
+          "const": "retry"
+        },
+        {
+          "description": "Same as `retry` until a slow-test threshold is implemented.",
+          "type": "string",
+          "const": "slow"
+        },
+        {
+          "description": "Always display the summary line and diagnostics (default).",
+          "type": "string",
+          "const": "pass"
+        },
+        {
+          "description": "Same as `pass` until skip-specific summary lines are emitted.",
+          "type": "string",
+          "const": "skip"
+        },
+        {
+          "description": "Always display every summary status.",
+          "type": "string",
+          "const": "all"
+        }
+      ]
+    },
+    "JunitOptions": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "Output path for the `JUnit` XML report.\n\nWhen unset, no `JUnit` report is written.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "report-name": {
+          "description": "Name of the top-level `JUnit` test suite collection.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "store-failure-output": {
+          "description": "Whether to include captured stdout and stderr for failing tests.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "store-success-output": {
+          "description": "Whether to include captured stdout and stderr for passing tests.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "MaxFail": {
+      "description": "Controls how many tests may fail before karva stops scheduling new ones.\n\nModelled on nextest's `--max-fail` flag. A value of `None` means karva\nnever stops scheduling tests; a value of `Some(n)` stops once `n` tests\nhave failed, which generalizes the legacy `--fail-fast` flag (equivalent\nto `Some(1)`).",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 1
+    },
+    "NoTestsMode": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "pass",
+        "warn",
+        "fail"
+      ]
+    },
+    "Options": {
+      "type": "object",
+      "properties": {
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CoverageOptions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "junit": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/JunitOptions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "overrides": {
+          "description": "Per-test configuration overrides.\n\nEach entry pairs a [filter expression](#filter) with one or more\noption overrides. The first override whose filter matches the\nrunning test wins for any given option. Fields left unset on a\nmatching override fall through to the next match (or the\nprofile-level default).",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/OverrideOptions"
+          }
+        },
+        "src": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SrcOptions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "terminal": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TerminalOptions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "test": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TestOptions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "OutputFormat": {
+      "description": "The diagnostic output format.",
+      "type": "string",
+      "enum": [
+        "full",
+        "concise"
+      ]
+    },
+    "OverrideOptions": {
+      "description": "A single per-test override entry.\n\nMirrors `[[profile.<name>.overrides]]` in `karva.toml`. Each override\npairs a filter expression with one or more option fields to apply when\nthe filter matches a given test.",
+      "type": "object",
+      "properties": {
+        "fail-slow": {
+          "description": "Duration budget (in seconds) for a matching test's full lifecycle.\nMirrors the profile-level [`fail-slow`](#fail-slow) field. A\nnon-positive value disables the budget for the matching test.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FailSlowSecs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "filter": {
+          "description": "A filter expression evaluated against each test. Tests whose name\nor tags match the expression pick up this override's settings.",
+          "type": "string"
+        },
+        "retries": {
+          "description": "Number of times to retry a matching test before giving up. Mirrors\nthe profile-level [`retry`](#retry) field.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "slow-timeout": {
+          "description": "Threshold (in seconds) above which a matching test is flagged as\nslow. Mirrors the profile-level\n[`slow-timeout`](#slow-timeout) field. A non-positive value\ndisables slow tracking for the matching test.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SlowTimeoutSecs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timeout": {
+          "description": "Hard per-test timeout, in seconds, applied to matching tests.\nMirrors the profile-level [`timeout`](#timeout) field. A value of\n`0` (or any non-positive value) disables the hard timeout for the\nmatching test.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TestTimeoutSecs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "filter"
+      ]
+    },
+    "RunTimeoutSecs": {
+      "description": "A global run timeout expressed in seconds.",
+      "type": "number",
+      "format": "double"
+    },
+    "SlowTimeoutSecs": {
+      "description": "A slow-test threshold expressed in seconds.\n\nWraps `f64` so the surrounding [`crate::options::TestOptions`] can keep\nderiving `Eq`/`Combine` without pulling `f64` into those bounds. Bit-wise\nequality is used (`NaN` is not a valid value because the option is\nvalidated at parse time).",
+      "type": "number",
+      "format": "double"
+    },
+    "SrcOptions": {
+      "type": "object",
+      "properties": {
+        "include": {
+          "description": "A list of files and directories to check.\nIncluding a file or directory will make it so that it (and its contents)\nare tested.\nWhen unset, Karva checks the `tests` directory if it exists, otherwise\nit checks the project root.\n\n- `tests` matches a directory named `tests`\n- `tests/test.py` matches a file named `test.py` in the `tests` directory",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "respect-ignore-files": {
+          "description": "Whether to automatically exclude files that are ignored by `.ignore`,\n`.gitignore`, `.git/info/exclude`, and global `gitignore` files.\nEnabled by default.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "StatusLevel": {
+      "description": "Which test result statuses to display during the run.\n\nModeled after `cargo-nextest`'s `--status-level`. Levels are cumulative:\neach level displays its own status plus all earlier statuses.",
+      "oneOf": [
+        {
+          "description": "Don't display any test result lines (or the \"Starting\" header).",
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "description": "Only display failed test results.",
+          "type": "string",
+          "const": "fail"
+        },
+        {
+          "description": "Display failed test results plus a `TRY N FAIL` line for each failed\nattempt that was retried.",
+          "type": "string",
+          "const": "retry"
+        },
+        {
+          "description": "Display failed, retried, and slow test results. Karva does not yet\nhave a slow-test threshold, so this currently behaves like `retry`.",
+          "type": "string",
+          "const": "slow"
+        },
+        {
+          "description": "Display failed, retried, slow, and passing test results (default).",
+          "type": "string",
+          "const": "pass"
+        },
+        {
+          "description": "Additionally display skipped test results.",
+          "type": "string",
+          "const": "skip"
+        },
+        {
+          "description": "Display all test result statuses.",
+          "type": "string",
+          "const": "all"
+        }
+      ]
+    },
+    "TerminalOptions": {
+      "type": "object",
+      "properties": {
+        "final-status-level": {
+          "description": "Test summary information to display at the end of the run.\n\nModeled after `cargo-nextest`'s `--final-status-level`. Levels are\ncumulative in the same way as [`status_level`](#status-level).\n\nDefaults to `pass`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FinalStatusLevel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output-format": {
+          "description": "The format to use for printing diagnostic messages.\n\nDefaults to `full`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OutputFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "show-python-output": {
+          "description": "Whether to show the python output.\n\nThis is the output the `print` goes to etc.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "status-level": {
+          "description": "Test result statuses to display during the run.\n\nModeled after `cargo-nextest`'s `--status-level`. Levels are\ncumulative: `pass` shows passing and failed tests, `skip` adds\nskipped tests on top, and so on. `retry` and `slow` are accepted\nfor forward-compatibility but currently behave like `fail`.\n\nDefaults to `pass`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StatusLevel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "TerminationGracePeriodSecs": {
+      "description": "Grace period between graceful termination and force-kill, in seconds.",
+      "type": "number",
+      "format": "double"
+    },
+    "TestOptions": {
+      "type": "object",
+      "properties": {
+        "fail-fast": {
+          "description": "Whether to stop at the first test failure.\n\nThis is a legacy alias for [`max_fail`](#max-fail): `true`\ncorresponds to `max-fail = 1` and `false` leaves the limit unset.\nWhen both are set, `max-fail` takes precedence.\n\nDefaults to `false`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "fail-slow": {
+          "description": "Duration budget (in seconds) for a test's full lifecycle (fixture\nsetup, the test call, and fixture teardown).\n\nWhen set, a test is allowed to run to completion — including\nteardown, so cleanup is never skipped — and is then reported as a\nfailure if the full lifecycle took longer than this budget. Tests\ncan override the limit individually with\n[`@karva.tags.fail_slow`](https://docs.karva.dev/usage/failure-handling/fail-slow/),\nwhich takes precedence over the configured default.\n\nThis is distinct from [`timeout`](#timeout), which kills a test\nmid-execution, and [`slow_timeout`](#slow-timeout), which is purely\ninformational and never fails a test.\n\nDefaults to unset, which disables budget checking unless a tag is\napplied to the test.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FailSlowSecs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max-fail": {
+          "description": "Stop scheduling new tests once this many tests have failed.\n\nAccepts a positive integer. Omitting the field (the default) lets\nevery test run regardless of how many fail. Setting `max-fail = 1`\nis equivalent to the legacy `fail-fast = true`.\n\nWhen both [`fail_fast`](#fail-fast) and `max-fail` are set,\n`max-fail` takes precedence.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MaxFail"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "no-tests": {
+          "description": "Configures behavior when no tests are found to run.\n\n`auto` (the default) fails when no filter expressions were given, and\npasses silently when filters were given. Use `fail` to always fail,\n`warn` to always warn, or `pass` to always succeed silently.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/NoTestsMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retry": {
+          "description": "When set, we will retry failed tests up to this number of times.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "run-timeout": {
+          "description": "Wall-clock limit (in seconds) for the entire run.\n\nWhen the run takes longer than this duration, karva stops the\nremaining workers and exits with a failure status. This is a safety\nnet for CI to bound runaway suites; it does not affect individual\ntest results that already completed.\n\nDefaults to unset, which lets the run take as long as it needs.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RunTimeoutSecs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "slow-timeout": {
+          "description": "Threshold (in seconds) after which a test is flagged as slow.\n\nWhen set, tests that take longer than this duration are reported with\na `SLOW` status line and counted in the run summary. The `SLOW` line\nis gated on `--status-level=slow` (or higher); the summary always\nshows the slow count when `--final-status-level=slow` is set.\n\nDefaults to unset, which disables slow-test detection.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SlowTimeoutSecs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "termination-grace-period": {
+          "description": "Grace period (in seconds) between graceful worker termination and\nforce-kill.\n\nKarva uses this when stopping workers because of Ctrl+C, fail-fast, or\n`run-timeout`. Set to `0` to send the force-kill signal immediately\nafter the graceful termination signal.\n\nDefaults to 10 seconds.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TerminationGracePeriodSecs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "test-function-prefix": {
+          "description": "The prefix to use for test functions.\n\nDefaults to `test`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timeout": {
+          "description": "Hard per-test timeout (in seconds).\n\nWhen set, every test that runs longer than this duration is killed\nand reported as a failure. Tests can override the limit individually\nwith [`@karva.tags.timeout`](https://docs.karva.dev/usage/tags/timeout/),\nwhich takes precedence over the configured default.\n\nDefaults to unset, which disables hard timeouts unless a tag is\napplied to the test.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TestTimeoutSecs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "try-import-fixtures": {
+          "description": "When set, we will try to import functions in each test file as well as parsing the ast to find them.\n\nThis is often slower, so it is not recommended for most projects.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "TestTimeoutSecs": {
+      "description": "A per-test timeout expressed in seconds.\n\nWraps `f64` for the same reason as [`SlowTimeoutSecs`]. Tests exceeding\nthis duration are killed and reported as failures (see\n[`crate::settings::TestSettings::timeout`]).",
+      "type": "number",
+      "format": "double"
+    }
+  }
 }

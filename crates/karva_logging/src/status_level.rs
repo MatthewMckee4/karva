@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
     Deserialize,
     clap::ValueEnum,
 )]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum StatusLevel {
     /// Don't display any test result lines (or the "Starting" header).
@@ -80,6 +81,7 @@ impl Combine for StatusLevel {
     Deserialize,
     clap::ValueEnum,
 )]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum FinalStatusLevel {
     /// Don't display the summary line or any diagnostic blocks.

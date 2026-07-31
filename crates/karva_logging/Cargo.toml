@@ -10,6 +10,9 @@ repository.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[features]
+schemars = ["dep:schemars"]
+
 [dependencies]
 karva_combine = { workspace = true }
 karva_static = { workspace = true }
@@ -17,6 +20,7 @@ karva_static = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 colored = { workspace = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 tracing = { workspace = true, features = ["release_max_level_debug"] }
 tracing-flame = { workspace = true }

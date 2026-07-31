@@ -21,6 +21,7 @@ use crate::settings::{
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Options {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -87,6 +88,7 @@ impl Options {
 /// pairs a filter expression with one or more option fields to apply when
 /// the filter matches a given test.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, OptionsMetadata)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct OverrideOptions {
     /// A filter expression evaluated against each test. Tests whose name
@@ -98,6 +100,7 @@ pub struct OverrideOptions {
             filter = "tag(slow)"
         "#
     )]
+    #[cfg_attr(feature = "schemars", schemars(with = "String"))]
     pub filter: ValidatedFilter,
 
     /// Number of times to retry a matching test before giving up. Mirrors
@@ -169,6 +172,7 @@ impl OverrideOptions {
 #[derive(
     Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize, OptionsMetadata, Combine,
 )]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct SrcOptions {
     /// Whether to automatically exclude files that are ignored by `.ignore`,
@@ -215,6 +219,7 @@ impl SrcOptions {
 #[derive(
     Debug, Default, Clone, Eq, PartialEq, Combine, Serialize, Deserialize, OptionsMetadata,
 )]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct TerminalOptions {
     /// The format to use for printing diagnostic messages.
@@ -292,6 +297,7 @@ impl TerminalOptions {
 #[derive(
     Debug, Default, Clone, Eq, PartialEq, Combine, Serialize, Deserialize, OptionsMetadata,
 )]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct TestOptions {
     /// The prefix to use for test functions.
@@ -511,6 +517,7 @@ impl TestOptions {
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize, OptionsMetadata)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CoverageOptions {
     /// Source paths to measure coverage for.
@@ -666,6 +673,7 @@ impl CoverageOptions {
 #[derive(
     Debug, Default, Clone, Eq, PartialEq, Combine, Serialize, Deserialize, OptionsMetadata,
 )]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct JunitOptions {
     /// Output path for the `JUnit` XML report.
@@ -731,6 +739,7 @@ impl JunitOptions {
 
 /// Coverage report type.
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum CovReport {
     /// Compact terminal table (default).
@@ -774,6 +783,7 @@ impl CovReport {
 
 /// The diagnostic output format.
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum OutputFormat {
     #[default]

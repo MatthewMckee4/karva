@@ -19,6 +19,7 @@ pub const DEFAULT_PROFILE: &str = "default";
 /// implicit `default` profile is always available; other profiles inherit
 /// from it (and can override individual fields).
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Config {
     /// `SemVer` requirement that the running karva binary must satisfy.
@@ -34,6 +35,7 @@ pub struct Config {
             required-version = ">=0.5.0"
         "#
     )]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub required_version: Option<VersionReq>,
 
