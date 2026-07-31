@@ -239,9 +239,9 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         let mut child_parents = parents.to_vec();
         child_parents.push(package);
 
-        if let Some(configuration_module) = package.configuration_module_impl()
+        if package.configuration_module_impl().is_some()
             && let Err(mut diagnostics) =
-                self.run_auto_use_fixtures(py, parents, configuration_module, FixtureScope::Package)
+                self.run_auto_use_fixtures(py, parents, package, FixtureScope::Package)
         {
             let diagnostic = diagnostics.remove(0);
             self.register_error_package_tests(package, &diagnostic, &diagnostics);

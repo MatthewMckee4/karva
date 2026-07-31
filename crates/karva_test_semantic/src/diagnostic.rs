@@ -391,6 +391,15 @@ pub fn fixture_resolution_diagnostic(error: FixtureResolutionError) -> Diagnosti
             fixture,
             dependency,
         } => fixture_scope_mismatch_diagnostic(&dependency_path, &fixture, &dependency),
+        FixtureResolutionError::MissingFixtures {
+            fixture,
+            missing_fixtures,
+        } => missing_fixtures_diagnostic(
+            fixture.source_file,
+            &fixture.stmt_function_def,
+            &missing_fixtures,
+            FunctionKind::Fixture,
+        ),
     }
 }
 
