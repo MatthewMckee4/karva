@@ -75,6 +75,16 @@ declare_diagnostic_type! {
 }
 
 declare_diagnostic_type! {
+    /// ## Duplicate fixture
+    ///
+    /// Raised when a module defines the same fixture more than once.
+    pub static DUPLICATE_FIXTURE = {
+        summary: "Discovered duplicate fixture definitions",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
     /// ## Invalid fixture
     ///
     /// There are several reasons a fixture may be invalid,
@@ -158,6 +168,16 @@ declare_diagnostic_type! {
 }
 
 declare_diagnostic_type! {
+    /// ## Duplicate test
+    ///
+    /// Raised when a module defines the same test function more than once.
+    pub static DUPLICATE_TEST = {
+        summary: "Discovered duplicate test definitions",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
     /// ## Invalid Test
     ///
     /// If a test definition cannot be run by Karva, we will raise this error.
@@ -198,6 +218,21 @@ fn annotate_function_name(
 ) {
     let span = Span::from(source_file).with_range(stmt_function_def.name.range);
     diagnostic.annotate(Annotation::primary(span));
+}
+
+fn annotate_first_definition(
+    diagnostic: &mut Diagnostic,
+    source_file: SourceFile,
+    name: &str,
+    stmt_function_def: &StmtFunctionDef,
+) {
+    let mut sub = SubDiagnostic::new(
+        SubDiagnosticSeverity::Info,
+        format!("First definition of `{name}` is here"),
+    );
+    let span = Span::from(source_file).with_range(stmt_function_def.name.range);
+    sub.annotate(Annotation::primary(span));
+    diagnostic.sub(sub);
 }
 
 /// Emits sub-diagnostics for each intermediate fixture in the dependency chain,
@@ -250,6 +285,37 @@ pub fn report_failed_to_discover_imported_fixture(
         "Failed to discover imported fixture `{fixture_name}` from `{source_path}`: {error}"
     ));
 
+    context.add_run_diagnostic(diagnostic);
+}
+
+pub fn report_duplicate_fixture(
+    context: &Context,
+    source_file: SourceFile,
+    fixture_name: &str,
+    first_definition: &StmtFunctionDef,
+    duplicate_definition: &StmtFunctionDef,
+) {
+    let mut diagnostic = DUPLICATE_FIXTURE.diagnostic(format!(
+        "Fixture `{fixture_name}` is defined more than once"
+    ));
+
+    annotate_function_name(&mut diagnostic, source_file.clone(), duplicate_definition);
+    annotate_first_definition(&mut diagnostic, source_file, fixture_name, first_definition);
+    context.add_run_diagnostic(diagnostic);
+}
+
+pub fn report_duplicate_test(
+    context: &Context,
+    source_file: SourceFile,
+    test_name: &str,
+    first_definition: &StmtFunctionDef,
+    duplicate_definition: &StmtFunctionDef,
+) {
+    let mut diagnostic =
+        DUPLICATE_TEST.diagnostic(format!("Test `{test_name}` is defined more than once"));
+
+    annotate_function_name(&mut diagnostic, source_file.clone(), duplicate_definition);
+    annotate_first_definition(&mut diagnostic, source_file, test_name, first_definition);
     context.add_run_diagnostic(diagnostic);
 }
 

@@ -110,6 +110,66 @@ def test_all_scopes(some_fixture: int) -> None:
 }
 
 #[test]
+fn test_duplicate_fixture_names_are_rejected_without_running_body() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+import pytest
+from pathlib import Path
+
+def mark(name):
+    Path(name).write_text("ran")
+
+fixture_name = "shared"
+
+@karva.fixture(name=fixture_name, auto_use=True)
+def first_fixture():
+    mark("first.txt")
+
+@pytest.fixture(name=fixture_name, autouse=True)
+def second_fixture():
+    mark("second.txt")
+
+def test_ok():
+    assert True
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_ok
+
+    diagnostics:
+
+    error[duplicate-fixture]: Fixture `shared` is defined more than once
+      --> test.py:16:5
+       |
+    16 | def second_fixture():
+       |     ^^^^^^^^^^^^^^
+       |
+    info: First definition of `shared` is here
+      --> test.py:12:5
+       |
+    12 | def first_fixture():
+       |     ^^^^^^^^^^^^^
+       |
+
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    for marker in ["first.txt", "second.txt"] {
+        assert!(!context.root().join(marker).exists());
+    }
+}
+
+#[test]
 fn test_missing_fixture() {
     let context = TestContext::with_file(
         "test.py",

@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -10,11 +11,12 @@ use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
 use ruff_python_ast::{Expr, PythonVersion, Stmt, StmtFunctionDef};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 use ruff_source_file::SourceFileBuilder;
+use ruff_text_size::TextRange;
 
 use crate::Context;
 use crate::diagnostic::{
-    report_failed_to_discover_imported_fixture, report_failed_to_import_module,
-    report_generator_test, report_invalid_fixture,
+    report_duplicate_fixture, report_duplicate_test, report_failed_to_discover_imported_fixture,
+    report_failed_to_import_module, report_generator_test, report_invalid_fixture,
 };
 use crate::discovery::{DiscoveredModule, DiscoveredTestFunction};
 use crate::extensions::fixtures::DiscoveredFixture;
@@ -79,12 +81,13 @@ impl<'ctx, 'py, 'a, 'b> FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
 }
 
 impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
-    fn process_fixture_function(&mut self, stmt_function_def: StmtFunctionDef) {
+    fn process_fixture_function(
+        &mut self,
+        stmt_function_def: StmtFunctionDef,
+    ) -> Option<DiscoveredFixture> {
         self.try_import_module();
 
-        let Some(py_module) = self.py_module.as_ref() else {
-            return;
-        };
+        let py_module = self.py_module.as_ref()?;
 
         let is_generator_function = is_generator(&stmt_function_def);
 
@@ -98,7 +101,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             self.module.source_file(),
             is_generator_function,
         ) {
-            Ok(fixture_def) => self.module.add_fixture(fixture_def),
+            Ok(fixture_def) => Some(fixture_def),
             Err(e) => {
                 report_invalid_fixture(
                     self.context,
@@ -107,6 +110,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                     &stmt_function_def,
                     &e,
                 );
+                None
             }
         }
     }
@@ -277,7 +281,26 @@ pub fn discover(
 
     let mut visitor = FunctionDefinitionVisitor::new(py, context, module);
 
-    for test_function_def in test_function_defs {
+    let duplicate_test_indices = duplicate_definition_indices(
+        &test_function_defs,
+        |test_function_def| test_function_def.name.to_string(),
+        |test_function_def| test_function_def.range,
+        |name, first_definition, duplicate_definition| {
+            report_duplicate_test(
+                context,
+                visitor.module.source_file(),
+                name,
+                first_definition,
+                duplicate_definition,
+            );
+        },
+    );
+
+    for (index, test_function_def) in test_function_defs.into_iter().enumerate() {
+        if duplicate_test_indices.contains(&index) {
+            continue;
+        }
+
         if is_generator(&test_function_def) {
             report_generator_test(context, visitor.module.source_file(), &test_function_def);
             continue;
@@ -286,13 +309,69 @@ pub fn discover(
         visitor.process_test_function(test_function_def);
     }
 
+    let mut fixtures = Vec::with_capacity(fixture_function_defs.len());
     for fixture_function_def in fixture_function_defs {
-        visitor.process_fixture_function(fixture_function_def);
+        if let Some(fixture) = visitor.process_fixture_function(fixture_function_def) {
+            fixtures.push(fixture);
+        }
+    }
+
+    let duplicate_fixture_indices = duplicate_definition_indices(
+        &fixtures,
+        |fixture| fixture.name().function_name().to_string(),
+        |fixture| fixture.stmt_function_def().range,
+        |name, first_definition, duplicate_definition| {
+            report_duplicate_fixture(
+                context,
+                visitor.module.source_file(),
+                name,
+                first_definition.stmt_function_def(),
+                duplicate_definition.stmt_function_def(),
+            );
+        },
+    );
+
+    for (index, fixture) in fixtures.into_iter().enumerate() {
+        if duplicate_fixture_indices.contains(&index) {
+            continue;
+        }
+
+        visitor.module.add_fixture(fixture);
     }
 
     if is_conftest || context.settings().test().try_import_fixtures {
         visitor.find_extra_fixtures();
     }
+}
+
+fn duplicate_definition_indices<T>(
+    definitions: &[T],
+    mut name: impl FnMut(&T) -> String,
+    mut range: impl FnMut(&T) -> TextRange,
+    mut report: impl FnMut(&str, &T, &T),
+) -> HashSet<usize> {
+    let mut seen: HashMap<String, usize> = HashMap::new();
+    let mut duplicates: HashSet<usize> = HashSet::new();
+
+    for (index, definition) in definitions.iter().enumerate() {
+        let definition_name = name(definition);
+
+        if let Some(first_index) = seen.get(&definition_name) {
+            let first_definition = &definitions[*first_index];
+            if range(first_definition) == range(definition) {
+                duplicates.insert(index);
+                continue;
+            }
+
+            report(&definition_name, first_definition, definition);
+            duplicates.insert(*first_index);
+            duplicates.insert(index);
+        } else {
+            seen.insert(definition_name, index);
+        }
+    }
+
+    duplicates
 }
 
 /// Returns `true` if the function body contains a yield or yield-from expression.
