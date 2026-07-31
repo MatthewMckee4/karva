@@ -19,7 +19,6 @@ nav = [
         { "Tutorial" = "get-started/tutorial.md"},
     ]},
     { "Usage" = [
-        { "Project Non-Goals" = "usage/non-goals.md"},
         { "Running Tests" = [
             { "Filtering Tests" = "usage/running-tests/filtering.md"},
             { "Parallel Execution" = "usage/running-tests/parallel.md"},
@@ -47,6 +46,7 @@ nav = [
             { "Expect Fail" = "usage/tags/expect_fail.md"},
             { "Timeout" = "usage/tags/timeout.md"},
         ]},
+        { "Project Non-Goals" = "usage/non-goals.md"},
     ]},
     { "Configuration" = [
         { "Configuration" = "configuration/configuration.md"},
