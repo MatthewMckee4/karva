@@ -90,7 +90,9 @@ impl Project {
 
     pub fn test_paths(&self) -> Vec<Result<TestPath, TestPathError>> {
         if self.settings.src().include_paths.is_empty() {
-            return vec![TestPath::new(self.cwd().as_str())];
+            let tests = self.cwd().join("tests");
+            let path = if tests.is_dir() { &tests } else { self.cwd() };
+            return vec![TestPath::new(path.as_str())];
         }
 
         self.settings

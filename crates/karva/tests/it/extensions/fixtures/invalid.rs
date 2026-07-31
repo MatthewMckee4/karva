@@ -261,9 +261,11 @@ fn test_fixture_missing_fixtures() {
         "test.py",
         r"
                 from karva import fixture
+                from pathlib import Path
 
                 @fixture
                 def failing_fixture(missing_fixture):
+                    Path('fixture-ran').touch()
                     return 1
 
                 def test_failing_fixture(failing_fixture):
@@ -282,19 +284,20 @@ fn test_fixture_missing_fixtures() {
 
     test::test_failing_fixture:
 
-    error[fixture-failure]: Fixture `failing_fixture` failed
-     --> test.py:5:5
+    error[missing-fixtures]: Fixture `failing_fixture` has missing fixtures
+     --> test.py:6:5
       |
-    5 | def failing_fixture(missing_fixture):
+    6 | def failing_fixture(missing_fixture):
       |     ^^^^^^^^^^^^^^^
       |
-    info: failing_fixture() missing 1 required positional argument: 'missing_fixture'
+    info: Missing fixtures: `missing_fixture`
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
+    assert!(!context.root().join("fixture-ran").exists());
 }
 
 #[test]

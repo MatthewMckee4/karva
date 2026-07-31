@@ -187,6 +187,8 @@ pub struct SrcOptions {
     /// A list of files and directories to check.
     /// Including a file or directory will make it so that it (and its contents)
     /// are tested.
+    /// When unset, Karva checks the `tests` directory if it exists, otherwise
+    /// it checks the project root.
     ///
     /// - `tests` matches a directory named `tests`
     /// - `tests/test.py` matches a file named `test.py` in the `tests` directory

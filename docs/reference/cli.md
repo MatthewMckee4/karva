@@ -34,7 +34,7 @@ karva test [OPTIONS] [PATH]...
 
 <h3 class="cli-reference">Arguments</h3>
 
-<dl class="cli-reference"><dt id="karva-test--paths"><a href="#karva-test--paths"><code>PATHS</code></a></dt><dd><p>List of files, directories, or test functions to test &#91;default: the project root&#93;</p>
+<dl class="cli-reference"><dt id="karva-test--paths"><a href="#karva-test--paths"><code>PATHS</code></a></dt><dd><p>List of files, directories, or test functions to test &#91;default: tests if it exists, otherwise the project root&#93;</p>
 </dd></dl>
 
 <h3 class="cli-reference">Options</h3>

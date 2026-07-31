@@ -19,19 +19,23 @@ nav = [
         { "Tutorial" = "get-started/tutorial.md"},
     ]},
     { "Usage" = [
+        { "Overview" = "usage/index.md"},
         { "Running Tests" = [
             { "Filtering Tests" = "usage/running-tests/filtering.md"},
             { "Parallel Execution" = "usage/running-tests/parallel.md"},
             { "Watch Mode" = "usage/running-tests/watch.md"},
             { "Cache" = "usage/running-tests/cache.md"},
+            { "Test Reports" = "usage/running-tests/reports.md"},
         ]},
         { "Failure Handling" = [
             { "Failing Fast" = "usage/failure-handling/fail-fast.md"},
             { "Retries" = "usage/failure-handling/retries.md"},
             { "Slow Tests" = "usage/failure-handling/slow-tests.md"},
             { "Fail Slow" = "usage/failure-handling/fail-slow.md"},
+            { "Run Timeout" = "usage/failure-handling/run-timeout.md"},
         ]},
         { "Writing Tests" = [
+            { "Basics" = "usage/writing-tests/tests.md"},
             { "Snapshots" = "usage/writing-tests/snapshots.md"},
             { "Coverage" = "usage/writing-tests/coverage.md"},
             { "Other Functions" = "usage/writing-tests/functions.md"},
