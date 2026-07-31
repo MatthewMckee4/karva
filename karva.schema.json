@@ -9,6 +9,12 @@
       "type": "object",
       "additionalProperties": {
         "$ref": "#/definitions/Options"
+      },
+      "propertyNames": {
+        "not": {
+          "pattern": "^default-"
+        },
+        "pattern": "^[A-Za-z0-9_-]+$"
       }
     },
     "required-version": {

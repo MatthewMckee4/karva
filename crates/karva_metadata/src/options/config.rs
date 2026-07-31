@@ -43,8 +43,22 @@ pub struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub required_version: Option<VersionReq>,
 
+    #[cfg_attr(feature = "schemars", schemars(schema_with = "profile_schema"))]
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub profile: BTreeMap<String, Options>,
+}
+
+#[cfg(feature = "schemars")]
+fn profile_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    let options = generator.subschema_for::<Options>();
+    schemars::json_schema!({
+        "type": "object",
+        "propertyNames": {
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "not": { "pattern": "^default-" }
+        },
+        "additionalProperties": options
+    })
 }
 
 impl Config {
