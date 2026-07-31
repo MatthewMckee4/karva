@@ -465,6 +465,12 @@ def test_failure():
     5 | def broken_fixture():
       |     ^^^^^^^^^^^^^^
       |
+    info: Test `test_unreachable` requires fixture `broken_fixture`
+     --> test_fixture.py:8:5
+      |
+    8 | def test_unreachable():
+      |     ^^^^^^^^^^^^^^^^
+      |
     info: Fixture failed here
      --> test_fixture.py:6:5
       |
@@ -509,6 +515,12 @@ def test_failure():
       |
     5 | def broken_fixture():
       |     ^^^^^^^^^^^^^^
+      |
+    info: Test `test_unreachable` requires fixture `broken_fixture`
+     --&gt; test_fixture.py:8:5
+      |
+    8 | def test_unreachable():
+      |     ^^^^^^^^^^^^^^^^
       |
     info: Fixture failed here
      --&gt; test_fixture.py:6:5

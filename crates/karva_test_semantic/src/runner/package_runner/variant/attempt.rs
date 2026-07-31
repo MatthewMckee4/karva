@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use karva_diagnostic::{TestExecutionAttempt, TestExecutionOutcome};
 use pyo3::prelude::*;
 
-use crate::diagnostic::fixture_failure_diagnostic;
+use crate::diagnostic::test_fixture_failure_diagnostic;
 use crate::extensions::fixtures::FixtureScope;
 use crate::extensions::functions::snapshot::set_snapshot_context;
 use crate::utils::{run_coroutine, run_test_with_timeout};
@@ -139,7 +139,14 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         } else {
             let mut diagnostics = fixture_call_errors
                 .into_iter()
-                .map(|error| fixture_failure_diagnostic(self.py, error))
+                .map(|error| {
+                    test_fixture_failure_diagnostic(
+                        self.py,
+                        error,
+                        &self.test.source_file,
+                        &self.test.stmt_function_def,
+                    )
+                })
                 .collect::<Vec<_>>();
             let teardown_start = Instant::now();
             diagnostics.extend(

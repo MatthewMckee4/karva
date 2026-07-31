@@ -287,7 +287,7 @@ mod tests {
     fn test_invalid_fixture_scope() {
         assert_eq!(
             FixtureScope::try_from("invalid".to_string()),
-            Err("Invalid fixture scope: invalid".to_string())
+            Err("Invalid fixture scope `invalid`".to_string())
         );
     }
 }

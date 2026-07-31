@@ -359,6 +359,23 @@ pub fn invalid_fixture_finalizer_diagnostic(
 }
 
 pub fn fixture_failure_diagnostic(py: Python, error: FixtureCallError) -> Diagnostic {
+    fixture_failure_diagnostic_impl(py, error, None)
+}
+
+pub fn test_fixture_failure_diagnostic(
+    py: Python,
+    error: FixtureCallError,
+    test_source_file: &SourceFile,
+    test_function: &StmtFunctionDef,
+) -> Diagnostic {
+    fixture_failure_diagnostic_impl(py, error, Some((test_source_file, test_function)))
+}
+
+fn fixture_failure_diagnostic_impl(
+    py: Python,
+    error: FixtureCallError,
+    test: Option<(&SourceFile, &StmtFunctionDef)>,
+) -> Diagnostic {
     let FixtureCallError {
         fixture_name,
         error,
@@ -369,6 +386,22 @@ pub fn fixture_failure_diagnostic(py: Python, error: FixtureCallError) -> Diagno
     } = error;
 
     let mut diagnostic = FIXTURE_FAILURE.diagnostic(format!("Fixture `{fixture_name}` failed"));
+
+    if let Some((source_file, test_function)) = test {
+        let requested_fixture = dependency_chain
+            .last()
+            .map_or(fixture_name.as_str(), |entry| entry.name.as_str());
+        let mut sub = SubDiagnostic::new(
+            SubDiagnosticSeverity::Info,
+            format!(
+                "Test `{}` requires fixture `{requested_fixture}`",
+                test_function.name
+            ),
+        );
+        let span = Span::from(source_file.clone()).with_range(test_function.name.range);
+        sub.annotate(Annotation::primary(span));
+        diagnostic.sub(sub);
+    }
 
     report_dependency_chain(&mut diagnostic, &dependency_chain, &fixture_name);
 

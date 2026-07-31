@@ -49,7 +49,7 @@ fn test_invalid_pytest_fixture_scope() {
     5 | def some_fixture() -> int:
       |     ^^^^^^^^^^^^
       |
-    info: Invalid fixture scope: sessionss
+    info: Invalid fixture scope `sessionss`
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -100,7 +100,7 @@ def test_all_scopes(some_fixture: int) -> None:
     4 | def some_fixture() -> int:
       |     ^^^^^^^^^^^^
       |
-    info: Invalid fixture scope: sessionss
+    info: Invalid fixture scope `sessionss`
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -239,6 +239,12 @@ fn test_fixture_fails_to_run() {
       |
     5 | def failing_fixture():
       |     ^^^^^^^^^^^^^^^
+      |
+    info: Test `test_failing_fixture` requires fixture `failing_fixture`
+     --> test.py:8:5
+      |
+    8 | def test_failing_fixture(failing_fixture):
+      |     ^^^^^^^^^^^^^^^^^^^^
       |
     info: Fixture failed here
      --> test.py:6:5
@@ -380,6 +386,12 @@ fn test_failing_yield_fixture() {
     5 | def fixture():
       |     ^^^^^^^
       |
+    info: Test `test_failing_fixture` requires fixture `fixture`
+      --> test.py:10:5
+       |
+    10 | def test_failing_fixture(fixture):
+       |     ^^^^^^^^^^^^^^^^^^^^
+       |
     info: Fixture failed here
      --> test.py:7:9
       |
@@ -522,6 +534,12 @@ fn test_fixture_dependency_chain_failure() {
     5 | def config():
       |     ^^^^^^
       |
+    info: Test `test_with_db` requires fixture `db`
+      --> test.py:16:5
+       |
+    16 | def test_with_db(db):
+       |     ^^^^^^^^^^^^
+       |
     info: Fixture `db` requires `connection`
       --> test.py:13:5
        |
@@ -640,7 +658,7 @@ def test_service(service):
        |     ^^^^^^^
        |
     info: Missing fixtures: `config`
-    info: Fixture `config` was rejected during discovery: Invalid fixture scope: invalid
+    info: Fixture `config` was rejected during discovery: Invalid fixture scope `invalid`
      --> test.py:6:5
       |
     6 | def config():
@@ -655,7 +673,7 @@ def test_service(service):
     6 | def config():
       |     ^^^^^^
       |
-    info: Invalid fixture scope: invalid
+    info: Invalid fixture scope `invalid`
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped

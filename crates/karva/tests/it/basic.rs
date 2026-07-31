@@ -1044,7 +1044,7 @@ fn test_invalid_fixture() {
     5 | def fixture_generator():
       |     ^^^^^^^^^^^^^^^^^
       |
-    info: Invalid fixture scope: ssession
+    info: Invalid fixture scope `ssession`
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -1445,6 +1445,12 @@ def test_2(y): pass
       |
     5 | def x():
       |     ^
+      |
+    info: Test `test_1` requires fixture `x`
+     --> test_file.py:3:5
+      |
+    3 | def test_1(x): pass
+      |     ^^^^^^
       |
     info: Fixture failed here
      --> foo.py:6:5

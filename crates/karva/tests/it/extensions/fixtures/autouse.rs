@@ -221,6 +221,27 @@ def test_something_else():
     failures:
 
     test::test_something:
+
+    error[fixture-failure]: Fixture `failing_fixture` failed
+     --> test.py:5:5
+      |
+    5 | def failing_fixture():
+      |     ^^^^^^^^^^^^^^^
+      |
+    info: Test `test_something` requires fixture `failing_fixture`
+     --> test.py:8:5
+      |
+    8 | def test_something():
+      |     ^^^^^^^^^^^^^^
+      |
+    info: Fixture failed here
+     --> test.py:6:5
+      |
+    6 |     raise RuntimeError("Setup failed!")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Setup failed!
+
     test::test_something_else:
 
     error[fixture-failure]: Fixture `failing_fixture` failed
@@ -229,6 +250,12 @@ def test_something_else():
     5 | def failing_fixture():
       |     ^^^^^^^^^^^^^^^
       |
+    info: Test `test_something_else` requires fixture `failing_fixture`
+      --> test.py:11:5
+       |
+    11 | def test_something_else():
+       |     ^^^^^^^^^^^^^^^^^^^
+       |
     info: Fixture failed here
      --> test.py:6:5
       |
@@ -387,6 +414,12 @@ def test_something():
     5 | def failing_dep():
       |     ^^^^^^^^^^^
       |
+    info: Test `test_something` requires fixture `auto_fixture`
+      --> test.py:12:5
+       |
+    12 | def test_something():
+       |     ^^^^^^^^^^^^^^
+       |
     info: Fixture `auto_fixture` requires `failing_dep`
      --> test.py:9:5
       |

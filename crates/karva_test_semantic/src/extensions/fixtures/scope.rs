@@ -47,7 +47,7 @@ impl TryFrom<String> for FixtureScope {
             "session" => Ok(Self::Session),
             "package" => Ok(Self::Package),
             "function" => Ok(Self::Function),
-            _ => Err(format!("Invalid fixture scope: {s}")),
+            _ => Err(format!("Invalid fixture scope `{s}`")),
         }
     }
 }
