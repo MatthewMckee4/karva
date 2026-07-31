@@ -19,6 +19,7 @@ nav = [
         { "Tutorial" = "get-started/tutorial.md"},
     ]},
     { "Usage" = [
+        { "Overview" = "usage/index.md"},
         { "Running Tests" = [
             { "Filtering Tests" = "usage/running-tests/filtering.md"},
             { "Parallel Execution" = "usage/running-tests/parallel.md"},
