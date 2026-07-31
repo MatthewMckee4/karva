@@ -86,15 +86,29 @@ impl Options {
 /// Mirrors `[[profile.<name>.overrides]]` in `karva.toml`. Each override
 /// pairs a filter expression with one or more option fields to apply when
 /// the filter matches a given test.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, OptionsMetadata)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct OverrideOptions {
     /// A filter expression evaluated against each test. Tests whose name
     /// or tags match the expression pick up this override's settings.
+    #[option(
+        default = "required",
+        value_type = "string",
+        example = r#"
+            filter = "tag(slow)"
+        "#
+    )]
     pub filter: ValidatedFilter,
 
     /// Number of times to retry a matching test before giving up. Mirrors
     /// the profile-level [`retry`](#retry) field.
+    #[option(
+        default = "null",
+        value_type = "u32",
+        example = r#"
+            retries = 2
+        "#
+    )]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retries: Option<u32>,
 
@@ -102,6 +116,13 @@ pub struct OverrideOptions {
     /// Mirrors the profile-level [`timeout`](#timeout) field. A value of
     /// `0` (or any non-positive value) disables the hard timeout for the
     /// matching test.
+    #[option(
+        default = "null",
+        value_type = "float (seconds)",
+        example = r#"
+            timeout = 30.0
+        "#
+    )]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout: Option<TestTimeoutSecs>,
 
@@ -109,12 +130,26 @@ pub struct OverrideOptions {
     /// slow. Mirrors the profile-level
     /// [`slow-timeout`](#slow-timeout) field. A non-positive value
     /// disables slow tracking for the matching test.
+    #[option(
+        default = "null",
+        value_type = "float (seconds)",
+        example = r#"
+            slow-timeout = 1.0
+        "#
+    )]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slow_timeout: Option<SlowTimeoutSecs>,
 
     /// Duration budget (in seconds) for a matching test's full lifecycle.
     /// Mirrors the profile-level [`fail-slow`](#fail-slow) field. A
     /// non-positive value disables the budget for the matching test.
+    #[option(
+        default = "null",
+        value_type = "float (seconds)",
+        example = r#"
+            fail-slow = 10.0
+        "#
+    )]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fail_slow: Option<FailSlowSecs>,
 }

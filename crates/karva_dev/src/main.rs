@@ -14,6 +14,7 @@ use pretty_assertions::StrComparison;
 
 mod generate_cli_reference;
 mod generate_env_vars;
+mod generate_json_schema;
 mod generate_options;
 
 const ROOT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../");
@@ -88,6 +89,8 @@ enum Command {
     GenerateCliReference(generate_cli_reference::Args),
     /// Generate environment variables reference.
     GenerateEnvVars(generate_env_vars::Args),
+    /// Generate JSON Schema for `karva.toml`.
+    GenerateJsonSchema(generate_json_schema::Args),
     /// Generate options reference.
     GenerateOptions(generate_options::Args),
     /// Generate all developer documentation and references.
@@ -101,9 +104,11 @@ fn main() -> Result<ExitCode> {
         Command::GenerateAll => {
             generate_cli_reference::main(&generate_cli_reference::Args { mode: Mode::Write })?;
             generate_env_vars::main(&generate_env_vars::Args { mode: Mode::Write })?;
+            generate_json_schema::main(&generate_json_schema::Args { mode: Mode::Write })?;
             generate_options::main(&generate_options::Args { mode: Mode::Write })?;
         }
         Command::GenerateEnvVars(args) => generate_env_vars::main(&args)?,
+        Command::GenerateJsonSchema(args) => generate_json_schema::main(&args)?,
         Command::GenerateOptions(args) => generate_options::main(&args)?,
     }
     Ok(ExitCode::SUCCESS)

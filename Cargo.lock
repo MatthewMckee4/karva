@@ -1245,6 +1245,7 @@ dependencies = [
  "markdown",
  "pretty_assertions",
  "ruff_options_metadata",
+ "serde_json",
 ]
 
 [[package]]
