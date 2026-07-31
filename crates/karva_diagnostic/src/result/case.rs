@@ -147,14 +147,22 @@ pub struct TestCaseAttempt<D = RenderedDiagnostic> {
     attempt: u32,
     outcome: TestCaseOutcome<D>,
     duration: Duration,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    captured_output: Option<CapturedTestOutput>,
 }
 
 impl<D> TestCaseAttempt<D> {
-    pub fn new(attempt: u32, outcome: TestCaseOutcome<D>, duration: Duration) -> Self {
+    pub fn new(
+        attempt: u32,
+        outcome: TestCaseOutcome<D>,
+        duration: Duration,
+        captured_output: Option<CapturedTestOutput>,
+    ) -> Self {
         Self {
             attempt,
             outcome,
             duration,
+            captured_output,
         }
     }
 
@@ -170,6 +178,10 @@ impl<D> TestCaseAttempt<D> {
         self.duration
     }
 
+    pub fn captured_output(&self) -> Option<&CapturedTestOutput> {
+        self.captured_output.as_ref()
+    }
+
     fn try_map_diagnostic<T, E>(
         self,
         mut map: impl FnMut(&D) -> Result<T, E>,
@@ -178,6 +190,7 @@ impl<D> TestCaseAttempt<D> {
             attempt: self.attempt,
             outcome: self.outcome.try_map_diagnostic(&mut map)?,
             duration: self.duration,
+            captured_output: self.captured_output,
         })
     }
 }

@@ -104,10 +104,9 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             return result;
         }
 
-        let output_capture = self.start_output_capture();
         let retry_params = self.params.clone();
         let first_params = std::mem::take(&mut self.params);
-        let first_attempt = self.prepare_attempt(first_params);
+        let first_attempt = self.prepare_attempt(first_params, self.start_output_capture());
         let settings = self.settings(&first_attempt.fixtures.function_arguments);
         let function = self.test.py_function.clone_ref(self.py);
         let test_name_env_result =
@@ -153,11 +152,15 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             }
         };
 
-        self.finish(&settings, output_capture, prior_attempts, final_attempt)
+        self.finish(&settings, prior_attempts, final_attempt)
     }
 
     /// Prepares fixture values and records setup duration for one attempt.
-    fn prepare_attempt(&self, params: HashMap<String, Arc<Py<PyAny>>>) -> PreparedTestAttempt {
+    fn prepare_attempt(
+        &self,
+        params: HashMap<String, Arc<Py<PyAny>>>,
+        output_capture: Option<PythonOutputCapture>,
+    ) -> PreparedTestAttempt {
         let setup_start = Instant::now();
         let fixtures = self.package_runner.prepare_test_fixtures(
             self.py,
@@ -169,6 +172,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         PreparedTestAttempt {
             fixtures,
             setup_duration: setup_start.elapsed(),
+            output_capture,
         }
     }
 
@@ -179,7 +183,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         settings: &VariantSettings,
     ) -> PreparedTestAttempt {
         self.set_coverage_context(None);
-        let prepared = self.prepare_attempt(params);
+        let prepared = self.prepare_attempt(params, self.start_output_capture());
         self.set_coverage_context(Some(&settings.qualified_name));
         prepared
     }
@@ -290,12 +294,16 @@ impl<'runner, 'context, 'settings, 'test, 'py>
     fn finish(
         &self,
         settings: &VariantSettings,
-        output_capture: Option<PythonOutputCapture>,
         prior_attempts: Vec<TestLifecycleAttempt>,
         final_attempt: TestLifecycleAttempt,
     ) -> bool {
         self.set_coverage_context(None);
-        let captured_output = finish_output_capture(self.py, output_capture);
+        let captured_output = combine_captured_output(
+            prior_attempts
+                .iter()
+                .chain(std::iter::once(&final_attempt))
+                .filter_map(|attempt| attempt.captured_output.as_ref()),
+        );
         let total_duration = prior_attempts
             .iter()
             .map(|attempt| attempt.duration)
@@ -463,4 +471,18 @@ fn finish_output_capture(
             None
         }
     }
+}
+
+/// Combines attempt output for existing terminal and `JUnit` consumers.
+fn combine_captured_output<'a>(
+    outputs: impl Iterator<Item = &'a CapturedTestOutput>,
+) -> Option<CapturedTestOutput> {
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+    for output in outputs {
+        stdout.push_str(output.stdout());
+        stderr.push_str(output.stderr());
+    }
+    let output = CapturedTestOutput::new(stdout, stderr);
+    (!output.is_empty()).then_some(output)
 }
