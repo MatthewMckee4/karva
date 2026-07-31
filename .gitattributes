@@ -1,1 +1,3 @@
 * text=auto eol=lf
+*.md.snap linguist-language=Markdown
+karva.schema.json -diff linguist-generated=true text=auto eol=lf

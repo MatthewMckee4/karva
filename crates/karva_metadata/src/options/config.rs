@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use karva_combine::Combine;
+use karva_macros::OptionsMetadata;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -14,10 +15,11 @@ pub const DEFAULT_PROFILE: &str = "default";
 
 /// File-level configuration: a collection of named profiles.
 ///
-/// Mirrors nextest: every option group lives inside `[profile.<name>]`. The
-/// implicit `default` profile is always available; other profiles inherit
-/// from it (and can override individual fields).
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Every option group lives inside `[profile.<name>]`. The implicit `default`
+/// profile is always available; named profiles inherit from it and can
+/// override individual fields.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Config {
     /// `SemVer` requirement that the running karva binary must satisfy.
@@ -26,11 +28,33 @@ pub struct Config {
     /// match the requirement. This is useful in CI and for shared
     /// repositories where every developer should be on a known-good
     /// version.
+    #[option(
+        default = r#"null"#,
+        value_type = "string",
+        example = r#"
+            required-version = ">=0.5.0"
+        "#
+    )]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub required_version: Option<VersionReq>,
 
+    #[cfg_attr(feature = "schemars", schemars(schema_with = "profile_schema"))]
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub profile: BTreeMap<String, Options>,
+}
+
+#[cfg(feature = "schemars")]
+fn profile_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    let options = generator.subschema_for::<Options>();
+    schemars::json_schema!({
+        "type": "object",
+        "propertyNames": {
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "not": { "pattern": "^default-" }
+        },
+        "additionalProperties": options
+    })
 }
 
 impl Config {

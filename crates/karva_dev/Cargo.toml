@@ -13,7 +13,7 @@ license = { workspace = true }
 
 [dependencies]
 karva_cli = { workspace = true }
-karva_metadata = { workspace = true }
+karva_metadata = { workspace = true, features = ["schemars"] }
 karva_static = { workspace = true }
 
 anyhow = { workspace = true }
@@ -24,6 +24,8 @@ itertools = { workspace = true }
 markdown = { workspace = true }
 pretty_assertions = { workspace = true }
 ruff_options_metadata = { workspace = true }
+schemars = { workspace = true }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

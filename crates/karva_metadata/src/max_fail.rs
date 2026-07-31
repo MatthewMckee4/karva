@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 #[derive(
     Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord,
 )]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct MaxFail(Option<NonZeroU32>);
 

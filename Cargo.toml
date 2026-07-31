@@ -71,6 +71,7 @@ ruff_python_trivia = { git = "https://github.com/astral-sh/ruff/", branch = "mai
 ruff_source_file = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_text_size = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 rusqlite = { version = "0.40.1", default-features = false, features = ["bundled"] }
+schemars = { version = "1.0.4" }
 semver = { version = "1.0.28", features = ["serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.150" }
