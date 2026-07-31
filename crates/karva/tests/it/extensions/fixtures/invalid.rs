@@ -666,6 +666,375 @@ def test_service(service):
     assert!(!context.root().join("test-ran").exists());
 }
 
+#[test]
+fn test_fixture_reports_rejected_dependency_from_conftest() {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            r#"
+import karva
+
+@karva.fixture(scope="invalid")
+def config():
+    return {}
+"#,
+        ),
+        (
+            "test.py",
+            r#"
+import karva
+from pathlib import Path
+
+@karva.fixture
+def service(config):
+    Path("fixture-ran").touch()
+
+def test_service(service):
+    Path("test-ran").touch()
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_service
+
+    failures:
+
+    test::test_service:
+
+    error[missing-fixtures]: Fixture `service` has missing fixtures
+     --> test.py:6:5
+      |
+    6 | def service(config):
+      |     ^^^^^^^
+      |
+    info: Missing fixtures: `config`
+    info: Fixture `config` was rejected during discovery: Invalid fixture scope `invalid`
+     --> conftest.py:5:5
+      |
+    5 | def config():
+      |     ^^^^^^
+      |
+
+    diagnostics:
+
+    error[invalid-fixture]: Discovered an invalid fixture `config`
+     --> conftest.py:5:5
+      |
+    5 | def config():
+      |     ^^^^^^
+      |
+    info: Invalid fixture scope `invalid`
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(!context.root().join("fixture-ran").exists());
+    assert!(!context.root().join("test-ran").exists());
+}
+
+#[test]
+fn test_rejected_module_fixture_shadows_valid_conftest_fixture() {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            r#"
+import karva
+from pathlib import Path
+
+@karva.fixture
+def config():
+    Path("parent-ran").touch()
+    return {}
+"#,
+        ),
+        (
+            "test.py",
+            r#"
+import karva
+from pathlib import Path
+
+@karva.fixture(scope="invalid")
+def config():
+    return {}
+
+@karva.fixture
+def service(config):
+    Path("fixture-ran").touch()
+
+def test_service(service):
+    Path("test-ran").touch()
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_service
+
+    failures:
+
+    test::test_service:
+
+    error[missing-fixtures]: Fixture `service` has missing fixtures
+      --> test.py:10:5
+       |
+    10 | def service(config):
+       |     ^^^^^^^
+       |
+    info: Missing fixtures: `config`
+    info: Fixture `config` was rejected during discovery: Invalid fixture scope `invalid`
+     --> test.py:6:5
+      |
+    6 | def config():
+      |     ^^^^^^
+      |
+
+    diagnostics:
+
+    error[invalid-fixture]: Discovered an invalid fixture `config`
+     --> test.py:6:5
+      |
+    6 | def config():
+      |     ^^^^^^
+      |
+    info: Invalid fixture scope `invalid`
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(!context.root().join("parent-ran").exists());
+    assert!(!context.root().join("fixture-ran").exists());
+    assert!(!context.root().join("test-ran").exists());
+}
+
+#[test]
+fn test_valid_module_fixture_shadows_rejected_conftest_fixture() {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            r#"
+import karva
+
+@karva.fixture(scope="invalid")
+def config():
+    return {}
+"#,
+        ),
+        (
+            "test.py",
+            r#"
+import karva
+from pathlib import Path
+
+@karva.fixture
+def config():
+    Path("fixture-ran").touch()
+    return {}
+
+def test_config(config):
+    Path("test-ran").touch()
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_config(config={})
+
+    diagnostics:
+
+    error[invalid-fixture]: Discovered an invalid fixture `config`
+     --> conftest.py:5:5
+      |
+    5 | def config():
+      |     ^^^^^^
+      |
+    info: Invalid fixture scope `invalid`
+
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(context.root().join("fixture-ran").exists());
+    assert!(context.root().join("test-ran").exists());
+}
+
+#[test]
+fn test_fixture_reports_multiple_rejected_and_unknown_dependencies() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+from pathlib import Path
+
+@karva.fixture(scope="invalid-config")
+def config():
+    return {}
+
+@karva.fixture(scope="invalid-credentials")
+def credentials():
+    return {}
+
+@karva.fixture
+def service(config, unknown, credentials):
+    Path("fixture-ran").touch()
+
+def test_service(service):
+    Path("test-ran").touch()
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_service
+
+    failures:
+
+    test::test_service:
+
+    error[missing-fixtures]: Fixture `service` has missing fixtures
+      --> test.py:14:5
+       |
+    14 | def service(config, unknown, credentials):
+       |     ^^^^^^^
+       |
+    info: Missing fixtures: `config`, `unknown`, `credentials`
+    info: Fixture `config` was rejected during discovery: Invalid fixture scope `invalid-config`
+     --> test.py:6:5
+      |
+    6 | def config():
+      |     ^^^^^^
+      |
+    info: Fixture `credentials` was rejected during discovery: Invalid fixture scope `invalid-credentials`
+      --> test.py:10:5
+       |
+    10 | def credentials():
+       |     ^^^^^^^^^^^
+       |
+
+    diagnostics:
+
+    error[invalid-fixture]: Discovered an invalid fixture `config`
+     --> test.py:6:5
+      |
+    6 | def config():
+      |     ^^^^^^
+      |
+    info: Invalid fixture scope `invalid-config`
+
+    error[invalid-fixture]: Discovered an invalid fixture `credentials`
+      --> test.py:10:5
+       |
+    10 | def credentials():
+       |     ^^^^^^^^^^^
+       |
+    info: Invalid fixture scope `invalid-credentials`
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(!context.root().join("fixture-ran").exists());
+    assert!(!context.root().join("test-ran").exists());
+}
+
+#[test]
+fn test_fixture_reports_rejected_imported_dependency_alias() {
+    let context = TestContext::with_files([
+        (
+            "fixture_helpers.py",
+            r#"
+import pytest
+
+@pytest.fixture(scope="invalid")
+def original_config():
+    return {}
+"#,
+        ),
+        (
+            "conftest.py",
+            "from fixture_helpers import original_config as config\n",
+        ),
+        (
+            "test.py",
+            r#"
+import karva
+from pathlib import Path
+
+@karva.fixture
+def service(config):
+    Path("fixture-ran").touch()
+
+def test_service(service):
+    Path("test-ran").touch()
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_service
+
+    failures:
+
+    test::test_service:
+
+    error[missing-fixtures]: Fixture `service` has missing fixtures
+     --> test.py:6:5
+      |
+    6 | def service(config):
+      |     ^^^^^^^
+      |
+    info: Missing fixtures: `config`
+    info: Fixture `config` was rejected during discovery: Invalid fixture scope `invalid`
+     --> fixture_helpers.py:5:5
+      |
+    5 | def original_config():
+      |     ^^^^^^^^^^^^^^^
+      |
+
+    diagnostics:
+
+    error[invalid-fixture]: Discovered an invalid fixture `original_config`
+     --> fixture_helpers.py:5:5
+      |
+    5 | def original_config():
+      |     ^^^^^^^^^^^^^^^
+      |
+    info: Invalid fixture scope `invalid`
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(!context.root().join("fixture-ran").exists());
+    assert!(!context.root().join("test-ran").exists());
+}
+
 #[rstest]
 fn test_fixture_scope_mismatch(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
