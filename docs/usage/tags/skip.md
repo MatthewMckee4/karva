@@ -24,6 +24,19 @@ def test_function():
 
 Then running `uv run karva test` will result in one skipped test.
 
+## Running skipped tests
+
+Use `--run-ignored=only` to run only tests whose skip condition is active, or
+`--run-ignored=all` to run them alongside normal tests. Active skip decorators
+are ignored for these tests, so their bodies run and can pass or fail normally.
+
+```bash
+uv run karva test --run-ignored=only
+uv run karva test --run-ignored=all
+```
+
+Tests with false skip conditions are not considered ignored.
+
 ## Reason
 
 You can provide a `str` reason as a positional or keyword argument.

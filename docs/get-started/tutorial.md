@@ -46,6 +46,7 @@ uv run karva test
 
 ## Where to next
 
+- [Writing Tests](../usage/writing-tests/tests.md) — learn collection rules and async support.
 - [Filtering Tests](../usage/running-tests/filtering.md) — pick which tests run with the `-E` filter DSL.
 - [Fixtures](../usage/fixtures/fixtures.md) — share setup and teardown between tests.
 - [Snapshots](../usage/writing-tests/snapshots.md) — pin large outputs to a file.
