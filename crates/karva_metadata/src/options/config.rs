@@ -20,10 +20,6 @@ pub const DEFAULT_PROFILE: &str = "default";
 /// override individual fields.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
-#[cfg_attr(
-    feature = "schemars",
-    schemars(extend("$id" = "https://www.schemastore.org/karva.json"))
-)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Config {
     /// `SemVer` requirement that the running karva binary must satisfy.
