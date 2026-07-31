@@ -21,6 +21,7 @@ use crate::diagnostic::{
 use crate::discovery::{DiscoveredModule, DiscoveredTestFunction};
 use crate::extensions::fixtures::DiscoveredFixture;
 use crate::extensions::fixtures::python::FixtureFunctionDefinition;
+use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
 
 /// Visitor for discovering test functions and fixture definitions in a given module.
 ///
@@ -70,11 +71,18 @@ impl<'ctx, 'py, 'a, 'b> FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
                 self.py_module = Some(py_module);
             }
             Err(error) => {
-                report_failed_to_import_module(
-                    self.context,
-                    self.module.name(),
-                    &error.value(self.py).to_string(),
-                );
+                if is_skip_exception(self.py, &error) {
+                    self.context.register_module_skip(
+                        self.module.module_path(),
+                        extract_skip_reason(self.py, &error),
+                    );
+                } else {
+                    report_failed_to_import_module(
+                        self.context,
+                        self.module.name(),
+                        &error.value(self.py).to_string(),
+                    );
+                }
             }
         }
     }

@@ -7,7 +7,7 @@ use karva_diagnostic::{
     TestExecutionOutcome, TestRunResult,
 };
 use karva_metadata::ProjectSettings;
-use karva_python_semantic::QualifiedTestName;
+use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName};
 use ruff_db::diagnostic::Diagnostic;
 use ruff_python_ast::PythonVersion;
 
@@ -104,6 +104,19 @@ impl<'a> Context<'a> {
         );
 
         passed
+    }
+
+    pub(crate) fn register_module_skip(&self, module_path: &ModulePath, reason: Option<String>) {
+        let name = QualifiedTestName::new(
+            QualifiedFunctionName::new("<module>".to_string(), module_path.clone()),
+            None,
+        );
+        self.register_test_case_result(
+            &name,
+            TestExecutionOutcome::Skipped { reason },
+            std::time::Duration::ZERO,
+            None,
+        );
     }
 
     /// Forward a per-attempt outcome to the reporter. Does not touch

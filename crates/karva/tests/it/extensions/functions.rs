@@ -218,6 +218,73 @@ def test_conditional_skip():
     }
 }
 
+#[test]
+fn test_module_level_skip_with_passing_module() {
+    let context = TestContext::with_files([
+        (
+            "test_skipped.py",
+            r#"
+import karva
+
+karva.skip("no gpu available")
+
+def test_never_reached():
+    assert False
+            "#,
+        ),
+        (
+            "test_passed.py",
+            r"
+def test_passes():
+    assert True
+            ",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=skip"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            SKIP [TIME] test_skipped::<module>: no gpu available
+            PASS [TIME] test_passed::test_passes
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_all_modules_skipped_at_module_level() {
+    let context = TestContext::with_file(
+        "test_gpu.py",
+        r#"
+import karva
+
+karva.skip("no gpu available")
+
+def test_gpu():
+    assert False
+
+def test_more_gpu():
+    assert False
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=skip"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            SKIP [TIME] test_gpu::<module>: no gpu available
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
+
+    ----- stderr -----
+    ");
+}
+
 #[rstest]
 fn test_runtime_skip_does_not_retry(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
