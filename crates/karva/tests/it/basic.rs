@@ -2082,6 +2082,86 @@ def test_2(): pass
 }
 
 #[test]
+fn test_verbose_output_shows_traceback_calls() {
+    let context = TestContext::with_files([
+        (
+            "test.py",
+            r"
+from middle import call_middle
+
+def test_failure():
+    call_middle()
+",
+        ),
+        (
+            "middle.py",
+            r"
+from bottom import fail
+
+def call_middle():
+    fail()
+",
+        ),
+        (
+            "bottom.py",
+            r#"
+def fail():
+    raise RuntimeError("traceback context")
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("-v"), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_failure
+
+    failures:
+
+    test::test_failure:
+
+    error[test-failure]: Test `test_failure` failed
+     --> test.py:4:5
+      |
+    4 | def test_failure():
+      |     ^^^^^^^^^^^^
+      |
+    info: Called `call_middle` here
+     --> test.py:5:5
+      |
+    5 |     call_middle()
+      |     ^^^^^^^^^^^^^
+      |
+    info: Called `fail` here
+     --> middle.py:5:5
+      |
+    5 |     fail()
+      |     ^^^^^^
+      |
+    info: Test failed here
+     --> bottom.py:3:5
+      |
+    3 |     raise RuntimeError("traceback context")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: traceback context
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    INFO Collected all tests in [TIME]
+    INFO Spawning 1 workers
+    INFO Worker 0 spawned with 1 tests
+    INFO Waiting for 1 workers to complete (Ctrl+C to cancel)
+    INFO Worker 0 completed successfully in [TIME]
+    INFO All workers completed
+    "#);
+}
+
+#[test]
 fn test_trace_verbose_output() {
     let context = TestContext::with_file(
         "test.py",

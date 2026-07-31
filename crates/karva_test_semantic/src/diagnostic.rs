@@ -26,6 +26,12 @@ use crate::runner::{
 use crate::utils::truncate_string;
 use crate::{Context, declare_diagnostic_type};
 
+#[derive(Clone, Copy)]
+struct FailedFunctionCallOptions {
+    function_kind: FunctionKind,
+    verbose: bool,
+}
+
 declare_diagnostic_type! {
     /// ## Failed to collect module
     ///
@@ -357,7 +363,11 @@ pub fn invalid_fixture_finalizer_diagnostic(
     diagnostic
 }
 
-pub fn fixture_failure_diagnostic(py: Python, error: FixtureCallError) -> Diagnostic {
+pub fn fixture_failure_diagnostic(
+    py: Python,
+    error: FixtureCallError,
+    verbose: bool,
+) -> Diagnostic {
     let FixtureCallError {
         fixture_name,
         error,
@@ -377,7 +387,10 @@ pub fn fixture_failure_diagnostic(py: Python, error: FixtureCallError) -> Diagno
         &source_file,
         &stmt_function_def,
         &arguments,
-        FunctionKind::Fixture,
+        FailedFunctionCallOptions {
+            function_kind: FunctionKind::Fixture,
+            verbose,
+        },
         &error,
     );
     diagnostic
@@ -533,6 +546,7 @@ pub fn test_failure_diagnostic(
     stmt_function_def: &StmtFunctionDef,
     arguments: &FixtureArguments,
     error: &PyErr,
+    verbose: bool,
 ) -> Diagnostic {
     let mut diagnostic =
         TEST_FAILURE.diagnostic(format!("Test `{}` failed", stmt_function_def.name));
@@ -543,7 +557,10 @@ pub fn test_failure_diagnostic(
         source_file,
         stmt_function_def,
         arguments,
-        FunctionKind::Test,
+        FailedFunctionCallOptions {
+            function_kind: FunctionKind::Test,
+            verbose,
+        },
         error,
     );
     diagnostic
@@ -637,9 +654,13 @@ fn handle_failed_function_call(
     source_file: &SourceFile,
     stmt_function_def: &StmtFunctionDef,
     arguments: &FixtureArguments,
-    function_kind: FunctionKind,
+    options: FailedFunctionCallOptions,
     error: &PyErr,
 ) {
+    let FailedFunctionCallOptions {
+        function_kind,
+        verbose,
+    } = options;
     annotate_function_name(diagnostic, source_file.clone(), stmt_function_def);
 
     if !arguments.is_empty() {
@@ -656,22 +677,42 @@ fn handle_failed_function_call(
         diagnostic.info(format!("`{truncated_name}`: `{truncated_value}`"));
     }
 
-    if let Some(Traceback {
-        lines: _,
-        error_source_file,
-        location,
-    }) = Traceback::from_error_with_source(py, error, source_file)
-    {
-        let mut sub = SubDiagnostic::new(
-            SubDiagnosticSeverity::Info,
-            format!("{} failed here", function_kind.capitalised()),
-        );
+    if let Some(Traceback { frames }) = Traceback::from_error_with_source(py, error, source_file) {
+        if verbose {
+            for pair in frames.windows(2) {
+                if let [caller, callee] = pair {
+                    let message = format!("Called `{}` here", callee.function_name);
+                    if let Some(source) = &caller.source {
+                        let mut sub = SubDiagnostic::new(SubDiagnosticSeverity::Info, message);
+                        sub.annotate(Annotation::primary(
+                            Span::from(source.source_file.clone()).with_range(source.location),
+                        ));
+                        diagnostic.sub(sub);
+                    } else {
+                        diagnostic.info(format!(
+                            "{message}: {}:{}",
+                            caller.file_path, caller.line_number
+                        ));
+                    }
+                }
+            }
+        }
 
-        let secondary_span = Span::from(error_source_file).with_range(location);
-
-        sub.annotate(Annotation::primary(secondary_span));
-
-        diagnostic.sub(sub);
+        if let Some(failure) = frames.last() {
+            let message = format!("{} failed here", function_kind.capitalised());
+            if let Some(source) = &failure.source {
+                let mut sub = SubDiagnostic::new(SubDiagnosticSeverity::Info, message);
+                sub.annotate(Annotation::primary(
+                    Span::from(source.source_file.clone()).with_range(source.location),
+                ));
+                diagnostic.sub(sub);
+            } else if verbose {
+                diagnostic.info(format!(
+                    "{message}: {}:{}",
+                    failure.file_path, failure.line_number
+                ));
+            }
+        }
     }
 
     let error_string = error.value(py).to_string();

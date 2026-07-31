@@ -35,8 +35,9 @@ pub fn run_tests(
     reporter: &dyn Reporter,
     test_paths: Vec<Result<TestPath, TestPathError>>,
     coverage: Option<&CoverageConfig>,
+    verbose: bool,
 ) -> TestRunResult {
-    let context = Context::new(cwd, settings, python_version, reporter);
+    let context = Context::new(cwd, settings, python_version, reporter, verbose);
 
     attach_with_output(settings.terminal().show_python_output, |py| {
         let cov_session = coverage.and_then(|cfg| match CoverageSession::start(py, cwd, cfg) {

@@ -144,6 +144,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         reporter.as_ref(),
         test_paths,
         coverage.as_ref(),
+        !verbosity.is_default(),
     );
 
     let diagnostic_format = settings.terminal().output_format.into();

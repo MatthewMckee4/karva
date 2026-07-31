@@ -39,6 +39,8 @@ pub(super) struct OutcomeContext<'a> {
     pub(super) function_arguments: &'a FixtureArguments,
     /// Active expected-failure policy, when configured.
     pub(super) expect_fail_tag: Option<ExpectFailTag>,
+    /// Whether failure diagnostics should include every Python call frame.
+    pub(super) verbose: bool,
 }
 
 /// Durations for each phase of one complete test attempt.
@@ -160,6 +162,7 @@ pub(super) fn classify_test_result(
             context.stmt_function_def,
             context.function_arguments,
             &error,
+            context.verbose,
         );
         TestExecutionOutcome::failed(diagnostic)
     } else {
