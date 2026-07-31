@@ -12,4 +12,4 @@ pub use result::{
 };
 
 #[cfg(feature = "traceback")]
-pub use traceback::Traceback;
+pub use traceback::{Traceback, TracebackFrame, TracebackFrameSource};

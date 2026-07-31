@@ -6,9 +6,23 @@ use ruff_text_size::{TextRange, TextSize};
 /// Parsed representation of a Python traceback from a `PyErr` object.
 #[derive(Debug, Clone)]
 pub struct Traceback {
-    pub lines: Vec<String>,
+    pub frames: Vec<TracebackFrame>,
+}
 
-    pub error_source_file: SourceFile,
+#[derive(Debug, Clone)]
+pub struct TracebackFrame {
+    pub function_name: String,
+
+    pub file_path: Utf8PathBuf,
+
+    pub line_number: OneIndexed,
+
+    pub source: Option<TracebackFrameSource>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TracebackFrameSource {
+    pub source_file: SourceFile,
 
     pub location: TextRange,
 }
@@ -17,6 +31,7 @@ pub struct Traceback {
 struct TracebackLocation {
     file_path: Utf8PathBuf,
     line_number: OneIndexed,
+    function_name: String,
 }
 
 impl Traceback {
@@ -48,19 +63,25 @@ impl Traceback {
             if traceback_str.is_empty() {
                 return None;
             }
-            let lines = filter_traceback(&traceback_str)
-                .lines()
-                .map(|line| format!(" | {line}"))
+            let frames = get_traceback_locations(&traceback_str)
+                .into_iter()
+                .map(|frame| {
+                    let source = get_source_file_and_range(&frame, source_file).map(
+                        |(source_file, location)| TracebackFrameSource {
+                            source_file,
+                            location,
+                        },
+                    );
+                    TracebackFrame {
+                        function_name: frame.function_name,
+                        file_path: frame.file_path,
+                        line_number: frame.line_number,
+                        source,
+                    }
+                })
                 .collect::<Vec<_>>();
 
-            let (error_source_file, location) =
-                get_source_file_and_range(&traceback_str, source_file)?;
-
-            Some(Self {
-                lines,
-                error_source_file,
-                location,
-            })
+            (!frames.is_empty()).then_some(Self { frames })
         } else {
             None
         }
@@ -68,11 +89,9 @@ impl Traceback {
 }
 
 fn get_source_file_and_range(
-    traceback: &str,
+    traceback_location: &TracebackLocation,
     fallback_source_file: Option<&SourceFile>,
 ) -> Option<(SourceFile, TextRange)> {
-    let traceback_location = get_traceback_location(traceback)?;
-
     if let Some(source_file) = fallback_source_file
         && source_file_matches_path(source_file, &traceback_location.file_path)
     {
@@ -99,15 +118,8 @@ fn source_file_matches_path(source_file: &SourceFile, traceback_path: &Utf8Path)
         || traceback_path.ends_with(source_path)
 }
 
-fn get_traceback_location(traceback: &str) -> Option<TracebackLocation> {
-    // Find the last line that starts with "File \"" (ignoring leading whitespace)
-    for line in traceback.lines().rev() {
-        if let Some(location) = parse_traceback_line(line) {
-            return Some(location);
-        }
-    }
-
-    None
+fn get_traceback_locations(traceback: &str) -> Vec<TracebackLocation> {
+    traceback.lines().filter_map(parse_traceback_line).collect()
 }
 
 /// Parse a traceback line like: `  File "/path/to/file.py", line 42, in function_name`
@@ -117,12 +129,13 @@ fn parse_traceback_line(line: &str) -> Option<TracebackLocation> {
 
     let (filename, rest) = after_file.split_once('"')?;
 
-    let line_str = rest.strip_prefix(", line ")?.split_once(',')?.0;
+    let (line_str, function_name) = rest.strip_prefix(", line ")?.split_once(", in ")?;
     let line_number = line_str.parse::<OneIndexed>().ok()?;
 
     Some(TracebackLocation {
         file_path: Utf8PathBuf::from(filename),
         line_number,
+        function_name: function_name.to_string(),
     })
 }
 
@@ -162,50 +175,9 @@ fn calculate_line_range(source_text: &str, line_number: OneIndexed) -> Option<Te
     None
 }
 
-// Simplified traceback filtering that removes unnecessary traceback headers
-fn filter_traceback(traceback: &str) -> String {
-    let mut filtered = String::new();
-
-    for (i, line) in traceback.lines().enumerate() {
-        if i == 0 && line.contains("Traceback (most recent call last):") {
-            continue;
-        }
-        filtered.push_str(line.strip_prefix("  ").unwrap_or(line));
-        filtered.push('\n');
-    }
-    filtered
-        .trim_end_matches('\n')
-        .trim_end_matches('^')
-        .trim_end()
-        .to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    mod filter_traceback_tests {
-        use super::*;
-
-        #[test]
-        fn test_filter_traceback() {
-            let traceback = r#"Traceback (most recent call last):
-File "test.py", line 1, in <module>
-    raise Exception('Test error')
-Exception: Test error
-"#;
-            insta::assert_snapshot!(filter_traceback(traceback), @r#"
-            File "test.py", line 1, in <module>
-              raise Exception('Test error')
-            Exception: Test error
-            "#);
-        }
-
-        #[test]
-        fn test_filter_traceback_empty() {
-            insta::assert_snapshot!(filter_traceback(""), @"");
-        }
-    }
 
     mod parse_traceback_line_tests {
         use super::*;
@@ -220,6 +192,7 @@ Exception: Test error
                     line_number: OneIndexed(
                         10,
                     ),
+                    function_name: "<module>",
                 },
             )
             "#);
@@ -235,6 +208,7 @@ Exception: Test error
                     line_number: OneIndexed(
                         42,
                     ),
+                    function_name: "function_name",
                 },
             )
             "#);
@@ -267,13 +241,14 @@ Exception: Test error
                     line_number: OneIndexed(
                         99999,
                     ),
+                    function_name: "<module>",
                 },
             )
             "#);
         }
     }
 
-    mod get_traceback_location_tests {
+    mod get_traceback_locations_tests {
         use super::*;
 
         #[test]
@@ -282,15 +257,16 @@ Exception: Test error
   File "test.py", line 10, in <module>
     raise Exception('Test error')
 Exception: Test error"#;
-            insta::assert_debug_snapshot!(get_traceback_location(traceback), @r#"
-            Some(
+            insta::assert_debug_snapshot!(get_traceback_locations(traceback), @r#"
+            [
                 TracebackLocation {
                     file_path: "test.py",
                     line_number: OneIndexed(
                         10,
                     ),
+                    function_name: "<module>",
                 },
-            )
+            ]
             "#);
         }
 
@@ -302,26 +278,34 @@ Exception: Test error"#;
   File "helper.py", line 15, in foo
     bar()
 ValueError: Invalid value"#;
-            insta::assert_debug_snapshot!(get_traceback_location(traceback), @r#"
-            Some(
+            insta::assert_debug_snapshot!(get_traceback_locations(traceback), @r#"
+            [
+                TracebackLocation {
+                    file_path: "main.py",
+                    line_number: OneIndexed(
+                        5,
+                    ),
+                    function_name: "<module>",
+                },
                 TracebackLocation {
                     file_path: "helper.py",
                     line_number: OneIndexed(
                         15,
                     ),
+                    function_name: "foo",
                 },
-            )
+            ]
             "#);
         }
 
         #[test]
         fn test_get_traceback_location_empty() {
-            insta::assert_debug_snapshot!(get_traceback_location(""), @"None");
+            insta::assert_debug_snapshot!(get_traceback_locations(""), @"[]");
         }
 
         #[test]
         fn test_get_traceback_location_no_file_lines() {
-            insta::assert_debug_snapshot!(get_traceback_location("Exception: Test error"), @"None");
+            insta::assert_debug_snapshot!(get_traceback_locations("Exception: Test error"), @"[]");
         }
     }
 
@@ -401,8 +385,16 @@ AssertionError"#;
             )
             .finish();
 
-            let (resolved_source_file, range) =
-                get_source_file_and_range(traceback, Some(&source_file)).unwrap();
+            let locations = get_traceback_locations(traceback);
+            assert_eq!(locations.len(), 1);
+            let Some(location) = locations.first() else {
+                return;
+            };
+            let resolved = get_source_file_and_range(location, Some(&source_file));
+            assert!(resolved.is_some());
+            let Some((resolved_source_file, range)) = resolved else {
+                return;
+            };
 
             assert_eq!(resolved_source_file, source_file);
             assert_eq!(resolved_source_file.slice(range), "assert False");
@@ -420,7 +412,12 @@ AssertionError"#;
             )
             .finish();
 
-            assert!(get_source_file_and_range(traceback, Some(&source_file)).is_none());
+            let locations = get_traceback_locations(traceback);
+            assert_eq!(locations.len(), 1);
+            let Some(location) = locations.first() else {
+                return;
+            };
+            assert!(get_source_file_and_range(location, Some(&source_file)).is_none());
         }
     }
 }

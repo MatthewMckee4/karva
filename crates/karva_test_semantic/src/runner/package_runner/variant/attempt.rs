@@ -101,6 +101,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                     stmt_function_def: &self.test.stmt_function_def,
                     function_arguments: &function_arguments,
                     expect_fail_tag: settings.expect_fail_tag.clone(),
+                    verbose: self.package_runner.context.is_verbose(),
                 },
             );
             let skipped = outcome.is_skipped();
@@ -142,7 +143,13 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         } else {
             let mut diagnostics = fixture_call_errors
                 .into_iter()
-                .map(|error| fixture_failure_diagnostic(self.py, error))
+                .map(|error| {
+                    fixture_failure_diagnostic(
+                        self.py,
+                        error,
+                        self.package_runner.context.is_verbose(),
+                    )
+                })
                 .collect::<Vec<_>>();
             let teardown_start = Instant::now();
             diagnostics.extend(

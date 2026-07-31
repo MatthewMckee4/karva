@@ -48,7 +48,7 @@ impl PackageRunner<'_, '_> {
         } else {
             let mut diagnostics = auto_use_errors
                 .into_iter()
-                .map(|error| fixture_failure_diagnostic(py, error))
+                .map(|error| fixture_failure_diagnostic(py, error, self.context.is_verbose()))
                 .collect::<Vec<_>>();
             diagnostics.extend(self.clean_up_scope(py, scope));
             Err(diagnostics)

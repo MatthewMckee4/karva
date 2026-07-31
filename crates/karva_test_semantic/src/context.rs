@@ -30,6 +30,9 @@ pub struct Context<'a> {
 
     /// Reporter for outputting test progress and results.
     reporter: &'a dyn Reporter,
+
+    /// Whether diagnostics should include the full Python call chain.
+    verbose: bool,
 }
 
 impl<'a> Context<'a> {
@@ -38,6 +41,7 @@ impl<'a> Context<'a> {
         settings: &'a ProjectSettings,
         python_version: PythonVersion,
         reporter: &'a dyn Reporter,
+        verbose: bool,
     ) -> Self {
         Self {
             cwd,
@@ -45,6 +49,7 @@ impl<'a> Context<'a> {
             python_version,
             result: RefCell::new(TestRunResult::default()),
             reporter,
+            verbose,
         }
     }
 
@@ -54,6 +59,10 @@ impl<'a> Context<'a> {
 
     pub(crate) fn settings(&self) -> &'a ProjectSettings {
         self.settings
+    }
+
+    pub(crate) fn is_verbose(&self) -> bool {
+        self.verbose
     }
 
     pub(crate) fn collection_settings(&'a self) -> CollectionSettings<'a> {
