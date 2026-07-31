@@ -87,4 +87,9 @@ toggle.name = "Switch to light mode"
 linenums = true
 auto_title = true
 
+[project.markdown_extensions.admonition]
+
 [project.markdown_extensions.pymdownx.superfences]
+
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true

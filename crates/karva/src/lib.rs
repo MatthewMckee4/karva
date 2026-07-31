@@ -1,7 +1,8 @@
 use std::ffi::OsString;
+use std::io::stdout;
 
 use anyhow::Context;
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use karva_cli::{Args, Command};
 
 pub use karva_cli::ExitStatus;
@@ -41,6 +42,10 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         Command::Cache(cache_args) => commands::cache::cache(&cache_args),
         Command::ShowConfig(show_config_args) => {
             commands::show_config::show_config(show_config_args)
+        }
+        Command::GenerateShellCompletion { shell } => {
+            shell.generate(&mut Args::command(), &mut stdout());
+            Ok(ExitStatus::Success)
         }
         Command::Version => commands::version::version().map(|()| ExitStatus::Success),
     }
