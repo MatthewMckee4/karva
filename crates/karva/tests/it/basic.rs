@@ -1044,7 +1044,7 @@ fn test_invalid_fixture() {
     5 | def fixture_generator():
       |     ^^^^^^^^^^^^^^^^^
       |
-    info: Invalid fixture scope: ssession
+    info: Invalid fixture scope `ssession`
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped

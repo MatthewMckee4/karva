@@ -4,7 +4,7 @@ use pyo3::Python;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::discovery::{DiscoveredModule, DiscoveredPackage};
-use crate::extensions::fixtures::{DiscoveredFixture, FixtureScope};
+use crate::extensions::fixtures::{DiscoveredFixture, FixtureScope, RejectedFixture};
 
 /// This trait is used to get all fixtures (from a module or package) that have a given scope.
 ///
@@ -13,6 +13,9 @@ use crate::extensions::fixtures::{DiscoveredFixture, FixtureScope};
 pub trait HasFixtures<'a>: Debug {
     /// Get a fixture with the given name
     fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a DiscoveredFixture>;
+
+    /// Get a fixture definition rejected during discovery.
+    fn get_rejected_fixture(&'a self, fixture_name: &str) -> Option<&'a RejectedFixture>;
 
     /// Get all autouse fixtures
     ///
@@ -25,6 +28,10 @@ impl<'a> HasFixtures<'a> for DiscoveredModule {
         self.fixtures()
             .iter()
             .find(|f| f.name().function_name() == fixture_name)
+    }
+
+    fn get_rejected_fixture(&'a self, fixture_name: &str) -> Option<&'a RejectedFixture> {
+        self.rejected_fixture(fixture_name)
     }
 
     fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a DiscoveredFixture> {
@@ -42,6 +49,15 @@ impl<'a> HasFixtures<'a> for DiscoveredPackage {
             .or_else(|| {
                 self.framework_module_impl()
                     .and_then(|module| module.get_fixture(fixture_name))
+            })
+    }
+
+    fn get_rejected_fixture(&'a self, fixture_name: &str) -> Option<&'a RejectedFixture> {
+        self.configuration_module_impl()
+            .and_then(|module| module.get_rejected_fixture(fixture_name))
+            .or_else(|| {
+                self.framework_module_impl()
+                    .and_then(|module| module.get_rejected_fixture(fixture_name))
             })
     }
 
@@ -75,6 +91,10 @@ impl<'a> HasFixtures<'a> for DiscoveredPackage {
 impl<'a> HasFixtures<'a> for &'a DiscoveredPackage {
     fn get_fixture(&'a self, fixture_name: &str) -> Option<&'a DiscoveredFixture> {
         (*self).get_fixture(fixture_name)
+    }
+
+    fn get_rejected_fixture(&'a self, fixture_name: &str) -> Option<&'a RejectedFixture> {
+        (*self).get_rejected_fixture(fixture_name)
     }
 
     fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a DiscoveredFixture> {
