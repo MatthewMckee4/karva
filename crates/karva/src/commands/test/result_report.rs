@@ -241,6 +241,8 @@ struct AttemptReport<'a> {
     status: TestStatus,
     duration_seconds: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    captured_output: Option<CapturedOutputReport<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     diagnostic: Option<DiagnosticReport<'a>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     related_diagnostics: Vec<DiagnosticReport<'a>>,
@@ -262,6 +264,7 @@ impl<'a> AttemptReport<'a> {
             attempt: attempt.attempt(),
             status,
             duration_seconds: attempt.duration().as_secs_f64(),
+            captured_output: attempt.captured_output().map(CapturedOutputReport::new),
             diagnostic,
             related_diagnostics: attempt
                 .outcome()

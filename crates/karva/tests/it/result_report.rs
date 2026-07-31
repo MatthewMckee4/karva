@@ -142,6 +142,9 @@ fn writes_json_result_report() {
               "attempt": 1,
               "status": "failed",
               "duration_seconds": "[TIME]",
+              "captured_output": {
+                "stderr": "fail stderr\n"
+              },
               "diagnostic": {
                 "code": "test-failure",
                 "severity": "error",
@@ -153,6 +156,9 @@ fn writes_json_result_report() {
               "attempt": 2,
               "status": "failed",
               "duration_seconds": "[TIME]",
+              "captured_output": {
+                "stderr": "fail stderr\n"
+              },
               "diagnostic": {
                 "code": "test-failure",
                 "severity": "error",
@@ -181,6 +187,9 @@ fn writes_json_result_report() {
               "attempt": 1,
               "status": "failed",
               "duration_seconds": "[TIME]",
+              "captured_output": {
+                "stdout": "flaky attempt 1\n"
+              },
               "diagnostic": {
                 "code": "test-failure",
                 "severity": "error",
@@ -191,7 +200,10 @@ fn writes_json_result_report() {
             {
               "attempt": 2,
               "status": "passed",
-              "duration_seconds": "[TIME]"
+              "duration_seconds": "[TIME]",
+              "captured_output": {
+                "stdout": "flaky attempt 2\n"
+              }
             }
           ]
         },

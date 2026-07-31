@@ -2,7 +2,7 @@
 
 use std::time::{Duration, Instant};
 
-use karva_diagnostic::{TestExecutionAttempt, TestExecutionOutcome};
+use karva_diagnostic::{CapturedTestOutput, TestExecutionAttempt, TestExecutionOutcome};
 use pyo3::prelude::*;
 
 use crate::diagnostic::fixture_failure_diagnostic;
@@ -10,7 +10,8 @@ use crate::extensions::fixtures::FixtureScope;
 use crate::extensions::functions::snapshot::set_snapshot_context;
 use crate::utils::{run_coroutine, run_test_with_timeout};
 
-use super::{VariantRunner, VariantSettings};
+use super::{VariantRunner, VariantSettings, finish_output_capture};
+use crate::output_capture::PythonOutputCapture;
 use crate::runner::package_runner::fixture::PreparedFixtures;
 use crate::runner::package_runner::outcome::{
     OutcomeContext, PhaseDurations, apply_fail_slow_budget, attach_finalizer_diagnostics,
@@ -36,6 +37,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                     test_finalizers,
                 },
             setup_duration,
+            output_capture,
         } = prepared;
 
         let (outcome, duration, retryable) = if fixture_call_errors.is_empty() {
@@ -113,6 +115,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 self.package_runner
                     .clean_up_scope(self.py, FixtureScope::Function),
             );
+            let teardown_failed = !finalizer_diagnostics.is_empty();
             let phases = PhaseDurations {
                 setup: setup_duration,
                 call: call_duration,
@@ -134,7 +137,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             (
                 outcome,
                 duration,
-                retryable_result || (budget_exceeded && !skipped),
+                retryable_result || teardown_failed || (budget_exceeded && !skipped),
             )
         } else {
             let mut diagnostics = fixture_call_errors
@@ -158,9 +161,6 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 teardown: teardown_start.elapsed(),
             };
             let duration = phases.total();
-            let retryable = settings
-                .fail_slow_budget
-                .is_some_and(|budget| duration > budget);
             let diagnostic = diagnostics.remove(0);
             let outcome = TestExecutionOutcome::error_with_related(diagnostic, diagnostics);
             let outcome = apply_fail_slow_budget(
@@ -171,14 +171,17 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 &self.test.source_file,
                 &self.test.stmt_function_def,
             );
-            (outcome, duration, retryable)
+            (outcome, duration, true)
         };
+
+        let captured_output = finish_output_capture(self.py, output_capture);
 
         AttemptResult {
             lifecycle: TestLifecycleAttempt {
                 attempt: attempt_number,
                 outcome,
                 duration,
+                captured_output,
             },
             retryable,
         }
@@ -191,6 +194,8 @@ pub(super) struct PreparedTestAttempt {
     pub(super) fixtures: PreparedFixtures,
     /// Duration of fixture and parameter preparation.
     pub(super) setup_duration: Duration,
+    /// Python stdout and stderr capture spanning setup, call, and teardown.
+    pub(super) output_capture: Option<PythonOutputCapture>,
 }
 
 /// Completed call lifecycle plus retry decision.
@@ -209,11 +214,18 @@ pub(super) struct TestLifecycleAttempt {
     pub(super) outcome: TestExecutionOutcome,
     /// Full setup, call, and teardown duration.
     pub(super) duration: Duration,
+    /// Output captured only during this attempt.
+    pub(super) captured_output: Option<CapturedTestOutput>,
 }
 
 impl TestLifecycleAttempt {
     /// Converts internal lifecycle state to diagnostic reporting state.
     pub(super) fn into_execution_attempt(self) -> TestExecutionAttempt {
-        TestExecutionAttempt::new(self.attempt, self.outcome, self.duration)
+        TestExecutionAttempt::new(
+            self.attempt,
+            self.outcome,
+            self.duration,
+            self.captured_output,
+        )
     }
 }
