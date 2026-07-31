@@ -54,3 +54,16 @@ karva test --partition slice:3/3
 ```
 
 Slices are computed deterministically from the current test set, so the same revision splits the same way on every machine. Adding or removing tests can shift which slice a given test falls into, so this is less stable per-test than a hash-based scheme but does not need any historical data.
+
+Use `hash:M/N` when stable assignment matters more than even slices. Each
+qualified test name maps to one stable bucket, so adding or removing a test
+does not move any other test:
+
+```bash
+uv run karva test --partition hash:1/3
+uv run karva test --partition hash:2/3
+uv run karva test --partition hash:3/3
+```
+
+Hash buckets can be uneven. Run every bucket together to cover the complete
+suite.

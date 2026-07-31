@@ -11,6 +11,25 @@ karva test -E 'test(/^auth::/) & not tag(flaky)'
 karva test -E '(tag(fast) | tag(unit)) - tag(flaky)'
 ```
 
+## Adding custom tags
+
+Any attribute under `karva.tags` that is not a built-in tag creates a custom
+tag. No registration is required:
+
+```python title="test_checkout.py"
+import karva
+
+
+@karva.tags.integration
+def test_checkout():
+    assert checkout()
+```
+
+Pytest marks are also recognized as custom tags, so
+`@pytest.mark.integration` matches the same `tag(integration)` predicate.
+Arguments attached to custom tags do not affect filtering; filters match the
+tag name.
+
 When `-E` is passed more than once, a test runs if it matches **any** of
 the expressions (OR across flags):
 
@@ -181,6 +200,17 @@ two are equivalent).
 On top of the old capabilities, the new DSL adds substring, exact, and
 glob matchers — previously only regex matching was possible for test
 names, and only exact matching for tags.
+
+## When nothing matches
+
+With the default `--no-tests=auto`, collecting no tests fails the run when no
+filter was supplied, but a valid filter that matches nothing exits
+successfully. This makes optional CI shards and local filters easy to compose
+without hiding an empty suite.
+
+Use `--no-tests=pass`, `--no-tests=warn`, or `--no-tests=fail` to choose the
+behavior explicitly. The same setting is available as `no-tests` in the
+profile's `test` configuration.
 
 ## Grammar
 
