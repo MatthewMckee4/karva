@@ -19,6 +19,7 @@ nav = [
         { "Tutorial" = "get-started/tutorial.md"},
     ]},
     { "Usage" = [
+        { "Project Non-Goals" = "usage/non-goals.md"},
         { "Running Tests" = [
             { "Filtering Tests" = "usage/running-tests/filtering.md"},
             { "Parallel Execution" = "usage/running-tests/parallel.md"},
@@ -54,7 +55,6 @@ nav = [
     { "Reference" = [
         { "CLI" = "reference/cli.md"},
         { "Environment Variables" = "reference/env-vars.md"},
-        { "Project Non-Goals" = "reference/non-goals.md"},
     ]},
 ]
 
