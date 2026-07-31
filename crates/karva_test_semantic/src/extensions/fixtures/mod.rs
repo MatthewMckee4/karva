@@ -54,6 +54,31 @@ pub struct DiscoveredFixture {
     is_generator: bool,
 }
 
+/// Fixture definition rejected during discovery.
+#[derive(Clone, Debug)]
+pub struct RejectedFixture {
+    pub(crate) name: String,
+    pub(crate) reason: String,
+    pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
+    pub(crate) source_file: SourceFile,
+}
+
+impl RejectedFixture {
+    pub(crate) fn new(
+        name: String,
+        reason: String,
+        stmt_function_def: Rc<StmtFunctionDef>,
+        source_file: SourceFile,
+    ) -> Self {
+        Self {
+            name,
+            reason,
+            stmt_function_def,
+            source_file,
+        }
+    }
+}
+
 impl DiscoveredFixture {
     pub(crate) fn new(
         name: QualifiedFunctionName,

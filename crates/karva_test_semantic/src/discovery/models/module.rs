@@ -3,7 +3,7 @@ use karva_python_semantic::ModulePath;
 use ruff_source_file::{SourceFile, SourceFileBuilder};
 
 use crate::discovery::DiscoveredTestFunction;
-use crate::extensions::fixtures::DiscoveredFixture;
+use crate::extensions::fixtures::{DiscoveredFixture, RejectedFixture};
 
 /// Represents a single Python file containing tests and/or fixtures.
 ///
@@ -20,6 +20,9 @@ pub struct DiscoveredModule {
     /// Fixture definitions discovered in this module.
     fixtures: Vec<DiscoveredFixture>,
 
+    /// Fixture definitions rejected during discovery.
+    rejected_fixtures: Vec<RejectedFixture>,
+
     /// Original source code for diagnostic reporting.
     source_file: SourceFile,
 }
@@ -31,6 +34,7 @@ impl DiscoveredModule {
             path,
             test_functions: Vec::new(),
             fixtures: Vec::new(),
+            rejected_fixtures: Vec::new(),
             source_file,
         }
     }
@@ -63,12 +67,24 @@ impl DiscoveredModule {
         self.fixtures.push(fixture);
     }
 
+    pub(crate) fn rejected_fixture(&self, name: &str) -> Option<&RejectedFixture> {
+        self.rejected_fixtures
+            .iter()
+            .find(|fixture| fixture.name == name)
+    }
+
+    pub(crate) fn add_rejected_fixture(&mut self, fixture: RejectedFixture) {
+        self.rejected_fixtures.push(fixture);
+    }
+
     pub(crate) fn source_file(&self) -> SourceFile {
         self.source_file.clone()
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.test_functions.is_empty() && self.fixtures.is_empty()
+        self.test_functions.is_empty()
+            && self.fixtures.is_empty()
+            && self.rejected_fixtures.is_empty()
     }
 
     pub(crate) fn shrink(&mut self) {

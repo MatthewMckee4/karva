@@ -18,6 +18,7 @@ use ruff_source_file::SourceFile;
 
 mod metadata;
 
+use crate::extensions::fixtures::RejectedFixture;
 use crate::extensions::tags::parametrize::InvalidParametrizeError;
 use crate::runner::{
     FixtureArguments, FixtureCallError, FixtureChainEntry, FixtureResolutionEntry,
@@ -394,12 +395,8 @@ pub fn fixture_resolution_diagnostic(error: FixtureResolutionError) -> Diagnosti
         FixtureResolutionError::MissingFixtures {
             fixture,
             missing_fixtures,
-        } => missing_fixtures_diagnostic(
-            fixture.source_file,
-            &fixture.stmt_function_def,
-            &missing_fixtures,
-            FunctionKind::Fixture,
-        ),
+            rejected_fixtures,
+        } => fixture_missing_fixtures_diagnostic(&fixture, &missing_fixtures, &rejected_fixtures),
     }
 }
 
@@ -484,6 +481,35 @@ fn fixture_scope_mismatch_diagnostic(
         .with_range(dependency.stmt_function_def.name.range);
     dependency_sub.annotate(Annotation::primary(span));
     diagnostic.sub(dependency_sub);
+    diagnostic
+}
+
+fn fixture_missing_fixtures_diagnostic(
+    fixture: &FixtureResolutionEntry,
+    missing_fixtures: &[String],
+    rejected_fixtures: &[RejectedFixture],
+) -> Diagnostic {
+    let mut diagnostic = missing_fixtures_diagnostic(
+        fixture.source_file.clone(),
+        &fixture.stmt_function_def,
+        missing_fixtures,
+        FunctionKind::Fixture,
+    );
+
+    for rejected_fixture in rejected_fixtures {
+        let mut sub = SubDiagnostic::new(
+            SubDiagnosticSeverity::Info,
+            format!(
+                "Fixture `{}` was rejected during discovery: {}",
+                rejected_fixture.name, rejected_fixture.reason
+            ),
+        );
+        let span = Span::from(rejected_fixture.source_file.clone())
+            .with_range(rejected_fixture.stmt_function_def.name.range);
+        sub.annotate(Annotation::primary(span));
+        diagnostic.sub(sub);
+    }
+
     diagnostic
 }
 

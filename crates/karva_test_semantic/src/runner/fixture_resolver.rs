@@ -9,8 +9,8 @@ use ruff_source_file::SourceFile;
 
 use crate::discovery::DiscoveredPackage;
 use crate::extensions::fixtures::{
-    DiscoveredFixture, FixtureScope, HasFixtures, NormalizedFixture, RequiresFixtures,
-    get_auto_use_fixtures,
+    DiscoveredFixture, FixtureScope, HasFixtures, NormalizedFixture, RejectedFixture,
+    RequiresFixtures, get_auto_use_fixtures,
 };
 
 /// Resolves fixtures at runtime during test execution.
@@ -64,6 +64,8 @@ pub enum FixtureResolutionError {
         fixture: FixtureResolutionEntry,
         /// Unresolved dependency names.
         missing_fixtures: Vec<String>,
+        /// Missing dependencies that were rejected during discovery.
+        rejected_fixtures: Vec<RejectedFixture>,
     },
 }
 
@@ -250,6 +252,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
     ) -> FixtureResolutionResult<Vec<Rc<NormalizedFixture>>> {
         let mut normalized_fixtures = Vec::with_capacity(fixture_names.len());
         let mut missing_fixtures = Vec::new();
+        let mut rejected_fixtures = Vec::new();
 
         for dep_name in fixture_names {
             if let Some(fixture) =
@@ -275,6 +278,11 @@ impl<'a> RuntimeFixtureResolver<'a> {
                     let normalized = self.normalize_fixture(py, fixture, path)?;
                     normalized_fixtures.push(normalized);
                 } else {
+                    if let Some(rejected_fixture) =
+                        find_rejected_fixture(dep_name, self.parents, self.current)
+                    {
+                        rejected_fixtures.push(rejected_fixture.clone());
+                    }
                     missing_fixtures.push(dep_name.clone());
                 }
             }
@@ -286,6 +294,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
             return Err(FixtureResolutionError::MissingFixtures {
                 fixture: FixtureResolutionEntry::new(fixture),
                 missing_fixtures,
+                rejected_fixtures,
             });
         }
 
@@ -308,6 +317,9 @@ fn find_fixture<'a>(
     {
         return Some(fixture);
     }
+    if current.get_rejected_fixture(name).is_some() {
+        return None;
+    }
 
     for parent in parents {
         if let Some(fixture) = parent.get_fixture(name)
@@ -316,7 +328,25 @@ fn find_fixture<'a>(
         {
             return Some(fixture);
         }
+        if parent.get_rejected_fixture(name).is_some() {
+            return None;
+        }
     }
 
     None
+}
+
+/// Finds rejected fixture metadata using the same provider precedence as fixture lookup.
+fn find_rejected_fixture<'a>(
+    name: &str,
+    parents: &'a [&'a DiscoveredPackage],
+    current: &'a (dyn HasFixtures<'a> + 'a),
+) -> Option<&'a RejectedFixture> {
+    if let Some(fixture) = current.get_rejected_fixture(name) {
+        return Some(fixture);
+    }
+
+    parents
+        .iter()
+        .find_map(|parent| parent.get_rejected_fixture(name))
 }

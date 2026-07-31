@@ -15,7 +15,7 @@ use crate::collection::TestFunctionCollector;
 use crate::diagnostic::report_collection_error;
 use crate::discovery::visitor::{discover, is_generator};
 use crate::discovery::{DiscoveredModule, DiscoveredPackage};
-use crate::extensions::fixtures::DiscoveredFixture;
+use crate::extensions::fixtures::{DiscoveredFixture, RejectedFixture};
 use crate::utils::add_to_sys_path;
 
 /// Discovers test functions and fixtures from Python source files.
@@ -206,7 +206,7 @@ fn discover_framework_fixtures(
         let stmt_rc = Rc::new(function_def);
         match DiscoveredFixture::try_from_function(
             py,
-            stmt_rc,
+            Rc::clone(&stmt_rc),
             &builtins_module,
             &module_path,
             framework_module.source_file(),
@@ -214,6 +214,13 @@ fn discover_framework_fixtures(
         ) {
             Ok(fixture) => framework_module.add_fixture(fixture),
             Err(err) => {
+                let source_file = framework_module.source_file();
+                framework_module.add_rejected_fixture(RejectedFixture::new(
+                    fixture_name.clone(),
+                    err.value(py).to_string(),
+                    stmt_rc,
+                    source_file,
+                ));
                 tracing::warn!(
                     "Failed to discover framework fixture `{fixture_name}` from `karva._builtins`: {err}"
                 );

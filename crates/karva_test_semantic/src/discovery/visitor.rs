@@ -19,8 +19,8 @@ use crate::diagnostic::{
     report_failed_to_import_module, report_generator_test, report_invalid_fixture,
 };
 use crate::discovery::{DiscoveredModule, DiscoveredTestFunction};
-use crate::extensions::fixtures::DiscoveredFixture;
 use crate::extensions::fixtures::python::FixtureFunctionDefinition;
+use crate::extensions::fixtures::{DiscoveredFixture, RejectedFixture};
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
 
 /// Visitor for discovering test functions and fixture definitions in a given module.
@@ -110,13 +110,20 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             is_generator_function,
         ) {
             Ok(fixture_def) => Some(fixture_def),
-            Err(e) => {
+            Err(error) => {
+                let source_file = self.module.source_file();
+                self.module.add_rejected_fixture(RejectedFixture::new(
+                    stmt_function_def.name.to_string(),
+                    error.value(self.py).to_string(),
+                    Rc::clone(&stmt_function_def),
+                    source_file,
+                ));
                 report_invalid_fixture(
                     self.context,
                     self.py,
                     self.module.source_file(),
                     &stmt_function_def,
-                    &e,
+                    &error,
                 );
                 None
             }
@@ -260,13 +267,19 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             is_generator_function,
         ) {
             Ok(fixture_def) => self.module.add_fixture(fixture_def),
-            Err(e) => {
+            Err(error) => {
+                self.module.add_rejected_fixture(RejectedFixture::new(
+                    name.to_string(),
+                    error.value(self.py).to_string(),
+                    Rc::clone(&stmt_function_def),
+                    source_file.clone(),
+                ));
                 report_invalid_fixture(
                     self.context,
                     self.py,
                     source_file,
                     stmt_function_def.as_ref(),
-                    &e,
+                    &error,
                 );
             }
         }
