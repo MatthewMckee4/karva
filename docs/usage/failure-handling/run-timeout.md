@@ -6,11 +6,8 @@ same budget as test execution. Use it as a CI tripwire for a runaway suite; use
 [`@karva.tags.timeout`](../tags/timeout.md) when one test needs its own limit.
 
 Measure healthy CI runs first, choose a timeout that leaves room for normal
-variance, and pass that measured value in seconds:
-
-```bash
-uv run karva test --run-timeout="$KARVA_CI_RUN_TIMEOUT"
-```
+variance, then pass it as `--run-timeout=SECONDS`, replacing `SECONDS` with
+that measured value.
 
 The same limit can be stored as `run-timeout` under the profile's `test`
 configuration.
