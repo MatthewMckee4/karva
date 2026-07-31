@@ -1,4 +1,5 @@
 {
+  "$id": "https://www.schemastore.org/karva.json",
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Config",
   "description": "File-level configuration: a collection of named profiles.\n\nEvery option group lives inside `[profile.<name>]`. The implicit `default`\nprofile is always available; named profiles inherit from it and can\noverride individual fields.",
