@@ -26,6 +26,7 @@ draft = false
 "Test Running" = ["test-running"]
 "Discovery" = ["discovery"]
 "Fixtures" = ["extensions/fixtures"]
+"Functions" = ["extensions/functions"]
 "Tags & Marks" = ["extensions/tags"]
 "Snapshot Testing" = ["snapshot-testing"]
 "Property Testing" = ["property-testing"]
