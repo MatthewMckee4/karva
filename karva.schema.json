@@ -178,9 +178,34 @@
         }
       ]
     },
+    "FlakyResult": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail"
+      ]
+    },
+    "JunitFlakyFailStatus": {
+      "type": "string",
+      "enum": [
+        "failure",
+        "success"
+      ]
+    },
     "JunitOptions": {
       "type": "object",
       "properties": {
+        "flaky-fail-status": {
+          "description": "How flaky tests configured to fail are represented in `JUnit`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/JunitFlakyFailStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "path": {
           "description": "Output path for the `JUnit` XML report.\n\nWhen unset, no `JUnit` report is written.",
           "type": [
@@ -301,6 +326,23 @@
         "concise"
       ]
     },
+    "OverrideJunitOptions": {
+      "type": "object",
+      "properties": {
+        "flaky-fail-status": {
+          "description": "Whether matching flaky-fail tests appear as failures or successes in\n`JUnit`, while preserving their flaky attempt details.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/JunitFlakyFailStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "OverrideOptions": {
       "description": "A single per-test override entry.\n\nMirrors `[[profile.<name>.overrides]]` in `karva.toml`. Each override\npairs a filter expression with one or more option fields to apply when\nthe filter matches a given test.",
       "type": "object",
@@ -319,6 +361,28 @@
         "filter": {
           "description": "A filter expression evaluated against each test. Tests whose name\nor tags match the expression pick up this override's settings.",
           "type": "string"
+        },
+        "flaky-result": {
+          "description": "Whether matching flaky tests pass or fail the run.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlakyResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "junit": {
+          "description": "`JUnit` behavior for matching flaky tests configured to fail.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OverrideJunitOptions"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "retries": {
           "description": "Number of times to retry a matching test before giving up. Mirrors\nthe profile-level [`retry`](#retry) field.",
@@ -496,6 +560,17 @@
           "anyOf": [
             {
               "$ref": "#/definitions/FailSlowSecs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "flaky-result": {
+          "description": "Whether tests that pass only after a retry should fail the run.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlakyResult"
             },
             {
               "type": "null"

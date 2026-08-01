@@ -3,7 +3,10 @@ use std::str::FromStr;
 use camino::Utf8PathBuf;
 use ruff_db::diagnostic::DiagnosticFormat;
 
-use karva_metadata::{NoTestsMode, RunIgnoredMode};
+use karva_metadata::{
+    FlakyResult as FlakyResultMode, JunitFlakyFailStatus as JunitFlakyFailStatusMode, NoTestsMode,
+    RunIgnoredMode,
+};
 
 /// Coverage report selection parsed from `--cov-report`.
 #[derive(Clone, Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -182,6 +185,37 @@ impl From<NoTests> for NoTestsMode {
             NoTests::Pass => Self::Pass,
             NoTests::Warn => Self::Warn,
             NoTests::Fail => Self::Fail,
+        }
+    }
+}
+
+/// Whether flaky tests pass or fail the run.
+#[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum FlakyResult {
+    Pass,
+    Fail,
+}
+
+impl From<FlakyResult> for FlakyResultMode {
+    fn from(value: FlakyResult) -> Self {
+        match value {
+            FlakyResult::Pass => Self::Pass,
+            FlakyResult::Fail => Self::Fail,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum JunitFlakyFailStatus {
+    Failure,
+    Success,
+}
+
+impl From<JunitFlakyFailStatus> for JunitFlakyFailStatusMode {
+    fn from(value: JunitFlakyFailStatus) -> Self {
+        match value {
+            JunitFlakyFailStatus::Failure => Self::Failure,
+            JunitFlakyFailStatus::Success => Self::Success,
         }
     }
 }

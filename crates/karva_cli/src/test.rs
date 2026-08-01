@@ -4,13 +4,15 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use karva_logging::{FinalStatusLevel, StatusLevel, TerminalColor};
 use karva_metadata::{
-    CovFailUnder, CoverageOptions, FailSlowSecs, MaxFail, Options, OverrideOptions, RunTimeoutSecs,
-    SlowTimeoutSecs, SrcOptions, TerminalOptions, TerminationGracePeriodSecs, TestOptions,
-    TestTimeoutSecs,
+    CovFailUnder, CoverageOptions, FailSlowSecs, JunitOptions, MaxFail, Options, OverrideOptions,
+    RunTimeoutSecs, SlowTimeoutSecs, SrcOptions, TerminalOptions, TerminationGracePeriodSecs,
+    TestOptions, TestTimeoutSecs,
 };
 use karva_static::EnvVars;
 
-use crate::enums::{CovReport, NoTests, OutputFormat, ResultFormat, RunIgnored};
+use crate::enums::{
+    CovReport, FlakyResult, JunitFlakyFailStatus, NoTests, OutputFormat, ResultFormat, RunIgnored,
+};
 use crate::partition::PartitionSelection;
 use crate::verbosity::Verbosity;
 
@@ -107,6 +109,19 @@ pub struct SubTestCommand {
     /// When set, the test will retry failed tests up to this number of times.
     #[clap(long, help_heading = "Runner options")]
     pub retry: Option<u32>,
+
+    /// Whether tests that pass only after a retry should pass or fail the run.
+    #[arg(
+        long,
+        value_name = "ACTION",
+        env = EnvVars::KARVA_FLAKY_RESULT,
+        help_heading = "Runner options"
+    )]
+    pub flaky_result: Option<FlakyResult>,
+
+    /// Internal transport for the resolved `JUnit` flaky status.
+    #[arg(long, hide = true)]
+    pub junit_flaky_fail_status: Option<JunitFlakyFailStatus>,
 
     /// Threshold in seconds after which a test is flagged as slow.
     ///
@@ -460,6 +475,7 @@ impl SubTestCommand {
                 max_fail,
                 try_import_fixtures: self.try_import_fixtures,
                 retry: self.retry,
+                flaky_result: self.flaky_result.map(Into::into),
                 no_tests: self.no_tests.map(Into::into),
                 slow_timeout: self.slow_timeout.map(SlowTimeoutSecs),
                 fail_slow: self.fail_slow.map(FailSlowSecs),
@@ -481,7 +497,10 @@ impl SubTestCommand {
                 fail_under: self.cov_fail_under.map(CovFailUnder),
                 disabled: self.no_cov.then_some(true),
             }),
-            junit: None,
+            junit: self.junit_flaky_fail_status.map(|status| JunitOptions {
+                flaky_fail_status: Some(status.into()),
+                ..JunitOptions::default()
+            }),
             overrides: self.override_json,
         }
     }

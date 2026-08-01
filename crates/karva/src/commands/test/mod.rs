@@ -241,7 +241,8 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         return Ok(exit_status);
     }
 
-    let exit_status = if result.is_success() && !coverage_below_threshold {
+    let flaky_failed = result.has_flaky_failures();
+    let exit_status = if result.is_success() && !coverage_below_threshold && !flaky_failed {
         ExitStatus::Success
     } else {
         ExitStatus::Failure
@@ -302,13 +303,17 @@ pub fn print_test_output(
 
     drop(details);
 
-    let success = result.is_success();
+    let flaky_failed = result.has_flaky_failures();
+    let success = result.is_success() && !flaky_failed;
     let mut summary = printer
         .stream_for_summary(success, result.stats.flaky() > 0)
         .lock();
 
     write!(summary, "{}", result.stats.display(start_time, success))?;
     write!(summary, "{}", DisplayFlakyTests::new(&result.flaky_tests))?;
+    if flaky_failed {
+        writeln!(summary, "flaky failure: flaky tests caused the run to fail")?;
+    }
 
     Ok(())
 }

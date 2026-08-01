@@ -15,9 +15,10 @@ pub use overrides::ProjectOptionsOverrides;
 use crate::filter::{FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
 use crate::settings::{
-    CovFailUnder, CoverageSettings, FailSlowSecs, JunitSettings, NoTestsMode, OverrideSettings,
-    ProjectSettings, RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs, SrcSettings,
-    TerminalSettings, TerminationGracePeriodSecs, TestSettings, TestTimeoutSecs,
+    CovFailUnder, CoverageSettings, FailSlowSecs, FlakyResult, JunitFlakyFailStatus, JunitSettings,
+    NoTestsMode, OverrideSettings, ProjectSettings, RunIgnoredMode, RunTimeoutSecs,
+    SlowTimeoutSecs, SrcSettings, TerminalSettings, TerminationGracePeriodSecs, TestSettings,
+    TestTimeoutSecs,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata)]
@@ -115,6 +116,22 @@ pub struct OverrideOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retries: Option<u32>,
 
+    /// Whether matching flaky tests pass or fail the run.
+    #[option(
+        default = "null",
+        value_type = "pass | fail",
+        example = r#"
+            flaky-result = "pass"
+        "#
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flaky_result: Option<FlakyResult>,
+
+    /// `JUnit` behavior for matching flaky tests configured to fail.
+    #[option_group]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub junit: Option<OverrideJunitOptions>,
+
     /// Hard per-test timeout, in seconds, applied to matching tests.
     /// Mirrors the profile-level [`timeout`](#timeout) field. A value of
     /// `0` (or any non-positive value) disables the hard timeout for the
@@ -162,11 +179,33 @@ impl OverrideOptions {
         OverrideSettings {
             filter: self.filter.clone(),
             retries: self.retries,
+            flaky_result: self.flaky_result,
+            junit_flaky_fail_status: self
+                .junit
+                .as_ref()
+                .and_then(|junit| junit.flaky_fail_status),
             timeout: self.timeout,
             slow_timeout: self.slow_timeout,
             fail_slow: self.fail_slow,
         }
     }
+}
+
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize, OptionsMetadata)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct OverrideJunitOptions {
+    /// Whether matching flaky-fail tests appear as failures or successes in
+    /// `JUnit`, while preserving their flaky attempt details.
+    #[option(
+        default = "null",
+        value_type = "failure | success",
+        example = r#"
+            flaky-fail-status = "success"
+        "#
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flaky_fail_status: Option<JunitFlakyFailStatus>,
 }
 
 #[derive(
@@ -372,6 +411,17 @@ pub struct TestOptions {
     )]
     pub retry: Option<u32>,
 
+    /// Whether tests that pass only after a retry should fail the run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"pass"#,
+        value_type = "pass | fail",
+        example = r#"
+            flaky-result = "fail"
+        "#
+    )]
+    pub flaky_result: Option<FlakyResult>,
+
     /// Configures behavior when no tests are found to run.
     ///
     /// `auto` (the default) fails when no filter expressions were given, and
@@ -502,6 +552,7 @@ impl TestOptions {
             max_fail,
             try_import_fixtures: self.try_import_fixtures.unwrap_or_default(),
             retry: self.retry.unwrap_or_default(),
+            flaky_result: self.flaky_result.unwrap_or_default(),
             filter: FiltersetSet::default(),
             run_ignored: RunIgnoredMode::default(),
             no_tests: self.no_tests.unwrap_or_default(),
@@ -721,6 +772,17 @@ pub struct JunitOptions {
         "#
     )]
     pub store_failure_output: Option<bool>,
+
+    /// How flaky tests configured to fail are represented in `JUnit`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"failure"#,
+        value_type = r#"failure | success"#,
+        example = r#"
+            flaky-fail-status = "success"
+        "#
+    )]
+    pub flaky_fail_status: Option<JunitFlakyFailStatus>,
 }
 
 impl JunitOptions {
@@ -733,6 +795,7 @@ impl JunitOptions {
                 .unwrap_or_else(|| "karva-tests".to_string()),
             store_success_output: self.store_success_output.unwrap_or_default(),
             store_failure_output: self.store_failure_output.unwrap_or(true),
+            flaky_fail_status: self.flaky_fail_status.unwrap_or_default(),
         }
     }
 }
@@ -897,7 +960,7 @@ nonsense = 42
           |
         4 | nonsense = 42
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `test-function-prefix`, `fail-fast`, `max-fail`, `try-import-fixtures`, `retry`, `no-tests`, `slow-timeout`, `timeout`, `fail-slow`, `run-timeout`, `termination-grace-period`
+        unknown field `nonsense`, expected one of `test-function-prefix`, `fail-fast`, `max-fail`, `try-import-fixtures`, `retry`, `flaky-result`, `no-tests`, `slow-timeout`, `timeout`, `fail-slow`, `run-timeout`, `termination-grace-period`
         "
         );
     }
@@ -994,6 +1057,7 @@ max-fail = 0
             retry: Some(
                 5,
             ),
+            flaky_result: None,
             no_tests: None,
             slow_timeout: None,
             timeout: None,
@@ -1026,6 +1090,7 @@ max-fail = 0
             retry: Some(
                 3,
             ),
+            flaky_result: None,
             no_tests: None,
             slow_timeout: None,
             timeout: None,
@@ -1091,6 +1156,7 @@ retry = 2
                 retry: Some(
                     2,
                 ),
+                flaky_result: None,
                 no_tests: None,
                 slow_timeout: None,
                 timeout: None,
@@ -1150,6 +1216,7 @@ retry = 5
                 retry: Some(
                     5,
                 ),
+                flaky_result: None,
                 no_tests: None,
                 slow_timeout: None,
                 timeout: None,
@@ -1333,6 +1400,7 @@ store-failure-output = false
                 store_failure_output: Some(
                     false,
                 ),
+                flaky_fail_status: None,
             },
         )
         "#);

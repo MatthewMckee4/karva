@@ -182,6 +182,23 @@ sources = ["src"]
 
 ## `junit`
 
+### `flaky-fail-status`
+
+How flaky tests configured to fail are represented in `JUnit`.
+
+**Default value**: `failure`
+
+**Type**: `failure | success`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.junit]
+flaky-fail-status = "success"
+```
+
+---
+
 ### `path`
 
 Output path for the `JUnit` XML report.
@@ -436,6 +453,23 @@ applied to the test.
 ```toml
 [tool.karva.profile.default.test]
 fail-slow = 0.25
+```
+
+---
+
+### `flaky-result`
+
+Whether tests that pass only after a retry should fail the run.
+
+**Default value**: `pass`
+
+**Type**: `pass | fail`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.test]
+flaky-result = "fail"
 ```
 
 ---

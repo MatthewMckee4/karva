@@ -1,4 +1,5 @@
 use insta_cmd::assert_cmd_snapshot;
+use karva_static::EnvVars;
 
 use crate::common::TestContext;
 
@@ -157,6 +158,86 @@ def test_unit():
 
     ----- stderr -----
     ");
+}
+
+#[test]
+fn override_flaky_result_and_explicit_global_override() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.test]
+retry = 1
+flaky-result = "pass"
+
+[[profile.default.overrides]]
+filter = "tag(strict)"
+flaky-result = "fail"
+"#,
+        ),
+        (
+            "test.py",
+            r#"
+import os
+import karva
+
+@karva.tags.strict
+def test_flaky():
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_flaky
+      TRY 2 PASS [TIME] test::test_flaky
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_flaky
+    flaky failure: flaky tests caused the run to fail
+
+    ----- stderr -----
+    ");
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("--flaky-result=pass"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_flaky
+      TRY 2 PASS [TIME] test::test_flaky
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_flaky
+
+    ----- stderr -----
+    "
+    );
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .env(EnvVars::KARVA_FLAKY_RESULT, "pass"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_flaky
+      TRY 2 PASS [TIME] test::test_flaky
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_flaky
+
+    ----- stderr -----
+    "
+    );
 }
 
 #[test]

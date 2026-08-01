@@ -2032,6 +2032,49 @@ def test_flaky():
 }
 
 #[test]
+fn flaky_result_does_not_enable_retries() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+
+def test_needs_retry():
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--flaky-result=fail"), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_needs_retry
+
+    failures:
+
+    test::test_needs_retry:
+
+    error[test-failure]: Test `test_needs_retry` failed
+     --> test.py:4:5
+      |
+    4 | def test_needs_retry():
+      |     ^^^^^^^^^^^^^^^^
+      |
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     assert os.environ["KARVA_ATTEMPT"] == "2"
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
 fn test_extra_verbose_output() {
     let context = TestContext::with_file(
         "test.py",

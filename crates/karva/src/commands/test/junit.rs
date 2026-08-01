@@ -43,6 +43,11 @@ fn build_junit_xml(settings: &JunitSettings, results: &AggregatedResults) -> Res
         .map(TestCaseResult::duration)
         .sum::<std::time::Duration>()
         .as_secs_f64();
+    let flaky_failures = results
+        .test_cases
+        .iter()
+        .filter(|case| case.is_junit_flaky_failure())
+        .count();
 
     let mut xml = String::new();
     xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
@@ -51,7 +56,7 @@ fn build_junit_xml(settings: &JunitSettings, results: &AggregatedResults) -> Res
         "<testsuites name=\"{}\" tests=\"{}\" failures=\"{}\" skipped=\"{}\" errors=\"{}\" time=\"{total_time:.6}\">",
         escape_xml(&settings.report_name),
         results.stats.total() + run_errors,
-        results.stats.failed(),
+        results.stats.failed() + flaky_failures,
         results.stats.skipped(),
         results.stats.errors() + run_errors,
     )?;
@@ -74,7 +79,7 @@ fn write_suite(
     let tests = cases.len();
     let failures = cases
         .iter()
-        .filter(|case| case.outcome().is_failed())
+        .filter(|case| case.outcome().is_failed() || case.is_junit_flaky_failure())
         .count();
     let skipped = cases
         .iter()
@@ -134,7 +139,13 @@ fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult)
 
     xml.push_str(">\n");
     match case.outcome() {
-        TestCaseOutcome::Passed => {}
+        TestCaseOutcome::Passed => {
+            if case.is_junit_flaky_failure() {
+                xml.push_str(
+                    "      <failure message=\"Flaky test failed by policy\" type=\"flaky\">Flaky tests are configured to fail the run.</failure>\n",
+                );
+            }
+        }
         TestCaseOutcome::Failed {
             diagnostic,
             related,

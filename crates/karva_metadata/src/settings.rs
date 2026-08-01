@@ -48,6 +48,62 @@ pub enum NoTestsMode {
     Fail,
 }
 
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+pub enum FlakyResult {
+    #[default]
+    Pass,
+    Fail,
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+pub enum JunitFlakyFailStatus {
+    #[default]
+    Failure,
+    Success,
+}
+
+impl JunitFlakyFailStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Failure => "failure",
+            Self::Success => "success",
+        }
+    }
+}
+
+impl FlakyResult {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pass => "pass",
+            Self::Fail => "fail",
+        }
+    }
+}
+
+impl Combine for JunitFlakyFailStatus {
+    #[inline(always)]
+    fn combine_with(&mut self, _other: Self) {}
+
+    #[inline]
+    fn combine(self, _other: Self) -> Self {
+        self
+    }
+}
+
+impl Combine for FlakyResult {
+    #[inline(always)]
+    fn combine_with(&mut self, _other: Self) {}
+
+    #[inline]
+    fn combine(self, _other: Self) -> Self {
+        self
+    }
+}
+
 impl Combine for NoTestsMode {
     #[inline(always)]
     fn combine_with(&mut self, _other: Self) {}
@@ -275,6 +331,10 @@ pub struct OverrideSettings {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retries: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub flaky_result: Option<FlakyResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub junit_flaky_fail_status: Option<JunitFlakyFailStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout: Option<TestTimeoutSecs>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slow_timeout: Option<SlowTimeoutSecs>,
@@ -336,6 +396,16 @@ impl ProjectSettings {
     pub fn retry_for(&self, ctx: &EvalContext<'_>) -> u32 {
         self.first_matching_override(ctx, |ovr| ovr.retries)
             .unwrap_or(self.test.retry)
+    }
+
+    pub fn flaky_result_for(&self, ctx: &EvalContext<'_>) -> FlakyResult {
+        self.first_matching_override(ctx, |ovr| ovr.flaky_result)
+            .unwrap_or(self.test.flaky_result)
+    }
+
+    pub fn junit_flaky_fail_status_for(&self, ctx: &EvalContext<'_>) -> JunitFlakyFailStatus {
+        self.first_matching_override(ctx, |ovr| ovr.junit_flaky_fail_status)
+            .unwrap_or(self.junit.flaky_fail_status)
     }
 
     /// Resolve the hard per-test timeout for a single test.
@@ -444,6 +514,7 @@ pub struct JunitSettings {
     #[serde(skip_serializing_if = "is_false")]
     pub store_success_output: bool,
     pub store_failure_output: bool,
+    pub flaky_fail_status: JunitFlakyFailStatus,
 }
 
 impl Default for JunitSettings {
@@ -453,6 +524,7 @@ impl Default for JunitSettings {
             report_name: "karva-tests".to_string(),
             store_success_output: false,
             store_failure_output: true,
+            flaky_fail_status: JunitFlakyFailStatus::default(),
         }
     }
 }
@@ -475,6 +547,7 @@ pub struct TestSettings {
     pub max_fail: MaxFail,
     pub try_import_fixtures: bool,
     pub retry: u32,
+    pub flaky_result: FlakyResult,
     /// Runtime-only: filters are sourced from CLI flags, never config files.
     #[serde(skip)]
     pub filter: FiltersetSet,
