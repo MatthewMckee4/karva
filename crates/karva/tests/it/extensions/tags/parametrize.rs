@@ -1030,6 +1030,45 @@ def test_parametrize_with_fixture(a, fixture_value):
     ");
 }
 
+#[rstest]
+fn test_parametrize_accepts_arbitrary_iterables(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+import {framework}
+parametrize = {parametrize}
+
+@parametrize("value", (value for value in [1, 2]))
+def test_generator(value):
+    assert value in [1, 2]
+
+@parametrize("value", {{3: None, 4: None}}.keys())
+def test_dict_keys(value):
+    assert value in [3, 4]
+"#,
+            parametrize = get_parametrize_function(framework),
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 2 tests across 1 worker
+                PASS [TIME] test::test_generator(value=1)
+                PASS [TIME] test::test_generator(value=2)
+                PASS [TIME] test::test_dict_keys(value=3)
+                PASS [TIME] test::test_dict_keys(value=4)
+        ────────────
+             Summary [TIME] 4 tests run: 4 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
 #[test]
 fn test_parametrized_variants_retry_independently() {
     let context = TestContext::with_file(
