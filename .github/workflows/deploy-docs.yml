@@ -1,15 +1,6 @@
 name: Deploy docs
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/deploy-docs.yml"
-      - "docs/**"
-      - "pyproject.toml"
-      - "uv.lock"
-      - "zensical.toml"
   workflow_dispatch:
 
 permissions: {}
