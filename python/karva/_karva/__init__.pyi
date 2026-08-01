@@ -83,20 +83,22 @@ def param(
         *values: The values to parameterize the test case with.
         tags: The tag or tag functions.
 
-    .. code-block:: python
+    Examples:
+        Parameterize a test and tag individual cases:
 
-    import karva
+        ```python
+        import karva
 
-    @karva.tags.parametrize("input,expected", [
-        karva.param(2, 4),
-        karva.param(4, 17, tags=(karva.tags.skip,)),
-        karva.param(5, 26, tags=(karva.tags.expect_fail,)),
-        karva.param(6, 36, tags=(karva.tags.skip(True),)),
-        karva.param(7, 50, tags=(karva.tags.expect_fail(True),)),
-    ])
-    def test_square(input, expected):
-        assert input ** 2 == expected
-
+        @karva.tags.parametrize("input,expected", [
+            karva.param(2, 4),
+            karva.param(4, 17, tags=(karva.tags.skip,)),
+            karva.param(5, 26, tags=(karva.tags.expect_fail,)),
+            karva.param(6, 36, tags=(karva.tags.skip(True),)),
+            karva.param(7, 50, tags=(karva.tags.expect_fail(True),)),
+        ])
+        def test_square(input, expected):
+            assert input ** 2 == expected
+        ```
     """
 
 

@@ -1,6 +1,6 @@
 """Path / filesystem helpers required by ``TempPathFactory``.
 
-Vendored from pytest's ``_pytest/pathlib.py`` (commit 8ecf49ec2). Only the
+Adapted from pytest's ``_pytest/pathlib.py`` (commit 8ecf49ec2). Only the
 helpers transitively required by ``make_numbered_dir_with_cleanup`` and
 ``cleanup_dead_symlinks`` are included; the rest of pytest's ``pathlib`` module
 is not.
@@ -11,7 +11,7 @@ The following adaptations were made:
 - Imports of unused pytest helpers (``assert_never``, ``skip``) are dropped.
 - ``_ignore_error``, ``_IGNORED_ERRORS``, ``_IGNORED_WINERRORS`` are dropped:
   they are copied from CPython's ``pathlib`` for pytest's symlink-scan code
-  path, which is not vendored here.
+  path, which is not included here.
 
 See the pytest license block in this repository's LICENSE file for the
 applicable copyright notice.
@@ -31,7 +31,7 @@ import warnings
 from collections.abc import Callable, Iterable, Iterator
 from functools import partial
 from pathlib import Path, PurePath
-from typing import Any, TypeVar
+from typing import TypeVar
 
 LOCK_TIMEOUT = 60 * 60 * 24 * 3
 
@@ -43,7 +43,7 @@ def get_lock_path(path: _AnyPurePath) -> _AnyPurePath:
 
 
 def on_rm_rf_error(
-    func: Callable[..., Any] | None,
+    func: Callable[[str], object] | None,
     path: str,
     excinfo: BaseException
     | tuple[type[BaseException], BaseException, types.TracebackType | None],
@@ -54,10 +54,7 @@ def on_rm_rf_error(
 
     The returned value is used only by our own tests.
     """
-    if isinstance(excinfo, BaseException):
-        exc = excinfo
-    else:
-        exc = excinfo[1]
+    exc = excinfo if isinstance(excinfo, BaseException) else excinfo[1]
 
     # Another process removed the file in the middle of the "rm_rf" (xdist for example).
     # More context: https://github.com/pytest-dev/pytest/issues/5974#issuecomment-543799018
@@ -65,7 +62,10 @@ def on_rm_rf_error(
         return False
 
     if not isinstance(exc, PermissionError):
-        warnings.warn(UserWarning(f"(rm_rf) error removing {path}\n{type(exc)}: {exc}"))
+        warnings.warn(
+            UserWarning(f"(rm_rf) error removing {path}\n{type(exc)}: {exc}"),
+            stacklevel=2,
+        )
         return False
 
     if func not in (os.rmdir, os.remove, os.unlink):
@@ -73,7 +73,8 @@ def on_rm_rf_error(
             warnings.warn(
                 UserWarning(
                     f"(rm_rf) unknown function {func} when removing {path}:\n{type(exc)}: {exc}"
-                )
+                ),
+                stacklevel=2,
             )
         return False
 
@@ -164,38 +165,36 @@ def parse_num(maybe_num: str) -> int:
 
 
 def _force_symlink(root: Path, target: str | PurePath, link_to: str | Path) -> None:
-    """Helper to create the current symlink.
+    """Create the current symlink.
 
     It's full of race conditions that are reasonably OK to ignore for the
     context of best effort linking to the latest test run.
     """
     current_symlink = root.joinpath(target)
-    try:
+    with contextlib.suppress(OSError):
         current_symlink.unlink()
-    except OSError:
-        pass
-    try:
+    with contextlib.suppress(OSError):
         current_symlink.symlink_to(link_to)
-    except Exception:
-        pass
 
 
 def make_numbered_dir(root: Path, prefix: str, mode: int = 0o700) -> Path:
     """Create a directory with an increased number as suffix for the given prefix."""
+    last_error: OSError | None = None
     for _ in range(10):
         max_existing = max(map(parse_num, find_suffixes(root, prefix)), default=-1)
         new_number = max_existing + 1
         new_path = root.joinpath(f"{prefix}{new_number}")
         try:
             new_path.mkdir(mode=mode)
-        except Exception:
-            pass
+        except OSError as error:
+            last_error = error
         else:
             _force_symlink(root, prefix + "current", new_path)
             return new_path
-    raise OSError(
+    message = (
         f"could not create numbered dir with prefix {prefix} in {root} after 10 tries"
     )
+    raise OSError(message) from last_error
 
 
 def create_cleanup_lock(p: Path) -> Path:
@@ -214,9 +213,7 @@ def create_cleanup_lock(p: Path) -> Path:
     return lock_path
 
 
-def register_cleanup_lock_removal(
-    lock_path: Path, register: Any = atexit.register
-) -> Any:
+def register_cleanup_lock_removal(lock_path: Path) -> None:
     """Register a cleanup function for removing a lock, by default on atexit."""
     pid = os.getpid()
 
@@ -224,17 +221,14 @@ def register_cleanup_lock_removal(
         current_pid = os.getpid()
         if current_pid != original_pid:
             return
-        try:
+        with contextlib.suppress(OSError):
             lock_path.unlink()
-        except OSError:
-            pass
 
-    return register(cleanup_on_exit)
+    atexit.register(cleanup_on_exit)
 
 
 def maybe_delete_a_numbered_dir(path: Path) -> None:
-    """Remove a numbered directory if its lock can be obtained and it does
-    not seem to be in use."""
+    """Remove an unused numbered directory when its lock can be obtained."""
     path = ensure_extended_length_path(path)
     lock_path = None
     try:
@@ -248,10 +242,8 @@ def maybe_delete_a_numbered_dir(path: Path) -> None:
         return
     finally:
         if lock_path is not None:
-            try:
+            with contextlib.suppress(OSError):
                 lock_path.unlink()
-            except OSError:
-                pass
 
 
 def ensure_deletable(path: Path, consider_lock_dead_if_created_before: float) -> bool:
@@ -266,7 +258,7 @@ def ensure_deletable(path: Path, consider_lock_dead_if_created_before: float) ->
         return False
     try:
         lock_time = lock.stat().st_mtime
-    except Exception:
+    except OSError:
         return False
     else:
         if lock_time < consider_lock_dead_if_created_before:
@@ -295,10 +287,10 @@ def cleanup_candidates(root: Path, prefix: str, keep: int) -> Iterator[Path]:
 
 
 def cleanup_dead_symlinks(root: Path) -> None:
+    """Remove broken symlinks from a directory."""
     for left_dir in root.iterdir():
-        if left_dir.is_symlink():
-            if not left_dir.resolve().exists():
-                left_dir.unlink()
+        if left_dir.is_symlink() and not left_dir.resolve().exists():
+            left_dir.unlink()
 
 
 def cleanup_numbered_dir(
@@ -330,7 +322,7 @@ def make_numbered_dir_with_cleanup(
             if keep != 0:
                 lock_path = create_cleanup_lock(p)
                 register_cleanup_lock_removal(lock_path)
-        except Exception as exc:
+        except OSError as exc:
             e = exc
         else:
             consider_lock_dead_if_created_before = p.stat().st_mtime - lock_timeout

@@ -1,6 +1,6 @@
 """Record warnings during test function execution.
 
-Vendored from pytest's ``_pytest/recwarn.py`` (commit 8ecf49ec2). Only the
+Adapted from pytest's ``_pytest/recwarn.py`` (commit 8ecf49ec2). Only the
 ``WarningsRecorder`` class is included; the ``WarningsChecker``/``warns``/
 ``deprecated_call`` helpers are intentionally omitted because karva does
 not yet expose ``pytest.warns``. The ``recwarn`` fixture wrapper lives in
@@ -54,12 +54,13 @@ class WarningsRecorder(warnings.catch_warnings):
         return iter(self._list)
 
     def __len__(self) -> int:
-        """The number of recorded warnings."""
+        """Return the number of recorded warnings."""
         return len(self._list)
 
     def pop(self, cls: type[Warning] = Warning) -> warnings.WarningMessage:
-        """Pop the first recorded warning which is an instance of ``cls``,
-        but not an instance of a child class of any other match.
+        """Pop the first recorded warning matching ``cls``.
+
+        Prefer an exact match over a child class of any other match.
         Raises ``AssertionError`` if there is no match.
         """
         best_idx: int | None = None

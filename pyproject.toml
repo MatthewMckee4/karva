@@ -75,7 +75,6 @@ target-version = "py311"
 [tool.ruff.lint]
 exclude = [
     "python/karva/__main__.py",
-    "python/karva/_vendor/**/*.py",
 ]
 select = [
     "ARG",
@@ -125,6 +124,9 @@ unfixable = [
     "PLW1510", # automatic fix might obscure issue
     "RUF017",  # Ruff's fix is faster, but I prefer using itertools.chain_from_iterable
 ]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ty.environment]
 python-version = "3.11"
