@@ -1,5 +1,6 @@
 """Karva is a Python test framework, written in Rust."""
 
+from karva._approx import approx
 from karva._builtins import MockEnv
 from karva._karva import (
     Command,
@@ -33,6 +34,7 @@ __all__: list[str] = [
     "SkipError",
     "SnapshotMismatchError",
     "SnapshotSettings",
+    "approx",
     "assert_cmd_snapshot",
     "assert_json_snapshot",
     "assert_snapshot",

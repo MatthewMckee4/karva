@@ -5,6 +5,160 @@ use rstest::rstest;
 use crate::common::TestContext;
 
 #[test]
+fn test_approx_matches_pytest() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+from decimal import Decimal
+import math
+
+import karva
+import pytest
+
+@karva.tags.parametrize("actual, expected, kwargs, result", [
+    (0.1 + 0.2, 0.3, {}, True),
+    (1.0001, 1, {}, False),
+    (1.0001, 1, {"rel": 1e-3}, True),
+    (1 + 1e-8, 1, {"abs": 1e-12}, False),
+    (1e-13, 0, {}, True),
+    (complex(1.0000001, 2), complex(1, 2), {}, True),
+    (Decimal("1.0000001"), Decimal("1"), {}, True),
+    ([0.1 + 0.2, 0.6], [0.3, 0.6], {}, True),
+    ([0.3], [0.3, 0.6], {}, False),
+    ({"x": 0.1 + 0.2}, {"x": 0.3}, {}, True),
+    ({"y": 0.3}, {"x": 0.3}, {}, False),
+    (math.nan, math.nan, {}, False),
+    (math.nan, math.nan, {"nan_ok": True}, True),
+    (math.inf, math.inf, {}, True),
+    (-math.inf, math.inf, {}, False),
+])
+def test_supported_cases_match_pytest(actual, expected, kwargs, result):
+    assert (actual == karva.approx(expected, **kwargs)) == result
+    assert (actual == karva.approx(expected, **kwargs)) == (actual == pytest.approx(expected, **kwargs))
+
+def test_works_on_either_side():
+    assert karva.approx(0.3) == 0.1 + 0.2
+    assert 0.1 + 0.2 == karva.approx(0.3)
+
+def test_representation_includes_tolerance():
+    assert "0.3 ± 3.0e-07" == repr(karva.approx(0.3))
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 3 tests across 1 worker
+            PASS [TIME] test::test_supported_cases_match_pytest(actual=0.30000000000000004, expected=0.3, kwargs={}, result=True)
+            PASS [TIME] test::test_supported_cases_match_pytest(actual=1.0001, expected=1, kwargs={}, result=False)
+            PASS [TIME] test::test_supported_cases_match_pytest(actual=1.0001, expected=1, kwargs={'rel': 0.001}, result=True)
+            PASS [TIME] test::test_supported_cases_match_pytest(actual=1.00000001, expected=1, kwargs={'abs': 1e-12}, result=False)
+            PASS [TIME] test::test_supported_cases_match_pytest(actual=1e-13, expected=0, kwargs={}, result=True)
+            PASS [TIME] test::test_supported_cases_match_pytest(actual=(1.0000001+2j), expected=(1+2j), kwargs={}, result=True)
+            PASS [TIME] test::test_supported_cases_match_pytest(actual=1.0000001, expected=1, kwargs={}, result=True)
+            PASS [TIME] test::test_supported_cases_match_pytest(actual=[0.30000000000000004, 0.6], expected=[0.3, 0.6], kwargs={}, result=True)
+            PASS [TIME] test::test_supported_cases_match_pytest(actual=[0.3], expected=[0.3, 0.6], kwargs={}, result=False)
+            PASS [TIME] test::test_supported_cases_match_pytest(actual={'x': 0.30000000000000004}, expected={'x': 0.3}, kwargs={}, result=True)
+            PASS [TIME] test::test_supported_cases_match_pytest(actual={'y': 0.3}, expected={'x': 0.3}, kwargs={}, result=False)
+            PASS [TIME] test::test_supported_cases_match_pytest(actual=nan, expected=nan, kwargs={}, result=False)
+            PASS [TIME] test::test_supported_cases_match_pytest(actual=nan, expected=nan, kwargs={'nan_ok': True}, result=True)
+            PASS [TIME] test::test_supported_cases_match_pytest(actual=inf, expected=inf, kwargs={}, result=True)
+            PASS [TIME] test::test_supported_cases_match_pytest(actual=-inf, expected=inf, kwargs={}, result=False)
+            PASS [TIME] test::test_works_on_either_side
+            PASS [TIME] test::test_representation_includes_tolerance
+    ────────────
+         Summary [TIME] 17 tests run: 17 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_approx_invalid_value_diagnostic() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_rejects_invalid_sequence_value():
+    karva.approx([1, "two"])
+
+def test_rejects_invalid_mapping_value():
+    karva.approx({"count": "two"})
+
+def test_rejects_invalid_scalar_value():
+    karva.approx("two")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 3 tests across 1 worker
+            FAIL [TIME] test::test_rejects_invalid_sequence_value
+            FAIL [TIME] test::test_rejects_invalid_mapping_value
+            FAIL [TIME] test::test_rejects_invalid_scalar_value
+
+    failures:
+
+    test::test_rejects_invalid_mapping_value:
+
+    error[test-failure]: Test `test_rejects_invalid_mapping_value` failed
+     --> test.py:7:5
+      |
+    7 | def test_rejects_invalid_mapping_value():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Test failed here
+     --> test.py:8:5
+      |
+    8 |     karva.approx({"count": "two"})
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: karva.approx() expected a numeric value at key 'count', got str: 'two'
+
+    test::test_rejects_invalid_scalar_value:
+
+    error[test-failure]: Test `test_rejects_invalid_scalar_value` failed
+      --> test.py:10:5
+       |
+    10 | def test_rejects_invalid_scalar_value():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Test failed here
+      --> test.py:11:5
+       |
+    11 |     karva.approx("two")
+       |     ^^^^^^^^^^^^^^^^^^^
+       |
+    info: karva.approx() expected a numeric value, got str: 'two'
+
+    test::test_rejects_invalid_sequence_value:
+
+    error[test-failure]: Test `test_rejects_invalid_sequence_value` failed
+     --> test.py:4:5
+      |
+    4 | def test_rejects_invalid_sequence_value():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.approx([1, "two"])
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: karva.approx() expected a numeric value at index 1, got str: 'two'
+
+    ────────────
+         Summary [TIME] 3 tests run: 0 passed, 3 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
 fn test_fail_function() {
     let context = TestContext::with_file(
         "test.py",

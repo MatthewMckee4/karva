@@ -6,7 +6,7 @@
 
 use camino::Utf8Path;
 use karva_collector::CollectionError;
-use karva_diagnostic::Traceback;
+use karva_diagnostic::{Traceback, TracebackFrame};
 use karva_logging::time::format_duration;
 use karva_python_semantic::FunctionKind;
 use pyo3::{PyErr, Python};
@@ -733,7 +733,17 @@ fn handle_failed_function_call(
             }
         }
 
-        if let Some(failure) = frames.last() {
+        let failure = if verbose {
+            frames.last()
+        } else {
+            frames
+                .iter()
+                .rev()
+                .find(|frame| !is_installed_package_frame(frame))
+                .or_else(|| frames.last())
+        };
+
+        if let Some(failure) = failure {
             let message = format!("{} failed here", function_kind.capitalised());
             if let Some(source) = &failure.source {
                 let mut sub = SubDiagnostic::new(SubDiagnosticSeverity::Info, message);
@@ -755,6 +765,13 @@ fn handle_failed_function_call(
     if !error_string.is_empty() {
         diagnostic.info(indent_continuation_lines(&error_string));
     }
+}
+
+fn is_installed_package_frame(frame: &TracebackFrame) -> bool {
+    frame
+        .file_path
+        .components()
+        .any(|component| matches!(component.as_str(), "site-packages" | "dist-packages"))
 }
 
 /// Indent continuation lines in a multi-line message so they align under the first line's text.
