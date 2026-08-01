@@ -263,7 +263,6 @@ pub const WERKZEUG_PROJECT: BenchmarkProject = BenchmarkProject {
 };
 
 pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
-    SYNTHETIC_PROJECT,
     REQUESTS_PROJECT,
     PYDANTIC_PROJECT,
     FASTAPI_PROJECT,
