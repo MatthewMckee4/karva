@@ -893,7 +893,9 @@ fn write_summary_line(
 
 fn matrix_iterations(project_name: &str) -> usize {
     match project_name {
-        "fastapi" | "httpx" | "pydantic" => LONG_PROJECT_ITERATIONS,
+        "fastapi" | "httpx" | "karva-benchmark-1" | "pydantic" | "requests" | "werkzeug" => {
+            LONG_PROJECT_ITERATIONS
+        }
         "tomlkit" => MEDIUM_PROJECT_ITERATIONS,
         _ => FAST_PROJECT_ITERATIONS,
     }
@@ -1241,14 +1243,18 @@ mod tests {
     }
 
     #[test]
-    fn matrix_iterations_are_higher_for_fast_projects() {
+    fn matrix_iterations_match_project_runtime() {
         assert_eq!(matrix_iterations("sniffio"), FAST_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("h11"), FAST_PROJECT_ITERATIONS);
-        assert_eq!(matrix_iterations("requests"), FAST_PROJECT_ITERATIONS);
-        assert_eq!(matrix_iterations("werkzeug"), FAST_PROJECT_ITERATIONS);
+        assert_eq!(
+            matrix_iterations("karva-benchmark-1"),
+            LONG_PROJECT_ITERATIONS
+        );
         assert_eq!(matrix_iterations("fastapi"), LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("httpx"), LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("pydantic"), LONG_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("requests"), LONG_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("werkzeug"), LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("tomlkit"), MEDIUM_PROJECT_ITERATIONS);
     }
 
