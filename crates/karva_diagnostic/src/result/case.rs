@@ -8,6 +8,14 @@ use super::diagnostic::RenderedDiagnostic;
 use super::kind::IndividualTestResultKind;
 use super::output::CapturedTestOutput;
 
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if passes a reference to the field"
+)]
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TestCaseResult<D = RenderedDiagnostic> {
     module_name: String,
@@ -113,6 +121,18 @@ impl<D> TestCaseResult<D> {
         self.retry.as_ref()
     }
 
+    pub fn is_flaky_failure(&self) -> bool {
+        self.retry
+            .as_ref()
+            .is_some_and(TestCaseRetry::is_flaky_failure)
+    }
+
+    pub fn is_junit_flaky_failure(&self) -> bool {
+        self.retry
+            .as_ref()
+            .is_some_and(TestCaseRetry::is_junit_flaky_failure)
+    }
+
     pub fn captured_output(&self) -> Option<&CapturedTestOutput> {
         self.captured_output.as_ref()
     }
@@ -199,6 +219,10 @@ impl<D> TestCaseAttempt<D> {
 pub struct TestCaseRetry {
     attempts: u32,
     max_attempts: u32,
+    #[serde(default, skip_serializing_if = "is_false")]
+    flaky_failure: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    junit_flaky_failure: bool,
 }
 
 impl TestCaseRetry {
@@ -206,7 +230,16 @@ impl TestCaseRetry {
         Self {
             attempts,
             max_attempts,
+            flaky_failure: false,
+            junit_flaky_failure: false,
         }
+    }
+
+    #[must_use]
+    pub fn with_failure_policy(mut self, flaky_failure: bool, junit_flaky_failure: bool) -> Self {
+        self.flaky_failure = flaky_failure;
+        self.junit_flaky_failure = junit_flaky_failure;
+        self
     }
 
     pub fn attempts(&self) -> u32 {
@@ -215,6 +248,14 @@ impl TestCaseRetry {
 
     pub fn max_attempts(&self) -> u32 {
         self.max_attempts
+    }
+
+    pub fn is_flaky_failure(&self) -> bool {
+        self.flaky_failure
+    }
+
+    pub fn is_junit_flaky_failure(&self) -> bool {
+        self.junit_flaky_failure
     }
 }
 

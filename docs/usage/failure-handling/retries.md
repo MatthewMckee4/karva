@@ -34,7 +34,7 @@ The equivalent command-line override is:
 uv run karva test --retry 2 --flaky-result fail
 ```
 
-`pass` remains the default. With `fail`, Karva keeps the test's `FLAKY` status and attempt history but exits non-zero and marks JSON, JSONL, and JUnit reports as failed. `--flaky-result` does not enable retries by itself. `KARVA_FLAKY_RESULT` provides the same override through the environment.
+`pass` remains the default. With `fail`, Karva keeps the test's `FLAKY` status and attempt history but exits non-zero, marks JSON and JSONL reports as failed, and adds a JUnit failure by default. `--flaky-result` does not enable retries by itself. `KARVA_FLAKY_RESULT` provides the same override through the environment.
 
 To see the per-attempt lines in the run output, raise the status level:
 
@@ -62,6 +62,19 @@ retries = 0
 ```
 
 In this example tests tagged `network` retry up to five times, tests tagged `unit` never retry, and everything else falls back to `retry = 1`. Overrides defined in a named profile (`[[profile.ci.overrides]]`) take precedence over those defined under `default`.
+
+Overrides can also set `flaky-result` per test:
+
+```toml
+[profile.default.test]
+flaky-result = "pass"
+
+[[profile.default.overrides]]
+filter = "tag(strict)"
+flaky-result = "fail"
+```
+
+An explicit `--flaky-result` or `KARVA_FLAKY_RESULT` value disables all per-test `flaky-result` overrides, matching nextest's global override behavior.
 
 The same `[[profile.<name>.overrides]]` block also supports `timeout`, `slow-timeout`, and `fail-slow` fields, mirroring the [profile-level timeout](../../configuration/configuration.md), slow-test threshold, and [fail-slow budget](fail-slow.md). A matching override with a non-positive value disables the corresponding limit for that test, even when the profile sets one.
 

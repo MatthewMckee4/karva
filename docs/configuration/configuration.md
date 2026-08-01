@@ -182,6 +182,23 @@ sources = ["src"]
 
 ## `junit`
 
+### `flaky-fail-status`
+
+How flaky tests configured to fail are represented in `JUnit`.
+
+**Default value**: `failure`
+
+**Type**: `failure | success`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.junit]
+flaky-fail-status = "success"
+```
+
+---
+
 ### `path`
 
 Output path for the `JUnit` XML report.

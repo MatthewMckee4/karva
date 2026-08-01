@@ -6,8 +6,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use karva_diagnostic::{CapturedTestOutput, TestCaseRetry, TestExecutionOutcome};
-use karva_metadata::RunIgnoredMode;
 use karva_metadata::filter::EvalContext;
+use karva_metadata::{FlakyResult, JunitFlakyFailStatus, RunIgnoredMode};
 use karva_python_semantic::QualifiedTestName;
 use pyo3::prelude::*;
 
@@ -253,6 +253,16 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .settings()
             .retry_for(&evaluation_context)
             .saturating_add(1);
+        let flaky_result = self
+            .package_runner
+            .context
+            .settings()
+            .flaky_result_for(&evaluation_context);
+        let junit_flaky_fail_status = self
+            .package_runner
+            .context
+            .settings()
+            .junit_flaky_fail_status_for(&evaluation_context);
         let expect_fail_tag = self.tags.expect_fail_tag();
         let expect_fail = expect_fail_tag
             .as_ref()
@@ -287,6 +297,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             fail_slow_budget,
             slow_timeout,
             max_attempts,
+            flaky_result,
+            junit_flaky_fail_status,
         }
     }
 
@@ -340,6 +352,10 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         } else {
             let final_attempt_number = final_attempt.attempt;
             let outcome = final_attempt.outcome.clone();
+            let flaky_failure = matches!(&outcome, TestExecutionOutcome::Passed)
+                && settings.flaky_result == FlakyResult::Fail;
+            let junit_flaky_failure =
+                flaky_failure && settings.junit_flaky_fail_status == JunitFlakyFailStatus::Failure;
             let mut execution_attempts = prior_attempts
                 .into_iter()
                 .map(TestLifecycleAttempt::into_execution_attempt)
@@ -349,7 +365,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 &settings.qualified_test_name,
                 outcome,
                 total_duration,
-                TestCaseRetry::new(final_attempt_number, settings.max_attempts),
+                TestCaseRetry::new(final_attempt_number, settings.max_attempts)
+                    .with_failure_policy(flaky_failure, junit_flaky_failure),
                 captured_output,
                 execution_attempts,
             )
@@ -452,6 +469,10 @@ struct VariantSettings {
     slow_timeout: Option<Duration>,
     /// Total attempts, including the initial call.
     max_attempts: u32,
+    /// Whether a pass after retry fails the run.
+    flaky_result: FlakyResult,
+    /// How a flaky failure appears in `JUnit`.
+    junit_flaky_fail_status: JunitFlakyFailStatus,
 }
 
 /// Finishes best-effort Python output capture.

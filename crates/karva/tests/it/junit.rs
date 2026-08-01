@@ -328,6 +328,100 @@ def test_flaky():
 }
 
 #[test]
+fn junit_flaky_fail_status_supports_per_test_overrides() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.test]
+retry = 1
+flaky-result = "fail"
+
+[profile.default.junit]
+path = "results.xml"
+flaky-fail-status = "success"
+
+[[profile.default.overrides]]
+filter = "tag(strict)"
+
+[profile.default.overrides.junit]
+flaky-fail-status = "failure"
+"#,
+        ),
+        (
+            "test_flaky.py",
+            r#"
+import os
+import karva
+
+@karva.tags.strict
+def test_strict():
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+
+def test_lenient():
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().arg("--status-level=none"),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed (2 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test_flaky::test_lenient
+       FLAKY 2/2 [TIME] test_flaky::test_strict
+    flaky failure: flaky tests caused the run to fail
+
+    ----- stderr -----
+    "
+    );
+    assert_snapshot!(normalize_junit_xml(&context.read_file("results.xml")), @r#"
+    <?xml version="1.0" encoding="UTF-8"?>
+    <testsuites name="karva-tests" tests="2" failures="1" skipped="0" errors="0" time="[TIME]">
+      <testsuite name="test_flaky" tests="2" failures="1" skipped="0" errors="0" time="[TIME]">
+        <testcase classname="test_flaky" name="test_lenient" time="[TIME]">
+          <flakyFailure message="Test `test_lenient` failed" type="test-failure" time="[TIME]">error[test-failure]: Test `test_lenient` failed
+     --&gt; test_flaky.py:9:5
+      |
+    9 | def test_lenient():
+      |     ^^^^^^^^^^^^
+      |
+    info: Test failed here
+      --&gt; test_flaky.py:10:5
+       |
+    10 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+
+    </flakyFailure>
+        </testcase>
+        <testcase classname="test_flaky" name="test_strict" time="[TIME]">
+          <failure message="Flaky test failed by policy" type="flaky">Flaky tests are configured to fail the run.</failure>
+          <flakyFailure message="Test `test_strict` failed" type="test-failure" time="[TIME]">error[test-failure]: Test `test_strict` failed
+     --&gt; test_flaky.py:6:5
+      |
+    6 | def test_strict():
+      |     ^^^^^^^^^^^
+      |
+    info: Test failed here
+     --&gt; test_flaky.py:7:5
+      |
+    7 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+
+    </flakyFailure>
+        </testcase>
+      </testsuite>
+    </testsuites>
+    "#);
+}
+
+#[test]
 fn junit_reports_fail_slow_teardown_duration() {
     let context = TestContext::with_files([
         (

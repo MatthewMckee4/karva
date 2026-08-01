@@ -131,6 +131,18 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
         push_value_arg(&mut cli_args, "--retry", settings.test().retry);
     }
 
+    push_value_arg(
+        &mut cli_args,
+        "--flaky-result",
+        settings.test().flaky_result.as_str(),
+    );
+
+    push_value_arg(
+        &mut cli_args,
+        "--junit-flaky-fail-status",
+        settings.junit().flaky_fail_status.as_str(),
+    );
+
     if let Some(threshold) = settings.test().slow_timeout {
         push_value_arg(&mut cli_args, "--slow-timeout", threshold.as_secs_f64());
     }
@@ -167,6 +179,10 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
         let json = serde_json::json!({
             "filter": ovr.filter.as_str(),
             "retries": ovr.retries,
+            "flaky-result": ovr.flaky_result,
+            "junit": {
+                "flaky-fail-status": ovr.junit_flaky_fail_status,
+            },
             "timeout": ovr.timeout.map(|t| t.0),
             "slow-timeout": ovr.slow_timeout.map(|t| t.0),
             "fail-slow": ovr.fail_slow.map(|t| t.0),

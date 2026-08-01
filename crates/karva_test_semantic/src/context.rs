@@ -172,7 +172,7 @@ impl<'a> Context<'a> {
         captured_output: Option<CapturedTestOutput>,
         attempts: Vec<TestExecutionAttempt>,
     ) -> bool {
-        let passed = !outcome.is_non_success();
+        let passed = !outcome.is_non_success() && !retry.is_flaky_failure();
         self.result().register_retried_result(
             test_case_name,
             outcome,

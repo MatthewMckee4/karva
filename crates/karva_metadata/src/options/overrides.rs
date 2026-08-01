@@ -29,6 +29,17 @@ impl ProjectOptionsOverrides {
     /// overrides on top.
     pub fn apply_to(&self, config: Config) -> Result<Options, UnknownProfile> {
         let resolved = config.resolve_profile(self.profile.as_deref())?;
-        Ok(self.options.clone().combine(resolved))
+        let disable_flaky_result_overrides = self
+            .options
+            .test
+            .as_ref()
+            .is_some_and(|test| test.flaky_result.is_some());
+        let mut options = self.options.clone().combine(resolved);
+        if disable_flaky_result_overrides {
+            for override_options in &mut options.overrides {
+                override_options.flaky_result = None;
+            }
+        }
+        Ok(options)
     }
 }

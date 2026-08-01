@@ -5,14 +5,13 @@ use anyhow::{Context as _, Result};
 use camino::Utf8Path;
 use karva_cache::AggregatedResults;
 use karva_diagnostic::{RenderedDiagnostic, TestCaseAttempt, TestCaseOutcome, TestCaseResult};
-use karva_metadata::{FlakyResult, JunitSettings};
+use karva_metadata::JunitSettings;
 use karva_project::path::absolute;
 
 pub(super) fn write_junit_report(
     settings: &JunitSettings,
     results: &AggregatedResults,
     project_root: &Utf8Path,
-    flaky_result: FlakyResult,
 ) -> Result<()> {
     let Some(path) = settings.path.as_deref() else {
         return Ok(());
@@ -24,18 +23,14 @@ pub(super) fn write_junit_report(
             .with_context(|| format!("failed to create JUnit report directory `{parent}`"))?;
     }
 
-    let xml = build_junit_xml(settings, results, flaky_result)?;
+    let xml = build_junit_xml(settings, results)?;
     std::fs::write(&output_path, xml)
         .with_context(|| format!("failed to write JUnit report `{output_path}`"))?;
 
     Ok(())
 }
 
-fn build_junit_xml(
-    settings: &JunitSettings,
-    results: &AggregatedResults,
-    flaky_result: FlakyResult,
-) -> Result<String> {
+fn build_junit_xml(settings: &JunitSettings, results: &AggregatedResults) -> Result<String> {
     let suites = test_cases_by_module(&results.test_cases);
     let run_errors = results
         .run_diagnostics
@@ -48,11 +43,11 @@ fn build_junit_xml(
         .map(TestCaseResult::duration)
         .sum::<std::time::Duration>()
         .as_secs_f64();
-    let flaky_failures = if flaky_result == FlakyResult::Fail {
-        results.stats.flaky()
-    } else {
-        0
-    };
+    let flaky_failures = results
+        .test_cases
+        .iter()
+        .filter(|case| case.is_junit_flaky_failure())
+        .count();
 
     let mut xml = String::new();
     xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
@@ -67,7 +62,7 @@ fn build_junit_xml(
     )?;
 
     for (module_name, cases) in suites {
-        write_suite(&mut xml, settings, module_name, cases, flaky_result)?;
+        write_suite(&mut xml, settings, module_name, cases)?;
     }
     write_run_diagnostics_suite(&mut xml, settings, &results.run_diagnostics)?;
 
@@ -80,14 +75,11 @@ fn write_suite(
     settings: &JunitSettings,
     module_name: &str,
     cases: Vec<&TestCaseResult>,
-    flaky_result: FlakyResult,
 ) -> Result<()> {
     let tests = cases.len();
     let failures = cases
         .iter()
-        .filter(|case| {
-            case.outcome().is_failed() || (flaky_result == FlakyResult::Fail && is_flaky(case))
-        })
+        .filter(|case| case.outcome().is_failed() || case.is_junit_flaky_failure())
         .count();
     let skipped = cases
         .iter()
@@ -110,19 +102,14 @@ fn write_suite(
     )?;
 
     for case in cases {
-        write_case(xml, settings, case, flaky_result)?;
+        write_case(xml, settings, case)?;
     }
 
     xml.push_str("  </testsuite>\n");
     Ok(())
 }
 
-fn write_case(
-    xml: &mut String,
-    settings: &JunitSettings,
-    case: &TestCaseResult,
-    flaky_result: FlakyResult,
-) -> Result<()> {
+fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult) -> Result<()> {
     let time = junit_case_duration(case).as_secs_f64();
     let output = case.captured_output();
     let include_output = match case.outcome() {
@@ -153,7 +140,7 @@ fn write_case(
     xml.push_str(">\n");
     match case.outcome() {
         TestCaseOutcome::Passed => {
-            if flaky_result == FlakyResult::Fail && is_flaky(case) {
+            if case.is_junit_flaky_failure() {
                 xml.push_str(
                     "      <failure message=\"Flaky test failed by policy\" type=\"flaky\">Flaky tests are configured to fail the run.</failure>\n",
                 );
@@ -203,10 +190,6 @@ fn write_case(
 
     xml.push_str("    </testcase>\n");
     Ok(())
-}
-
-fn is_flaky(case: &TestCaseResult) -> bool {
-    matches!(case.outcome(), TestCaseOutcome::Passed) && case.retry().is_some()
 }
 
 fn write_attempts(xml: &mut String, case: &TestCaseResult) -> Result<()> {

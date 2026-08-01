@@ -13,7 +13,8 @@ mod verbosity;
 
 pub use cache::{CacheAction, CacheCommand};
 pub use enums::{
-    CovContext, CovReport, FlakyResult, NoTests, OutputFormat, ResultFormat, RunIgnored,
+    CovContext, CovReport, FlakyResult, JunitFlakyFailStatus, NoTests, OutputFormat, ResultFormat,
+    RunIgnored,
 };
 pub use exit_status::ExitStatus;
 pub use partition::PartitionSelection;

@@ -62,6 +62,10 @@ impl AggregatedResults {
             .any(RenderedDiagnostic::is_error)
     }
 
+    pub fn has_flaky_failures(&self) -> bool {
+        self.test_cases.iter().any(TestCaseResult::is_flaky_failure)
+    }
+
     pub fn register_interrupted_test(&mut self, name: &str, duration: Duration) {
         let function_name = base_test_name(name);
         self.stats.add(TestResultKind::Failed);
