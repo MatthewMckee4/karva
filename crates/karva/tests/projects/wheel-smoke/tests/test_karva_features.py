@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 import karva
 
@@ -31,6 +32,8 @@ def test_parametrized_addition(
 def test_tmp_path_and_output_capture(tmp_path, capsys) -> None:
     message_file = tmp_path / "message.txt"
     message_file.write_text("hello from wheel smoke", encoding="utf-8")
+
+    sys.stdout.write(f"{message_file.read_text(encoding='utf-8')}\n")
 
     captured = capsys.readouterr()
     assert captured.out == "hello from wheel smoke\n"
