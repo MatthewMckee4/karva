@@ -733,7 +733,21 @@ fn handle_failed_function_call(
             }
         }
 
-        if let Some(failure) = frames.last() {
+        let failure = if verbose {
+            frames.last()
+        } else {
+            frames
+                .iter()
+                .rev()
+                .find(|frame| {
+                    frame.source.as_ref().is_some_and(|frame_source| {
+                        frame_source.source_file.name() == source_file.name()
+                    })
+                })
+                .or_else(|| frames.last())
+        };
+
+        if let Some(failure) = failure {
             let message = format!("{} failed here", function_kind.capitalised());
             if let Some(source) = &failure.source {
                 let mut sub = SubDiagnostic::new(SubDiagnosticSeverity::Info, message);

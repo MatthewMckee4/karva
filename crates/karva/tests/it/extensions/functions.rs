@@ -81,8 +81,14 @@ fn test_approx_invalid_value_diagnostic() {
         r#"
 import karva
 
-def test_rejects_invalid_values():
+def test_rejects_invalid_sequence_value():
     karva.approx([1, "two"])
+
+def test_rejects_invalid_mapping_value():
+    karva.approx({"count": "two"})
+
+def test_rejects_invalid_scalar_value():
+    karva.approx("two")
         "#,
     );
 
@@ -90,29 +96,63 @@ def test_rejects_invalid_values():
     success: false
     exit_code: 1
     ----- stdout -----
-        Starting 1 test across 1 worker
-            FAIL [TIME] test::test_rejects_invalid_values
+        Starting 3 tests across 1 worker
+            FAIL [TIME] test::test_rejects_invalid_sequence_value
+            FAIL [TIME] test::test_rejects_invalid_mapping_value
+            FAIL [TIME] test::test_rejects_invalid_scalar_value
 
     failures:
 
-    test::test_rejects_invalid_values:
+    test::test_rejects_invalid_mapping_value:
 
-    error[test-failure]: Test `test_rejects_invalid_values` failed
-     --> test.py:4:5
+    error[test-failure]: Test `test_rejects_invalid_mapping_value` failed
+     --> test.py:7:5
       |
-    4 | def test_rejects_invalid_values():
-      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    7 | def test_rejects_invalid_mapping_value():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
     info: Test failed here
-       --> <karva>/_approx.py:187:13
-        |
-    187 |             raise TypeError(f"karva.approx() expected a numeric value, got {value!r}")
-        |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        |
-    info: karva.approx() expected a numeric value, got 'two'
+     --> test.py:8:5
+      |
+    8 |     karva.approx({"count": "two"})
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: karva.approx() expected a numeric value at key 'count', got str: 'two'
+
+    test::test_rejects_invalid_scalar_value:
+
+    error[test-failure]: Test `test_rejects_invalid_scalar_value` failed
+      --> test.py:10:5
+       |
+    10 | def test_rejects_invalid_scalar_value():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Test failed here
+      --> test.py:11:5
+       |
+    11 |     karva.approx("two")
+       |     ^^^^^^^^^^^^^^^^^^^
+       |
+    info: karva.approx() expected a numeric value, got str: 'two'
+
+    test::test_rejects_invalid_sequence_value:
+
+    error[test-failure]: Test `test_rejects_invalid_sequence_value` failed
+     --> test.py:4:5
+      |
+    4 | def test_rejects_invalid_sequence_value():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.approx([1, "two"])
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: karva.approx() expected a numeric value at index 1, got str: 'two'
 
     ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+         Summary [TIME] 3 tests run: 0 passed, 3 failed, 0 skipped
 
     ----- stderr -----
     "#);

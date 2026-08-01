@@ -57,7 +57,8 @@ class _Approx(Generic[_Expected]):
     def _scalar(self, expected: object) -> _ApproxScalar:
         if not _is_number(expected):
             raise TypeError(
-                f"karva.approx() expected a numeric value, got {expected!r}"
+                "karva.approx() expected a numeric value, "
+                f"got {type(expected).__name__}: {expected!r}"
             )
         return _ApproxScalar(expected, self.rel, self.abs, self.nan_ok)
 
@@ -182,9 +183,13 @@ def _item(value: object) -> object:
 
 
 def _validate_values(values: Iterable[object]) -> None:
-    for value in values:
-        if not _is_number(_item(value)):
-            raise TypeError(f"karva.approx() expected a numeric value, got {value!r}")
+    for index, value in enumerate(values):
+        item = _item(value)
+        if not _is_number(item):
+            raise TypeError(
+                "karva.approx() expected a numeric value "
+                f"at index {index}, got {type(item).__name__}: {item!r}"
+            )
 
 
 def approx(
@@ -195,7 +200,13 @@ def approx(
 ) -> _Approx[Any]:
     """Return an object that compares equal to numbers within given tolerances."""
     if isinstance(expected, Mapping):
-        _validate_values(expected.values())
+        for key, value in expected.items():
+            item = _item(value)
+            if not _is_number(item):
+                raise TypeError(
+                    "karva.approx() expected a numeric value "
+                    f"at key {key!r}, got {type(item).__name__}: {item!r}"
+                )
         return _ApproxMapping(cast(Mapping[object, object], expected), rel, abs, nan_ok)
     if _is_array(expected):
         _validate_values(expected.flat)
@@ -204,7 +215,10 @@ def approx(
         _validate_values(expected)
         return _ApproxSequence(expected, rel, abs, nan_ok)
     if not _is_number(expected):
-        raise TypeError(f"karva.approx() expected a numeric value, got {expected!r}")
+        raise TypeError(
+            "karva.approx() expected a numeric value, "
+            f"got {type(expected).__name__}: {expected!r}"
+        )
     return _ApproxScalar(expected, rel, abs, nan_ok)
 
 
