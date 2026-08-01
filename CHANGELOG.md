@@ -1,5 +1,64 @@
 # Changelog
 
+## 0.0.1-alpha.10
+
+### Bug Fixes
+
+- Escape NUL bytes in parameterized test names ([#1101](https://github.com/MatthewMckee4/karva/pull/1101))
+- Report missing fixture dependencies before execution ([#1071](https://github.com/MatthewMckee4/karva/pull/1071))
+- Fix module-level skip reporting ([#1069](https://github.com/MatthewMckee4/karva/pull/1069))
+- Give retries fresh fixture lifecycles ([#1077](https://github.com/MatthewMckee4/karva/pull/1077))
+
+### CLI
+
+- Add shell completion generation ([#1066](https://github.com/MatthewMckee4/karva/pull/1066))
+
+### Configuration
+
+- Generate JSON Schema for karva.toml ([#1076](https://github.com/MatthewMckee4/karva/pull/1076))
+
+### Diagnostics
+
+- Show traceback calls in verbose output ([#1075](https://github.com/MatthewMckee4/karva/pull/1075))
+- Explain rejected fixture dependencies ([#1073](https://github.com/MatthewMckee4/karva/pull/1073))
+- Reject duplicate test and fixture definitions ([#988](https://github.com/MatthewMckee4/karva/pull/988))
+- Quote string values in test names ([#1061](https://github.com/MatthewMckee4/karva/pull/1061))
+
+### Discovery
+
+- Default test discovery to tests directory ([#1074](https://github.com/MatthewMckee4/karva/pull/1074))
+
+### Documentation
+
+- Redesign Zensical documentation site ([#1115](https://github.com/MatthewMckee4/karva/pull/1115))
+- Document missing test runner behavior ([#1072](https://github.com/MatthewMckee4/karva/pull/1072))
+- Add usage overview page ([#1070](https://github.com/MatthewMckee4/karva/pull/1070))
+- Move project non-goals under usage ([#1067](https://github.com/MatthewMckee4/karva/pull/1067))
+
+### Fixtures
+
+- Collapse missing fixtures before parameter expansion ([#1102](https://github.com/MatthewMckee4/karva/pull/1102))
+
+### Functions
+
+- Add warning assertion helpers ([#1108](https://github.com/MatthewMckee4/karva/pull/1108))
+- Add karva.approx ([#1110](https://github.com/MatthewMckee4/karva/pull/1110))
+
+### Pytest Compatibility
+
+- Support module-level pytest parametrization ([#1099](https://github.com/MatthewMckee4/karva/pull/1099))
+- Support explicit parametrize IDs ([#1050](https://github.com/MatthewMckee4/karva/pull/1050))
+
+### Tags & Marks
+
+- Disambiguate duplicate parameter IDs ([#1097](https://github.com/MatthewMckee4/karva/pull/1097))
+- Honor keyword xfail conditions ([#1107](https://github.com/MatthewMckee4/karva/pull/1107))
+- Accept iterable parametrize values ([#1098](https://github.com/MatthewMckee4/karva/pull/1098))
+
+### Contributors
+
+- [@MatthewMckee4](https://github.com/MatthewMckee4)
+
 ## 0.0.1-alpha.9
 
 ### Bug Fixes
