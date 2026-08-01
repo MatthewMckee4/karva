@@ -5,5 +5,4 @@
   <path d="M140 0V1440H381V772L956 1440H1252L633 734L1294 0H988L381 672V0Z" fill="#ebf4dd" transform="translate(139 212) scale(.047222 -.047222)"/>
   <text x="112" y="365" fill="#ebf4dd" font-family="Manrope, system-ui, sans-serif" font-size="112" font-weight="750" letter-spacing="-5">Karva</text>
   <text x="116" y="438" fill="#cedcc4" font-family="Manrope, system-ui, sans-serif" font-size="39" font-weight="500">A Python test framework, written in Rust.</text>
-  <rect x="112" y="491" width="220" height="10" rx="5" fill="#90ab8b"/>
 </svg>

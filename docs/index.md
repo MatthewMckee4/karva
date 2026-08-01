@@ -1,6 +1,6 @@
 ---
 title: Karva
-description: Fast, focused Python testing with a Rust engine.
+description: A Python test framework, written in Rust.
 ---
 
 <div class="home-hero">

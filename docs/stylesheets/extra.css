@@ -164,14 +164,6 @@
   max-width: none;
 }
 
-.md-main:has(.home-hero) {
-  background-image: radial-gradient(
-    circle at 82% 12%,
-    color-mix(in srgb, var(--karva-sage) 16%, transparent),
-    transparent 32rem
-  );
-}
-
 .home-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(18rem, 0.75fr);
