@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 import karva
+
 from karva_wheel_smoke.calculator import Calculator, legacy_label, normalize_name
 
 
@@ -30,8 +31,6 @@ def test_parametrized_addition(
 def test_tmp_path_and_output_capture(tmp_path, capsys) -> None:
     message_file = tmp_path / "message.txt"
     message_file.write_text("hello from wheel smoke", encoding="utf-8")
-
-    print(message_file.read_text(encoding="utf-8"))
 
     captured = capsys.readouterr()
     assert captured.out == "hello from wheel smoke\n"

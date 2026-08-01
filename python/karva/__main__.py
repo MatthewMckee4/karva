@@ -8,6 +8,7 @@ import sysconfig
 from pathlib import Path
 
 MAX_PATH_PARTS = 3
+MIN_PIP_BUILD_PATHS = 2
 
 
 def find_karva_bin() -> str:
@@ -18,14 +19,7 @@ def find_karva_bin() -> str:
     if scripts_path.is_file():
         return str(scripts_path)
 
-    if sys.version_info >= (3, 10):
-        user_scheme = sysconfig.get_preferred_scheme("user")
-    elif os.name == "nt":
-        user_scheme = "nt_user"
-    elif sys.platform == "darwin" and sys._framework:
-        user_scheme = "osx_framework_user"
-    else:
-        user_scheme = "posix_user"
+    user_scheme = sysconfig.get_preferred_scheme("user")
 
     user_path = Path(sysconfig.get_path("scripts", scheme=user_scheme)) / karva_exe
     if user_path.is_file():
@@ -38,7 +32,7 @@ def find_karva_bin() -> str:
         return str(target_path)
 
     paths = os.environ.get("PATH", "").split(os.pathsep)
-    if len(paths) >= 2:
+    if len(paths) >= MIN_PIP_BUILD_PATHS:
 
         def get_last_three_path_parts(path: str) -> list[str]:
             """Return a list of up to the last three parts of a path."""

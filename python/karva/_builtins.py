@@ -21,10 +21,10 @@ import os
 import sys
 import tempfile
 import warnings
-from collections.abc import Generator
 from typing import TYPE_CHECKING, BinaryIO, NamedTuple, TextIO, cast
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
     from pathlib import Path
     from typing import Self
 
@@ -117,7 +117,10 @@ class _CapsysFixture:
     def disabled(self) -> _CapsysDisabled:
         """Context manager that temporarily restores real stdout/stderr."""
         return _CapsysDisabled(
-            self._real_stdout, self._real_stderr, self._out, self._err
+            self._real_stdout,
+            self._real_stderr,
+            self._out,
+            self._err,
         )
 
     def __repr__(self) -> str:
@@ -131,11 +134,11 @@ class _CapfdDisabled:
         self._fixture = fixture
 
     def __enter__(self) -> Self:
-        self._fixture._suspend()
+        self._fixture.suspend()
         return self
 
     def __exit__(self, *args: object) -> bool:
-        self._fixture._resume()
+        self._fixture.resume()
         return False
 
 
@@ -185,7 +188,7 @@ class _CapfdFixture:
 
     def close(self) -> None:
         """Restore stdout and stderr and close the capture files."""
-        self._suspend()
+        self.suspend()
         self._stdout.close()
         self._stderr.close()
         self._out_file.close()
@@ -197,14 +200,16 @@ class _CapfdFixture:
         self._stdout.flush()
         self._stderr.flush()
 
-    def _suspend(self) -> None:
+    def suspend(self) -> None:
+        """Temporarily restore the original file descriptors."""
         self._flush()
         os.dup2(self._saved_stdout_fd, 1)
         os.dup2(self._saved_stderr_fd, 2)
         sys.stdout = self._real_stdout
         sys.stderr = self._real_stderr
 
-    def _resume(self) -> None:
+    def resume(self) -> None:
+        """Resume file-descriptor capture."""
         os.dup2(self._out_file.fileno(), 1)
         os.dup2(self._err_file.fileno(), 2)
         sys.stdout = self._stdout
@@ -215,7 +220,7 @@ class _CapfdFixture:
 
 
 class BinaryCaptureResult(NamedTuple):
-    """Captured stdout and stderr from :fixture:`capsysbinary` / :fixture:`capfdbinary`."""
+    """Captured stdout and stderr from binary capture fixtures."""
 
     out: bytes
     err: bytes
@@ -233,7 +238,8 @@ class _BinaryCaptureStream:
         elif isinstance(obj, (bytes, bytearray)):
             b = bytes(obj)
         else:
-            raise TypeError("write() argument must be str or bytes-like object")
+            message = "write() argument must be str or bytes-like object"
+            raise TypeError(message)
         self._data += b
         return len(b)
 
@@ -249,7 +255,7 @@ class _BinaryCaptureStream:
 
 
 class _CapsysBinaryDisabled:
-    """Context manager that temporarily restores real stdout/stderr during binary capture."""
+    """Temporarily restore real stdout and stderr during binary capture."""
 
     def __init__(
         self,
@@ -269,8 +275,8 @@ class _CapsysBinaryDisabled:
         return self
 
     def __exit__(self, *args: object) -> bool:
-        sys.stdout = cast(TextIO, self._cur_out)
-        sys.stderr = cast(TextIO, self._cur_err)
+        sys.stdout = cast("TextIO", self._cur_out)
+        sys.stderr = cast("TextIO", self._cur_err)
         return False
 
 
@@ -282,8 +288,8 @@ class _CapsysBinaryFixture:
         self._real_stderr: TextIO = real_stderr
         self._out: _BinaryCaptureStream = _BinaryCaptureStream()
         self._err: _BinaryCaptureStream = _BinaryCaptureStream()
-        sys.stdout = cast(TextIO, self._out)
-        sys.stderr = cast(TextIO, self._err)
+        sys.stdout = cast("TextIO", self._out)
+        sys.stderr = cast("TextIO", self._err)
 
     def readouterr(self) -> BinaryCaptureResult:
         """Return captured output as bytes and reset the buffers."""
@@ -291,14 +297,17 @@ class _CapsysBinaryFixture:
         err = self._err.getvalue()
         self._out = _BinaryCaptureStream()
         self._err = _BinaryCaptureStream()
-        sys.stdout = cast(TextIO, self._out)
-        sys.stderr = cast(TextIO, self._err)
+        sys.stdout = cast("TextIO", self._out)
+        sys.stderr = cast("TextIO", self._err)
         return BinaryCaptureResult(out, err)
 
     def disabled(self) -> _CapsysBinaryDisabled:
         """Context manager that temporarily restores real stdout/stderr."""
         return _CapsysBinaryDisabled(
-            self._real_stdout, self._real_stderr, self._out, self._err
+            self._real_stdout,
+            self._real_stderr,
+            self._out,
+            self._err,
         )
 
     def __repr__(self) -> str:
@@ -393,7 +402,7 @@ class _CapLog:
         target.setLevel(level)
         self._handler.setLevel(level)
 
-    def _restore_levels(self) -> None:
+    def restore_levels(self) -> None:
         """Restore every logger that was touched via ``set_level``."""
         for logger_name, original_level in self._saved_levels.items():
             logging.getLogger(logger_name).setLevel(original_level)
@@ -483,7 +492,7 @@ def caplog() -> Generator[_CapLog, None, None]:
 
     root_logger.removeHandler(handler)
     logging.disable(saved_disable)
-    cap._restore_levels()
+    cap.restore_levels()
 
 
 @fixture

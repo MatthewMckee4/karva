@@ -9,11 +9,12 @@ ROOT = Path(__file__).parent.parent
 
 
 def prepare_index_file() -> None:
-    """Copy root `README.md` to `docs/index.md`"""
+    """Copy root `README.md` to `docs/index.md`."""
     (ROOT / "docs" / "index.md").write_text((ROOT / "README.md").read_text())
 
 
 def main() -> None:
+    """Prepare documentation source files."""
     prepare_index_file()
 
 
