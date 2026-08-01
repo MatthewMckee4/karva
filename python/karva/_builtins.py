@@ -41,7 +41,6 @@ __all__ = [
     "capsysbinary",
     "monkeypatch",
     "recwarn",
-    "request",
     "temp_dir",
     "temp_path",
     "tmp_path",
@@ -49,51 +48,6 @@ __all__ = [
     "tmpdir",
     "tmpdir_factory",
 ]
-
-
-class _RequestMarker:
-    """Minimal marker returned by ``request.node.get_closest_marker``."""
-
-    def __init__(self, name: str) -> None:
-        self.name = name
-
-
-class _RequestNode:
-    """Current test metadata exposed through the ``request`` fixture."""
-
-    def __init__(self, name: str, marker_names: tuple[str, ...]) -> None:
-        self.name = name
-        self._marker_names = marker_names
-
-    def get_closest_marker(self, name: str) -> _RequestMarker | None:
-        """Return the named marker when applied to the current test."""
-        if name in self._marker_names:
-            return _RequestMarker(name)
-        return None
-
-
-class _FixtureRequest:
-    """Subset of pytest's fixture request available during fixture setup."""
-
-    @property
-    def node(self) -> _RequestNode:
-        """Return metadata for the test currently running."""
-        return _current_request_node
-
-
-_current_request_node = _RequestNode("", ())
-_request = _FixtureRequest()
-
-
-def _set_request_context(name: str, marker_names: tuple[str, ...]) -> None:
-    global _current_request_node
-    _current_request_node = _RequestNode(name, marker_names)
-
-
-@fixture(scope="session")
-def request() -> _FixtureRequest:
-    """Expose metadata for the current test to fixtures."""
-    return _request
 
 
 @fixture

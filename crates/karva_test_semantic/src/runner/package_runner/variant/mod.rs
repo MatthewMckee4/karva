@@ -20,9 +20,7 @@ use crate::extensions::tags::timeout::TimeoutTag;
 use crate::output_capture::PythonOutputCapture;
 use crate::runner::fixture_arguments::FixtureArguments;
 use crate::runner::test_iterator::TestVariant;
-use crate::utils::{
-    full_test_name, set_attempt_env, set_fixture_request_context, set_test_name_env,
-};
+use crate::utils::{full_test_name, set_attempt_env, set_test_name_env};
 
 use super::PackageRunner;
 
@@ -108,14 +106,11 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 
         let retry_params = self.params.clone();
         let first_params = std::mem::take(&mut self.params);
-        let marker_names = self.tags.custom_tag_names();
-        let request_context_result =
-            set_fixture_request_context(self.py, self.test.name.function_name(), &marker_names);
         let first_attempt = self.prepare_attempt(first_params, self.start_output_capture());
         let settings = self.settings(&first_attempt.fixtures.function_arguments);
         let function = self.test.py_function.clone_ref(self.py);
-        let test_name_env_result = request_context_result
-            .and_then(|()| set_test_name_env(self.py, &settings.qualified_test_name.to_string()));
+        let test_name_env_result =
+            set_test_name_env(self.py, &settings.qualified_test_name.to_string());
 
         tracing::debug!("Running test `{}`", settings.qualified_test_name);
         self.package_runner

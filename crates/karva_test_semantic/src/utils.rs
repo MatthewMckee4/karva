@@ -221,18 +221,6 @@ pub(crate) fn set_test_name_env(py: Python<'_>, qualified_name: &str) -> PyResul
     Ok(())
 }
 
-/// Updates the Python fixture request before fixtures run for a test variant.
-pub(crate) fn set_fixture_request_context(
-    py: Python<'_>,
-    test_name: &str,
-    marker_names: &[&str],
-) -> PyResult<()> {
-    let marker_names = PyTuple::new(py, marker_names)?;
-    py.import("karva._builtins")?
-        .call_method1("_set_request_context", (test_name, marker_names))?;
-    Ok(())
-}
-
 pub(crate) fn display_value(value: &Bound<'_, PyAny>) -> String {
     let display = if value.is_instance_of::<PyString>()
         && let Ok(repr) = value.repr()

@@ -4,43 +4,6 @@ use rstest::rstest;
 
 use crate::common::TestContext;
 
-#[test]
-fn test_request_fixture_exposes_test_markers_to_auto_use_fixtures() {
-    let test_context = TestContext::with_file(
-        "test.py",
-        r#"
-import pytest
-
-@pytest.fixture(autouse=True)
-def inspect_request(request):
-    marker = request.node.get_closest_marker("selected")
-    if request.node.name == "test_marked":
-        assert marker.name == "selected"
-    else:
-        assert request.node.name == "test_unmarked"
-        assert marker is None
-    assert request.node.get_closest_marker("missing") is None
-
-@pytest.mark.selected
-def test_marked():
-    pass
-
-def test_unmarked():
-    pass
-"#,
-    );
-
-    assert_cmd_snapshot!(test_context.command().arg("--status-level=none"), @"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-    ────────────
-         Summary [TIME] 2 tests run: 2 passed, 0 skipped
-
-    ----- stderr -----
-    ");
-}
-
 #[rstest]
 fn test_temp_directory_fixture(#[values("tmp_path", "temp_path", "temp_dir")] fixture_name: &str) {
     let test_context = TestContext::with_file(
