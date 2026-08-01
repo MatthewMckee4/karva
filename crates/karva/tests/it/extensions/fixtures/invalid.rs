@@ -232,7 +232,7 @@ fn test_fixture_fails_to_run() {
 
     failures:
 
-    test::test_failing_fixture:
+    test::test_failing_fixture (requires fixture `failing_fixture`):
 
     error[fixture-failure]: Fixture `failing_fixture` failed
      --> test.py:5:5
@@ -372,7 +372,7 @@ fn test_failing_yield_fixture() {
 
     failures:
 
-    test::test_failing_fixture:
+    test::test_failing_fixture (requires fixture `fixture`):
 
     error[fixture-failure]: Fixture `fixture` failed
      --> test.py:5:5
@@ -514,7 +514,7 @@ fn test_fixture_dependency_chain_failure() {
 
     failures:
 
-    test::test_with_db:
+    test::test_with_db (requires fixture `db`):
 
     error[fixture-failure]: Fixture `config` failed
      --> test.py:5:5

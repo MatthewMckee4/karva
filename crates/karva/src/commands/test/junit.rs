@@ -4,7 +4,9 @@ use std::fmt::Write as _;
 use anyhow::{Context as _, Result};
 use camino::Utf8Path;
 use karva_cache::AggregatedResults;
-use karva_diagnostic::{RenderedDiagnostic, TestCaseAttempt, TestCaseOutcome, TestCaseResult};
+use karva_diagnostic::{
+    FixtureFailure, RenderedDiagnostic, TestCaseAttempt, TestCaseOutcome, TestCaseResult,
+};
 use karva_metadata::JunitSettings;
 use karva_project::path::absolute;
 
@@ -138,6 +140,7 @@ fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult)
     }
 
     xml.push_str(">\n");
+    write_fixture_failure_properties(xml, case)?;
     match case.outcome() {
         TestCaseOutcome::Passed => {
             if case.is_junit_flaky_failure() {
@@ -172,6 +175,7 @@ fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult)
         TestCaseOutcome::Error {
             diagnostic,
             related,
+            ..
         } => write_diagnostic_element(xml, "error", diagnostic, related, None)?,
         TestCaseOutcome::Skipped { reason } => {
             if let Some(reason) = reason {
@@ -189,6 +193,51 @@ fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult)
     }
 
     xml.push_str("    </testcase>\n");
+    Ok(())
+}
+
+fn write_fixture_failure_properties(xml: &mut String, case: &TestCaseResult) -> Result<()> {
+    let has_attempt_failures = case
+        .attempts()
+        .iter()
+        .any(|attempt| !attempt.outcome().fixture_failures().is_empty());
+    if !has_attempt_failures && case.outcome().fixture_failures().is_empty() {
+        return Ok(());
+    }
+
+    xml.push_str("      <properties>\n");
+    if has_attempt_failures {
+        for attempt in case.attempts() {
+            for failure in attempt.outcome().fixture_failures() {
+                write_fixture_failure_property(xml, Some(attempt.attempt()), failure)?;
+            }
+        }
+    } else {
+        for failure in case.outcome().fixture_failures() {
+            write_fixture_failure_property(xml, None, failure)?;
+        }
+    }
+    xml.push_str("      </properties>\n");
+    Ok(())
+}
+
+fn write_fixture_failure_property(
+    xml: &mut String,
+    attempt: Option<u32>,
+    failure: &FixtureFailure,
+) -> Result<()> {
+    let name = attempt.map_or_else(
+        || "karva.fixture_failure".to_string(),
+        |attempt| format!("karva.fixture_failure.attempt.{attempt}"),
+    );
+    let chain = failure.dependency_chain().join(" -> ");
+    writeln!(
+        xml,
+        "        <property name=\"{}\" value=\"{} [{}]\"/>",
+        escape_xml(&name),
+        escape_xml(&failure.description()),
+        escape_xml(&chain),
+    )?;
     Ok(())
 }
 

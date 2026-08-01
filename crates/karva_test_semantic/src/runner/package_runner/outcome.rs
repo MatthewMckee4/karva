@@ -199,11 +199,13 @@ pub(super) fn attach_finalizer_diagnostics(
         TestExecutionOutcome::Error {
             diagnostic,
             mut related,
+            fixture_failures,
         } => {
             related.append(&mut diagnostics);
             TestExecutionOutcome::Error {
                 diagnostic,
                 related,
+                fixture_failures,
             }
         }
         TestExecutionOutcome::Passed | TestExecutionOutcome::Skipped { .. } => {

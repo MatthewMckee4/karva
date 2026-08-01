@@ -5,8 +5,8 @@ use camino::Utf8Path;
 use karva_cache::AggregatedResults;
 use karva_cli::ResultFormat;
 use karva_diagnostic::{
-    CapturedTestOutput, RenderedDiagnostic, TestCaseAttempt, TestCaseOutcome, TestCaseResult,
-    TestCaseRetry,
+    CapturedTestOutput, FixtureFailure, RenderedDiagnostic, TestCaseAttempt, TestCaseOutcome,
+    TestCaseResult, TestCaseRetry,
 };
 use karva_project::path::absolute;
 use serde::Serialize;
@@ -192,6 +192,8 @@ struct TestReport<'a> {
     captured_output: Option<CapturedOutputReport<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     diagnostic: Option<DiagnosticReport<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fixture_failures: Option<&'a [FixtureFailure]>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     related_diagnostics: Vec<DiagnosticReport<'a>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -224,6 +226,8 @@ impl<'a> TestReport<'a> {
             retry,
             captured_output: case.captured_output().map(CapturedOutputReport::new),
             diagnostic: diagnostic.map(DiagnosticReport::new),
+            fixture_failures: (!case.outcome().fixture_failures().is_empty())
+                .then_some(case.outcome().fixture_failures()),
             related_diagnostics: case
                 .outcome()
                 .related_diagnostics()
@@ -244,6 +248,8 @@ struct AttemptReport<'a> {
     captured_output: Option<CapturedOutputReport<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     diagnostic: Option<DiagnosticReport<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fixture_failures: Option<&'a [FixtureFailure]>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     related_diagnostics: Vec<DiagnosticReport<'a>>,
 }
@@ -266,6 +272,8 @@ impl<'a> AttemptReport<'a> {
             duration_seconds: attempt.duration().as_secs_f64(),
             captured_output: attempt.captured_output().map(CapturedOutputReport::new),
             diagnostic,
+            fixture_failures: (!attempt.outcome().fixture_failures().is_empty())
+                .then_some(attempt.outcome().fixture_failures()),
             related_diagnostics: attempt
                 .outcome()
                 .related_diagnostics()

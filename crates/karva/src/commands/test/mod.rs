@@ -346,7 +346,7 @@ fn write_test_failures_block(
         let Some(diagnostic) = case.outcome().diagnostic() else {
             continue;
         };
-        writeln!(stdout, "{}:", case.full_name())?;
+        write_test_failure_header(stdout, case)?;
         if case.captured_output().is_none() {
             for (other_index, other) in failed_tests.iter().enumerate().skip(index + 1) {
                 if other.captured_output().is_none()
@@ -354,7 +354,7 @@ fn write_test_failures_block(
                     && other.outcome().related_diagnostics() == case.outcome().related_diagnostics()
                 {
                     emitted[other_index] = true;
-                    writeln!(stdout, "{}:", other.full_name())?;
+                    write_test_failure_header(stdout, other)?;
                 }
             }
         }
@@ -370,6 +370,26 @@ fn write_test_failures_block(
         }
     }
 
+    Ok(())
+}
+
+fn write_test_failure_header(
+    stdout: &mut Stdout,
+    case: &karva_diagnostic::TestCaseResult,
+) -> Result<()> {
+    write!(stdout, "{}", case.full_name())?;
+    let fixture_failures = case.outcome().fixture_failures();
+    if !fixture_failures.is_empty() {
+        write!(stdout, " (")?;
+        for (index, failure) in fixture_failures.iter().enumerate() {
+            if index > 0 {
+                write!(stdout, "; ")?;
+            }
+            write!(stdout, "{}", failure.description())?;
+        }
+        write!(stdout, ")")?;
+    }
+    writeln!(stdout, ":")?;
     Ok(())
 }
 

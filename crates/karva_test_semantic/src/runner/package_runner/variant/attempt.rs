@@ -5,14 +5,13 @@ use std::time::{Duration, Instant};
 use karva_diagnostic::{CapturedTestOutput, TestExecutionAttempt, TestExecutionOutcome};
 use pyo3::prelude::*;
 
-use crate::diagnostic::fixture_failure_diagnostic;
 use crate::extensions::fixtures::FixtureScope;
 use crate::extensions::functions::snapshot::set_snapshot_context;
 use crate::utils::{run_coroutine, run_test_with_timeout};
 
 use super::{VariantRunner, VariantSettings, finish_output_capture};
 use crate::output_capture::PythonOutputCapture;
-use crate::runner::package_runner::fixture::PreparedFixtures;
+use crate::runner::package_runner::fixture::{PreparedFixtures, fixture_failure_diagnostics};
 use crate::runner::package_runner::outcome::{
     OutcomeContext, PhaseDurations, apply_fail_slow_budget, attach_finalizer_diagnostics,
     classify_test_result, reject_non_none_return, should_retry_result,
@@ -141,16 +140,11 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 retryable_result || teardown_failed || (budget_exceeded && !skipped),
             )
         } else {
-            let mut diagnostics = fixture_call_errors
-                .into_iter()
-                .map(|error| {
-                    fixture_failure_diagnostic(
-                        self.py,
-                        error,
-                        self.package_runner.context.is_verbose(),
-                    )
-                })
-                .collect::<Vec<_>>();
+            let (mut diagnostics, fixture_failures) = fixture_failure_diagnostics(
+                self.py,
+                fixture_call_errors,
+                self.package_runner.context.is_verbose(),
+            );
             let teardown_start = Instant::now();
             diagnostics.extend(
                 test_finalizers
@@ -169,7 +163,11 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             };
             let duration = phases.total();
             let diagnostic = diagnostics.remove(0);
-            let outcome = TestExecutionOutcome::error_with_related(diagnostic, diagnostics);
+            let outcome = TestExecutionOutcome::error_with_fixture_failures(
+                diagnostic,
+                diagnostics,
+                fixture_failures,
+            );
             let outcome = apply_fail_slow_budget(
                 outcome,
                 duration,
