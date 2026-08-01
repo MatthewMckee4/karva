@@ -16,6 +16,7 @@
 ### Configuration
 
 - Generate JSON Schema for karva.toml ([#1076](https://github.com/MatthewMckee4/karva/pull/1076))
+- Reject invalid timeout values during config parsing ([#1100](https://github.com/MatthewMckee4/karva/pull/1100))
 
 ### Diagnostics
 
@@ -54,6 +55,10 @@
 - Disambiguate duplicate parameter IDs ([#1097](https://github.com/MatthewMckee4/karva/pull/1097))
 - Honor keyword xfail conditions ([#1107](https://github.com/MatthewMckee4/karva/pull/1107))
 - Accept iterable parametrize values ([#1098](https://github.com/MatthewMckee4/karva/pull/1098))
+
+### Test Running
+
+- Allow flaky tests to fail the run ([#1113](https://github.com/MatthewMckee4/karva/pull/1113))
 
 ### Contributors
 
