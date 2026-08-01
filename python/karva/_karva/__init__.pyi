@@ -11,18 +11,25 @@ _T = TypeVar("_T")
 _P = ParamSpec("_P")
 
 
-def karva_run() -> int: ...
+def karva_run() -> int:
+    """Run Karva using the current process arguments."""
 
 
 class FixtureFunctionMarker(Generic[_P, _T]):
+    """Mark a function as a fixture."""
+
     def __call__(
         self,
         function: Callable[_P, _T],
-    ) -> FixtureFunctionDefinition[_P, _T]: ...
+    ) -> FixtureFunctionDefinition[_P, _T]:
+        """Mark the function as a fixture."""
 
 
 class FixtureFunctionDefinition(Generic[_P, _T]):
-    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T: ...
+    """Represent a registered fixture function."""
+
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T:
+        """Call the underlying fixture function."""
 
 
 @overload
@@ -38,11 +45,17 @@ def fixture(
 
 
 class TestFunction(Generic[_P, _T]):
-    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T: ...
+    """Represent a registered test function."""
+
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T:
+        """Call the underlying test function."""
 
 
 class Tags:
-    def __call__(self, f: Callable[_P, _T], /) -> Callable[_P, _T]: ...
+    """Decorate a test function with configured tags."""
+
+    def __call__(self, f: Callable[_P, _T], /) -> Callable[_P, _T]:
+        """Apply the tags to a test function."""
 
 
 def skip(reason: str | None = ...) -> NoReturn:
@@ -54,6 +67,8 @@ def fail(reason: str | None = ...) -> NoReturn:
 
 
 class Param:
+    """Represent values and tags for a parametrized test case."""
+
     @property
     def values(self) -> list[object]:
         """The values to parameterize the test case with."""
@@ -81,6 +96,7 @@ def param(
     ])
     def test_square(input, expected):
         assert input ** 2 == expected
+
     """
 
 
@@ -103,13 +119,16 @@ class ExceptionInfo:
 class RaisesContext:
     """Context manager returned by `karva.raises`."""
 
-    def __enter__(self) -> ExceptionInfo: ...
+    def __enter__(self) -> ExceptionInfo:
+        """Enter the exception assertion context."""
+
     def __exit__(
         self,
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: types.TracebackType | None,
-    ) -> bool: ...
+    ) -> bool:
+        """Exit the exception assertion context."""
 
 
 def raises(
@@ -123,6 +142,7 @@ def raises(
         expected_exception: The expected exception type.
         match: An optional regex pattern to match against the string
             representation of the exception.
+
     """
 
 
@@ -160,13 +180,26 @@ class Command:
     the command's stdout, stderr, and exit code.
     """
 
-    def __init__(self, program: str) -> None: ...
-    def arg(self, value: str) -> Self: ...
-    def args(self, values: Sequence[str]) -> Self: ...
-    def env(self, key: str, value: str) -> Self: ...
-    def envs(self, vars: dict[str, str]) -> Self: ...
-    def current_dir(self, path: str) -> Self: ...
-    def stdin(self, data: str) -> Self: ...
+    def __init__(self, program: str) -> None:
+        """Create a command for the given program."""
+
+    def arg(self, value: str) -> Self:
+        """Append an argument."""
+
+    def args(self, values: Sequence[str]) -> Self:
+        """Append multiple arguments."""
+
+    def env(self, key: str, value: str) -> Self:
+        """Set an environment variable."""
+
+    def envs(self, vars: dict[str, str]) -> Self:
+        """Set multiple environment variables."""
+
+    def current_dir(self, path: str) -> Self:
+        """Set the working directory."""
+
+    def stdin(self, data: str) -> Self:
+        """Set the standard input data."""
 
 
 @overload
@@ -195,14 +228,19 @@ class SnapshotSettings:
         *,
         filters: list[tuple[str, str]] | None = None,
         allow_duplicates: bool = False,
-    ) -> None: ...
-    def __enter__(self) -> Self: ...
+    ) -> None:
+        """Create scoped snapshot settings."""
+
+    def __enter__(self) -> Self:
+        """Enter the snapshot settings context."""
+
     def __exit__(
         self,
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: types.TracebackType | None,
-    ) -> bool: ...
+    ) -> bool:
+        """Exit the snapshot settings context."""
 
 
 def snapshot_settings(
@@ -216,6 +254,7 @@ def snapshot_settings(
         filters: List of (regex_pattern, replacement) pairs applied sequentially
             to the serialized snapshot value before comparison/storage.
         allow_duplicates: If True, allow multiple unnamed snapshots in a single test.
+
     """
 
 

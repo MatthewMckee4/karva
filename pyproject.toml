@@ -99,8 +99,7 @@ select = [
     "PLW1510",
 ]
 ignore = [
-    # Unnecessarily strict/pedantic
-    "D",
+    "D100",
     # These are all enforced by, or incompatible with, the ruff formatter:
     "E203",
     "E501",

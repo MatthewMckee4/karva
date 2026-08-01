@@ -26,14 +26,14 @@ def use_fixtures(*fixture_names: str) -> Tags:
 @overload
 def skip(f: Callable[_P, _T]) -> TestFunction[_P, _T]: ...
 @overload
-def skip(*conditions: bool, reason: str | None = ...) -> Tags:
+def skip(*conditions: bool, reason: str | None = ...) -> Tags:  # noqa: D418
     """Skip the current test given the conditions."""
 
 
 @overload
 def expect_fail(f: Callable[_P, _T]) -> TestFunction[_P, _T]: ...
 @overload
-def expect_fail(*conditions: bool, reason: str | None = ...) -> Tags:
+def expect_fail(*conditions: bool, reason: str | None = ...) -> Tags:  # noqa: D418
     """Expect the current test to fail given the conditions."""
 
 
