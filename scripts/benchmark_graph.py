@@ -18,16 +18,23 @@ ROOT = Path(__file__).parent.parent
 
 def main() -> None:
     """Create and save a benchmark comparison graph."""
-    plt.style.use("dark_background")
+    plt.rcParams.update(
+        {
+            "font.family": "DejaVu Sans",
+            "svg.fonttype": "none",
+        }
+    )
 
     labels = ["pytest", "pytest-xdist", "karva"]
     means = [92.2, 60.5, 2.6]
+    foreground = "#ebf4dd"
+    muted = "#b9c9b5"
 
     y_pos = np.arange(len(labels))
 
-    fig, ax = plt.subplots(figsize=(8, 2))
-    fig.patch.set_facecolor("black")
-    ax.set_facecolor("black")
+    fig, ax = plt.subplots(figsize=(7.2, 2.6))
+    fig.patch.set_alpha(0)
+    ax.set_facecolor("none")
 
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -39,24 +46,30 @@ def main() -> None:
         bottom=True,
         top=False,
         labelbottom=True,
-        colors="grey",
+        colors=muted,
     )
     ax.xaxis.set_ticks_position("bottom")
     ax.xaxis.set_label_position("bottom")
-    ax.spines["bottom"].set_color("grey")
+    ax.spines["bottom"].set_color(muted)
 
     max_time = np.ceil(max(means))
     linspace = np.linspace(0, max_time, 5)
     ax.set_xticks(linspace)
     ax.set_xticklabels(
         [f"{x:.2f}s" for x in linspace],
-        color="grey",
+        color=muted,
+        fontsize=9,
     )
 
-    bars = ax.barh(y_pos, means, color=["#45744a", "#45744a"], height=0.5)
+    bars = ax.barh(
+        y_pos,
+        means,
+        color=["#5a7863", "#90ab8b", foreground],
+        height=0.46,
+    )
 
     ax.set_yticks(y_pos)
-    ax.set_yticklabels(labels, fontsize=16, color="grey")
+    ax.set_yticklabels(labels, fontsize=12, color=foreground, fontweight=700)
 
     for bar in bars:
         width = bar.get_width()
@@ -67,17 +80,20 @@ def main() -> None:
             f"{width:.2f}s",
             ha="left",
             va="center",
-            color="grey",
-            fontsize=10,
+            color=foreground,
+            fontsize=9,
         )
 
-    plt.title(
-        "Running benchmark tests (~250,000 tests) (14 cores)",
-        fontsize=18,
-        pad=20,
-        color="grey",
-        y=-0.6,
+    fig.text(
+        0.99,
+        0.015,
+        "Workload: ~250,000 tests · Machine: 14 cores",
+        ha="right",
+        color=muted,
+        fontsize=8,
     )
+
+    fig.subplots_adjust(bottom=0.22, left=0.2, right=0.9, top=0.96)
 
     for path in [
         ROOT / "docs/assets/benchmark_results.svg",
@@ -88,6 +104,11 @@ def main() -> None:
             bbox_inches="tight",
             transparent=True,
         )
+        svg = path.read_text().replace(
+            "font-family: 'DejaVu Sans'",
+            "font-family: Manrope, system-ui, sans-serif",
+        )
+        path.write_text("\n".join(line.rstrip() for line in svg.splitlines()) + "\n")
 
     plt.close()
 
