@@ -5,6 +5,69 @@ use rstest::rstest;
 use crate::common::TestContext;
 
 #[test]
+fn test_approx_matches_pytest() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+from decimal import Decimal
+import math
+
+import karva
+import pytest
+
+CASES = [
+    (0.1 + 0.2, 0.3, {}, True),
+    (1.0001, 1, {}, False),
+    (1.0001, 1, {"rel": 1e-3}, True),
+    (1 + 1e-8, 1, {"abs": 1e-12}, False),
+    (1e-13, 0, {}, True),
+    (complex(1.0000001, 2), complex(1, 2), {}, True),
+    (Decimal("1.0000001"), Decimal("1"), {}, True),
+    ([0.1 + 0.2, 0.6], [0.3, 0.6], {}, True),
+    ([0.3], [0.3, 0.6], {}, False),
+    ({"x": 0.1 + 0.2}, {"x": 0.3}, {}, True),
+    ({"y": 0.3}, {"x": 0.3}, {}, False),
+    (math.nan, math.nan, {}, False),
+    (math.nan, math.nan, {"nan_ok": True}, True),
+    (math.inf, math.inf, {}, True),
+    (-math.inf, math.inf, {}, False),
+]
+
+def test_supported_cases_match_pytest():
+    for actual, expected, kwargs, result in CASES:
+        assert (actual == karva.approx(expected, **kwargs)) == result
+        assert (actual == karva.approx(expected, **kwargs)) == (actual == pytest.approx(expected, **kwargs))
+
+def test_works_on_either_side():
+    assert karva.approx(0.3) == 0.1 + 0.2
+    assert 0.1 + 0.2 == karva.approx(0.3)
+
+def test_rejects_invalid_values():
+    with karva.raises(TypeError, match="expected a numeric value"):
+        karva.approx([1, "two"])
+
+def test_representation_includes_tolerance():
+    assert "0.3 ± 3.0e-07" == repr(karva.approx(0.3))
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 4 tests across 1 worker
+            PASS [TIME] test::test_supported_cases_match_pytest
+            PASS [TIME] test::test_works_on_either_side
+            PASS [TIME] test::test_rejects_invalid_values
+            PASS [TIME] test::test_representation_includes_tolerance
+    ────────────
+         Summary [TIME] 4 tests run: 4 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_fail_function() {
     let context = TestContext::with_file(
         "test.py",

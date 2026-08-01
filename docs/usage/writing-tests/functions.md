@@ -1,3 +1,31 @@
+## Approximate comparisons
+
+Use `karva.approx()` when floating-point results should match within a tolerance.
+It uses pytest's defaults: relative tolerance `1e-6` and absolute tolerance
+`1e-12`.
+
+```python title="test.py"
+import karva
+
+def test_total():
+    assert 0.1 + 0.2 == karva.approx(0.3)
+
+def test_coordinates():
+    assert [0.1000001, 0.2] == karva.approx([0.1, 0.2], rel=1e-5)
+```
+
+Mappings, ordered sequences, complex numbers, and `Decimal` values are
+supported. Set `nan_ok=True` to compare NaN values as equal. This is the direct
+replacement for `pytest.approx()` when migrating tests:
+
+```python
+# pytest
+assert value == pytest.approx(expected)
+
+# Karva
+assert value == karva.approx(expected)
+```
+
 ## Skip
 
 If you want to skip a test when its running, use `karva.skip()`.
