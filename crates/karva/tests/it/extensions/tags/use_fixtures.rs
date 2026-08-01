@@ -35,6 +35,65 @@ def test_with_use_fixture():
 }
 
 #[test]
+fn test_use_fixtures_setup_failure() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture
+def dependency():
+    raise RuntimeError("setup failed")
+
+@karva.fixture
+def setup_fixture(dependency):
+    return dependency
+
+@karva.tags.use_fixtures("setup_fixture")
+def test_blocked():
+    raise AssertionError("test body ran")
+"#,
+    );
+
+    assert_cmd_snapshot!(test_context.command(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_blocked
+
+    failures:
+
+    test::test_blocked (uses fixture `setup_fixture` via `use_fixtures`):
+
+    error[fixture-failure]: Fixture `dependency` failed
+     --> test.py:5:5
+      |
+    5 | def dependency():
+      |     ^^^^^^^^^^
+      |
+    info: Fixture `setup_fixture` requires `dependency`
+     --> test.py:9:5
+      |
+    9 | def setup_fixture(dependency):
+      |     ^^^^^^^^^^^^^
+      |
+    info: Fixture failed here
+     --> test.py:6:5
+      |
+    6 |     raise RuntimeError("setup failed")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: setup failed
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
 fn test_use_fixtures_multiple_fixtures() {
     let test_context = TestContext::with_file(
         "test.py",

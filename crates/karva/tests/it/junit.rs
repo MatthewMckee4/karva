@@ -616,7 +616,7 @@ def test_failure():
       |     ^^^^^^^^^^^^
       |
 
-    test_fixture::test_unreachable:
+    test_fixture::test_unreachable (uses auto-use fixture `broken_fixture`):
 
     error[fixture-failure]: Fixture `broken_fixture` failed
      --> test_fixture.py:5:5
@@ -663,6 +663,9 @@ def test_failure():
       </testsuite>
       <testsuite name="test_fixture" tests="1" failures="0" skipped="0" errors="1" time="[TIME]">
         <testcase classname="test_fixture" name="test_unreachable" time="[TIME]">
+          <properties>
+            <property name="karva.fixture_failure" value="uses auto-use fixture `broken_fixture` [broken_fixture]"/>
+          </properties>
           <error message="Fixture `broken_fixture` failed" type="fixture-failure">error[fixture-failure]: Fixture `broken_fixture` failed
      --&gt; test_fixture.py:5:5
       |

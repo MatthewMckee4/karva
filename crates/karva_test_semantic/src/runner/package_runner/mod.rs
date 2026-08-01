@@ -3,7 +3,7 @@
 use std::cell::Cell;
 
 use karva_coverage::CoverageSession;
-use karva_diagnostic::TestExecutionOutcome;
+use karva_diagnostic::{FixtureFailure, TestExecutionOutcome};
 use karva_python_semantic::QualifiedTestName;
 use pyo3::prelude::*;
 use ruff_db::diagnostic::Diagnostic;
@@ -78,10 +78,15 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         test: &DiscoveredTestFunction,
         diagnostic: Diagnostic,
         related: Vec<Diagnostic>,
+        fixture_failures: Vec<FixtureFailure>,
     ) {
         self.context.register_test_case_result(
             &QualifiedTestName::new(test.name.clone(), None),
-            TestExecutionOutcome::error_with_related(diagnostic, related),
+            TestExecutionOutcome::error_with_fixture_failures(
+                diagnostic,
+                related,
+                fixture_failures,
+            ),
             std::time::Duration::ZERO,
             None,
         );
@@ -94,9 +99,15 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         module: &DiscoveredModule,
         diagnostic: &Diagnostic,
         related: &[Diagnostic],
+        fixture_failures: &[FixtureFailure],
     ) {
         for test in module.test_functions() {
-            self.register_error_test(test, diagnostic.clone(), related.to_vec());
+            self.register_error_test(
+                test,
+                diagnostic.clone(),
+                related.to_vec(),
+                fixture_failures.to_vec(),
+            );
             if self.max_fail_reached() {
                 return;
             }
@@ -109,15 +120,16 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         package: &DiscoveredPackage,
         diagnostic: &Diagnostic,
         related: &[Diagnostic],
+        fixture_failures: &[FixtureFailure],
     ) {
         for module in package.modules().values() {
-            self.register_error_module_tests(module, diagnostic, related);
+            self.register_error_module_tests(module, diagnostic, related, fixture_failures);
             if self.max_fail_reached() {
                 return;
             }
         }
         for child_package in package.packages().values() {
-            self.register_error_package_tests(child_package, diagnostic, related);
+            self.register_error_package_tests(child_package, diagnostic, related, fixture_failures);
             if self.max_fail_reached() {
                 return;
             }
@@ -139,7 +151,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                         &test.stmt_function_def,
                         &error,
                     );
-                    self.register_error_test(test, diagnostic, Vec::new());
+                    self.register_error_test(test, diagnostic, Vec::new(), Vec::new());
                     valid = false;
                     if self.max_fail_reached() {
                         return false;
@@ -164,11 +176,16 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             return;
         }
 
-        if let Err(mut diagnostics) =
+        if let Err(mut failure) =
             self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session)
         {
-            let diagnostic = diagnostics.remove(0);
-            self.register_error_package_tests(session, &diagnostic, &diagnostics);
+            let diagnostic = failure.diagnostics.remove(0);
+            self.register_error_package_tests(
+                session,
+                &diagnostic,
+                &failure.diagnostics,
+                &failure.fixture_failures,
+            );
             return;
         }
 
@@ -183,11 +200,16 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         module: &DiscoveredModule,
         parents: &[&DiscoveredPackage],
     ) -> bool {
-        if let Err(mut diagnostics) =
+        if let Err(mut failure) =
             self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module)
         {
-            let diagnostic = diagnostics.remove(0);
-            self.register_error_module_tests(module, &diagnostic, &diagnostics);
+            let diagnostic = failure.diagnostics.remove(0);
+            self.register_error_module_tests(
+                module,
+                &diagnostic,
+                &failure.diagnostics,
+                &failure.fixture_failures,
+            );
             return false;
         }
 
@@ -200,6 +222,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                     self.register_error_test(
                         test,
                         fixture_resolution_diagnostic(error),
+                        Vec::new(),
                         Vec::new(),
                     );
                     passed = false;
@@ -240,11 +263,16 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         child_parents.push(package);
 
         if package.configuration_module_impl().is_some()
-            && let Err(mut diagnostics) =
+            && let Err(mut failure) =
                 self.run_auto_use_fixtures(py, parents, package, FixtureScope::Package)
         {
-            let diagnostic = diagnostics.remove(0);
-            self.register_error_package_tests(package, &diagnostic, &diagnostics);
+            let diagnostic = failure.diagnostics.remove(0);
+            self.register_error_package_tests(
+                package,
+                &diagnostic,
+                &failure.diagnostics,
+                &failure.fixture_failures,
+            );
             return false;
         }
 

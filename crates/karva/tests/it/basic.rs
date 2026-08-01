@@ -478,7 +478,7 @@ fn test_fail_concise_output() {
 
     test_fail.py:5:5: error[invalid-fixture-finalizer] Discovered an invalid fixture finalizer `fixture_1`
 
-    test_fail::test_2:
+    test_fail::test_2 (requires fixture `fixture_2`):
 
     test_fail.py:13:5: error[fixture-failure] Fixture `fixture_2` failed
 
@@ -1438,7 +1438,7 @@ def test_2(y): pass
 
     failures:
 
-    test_file::test_1:
+    test_file::test_1 (requires fixture `x`):
 
     error[fixture-failure]: Fixture `x` failed
      --> foo.py:5:5

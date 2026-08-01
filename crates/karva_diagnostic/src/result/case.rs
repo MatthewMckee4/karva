@@ -272,6 +272,8 @@ pub enum TestCaseOutcome<D = RenderedDiagnostic> {
         diagnostic: D,
         #[serde(default = "Vec::new", skip_serializing_if = "Vec::is_empty")]
         related: Vec<D>,
+        #[serde(default = "Vec::new", skip_serializing_if = "Vec::is_empty")]
+        fixture_failures: Vec<FixtureFailure>,
     },
     Skipped {
         reason: Option<String>,
@@ -291,9 +293,18 @@ impl<D> TestCaseOutcome<D> {
     }
 
     pub fn error_with_related(diagnostic: D, related: Vec<D>) -> Self {
+        Self::error_with_fixture_failures(diagnostic, related, Vec::new())
+    }
+
+    pub fn error_with_fixture_failures(
+        diagnostic: D,
+        related: Vec<D>,
+        fixture_failures: Vec<FixtureFailure>,
+    ) -> Self {
         Self::Error {
             diagnostic,
             related,
+            fixture_failures,
         }
     }
 
@@ -327,6 +338,15 @@ impl<D> TestCaseOutcome<D> {
         }
     }
 
+    pub fn fixture_failures(&self) -> &[FixtureFailure] {
+        match self {
+            Self::Error {
+                fixture_failures, ..
+            } => fixture_failures,
+            Self::Passed | Self::Failed { .. } | Self::Skipped { .. } => &[],
+        }
+    }
+
     pub fn result_kind(&self) -> IndividualTestResultKind {
         match self {
             Self::Passed => IndividualTestResultKind::Passed,
@@ -357,16 +377,65 @@ impl<D> TestCaseOutcome<D> {
             Self::Error {
                 diagnostic,
                 related,
+                fixture_failures,
             } => TestCaseOutcome::Error {
                 diagnostic: map(&diagnostic)?,
                 related: related
                     .into_iter()
                     .map(|diagnostic| map(&diagnostic))
                     .collect::<Result<Vec<_>, _>>()?,
+                fixture_failures,
             },
             Self::Skipped { reason } => TestCaseOutcome::Skipped { reason },
         })
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FixtureFailure {
+    fixture: String,
+    usage: FixtureUsage,
+    dependency_chain: Vec<String>,
+}
+
+impl FixtureFailure {
+    pub fn new(fixture: String, usage: FixtureUsage, dependency_chain: Vec<String>) -> Self {
+        Self {
+            fixture,
+            usage,
+            dependency_chain,
+        }
+    }
+
+    pub fn fixture(&self) -> &str {
+        &self.fixture
+    }
+
+    pub fn usage(&self) -> FixtureUsage {
+        self.usage
+    }
+
+    pub fn dependency_chain(&self) -> &[String] {
+        &self.dependency_chain
+    }
+
+    pub fn description(&self) -> String {
+        match self.usage {
+            FixtureUsage::Required => format!("requires fixture `{}`", self.fixture),
+            FixtureUsage::UseFixtures => {
+                format!("uses fixture `{}` via `use_fixtures`", self.fixture)
+            }
+            FixtureUsage::AutoUse => format!("uses auto-use fixture `{}`", self.fixture),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FixtureUsage {
+    Required,
+    UseFixtures,
+    AutoUse,
 }
 
 pub type TestExecutionResult = TestCaseResult<Diagnostic>;

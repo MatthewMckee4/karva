@@ -13,8 +13,8 @@ use ruff_db::diagnostic::Diagnostic;
 use crate::reporter::Reporter;
 
 pub use case::{
-    TestCaseAttempt, TestCaseOutcome, TestCaseResult, TestCaseRetry, TestExecutionAttempt,
-    TestExecutionOutcome, TestExecutionResult,
+    FixtureFailure, FixtureUsage, TestCaseAttempt, TestCaseOutcome, TestCaseResult, TestCaseRetry,
+    TestExecutionAttempt, TestExecutionOutcome, TestExecutionResult,
 };
 pub use diagnostic::RenderedDiagnostic;
 pub use flaky::{DisplayFlakyTest, DisplayFlakyTests, FlakyTest};

@@ -220,8 +220,8 @@ def test_something_else():
 
     failures:
 
-    test::test_something:
-    test::test_something_else:
+    test::test_something (uses auto-use fixture `failing_fixture`):
+    test::test_something_else (uses auto-use fixture `failing_fixture`):
 
     error[fixture-failure]: Fixture `failing_fixture` failed
      --> test.py:5:5
@@ -319,7 +319,7 @@ def test_unreachable():
 
     failures:
 
-    test::test_unreachable:
+    test::test_unreachable (uses auto-use fixture `failing_setup_fixture`):
 
     error[fixture-failure]: Fixture `failing_setup_fixture` failed
       --> test.py:10:5
@@ -379,7 +379,7 @@ def test_something():
 
     failures:
 
-    test::test_something:
+    test::test_something (uses auto-use fixture `auto_fixture`):
 
     error[fixture-failure]: Fixture `failing_dep` failed
      --> test.py:5:5
@@ -437,8 +437,8 @@ def test_second():
 
     failures:
 
-    test::test_first:
-    test::test_second:
+    test::test_first (uses auto-use fixture `failing_scoped_fixture`):
+    test::test_second (uses auto-use fixture `failing_scoped_fixture`):
 
     error[fixture-failure]: Fixture `failing_scoped_fixture` failed
      --> test.py:5:5

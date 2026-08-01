@@ -395,7 +395,7 @@ def test_example(broken):
 
     failures:
 
-    test::test_example:
+    test::test_example (requires fixture `broken`):
 
     error[fixture-failure]: Fixture `broken` failed
       --> test.py:11:5

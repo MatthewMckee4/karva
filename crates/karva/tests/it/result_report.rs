@@ -286,6 +286,146 @@ fn writes_jsonl_result_records() {
 }
 
 #[test]
+fn reports_fixture_failure_causality_for_parameters_and_retries() {
+    let context = TestContext::with_file(
+        "test_fixture.py",
+        r#"
+import karva
+
+@karva.fixture
+def root():
+    raise RuntimeError("setup failed")
+
+@karva.fixture
+def nested(root):
+    return root
+
+@karva.tags.parametrize("value", [1, 2])
+def test_blocked(nested, value):
+    raise AssertionError("test body ran")
+"#,
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
+            "--retry=1",
+            "--status-level=none",
+            "--result-output=reports/results.json",
+        ]),
+        @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test_fixture::test_blocked(value=1) (requires fixture `nested`):
+    test_fixture::test_blocked(value=2) (requires fixture `nested`):
+
+    error[fixture-failure]: Fixture `root` failed
+     --> test_fixture.py:5:5
+      |
+    5 | def root():
+      |     ^^^^
+      |
+    info: Fixture `nested` requires `root`
+     --> test_fixture.py:9:5
+      |
+    9 | def nested(root):
+      |     ^^^^^^
+      |
+    info: Fixture failed here
+     --> test_fixture.py:6:5
+      |
+    6 |     raise RuntimeError("setup failed")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: setup failed
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 errors, 0 skipped
+
+    ----- stderr -----
+    "#
+    );
+
+    let report: Value = serde_json::from_str(&context.read_file("reports/results.json"))
+        .expect("result report should be valid JSON");
+    let tests = report["tests"]
+        .as_array()
+        .expect("tests should be an array");
+    assert_eq!(tests.len(), 2);
+    for test in tests {
+        let expected = serde_json::json!([{
+            "fixture": "nested",
+            "usage": "required",
+            "dependency_chain": ["nested", "root"],
+        }]);
+        assert_eq!(test["fixture_failures"], expected);
+        assert_eq!(test["attempts"][0]["fixture_failures"], expected);
+        assert_eq!(test["attempts"][1]["fixture_failures"], expected);
+    }
+
+    insta::allow_duplicates! {
+        assert_cmd_snapshot!(
+            context.command_no_parallel().args([
+                "--retry=1",
+                "--status-level=none",
+                "--result-output=reports/results.jsonl",
+                "--result-format=jsonl",
+                "--no-cache",
+            ]),
+            @r#"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+
+        failures:
+
+        test_fixture::test_blocked(value=1) (requires fixture `nested`):
+        test_fixture::test_blocked(value=2) (requires fixture `nested`):
+
+        error[fixture-failure]: Fixture `root` failed
+         --> test_fixture.py:5:5
+          |
+        5 | def root():
+          |     ^^^^
+          |
+        info: Fixture `nested` requires `root`
+         --> test_fixture.py:9:5
+          |
+        9 | def nested(root):
+          |     ^^^^^^
+          |
+        info: Fixture failed here
+         --> test_fixture.py:6:5
+          |
+        6 |     raise RuntimeError("setup failed")
+          |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          |
+        info: setup failed
+
+        ────────────
+             Summary [TIME] 2 tests run: 0 passed, 2 errors, 0 skipped
+
+        ----- stderr -----
+        "#
+        );
+    }
+    let records = context
+        .read_file("reports/results.jsonl")
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("record should be valid JSON"))
+        .collect::<Vec<_>>();
+    for test in records.iter().filter(|record| record["type"] == "test") {
+        assert_eq!(
+            test["fixture_failures"][0]["dependency_chain"],
+            serde_json::json!(["nested", "root"]),
+        );
+    }
+}
+
+#[test]
 fn flaky_result_fail_marks_json_run_failed() {
     let context = TestContext::with_file(
         "test_flaky.py",

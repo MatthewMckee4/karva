@@ -5,6 +5,7 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use karva_diagnostic::{FixtureFailure, FixtureUsage};
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
 use ruff_db::diagnostic::Diagnostic;
@@ -31,27 +32,31 @@ impl PackageRunner<'_, '_> {
         parents: &'a [&'a crate::discovery::DiscoveredPackage],
         current: &'a (dyn HasFixtures<'a> + 'a),
         scope: FixtureScope,
-    ) -> Result<(), Vec<Diagnostic>> {
+    ) -> Result<(), FixtureSetupFailures> {
         let mut resolver = RuntimeFixtureResolver::new(parents, current);
         let auto_use_fixtures = match resolver.get_normalized_auto_use_fixtures(py, scope) {
             Ok(fixtures) => fixtures,
             Err(error) => {
                 let mut diagnostics = vec![fixture_resolution_diagnostic(error)];
                 diagnostics.extend(self.clean_up_scope(py, scope));
-                return Err(diagnostics);
+                return Err(FixtureSetupFailures {
+                    diagnostics,
+                    fixture_failures: Vec::new(),
+                });
             }
         };
 
-        let auto_use_errors = self.run_fixtures(py, &auto_use_fixtures);
+        let auto_use_errors = self.run_fixtures(py, &auto_use_fixtures, FixtureUsage::AutoUse);
         if auto_use_errors.is_empty() {
             Ok(())
         } else {
-            let mut diagnostics = auto_use_errors
-                .into_iter()
-                .map(|error| fixture_failure_diagnostic(py, error, self.context.is_verbose()))
-                .collect::<Vec<_>>();
+            let (mut diagnostics, fixture_failures) =
+                fixture_failure_diagnostics(py, auto_use_errors, self.context.is_verbose());
             diagnostics.extend(self.clean_up_scope(py, scope));
-            Err(diagnostics)
+            Err(FixtureSetupFailures {
+                diagnostics,
+                fixture_failures,
+            })
         }
     }
 
@@ -68,7 +73,8 @@ impl PackageRunner<'_, '_> {
         params: HashMap<String, Arc<Py<PyAny>>>,
     ) -> PreparedFixtures {
         let mut test_finalizers = Vec::new();
-        let mut fixture_call_errors = self.run_fixtures(py, use_fixture_dependencies);
+        let mut fixture_call_errors =
+            self.run_fixtures(py, use_fixture_dependencies, FixtureUsage::UseFixtures);
         let mut function_arguments = FixtureArguments::default();
 
         for fixture in fixture_dependencies {
@@ -81,11 +87,15 @@ impl PackageRunner<'_, '_> {
                         test_finalizers.push(finalizer);
                     }
                 }
-                Err(error) => fixture_call_errors.push(error),
+                Err(error) => fixture_call_errors.push(PreparedFixtureFailure::new(
+                    fixture.function_name(),
+                    FixtureUsage::Required,
+                    error,
+                )),
             }
         }
 
-        fixture_call_errors.extend(self.run_fixtures(py, auto_use_fixtures));
+        fixture_call_errors.extend(self.run_fixtures(py, auto_use_fixtures, FixtureUsage::AutoUse));
 
         for (key, value) in params {
             function_arguments.insert(
@@ -197,13 +207,18 @@ impl PackageRunner<'_, '_> {
         &self,
         py: Python<'_>,
         fixtures: &[P],
-    ) -> Vec<FixtureCallError> {
+        usage: FixtureUsage,
+    ) -> Vec<PreparedFixtureFailure> {
         let mut errors = Vec::new();
         for fixture in fixtures {
             match self.run_fixture(py, fixture) {
                 Ok((_, Some(finalizer))) => self.finalizer_cache.add_finalizer(finalizer),
                 Ok((_, None)) => {}
-                Err(error) => errors.push(error),
+                Err(error) => errors.push(PreparedFixtureFailure::new(
+                    fixture.function_name(),
+                    usage,
+                    error,
+                )),
             }
         }
         errors
@@ -215,9 +230,63 @@ pub(super) struct PreparedFixtures {
     /// Keyword arguments passed to the Python test function.
     pub(super) function_arguments: FixtureArguments,
     /// Fixture setup failures that prevent the test call.
-    pub(super) fixture_call_errors: Vec<FixtureCallError>,
+    pub(super) fixture_call_errors: Vec<PreparedFixtureFailure>,
     /// Function-scoped finalizers run after this attempt.
     pub(super) test_finalizers: Vec<Finalizer>,
+}
+
+pub(super) struct FixtureSetupFailures {
+    pub(super) diagnostics: Vec<Diagnostic>,
+    pub(super) fixture_failures: Vec<FixtureFailure>,
+}
+
+pub(super) struct PreparedFixtureFailure {
+    pub(super) error: FixtureCallError,
+    pub(super) fixture_failure: FixtureFailure,
+}
+
+impl PreparedFixtureFailure {
+    fn new(requested_fixture: &str, usage: FixtureUsage, error: FixtureCallError) -> Self {
+        let mut dependency_chain = vec![requested_fixture.to_string()];
+        dependency_chain.extend(
+            error
+                .dependency_chain
+                .iter()
+                .rev()
+                .map(|entry| entry.name.clone())
+                .filter(|name| name != requested_fixture),
+        );
+        if dependency_chain
+            .last()
+            .is_none_or(|name| name != &error.fixture_name)
+        {
+            dependency_chain.push(error.fixture_name.clone());
+        }
+        Self {
+            fixture_failure: FixtureFailure::new(
+                requested_fixture.to_string(),
+                usage,
+                dependency_chain,
+            ),
+            error,
+        }
+    }
+}
+
+pub(super) fn fixture_failure_diagnostics(
+    py: Python<'_>,
+    failures: Vec<PreparedFixtureFailure>,
+    verbose: bool,
+) -> (Vec<Diagnostic>, Vec<FixtureFailure>) {
+    failures
+        .into_iter()
+        .map(|failure| {
+            (
+                fixture_failure_diagnostic(py, failure.error, verbose),
+                failure.fixture_failure,
+            )
+        })
+        .unzip()
 }
 
 /// Failure raised while preparing or calling a fixture.
