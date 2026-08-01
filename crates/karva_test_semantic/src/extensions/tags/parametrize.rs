@@ -64,8 +64,6 @@ pub enum InvalidParametrizeError {
     UnknownName { name: String },
     #[error("Parameter ID cannot be empty")]
     EmptyId,
-    #[error("Parameter ID `{id}` is used more than once")]
-    DuplicateId { id: String },
 }
 
 struct ParametrizeSyntax<'a> {
@@ -167,7 +165,7 @@ impl InvalidParametrizeError {
             Self::UnknownName { name } => {
                 name_diagnostic_location(&syntaxes, name, "not accepted by test", function)
             }
-            Self::EmptyId | Self::DuplicateId { .. } => None,
+            Self::EmptyId => None,
         }
     }
 }
@@ -415,6 +413,42 @@ impl ParametrizationArgs {
 
     pub(crate) fn id(&self) -> Option<&str> {
         self.has_explicit_id.then_some(self.id.as_str())
+    }
+}
+
+fn make_unique_parametrize_ids(parametrizations: &mut [ParametrizationArgs]) {
+    let mut id_counts = HashMap::new();
+    for parametrization in &*parametrizations {
+        if !parametrization.id.is_empty() {
+            *id_counts.entry(parametrization.id.clone()).or_insert(0) += 1;
+        }
+    }
+
+    let mut used_ids = parametrizations
+        .iter()
+        .map(|parametrization| parametrization.id.clone())
+        .collect::<HashSet<_>>();
+    let mut id_suffixes = HashMap::new();
+    for parametrization in parametrizations {
+        if id_counts.get(&parametrization.id).copied().unwrap_or(0) < 2 {
+            continue;
+        }
+
+        let id = &parametrization.id;
+        let separator = if id.ends_with(|character: char| character.is_ascii_digit()) {
+            "_"
+        } else {
+            ""
+        };
+        let counter = id_suffixes.entry(id.clone()).or_insert(0);
+        loop {
+            let candidate = format!("{id}{separator}{counter}");
+            *counter += 1;
+            if used_ids.insert(candidate.clone()) {
+                parametrization.id = candidate;
+                break;
+            }
+        }
     }
 }
 
@@ -706,6 +740,7 @@ impl ParametrizeTag {
             };
             param_args.push(current_param_args);
         }
+        make_unique_parametrize_ids(&mut param_args);
         param_args
     }
 }

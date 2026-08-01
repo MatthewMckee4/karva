@@ -1585,14 +1585,18 @@ def test_values(left, right):
 }
 
 #[rstest]
-fn test_parametrize_rejects_duplicate_ids(#[values("pytest", "karva")] framework: &str) {
+fn test_parametrize_disambiguates_duplicate_ids(#[values("pytest", "karva")] framework: &str) {
     let test_context = TestContext::with_file(
         "test.py",
         &format!(
             r#"
 import {framework}
 
-@{parametrize}("value", [1, 2], ids=["same", "same"])
+@{parametrize}(
+    "value",
+    [1, 2, 3, 4, 5],
+    ids=["same", "same", "same0", "ending1", "ending1"],
+)
 def test_value(value):
     pass
 "#,
@@ -1602,25 +1606,17 @@ def test_value(value):
 
     allow_duplicates! {
         assert_cmd_snapshot!(test_context.command(), @"
-        success: false
-        exit_code: 1
+        success: true
+        exit_code: 0
         ----- stdout -----
             Starting 1 test across 1 worker
-               ERROR [TIME] test::test_value
-
-        failures:
-
-        test::test_value:
-
-        error[invalid-parametrize]: Parameter ID `same` is used more than once
-         --> test.py:5:5
-          |
-        5 | def test_value(value):
-          |     ^^^^^^^^^^
-          |
-
+                PASS [TIME] test::test_value(same1)
+                PASS [TIME] test::test_value(same2)
+                PASS [TIME] test::test_value(same0)
+                PASS [TIME] test::test_value(ending1_0)
+                PASS [TIME] test::test_value(ending1_1)
         ────────────
-             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+             Summary [TIME] 5 tests run: 5 passed, 0 skipped
 
         ----- stderr -----
         ");
