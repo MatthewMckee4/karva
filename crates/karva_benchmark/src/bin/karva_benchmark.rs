@@ -131,6 +131,7 @@ struct DiagnosticComparison {
 struct TestStats {
     passed: usize,
     failed: usize,
+    errors: usize,
     skipped: usize,
 }
 
@@ -621,7 +622,7 @@ fn diagnostic_comparison(
 fn parse_test_stats(output: &str) -> Option<TestStats> {
     static SUMMARY: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(
-            r"(?m)^\s*Summary \[TIME\] \d+ tests? run: (?P<passed>\d+) passed(?: \(\d+ flaky\))?(?:, (?P<failed>\d+) failed)?, (?P<skipped>\d+) skipped",
+            r"(?m)^\s*Summary \[TIME\] \d+ tests? run: (?P<passed>\d+) passed(?: \(\d+ flaky\))?(?:, (?P<failed>\d+) failed)?(?:, (?P<errors>\d+) errors?)?, (?P<skipped>\d+) skipped",
         )
         .expect("summary regex should be valid")
     });
@@ -631,6 +632,9 @@ fn parse_test_stats(output: &str) -> Option<TestStats> {
         passed: captures.name("passed")?.as_str().parse().ok()?,
         failed: captures
             .name("failed")
+            .map_or(Some(0), |value| value.as_str().parse().ok())?,
+        errors: captures
+            .name("errors")
             .map_or(Some(0), |value| value.as_str().parse().ok())?,
         skipped: captures.name("skipped")?.as_str().parse().ok()?,
     })
@@ -809,14 +813,14 @@ fn test_result(stats: Option<&TestStats>) -> String {
     stats.map_or_else(
         || "—".to_string(),
         |stats| {
-            let icon = if stats.failed == 0 {
+            let icon = if stats.failed == 0 && stats.errors == 0 {
                 ":white_check_mark:"
             } else {
                 ":x:"
             };
             format!(
-                "{icon} {} pass · {} fail · {} skip",
-                stats.passed, stats.failed, stats.skipped
+                "{icon} {} pass · {} fail · {} error · {} skip",
+                stats.passed, stats.failed, stats.errors, stats.skipped
             )
         },
     )
@@ -1156,7 +1160,7 @@ mod tests {
         let candidate = normalize_diagnostic_text(
             "    PASS [   0.900s] test_hooks(hook=<function hook at 0x456def>)\n\
              new diagnostic\n\
-             Summary [   1.000s] 3 tests run: 1 passed, 1 failed, 1 skipped\n",
+             Summary [   1.000s] 3 tests run: 1 passed, 1 error, 1 skipped\n",
         );
         insta::assert_snapshot!(baseline, @"
             PASS [TIME] test_hooks(hook=<function hook at 0xADDR>)
@@ -1178,7 +1182,7 @@ mod tests {
 
         | Project | Previous | New |
         | --- | --- | --- |
-        | `requests` | :white_check_mark: 2 pass · 0 fail · 1 skip | :x: 1 pass · 1 fail · 1 skip |
+        | `requests` | :white_check_mark: 2 pass · 0 fail · 0 error · 1 skip | :x: 1 pass · 0 fail · 1 error · 1 skip |
 
         </details>
 
@@ -1194,7 +1198,7 @@ mod tests {
              PASS [TIME] test_hooks(hook=<function hook at 0xADDR>)
         -Summary [TIME] 3 tests run: 2 passed, 1 skipped
         +new diagnostic
-        +Summary [TIME] 3 tests run: 1 passed, 1 failed, 1 skipped
+        +Summary [TIME] 3 tests run: 1 passed, 1 error, 1 skipped
         ```
 
         </details>
@@ -1222,7 +1226,7 @@ mod tests {
 
         | Project | Previous | New |
         | --- | --- | --- |
-        | `requests` | :white_check_mark: 1 pass · 0 fail · 0 skip | :white_check_mark: 1 pass · 0 fail · 0 skip |
+        | `requests` | :white_check_mark: 1 pass · 0 fail · 0 error · 0 skip | :white_check_mark: 1 pass · 0 fail · 0 error · 0 skip |
 
         </details>
         ");
