@@ -115,6 +115,7 @@ struct ProjectComparison {
     baseline: Measurement,
     candidate: Measurement,
     percent_change: f64,
+    successful_workload: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     diagnostics: Option<DiagnosticComparison>,
 }
@@ -127,7 +128,7 @@ struct DiagnosticComparison {
     diff: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct TestStats {
     passed: usize,
     failed: usize,
@@ -249,7 +250,22 @@ fn compare(args: CompareArgs) -> Result<()> {
                 run_subject(config, project.cwd(), &mut candidate)?;
                 run_subject(config, project.cwd(), &mut baseline)?;
             }
+
+            if iteration == 0
+                && !is_equivalent_successful_workload(
+                    baseline_diagnostic_output.as_deref(),
+                    candidate_diagnostic_output.as_deref(),
+                )
+            {
+                break;
+            }
         }
+
+        let successful_workload = is_equivalent_successful_workload(
+            baseline_diagnostic_output.as_deref(),
+            candidate_diagnostic_output.as_deref(),
+        );
+        let completed_iterations = baseline_wall_time_values.len();
 
         let baseline_wall_time = Measurement::new(baseline_wall_time_values);
         let candidate_wall_time = Measurement::new(candidate_wall_time_values);
@@ -258,10 +274,11 @@ fn compare(args: CompareArgs) -> Result<()> {
 
         wall_time_comparisons.push(ProjectComparison {
             name: config.name.to_string(),
-            iterations: args.iterations,
+            iterations: completed_iterations,
             baseline: baseline_wall_time,
             candidate: candidate_wall_time,
             percent_change: wall_time_percent_change,
+            successful_workload,
             diagnostics: diagnostic_comparison(
                 baseline_diagnostic_output.as_deref(),
                 candidate_diagnostic_output.as_deref(),
@@ -276,10 +293,11 @@ fn compare(args: CompareArgs) -> Result<()> {
 
         memory_comparisons.push(ProjectComparison {
             name: config.name.to_string(),
-            iterations: args.iterations,
+            iterations: completed_iterations,
             baseline: baseline_memory,
             candidate: candidate_memory,
             percent_change: memory_percent_change,
+            successful_workload,
             diagnostics: None,
         });
     }
@@ -619,6 +637,17 @@ fn diagnostic_comparison(
     })
 }
 
+fn is_equivalent_successful_workload(baseline: Option<&str>, candidate: Option<&str>) -> bool {
+    let (Some(baseline), Some(candidate)) = (
+        baseline.and_then(parse_test_stats),
+        candidate.and_then(parse_test_stats),
+    ) else {
+        return false;
+    };
+
+    baseline == candidate && baseline.failed == 0 && baseline.errors == 0
+}
+
 fn parse_test_stats(output: &str) -> Option<TestStats> {
     static SUMMARY: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(
@@ -696,6 +725,21 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
     let (marker, verdict) = verdict(report.metric, &summary);
     writeln!(body, "### {marker} {verdict}")?;
 
+    let incompatible = report
+        .projects
+        .iter()
+        .filter(|project| !project.successful_workload)
+        .map(|project| format!("`{}`", project.name))
+        .collect::<Vec<_>>();
+    if !incompatible.is_empty() {
+        writeln!(body)?;
+        writeln!(
+            body,
+            "Compatibility failures excluded from performance results: {}. See the diagnostic comparison.",
+            incompatible.join(", ")
+        )?;
+    }
+
     if summary.slower > 0 {
         writeln!(body)?;
         writeln!(
@@ -727,10 +771,9 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
         write_project_table(
             &mut body,
             report.metric,
-            report
-                .projects
-                .iter()
-                .filter(|project| is_material_change(project.percent_change)),
+            report.projects.iter().filter(|project| {
+                project.successful_workload && is_material_change(project.percent_change)
+            }),
         )?;
     }
 
@@ -738,7 +781,14 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
     writeln!(body, "<details>")?;
     writeln!(body, "<summary>All benchmark scores</summary>")?;
     writeln!(body)?;
-    write_project_table(&mut body, report.metric, &report.projects)?;
+    write_project_table(
+        &mut body,
+        report.metric,
+        report
+            .projects
+            .iter()
+            .filter(|project| project.successful_workload),
+    )?;
     writeln!(body)?;
     writeln!(body, "</details>")?;
 
@@ -857,7 +907,10 @@ impl ReportSummary {
     fn new(projects: &[ProjectComparison]) -> Self {
         let mut summary = Self::default();
 
-        for project in projects {
+        for project in projects
+            .iter()
+            .filter(|project| project.successful_workload)
+        {
             match trend(project.percent_change) {
                 "faster" => summary.faster += 1,
                 "slower" => summary.slower += 1,
@@ -1059,8 +1112,8 @@ mod tests {
     use super::{
         BenchmarkMetric, ComparisonReport, FAST_PROJECT_ITERATIONS, LONG_PROJECT_ITERATIONS,
         MEDIUM_PROJECT_ITERATIONS, Measurement, ProjectComparison, diagnostic_comparison,
-        diagnostics_markdown_report, is_benchmarkable_exit, karva_invocation, markdown_report,
-        matrix_iterations, normalize_diagnostic_text, trend,
+        diagnostics_markdown_report, is_benchmarkable_exit, is_equivalent_successful_workload,
+        karva_invocation, markdown_report, matrix_iterations, normalize_diagnostic_text, trend,
     };
 
     #[test]
@@ -1233,6 +1286,58 @@ mod tests {
     }
 
     #[test]
+    fn performance_requires_equivalent_successful_workloads() {
+        let successful =
+            normalize_diagnostic_text("Summary [   0.100s] 3 tests run: 2 passed, 1 skipped\n");
+        let errors = normalize_diagnostic_text(
+            "Summary [   0.100s] 3 tests run: 2 passed, 1 error, 0 skipped\n",
+        );
+        let different =
+            normalize_diagnostic_text("Summary [   0.100s] 2 tests run: 2 passed, 0 skipped\n");
+
+        assert!(is_equivalent_successful_workload(
+            Some(&successful),
+            Some(&successful)
+        ));
+        assert!(!is_equivalent_successful_workload(
+            Some(&successful),
+            Some(&errors)
+        ));
+        assert!(!is_equivalent_successful_workload(
+            Some(&successful),
+            Some(&different)
+        ));
+    }
+
+    #[test]
+    fn markdown_report_excludes_compatibility_failures() {
+        let mut incompatible = project("pydantic", 1, 10.0, 1.0);
+        incompatible.successful_workload = false;
+
+        let markdown = markdown_report(&report_with_projects(vec![
+            project("requests", 21, 1.0, 1.0),
+            incompatible,
+        ]))
+        .expect("report should render");
+
+        insta::assert_snapshot!(markdown, @"
+        <!-- karva-benchmark-comparison -->
+        ### :white_check_mark: Merging this PR will not alter performance
+
+        Compatibility failures excluded from performance results: `pydantic`. See the diagnostic comparison.
+
+        <details>
+        <summary>All benchmark scores</summary>
+
+        |  | Mode | Benchmark | Base | Head | Change | Runs |
+        | --- | --- | --- | ---: | ---: | ---: | ---: |
+        | :white_check_mark: | WallTime | `requests` | 1.000 s | 1.000 s | +0.0% | 21 |
+
+        </details>
+        ");
+    }
+
+    #[test]
     fn trend_uses_material_change_threshold() {
         assert_eq!(trend(-1.0), "faster");
         assert_eq!(trend(1.0), "slower");
@@ -1308,6 +1413,7 @@ mod tests {
             baseline: measurement(baseline),
             candidate: measurement(candidate),
             percent_change: super::percent_change(baseline, candidate),
+            successful_workload: true,
             diagnostics: None,
         }
     }

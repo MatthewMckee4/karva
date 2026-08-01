@@ -287,6 +287,15 @@ jobs:
             --input-dir "${RUNNER_TEMP}/benchmark-memory-reports" \
             --output-markdown "${RUNNER_TEMP}/benchmark-memory-report.md"
 
+      - name: Upload full benchmark reports
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: benchmark-markdown-reports
+          path: |
+            ${{ runner.temp }}/benchmark-report.md
+            ${{ runner.temp }}/benchmark-memory-report.md
+            ${{ runner.temp }}/diagnostic-report.md
+
       - name: Comment benchmark reports
         if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
         env:
@@ -300,6 +309,16 @@ jobs:
             local report_path="$2"
             local payload_path="$3"
             local comment_id
+            local max_length=65536 # GitHub issue-comment body limit reported by issue #1106.
+            local truncation_notice
+
+            truncation_notice=$(cat <<EOF
+
+
+          > [!NOTE]
+          > Report truncated to fit GitHub's comment limit. [Download the complete report artifact](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}#artifacts).
+          EOF
+            )
 
             comment_id=$(
               gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
@@ -307,7 +326,12 @@ jobs:
                 | tail -n 1
             )
 
-            jq -n --rawfile body "${report_path}" '{body: $body}' > "${payload_path}"
+            jq -n \
+              --rawfile body "${report_path}" \
+              --arg notice "${truncation_notice}" \
+              --argjson max_length "${max_length}" \
+              '{body: (if ($body | length) > $max_length then $body[:$max_length - ($notice | length)] + $notice else $body end)}' \
+              > "${payload_path}"
 
             if [[ -n "${comment_id}" ]]; then
               gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" \
