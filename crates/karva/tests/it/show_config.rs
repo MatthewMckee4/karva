@@ -36,6 +36,7 @@ fn show_config_default_profile() {
     [junit]
     report-name = "karva-tests"
     store-failure-output = true
+    flaky-fail-status = "failure"
 
     ----- stderr -----
     "#);
@@ -86,6 +87,7 @@ output-format = "concise"
     [junit]
     report-name = "karva-tests"
     store-failure-output = true
+    flaky-fail-status = "failure"
 
     ----- stderr -----
     "#);
@@ -137,6 +139,7 @@ output-format = "concise"
     [junit]
     report-name = "karva-tests"
     store-failure-output = true
+    flaky-fail-status = "failure"
 
     ----- stderr -----
     "#);
@@ -195,6 +198,7 @@ fail-under = 90
     [junit]
     report-name = "karva-tests"
     store-failure-output = true
+    flaky-fail-status = "failure"
 
     ----- stderr -----
     "#);
@@ -246,6 +250,7 @@ slow-timeout = 0.5
     [junit]
     report-name = "karva-tests"
     store-failure-output = true
+    flaky-fail-status = "failure"
 
     [[overrides]]
     filter = "tag(network)"
