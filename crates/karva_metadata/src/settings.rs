@@ -8,6 +8,27 @@ use crate::filter::{EvalContext, FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
 use crate::options::{CovReport, OutputFormat};
 
+macro_rules! impl_duration_secs_deserialize {
+    ($type:ident, $option:literal) => {
+        impl<'de> Deserialize<'de> for $type {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                let seconds = f64::deserialize(deserializer)?;
+                if !seconds.is_finite() || (seconds > 0.0 && Self(seconds).as_duration().is_none())
+                {
+                    return Err(serde::de::Error::custom(concat!(
+                        $option,
+                        " must be a finite duration supported by this platform"
+                    )));
+                }
+                Ok(Self(seconds))
+            }
+        }
+    };
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunIgnoredMode {
     #[default]
@@ -43,7 +64,7 @@ impl Combine for NoTestsMode {
 /// deriving `Eq`/`Combine` without pulling `f64` into those bounds. Bit-wise
 /// equality is used (`NaN` is not a valid value because the option is
 /// validated at parse time).
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct SlowTimeoutSecs(pub f64);
@@ -53,12 +74,16 @@ impl Eq for SlowTimeoutSecs {}
 impl SlowTimeoutSecs {
     pub fn as_duration(self) -> Option<Duration> {
         if self.0.is_finite() && self.0 > 0.0 {
-            Some(Duration::from_secs_f64(self.0))
+            Duration::try_from_secs_f64(self.0)
+                .ok()
+                .filter(|duration| !duration.is_zero())
         } else {
             None
         }
     }
 }
+
+impl_duration_secs_deserialize!(SlowTimeoutSecs, "slow-timeout");
 
 impl Combine for SlowTimeoutSecs {
     #[inline(always)]
@@ -75,7 +100,7 @@ impl Combine for SlowTimeoutSecs {
 /// Wraps `f64` for the same reason as [`SlowTimeoutSecs`]. Tests exceeding
 /// this duration are killed and reported as failures (see
 /// [`crate::settings::TestSettings::timeout`]).
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct TestTimeoutSecs(pub f64);
@@ -85,12 +110,16 @@ impl Eq for TestTimeoutSecs {}
 impl TestTimeoutSecs {
     pub fn as_duration(self) -> Option<Duration> {
         if self.0.is_finite() && self.0 > 0.0 {
-            Some(Duration::from_secs_f64(self.0))
+            Duration::try_from_secs_f64(self.0)
+                .ok()
+                .filter(|duration| !duration.is_zero())
         } else {
             None
         }
     }
 }
+
+impl_duration_secs_deserialize!(TestTimeoutSecs, "timeout");
 
 impl Combine for TestTimeoutSecs {
     #[inline(always)]
@@ -128,20 +157,7 @@ impl FailSlowSecs {
     }
 }
 
-impl<'de> Deserialize<'de> for FailSlowSecs {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let seconds = f64::deserialize(deserializer)?;
-        if !seconds.is_finite() || (seconds > 0.0 && Self(seconds).as_duration().is_none()) {
-            return Err(serde::de::Error::custom(
-                "fail-slow must be a finite duration supported by this platform",
-            ));
-        }
-        Ok(Self(seconds))
-    }
-}
+impl_duration_secs_deserialize!(FailSlowSecs, "fail-slow");
 
 impl Combine for FailSlowSecs {
     #[inline(always)]
@@ -154,7 +170,7 @@ impl Combine for FailSlowSecs {
 }
 
 /// A global run timeout expressed in seconds.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct RunTimeoutSecs(pub f64);
@@ -164,12 +180,16 @@ impl Eq for RunTimeoutSecs {}
 impl RunTimeoutSecs {
     pub fn as_duration(self) -> Option<Duration> {
         if self.0.is_finite() && self.0 > 0.0 {
-            Some(Duration::from_secs_f64(self.0))
+            Duration::try_from_secs_f64(self.0)
+                .ok()
+                .filter(|duration| !duration.is_zero())
         } else {
             None
         }
     }
 }
+
+impl_duration_secs_deserialize!(RunTimeoutSecs, "run-timeout");
 
 impl Combine for RunTimeoutSecs {
     #[inline(always)]
@@ -182,7 +202,7 @@ impl Combine for RunTimeoutSecs {
 }
 
 /// Grace period between graceful termination and force-kill, in seconds.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct TerminationGracePeriodSecs(pub f64);
@@ -192,12 +212,14 @@ impl Eq for TerminationGracePeriodSecs {}
 impl TerminationGracePeriodSecs {
     pub fn as_duration(self) -> Option<Duration> {
         if self.0.is_finite() && self.0 >= 0.0 {
-            Some(Duration::from_secs_f64(self.0))
+            Duration::try_from_secs_f64(self.0).ok()
         } else {
             None
         }
     }
 }
+
+impl_duration_secs_deserialize!(TerminationGracePeriodSecs, "termination-grace-period");
 
 impl Combine for TerminationGracePeriodSecs {
     #[inline(always)]

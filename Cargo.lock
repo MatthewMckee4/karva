@@ -1317,6 +1317,7 @@ dependencies = [
  "karva_macros",
  "karva_version",
  "regex",
+ "rstest",
  "ruff_db",
  "ruff_options_metadata",
  "ruff_python_ast",
