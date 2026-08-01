@@ -8,14 +8,16 @@ use std::io::Write as _;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::sync::LazyLock;
+#[cfg(target_os = "linux")]
 use std::time::Instant;
 use std::{collections::HashSet, io};
 
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use fs_err::{self as fs, File};
 use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject, CLI_BENCHMARK_PROJECTS, WORKER_COUNT};
+use karva_cli::ExitStatus;
 use karva_static::ToolEnvVars;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -24,6 +26,7 @@ use similar::{Algorithm, TextDiff};
 const MATERIAL_CHANGE_PERCENT: f64 = 1.0;
 const FAST_PROJECT_ITERATIONS: usize = 21;
 const MEDIUM_PROJECT_ITERATIONS: usize = 15;
+const LONG_PROJECT_ITERATIONS: usize = MEDIUM_PROJECT_ITERATIONS / 2;
 
 #[derive(Debug, Parser)]
 #[command(about = "Run Karva benchmark comparisons")]
@@ -41,9 +44,6 @@ enum Commands {
 
 #[derive(Debug, Parser)]
 struct CompareArgs {
-    #[arg(long, value_enum, default_value_t = BenchmarkMetric::WallTime)]
-    metric: BenchmarkMetric,
-
     #[arg(long)]
     baseline_label: String,
 
@@ -63,10 +63,16 @@ struct CompareArgs {
     projects: Vec<String>,
 
     #[arg(long, value_name = "PATH")]
-    output_json: PathBuf,
+    output_wall_time_json: PathBuf,
 
     #[arg(long, value_name = "PATH")]
-    output_markdown: PathBuf,
+    output_wall_time_markdown: PathBuf,
+
+    #[arg(long, value_name = "PATH")]
+    output_memory_json: PathBuf,
+
+    #[arg(long, value_name = "PATH")]
+    output_memory_markdown: PathBuf,
 }
 
 #[derive(Debug, Parser)]
@@ -144,11 +150,12 @@ struct ReportSummary {
 struct Subject<'a> {
     label: &'a str,
     wheel: &'a Utf8Path,
-    values: &'a mut Vec<f64>,
+    wall_time_values: &'a mut Vec<f64>,
+    memory_values: &'a mut Vec<f64>,
     diagnostic_output: &'a mut Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
+#[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum BenchmarkMetric {
     WallTime,
@@ -162,7 +169,8 @@ struct KarvaInvocation {
 }
 
 struct RunMeasurement {
-    value: f64,
+    wall_time: f64,
+    peak_rss_kib: f64,
     output: Output,
 }
 
@@ -198,17 +206,22 @@ fn compare(args: CompareArgs) -> Result<()> {
 
     let baseline_wheel = utf8_path(args.baseline_wheel)?;
     let candidate_wheel = utf8_path(args.candidate_wheel)?;
-    let output_json = utf8_path(args.output_json)?;
-    let output_markdown = utf8_path(args.output_markdown)?;
+    let output_wall_time_json = utf8_path(args.output_wall_time_json)?;
+    let output_wall_time_markdown = utf8_path(args.output_wall_time_markdown)?;
+    let output_memory_json = utf8_path(args.output_memory_json)?;
+    let output_memory_markdown = utf8_path(args.output_memory_markdown)?;
     let projects = selected_projects(&args.projects)?;
-    let mut comparisons = Vec::with_capacity(projects.len());
+    let mut wall_time_comparisons = Vec::with_capacity(projects.len());
+    let mut memory_comparisons = Vec::with_capacity(projects.len());
 
     for config in projects {
         eprintln!("Preparing benchmark project `{}`", config.name);
         let project = karva_benchmark::prepare_benchmark_project_environment(config)
             .with_context(|| format!("Failed to prepare benchmark project `{}`", config.name))?;
-        let mut baseline_values = Vec::with_capacity(args.iterations);
-        let mut candidate_values = Vec::with_capacity(args.iterations);
+        let mut baseline_wall_time_values = Vec::with_capacity(args.iterations);
+        let mut baseline_memory_values = Vec::with_capacity(args.iterations);
+        let mut candidate_wall_time_values = Vec::with_capacity(args.iterations);
+        let mut candidate_memory_values = Vec::with_capacity(args.iterations);
         let mut baseline_diagnostic_output = None;
         let mut candidate_diagnostic_output = None;
 
@@ -216,35 +229,38 @@ fn compare(args: CompareArgs) -> Result<()> {
             let mut baseline = Subject {
                 label: &args.baseline_label,
                 wheel: &baseline_wheel,
-                values: &mut baseline_values,
+                wall_time_values: &mut baseline_wall_time_values,
+                memory_values: &mut baseline_memory_values,
                 diagnostic_output: &mut baseline_diagnostic_output,
             };
             let mut candidate = Subject {
                 label: &args.candidate_label,
                 wheel: &candidate_wheel,
-                values: &mut candidate_values,
+                wall_time_values: &mut candidate_wall_time_values,
+                memory_values: &mut candidate_memory_values,
                 diagnostic_output: &mut candidate_diagnostic_output,
             };
 
             if iteration % 2 == 0 {
-                run_subject(args.metric, config, project.cwd(), &mut baseline)?;
-                run_subject(args.metric, config, project.cwd(), &mut candidate)?;
+                run_subject(config, project.cwd(), &mut baseline)?;
+                run_subject(config, project.cwd(), &mut candidate)?;
             } else {
-                run_subject(args.metric, config, project.cwd(), &mut candidate)?;
-                run_subject(args.metric, config, project.cwd(), &mut baseline)?;
+                run_subject(config, project.cwd(), &mut candidate)?;
+                run_subject(config, project.cwd(), &mut baseline)?;
             }
         }
 
-        let baseline = Measurement::new(baseline_values);
-        let candidate = Measurement::new(candidate_values);
-        let percent_change = percent_change(baseline.median, candidate.median);
+        let baseline_wall_time = Measurement::new(baseline_wall_time_values);
+        let candidate_wall_time = Measurement::new(candidate_wall_time_values);
+        let wall_time_percent_change =
+            percent_change(baseline_wall_time.median, candidate_wall_time.median);
 
-        comparisons.push(ProjectComparison {
+        wall_time_comparisons.push(ProjectComparison {
             name: config.name.to_string(),
             iterations: args.iterations,
-            baseline,
-            candidate,
-            percent_change,
+            baseline: baseline_wall_time,
+            candidate: candidate_wall_time,
+            percent_change: wall_time_percent_change,
             diagnostics: diagnostic_comparison(
                 baseline_diagnostic_output.as_deref(),
                 candidate_diagnostic_output.as_deref(),
@@ -252,19 +268,42 @@ fn compare(args: CompareArgs) -> Result<()> {
                 &args.candidate_label,
             ),
         });
+
+        let baseline_memory = Measurement::new(baseline_memory_values);
+        let candidate_memory = Measurement::new(candidate_memory_values);
+        let memory_percent_change = percent_change(baseline_memory.median, candidate_memory.median);
+
+        memory_comparisons.push(ProjectComparison {
+            name: config.name.to_string(),
+            iterations: args.iterations,
+            baseline: baseline_memory,
+            candidate: candidate_memory,
+            percent_change: memory_percent_change,
+            diagnostics: None,
+        });
     }
 
-    let report = ComparisonReport {
-        metric: args.metric,
+    let wall_time_report = ComparisonReport {
+        metric: BenchmarkMetric::WallTime,
+        baseline_label: args.baseline_label.clone(),
+        baseline_wheel: baseline_wheel.clone(),
+        candidate_label: args.candidate_label.clone(),
+        candidate_wheel: candidate_wheel.clone(),
+        projects: wall_time_comparisons,
+    };
+    let memory_report = ComparisonReport {
+        metric: BenchmarkMetric::Memory,
         baseline_label: args.baseline_label,
         baseline_wheel,
         candidate_label: args.candidate_label,
         candidate_wheel,
-        projects: comparisons,
+        projects: memory_comparisons,
     };
 
-    write_json(&output_json, &report)?;
-    write_markdown(&output_markdown, &report)?;
+    write_json(&output_wall_time_json, &wall_time_report)?;
+    write_markdown(&output_wall_time_markdown, &wall_time_report)?;
+    write_json(&output_memory_json, &memory_report)?;
+    write_markdown(&output_memory_markdown, &memory_report)?;
 
     Ok(())
 }
@@ -392,7 +431,6 @@ fn selected_projects(names: &[String]) -> Result<Vec<&'static BenchmarkProject>>
 }
 
 fn run_subject(
-    metric: BenchmarkMetric,
     config: &BenchmarkProject,
     project_root: &Utf8Path,
     subject: &mut Subject<'_>,
@@ -404,78 +442,45 @@ fn run_subject(
     warm_project_cache(config, project_root)
         .with_context(|| format!("Failed to warm benchmark cache for `{}`", config.name))?;
 
-    let measurement = run_project_cli(metric, config, project_root)
+    let measurement = run_project_cli(config, project_root)
         .with_context(|| format!("Failed to run `{}` with `{}`", config.name, subject.label))?;
-    subject.values.push(measurement.value);
-    if metric == BenchmarkMetric::WallTime && subject.diagnostic_output.is_none() {
+    subject.wall_time_values.push(measurement.wall_time);
+    subject.memory_values.push(measurement.peak_rss_kib);
+    if subject.diagnostic_output.is_none() {
         *subject.diagnostic_output = Some(normalize_diagnostic_output(&measurement.output));
     }
 
     eprintln!(
-        "{} / {} / {}: {}",
+        "{} / {} / {}: {} / {}: {}",
         config.name,
         subject.label,
-        metric.mode_label(),
-        metric.format_value(measurement.value)
+        BenchmarkMetric::WallTime.mode_label(),
+        BenchmarkMetric::WallTime.format_value(measurement.wall_time),
+        BenchmarkMetric::Memory.mode_label(),
+        BenchmarkMetric::Memory.format_value(measurement.peak_rss_kib),
     );
 
     Ok(())
 }
 
-fn run_project_cli(
-    metric: BenchmarkMetric,
-    config: &BenchmarkProject,
-    project_root: &Utf8Path,
-) -> Result<RunMeasurement> {
-    match metric {
-        BenchmarkMetric::WallTime => run_project_wall_time(config, project_root),
-        BenchmarkMetric::Memory => run_project_peak_rss_kib(config, project_root),
-    }
-}
-
-fn warm_project_cache(config: &BenchmarkProject, project_root: &Utf8Path) -> Result<()> {
-    let invocation = karva_invocation(config, project_root)?;
-    let output = run_invocation(&invocation, project_root)?;
-    ensure_karva_success(&output, config)
-}
-
-fn run_project_wall_time(
-    config: &BenchmarkProject,
-    project_root: &Utf8Path,
-) -> Result<RunMeasurement> {
-    let invocation = karva_invocation(config, project_root)?;
-
-    let start = Instant::now();
-    let output = run_invocation(&invocation, project_root)?;
-    let elapsed = start.elapsed();
-
-    ensure_karva_success(&output, config)?;
-
-    Ok(RunMeasurement {
-        value: elapsed.as_secs_f64(),
-        output,
-    })
-}
-
-fn run_project_peak_rss_kib(
-    config: &BenchmarkProject,
-    project_root: &Utf8Path,
-) -> Result<RunMeasurement> {
+fn run_project_cli(config: &BenchmarkProject, project_root: &Utf8Path) -> Result<RunMeasurement> {
     #[cfg(target_os = "linux")]
     {
         let invocation = karva_invocation(config, project_root)?;
         let report_path = memory_report_path(project_root, config.name);
 
+        let start = Instant::now();
         let output = Command::new("/usr/bin/time")
             .current_dir(project_root)
             .env(ToolEnvVars::PATH, &invocation.path)
-            .args(["-f", "%M", "-o", report_path.as_str()])
+            .args(["--quiet", "-f", "%M", "-o", report_path.as_str()])
             .arg(invocation.binary.as_str())
             .args(&invocation.args)
             .output()
             .context("Failed to execute `/usr/bin/time` for memory benchmark")?;
+        let elapsed = start.elapsed();
 
-        ensure_karva_success(&output, config)?;
+        ensure_karva_completed(&output, config)?;
 
         let peak_rss_kib = read_peak_rss_kib(&report_path)?;
         if let Err(err) = fs::remove_file(&report_path) {
@@ -483,7 +488,8 @@ fn run_project_peak_rss_kib(
         }
 
         Ok(RunMeasurement {
-            value: peak_rss_kib,
+            wall_time: elapsed.as_secs_f64(),
+            peak_rss_kib,
             output,
         })
     }
@@ -494,6 +500,12 @@ fn run_project_peak_rss_kib(
         let _ = project_root;
         anyhow::bail!("Memory benchmarks require Linux and GNU `/usr/bin/time`")
     }
+}
+
+fn warm_project_cache(config: &BenchmarkProject, project_root: &Utf8Path) -> Result<()> {
+    let invocation = karva_invocation(config, project_root)?;
+    let output = run_invocation(&invocation, project_root)?;
+    ensure_karva_completed(&output, config)
 }
 
 fn run_invocation(invocation: &KarvaInvocation, project_root: &Utf8Path) -> Result<Output> {
@@ -539,9 +551,9 @@ impl KarvaInvocation {
     }
 }
 
-fn ensure_karva_success(output: &Output, config: &BenchmarkProject) -> Result<()> {
+fn ensure_karva_completed(output: &Output, config: &BenchmarkProject) -> Result<()> {
     anyhow::ensure!(
-        output.status.success(),
+        is_benchmarkable_exit(output.status.code()),
         "Karva exited with status {} for `{}`\nstdout:\n{}\nstderr:\n{}",
         output.status,
         config.name,
@@ -550,6 +562,14 @@ fn ensure_karva_success(output: &Output, config: &BenchmarkProject) -> Result<()
     );
 
     Ok(())
+}
+
+fn is_benchmarkable_exit(code: Option<i32>) -> bool {
+    matches!(
+        code,
+        Some(code)
+            if code == ExitStatus::Success.to_i32() || code == ExitStatus::Failure.to_i32()
+    )
 }
 
 fn normalize_diagnostic_output(output: &Output) -> String {
@@ -869,6 +889,7 @@ fn write_summary_line(
 
 fn matrix_iterations(project_name: &str) -> usize {
     match project_name {
+        "fastapi" | "httpx" | "pydantic" => LONG_PROJECT_ITERATIONS,
         "tomlkit" => MEDIUM_PROJECT_ITERATIONS,
         _ => FAST_PROJECT_ITERATIONS,
     }
@@ -1032,9 +1053,10 @@ mod tests {
     use camino::Utf8Path;
 
     use super::{
-        BenchmarkMetric, ComparisonReport, FAST_PROJECT_ITERATIONS, MEDIUM_PROJECT_ITERATIONS,
-        Measurement, ProjectComparison, diagnostic_comparison, diagnostics_markdown_report,
-        karva_invocation, markdown_report, matrix_iterations, normalize_diagnostic_text, trend,
+        BenchmarkMetric, ComparisonReport, FAST_PROJECT_ITERATIONS, LONG_PROJECT_ITERATIONS,
+        MEDIUM_PROJECT_ITERATIONS, Measurement, ProjectComparison, diagnostic_comparison,
+        diagnostics_markdown_report, is_benchmarkable_exit, karva_invocation, markdown_report,
+        matrix_iterations, normalize_diagnostic_text, trend,
     };
 
     #[test]
@@ -1220,7 +1242,24 @@ mod tests {
         assert_eq!(matrix_iterations("h11"), FAST_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("requests"), FAST_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("werkzeug"), FAST_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("fastapi"), LONG_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("httpx"), LONG_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("pydantic"), LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("tomlkit"), MEDIUM_PROJECT_ITERATIONS);
+    }
+
+    #[test]
+    fn test_failures_are_benchmarkable() {
+        assert!(is_benchmarkable_exit(Some(
+            karva_cli::ExitStatus::Success.to_i32()
+        )));
+        assert!(is_benchmarkable_exit(Some(
+            karva_cli::ExitStatus::Failure.to_i32()
+        )));
+        assert!(!is_benchmarkable_exit(Some(
+            karva_cli::ExitStatus::Error.to_i32()
+        )));
+        assert!(!is_benchmarkable_exit(None));
     }
 
     #[test]

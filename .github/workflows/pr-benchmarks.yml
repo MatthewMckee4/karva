@@ -200,26 +200,16 @@ jobs:
           mkdir -p "${report_dir}" "${memory_report_dir}"
 
           target/release/karva-benchmark compare \
-            --metric wall-time \
             --baseline-label "${BASE_LABEL}" \
             --baseline-wheel "${base_wheel}" \
             --candidate-label "${HEAD_LABEL}" \
             --candidate-wheel "${head_wheel}" \
             --iterations "${ITERATIONS}" \
             --project "${PROJECT}" \
-            --output-json "${report_dir}/${PROJECT}.json" \
-            --output-markdown "${report_dir}/${PROJECT}.md"
-
-          target/release/karva-benchmark compare \
-            --metric memory \
-            --baseline-label "${BASE_LABEL}" \
-            --baseline-wheel "${base_wheel}" \
-            --candidate-label "${HEAD_LABEL}" \
-            --candidate-wheel "${head_wheel}" \
-            --iterations "${ITERATIONS}" \
-            --project "${PROJECT}" \
-            --output-json "${memory_report_dir}/${PROJECT}.json" \
-            --output-markdown "${memory_report_dir}/${PROJECT}.md"
+            --output-wall-time-json "${report_dir}/${PROJECT}.json" \
+            --output-wall-time-markdown "${report_dir}/${PROJECT}.md" \
+            --output-memory-json "${memory_report_dir}/${PROJECT}.json" \
+            --output-memory-markdown "${memory_report_dir}/${PROJECT}.md"
 
       - name: Upload benchmark report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
