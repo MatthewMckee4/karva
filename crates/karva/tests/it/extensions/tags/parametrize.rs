@@ -1217,6 +1217,38 @@ def test_value(value):
 }
 
 #[test]
+fn test_multiple_module_level_pytest_parametrize_marks() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r#"import pytest
+
+pytestmark = [
+    pytest.mark.parametrize("left", [1, 2]),
+    pytest.mark.parametrize("right", [3, 4]),
+]
+
+def test_values(left, right):
+    assert left < right
+"#,
+    );
+
+    assert_cmd_snapshot!(test_context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_values(left=1, right=3)
+            PASS [TIME] test::test_values(left=1, right=4)
+            PASS [TIME] test::test_values(left=2, right=3)
+            PASS [TIME] test::test_values(left=2, right=4)
+    ────────────
+         Summary [TIME] 4 tests run: 4 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_parametrize_two_decorators() {
     let test_context = TestContext::with_file(
         "test.py",
