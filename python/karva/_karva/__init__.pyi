@@ -10,7 +10,9 @@ _ScopeName: TypeAlias = Literal["session", "package", "module", "function"]
 _T = TypeVar("_T")
 _P = ParamSpec("_P")
 
+
 def karva_run() -> int: ...
+
 
 class FixtureFunctionMarker(Generic[_P, _T]):
     def __call__(
@@ -18,8 +20,10 @@ class FixtureFunctionMarker(Generic[_P, _T]):
         function: Callable[_P, _T],
     ) -> FixtureFunctionDefinition[_P, _T]: ...
 
+
 class FixtureFunctionDefinition(Generic[_P, _T]):
     def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T: ...
+
 
 @overload
 def fixture(func: Callable[_P, _T]) -> FixtureFunctionDefinition[_P, _T]: ...
@@ -32,22 +36,28 @@ def fixture(
     auto_use: bool = ...,
 ) -> FixtureFunctionMarker[_P, _T]: ...
 
+
 class TestFunction(Generic[_P, _T]):
     def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T: ...
+
 
 class Tags:
     def __call__(self, f: Callable[_P, _T], /) -> Callable[_P, _T]: ...
 
+
 def skip(reason: str | None = ...) -> NoReturn:
     """Skip the current test."""
 
+
 def fail(reason: str | None = ...) -> NoReturn:
     """Fail the current test."""
+
 
 class Param:
     @property
     def values(self) -> list[object]:
         """The values to parameterize the test case with."""
+
 
 def param(
     *values: object, tags: Sequence[Tags | Callable[[], Tags]] | None = None
@@ -73,6 +83,7 @@ def param(
         assert input ** 2 == expected
     """
 
+
 class ExceptionInfo:
     """Stores information about a caught exception from `karva.raises`."""
 
@@ -88,6 +99,7 @@ class ExceptionInfo:
     def tb(self) -> object | None:
         """The traceback object."""
 
+
 class RaisesContext:
     """Context manager returned by `karva.raises`."""
 
@@ -98,6 +110,7 @@ class RaisesContext:
         exc_val: BaseException | None,
         exc_tb: types.TracebackType | None,
     ) -> bool: ...
+
 
 def raises(
     expected_exception: type[BaseException],
@@ -112,6 +125,7 @@ def raises(
             representation of the exception.
     """
 
+
 @overload
 def assert_snapshot(
     value: object,
@@ -136,6 +150,7 @@ def assert_json_snapshot(
     *,
     name: str,
 ) -> None: ...
+
 
 class Command:
     """Builder for running external commands in snapshot tests.
@@ -153,6 +168,7 @@ class Command:
     def current_dir(self, path: str) -> Self: ...
     def stdin(self, data: str) -> Self: ...
 
+
 @overload
 def assert_cmd_snapshot(
     cmd: Command,
@@ -165,6 +181,7 @@ def assert_cmd_snapshot(
     *,
     name: str,
 ) -> None: ...
+
 
 class SnapshotSettings:
     """Context manager for scoped snapshot configuration.
@@ -187,6 +204,7 @@ class SnapshotSettings:
         exc_tb: types.TracebackType | None,
     ) -> bool: ...
 
+
 def snapshot_settings(
     *,
     filters: list[tuple[str, str]] | None = None,
@@ -200,14 +218,18 @@ def snapshot_settings(
         allow_duplicates: If True, allow multiple unnamed snapshots in a single test.
     """
 
+
 class SkipError(Exception):
     """Raised when `karva.skip` is called."""
+
 
 class FailError(Exception):
     """Raised when `karva.fail` is called."""
 
+
 class SnapshotMismatchError(Exception):
     """Raised when a snapshot assertion fails."""
+
 
 class InvalidFixtureError(Exception):
     """Raised when an invalid fixture is encountered."""

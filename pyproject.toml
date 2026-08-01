@@ -35,7 +35,10 @@ karva = "karva._karva:karva_run"
 karva-worker = "karva._karva:karva_worker_run"
 
 [dependency-groups]
-dev = ["ruff", "ty"]
+dev = [
+    "ruff>=0.16.1",
+    "ty>=0.0.65",
+]
 docs = ["zensical==0.0.51"]
 release = ["tbump"]
 
@@ -65,6 +68,7 @@ cache-keys = [
 ]
 
 [tool.ruff]
+extension = { pyi = "python" }
 fix = true
 target-version = "py311"
 
@@ -72,7 +76,6 @@ target-version = "py311"
 exclude = [
     "python/karva/__main__.py",
     "python/karva/_vendor/**/*.py",
-    "crates/karva_benchmark/resources/test_*.py",
 ]
 select = [
     "ARG",
