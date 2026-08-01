@@ -25,6 +25,7 @@ use similar::{Algorithm, TextDiff};
 const MATERIAL_CHANGE_PERCENT: f64 = 1.0;
 const FAST_PROJECT_ITERATIONS: usize = 21;
 const MEDIUM_PROJECT_ITERATIONS: usize = 15;
+const LONG_PROJECT_ITERATIONS: usize = MEDIUM_PROJECT_ITERATIONS / 2;
 
 #[derive(Debug, Parser)]
 #[command(about = "Run Karva benchmark comparisons")]
@@ -470,7 +471,7 @@ fn run_project_peak_rss_kib(
         let output = Command::new("/usr/bin/time")
             .current_dir(project_root)
             .env(ToolEnvVars::PATH, &invocation.path)
-            .args(["-f", "%M", "-o", report_path.as_str()])
+            .args(["--quiet", "-f", "%M", "-o", report_path.as_str()])
             .arg(invocation.binary.as_str())
             .args(&invocation.args)
             .output()
@@ -878,7 +879,8 @@ fn write_summary_line(
 
 fn matrix_iterations(project_name: &str) -> usize {
     match project_name {
-        "fastapi" | "httpx" | "pydantic" | "tomlkit" => MEDIUM_PROJECT_ITERATIONS,
+        "fastapi" | "httpx" | "pydantic" => LONG_PROJECT_ITERATIONS,
+        "tomlkit" => MEDIUM_PROJECT_ITERATIONS,
         _ => FAST_PROJECT_ITERATIONS,
     }
 }
@@ -1041,10 +1043,10 @@ mod tests {
     use camino::Utf8Path;
 
     use super::{
-        BenchmarkMetric, ComparisonReport, FAST_PROJECT_ITERATIONS, MEDIUM_PROJECT_ITERATIONS,
-        Measurement, ProjectComparison, diagnostic_comparison, diagnostics_markdown_report,
-        is_benchmarkable_exit, karva_invocation, markdown_report, matrix_iterations,
-        normalize_diagnostic_text, trend,
+        BenchmarkMetric, ComparisonReport, FAST_PROJECT_ITERATIONS, LONG_PROJECT_ITERATIONS,
+        MEDIUM_PROJECT_ITERATIONS, Measurement, ProjectComparison, diagnostic_comparison,
+        diagnostics_markdown_report, is_benchmarkable_exit, karva_invocation, markdown_report,
+        matrix_iterations, normalize_diagnostic_text, trend,
     };
 
     #[test]
@@ -1230,9 +1232,9 @@ mod tests {
         assert_eq!(matrix_iterations("h11"), FAST_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("requests"), FAST_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("werkzeug"), FAST_PROJECT_ITERATIONS);
-        assert_eq!(matrix_iterations("fastapi"), MEDIUM_PROJECT_ITERATIONS);
-        assert_eq!(matrix_iterations("httpx"), MEDIUM_PROJECT_ITERATIONS);
-        assert_eq!(matrix_iterations("pydantic"), MEDIUM_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("fastapi"), LONG_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("httpx"), LONG_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("pydantic"), LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("tomlkit"), MEDIUM_PROJECT_ITERATIONS);
     }
 
