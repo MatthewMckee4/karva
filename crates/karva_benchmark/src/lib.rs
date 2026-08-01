@@ -27,7 +27,6 @@ pub enum DependencySetup {
     LockedUvSync {
         group: &'static str,
     },
-    LockedUvSyncAll,
     DateCappedUvSync {
         exclude_newer: &'static str,
         all_extras: bool,
@@ -67,16 +66,6 @@ pub const REQUESTS_PROJECT: BenchmarkProject = BenchmarkProject {
         all_extras: true,
         groups: &["test"],
     },
-    try_import_fixtures: true,
-};
-
-pub const PYDANTIC_PROJECT: BenchmarkProject = BenchmarkProject {
-    name: "pydantic",
-    repository: "https://github.com/pydantic/pydantic",
-    commit: "bd2d0dd0137dfa1a8fdff2529b9dfb1547980150",
-    paths: &["tests"],
-    python_version: PythonVersion::PY313,
-    dependency_setup: DependencySetup::LockedUvSyncAll,
     try_import_fixtures: true,
 };
 
@@ -264,7 +253,6 @@ pub const WERKZEUG_PROJECT: BenchmarkProject = BenchmarkProject {
 
 pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
     REQUESTS_PROJECT,
-    PYDANTIC_PROJECT,
     FASTAPI_PROJECT,
     HTTPX_PROJECT,
     H11_PROJECT,
@@ -487,23 +475,6 @@ fn install_dependencies(config: &BenchmarkProject, project_root: &Utf8PathBuf) -
                     ])
                     .current_dir(project_root),
                 "Failed to sync locked benchmark project environment",
-            )?;
-        }
-        DependencySetup::LockedUvSyncAll => {
-            run_command(
-                Command::new("uv")
-                    .args([
-                        "sync",
-                        "--locked",
-                        "--all-groups",
-                        "--all-extras",
-                        "--all-packages",
-                        "--python",
-                        &python_version,
-                        "--compile-bytecode",
-                    ])
-                    .current_dir(project_root),
-                "Failed to sync all locked benchmark project dependencies",
             )?;
         }
         DependencySetup::DateCappedUvSync {

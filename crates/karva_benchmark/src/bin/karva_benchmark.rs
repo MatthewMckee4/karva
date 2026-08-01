@@ -895,7 +895,7 @@ fn write_summary_line(
 fn matrix_iterations(project_name: &str) -> usize {
     match project_name {
         "requests" => EXTRA_LONG_PROJECT_ITERATIONS,
-        "fastapi" | "httpx" | "pydantic" | "werkzeug" => LONG_PROJECT_ITERATIONS,
+        "fastapi" | "httpx" | "werkzeug" => LONG_PROJECT_ITERATIONS,
         "tomlkit" => MEDIUM_PROJECT_ITERATIONS,
         _ => FAST_PROJECT_ITERATIONS,
     }
@@ -1248,7 +1248,6 @@ mod tests {
         assert_eq!(matrix_iterations("h11"), FAST_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("fastapi"), LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("httpx"), LONG_PROJECT_ITERATIONS);
-        assert_eq!(matrix_iterations("pydantic"), LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("requests"), EXTRA_LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("werkzeug"), LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("tomlkit"), MEDIUM_PROJECT_ITERATIONS);
