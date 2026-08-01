@@ -37,9 +37,12 @@ Every option group documented in [Configuration](configuration.md) — `src`,
 `terminal`, `test` — may appear inside a profile. Top-level `[src]`,
 `[terminal]`, or `[test]` tables (without `profile.<name>`) are not accepted.
 
-> **Warning:** Avoid custom profile names that begin with `default-`. The
-> `default-` prefix is reserved for built-in profiles that Karva may add in
-> the future.
+<div class="admonition warning">
+<p class="admonition-title">Reserved profile names</p>
+<p>Avoid custom profile names that begin with <code>default-</code>. The
+<code>default-</code> prefix is reserved for built-in profiles that Karva may
+add in the future.</p>
+</div>
 
 ### Profile inheritance
 

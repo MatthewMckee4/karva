@@ -20,7 +20,6 @@ reports, feature proposals, and documentation problems.
 Build the [Zensical](https://zensical.org/) documentation:
 
 ```sh
-uv run --script scripts/prepare_docs.py
 uv run --isolated --only-group docs zensical build
 ```
 
