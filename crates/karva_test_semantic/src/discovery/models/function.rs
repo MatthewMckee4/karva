@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
+use pyo3::types::PyModule;
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
 
@@ -35,6 +36,7 @@ impl DiscoveredTestFunction {
     pub(crate) fn new(
         py: Python<'_>,
         module: &DiscoveredModule,
+        py_module: &Bound<'_, PyModule>,
         stmt_function_def: Rc<StmtFunctionDef>,
         py_function: Py<PyAny>,
     ) -> PyResult<Self> {
@@ -43,7 +45,13 @@ impl DiscoveredTestFunction {
             module.module_path().clone(),
         );
 
-        let tags = Tags::from_py_any(py, &py_function, Some(&stmt_function_def))?;
+        let mut tags = Tags::from_py_any(py, &py_function, Some(&stmt_function_def))?;
+        if let Ok(marks) = py_module.getattr("pytestmark") {
+            let module_tags =
+                Tags::from_pytest_marks(py, &marks.unbind(), Some(&py_module.dict()))?
+                    .unwrap_or_default();
+            tags.extend(&module_tags);
+        }
 
         Ok(Self {
             name,

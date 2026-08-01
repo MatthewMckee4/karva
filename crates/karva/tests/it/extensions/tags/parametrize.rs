@@ -1151,6 +1151,33 @@ def test_parametrize_with_fixture(a):
 }
 
 #[test]
+fn test_module_level_pytest_parametrize() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r#"import pytest
+
+pytestmark = pytest.mark.parametrize("value", [1, 2])
+
+def test_value(value):
+    assert value > 0
+"#,
+    );
+
+    assert_cmd_snapshot!(test_context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_value(value=1)
+            PASS [TIME] test::test_value(value=2)
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_parametrize_two_decorators() {
     let test_context = TestContext::with_file(
         "test.py",
