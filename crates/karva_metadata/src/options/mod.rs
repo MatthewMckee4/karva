@@ -835,6 +835,7 @@ mod tests {
 
     use insta::{assert_debug_snapshot, assert_snapshot};
     use karva_combine::Combine;
+    use rstest::rstest;
 
     use super::*;
 
@@ -1788,5 +1789,26 @@ fail-slow = {value}
             );
             assert!(Config::from_toml_str(&override_value).is_err());
         }
+    }
+
+    #[rstest]
+    fn timeout_rejects_invalid_config_duration(
+        #[values("slow-timeout", "timeout", "run-timeout", "termination-grace-period")]
+        option: &str,
+        #[values("nan", "inf", "1e300")] value: &str,
+    ) {
+        let toml = format!(
+            r"
+[profile.default.test]
+{option} = {value}
+"
+        );
+        let error = Config::from_toml_str(&toml).expect_err("invalid duration");
+        assert!(
+            error.to_string().contains(&format!(
+                "{option} must be a finite duration supported by this platform"
+            )),
+            "unexpected error: {error}"
+        );
     }
 }
