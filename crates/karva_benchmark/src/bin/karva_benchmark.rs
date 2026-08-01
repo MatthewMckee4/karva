@@ -16,7 +16,7 @@ use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use fs_err::{self as fs, File};
-use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject, CI_BENCHMARK_PROJECTS, WORKER_COUNT};
+use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject, WORKER_COUNT};
 use karva_cli::ExitStatus;
 use karva_static::ToolEnvVars;
 use regex::Regex;
@@ -188,7 +188,7 @@ fn main() -> Result<()> {
 
 fn list_projects() -> Result<()> {
     let matrix = Matrix {
-        include: CI_BENCHMARK_PROJECTS
+        include: BENCHMARK_PROJECTS
             .iter()
             .map(|project| MatrixProject {
                 project: project.name,
