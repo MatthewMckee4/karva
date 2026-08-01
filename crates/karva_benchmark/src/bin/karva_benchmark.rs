@@ -16,6 +16,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Parser, ValueEnum};
 use fs_err::{self as fs, File};
 use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject, CLI_BENCHMARK_PROJECTS, WORKER_COUNT};
+use karva_cli::ExitStatus;
 use karva_static::ToolEnvVars;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -436,7 +437,7 @@ fn run_project_cli(
 fn warm_project_cache(config: &BenchmarkProject, project_root: &Utf8Path) -> Result<()> {
     let invocation = karva_invocation(config, project_root)?;
     let output = run_invocation(&invocation, project_root)?;
-    ensure_karva_success(&output, config)
+    ensure_karva_completed(&output, config)
 }
 
 fn run_project_wall_time(
@@ -449,7 +450,7 @@ fn run_project_wall_time(
     let output = run_invocation(&invocation, project_root)?;
     let elapsed = start.elapsed();
 
-    ensure_karva_success(&output, config)?;
+    ensure_karva_completed(&output, config)?;
 
     Ok(RunMeasurement {
         value: elapsed.as_secs_f64(),
@@ -475,7 +476,7 @@ fn run_project_peak_rss_kib(
             .output()
             .context("Failed to execute `/usr/bin/time` for memory benchmark")?;
 
-        ensure_karva_success(&output, config)?;
+        ensure_karva_completed(&output, config)?;
 
         let peak_rss_kib = read_peak_rss_kib(&report_path)?;
         if let Err(err) = fs::remove_file(&report_path) {
@@ -539,9 +540,9 @@ impl KarvaInvocation {
     }
 }
 
-fn ensure_karva_success(output: &Output, config: &BenchmarkProject) -> Result<()> {
+fn ensure_karva_completed(output: &Output, config: &BenchmarkProject) -> Result<()> {
     anyhow::ensure!(
-        output.status.success(),
+        is_benchmarkable_exit(output.status.code()),
         "Karva exited with status {} for `{}`\nstdout:\n{}\nstderr:\n{}",
         output.status,
         config.name,
@@ -550,6 +551,14 @@ fn ensure_karva_success(output: &Output, config: &BenchmarkProject) -> Result<()
     );
 
     Ok(())
+}
+
+fn is_benchmarkable_exit(code: Option<i32>) -> bool {
+    matches!(
+        code,
+        Some(code)
+            if code == ExitStatus::Success.to_i32() || code == ExitStatus::Failure.to_i32()
+    )
 }
 
 fn normalize_diagnostic_output(output: &Output) -> String {
@@ -869,7 +878,7 @@ fn write_summary_line(
 
 fn matrix_iterations(project_name: &str) -> usize {
     match project_name {
-        "tomlkit" => MEDIUM_PROJECT_ITERATIONS,
+        "fastapi" | "httpx" | "pydantic" | "tomlkit" => MEDIUM_PROJECT_ITERATIONS,
         _ => FAST_PROJECT_ITERATIONS,
     }
 }
@@ -1034,7 +1043,8 @@ mod tests {
     use super::{
         BenchmarkMetric, ComparisonReport, FAST_PROJECT_ITERATIONS, MEDIUM_PROJECT_ITERATIONS,
         Measurement, ProjectComparison, diagnostic_comparison, diagnostics_markdown_report,
-        karva_invocation, markdown_report, matrix_iterations, normalize_diagnostic_text, trend,
+        is_benchmarkable_exit, karva_invocation, markdown_report, matrix_iterations,
+        normalize_diagnostic_text, trend,
     };
 
     #[test]
@@ -1220,7 +1230,24 @@ mod tests {
         assert_eq!(matrix_iterations("h11"), FAST_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("requests"), FAST_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("werkzeug"), FAST_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("fastapi"), MEDIUM_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("httpx"), MEDIUM_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("pydantic"), MEDIUM_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("tomlkit"), MEDIUM_PROJECT_ITERATIONS);
+    }
+
+    #[test]
+    fn test_failures_are_benchmarkable() {
+        assert!(is_benchmarkable_exit(Some(
+            karva_cli::ExitStatus::Success.to_i32()
+        )));
+        assert!(is_benchmarkable_exit(Some(
+            karva_cli::ExitStatus::Failure.to_i32()
+        )));
+        assert!(!is_benchmarkable_exit(Some(
+            karva_cli::ExitStatus::Error.to_i32()
+        )));
+        assert!(!is_benchmarkable_exit(None));
     }
 
     #[test]

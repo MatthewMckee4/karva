@@ -73,6 +73,44 @@ pub const REQUESTS_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: true,
 };
 
+pub const PYDANTIC_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "pydantic",
+    repository: "https://github.com/pydantic/pydantic",
+    commit: "bd2d0dd0137dfa1a8fdff2529b9dfb1547980150",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::LockedUvSync { group: "dev" },
+    try_import_fixtures: true,
+};
+
+pub const FASTAPI_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "fastapi",
+    repository: "https://github.com/fastapi/fastapi",
+    commit: "53d2453d1a77f3384a1648d717f8ddafb5e9e460",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+        groups: &[],
+    },
+    try_import_fixtures: true,
+};
+
+pub const HTTPX_PROJECT: BenchmarkProject = BenchmarkProject {
+    name: "httpx",
+    repository: "https://github.com/encode/httpx",
+    commit: "ae1b9f66238f75ced3ced5e4485408435de10768",
+    paths: &["tests"],
+    python_version: PythonVersion::PY313,
+    dependency_setup: DependencySetup::DateCappedUvSync {
+        exclude_newer: "2026-01-01",
+        all_extras: true,
+        groups: &[],
+    },
+    try_import_fixtures: true,
+};
+
 pub const H11_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "h11",
     repository: "https://github.com/python-hyper/h11",
@@ -257,6 +295,9 @@ pub const WERKZEUG_PROJECT: BenchmarkProject = BenchmarkProject {
 pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
     SYNTHETIC_PROJECT,
     REQUESTS_PROJECT,
+    PYDANTIC_PROJECT,
+    FASTAPI_PROJECT,
+    HTTPX_PROJECT,
     H11_PROJECT,
     MARKUPSAFE_PROJECT,
     SNIFFIO_PROJECT,
@@ -272,6 +313,9 @@ pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
 
 pub const CLI_BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
     REQUESTS_PROJECT,
+    PYDANTIC_PROJECT,
+    FASTAPI_PROJECT,
+    HTTPX_PROJECT,
     H11_PROJECT,
     SNIFFIO_PROJECT,
     ITSDANGEROUS_PROJECT,
