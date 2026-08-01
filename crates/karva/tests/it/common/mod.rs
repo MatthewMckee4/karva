@@ -62,6 +62,10 @@ impl TestContext {
         let mut settings = Settings::clone_current();
 
         settings.add_filter(&tempdir_filter(&project_path), "<temp_dir>/");
+        settings.add_filter(
+            &format!(r"{}.*karva[\\/]", regex::escape(venv_path.as_str())),
+            "<karva>/",
+        );
         settings.add_filter(r#"\\(\w\w|\s|\.|")"#, "/$1");
         settings.add_filter(r"\x1b\[[0-9;]*m", "");
         settings.add_filter(r"\[\s*\d+\.\d+s\]", "[TIME]");
