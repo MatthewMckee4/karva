@@ -2,11 +2,9 @@
 
 These fixtures are automatically available to all tests without any imports.
 
-Several fixtures (``monkeypatch``, ``recwarn``, ``tmp_path`` and friends) are
-thin wrappers around classes vendored from pytest — see
-``karva._vendor._pytest_monkeypatch``, ``karva._vendor._pytest_recwarn``, and
-``karva._vendor._pytest_tmpdir`` for the vendored implementations and the
-LICENSE file at the repository root for the applicable copyright notices.
+Several fixtures (``monkeypatch``, ``recwarn``, ``tmp_path`` and friends) use
+internal implementations adapted from pytest. See ``karva._fixtures`` and the
+repository LICENSE for source details and applicable copyright notices.
 
 The fixture wrappers themselves have to live at the top level of this module
 because the Rust-side framework fixture discoverer parses this file's AST
@@ -28,10 +26,10 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Self
 
+from karva._fixtures.monkeypatch import MockEnv
+from karva._fixtures.recwarn import WarningsRecorder
+from karva._fixtures.tmpdir import TempPathFactory
 from karva._karva import fixture
-from karva._vendor._pytest_monkeypatch import MockEnv
-from karva._vendor._pytest_recwarn import WarningsRecorder
-from karva._vendor._pytest_tmpdir import TempPathFactory
 
 __all__ = [
     "CaptureResult",

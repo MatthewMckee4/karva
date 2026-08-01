@@ -6,13 +6,13 @@
 //! - `pytest.raises(...)` -> `karva.raises(...)`
 //! - `@pytest.mark.parametrize(...)` -> `@karva.tags.parametrize(...)`
 //! - `pytest.warns(pytest.PytestWarning)` cases are rewritten to use
-//!   `warnings.catch_warnings` since karva does not wrap the vendored
+//!   `warnings.catch_warnings` since Karva does not wrap the adapted
 //!   `setenv` warning in a framework-specific category.
 //!
 //! Tests that depended on `pytester`, the `_pytest.config` internals, or the
 //! legacy `pkg_resources` namespace-package path are not ported because the
 //! corresponding features are either not available in karva or were dropped
-//! when vendoring `MonkeyPatch`.
+//! when adapting `MonkeyPatch`.
 //!
 //! See the pytest license block in the repository LICENSE file for the
 //! applicable copyright notice.

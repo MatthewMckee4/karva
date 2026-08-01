@@ -1,6 +1,6 @@
 """Monkeypatching and mocking functionality.
 
-Vendored from pytest's ``_pytest/monkeypatch.py`` (commit 8ecf49ec2). The
+Adapted from pytest's ``_pytest/monkeypatch.py`` (commit 8ecf49ec2). The
 following adaptations were made:
 
 - ``MonkeyPatch`` is renamed to ``MockEnv`` to match karva's public API.
@@ -28,12 +28,13 @@ from __future__ import annotations
 
 import enum
 import importlib
+import inspect
 import os
 import re
 import sys
 import warnings
 from collections.abc import Generator, MutableMapping
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from typing import Any, Final, TypeVar, final, overload
 
 
@@ -96,8 +97,7 @@ def derive_importpath(import_path: str, raising: bool) -> tuple[str, object]:
 
 @final
 class MockEnv:
-    """Helper to conveniently monkeypatch attributes/items/environment
-    variables/syspath.
+    """Conveniently patch attributes, mappings, environment, and import paths.
 
     Returned by the :fixture:`monkeypatch` fixture. Can also be used directly
     as ``MockEnv()`` outside of a fixture; in that case, use
@@ -112,15 +112,16 @@ class MockEnv:
         self._savesyspath: list[str] | None = None
 
     def __repr__(self) -> str:
-        # Stable repr that does not leak the vendored module path; preserves
+        # Stable repr that does not leak the internal module path; preserves
         # compatibility with pre-existing karva test snapshots.
         return "<MockEnv object>"
 
     @classmethod
     @contextmanager
     def context(cls) -> Generator[MockEnv, None, None]:
-        """Context manager that returns a new :class:`MockEnv` object which
-        undoes any patching done inside the ``with`` block upon exit.
+        """Create a context that undoes its patches on exit.
+
+        The context yields a new :class:`MockEnv` instance.
         """
         m = cls()
         try:
@@ -161,8 +162,6 @@ class MockEnv:
         not exist, unless ``raising`` is set to ``False``.
         """
         __tracebackhide__ = True
-        import inspect
-
         if value is _NOTSET:
             if not isinstance(target, str):
                 raise TypeError(
@@ -203,8 +202,6 @@ class MockEnv:
         exist, unless ``raising`` is set to ``False``.
         """
         __tracebackhide__ = True
-        import inspect
-
         if name is _NOTSET:
             if not isinstance(target, str):
                 raise TypeError(
@@ -242,7 +239,7 @@ class MockEnv:
             self._setitem.append((dic, name, dic.get(name, _NOTSET)))
             del dic[name]
 
-    def setenv(self, name: str, value: str, prepend: str | None = None) -> None:
+    def setenv(self, name: str, value: object, prepend: str | None = None) -> None:
         """Set environment variable ``name`` to ``value``.
 
         If ``prepend`` is a character, read the current environment variable
@@ -250,7 +247,7 @@ class MockEnv:
         character.
         """
         if not isinstance(value, str):
-            warnings.warn(  # type: ignore[unreachable]
+            warnings.warn(
                 UserWarning(
                     f"Value of environment variable {name} type should be str, but got "
                     f"{value!r} (type: {type(value).__name__}); converted to str implicitly"
@@ -282,9 +279,7 @@ class MockEnv:
         # import caches. This is especially important when any namespace
         # package is in use, since then the mtime based FileFinder cache
         # gets not invalidated when writing the new files quickly afterwards.
-        from importlib import invalidate_caches
-
-        invalidate_caches()
+        importlib.invalidate_caches()
 
     def chdir(self, path: str | os.PathLike[str]) -> None:
         """Change the current working directory to the specified path."""
@@ -306,10 +301,8 @@ class MockEnv:
         self._setattr[:] = []
         for dictionary, key, value in reversed(self._setitem):
             if value is _NOTSET:
-                try:
+                with suppress(KeyError):
                     del dictionary[key]  # type: ignore[attr-defined]
-                except KeyError:
-                    pass
             else:
                 dictionary[key] = value  # type: ignore[index]
         self._setitem[:] = []

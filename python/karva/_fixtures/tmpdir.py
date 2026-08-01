@@ -1,6 +1,6 @@
 """Support for providing temporary directories to test functions.
 
-Vendored from pytest's ``_pytest/tmpdir.py`` (commit 8ecf49ec2). Only
+Adapted from pytest's ``_pytest/tmpdir.py`` (commit 8ecf49ec2). Only
 ``TempPathFactory`` and the ``get_user`` helper are included; pytest's
 ``Config`` integration, ``pytest_configure``/``pytest_sessionfinish`` hooks,
 and the per-test ``tmp_path`` fixture are intentionally omitted because
@@ -21,14 +21,16 @@ applicable copyright notice.
 from __future__ import annotations
 
 import dataclasses
+import getpass
 import os
 import stat
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal, final
+from typing import Literal, final
 
-from karva._vendor._pytest_pathlib import (
+from karva._fixtures.pathlib import (
     LOCK_TIMEOUT,
     make_numbered_dir,
     make_numbered_dir_with_cleanup,
@@ -52,7 +54,7 @@ class TempPathFactory:
     """
 
     _given_basetemp: Path | None
-    _trace: Any
+    _trace: Callable[..., object]
     _basetemp: Path | None
     _retention_count: int
     _retention_policy: RetentionType
@@ -62,7 +64,7 @@ class TempPathFactory:
         given_basetemp: Path | None = None,
         retention_count: int = 3,
         retention_policy: RetentionType = "all",
-        trace: Any = _noop_trace,
+        trace: Callable[..., object] = _noop_trace,
         basetemp: Path | None = None,
     ) -> None:
         if given_basetemp is None:
@@ -85,17 +87,15 @@ class TempPathFactory:
     def mktemp(self, basename: str, numbered: bool = True) -> Path:
         """Create a new temporary directory managed by the factory.
 
-        :param basename:
-            Directory base name, must be a relative path.
+        Args:
+            basename: Directory base name, which must be a relative path.
+            numbered: If true, ensure the directory is unique by adding a numbered
+                suffix greater than any existing one: ``basename="foo-"`` and
+                ``numbered=True`` creates directories named ``"foo-0"``,
+                ``"foo-1"``, ``"foo-2"`` and so on.
 
-        :param numbered:
-            If ``True``, ensure the directory is unique by adding a numbered
-            suffix greater than any existing one: ``basename="foo-"`` and
-            ``numbered=True`` means that this function will create directories
-            named ``"foo-0"``, ``"foo-1"``, ``"foo-2"`` and so on.
-
-        :returns:
-            The path to the new directory.
+        Returns:
+            The new directory path.
         """
         basename = self._ensure_relative_to_basetemp(basename)
         if not numbered:
@@ -109,7 +109,7 @@ class TempPathFactory:
     def getbasetemp(self) -> Path:
         """Return the base temporary directory, creating it if needed.
 
-        :returns:
+        Returns:
             The base temporary directory.
         """
         if self._basetemp is not None:
@@ -140,9 +140,7 @@ class TempPathFactory:
             # symlinks, otherwise we're open to a symlink-swapping TOCTOU.
             uid = _get_user_id()
             if uid is not None:
-                stat_follow_symlinks = (
-                    False if os.stat in os.supports_follow_symlinks else True
-                )
+                stat_follow_symlinks = os.stat not in os.supports_follow_symlinks
                 rootdir_stat = rootdir.stat(follow_symlinks=stat_follow_symlinks)
                 if stat.S_ISLNK(rootdir_stat.st_mode):
                     raise OSError(
@@ -155,9 +153,7 @@ class TempPathFactory:
                         "Fix this and try again."
                     )
                 if (rootdir_stat.st_mode & 0o077) != 0:
-                    chmod_follow_symlinks = (
-                        False if os.chmod in os.supports_follow_symlinks else True
-                    )
+                    chmod_follow_symlinks = os.chmod not in os.supports_follow_symlinks
                     rootdir.chmod(
                         rootdir_stat.st_mode & ~0o077,
                         follow_symlinks=chmod_follow_symlinks,
@@ -179,13 +175,13 @@ class TempPathFactory:
 
 
 def get_user() -> str | None:
-    """Return the current user name, or None if getuser() does not work
-    in the current environment (see pytest #1010)."""
-    try:
-        import getpass
+    """Return the current user name when available.
 
+    ``getuser()`` may fail in incomplete environments (see pytest #1010).
+    """
+    try:
         return getpass.getuser()
-    except (ImportError, OSError, KeyError):
+    except (OSError, KeyError):
         return None
 
 

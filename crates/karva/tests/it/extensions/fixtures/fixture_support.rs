@@ -1,6 +1,6 @@
 //! Tests adapted from pytest's `testing/test_recwarn.py` and
 //! `testing/test_tmpdir.py` (commit `8ecf49ec2`), focused on the subset of
-//! pytest behaviour that karva actually vendors:
+//! pytest behavior maintained by Karva's fixture support:
 //!
 //! - `WarningsRecorder` semantics (`_pytest/recwarn.py`),
 //! - `make_numbered_dir` / `cleanup_numbered_dir` / `rm_rf` from
@@ -9,7 +9,7 @@
 //!
 //! Each Rust test wraps one or more near-verbatim Python test bodies inside a
 //! `TestContext::with_file` harness so the assertions run through karva's own
-//! test runner — this gives coverage of the vendored modules as they are
+//! test runner — this gives coverage of the internal modules as they are
 //! actually imported at runtime, not via Rust unit tests that sidestep the
 //! wheel layout.
 //!
@@ -37,7 +37,7 @@ fn test_warnings_recorder_recording_lifecycle() {
 import warnings
 
 import karva
-from karva._vendor._pytest_recwarn import WarningsRecorder
+from karva._fixtures.recwarn import WarningsRecorder
 
 
 def test_recording():
@@ -76,7 +76,7 @@ fn test_warnings_recorder_invalid_enter_exit() {
         "test.py",
         r"
 import karva
-from karva._vendor._pytest_recwarn import WarningsRecorder
+from karva._fixtures.recwarn import WarningsRecorder
 
 
 def test_invalid_enter_exit():
@@ -139,7 +139,7 @@ fn test_numbered_dir_make_increments_suffix() {
     let context = TestContext::with_file(
         "test.py",
         r#"
-from karva._vendor._pytest_pathlib import make_numbered_dir
+from karva._fixtures.pathlib import make_numbered_dir
 
 
 def test_make_numbered(tmp_path):
@@ -175,7 +175,7 @@ fn test_numbered_dir_cleanup_lock_single_owner() {
         "test.py",
         r#"
 import karva
-from karva._vendor._pytest_pathlib import create_cleanup_lock
+from karva._fixtures.pathlib import create_cleanup_lock
 
 
 def test_cleanup_lock_create(tmp_path):
@@ -204,7 +204,7 @@ fn test_numbered_dir_cleanup_keep() {
     let context = TestContext::with_file(
         "test.py",
         r#"
-from karva._vendor._pytest_pathlib import cleanup_numbered_dir, make_numbered_dir
+from karva._fixtures.pathlib import cleanup_numbered_dir, make_numbered_dir
 
 
 PREFIX = "fun-"
@@ -261,7 +261,7 @@ fn test_numbered_dir_ensure_deletable_respects_lock() {
     let context = TestContext::with_file(
         "test.py",
         r#"
-from karva._vendor._pytest_pathlib import (
+from karva._fixtures.pathlib import (
     create_cleanup_lock,
     ensure_deletable,
     make_numbered_dir,
@@ -297,7 +297,7 @@ fn test_numbered_dir_maybe_delete_respects_lock() {
     let context = TestContext::with_file(
         "test.py",
         r#"
-from karva._vendor._pytest_pathlib import (
+from karva._fixtures.pathlib import (
     create_cleanup_lock,
     make_numbered_dir,
     maybe_delete_a_numbered_dir,
@@ -332,7 +332,7 @@ fn test_rm_rf_removes_directory() {
     let context = TestContext::with_file(
         "test.py",
         r#"
-from karva._vendor._pytest_pathlib import rm_rf
+from karva._fixtures.pathlib import rm_rf
 
 
 def test_rm_rf_empty(tmp_path):
@@ -373,7 +373,7 @@ fn test_rm_rf_read_only_file() {
 import os
 import stat
 
-from karva._vendor._pytest_pathlib import rm_rf
+from karva._fixtures.pathlib import rm_rf
 
 
 def test_rm_rf_read_only_file(tmp_path):
@@ -414,7 +414,7 @@ fn test_temp_path_factory_mktemp_numbering() {
     let context = TestContext::with_file(
         "test.py",
         r#"
-from karva._vendor._pytest_tmpdir import TempPathFactory
+from karva._fixtures.tmpdir import TempPathFactory
 
 
 def test_mktemp_naming(tmp_path):
@@ -449,7 +449,7 @@ fn test_temp_path_factory_given_basetemp_cleared_on_reuse() {
     let context = TestContext::with_file(
         "test.py",
         r#"
-from karva._vendor._pytest_tmpdir import TempPathFactory
+from karva._fixtures.tmpdir import TempPathFactory
 
 
 def test_reused_basetemp_is_wiped(tmp_path):
