@@ -89,6 +89,7 @@ def test_skip():
     11 |     assert False
        |     ^^^^^^^^^^^^
        |
+    info: assert False
 
     captured stdout:
     fail stdout
@@ -120,6 +121,7 @@ def test_skip():
     11 |     assert False
        |     ^^^^^^^^^^^^
        |
+    info: assert False
 
     </failure>
           <system-out>fail stdout
@@ -194,6 +196,7 @@ def test_flaky():
     5 |     assert False
       |     ^^^^^^^^^^^^
       |
+    info: assert False
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed (1 flaky), 1 failed, 0 skipped
@@ -221,6 +224,7 @@ def test_flaky():
     5 |     assert False
       |     ^^^^^^^^^^^^
       |
+    info: assert False
 
     </failure>
           <rerunFailure message="Test `test_fail` failed" type="test-failure" time="[TIME]">error[test-failure]: Test `test_fail` failed
@@ -235,6 +239,7 @@ def test_flaky():
     5 |     assert False
       |     ^^^^^^^^^^^^
       |
+    info: assert False
 
     </rerunFailure>
         </testcase>
@@ -251,6 +256,7 @@ def test_flaky():
     9 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
+    info: assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
 
     </flakyFailure>
           <system-out>attempt 1
@@ -319,6 +325,7 @@ def test_flaky():
     5 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
+    info: assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
 
     </flakyFailure>
         </testcase>
@@ -396,6 +403,7 @@ def test_lenient():
     10 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
        |
+    info: assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
 
     </flakyFailure>
         </testcase>
@@ -413,6 +421,7 @@ def test_lenient():
     7 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
+    info: assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
 
     </flakyFailure>
         </testcase>
@@ -615,6 +624,7 @@ def test_failure():
     3 |     assert False
       |     ^^^^^^^^^^^^
       |
+    info: assert False
 
     test_fixture::test_unreachable:
 
@@ -657,6 +667,7 @@ def test_failure():
     3 |     assert False
       |     ^^^^^^^^^^^^
       |
+    info: assert False
 
     </failure>
         </testcase>

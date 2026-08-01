@@ -1151,6 +1151,7 @@ def test_order(third, second, first):
     16 |     assert False
        |     ^^^^^^^^^^^^
        |
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

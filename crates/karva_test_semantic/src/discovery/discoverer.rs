@@ -12,7 +12,7 @@ use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 
 use crate::Context;
 use crate::collection::TestFunctionCollector;
-use crate::diagnostic::report_collection_error;
+use crate::diagnostic::{report_collection_error, report_failed_to_import_module};
 use crate::discovery::visitor::{discover, is_generator};
 use crate::discovery::{DiscoveredModule, DiscoveredPackage};
 use crate::extensions::fixtures::{DiscoveredFixture, RejectedFixture};
@@ -64,6 +64,15 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
                 return DiscoveredPackage::new(cwd.to_path_buf());
             }
         };
+
+        if let Err(error) = register_assertion_rewrite(py, &collected_package) {
+            report_failed_to_import_module(
+                self.context,
+                "karva._assertion",
+                &error.value(py).to_string(),
+            );
+            return DiscoveredPackage::new(cwd.to_path_buf());
+        }
 
         let mut session_package = self.convert_package(py, collected_package);
 
@@ -131,6 +140,33 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
 
         module
     }
+}
+
+fn register_assertion_rewrite(
+    py: Python<'_>,
+    collected_package: &CollectedPackage,
+) -> PyResult<()> {
+    fn collect_paths(package: &CollectedPackage, paths: &mut Vec<String>) {
+        if let Some(module) = &package.configuration_module {
+            paths.push(module.path.path().to_string());
+        }
+        paths.extend(
+            package
+                .modules
+                .values()
+                .map(|module| module.path.path().to_string()),
+        );
+        for package in package.packages.values() {
+            collect_paths(package, paths);
+        }
+    }
+
+    let mut paths = Vec::new();
+    collect_paths(collected_package, &mut paths);
+    py.import("karva._assertion")?
+        .getattr("register_assertion_rewrite")?
+        .call1((paths,))?;
+    Ok(())
 }
 
 /// Discovers all fixtures defined in `karva._builtins` by importing the module at

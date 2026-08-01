@@ -177,6 +177,35 @@ fn test_one_test_passes() {
 }
 
 #[test]
+fn test_assertion_message_is_rewritten() {
+    let context = TestContext::with_file(
+        "test_assertion.py",
+        r"
+        def validate(value):
+            assert value > 5
+
+        def test_assertion_message():
+            try:
+                validate(4)
+            except AssertionError as error:
+                assert str(error) == 'assert 4 > 5'
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_assertion::test_assertion_message
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_one_test_fail() {
     let context = TestContext::with_file(
         "test_fail.py",
@@ -209,6 +238,7 @@ fn test_one_test_fail() {
     3 |     assert False
       |     ^^^^^^^^^^^^
       |
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -426,6 +456,7 @@ fn test_failure_diagnostic_uses_discovered_source_after_file_is_deleted() {
     6 |     assert False
       |     ^^^^^^^^^^^^
       |
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -530,6 +561,7 @@ fn test_two_test_fails() {
     3 |     assert False
       |     ^^^^^^^^^^^^
       |
+    info: assert False
 
     tests.test_fail::test_fail2:
 
@@ -699,6 +731,7 @@ fn test_failed_output_is_captured() {
     10 |     assert False
        |     ^^^^^^^^^^^^
        |
+    info: assert False
 
     captured stdout:
     stdout from failure
@@ -834,6 +867,7 @@ fn test_quiet_output_failing() {
     3 |     assert False
       |     ^^^^^^^^^^^^
       |
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -942,6 +976,7 @@ fn test_fixture_generator_two_yields_failing_test() {
     10 |     assert fixture_generator == 2
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
        |
+    info: assert 1 == 2
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
@@ -1169,6 +1204,7 @@ def test_9():
     5 |     assert False
       |     ^^^^^^^^^^^^
       |
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -1301,6 +1337,7 @@ def test_1(fixture_very_very_very_very_very_long_name):
     9 |     assert False
       |     ^^^^^^^^^^^^
       |
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -2066,6 +2103,7 @@ def test_needs_retry():
     5 |     assert os.environ["KARVA_ATTEMPT"] == "2"
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
+    info: assert os.environ["KARVA_ATTEMPT"] == "2"
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -2406,6 +2444,7 @@ def test_2(): assert False
     3 | def test_2(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
+    info: assert False
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
@@ -2447,6 +2486,7 @@ def test_fail(): assert False
     2 | def test_fail(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -2490,6 +2530,7 @@ def test_always_fails(): assert False
     2 | def test_always_fails(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -2692,6 +2733,7 @@ def test_always_fails(): assert False
     11 | def test_always_fails(): assert False
        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
        |
+    info: assert False
 
     ────────────
          Summary [TIME] 3 tests run: 2 passed (1 flaky), 1 failed, 0 skipped
@@ -2793,6 +2835,7 @@ def test_always_fails(): assert False
     2 | def test_always_fails(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -3136,6 +3179,7 @@ def test_3(): pass
     2 | def test_1(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
+    info: assert False
 
     test::test_2:
 
@@ -3151,6 +3195,7 @@ def test_3(): pass
     3 | def test_2(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
+    info: assert False
 
     ────────────
          Summary [TIME] 3 tests run: 1 passed, 2 failed, 0 skipped
@@ -3196,6 +3241,7 @@ def test_3(): pass
     2 | def test_1(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -3242,6 +3288,7 @@ def test_3(): assert False
     2 | def test_1(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
+    info: assert False
 
     test::test_2:
 
@@ -3257,6 +3304,7 @@ def test_3(): assert False
     3 | def test_2(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
+    info: assert False
 
     ────────────
          Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped

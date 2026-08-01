@@ -165,6 +165,7 @@ fn durations_with_failing_tests() {
     8 |     assert False
       |     ^^^^^^^^^^^^
       |
+    info: assert False
 
     2 slowest tests:
       test_durations::test_fail ([TIME])

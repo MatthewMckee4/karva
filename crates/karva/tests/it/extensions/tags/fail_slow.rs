@@ -205,6 +205,7 @@ def test_slow_and_wrong():
     8 |     assert False
       |     ^^^^^^^^^^^^
       |
+    info: assert False
 
     error[fail-slow-exceeded]: Test `test_slow_and_wrong` exceeded its fail-slow budget
      --> test.py:6:5
