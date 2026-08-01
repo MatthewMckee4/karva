@@ -79,16 +79,7 @@ select = ["ALL"]
 ignore = [
     "D100",
     "CPY001",
-    "EM101"
 ]
-
-# [tool.ruff.lint.per-file-ignores]
-# "crates/karva/tests/projects/wheel-smoke/tests/*.py" = [
-#     "ANN001",
-#     "D103",
-#     "INP001",
-#     "S101",
-# ]
 
 [tool.ty.environment]
 python-version = "3.11"
