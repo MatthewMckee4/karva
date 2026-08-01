@@ -222,13 +222,14 @@ pub(crate) fn set_test_name_env(py: Python<'_>, qualified_name: &str) -> PyResul
 }
 
 pub(crate) fn display_value(value: &Bound<'_, PyAny>) -> String {
-    if value.is_instance_of::<PyString>()
+    let display = if value.is_instance_of::<PyString>()
         && let Ok(repr) = value.repr()
     {
         repr.to_string()
     } else {
         value.to_string()
-    }
+    };
+    display.replace('\0', "\\x00")
 }
 
 fn truncated_display_value(value: &Bound<'_, PyAny>) -> String {
