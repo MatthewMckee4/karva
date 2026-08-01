@@ -48,6 +48,25 @@ pub enum NoTestsMode {
     Fail,
 }
 
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+pub enum FlakyResult {
+    #[default]
+    Pass,
+    Fail,
+}
+
+impl Combine for FlakyResult {
+    #[inline(always)]
+    fn combine_with(&mut self, _other: Self) {}
+
+    #[inline]
+    fn combine(self, _other: Self) -> Self {
+        self
+    }
+}
+
 impl Combine for NoTestsMode {
     #[inline(always)]
     fn combine_with(&mut self, _other: Self) {}
@@ -475,6 +494,7 @@ pub struct TestSettings {
     pub max_fail: MaxFail,
     pub try_import_fixtures: bool,
     pub retry: u32,
+    pub flaky_result: FlakyResult,
     /// Runtime-only: filters are sourced from CLI flags, never config files.
     #[serde(skip)]
     pub filter: FiltersetSet,

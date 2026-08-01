@@ -10,7 +10,7 @@ use karva_metadata::{
 };
 use karva_static::EnvVars;
 
-use crate::enums::{CovReport, NoTests, OutputFormat, ResultFormat, RunIgnored};
+use crate::enums::{CovReport, FlakyResult, NoTests, OutputFormat, ResultFormat, RunIgnored};
 use crate::partition::PartitionSelection;
 use crate::verbosity::Verbosity;
 
@@ -330,6 +330,15 @@ pub struct TestCommand {
     #[clap(long, value_name = "SECONDS", help_heading = "Runner options")]
     pub run_timeout: Option<f64>,
 
+    /// Whether tests that pass only after a retry should pass or fail the run.
+    #[arg(
+        long,
+        value_name = "ACTION",
+        env = EnvVars::KARVA_FLAKY_RESULT,
+        help_heading = "Runner options"
+    )]
+    pub flaky_result: Option<FlakyResult>,
+
     /// Grace period before force-killing workers during shutdown, in seconds.
     ///
     /// When karva stops workers because of Ctrl+C, fail-fast, or
@@ -460,6 +469,7 @@ impl SubTestCommand {
                 max_fail,
                 try_import_fixtures: self.try_import_fixtures,
                 retry: self.retry,
+                flaky_result: None,
                 no_tests: self.no_tests.map(Into::into),
                 slow_timeout: self.slow_timeout.map(SlowTimeoutSecs),
                 fail_slow: self.fail_slow.map(FailSlowSecs),
@@ -490,6 +500,7 @@ impl SubTestCommand {
 impl TestCommand {
     pub fn into_options(self) -> Options {
         let run_timeout = self.run_timeout;
+        let flaky_result = self.flaky_result;
         let termination_grace_period = self.termination_grace_period;
         let mut sub_command = self.sub_command;
         if self.no_capture {
@@ -498,6 +509,7 @@ impl TestCommand {
         let mut options = sub_command.into_options();
         if let Some(test) = options.test.as_mut() {
             test.run_timeout = run_timeout.map(RunTimeoutSecs);
+            test.flaky_result = flaky_result.map(Into::into);
             test.termination_grace_period =
                 termination_grace_period.map(TerminationGracePeriodSecs);
         }

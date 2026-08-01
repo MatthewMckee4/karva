@@ -263,6 +263,71 @@ def test_flaky():
 }
 
 #[test]
+fn junit_marks_policy_failed_flaky_test_as_failure() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.junit]
+path = "results.xml"
+"#,
+        ),
+        (
+            "test_flaky.py",
+            r#"
+import os
+
+def test_flaky():
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
+            "--retry=1",
+            "--flaky-result=fail",
+            "--status-level=none",
+        ]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test_flaky::test_flaky
+    flaky failure: flaky tests caused the run to fail
+
+    ----- stderr -----
+    "
+    );
+    assert_snapshot!(normalize_junit_xml(&context.read_file("results.xml")), @r#"
+    <?xml version="1.0" encoding="UTF-8"?>
+    <testsuites name="karva-tests" tests="1" failures="1" skipped="0" errors="0" time="[TIME]">
+      <testsuite name="test_flaky" tests="1" failures="1" skipped="0" errors="0" time="[TIME]">
+        <testcase classname="test_flaky" name="test_flaky" time="[TIME]">
+          <failure message="Flaky test failed by policy" type="flaky">Flaky tests are configured to fail the run.</failure>
+          <flakyFailure message="Test `test_flaky` failed" type="test-failure" time="[TIME]">error[test-failure]: Test `test_flaky` failed
+     --&gt; test_flaky.py:4:5
+      |
+    4 | def test_flaky():
+      |     ^^^^^^^^^^
+      |
+    info: Test failed here
+     --&gt; test_flaky.py:5:5
+      |
+    5 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+
+    </flakyFailure>
+        </testcase>
+      </testsuite>
+    </testsuites>
+    "#);
+}
+
+#[test]
 fn junit_reports_fail_slow_teardown_duration() {
     let context = TestContext::with_files([
         (

@@ -276,6 +276,118 @@ def verify_b(): pass
 }
 
 #[test]
+fn flaky_result_profile_inheritance_and_cli_precedence() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.test]
+retry = 1
+flaky-result = "pass"
+
+[profile.ci.test]
+flaky-result = "fail"
+"#,
+        ),
+        (
+            "test.py",
+            r#"
+import os
+
+def test_flaky():
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--profile=ci"), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_flaky
+      TRY 2 PASS [TIME] test::test_flaky
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_flaky
+    flaky failure: flaky tests caused the run to fail
+
+    ----- stderr -----
+    ");
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--profile=ci", "--flaky-result=pass"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_flaky
+      TRY 2 PASS [TIME] test::test_flaky
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_flaky
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn flaky_result_environment_and_cli_precedence() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+
+def test_flaky():
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+"#,
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--retry=1"])
+            .env(karva_static::EnvVars::KARVA_FLAKY_RESULT, "fail"),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_flaky
+      TRY 2 PASS [TIME] test::test_flaky
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_flaky
+    flaky failure: flaky tests caused the run to fail
+
+    ----- stderr -----
+    "
+    );
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--retry=1", "--flaky-result=pass"])
+            .env(karva_static::EnvVars::KARVA_FLAKY_RESULT, "fail"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_flaky
+      TRY 2 PASS [TIME] test::test_flaky
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_flaky
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
 fn profile_pyproject_toml() {
     let context = TestContext::with_files([
         (

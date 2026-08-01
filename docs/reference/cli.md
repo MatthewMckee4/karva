@@ -89,6 +89,11 @@ karva test [OPTIONS] [PATH]...
 <li><code>pass</code>:  Always display the summary line and diagnostics (default)</li>
 <li><code>skip</code>:  Same as <code>pass</code> until skip-specific summary lines are emitted</li>
 <li><code>all</code>:  Always display every summary status</li>
+</ul></dd><dt id="karva-test--flaky-result"><a href="#karva-test--flaky-result"><code>--flaky-result</code></a> <i>action</i></dt><dd><p>Whether tests that pass only after a retry should pass or fail the run</p>
+<p>May also be set with the <code>KARVA_FLAKY_RESULT</code> environment variable.</p><p>Possible values:</p>
+<ul>
+<li><code>pass</code></li>
+<li><code>fail</code></li>
 </ul></dd><dt id="karva-test--help"><a href="#karva-test--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help (see a summary with '-h')</p>
 </dd><dt id="karva-test--last-failed"><a href="#karva-test--last-failed"><code>--last-failed</code></a>, <code>--lf</code></dt><dd><p>Re-run only the tests that failed in the previous run</p>
 </dd><dt id="karva-test--max-fail"><a href="#karva-test--max-fail"><code>--max-fail</code></a> <i>n</i></dt><dd><p>Stop scheduling new tests after this many failures.</p>

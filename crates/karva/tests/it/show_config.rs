@@ -24,6 +24,7 @@ fn show_config_default_profile() {
     test-function-prefix = "test"
     try-import-fixtures = false
     retry = 0
+    flaky-result = "pass"
     no-tests = "auto"
 
     [coverage]
@@ -73,6 +74,7 @@ output-format = "concise"
     max-fail = 1
     try-import-fixtures = false
     retry = 0
+    flaky-result = "pass"
     no-tests = "auto"
 
     [coverage]
@@ -123,6 +125,7 @@ output-format = "concise"
     test-function-prefix = "check"
     try-import-fixtures = false
     retry = 3
+    flaky-result = "pass"
     no-tests = "auto"
 
     [coverage]
@@ -176,6 +179,7 @@ fail-under = 90
     test-function-prefix = "test"
     try-import-fixtures = false
     retry = 0
+    flaky-result = "pass"
     no-tests = "auto"
     slow-timeout = 0.5
     timeout = 120.0
@@ -230,6 +234,7 @@ slow-timeout = 0.5
     test-function-prefix = "test"
     try-import-fixtures = false
     retry = 0
+    flaky-result = "pass"
     no-tests = "auto"
 
     [coverage]

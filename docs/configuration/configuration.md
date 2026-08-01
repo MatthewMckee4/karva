@@ -440,6 +440,23 @@ fail-slow = 0.25
 
 ---
 
+### `flaky-result`
+
+Whether tests that pass only after a retry should fail the run.
+
+**Default value**: `pass`
+
+**Type**: `pass | fail`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.test]
+flaky-result = "fail"
+```
+
+---
+
 ### `max-fail`
 
 Stop scheduling new tests once this many tests have failed.

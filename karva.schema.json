@@ -178,6 +178,13 @@
         }
       ]
     },
+    "FlakyResult": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail"
+      ]
+    },
     "JunitOptions": {
       "type": "object",
       "properties": {
@@ -496,6 +503,17 @@
           "anyOf": [
             {
               "$ref": "#/definitions/FailSlowSecs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "flaky-result": {
+          "description": "Whether tests that pass only after a retry should fail the run.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlakyResult"
             },
             {
               "type": "null"

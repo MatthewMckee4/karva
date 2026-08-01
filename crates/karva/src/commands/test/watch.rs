@@ -25,7 +25,13 @@ fn run_and_print(
     let start_time = Instant::now();
     match karva_runner::run_parallel_tests(project, config, sub_command, printer) {
         Ok(output) => {
-            if let Err(err) = print_test_output(printer, start_time, &output.results, durations) {
+            if let Err(err) = print_test_output(
+                printer,
+                start_time,
+                &output.results,
+                durations,
+                project.settings().test().flaky_result,
+            ) {
                 tracing::error!("Failed to print test output: {err}");
             }
             if output.timed_out

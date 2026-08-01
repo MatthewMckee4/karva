@@ -12,7 +12,9 @@ use karva_cache::{AggregatedResults, DisplayFlakyTests};
 use karva_cli::TestCommand;
 use karva_logging::{Printer, Stdout, set_colored_override, setup_tracing};
 use karva_metadata::filter::FiltersetSet;
-use karva_metadata::{CovReport, NoTestsMode, ProjectMetadata, ProjectOptionsOverrides};
+use karva_metadata::{
+    CovReport, FlakyResult, NoTestsMode, ProjectMetadata, ProjectOptionsOverrides,
+};
 use karva_project::Project;
 use karva_project::path::absolute;
 use karva_python_semantic::current_python_version;
@@ -102,8 +104,14 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         timed_out,
     } = karva_runner::run_parallel_tests(&project, &config, &sub_command, printer)?;
 
-    print_test_output(printer, start_time, &result, durations)?;
-    junit::write_junit_report(project.settings().junit(), &result, project.cwd())?;
+    let flaky_result = project.settings().test().flaky_result;
+    print_test_output(printer, start_time, &result, durations, flaky_result)?;
+    junit::write_junit_report(
+        project.settings().junit(),
+        &result,
+        project.cwd(),
+        flaky_result,
+    )?;
     let write_result_report = |exit_status| {
         result_report::write_result_report(
             result_output.as_deref(),
@@ -241,7 +249,8 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         return Ok(exit_status);
     }
 
-    let exit_status = if result.is_success() && !coverage_below_threshold {
+    let flaky_failed = flaky_result == FlakyResult::Fail && result.stats.flaky() > 0;
+    let exit_status = if result.is_success() && !coverage_below_threshold && !flaky_failed {
         ExitStatus::Success
     } else {
         ExitStatus::Failure
@@ -276,6 +285,7 @@ pub fn print_test_output(
     start_time: Instant,
     result: &AggregatedResults,
     durations: Option<usize>,
+    flaky_result: FlakyResult,
 ) -> Result<()> {
     let mut details = printer.stream_for_details().lock();
 
@@ -302,13 +312,17 @@ pub fn print_test_output(
 
     drop(details);
 
-    let success = result.is_success();
+    let flaky_failed = flaky_result == FlakyResult::Fail && result.stats.flaky() > 0;
+    let success = result.is_success() && !flaky_failed;
     let mut summary = printer
         .stream_for_summary(success, result.stats.flaky() > 0)
         .lock();
 
     write!(summary, "{}", result.stats.display(start_time, success))?;
     write!(summary, "{}", DisplayFlakyTests::new(&result.flaky_tests))?;
+    if flaky_failed {
+        writeln!(summary, "flaky failure: flaky tests caused the run to fail")?;
+    }
 
     Ok(())
 }

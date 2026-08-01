@@ -17,6 +17,25 @@ retry = 3
 
 A test that passes on any attempt is treated as a pass. The first failed attempt is reported as `TRY 1 FAIL`; the test is only marked as failing once every attempt has been exhausted.
 
+Set `flaky-result = "fail"` when retries should expose flaky tests without allowing them to pass the run:
+
+```toml
+[tool.karva.profile.default.test]
+retry = 2
+flaky-result = "pass"
+
+[tool.karva.profile.ci.test]
+flaky-result = "fail"
+```
+
+The equivalent command-line override is:
+
+```bash
+uv run karva test --retry 2 --flaky-result fail
+```
+
+`pass` remains the default. With `fail`, Karva keeps the test's `FLAKY` status and attempt history but exits non-zero and marks JSON, JSONL, and JUnit reports as failed. `--flaky-result` does not enable retries by itself. `KARVA_FLAKY_RESULT` provides the same override through the environment.
+
 To see the per-attempt lines in the run output, raise the status level:
 
 ```bash

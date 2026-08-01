@@ -29,6 +29,11 @@ Configuration profile to use, equivalent to `--profile`.
 Behavior when no tests are found to run, equivalent to
 `--no-tests`.
 
+### `KARVA_FLAKY_RESULT`
+
+Whether flaky tests pass or fail the run, equivalent to
+`--flaky-result`.
+
 ### `KARVA_STATUS_LEVEL`
 
 Test result statuses to display during the run, equivalent to

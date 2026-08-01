@@ -286,6 +286,125 @@ fn writes_jsonl_result_records() {
 }
 
 #[test]
+fn flaky_result_fail_marks_json_run_failed() {
+    let context = TestContext::with_file(
+        "test_flaky.py",
+        r#"
+import os
+
+def test_flaky():
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+"#,
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
+            "--retry=1",
+            "--flaky-result=fail",
+            "--status-level=none",
+            "--result-output=results.json",
+        ]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test_flaky::test_flaky
+    flaky failure: flaky tests caused the run to fail
+
+    ----- stderr -----
+    "
+    );
+    assert_snapshot!(context.read_file("results.json"), @r#"
+    {
+      "schema_version": 2,
+      "status": "failed",
+      "elapsed_seconds": "[TIME]",
+      "stats": {
+        "total": 1,
+        "passed": 1,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "flaky": 1,
+        "slow": 0
+      },
+      "tests": [
+        {
+          "module": "test_flaky",
+          "name": "test_flaky",
+          "full_name": "test_flaky::test_flaky",
+          "status": "passed",
+          "duration_seconds": "[TIME]",
+          "flaky": true,
+          "retry": {
+            "attempts": 2,
+            "max_attempts": 2
+          },
+          "attempts": [
+            {
+              "attempt": 1,
+              "status": "failed",
+              "duration_seconds": "[TIME]",
+              "diagnostic": {
+                "code": "test-failure",
+                "severity": "error",
+                "message": "Test `test_flaky` failed",
+                "rendered": "error[test-failure]: Test `test_flaky` failed\n --> test_flaky.py:4:5\n  |/n4 | def test_flaky():\n  |     ^^^^^^^^^^\n  |/ninfo: Test failed here\n --> test_flaky.py:5:5\n  |/n5 |     assert os.environ[/"KARVA_ATTEMPT/"] == /"2/"\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n\n"
+              }
+            },
+            {
+              "attempt": 2,
+              "status": "passed",
+              "duration_seconds": "[TIME]"
+            }
+          ]
+        }
+      ]
+    }
+    "#);
+}
+
+#[test]
+fn flaky_result_fail_marks_jsonl_run_failed() {
+    let context = TestContext::with_file(
+        "test_flaky.py",
+        r#"
+import os
+
+def test_flaky():
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+"#,
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
+            "--retry=1",
+            "--flaky-result=fail",
+            "--status-level=none",
+            "--result-output=results.jsonl",
+            "--result-format=jsonl",
+        ]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test_flaky::test_flaky
+    flaky failure: flaky tests caused the run to fail
+
+    ----- stderr -----
+    "
+    );
+    assert_snapshot!(context.read_file("results.jsonl"), @r#"
+    {"schema_version":2,"type":"test","module":"test_flaky","name":"test_flaky","full_name":"test_flaky::test_flaky","status":"passed","duration_seconds":"[TIME]","flaky":true,"retry":{"attempts":2,"max_attempts":2},"attempts":[{"attempt":1,"status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"test-failure","severity":"error","message":"Test `test_flaky` failed","rendered":"error[test-failure]: Test `test_flaky` failed\n --> test_flaky.py:4:5\n  |/n4 | def test_flaky():\n  |     ^^^^^^^^^^\n  |/ninfo: Test failed here\n --> test_flaky.py:5:5\n  |/n5 |     assert os.environ[/"KARVA_ATTEMPT/"] == /"2/"\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n\n"}},{"attempt":2,"status":"passed","duration_seconds":"[TIME]"}]}
+    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":1,"failed":0,"errors":0,"skipped":0,"flaky":1,"slow":0}}
+    "#);
+}
+
+#[test]
 fn fail_slow_reports_teardown_duration_in_json_and_jsonl() {
     let context = TestContext::with_file(
         "test_fail_slow.py",

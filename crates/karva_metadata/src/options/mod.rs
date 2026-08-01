@@ -15,9 +15,9 @@ pub use overrides::ProjectOptionsOverrides;
 use crate::filter::{FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
 use crate::settings::{
-    CovFailUnder, CoverageSettings, FailSlowSecs, JunitSettings, NoTestsMode, OverrideSettings,
-    ProjectSettings, RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs, SrcSettings,
-    TerminalSettings, TerminationGracePeriodSecs, TestSettings, TestTimeoutSecs,
+    CovFailUnder, CoverageSettings, FailSlowSecs, FlakyResult, JunitSettings, NoTestsMode,
+    OverrideSettings, ProjectSettings, RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs,
+    SrcSettings, TerminalSettings, TerminationGracePeriodSecs, TestSettings, TestTimeoutSecs,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata)]
@@ -372,6 +372,17 @@ pub struct TestOptions {
     )]
     pub retry: Option<u32>,
 
+    /// Whether tests that pass only after a retry should fail the run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"pass"#,
+        value_type = "pass | fail",
+        example = r#"
+            flaky-result = "fail"
+        "#
+    )]
+    pub flaky_result: Option<FlakyResult>,
+
     /// Configures behavior when no tests are found to run.
     ///
     /// `auto` (the default) fails when no filter expressions were given, and
@@ -502,6 +513,7 @@ impl TestOptions {
             max_fail,
             try_import_fixtures: self.try_import_fixtures.unwrap_or_default(),
             retry: self.retry.unwrap_or_default(),
+            flaky_result: self.flaky_result.unwrap_or_default(),
             filter: FiltersetSet::default(),
             run_ignored: RunIgnoredMode::default(),
             no_tests: self.no_tests.unwrap_or_default(),
@@ -897,7 +909,7 @@ nonsense = 42
           |
         4 | nonsense = 42
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `test-function-prefix`, `fail-fast`, `max-fail`, `try-import-fixtures`, `retry`, `no-tests`, `slow-timeout`, `timeout`, `fail-slow`, `run-timeout`, `termination-grace-period`
+        unknown field `nonsense`, expected one of `test-function-prefix`, `fail-fast`, `max-fail`, `try-import-fixtures`, `retry`, `flaky-result`, `no-tests`, `slow-timeout`, `timeout`, `fail-slow`, `run-timeout`, `termination-grace-period`
         "
         );
     }
@@ -994,6 +1006,7 @@ max-fail = 0
             retry: Some(
                 5,
             ),
+            flaky_result: None,
             no_tests: None,
             slow_timeout: None,
             timeout: None,
@@ -1026,6 +1039,7 @@ max-fail = 0
             retry: Some(
                 3,
             ),
+            flaky_result: None,
             no_tests: None,
             slow_timeout: None,
             timeout: None,
@@ -1091,6 +1105,7 @@ retry = 2
                 retry: Some(
                     2,
                 ),
+                flaky_result: None,
                 no_tests: None,
                 slow_timeout: None,
                 timeout: None,
@@ -1150,6 +1165,7 @@ retry = 5
                 retry: Some(
                     5,
                 ),
+                flaky_result: None,
                 no_tests: None,
                 slow_timeout: None,
                 timeout: None,

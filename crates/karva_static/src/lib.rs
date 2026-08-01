@@ -65,6 +65,10 @@ env_vars! {
         /// `--no-tests`.
         pub const KARVA_NO_TESTS: &'static str = "KARVA_NO_TESTS";
 
+        /// Whether flaky tests pass or fail the run, equivalent to
+        /// `--flaky-result`.
+        pub const KARVA_FLAKY_RESULT: &'static str = "KARVA_FLAKY_RESULT";
+
         /// Test result statuses to display during the run, equivalent to
         /// `--status-level`.
         pub const KARVA_STATUS_LEVEL: &'static str = "KARVA_STATUS_LEVEL";
