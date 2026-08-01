@@ -154,6 +154,11 @@ def test_warns_matches_message_regex():
         warnings.warn("value 42", UserWarning)
 
 
+def test_warns_defaults_to_any_warning():
+    with karva.warns():
+        warnings.warn("warning")
+
+
 def test_deprecated_call_accepts_deprecation_warnings():
     with karva.deprecated_call():
         warnings.warn("deprecated", DeprecationWarning)
@@ -169,7 +174,7 @@ def test_deprecated_call_accepts_deprecation_warnings():
     exit_code: 0
     ----- stdout -----
     ────────────
-         Summary [TIME] 3 tests run: 3 passed, 0 skipped
+         Summary [TIME] 4 tests run: 4 passed, 0 skipped
 
     ----- stderr -----
     ");
@@ -186,6 +191,9 @@ import karva
 
 
 def test_warns_failure_messages():
+    with karva.raises(TypeError, match="derived from Warning"):
+        karva.warns(ValueError)
+
     with karva.raises(AssertionError, match="No warnings of type.*UserWarning"):
         with karva.warns(UserWarning):
             pass
@@ -225,6 +233,82 @@ def test_warns_restores_filters_when_block_raises():
 
     ----- stderr -----
     ");
+}
+
+#[test]
+fn test_warning_assertion_diagnostics() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import warnings
+
+import karva
+
+
+def test_missing_warning():
+    with karva.warns(UserWarning):
+        pass
+
+
+def test_warning_message_mismatch():
+    with karva.warns(UserWarning, match="expected message"):
+        warnings.warn("different message", UserWarning)
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test::test_missing_warning
+            FAIL [TIME] test::test_warning_message_mismatch
+
+    failures:
+
+    test::test_missing_warning:
+
+    error[test-failure]: Test `test_missing_warning` failed
+     --> test.py:7:5
+      |
+    7 | def test_missing_warning():
+      |     ^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Test failed here
+     --> test.py:8:5
+      |
+    8 |     with karva.warns(UserWarning):
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: DID NOT WARN. No warnings of type (<class 'UserWarning'>,) were emitted.
+           Emitted warnings: [].
+
+    test::test_warning_message_mismatch:
+
+    error[test-failure]: Test `test_warning_message_mismatch` failed
+      --> test.py:12:5
+       |
+    12 | def test_warning_message_mismatch():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Test failed here
+      --> test.py:13:5
+       |
+    13 |     with karva.warns(UserWarning, match="expected message"):
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Regex pattern 'expected message' did not match any emitted warning.
+           Emitted warnings: [UserWarning('different message')].
+
+    captured stderr:
+    <temp_dir>/test.py:14: UserWarning: different message
+      warnings.warn("different message", UserWarning)
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 }
 
 // =============================================================================
