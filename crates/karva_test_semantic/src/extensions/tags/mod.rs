@@ -290,8 +290,8 @@ impl Tags {
                     tags.push(tag);
                 }
             }
-        } else {
-            return Ok(None);
+        } else if let Some(tag) = Tag::try_from_pytest_mark(marks.bind(py), globals)? {
+            tags.push(tag);
         }
         Ok(Some(Self { inner: tags }))
     }

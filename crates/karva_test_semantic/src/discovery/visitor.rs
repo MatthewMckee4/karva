@@ -141,6 +141,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             match DiscoveredTestFunction::new(
                 self.py,
                 self.module,
+                py_module,
                 Rc::new(stmt_function_def),
                 py_function.unbind(),
             ) {
