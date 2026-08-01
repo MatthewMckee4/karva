@@ -27,6 +27,7 @@ pub enum DependencySetup {
     LockedUvSync {
         group: &'static str,
     },
+    LockedUvSyncAll,
     DateCappedUvSync {
         exclude_newer: &'static str,
         all_extras: bool,
@@ -73,25 +74,13 @@ pub const REQUESTS_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: true,
 };
 
-const PYDANTIC_BENCHMARK_DIR: &str = "karva_benchmark_tests";
-const PYDANTIC_BENCHMARK_TESTS: &[&str] = &[
-    "test_aliases.py",
-    "test_annotated.py",
-    "test_color.py",
-    "test_discriminated_union.py",
-    "test_fields.py",
-    "test_networks_ipaddress.py",
-    "test_pipeline.py",
-    "test_types_payment_card_number.py",
-];
-
 pub const PYDANTIC_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "pydantic",
     repository: "https://github.com/pydantic/pydantic",
     commit: "bd2d0dd0137dfa1a8fdff2529b9dfb1547980150",
-    paths: &[PYDANTIC_BENCHMARK_DIR],
+    paths: &["tests"],
     python_version: PythonVersion::PY313,
-    dependency_setup: DependencySetup::LockedUvSync { group: "dev" },
+    dependency_setup: DependencySetup::LockedUvSyncAll,
     try_import_fixtures: true,
 };
 
@@ -323,7 +312,7 @@ pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
     WERKZEUG_PROJECT,
 ];
 
-pub const CLI_BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
+pub const CI_BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
     REQUESTS_PROJECT,
     PYDANTIC_PROJECT,
     FASTAPI_PROJECT,
@@ -361,18 +350,6 @@ pub fn prepare_benchmark_project_environment(config: &BenchmarkProject) -> Resul
     let project_root = ensure_checkout(config).context("Failed to checkout benchmark project")?;
     install_dependencies(config, &project_root)
         .context("Failed to install benchmark dependencies")?;
-    if config.name == PYDANTIC_PROJECT.name {
-        let benchmark_dir = project_root.join(PYDANTIC_BENCHMARK_DIR);
-        fs::create_dir_all(&benchmark_dir)
-            .context("Failed to create isolated Pydantic benchmark directory")?;
-        for test in PYDANTIC_BENCHMARK_TESTS {
-            fs::copy(
-                project_root.join("tests").join(test),
-                benchmark_dir.join(test),
-            )
-            .with_context(|| format!("Failed to copy Pydantic benchmark test `{test}`"))?;
-        }
-    }
     clean_project_cache(&project_root).context("Failed to clean benchmark cache")?;
 
     let mut metadata = ProjectMetadata::new(project_root, config.python_version);
@@ -559,6 +536,23 @@ fn install_dependencies(config: &BenchmarkProject, project_root: &Utf8PathBuf) -
                     ])
                     .current_dir(project_root),
                 "Failed to sync locked benchmark project environment",
+            )?;
+        }
+        DependencySetup::LockedUvSyncAll => {
+            run_command(
+                Command::new("uv")
+                    .args([
+                        "sync",
+                        "--locked",
+                        "--all-groups",
+                        "--all-extras",
+                        "--all-packages",
+                        "--python",
+                        &python_version,
+                        "--compile-bytecode",
+                    ])
+                    .current_dir(project_root),
+                "Failed to sync all locked benchmark project dependencies",
             )?;
         }
         DependencySetup::DateCappedUvSync {
