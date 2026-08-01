@@ -34,6 +34,12 @@
   border-bottom: 1px solid color-mix(in srgb, var(--md-default-fg-color) 12%, transparent);
   background: var(--karva-nav);
   box-shadow: none;
+  color: var(--karva-pale);
+}
+
+.md-header .md-search__button {
+  background: color-mix(in srgb, var(--karva-pale) 12%, transparent);
+  color: inherit;
 }
 
 .md-grid {
