@@ -403,10 +403,6 @@ pub struct ParametrizationArgs {
 }
 
 impl ParametrizationArgs {
-    pub(crate) fn values(&self) -> &HashMap<String, Arc<Py<PyAny>>> {
-        &self.values
-    }
-
     pub(crate) fn extend(&mut self, other: Self) {
         self.values.extend(other.values);
         self.tags.extend(&other.tags);
@@ -596,6 +592,10 @@ fn extract_parametrize_args<'py>(
 }
 
 impl ParametrizeTag {
+    pub(crate) fn names(&self) -> &[String] {
+        &self.names
+    }
+
     pub(crate) fn new(names: Vec<String>, parametrizations: Vec<Parametrization>) -> Self {
         Self {
             names,

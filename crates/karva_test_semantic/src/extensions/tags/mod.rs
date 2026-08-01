@@ -322,6 +322,18 @@ impl Tags {
         param_args
     }
 
+    pub(crate) fn parametrize_names(&self) -> HashSet<&str> {
+        self.inner
+            .iter()
+            .filter_map(|tag| match tag {
+                Tag::Parametrize(parametrize) => Some(parametrize.names()),
+                _ => None,
+            })
+            .flatten()
+            .map(String::as_str)
+            .collect()
+    }
+
     pub(crate) fn validate_parametrize(
         &self,
         function: &StmtFunctionDef,
