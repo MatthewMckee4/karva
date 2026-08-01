@@ -463,9 +463,13 @@ pub(super) fn parse_parametrize_args(
 ) -> PyResult<(Vec<String>, Vec<Parametrization>)> {
     let py = arg_values.py();
     let names = normalize_arg_names(arg_names)?;
-    let values = arg_values.extract::<Vec<Py<PyAny>>>().map_err(|_| {
-        PyValueError::new_err("pytest parametrize mark argvalues must be an iterable")
-    })?;
+    let values = arg_values
+        .try_iter()
+        .map_err(|_| {
+            PyValueError::new_err("pytest parametrize mark argvalues must be an iterable")
+        })?
+        .map(|value| value.map(Bound::unbind))
+        .collect::<PyResult<Vec<_>>>()?;
     let expect_multiple = names.len() > 1;
     let parametrizations = values
         .into_iter()
