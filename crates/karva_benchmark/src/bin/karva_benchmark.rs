@@ -16,7 +16,7 @@ use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use fs_err::{self as fs, File};
-use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject, CLI_BENCHMARK_PROJECTS, WORKER_COUNT};
+use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject, WORKER_COUNT};
 use karva_cli::ExitStatus;
 use karva_static::ToolEnvVars;
 use regex::Regex;
@@ -27,6 +27,7 @@ const MATERIAL_CHANGE_PERCENT: f64 = 1.0;
 const FAST_PROJECT_ITERATIONS: usize = 21;
 const MEDIUM_PROJECT_ITERATIONS: usize = 15;
 const LONG_PROJECT_ITERATIONS: usize = MEDIUM_PROJECT_ITERATIONS / 2;
+const EXTRA_LONG_PROJECT_ITERATIONS: usize = LONG_PROJECT_ITERATIONS.div_ceil(2);
 
 #[derive(Debug, Parser)]
 #[command(about = "Run Karva benchmark comparisons")]
@@ -187,7 +188,7 @@ fn main() -> Result<()> {
 
 fn list_projects() -> Result<()> {
     let matrix = Matrix {
-        include: CLI_BENCHMARK_PROJECTS
+        include: BENCHMARK_PROJECTS
             .iter()
             .map(|project| MatrixProject {
                 project: project.name,
@@ -893,7 +894,8 @@ fn write_summary_line(
 
 fn matrix_iterations(project_name: &str) -> usize {
     match project_name {
-        "fastapi" | "httpx" | "pydantic" => LONG_PROJECT_ITERATIONS,
+        "requests" => EXTRA_LONG_PROJECT_ITERATIONS,
+        "fastapi" | "httpx" | "werkzeug" => LONG_PROJECT_ITERATIONS,
         "tomlkit" => MEDIUM_PROJECT_ITERATIONS,
         _ => FAST_PROJECT_ITERATIONS,
     }
@@ -1057,10 +1059,10 @@ mod tests {
     use camino::Utf8Path;
 
     use super::{
-        BenchmarkMetric, ComparisonReport, FAST_PROJECT_ITERATIONS, LONG_PROJECT_ITERATIONS,
-        MEDIUM_PROJECT_ITERATIONS, Measurement, ProjectComparison, diagnostic_comparison,
-        diagnostics_markdown_report, is_benchmarkable_exit, karva_invocation, markdown_report,
-        matrix_iterations, normalize_diagnostic_text, trend,
+        BenchmarkMetric, ComparisonReport, EXTRA_LONG_PROJECT_ITERATIONS, FAST_PROJECT_ITERATIONS,
+        LONG_PROJECT_ITERATIONS, MEDIUM_PROJECT_ITERATIONS, Measurement, ProjectComparison,
+        diagnostic_comparison, diagnostics_markdown_report, is_benchmarkable_exit,
+        karva_invocation, markdown_report, matrix_iterations, normalize_diagnostic_text, trend,
     };
 
     #[test]
@@ -1241,14 +1243,13 @@ mod tests {
     }
 
     #[test]
-    fn matrix_iterations_are_higher_for_fast_projects() {
+    fn matrix_iterations_match_project_runtime() {
         assert_eq!(matrix_iterations("sniffio"), FAST_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("h11"), FAST_PROJECT_ITERATIONS);
-        assert_eq!(matrix_iterations("requests"), FAST_PROJECT_ITERATIONS);
-        assert_eq!(matrix_iterations("werkzeug"), FAST_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("fastapi"), LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("httpx"), LONG_PROJECT_ITERATIONS);
-        assert_eq!(matrix_iterations("pydantic"), LONG_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("requests"), EXTRA_LONG_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("werkzeug"), LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("tomlkit"), MEDIUM_PROJECT_ITERATIONS);
     }
 

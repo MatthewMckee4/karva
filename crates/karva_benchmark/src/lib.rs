@@ -59,27 +59,13 @@ pub const REQUESTS_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "requests",
     repository: "https://github.com/psf/requests",
     commit: "d64b9ad4bf1c14e21e0df3f0f4320fec81180e91",
-    paths: &[
-        "tests/test_structures.py",
-        "tests/test_hooks.py",
-        "tests/test_utils.py",
-    ],
+    paths: &["tests"],
     python_version: PythonVersion::PY313,
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
         all_extras: true,
         groups: &["test"],
     },
-    try_import_fixtures: true,
-};
-
-pub const PYDANTIC_PROJECT: BenchmarkProject = BenchmarkProject {
-    name: "pydantic",
-    repository: "https://github.com/pydantic/pydantic",
-    commit: "bd2d0dd0137dfa1a8fdff2529b9dfb1547980150",
-    paths: &["tests"],
-    python_version: PythonVersion::PY313,
-    dependency_setup: DependencySetup::LockedUvSync { group: "dev" },
     try_import_fixtures: true,
 };
 
@@ -185,11 +171,7 @@ pub const JINJA_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "jinja",
     repository: "https://github.com/pallets/jinja",
     commit: "5ef70112a1ff19c05324ff889dd30405b1002044",
-    paths: &[
-        "tests/test_runtime.py",
-        "tests/test_idtracking.py",
-        "tests/test_nodes.py",
-    ],
+    paths: &["tests"],
     python_version: PythonVersion::PY313,
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
@@ -217,16 +199,7 @@ pub const TOMLKIT_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "tomlkit",
     repository: "https://github.com/python-poetry/tomlkit",
     commit: "ae1b6790d99b21bc0a339a5825e7d5e40e7e6f6a",
-    paths: &[
-        "tests/test_toml_file.py",
-        "tests/test_parser.py",
-        "tests/test_write.py",
-        "tests/test_items.py",
-        "tests/test_build.py",
-        "tests/test_api.py",
-        "tests/test_toml_document.py",
-        "tests/test_utils.py",
-    ],
+    paths: &["tests"],
     python_version: PythonVersion::PY313,
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
@@ -254,15 +227,7 @@ pub const PLUGGY_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "pluggy",
     repository: "https://github.com/pytest-dev/pluggy",
     commit: "7fce99cb955846901b22b051909aa4f30dc16128",
-    paths: &[
-        "testing/test_details.py",
-        "testing/test_helpers.py",
-        "testing/test_invocations.py",
-        "testing/test_multicall.py",
-        "testing/test_result.py",
-        "testing/test_tracer.py",
-        "testing/test_warnings.py",
-    ],
+    paths: &["testing"],
     python_version: PythonVersion::PY313,
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
@@ -276,13 +241,7 @@ pub const WERKZEUG_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "werkzeug",
     repository: "https://github.com/pallets/werkzeug",
     commit: "1b00618e787f40dfb21eba29caf8f8be7c8e1d93",
-    paths: &[
-        "tests/test_datastructures.py",
-        "tests/test_http.py",
-        "tests/test_security.py",
-        "tests/test_urls.py",
-        "tests/test_wsgi.py",
-    ],
+    paths: &["tests"],
     python_version: PythonVersion::PY313,
     dependency_setup: DependencySetup::DateCappedUvSync {
         exclude_newer: "2026-01-01",
@@ -293,30 +252,11 @@ pub const WERKZEUG_PROJECT: BenchmarkProject = BenchmarkProject {
 };
 
 pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
-    SYNTHETIC_PROJECT,
     REQUESTS_PROJECT,
-    PYDANTIC_PROJECT,
     FASTAPI_PROJECT,
     HTTPX_PROJECT,
     H11_PROJECT,
     MARKUPSAFE_PROJECT,
-    SNIFFIO_PROJECT,
-    ITSDANGEROUS_PROJECT,
-    BLINKER_PROJECT,
-    JINJA_PROJECT,
-    INSTALLER_PROJECT,
-    TOMLKIT_PROJECT,
-    OUTCOME_PROJECT,
-    PLUGGY_PROJECT,
-    WERKZEUG_PROJECT,
-];
-
-pub const CLI_BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
-    REQUESTS_PROJECT,
-    PYDANTIC_PROJECT,
-    FASTAPI_PROJECT,
-    HTTPX_PROJECT,
-    H11_PROJECT,
     SNIFFIO_PROJECT,
     ITSDANGEROUS_PROJECT,
     BLINKER_PROJECT,
