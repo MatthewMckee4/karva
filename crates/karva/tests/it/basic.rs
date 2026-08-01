@@ -2844,6 +2844,11 @@ fn test_karva_test_name_env() {
         r#"
 import os
 import karva
+import pytest
+
+class NullString:
+    def __str__(self):
+        return "\x00"
 
 def test_plain():
     assert os.environ["KARVA_TEST_NAME"] == "test::test_plain"
@@ -2851,6 +2856,15 @@ def test_plain():
 @karva.tags.parametrize("value", [1, 2])
 def test_param(value):
     assert os.environ["KARVA_TEST_NAME"] == f"test::test_param(value={value})"
+
+@pytest.mark.parametrize(("input_value", "expected"), [(b"\x00", "\x00")])
+def test_null_byte(input_value, expected):
+    assert os.environ["KARVA_TEST_NAME"] == r"test::test_null_byte(input_value=b'\x00', expected='\x00')"
+    assert input_value.decode() == expected
+
+@karva.tags.parametrize("value", [NullString()])
+def test_value_derived_null_byte(value):
+    assert os.environ["KARVA_TEST_NAME"] == r"test::test_value_derived_null_byte(value=\x00)"
         "#,
     );
 
@@ -2858,12 +2872,14 @@ def test_param(value):
     success: true
     exit_code: 0
     ----- stdout -----
-        Starting 2 tests across 1 worker
+        Starting 4 tests across 1 worker
             PASS [TIME] test::test_plain
             PASS [TIME] test::test_param(value=1)
             PASS [TIME] test::test_param(value=2)
+            PASS [TIME] test::test_null_byte(input_value=b'/x00', expected='/x00')
+            PASS [TIME] test::test_value_derived_null_byte(value=/x00)
     ────────────
-         Summary [TIME] 3 tests run: 3 passed, 0 skipped
+         Summary [TIME] 5 tests run: 5 passed, 0 skipped
 
     ----- stderr -----
     ");
