@@ -1743,6 +1743,34 @@ def test_square(input, expected):
 }
 
 #[test]
+fn test_parametrize_with_pytest_param_false_keyword_xfail_condition() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r#"
+import pytest
+
+@pytest.mark.parametrize("value", [
+    pytest.param(1, marks=pytest.mark.xfail(condition=False, reason="not broken")),
+])
+def test_value(value):
+    assert value == 1
+"#,
+    );
+
+    assert_cmd_snapshot!(test_context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_value(value=1)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_parametrize_with_karva_param_single_arg() {
     let test_context = TestContext::with_file(
         "test.py",

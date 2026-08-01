@@ -42,8 +42,12 @@ impl ExpectFailTag {
         py_mark: &Bound<'_, PyAny>,
         globals: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<Self>> {
-        let parsed = parse_pytest_mark_args(py_mark, globals)?;
+        let mut parsed = parse_pytest_mark_args(py_mark, globals)?;
         let kwargs = py_mark.getattr("kwargs")?;
+        if let Ok(condition) = kwargs.get_item("condition") {
+            parsed.conditions.push(condition.is_truthy()?);
+            parsed.requires_reason = true;
+        }
         let reason = if let Ok(reason_item) = kwargs.get_item("reason") {
             Some(reason_item.str()?.to_string_lossy().into_owned())
         } else {

@@ -249,6 +249,32 @@ def test_1():
     }
 }
 
+#[test]
+fn test_pytest_expect_fail_with_false_keyword_condition() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+@pytest.mark.xfail(condition=False, reason='Condition is false')
+def test_1():
+    assert True
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_1
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
 #[rstest]
 fn test_expect_fail_with_expression(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
@@ -738,6 +764,35 @@ import pytest
 @pytest.mark.xfail(False)
 def test_1():
     assert True
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: pytest xfail mark requires a reason when using boolean conditions
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_pytest_expect_fail_keyword_condition_without_reason_rejected() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import pytest
+
+@pytest.mark.xfail(condition=True)
+def test_1():
+    assert False
 ",
     );
 
