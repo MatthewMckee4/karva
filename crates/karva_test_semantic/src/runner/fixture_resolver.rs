@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
 
-use crate::discovery::DiscoveredPackage;
+use crate::discovery::{DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::{
     DiscoveredFixture, FixtureScope, HasFixtures, NormalizedFixture, RejectedFixture,
     RequiresFixtures, get_auto_use_fixtures,
@@ -66,6 +66,15 @@ pub enum FixtureResolutionError {
         missing_fixtures: Vec<String>,
         /// Missing dependencies that were rejected during discovery.
         rejected_fixtures: Vec<RejectedFixture>,
+    },
+    /// Test requires names that cannot be resolved.
+    MissingTestFixtures {
+        /// Test definition used to locate the diagnostic.
+        stmt_function_def: Rc<StmtFunctionDef>,
+        /// Source containing the test definition.
+        source_file: SourceFile,
+        /// Unresolved fixture names.
+        missing_fixtures: Vec<String>,
     },
 }
 
@@ -219,14 +228,36 @@ impl<'a> RuntimeFixtureResolver<'a> {
     pub(super) fn resolve_test_fixtures(
         &mut self,
         py: Python,
-        fixture_names: &[String],
+        test: &DiscoveredTestFunction,
         parametrize_param_names: &HashSet<&str>,
     ) -> FixtureResolutionResult<Vec<Rc<NormalizedFixture>>> {
+        let fixture_names = test.stmt_function_def.required_fixtures(py);
         let regular_fixture_names: Vec<String> = fixture_names
             .iter()
             .filter(|name| !parametrize_param_names.contains(name.as_str()))
             .cloned()
             .collect();
+
+        // Wrapped and Hypothesis decorators can supply arguments declared in source.
+        let decorator_supplies_arguments = test.py_function.getattr(py, "__wrapped__").is_ok()
+            || test.py_function.getattr(py, "hypothesis").is_ok();
+        let missing_fixtures = if decorator_supplies_arguments {
+            Vec::new()
+        } else {
+            regular_fixture_names
+                .iter()
+                .filter(|name| find_fixture(None, name, self.parents, self.current).is_none())
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+
+        if !missing_fixtures.is_empty() {
+            return Err(FixtureResolutionError::MissingTestFixtures {
+                stmt_function_def: Rc::clone(&test.stmt_function_def),
+                source_file: test.source_file.clone(),
+                missing_fixtures,
+            });
+        }
 
         let mut path = FixturePath::default();
         self.get_dependent_fixtures(py, None, &regular_fixture_names, &mut path)

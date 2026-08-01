@@ -1,13 +1,13 @@
 //! Expansion of one discovered test into executable parameter/fixture variants.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use pyo3::prelude::*;
 
 use crate::discovery::DiscoveredTestFunction;
-use crate::extensions::fixtures::{NormalizedFixture, RequiresFixtures};
+use crate::extensions::fixtures::NormalizedFixture;
 use crate::extensions::tags::Tags;
 use crate::extensions::tags::parametrize::ParametrizationArgs;
 use crate::runner::fixture_resolver::{FixtureResolutionResult, RuntimeFixtureResolver};
@@ -102,16 +102,7 @@ impl<'a> TestVariantIterator<'a> {
         test: &'a DiscoveredTestFunction,
         resolver: &mut RuntimeFixtureResolver,
     ) -> FixtureResolutionResult<Self> {
-        let test_params = test.tags.parametrize_args();
-
-        let parametrize_param_names: HashSet<&str> = test_params
-            .iter()
-            .flat_map(|params| params.values().keys().map(String::as_str))
-            .collect();
-
-        // Only use the function parameter names, NOT the use_fixtures names.
-        // use_fixtures are run for side effects but not passed as arguments.
-        let function_param_names = test.stmt_function_def.required_fixtures(py);
+        let parametrize_param_names = test.tags.parametrize_names();
 
         let auto_use_fixtures = resolver.get_normalized_auto_use_fixtures(
             py,
@@ -119,11 +110,12 @@ impl<'a> TestVariantIterator<'a> {
         )?;
 
         let fixture_dependencies =
-            resolver.resolve_test_fixtures(py, &function_param_names, &parametrize_param_names)?;
+            resolver.resolve_test_fixtures(py, test, &parametrize_param_names)?;
 
         let use_fixture_names = test.tags.required_fixtures_names();
         let use_fixture_dependencies = resolver.resolve_use_fixtures(py, &use_fixture_names)?;
 
+        let test_params = test.tags.parametrize_args();
         let param_args = if test_params.is_empty() {
             vec![ParametrizationArgs::default()]
         } else {

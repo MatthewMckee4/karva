@@ -1070,6 +1070,88 @@ def test_dict_keys(value):
 }
 
 #[test]
+fn test_parametrize_with_missing_fixture_reports_base_test_once() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r#"
+import pytest
+
+@pytest.mark.parametrize("value", range(3))
+def test_example(value, plugin_fixture):
+    plugin_fixture.check(value)
+"#,
+    );
+
+    assert_cmd_snapshot!(test_context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_example
+
+    failures:
+
+    test::test_example:
+
+    error[missing-fixtures]: Test `test_example` has missing fixtures
+     --> test.py:5:5
+      |
+    5 | def test_example(value, plugin_fixture):
+      |     ^^^^^^^^^^^^
+      |
+    info: Missing fixtures: `plugin_fixture`
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_parametrize_with_missing_fixture_does_not_run_auto_use_fixture() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r#"
+import pytest
+
+@pytest.fixture(autouse=True)
+def auto_fixture():
+    raise AssertionError("auto-use fixture ran")
+
+@pytest.mark.parametrize("value", range(3))
+def test_example(value, plugin_fixture):
+    plugin_fixture.check(value)
+"#,
+    );
+
+    assert_cmd_snapshot!(test_context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_example
+
+    failures:
+
+    test::test_example:
+
+    error[missing-fixtures]: Test `test_example` has missing fixtures
+     --> test.py:9:5
+      |
+    9 | def test_example(value, plugin_fixture):
+      |     ^^^^^^^^^^^^
+      |
+    info: Missing fixtures: `plugin_fixture`
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_parametrized_variants_retry_independently() {
     let context = TestContext::with_file(
         "test.py",

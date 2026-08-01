@@ -410,6 +410,16 @@ pub fn fixture_resolution_diagnostic(error: FixtureResolutionError) -> Diagnosti
             missing_fixtures,
             rejected_fixtures,
         } => fixture_missing_fixtures_diagnostic(&fixture, &missing_fixtures, &rejected_fixtures),
+        FixtureResolutionError::MissingTestFixtures {
+            stmt_function_def,
+            source_file,
+            missing_fixtures,
+        } => missing_fixtures_diagnostic(
+            source_file,
+            &stmt_function_def,
+            &missing_fixtures,
+            FunctionKind::Test,
+        ),
     }
 }
 
