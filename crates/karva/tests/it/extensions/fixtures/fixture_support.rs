@@ -2,7 +2,7 @@
 //! `testing/test_tmpdir.py` (commit `8ecf49ec2`), focused on the subset of
 //! pytest behavior maintained by Karva's fixture support:
 //!
-//! - `WarningsRecorder` semantics (`_pytest/recwarn.py`),
+//! - warning recorder and assertion helper semantics (`_pytest/recwarn.py`),
 //! - `make_numbered_dir` / `cleanup_numbered_dir` / `rm_rf` from
 //!   `_pytest/pathlib.py`,
 //! - the `TempPathFactory.mktemp` naming contract from `_pytest/tmpdir.py`.
@@ -13,10 +13,10 @@
 //! actually imported at runtime, not via Rust unit tests that sidestep the
 //! wheel layout.
 //!
-//! Tests from pytest that depend on `pytester`, `WarningsChecker`,
-//! `pytest.warns`, the `Config`-backed `TempPathFactory.from_config`, or the
-//! `--basetemp` / retention-policy machinery are intentionally not ported,
-//! because karva does not expose those entry points.
+//! Tests from pytest that depend on `pytester`, the `Config`-backed
+//! `TempPathFactory.from_config`, or the `--basetemp` / retention-policy
+//! machinery are intentionally not ported because Karva does not expose those
+//! entry points.
 //!
 //! See the pytest license block in the repository `LICENSE` file for the
 //! applicable copyright notice.
@@ -125,6 +125,103 @@ def test_captures_deprecation_warning(recwarn):
     ----- stdout -----
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_warning_assertion_helpers() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import re
+import warnings
+
+import karva
+
+
+def test_warns_records_multiple_warnings():
+    with karva.warns((UserWarning, RuntimeWarning)) as recorded:
+        warnings.warn("first", UserWarning)
+        warnings.warn("second", RuntimeWarning)
+
+    assert [str(warning.message) for warning in recorded] == ["first", "second"]
+
+
+def test_warns_matches_message_regex():
+    with karva.warns(UserWarning, match=re.compile(r"value \d+")):
+        warnings.warn("value 42", UserWarning)
+
+
+def test_deprecated_call_accepts_deprecation_warnings():
+    with karva.deprecated_call():
+        warnings.warn("deprecated", DeprecationWarning)
+    with karva.deprecated_call():
+        warnings.warn("pending", PendingDeprecationWarning)
+    with karva.deprecated_call(match="future"):
+        warnings.warn("future change", FutureWarning)
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 3 tests run: 3 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_warning_assertion_failures_and_cleanup() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import warnings
+
+import karva
+
+
+def test_warns_failure_messages():
+    with karva.raises(AssertionError, match="No warnings of type.*UserWarning"):
+        with karva.warns(UserWarning):
+            pass
+
+    with karva.raises(AssertionError, match="missing.*did not match"):
+        with karva.warns(UserWarning, match="missing"):
+            warnings.warn("present", UserWarning)
+
+
+def test_warns_nested_contexts():
+    with karva.warns(RuntimeWarning) as outer:
+        with karva.warns(UserWarning) as inner:
+            warnings.warn("outer", RuntimeWarning)
+            warnings.warn("inner", UserWarning)
+
+    assert len(inner) == 2
+    assert len(outer) == 1
+    assert outer[0].category is RuntimeWarning
+
+
+def test_warns_restores_filters_when_block_raises():
+    original_filters = warnings.filters[:]
+    with karva.raises(ValueError, match="unrelated"):
+        with karva.warns(UserWarning):
+            raise ValueError("unrelated")
+
+    assert warnings.filters == original_filters
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
     ----- stderr -----
     ");

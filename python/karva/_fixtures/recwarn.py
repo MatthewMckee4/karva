@@ -1,10 +1,8 @@
 """Record warnings during test function execution.
 
-Adapted from pytest's ``_pytest/recwarn.py`` (commit 8ecf49ec2). Only the
-``WarningsRecorder`` class is included; the ``WarningsChecker``/``warns``/
-``deprecated_call`` helpers are intentionally omitted because karva does
-not yet expose ``pytest.warns``. The ``recwarn`` fixture wrapper lives in
-``karva._builtins`` where the framework-fixture discoverer can see it.
+Adapted from pytest's ``_pytest/recwarn.py`` (commit 8ecf49ec2). The
+``recwarn`` fixture wrapper lives in ``karva._builtins`` where the
+framework-fixture discoverer can see it.
 
 The following adaptations were made:
 
@@ -18,10 +16,12 @@ applicable copyright notice.
 from __future__ import annotations
 
 import builtins
+import re
 import warnings
 from collections.abc import Iterator
+from pprint import pformat
 from types import TracebackType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, final
 
 if TYPE_CHECKING:
     from typing import Self
@@ -108,4 +108,92 @@ class WarningsRecorder(warnings.catch_warnings):
         self._entered = False
 
 
-__all__ = ["WarningsRecorder"]
+@final
+class WarningsChecker(WarningsRecorder):
+    """Record warnings and require one matching warning."""
+
+    def __init__(
+        self,
+        expected_warning: type[Warning] | tuple[type[Warning], ...] = Warning,
+        match_expr: str | re.Pattern[str] | None = None,
+    ) -> None:
+        super().__init__()
+
+        expected_warnings = (
+            expected_warning
+            if isinstance(expected_warning, tuple)
+            else (expected_warning,)
+        )
+        if not all(
+            isinstance(warning_type, type) and issubclass(warning_type, Warning)
+            for warning_type in expected_warnings
+        ):
+            raise TypeError(
+                f"exceptions must be derived from Warning, not {type(expected_warning)}"
+            )
+
+        self.expected_warning = expected_warnings
+        self.match_expr = match_expr
+
+    def matches(self, warning: warnings.WarningMessage) -> bool:
+        """Return whether a recorded warning matches the expectation."""
+        return issubclass(warning.category, self.expected_warning) and (
+            self.match_expr is None
+            or re.search(self.match_expr, str(warning.message)) is not None
+        )
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        super().__exit__(exc_type, exc_val, exc_tb)
+
+        if exc_type is not None:
+            return
+
+        __tracebackhide__ = True
+        emitted = pformat([record.message for record in self], indent=2)
+        try:
+            if not any(
+                issubclass(warning.category, self.expected_warning) for warning in self
+            ):
+                raise AssertionError(
+                    "DID NOT WARN. No warnings of type "
+                    f"{self.expected_warning} were emitted.\n Emitted warnings: {emitted}."
+                )
+            if not any(self.matches(warning) for warning in self):
+                raise AssertionError(
+                    f"Regex pattern {self.match_expr!r} did not match any emitted warning.\n"
+                    f" Emitted warnings: {emitted}."
+                )
+        finally:
+            for warning in self:
+                if not self.matches(warning):
+                    warnings.warn_explicit(
+                        message=warning.message,
+                        category=warning.category,
+                        filename=warning.filename,
+                        lineno=warning.lineno,
+                        source=warning.source,
+                    )
+
+
+def warns(
+    expected_warning: type[Warning] | tuple[type[Warning], ...] = Warning,
+    *,
+    match: str | re.Pattern[str] | None = None,
+) -> WarningsRecorder:
+    """Assert that a block emits a matching warning and return all warnings."""
+    return WarningsChecker(expected_warning, match_expr=match)
+
+
+def deprecated_call(*, match: str | re.Pattern[str] | None = None) -> WarningsRecorder:
+    """Assert that a block emits a deprecation-related warning."""
+    return warns(
+        (DeprecationWarning, PendingDeprecationWarning, FutureWarning), match=match
+    )
+
+
+__all__ = ["WarningsRecorder", "deprecated_call", "warns"]

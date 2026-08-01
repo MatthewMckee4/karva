@@ -295,6 +295,37 @@ def test_capfdbinary_stderr(capfdbinary):
 
 ## Capturing Warnings
 
+Use `karva.warns()` to assert that a block emits a warning. Pass `match` to
+match its message with a regular expression. The context manager records every
+warning emitted by the block.
+
+```py title="test.py"
+import warnings
+
+import karva
+
+
+def test_deprecation():
+    with karva.warns(DeprecationWarning, match="use new_api") as recorded:
+        warnings.warn("use new_api instead", DeprecationWarning)
+
+    assert len(recorded) == 1
+```
+
+`karva.deprecated_call()` accepts `DeprecationWarning`,
+`PendingDeprecationWarning`, and `FutureWarning`.
+
+```py title="test.py"
+import warnings
+
+import karva
+
+
+def test_old_entrypoint():
+    with karva.deprecated_call(match="entrypoint"):
+        warnings.warn("old entrypoint", FutureWarning)
+```
+
 The `recwarn` fixture captures every warning raised during the test. It behaves like a list of `warnings.WarningMessage` objects — you can index into it, iterate it, and take its length.
 
 ```py title="test.py"

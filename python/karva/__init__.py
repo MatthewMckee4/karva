@@ -2,6 +2,7 @@
 
 from karva._approx import approx
 from karva._builtins import MockEnv
+from karva._fixtures.recwarn import deprecated_call, warns
 from karva._karva import (
     Command,
     ExceptionInfo,
@@ -38,6 +39,7 @@ __all__: list[str] = [
     "assert_cmd_snapshot",
     "assert_json_snapshot",
     "assert_snapshot",
+    "deprecated_call",
     "fail",
     "fixture",
     "karva_run",
@@ -46,4 +48,5 @@ __all__: list[str] = [
     "skip",
     "snapshot_settings",
     "tags",
+    "warns",
 ]
