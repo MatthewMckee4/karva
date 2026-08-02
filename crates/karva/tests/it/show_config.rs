@@ -204,6 +204,7 @@ fail-under = 90
     omit = ["**/generated.py"]
     contexts = []
     precision = 0
+    append = false
     report = "term-missing"
     fail-under = 90.0
 

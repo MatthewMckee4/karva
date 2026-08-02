@@ -84,6 +84,7 @@ impl CoverageCommand {
                 omit: (!self.omit.is_empty()).then(|| self.omit.clone()),
                 contexts: (!self.contexts.is_empty()).then(|| self.contexts.clone()),
                 precision: self.precision,
+                append: None,
                 fail_under: self.fail_under.map(CovFailUnder),
                 ..CoverageOptions::default()
             }),

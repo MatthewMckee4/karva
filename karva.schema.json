@@ -36,6 +36,11 @@
       "description": "Coverage report type.",
       "oneOf": [
         {
+          "description": "Persist native data without rendering a report.",
+          "type": "string",
+          "const": "none"
+        },
+        {
           "description": "Compact terminal table (default).",
           "type": "string",
           "const": "term"
@@ -66,6 +71,13 @@
       "description": "Controls measured Python sources and coverage report generation.",
       "type": "object",
       "properties": {
+        "append": {
+          "description": "Add a test run to compatible native data instead of replacing it.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "branch": {
           "description": "Whether to measure branch coverage in addition to line coverage.",
           "type": [
@@ -133,7 +145,7 @@
           ]
         },
         "report": {
-          "description": "Coverage report type.\n\n`term` (default) prints a compact terminal table.\n`term-missing` extends it with a `Missing` column listing the\nuncovered line numbers per file.",
+          "description": "Coverage report type.\n\n`term` (default) prints a compact terminal table.\n`term-missing` extends it with a `Missing` column listing the\nuncovered line numbers per file. `none` persists native data only.",
           "anyOf": [
             {
               "$ref": "#/definitions/CovReport"

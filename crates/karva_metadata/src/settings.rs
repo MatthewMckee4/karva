@@ -628,6 +628,9 @@ pub struct CoverageSettings {
     /// Decimal places shown in coverage percentages.
     pub precision: CoveragePrecision,
 
+    /// Whether a test run unions observations with an existing native artifact.
+    pub append: bool,
+
     /// Selected report backend.
     pub report: CovReport,
 

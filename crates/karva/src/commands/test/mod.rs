@@ -5,6 +5,7 @@ mod result_report;
 mod watch;
 
 use std::collections::HashMap;
+use std::io::ErrorKind;
 use std::io::Write;
 use std::time::{Duration, Instant};
 
@@ -106,6 +107,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
 
     print_test_output(printer, start_time, &result, durations)?;
     junit::write_junit_report(project.settings().junit(), &result, project.cwd())?;
+    let coverage_data_file = persist_coverage(&project, &coverage_files)?;
     let write_result_report = |exit_status| {
         result_report::write_result_report(
             result_output.as_deref(),
@@ -124,12 +126,11 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         return Ok(exit_status);
     }
 
-    let coverage_total = if coverage_files.is_empty() {
-        None
-    } else {
+    let coverage_total = if let Some(data_file) = coverage_data_file {
         let coverage = project.settings().coverage();
         let coverage_filters =
-            karva_coverage::CoverageFilters::new(&coverage.include, &coverage.omit)?;
+            karva_coverage::CoverageFilters::new(&coverage.include, &coverage.omit)?
+                .with_contexts(&coverage.contexts)?;
         if coverage.report_path.is_some()
             && matches!(coverage.report, CovReport::Term | CovReport::TermMissing)
         {
@@ -140,56 +141,48 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
                 coverage.report.as_str()
             )?;
         }
-        let coverage_result = match coverage.report {
-            CovReport::Term => karva_coverage::combine_and_report(
+        let coverage_result = (|| -> Result<Option<f64>> {
+            let Some(analysis) = karva_coverage::CoverageAnalysis::load_native(
                 project.cwd(),
-                &coverage_files,
-                false,
+                std::slice::from_ref(&data_file),
                 &coverage_filters,
-            ),
-            CovReport::TermMissing => karva_coverage::combine_and_report(
-                project.cwd(),
-                &coverage_files,
-                true,
-                &coverage_filters,
-            ),
-            CovReport::Xml => {
-                let output = coverage_report_path(
-                    coverage.report_path.as_deref(),
-                    "coverage.xml",
-                    project.cwd(),
-                );
-                karva_coverage::write_cobertura_xml(
-                    project.cwd(),
-                    &coverage_files,
-                    &output,
-                    &coverage_filters,
-                )
-            }
-            CovReport::Json => {
-                let output = coverage_report_path(
-                    coverage.report_path.as_deref(),
-                    "coverage.json",
-                    project.cwd(),
-                );
-                karva_coverage::write_json_report(
-                    project.cwd(),
-                    &coverage_files,
-                    &output,
-                    &coverage_filters,
-                )
-            }
-            CovReport::Html => {
-                let output =
-                    coverage_report_path(coverage.report_path.as_deref(), "htmlcov", project.cwd());
-                karva_coverage::write_html_report(
-                    project.cwd(),
-                    &coverage_files,
-                    &output,
-                    &coverage_filters,
-                )
-            }
-        };
+            )?
+            else {
+                return Ok(None);
+            };
+            let total = match coverage.report {
+                CovReport::None => analysis.total_percent(),
+                CovReport::Term => analysis.report_with_precision(false, coverage.precision.0)?,
+                CovReport::TermMissing => {
+                    analysis.report_with_precision(true, coverage.precision.0)?
+                }
+                CovReport::Xml => {
+                    let output = coverage_report_path(
+                        coverage.report_path.as_deref(),
+                        "coverage.xml",
+                        project.cwd(),
+                    );
+                    analysis.write_cobertura_xml(&output)?
+                }
+                CovReport::Json => {
+                    let output = coverage_report_path(
+                        coverage.report_path.as_deref(),
+                        "coverage.json",
+                        project.cwd(),
+                    );
+                    analysis.write_json(&output)?
+                }
+                CovReport::Html => {
+                    let output = coverage_report_path(
+                        coverage.report_path.as_deref(),
+                        "htmlcov",
+                        project.cwd(),
+                    );
+                    analysis.write_html(&output)?
+                }
+            };
+            Ok(Some(total))
+        })();
         match coverage_result {
             Ok(total) => total,
             Err(err) => {
@@ -197,6 +190,8 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
                 None
             }
         }
+    } else {
+        None
     };
 
     let coverage_below_threshold = if let Some(total) = coverage_total
@@ -242,6 +237,49 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     };
     write_result_report(exit_status)?;
     Ok(exit_status)
+}
+
+fn persist_coverage(
+    project: &Project,
+    worker_files: &[Utf8PathBuf],
+) -> Result<Option<Utf8PathBuf>> {
+    if worker_files.is_empty() {
+        return Ok(None);
+    }
+
+    let settings = project.settings().coverage();
+    let mode = if settings.branch {
+        karva_coverage::native::CoverageMode::Branch
+    } else {
+        karva_coverage::native::CoverageMode::Line
+    };
+    let current = karva_coverage::native::NativeCoverage::from_worker_files(
+        project.cwd(),
+        &settings.sources,
+        mode,
+        worker_files,
+    )?;
+    let data_file = absolute(&settings.data_file, project.cwd());
+    let artifact = if settings.append {
+        match std::fs::metadata(&data_file) {
+            Ok(_) => {
+                let mut previous = karva_coverage::native::NativeCoverage::read(&data_file)?;
+                previous.merge(current).with_context(|| {
+                    format!("failed to append native coverage data `{data_file}`")
+                })?;
+                previous
+            }
+            Err(error) if error.kind() == ErrorKind::NotFound => current,
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("failed to inspect coverage data `{data_file}`"));
+            }
+        }
+    } else {
+        current
+    };
+    artifact.write(&data_file)?;
+    Ok(Some(data_file))
 }
 
 fn coverage_report_path(
