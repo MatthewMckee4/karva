@@ -31,7 +31,7 @@ impl PackageRunner<'_, '_> {
     /// a test module, or a package. Resolution failures
     /// trigger cleanup for the partially initialized scope before returning.
     pub(super) fn run_auto_use_fixtures<'a>(
-        &self,
+        &mut self,
         py: Python<'_>,
         parents: &'a [&'a crate::discovery::DiscoveredPackage],
         current: &'a (dyn HasFixtures<'a> + 'a),
@@ -62,7 +62,7 @@ impl PackageRunner<'_, '_> {
 
     /// Runs function-scoped finalizers and clears their cached fixture values.
     pub(super) fn clean_up_test_attempt(
-        &self,
+        &mut self,
         py: Python<'_>,
         finalizers: Vec<Finalizer>,
     ) -> Vec<Diagnostic> {
@@ -76,16 +76,20 @@ impl PackageRunner<'_, '_> {
     }
 
     /// Clears cached fixture values and runs finalizers for one completed scope.
-    pub(super) fn clean_up_scope(&self, py: Python<'_>, scope: ScopeKey<'_>) -> Vec<Diagnostic> {
+    pub(super) fn clean_up_scope(
+        &mut self,
+        py: Python<'_>,
+        scope: ScopeKey<'_>,
+    ) -> Vec<Diagnostic> {
         let diagnostics = self.finalizer_cache.run_and_clear_scope(py, scope);
         self.fixture_cache.clear_scope(scope);
         diagnostics
     }
 
     /// Cleans one scope and promotes teardown failures to run diagnostics.
-    pub(super) fn report_scope_cleanup(&self, py: Python<'_>, scope: ScopeKey<'_>) {
+    pub(super) fn report_scope_cleanup(&mut self, py: Python<'_>, scope: ScopeKey<'_>) {
         for diagnostic in self.clean_up_scope(py, scope) {
-            self.context.add_run_diagnostic(diagnostic);
+            self.state.add_run_diagnostic(diagnostic);
         }
     }
 
@@ -94,7 +98,7 @@ impl PackageRunner<'_, '_> {
     /// Returned finalizers belong directly to the test attempt. Broader-scoped
     /// finalizers are retained in the runner cache until their scope ends.
     pub(super) fn prepare_test_fixtures(
-        &self,
+        &mut self,
         py: Python<'_>,
         fixture_plan: &FixturePlan,
         fixture_dependencies: &[FixtureId],
@@ -154,7 +158,7 @@ impl PackageRunner<'_, '_> {
     /// Runs one fixture, recursively preparing dependencies first.
     #[expect(clippy::result_large_err)]
     fn run_fixture(
-        &self,
+        &mut self,
         py: Python<'_>,
         fixture_plan: &FixturePlan,
         fixture_id: FixtureId,
@@ -210,7 +214,7 @@ impl PackageRunner<'_, '_> {
 
     /// Runs fixtures whose values are not passed to the test call.
     fn run_fixtures(
-        &self,
+        &mut self,
         py: Python<'_>,
         fixture_plan: &FixturePlan,
         fixture_ids: &[FixtureId],

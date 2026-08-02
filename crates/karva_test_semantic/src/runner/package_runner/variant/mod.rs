@@ -30,7 +30,11 @@ use attempt::{PreparedTestAttempt, TestLifecycleAttempt};
 
 impl PackageRunner<'_, '_> {
     /// Runs one concrete parameter and fixture combination.
-    pub(super) fn execute_test_variant(&self, py: Python<'_>, variant: TestVariant<'_>) -> bool {
+    pub(super) fn execute_test_variant(
+        &mut self,
+        py: Python<'_>,
+        variant: TestVariant<'_>,
+    ) -> bool {
         VariantRunner::new(self, py, variant).execute()
     }
 }
@@ -42,7 +46,7 @@ impl PackageRunner<'_, '_> {
 /// fixture selections, tags, and identity stay here.
 struct VariantRunner<'runner, 'context, 'settings, 'test, 'py> {
     /// Run-wide owner for fixtures, reporting, settings, and coverage.
-    package_runner: &'runner PackageRunner<'context, 'settings>,
+    package_runner: &'runner mut PackageRunner<'context, 'settings>,
     /// Attached Python interpreter used by every attempt.
     py: Python<'py>,
     /// Discovered test definition shared by every variant.
@@ -70,7 +74,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 {
     /// Captures raw variant inputs before any fixture setup begins.
     fn new(
-        package_runner: &'runner PackageRunner<'context, 'settings>,
+        package_runner: &'runner mut PackageRunner<'context, 'settings>,
         py: Python<'py>,
         variant: TestVariant<'test>,
     ) -> Self {
@@ -141,7 +145,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             );
 
             if attempt.retryable && attempt_number < settings.max_attempts {
-                self.package_runner.context.report_test_attempt(
+                self.package_runner.state.report_test_attempt(
+                    self.package_runner.context,
                     &settings.qualified_test_name,
                     attempt_number,
                     attempt.lifecycle.outcome.result_kind(),
@@ -160,7 +165,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 
     /// Prepares fixture values and records setup duration for one attempt.
     fn prepare_attempt(
-        &self,
+        &mut self,
         params: HashMap<String, Arc<Py<PyAny>>>,
         output_capture: Option<PythonOutputCapture>,
     ) -> PreparedTestAttempt {
@@ -182,7 +187,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 
     /// Prepares a retry while ensuring coverage excludes fixture setup.
     fn prepare_retry(
-        &self,
+        &mut self,
         params: HashMap<String, Arc<Py<PyAny>>>,
         settings: &VariantSettings,
     ) -> PreparedTestAttempt {
@@ -304,7 +309,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 
     /// Registers final outcome after all retries and returns pass/fail status.
     fn finish(
-        &self,
+        &mut self,
         settings: &VariantSettings,
         prior_attempts: Vec<TestLifecycleAttempt>,
         final_attempt: TestLifecycleAttempt,
@@ -323,7 +328,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .saturating_add(final_attempt.duration);
 
         if !prior_attempts.is_empty() {
-            self.package_runner.context.report_test_attempt(
+            self.package_runner.state.report_test_attempt(
+                self.package_runner.context,
                 &settings.qualified_test_name,
                 final_attempt.attempt,
                 final_attempt.outcome.result_kind(),
@@ -334,16 +340,19 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .slow_timeout
             .is_some_and(|threshold| total_duration > threshold)
         {
-            self.package_runner
-                .context
-                .register_slow_test(&settings.qualified_test_name, total_duration);
+            self.package_runner.state.register_slow_test(
+                self.package_runner.context,
+                &settings.qualified_test_name,
+                total_duration,
+            );
         }
         self.package_runner
             .context
             .report_test_finished(&settings.qualified_test_name);
 
         if prior_attempts.is_empty() {
-            self.package_runner.context.register_test_case_result(
+            self.package_runner.state.register_test_case_result(
+                self.package_runner.context,
                 &settings.qualified_test_name,
                 final_attempt.outcome,
                 total_duration,
@@ -361,7 +370,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 .map(TestLifecycleAttempt::into_execution_attempt)
                 .collect::<Vec<_>>();
             execution_attempts.push(final_attempt.into_execution_attempt());
-            self.package_runner.context.register_retried_result(
+            self.package_runner.state.register_retried_result(
                 &settings.qualified_test_name,
                 outcome,
                 total_duration,
@@ -374,7 +383,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
     }
 
     /// Returns a registered skip result when filters or skip policy exclude this variant.
-    fn should_skip(&self) -> Option<bool> {
+    fn should_skip(&mut self) -> Option<bool> {
         let filter = &self.package_runner.context.settings().test().filter;
         let run_ignored = self.package_runner.context.settings().test().run_ignored;
 
@@ -387,7 +396,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 tags: &custom_names,
             };
             if !filter.matches(&context) {
-                return Some(self.package_runner.context.register_test_case_result(
+                return Some(self.package_runner.state.register_test_case_result(
+                    self.package_runner.context,
                     &qualified,
                     TestExecutionOutcome::Skipped { reason: None },
                     Duration::ZERO,
@@ -408,7 +418,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             return None;
         };
         let qualified = QualifiedTestName::new(self.test.name().clone(), None);
-        Some(self.package_runner.context.register_test_case_result(
+        Some(self.package_runner.state.register_test_case_result(
+            self.package_runner.context,
             &qualified,
             TestExecutionOutcome::Skipped { reason },
             Duration::ZERO,

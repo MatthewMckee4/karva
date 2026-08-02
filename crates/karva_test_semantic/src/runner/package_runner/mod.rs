@@ -1,13 +1,11 @@
 //! Package-tree orchestration and run-wide execution state.
 
-use std::cell::Cell;
 use std::collections::HashMap;
 
 use karva_coverage::CoverageSession;
 use karva_python_semantic::QualifiedTestName;
 use pyo3::prelude::*;
 
-use crate::Context;
 use crate::diagnostic::{fixture_resolution_diagnostic, invalid_parametrize_diagnostic};
 use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::FixtureScope;
@@ -15,6 +13,7 @@ use crate::runner::fixture_resolver::{FixturePlanCompiler, FixtureResolutionErro
 use crate::runner::scoped_storage::ScopeKey;
 use crate::runner::test_iterator::{CompiledTestPlan, TestVariantIterator};
 use crate::runner::{FinalizerCache, FixtureCache};
+use crate::{Context, RunState};
 
 mod failure;
 mod fixture;
@@ -33,8 +32,10 @@ type CompiledTestPlans = HashMap<String, Result<CompiledTestPlan, FixtureResolut
 /// failure-budget accounting. Package traversal stays in this module; fixture
 /// lifecycle and individual test-variant lifecycle live in child modules.
 pub struct PackageRunner<'context, 'settings> {
-    /// Shared settings, reporter, and result accumulator for this test run.
+    /// Shared immutable settings and reporting services for this test run.
     context: &'context Context<'settings>,
+    /// Result accumulator exclusively owned by this runner during execution.
+    state: &'context mut RunState,
     /// Fixture values retained until their declared scope completes.
     fixture_cache: FixtureCache,
     /// Fixture finalizers retained until their declared scope completes.
@@ -42,21 +43,23 @@ pub struct PackageRunner<'context, 'settings> {
     /// Active coverage session for this worker, when coverage is enabled.
     coverage: Option<&'context CoverageSession>,
     /// Failed variants observed so far, used to enforce `max-fail`.
-    failed_count: Cell<u32>,
+    failed_count: u32,
 }
 
 impl<'context, 'settings> PackageRunner<'context, 'settings> {
     /// Creates an empty runner for one discovered package tree.
     pub(crate) fn new(
         context: &'context Context<'settings>,
+        state: &'context mut RunState,
         coverage: Option<&'context CoverageSession>,
     ) -> Self {
         Self {
             context,
+            state,
             fixture_cache: FixtureCache::default(),
             finalizer_cache: FinalizerCache::default(),
             coverage,
-            failed_count: Cell::new(0),
+            failed_count: 0,
         }
     }
 
@@ -66,20 +69,20 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             .settings()
             .test()
             .max_fail
-            .is_exceeded_by(self.failed_count.get())
+            .is_exceeded_by(self.failed_count)
     }
 
     /// Adds one failed variant to `max-fail` accounting.
-    fn record_outcome(&self, passed: bool) {
+    fn record_outcome(&mut self, passed: bool) {
         if !passed {
-            self.failed_count
-                .set(self.failed_count.get().saturating_add(1));
+            self.failed_count = self.failed_count.saturating_add(1);
         }
     }
 
     /// Registers a discovery or setup error against one test.
-    fn register_error_test(&self, test: &DiscoveredTestFunction, error: TestError) {
-        self.context.register_test_case_result(
+    fn register_error_test(&mut self, test: &DiscoveredTestFunction, error: TestError) {
+        self.state.register_test_case_result(
+            self.context,
             &QualifiedTestName::new(test.name().clone(), None),
             error.into_outcome(),
             std::time::Duration::ZERO,
@@ -89,7 +92,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
     }
 
     /// Registers one shared module error against tests not blocked by `max-fail`.
-    fn register_error_module_tests(&self, module: &DiscoveredModule, error: &TestError) {
+    fn register_error_module_tests(&mut self, module: &DiscoveredModule, error: &TestError) {
         for test in module.test_functions() {
             self.register_error_test(test, error.clone());
             if self.max_fail_reached() {
@@ -99,7 +102,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
     }
 
     /// Registers one shared package error throughout its remaining test tree.
-    fn register_error_package_tests(&self, package: &DiscoveredPackage, error: &TestError) {
+    fn register_error_package_tests(&mut self, package: &DiscoveredPackage, error: &TestError) {
         for module in package.modules().values() {
             self.register_error_module_tests(module, error);
             if self.max_fail_reached() {
@@ -118,7 +121,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
     ///
     /// Validation is deliberately a separate tree pass: once session setup
     /// begins, invalid parametrization must not leave partially run fixtures.
-    fn validate_parametrization(&self, package: &DiscoveredPackage) -> bool {
+    fn validate_parametrization(&mut self, package: &DiscoveredPackage) -> bool {
         let mut valid = true;
 
         for module in package.modules().values() {
@@ -172,7 +175,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
     }
 
     /// Executes all discovered tests and session-scoped fixture teardown.
-    pub(crate) fn execute(&self, py: Python<'_>, session: &DiscoveredPackage) {
+    pub(crate) fn execute(&mut self, py: Python<'_>, session: &DiscoveredPackage) {
         if !self.validate_parametrization(session) {
             return;
         }
@@ -193,7 +196,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
 
     /// Executes module auto-use fixtures, variants, and module teardown.
     fn execute_module(
-        &self,
+        &mut self,
         py: Python<'_>,
         module: &DiscoveredModule,
         parents: &[&DiscoveredPackage],
@@ -252,7 +255,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
 
     /// Recursively executes package modules, child packages, and teardown.
     fn execute_package(
-        &self,
+        &mut self,
         py: Python<'_>,
         package: &DiscoveredPackage,
         parents: &[&DiscoveredPackage],

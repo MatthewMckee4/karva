@@ -18,7 +18,7 @@ pub(super) struct FinalizerCache {
 
 impl FinalizerCache {
     /// Adds a finalizer to its declared scope's LIFO stack.
-    pub(super) fn add_finalizer(&self, finalizer: Finalizer) {
+    pub(super) fn add_finalizer(&mut self, finalizer: Finalizer) {
         let package_owner = finalizer.package_owner.clone();
         let scope = match finalizer.scope {
             FixtureScope::Session => ScopeKey::Session,
@@ -33,7 +33,7 @@ impl FinalizerCache {
 
     /// Drains one scope and returns diagnostics raised during teardown.
     pub(super) fn run_and_clear_scope(
-        &self,
+        &mut self,
         py: Python<'_>,
         scope: ScopeKey<'_>,
     ) -> Vec<Diagnostic> {
