@@ -16,6 +16,7 @@ karva <COMMAND>
 
 <dl class="cli-reference"><dt><a href="#karva-test"><code>karva test</code></a></dt><dd><p>Run tests</p></dd>
 <dt><a href="#karva-snapshot"><code>karva snapshot</code></a></dt><dd><p>Manage snapshots created by <code>karva.assert_snapshot()</code></p></dd>
+<dt><a href="#karva-coverage"><code>karva coverage</code></a></dt><dd><p>Read and report native Karva coverage data</p></dd>
 <dt><a href="#karva-cache"><code>karva cache</code></a></dt><dd><p>Manage the karva cache</p></dd>
 <dt><a href="#karva-show-config"><code>karva show-config</code></a></dt><dd><p>Print the resolved configuration karva would run with</p></dd>
 <dt><a href="#karva-version"><code>karva version</code></a></dt><dd><p>Display Karva's version</p></dd>
@@ -342,6 +343,55 @@ Print this message or the help of the given subcommand(s)
 
 ```
 karva snapshot help [COMMAND]
+```
+
+## karva coverage
+
+Read and report native Karva coverage data
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva coverage [OPTIONS] <COMMAND>
+```
+
+<h3 class="cli-reference">Commands</h3>
+
+<dl class="cli-reference"><dt><a href="#karva-coverage-report"><code>karva coverage report</code></a></dt><dd><p>Print the compact terminal coverage report</p></dd>
+<dt><a href="#karva-coverage-help"><code>karva coverage help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
+</dl>
+
+### karva coverage report
+
+Print the compact terminal coverage report
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva coverage report [OPTIONS]
+```
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-coverage-report--config-file"><a href="#karva-coverage-report--config-file"><code>--config-file</code></a> <i>path</i></dt><dd><p>The path to a <code>karva.toml</code> file to use for configuration</p>
+<p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-coverage-report--contexts"><a href="#karva-coverage-report--contexts"><code>--contexts</code></a> <i>regex</i></dt><dd><p>Include execution attributed to a matching context regular expression</p>
+</dd><dt id="karva-coverage-report--data-file"><a href="#karva-coverage-report--data-file"><code>--data-file</code></a> <i>path</i></dt><dd><p>Native coverage artifact path, relative to the project root</p>
+</dd><dt id="karva-coverage-report--fail-under"><a href="#karva-coverage-report--fail-under"><code>--fail-under</code></a> <i>percent</i></dt><dd><p>Fail when total coverage is below this percentage</p>
+</dd><dt id="karva-coverage-report--help"><a href="#karva-coverage-report--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd><dt id="karva-coverage-report--include"><a href="#karva-coverage-report--include"><code>--include</code></a> <i>glob</i></dt><dd><p>Include only report paths matching this glob</p>
+</dd><dt id="karva-coverage-report--omit"><a href="#karva-coverage-report--omit"><code>--omit</code></a> <i>glob</i></dt><dd><p>Exclude report paths matching this glob after inclusion</p>
+</dd><dt id="karva-coverage-report--precision"><a href="#karva-coverage-report--precision"><code>--precision</code></a> <i>n</i></dt><dd><p>Decimal places shown in coverage percentages</p>
+</dd><dt id="karva-coverage-report--profile"><a href="#karva-coverage-report--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to resolve</p>
+<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd></dl>
+
+### karva coverage help
+
+Print this message or the help of the given subcommand(s)
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva coverage help [COMMAND]
 ```
 
 ## karva cache

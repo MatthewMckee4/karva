@@ -69,7 +69,17 @@ pub fn write_html_report(
 impl CoverageAnalysis {
     /// Prints the compact terminal report and returns total coverage.
     pub fn report(&self, show_missing: bool) -> Result<f64> {
-        print_report(&self.rows, show_missing, &mut std::io::stdout().lock())
+        self.report_with_precision(show_missing, 0)
+    }
+
+    /// Prints the compact terminal report using `precision` decimal places.
+    pub fn report_with_precision(&self, show_missing: bool, precision: usize) -> Result<f64> {
+        print_report(
+            &self.rows,
+            show_missing,
+            precision,
+            &mut std::io::stdout().lock(),
+        )
     }
 
     /// Writes a Cobertura-compatible XML report and returns total coverage.
@@ -122,7 +132,12 @@ struct Row<'a> {
     missing: &'a str,
 }
 
-fn print_report(rows: &[FileRow], show_missing: bool, out: &mut dyn Write) -> Result<f64> {
+fn print_report(
+    rows: &[FileRow],
+    show_missing: bool,
+    precision: usize,
+    out: &mut dyn Write,
+) -> Result<f64> {
     let show_branches = rows.iter().any(|row| row.branches_enabled);
     let name_width = rows
         .iter()
@@ -154,7 +169,7 @@ fn print_report(rows: &[FileRow], show_missing: bool, out: &mut dyn Write) -> Re
     writeln!(out, "{rule}")?;
 
     for row in rows {
-        let cover = format!("{:.0}%", row_percent(row));
+        let cover = format!("{:.*}%", precision, row_percent(row));
         let stmts_str = row.stmts.to_string();
         let miss_str = row.miss.to_string();
         let branches_str = row.branches.to_string();
@@ -182,7 +197,7 @@ fn print_report(rows: &[FileRow], show_missing: bool, out: &mut dyn Write) -> Re
     writeln!(out, "{rule}")?;
     let total_pct = total_percent(rows);
     let total = totals_row(rows);
-    let total_cover = format!("{:.0}%", row_percent(&total));
+    let total_cover = format!("{:.*}%", precision, row_percent(&total));
     let total_stmts_str = total.stmts.to_string();
     let total_miss_str = total.miss.to_string();
     let total_branches_str = total.branches.to_string();
@@ -279,7 +294,7 @@ mod tests {
         let rows = [row("a.py", 4, 2, 2, ""), row("b.py", 2, 2, 0, "")];
 
         let mut buf: Vec<u8> = Vec::new();
-        let total = print_report(&rows, false, &mut buf).unwrap();
+        let total = print_report(&rows, false, 0, &mut buf).unwrap();
         let out = String::from_utf8(buf).unwrap();
 
         assert!(out.contains("a.py"));
@@ -295,7 +310,7 @@ mod tests {
         let rows = [row("a.py", 9, 3, 6, "2-4, 6-8")];
 
         let mut buf: Vec<u8> = Vec::new();
-        print_report(&rows, true, &mut buf).unwrap();
+        print_report(&rows, true, 0, &mut buf).unwrap();
         let out = String::from_utf8(buf).unwrap();
 
         assert!(out.contains("Missing"));

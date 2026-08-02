@@ -56,6 +56,42 @@ branch = true
 
 ---
 
+### `contexts`
+
+Include execution attributed to contexts matching these regular expressions.
+
+**Default value**: `null`
+
+**Type**: `list[str]`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.coverage]
+contexts = ["python=3\\.14", "test_checkout"]
+```
+
+---
+
+### `data-file`
+
+Native coverage artifact read and written by coverage commands.
+
+Relative paths are resolved from the project root.
+
+**Default value**: `.karva/coverage/data.json`
+
+**Type**: `path`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.coverage]
+data-file = ".karva/coverage/data.json"
+```
+
+---
+
 ### `fail-under`
 
 Minimum total coverage percentage required for the run to succeed.
@@ -116,6 +152,23 @@ applied after include filters.
 ```toml
 [tool.karva.profile.default.coverage]
 omit = ["**/migrations/*"]
+```
+
+---
+
+### `precision`
+
+Decimal places shown in coverage percentages.
+
+**Default value**: `0`
+
+**Type**: `non-negative integer`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.coverage]
+precision = 2
 ```
 
 ---

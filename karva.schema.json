@@ -73,6 +73,23 @@
             "null"
           ]
         },
+        "contexts": {
+          "description": "Include execution attributed to contexts matching these regular expressions.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "data-file": {
+          "description": "Native coverage artifact read and written by coverage commands.\n\nRelative paths are resolved from the project root.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "fail-under": {
           "description": "Minimum total coverage percentage required for the run to succeed.\n\nWhen set, the test command exits with a non-zero status if the\nreported `TOTAL` coverage is below this value, even when every test\npassed. Has no effect when tests already failed (the exit code is\nalready non-zero).",
           "anyOf": [
@@ -104,6 +121,17 @@
             "type": "string"
           }
         },
+        "precision": {
+          "description": "Decimal places shown in coverage percentages.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CoveragePrecision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "report": {
           "description": "Coverage report type.\n\n`term` (default) prints a compact terminal table.\n`term-missing` extends it with a `Missing` column listing the\nuncovered line numbers per file.",
           "anyOf": [
@@ -134,6 +162,12 @@
         }
       },
       "additionalProperties": false
+    },
+    "CoveragePrecision": {
+      "description": "Decimal places used for coverage percentages.\n\nThe maximum is [`f64::DIGITS`], the number of meaningful decimal digits\navailable from the percentage representation.",
+      "type": "integer",
+      "format": "uint",
+      "minimum": 0
     },
     "FailSlowSecs": {
       "description": "A per-test duration budget expressed in seconds.\n\nWraps `f64` for the same reason as [`SlowTimeoutSecs`]. Unlike\n[`SlowTimeoutSecs`] (informational) or [`TestTimeoutSecs`] (kills the\ntest mid-flight), a test exceeding this budget is allowed to finish its\nfull lifecycle — including fixture teardown — and is then reported as a\nfailure (see `TestSettings::fail_slow`).",
