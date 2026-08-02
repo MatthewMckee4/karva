@@ -126,6 +126,15 @@ uv run karva coverage json --show-contexts
 
 Exported JSON is separate from Karva's native artifact. `meta.format` versions its documented schema; breaking field or semantic changes increment that number, while consumers must tolerate additive fields within a format version. Files contain executed, missing, and excluded lines, optional contexts, branch arcs when collected, and per-file summaries. `totals` contains aggregate line and branch metrics.
 
+`uv run karva coverage lcov` writes a deterministic LCOV tracefile from persisted native data. Use `--output` to select another destination:
+
+```bash
+uv run karva coverage lcov
+uv run karva coverage lcov --output build/coverage.lcov
+```
+
+LCOV `SF`, `DA`, `LF`, `LH`, `BRDA`, `BRF`, and `BRH` records are a supported external contract. Source paths are portable project-relative paths after configured path aliases are applied.
+
 `--cov-report=html[:DIR]` writes a simple browsable HTML report. If `DIR` is omitted, karva writes `htmlcov/` in the project root:
 
 ```bash

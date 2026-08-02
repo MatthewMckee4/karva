@@ -2,6 +2,7 @@
 
 pub(crate) mod html;
 pub(crate) mod json;
+pub(crate) mod lcov;
 pub(crate) mod shared;
 mod terminal;
 pub(crate) mod xml;

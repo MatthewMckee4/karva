@@ -108,6 +108,17 @@ pub enum CoverageAction {
 
     /// Export documented JSON coverage data.
     Json(CoverageJsonCommand),
+
+    /// Generate an LCOV tracefile.
+    Lcov(CoverageLcovCommand),
+}
+
+#[derive(Debug, Args)]
+/// Options specific to the LCOV tracefile.
+pub struct CoverageLcovCommand {
+    /// Path receiving the LCOV tracefile.
+    #[arg(long, value_name = "PATH", default_value = "coverage.lcov")]
+    pub output: Utf8PathBuf,
 }
 
 #[derive(Debug, Args)]

@@ -112,6 +112,10 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
                 },
             )?
         }
+        CoverageAction::Lcov(lcov) => {
+            let output = absolute(&lcov.output, project.cwd());
+            analysis.write_lcov(&output)?
+        }
     };
     if let Some(threshold) = settings.fail_under
         && total < threshold
