@@ -5,9 +5,12 @@ the internal interchange format used by collection, combination, and reporting.
 It is not coverage.py's SQLite format and it is not the exported
 `coverage.json` report.
 
-Version 1 records the producing Karva version, collection mode, project and
-source roots, an optional run context, and files keyed by normalized
-project-relative path. Each file records a stable source-content fingerprint,
+Version 1 records the producing Karva version, collection mode, original
+project root, project-relative source roots, an optional run context, and files
+keyed by normalized project-relative path. The original root is provenance, not
+portable project identity; combination uses source roots, paths, and content
+fingerprints so artifacts can move between CI machines. Each file records a
+stable source-content fingerprint,
 executable, excluded, and executed lines, line contexts, and optional possible
 and executed branch arcs with their contexts. The fingerprint is lowercase
 hexadecimal fixed-key SipHash-128/1-3 over the source bytes.
