@@ -34,6 +34,7 @@ fn show_config_default_profile() {
     omit = []
     contexts = []
     precision = 0
+    append = false
     report = "term"
 
     [junit]
@@ -88,6 +89,7 @@ output-format = "concise"
     omit = []
     contexts = []
     precision = 0
+    append = false
     report = "term"
 
     [junit]
@@ -143,6 +145,7 @@ output-format = "concise"
     omit = []
     contexts = []
     precision = 0
+    append = false
     report = "term"
 
     [junit]
@@ -261,6 +264,7 @@ slow-timeout = 0.5
     omit = []
     contexts = []
     precision = 0
+    append = false
     report = "term"
 
     [junit]
