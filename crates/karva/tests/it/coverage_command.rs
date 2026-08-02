@@ -83,6 +83,41 @@ fn html_writes_navigable_annotated_report() {
 }
 
 #[test]
+fn xml_writes_cobertura_report() {
+    let context = TestContext::new();
+    write_coverage(&context, Utf8Path::new(".karva/coverage/data.json"));
+
+    assert_cmd_snapshot!(context.coverage("xml"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    ");
+    insta::assert_snapshot!(context.read_file("coverage.xml"), @r#"
+    <?xml version="1.0" ?>
+    <coverage version="1.0" timestamp="[TIMESTAMP]" lines-valid="2" lines-covered="1" line-rate="0.5000" branches-covered="0" branches-valid="0" branch-rate="0.0000" complexity="0.0">
+      <sources>
+        <source><temp_dir>/</source>
+      </sources>
+      <packages>
+        <package name="." line-rate="0.5000" branch-rate="0.0000" complexity="0.0">
+          <classes>
+            <class name="src/app.py" filename="src/app.py" line-rate="0.5000" branch-rate="0.0000" complexity="0.0">
+              <methods/>
+              <lines>
+                <line number="1" hits="1" branch="false"/>
+                <line number="2" hits="0" branch="false"/>
+              </lines>
+            </class>
+          </classes>
+        </package>
+      </packages>
+    </coverage>
+    "#);
+}
+
+#[test]
 fn report_auto_combines_pending_shards() {
     let context = TestContext::new();
     write_coverage(

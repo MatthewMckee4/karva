@@ -98,6 +98,10 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
                 },
             )?
         }
+        CoverageAction::Xml(xml) => {
+            let output = absolute(&xml.output, project.cwd());
+            analysis.write_cobertura_xml(&output)?
+        }
     };
     if let Some(threshold) = settings.fail_under
         && total < threshold
