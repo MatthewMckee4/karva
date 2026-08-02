@@ -852,6 +852,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn record_arc_attributes_the_current_context() {
+        let path: TrackedPath = Arc::from(PathBuf::from("module.py").into_boxed_path());
+        let arc = BranchArc { from: 1, to: 2 };
+        let mut state = TracerState {
+            current_context: Some("test_module::test_value".to_string()),
+            ..TracerState::default()
+        };
+
+        record_arc_in_state(&mut state, true, path.clone(), arc);
+
+        assert_eq!(state.arcs.get(&path), Some(&HashSet::from([arc])));
+        assert_eq!(
+            state
+                .arc_contexts
+                .get(&path)
+                .and_then(|arcs| arcs.get(&arc)),
+            Some(&HashSet::from(["test_module::test_value".to_string()]))
+        );
+    }
+
+    #[test]
     fn tracked_code_path_uses_code_cache_after_first_lookup() {
         let dir = tempfile::tempdir().expect("temp dir");
         let source = dir.path().join("module.py");

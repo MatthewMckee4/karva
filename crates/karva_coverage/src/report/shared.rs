@@ -15,7 +15,6 @@ pub(super) struct CombinedFile {
     branches_enabled: bool,
     branch_possible: BTreeSet<BranchArc>,
     branch_executed: BTreeSet<BranchArc>,
-    arc_contexts: BTreeMap<BranchArc, BTreeSet<String>>,
 }
 
 /// Report-ready metrics and source data shared by every output format.
@@ -44,11 +43,6 @@ pub(super) struct FileRow {
     pub branch_possible: Vec<BranchArc>,
     pub branch_executed: Vec<BranchArc>,
     pub branch_missing: Vec<BranchArc>,
-
-    /// All observed arcs, including arcs absent from static analysis.
-    pub arcs: Vec<BranchArc>,
-
-    pub arc_contexts: BTreeMap<BranchArc, BTreeSet<String>>,
 }
 
 /// Unions per-worker payloads so each source path has one coverage record.
@@ -73,13 +67,6 @@ pub(super) fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String,
                 bucket.branches_enabled = true;
                 bucket.branch_possible.extend(branches.possible);
                 bucket.branch_executed.extend(branches.executed);
-                for entry in branches.contexts {
-                    bucket
-                        .arc_contexts
-                        .entry(entry.arc)
-                        .or_default()
-                        .extend(entry.contexts);
-                }
             }
         }
     }
@@ -144,8 +131,6 @@ pub(super) fn build_rows(
                 branch_possible: data.branch_possible.iter().copied().collect(),
                 branch_executed: branch_executed.iter().copied().collect(),
                 branch_missing: branch_missing.iter().copied().collect(),
-                arcs: data.branch_executed.iter().copied().collect(),
-                arc_contexts: data.arc_contexts.clone(),
             }
         })
         .collect()
@@ -211,8 +196,6 @@ pub(super) fn totals_row(rows: &[FileRow]) -> FileRow {
         branch_possible: Vec::new(),
         branch_executed: Vec::new(),
         branch_missing: Vec::new(),
-        arcs: Vec::new(),
-        arc_contexts: BTreeMap::new(),
     }
 }
 
@@ -483,8 +466,6 @@ mod tests {
             branch_possible: Vec::new(),
             branch_executed: Vec::new(),
             branch_missing: Vec::new(),
-            arcs: Vec::new(),
-            arc_contexts: BTreeMap::new(),
         };
 
         assert_eq!(
