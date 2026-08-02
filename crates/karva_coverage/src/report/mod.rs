@@ -62,6 +62,14 @@ impl CoverageFilters {
         Ok(self)
     }
 
+    /// Applies configured aliases to native artifact source roots and file paths.
+    pub fn map_native_paths(
+        &self,
+        artifact: crate::native::NativeCoverage,
+    ) -> Result<crate::native::NativeCoverage> {
+        artifact.map_paths(|path| self.map_path(path))
+    }
+
     fn matches(&self, path: &str) -> bool {
         self.include
             .as_ref()

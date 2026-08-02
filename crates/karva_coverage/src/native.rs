@@ -185,6 +185,26 @@ impl NativeCoverage {
         }
         Ok(())
     }
+
+    /// Rewrites source identities and merges compatible paths that become equal.
+    pub(crate) fn map_paths(mut self, map: impl Fn(&str) -> String) -> Result<Self> {
+        self.source_roots = self
+            .source_roots
+            .iter()
+            .map(|path| Utf8PathBuf::from(map(path.as_str())))
+            .collect();
+        let mut files = BTreeMap::new();
+        for (path, incoming) in std::mem::take(&mut self.files) {
+            let mapped = Utf8PathBuf::from(map(path.as_str()));
+            if let Some(current) = files.get_mut(&mapped) {
+                merge_native_file(&mapped, current, incoming)?;
+            } else {
+                files.insert(mapped, incoming);
+            }
+        }
+        self.files = files;
+        Ok(self)
+    }
 }
 
 fn merge_worker_file(

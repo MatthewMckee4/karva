@@ -135,6 +135,15 @@ uv run karva coverage lcov --output build/coverage.lcov
 
 LCOV `SF`, `DA`, `LF`, `LH`, `BRDA`, `BRF`, and `BRH` records are a supported external contract. Source paths are portable project-relative paths after configured path aliases are applied.
 
+Combine native artifacts from CI shards before reporting:
+
+```bash
+uv run karva coverage combine artifacts/
+uv run karva coverage combine shard-a.json shard-b.json
+```
+
+With no paths, `combine` discovers artifacts under `.karva/coverage/pending/`. Successfully consumed inputs are removed after the combined artifact is atomically replaced. Pass `--keep` to retain them or `--append` to include the existing combined artifact.
+
 `--cov-report=html[:DIR]` writes a simple browsable HTML report. If `DIR` is omitted, karva writes `htmlcov/` in the project root:
 
 ```bash

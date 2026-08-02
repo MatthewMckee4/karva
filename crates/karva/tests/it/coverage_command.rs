@@ -9,6 +9,10 @@ use crate::common::TestContext;
 const SOURCE: &str = "first = 1\nsecond = 2\n";
 
 fn write_coverage(context: &TestContext, path: &Utf8Path) {
+    write_coverage_lines(context, path, BTreeSet::from([1]));
+}
+
+fn write_coverage_lines(context: &TestContext, path: &Utf8Path, executed: BTreeSet<u32>) {
     context.write_file("src/app.py", SOURCE);
     let root = context.root();
     let artifact = NativeCoverage::new(
@@ -21,7 +25,7 @@ fn write_coverage(context: &TestContext, path: &Utf8Path) {
                 source_fingerprint: SourceFingerprint::from_bytes(SOURCE.as_bytes()),
                 executable: BTreeSet::from([1, 2]),
                 excluded: BTreeSet::new(),
-                executed: BTreeSet::from([1]),
+                executed,
                 line_contexts: BTreeMap::from([(1, BTreeSet::from(["test_example".to_owned()]))]),
                 branches: None,
             },
@@ -30,6 +34,161 @@ fn write_coverage(context: &TestContext, path: &Utf8Path) {
     artifact
         .write(&root.join(path))
         .expect("write coverage data");
+}
+
+#[test]
+fn combine_unions_pending_artifacts_and_removes_inputs() {
+    let context = TestContext::new();
+    let first = Utf8Path::new(".karva/coverage/pending/first.json");
+    let second = Utf8Path::new(".karva/coverage/pending/second.json");
+    write_coverage_lines(&context, first, BTreeSet::from([1]));
+    write_coverage_lines(&context, second, BTreeSet::from([2]));
+
+    assert_cmd_snapshot!(context.coverage("combine"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    ");
+
+    let combined = NativeCoverage::read(&context.root().join(".karva/coverage/data.json"))
+        .expect("read combined coverage");
+    let file = combined
+        .files
+        .get(Utf8Path::new("src/app.py"))
+        .expect("combined source");
+    assert_eq!(file.executed, BTreeSet::from([1, 2]));
+    assert!(!context.root().join(first).exists());
+    assert!(!context.root().join(second).exists());
+}
+
+#[test]
+fn combine_failure_preserves_output_and_inputs() {
+    let context = TestContext::new();
+    let output = Utf8Path::new(".karva/coverage/data.json");
+    let valid = Utf8Path::new("inputs/valid.json");
+    let rejected = Utf8Path::new("inputs/rejected.json");
+    write_coverage_lines(&context, output, BTreeSet::from([1]));
+    write_coverage_lines(&context, valid, BTreeSet::from([2]));
+    context.write_file(rejected.as_str(), "not native coverage");
+    let original = context.read_file(output.as_str());
+
+    assert_cmd_snapshot!(
+        context
+            .coverage("combine")
+            .args([valid.as_str(), rejected.as_str()]),
+        @r"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    Karva failed
+      Cause: failed to combine native coverage artifacts:
+    `<temp_dir>/inputs/rejected.json`: failed to parse native coverage artifact `<temp_dir>/inputs/rejected.json`: expected ident at line 1 column 2
+    "
+    );
+
+    assert_eq!(context.read_file(output.as_str()), original);
+    assert!(context.root().join(valid).exists());
+    assert!(context.root().join(rejected).exists());
+}
+
+#[test]
+fn combine_appends_directory_inputs_and_keeps_them() {
+    let context = TestContext::new();
+    let output = Utf8Path::new(".karva/coverage/data.json");
+    let shard = Utf8Path::new("artifacts/nested/shard.json");
+    write_coverage_lines(&context, output, BTreeSet::from([1]));
+    write_coverage_lines(&context, shard, BTreeSet::from([2]));
+
+    assert_cmd_snapshot!(
+        context
+            .coverage("combine")
+            .args(["artifacts", "--append", "--keep"]),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    "
+    );
+
+    let combined = NativeCoverage::read(&context.root().join(output)).expect("read combined data");
+    let file = combined
+        .files
+        .get(Utf8Path::new("src/app.py"))
+        .expect("combined source");
+    assert_eq!(file.executed, BTreeSet::from([1, 2]));
+    assert!(context.root().join(shard).exists());
+}
+
+#[test]
+fn combine_maps_cross_platform_paths_deterministically() {
+    let context = TestContext::new();
+    context.write_file(
+        "karva.toml",
+        r"
+[profile.default.coverage]
+path-aliases = ['C:\repo=.']
+",
+    );
+    let unix = Utf8Path::new("artifacts/unix.json");
+    let windows = Utf8Path::new("artifacts/windows.json");
+    write_coverage(&context, unix);
+    let mut windows_artifact =
+        NativeCoverage::read(&context.root().join(unix)).expect("read portable coverage artifact");
+    windows_artifact.source_roots = BTreeSet::from([Utf8PathBuf::from(r"C:\repo\src")]);
+    let file = windows_artifact
+        .files
+        .remove(Utf8Path::new("src/app.py"))
+        .expect("portable source");
+    windows_artifact
+        .files
+        .insert(Utf8PathBuf::from(r"C:\repo\src\app.py"), file);
+    windows_artifact
+        .write(&context.root().join(windows))
+        .expect("write Windows artifact");
+
+    assert_cmd_snapshot!(
+        context.coverage("combine").args([
+            windows.as_str(),
+            unix.as_str(),
+            "--keep",
+        ]),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    "
+    );
+    let output = ".karva/coverage/data.json";
+    let first = context.read_file(output);
+
+    assert_cmd_snapshot!(
+        context.coverage("combine").args([
+            unix.as_str(),
+            windows.as_str(),
+            "--keep",
+        ]),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    "
+    );
+    assert_eq!(context.read_file(output), first);
+    let combined = NativeCoverage::read(&context.root().join(output)).expect("read combined data");
+    assert_eq!(
+        combined.files.keys().collect::<Vec<_>>(),
+        vec![Utf8Path::new("src/app.py")]
+    );
 }
 
 #[test]

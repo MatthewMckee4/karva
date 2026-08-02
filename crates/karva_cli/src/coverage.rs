@@ -111,6 +111,25 @@ pub enum CoverageAction {
 
     /// Generate an LCOV tracefile.
     Lcov(CoverageLcovCommand),
+
+    /// Combine native coverage artifacts.
+    Combine(CoverageCombineCommand),
+}
+
+#[derive(Debug, Args)]
+/// Options specific to combining native coverage artifacts.
+pub struct CoverageCombineCommand {
+    /// Native coverage files or directories containing them.
+    #[arg(value_name = "PATH")]
+    pub inputs: Vec<Utf8PathBuf>,
+
+    /// Include an existing combined artifact in the result.
+    #[arg(long)]
+    pub append: bool,
+
+    /// Keep input artifacts after a successful combination.
+    #[arg(long)]
+    pub keep: bool,
 }
 
 #[derive(Debug, Args)]
