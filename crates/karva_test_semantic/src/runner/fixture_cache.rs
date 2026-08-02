@@ -4,8 +4,7 @@ use std::collections::HashMap;
 
 use pyo3::prelude::*;
 
-use crate::extensions::fixtures::FixtureScope;
-use crate::runner::scoped_storage::ScopedStorage;
+use crate::runner::scoped_storage::{ScopeKey, ScopedStorage};
 
 /// Caches fixture values at different scope levels.
 ///
@@ -19,21 +18,23 @@ pub(super) struct FixtureCache {
 
 impl FixtureCache {
     /// Returns a new Python reference to a cached fixture value.
-    pub(super) fn get(&self, py: Python<'_>, name: &str, scope: FixtureScope) -> Option<Py<PyAny>> {
+    pub(super) fn get(&self, py: Python<'_>, name: &str, scope: ScopeKey<'_>) -> Option<Py<PyAny>> {
         self.storage
-            .get(scope)
-            .borrow()
-            .get(name)
-            .map(|value| value.clone_ref(py))
+            .with(scope, |values| {
+                values.get(name).map(|value| value.clone_ref(py))
+            })
+            .flatten()
     }
 
     /// Caches a fixture value until its declared scope completes.
-    pub(super) fn insert(&self, name: String, value: Py<PyAny>, scope: FixtureScope) {
-        self.storage.get(scope).borrow_mut().insert(name, value);
+    pub(super) fn insert(&self, name: String, value: Py<PyAny>, scope: ScopeKey<'_>) {
+        self.storage.with_mut(scope, |values| {
+            values.insert(name, value);
+        });
     }
 
     /// Drops every cached value owned by one completed scope.
-    pub(super) fn clear_scope(&self, scope: FixtureScope) {
-        self.storage.get(scope).borrow_mut().clear();
+    pub(super) fn clear_scope(&self, scope: ScopeKey<'_>) {
+        drop(self.storage.take(scope));
     }
 }

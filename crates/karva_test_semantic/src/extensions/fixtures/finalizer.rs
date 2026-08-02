@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use camino::Utf8PathBuf;
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
 use ruff_python_ast::StmtFunctionDef;
@@ -46,6 +47,9 @@ pub struct Finalizer {
 
     /// The scope determines when this finalizer runs.
     pub(crate) scope: FixtureScope,
+
+    /// Defining package for package-scoped teardown.
+    pub(crate) package_owner: Utf8PathBuf,
 
     /// AST definition used to locate teardown errors.
     pub(crate) stmt_function_def: Rc<StmtFunctionDef>,

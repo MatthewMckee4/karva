@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+use camino::Utf8Path;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
@@ -26,6 +27,8 @@ pub(super) struct FixturePlanCompiler<'a> {
     parents: &'a [&'a DiscoveredPackage],
     /// Fixture provider at the active package, module, or session scope.
     current: &'a (dyn HasFixtures<'a> + 'a),
+    /// Package owning fixtures provided by `current`.
+    current_package: &'a Utf8Path,
     /// Definition IDs reused within this compilation pass.
     fixture_ids: HashMap<String, FixtureId>,
 
@@ -162,13 +165,36 @@ impl<'a> FixturePlanCompiler<'a> {
     pub(super) fn new(
         parents: &'a [&'a DiscoveredPackage],
         current: &'a (dyn HasFixtures<'a> + 'a),
+        current_package: &'a Utf8Path,
     ) -> Self {
         Self {
             parents,
             current,
+            current_package,
             fixture_ids: HashMap::new(),
             fixtures: Vec::new(),
         }
+    }
+
+    /// Finds the package whose provider contributed `fixture`.
+    fn package_owner(&self, fixture: &DiscoveredFixture) -> &Utf8Path {
+        let name = fixture.name().function_name();
+        if self
+            .current
+            .get_fixture(name)
+            .is_some_and(|candidate| std::ptr::eq(candidate, fixture))
+        {
+            return self.current_package;
+        }
+
+        self.parents
+            .iter()
+            .find(|package| {
+                package
+                    .get_fixture(name)
+                    .is_some_and(|candidate| std::ptr::eq(candidate, fixture))
+            })
+            .map_or(self.current_package, |package| package.path())
     }
 
     /// Finishes the immutable arena after all requested root groups are compiled.
@@ -201,6 +227,7 @@ impl<'a> FixturePlanCompiler<'a> {
             name: fixture.name().clone(),
             dependencies: dependent_fixtures,
             scope: fixture.scope(),
+            package_owner: self.package_owner(fixture).to_path_buf(),
             is_generator: fixture.is_generator(),
             py_function: fixture.function().clone_ref(py),
             stmt_function_def: Rc::clone(fixture.stmt_function_def()),

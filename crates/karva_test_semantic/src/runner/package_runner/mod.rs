@@ -12,6 +12,7 @@ use crate::diagnostic::{fixture_resolution_diagnostic, invalid_parametrize_diagn
 use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::FixtureScope;
 use crate::runner::fixture_resolver::{FixturePlanCompiler, FixtureResolutionError};
+use crate::runner::scoped_storage::ScopeKey;
 use crate::runner::test_iterator::{CompiledTestPlan, TestVariantIterator};
 use crate::runner::{FinalizerCache, FixtureCache};
 
@@ -159,7 +160,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
 
         for module in package.modules().values() {
             for test in module.test_functions() {
-                let compiler = FixturePlanCompiler::new(&child_parents, module);
+                let compiler = FixturePlanCompiler::new(&child_parents, module, package.path());
                 let plan = CompiledTestPlan::compile(py, test, compiler);
                 plans.insert(test.name().to_string(), plan);
             }
@@ -179,13 +180,15 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         let mut test_plans = HashMap::new();
         Self::compile_test_plans(py, session, &[], &mut test_plans);
 
-        if let Err(error) = self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session) {
+        if let Err(error) =
+            self.run_auto_use_fixtures(py, &[], session, session.path(), FixtureScope::Session)
+        {
             self.register_error_package_tests(session, &error);
             return;
         }
 
         self.execute_package(py, session, &[], &mut test_plans);
-        self.report_scope_cleanup(py, FixtureScope::Session);
+        self.report_scope_cleanup(py, ScopeKey::Session);
     }
 
     /// Executes module auto-use fixtures, variants, and module teardown.
@@ -196,7 +199,12 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         parents: &[&DiscoveredPackage],
         test_plans: &mut CompiledTestPlans,
     ) -> bool {
-        if let Err(error) = self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module) {
+        let package_path = parents
+            .last()
+            .map_or_else(|| module.path(), |package| package.path());
+        if let Err(error) =
+            self.run_auto_use_fixtures(py, parents, module, package_path, FixtureScope::Module)
+        {
             self.register_error_module_tests(module, &error);
             return false;
         }
@@ -238,7 +246,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             }
         }
 
-        self.report_scope_cleanup(py, FixtureScope::Module);
+        self.report_scope_cleanup(py, ScopeKey::Module);
         passed
     }
 
@@ -254,8 +262,13 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         child_parents.push(package);
 
         if package.configuration_module_impl().is_some()
-            && let Err(error) =
-                self.run_auto_use_fixtures(py, parents, package, FixtureScope::Package)
+            && let Err(error) = self.run_auto_use_fixtures(
+                py,
+                parents,
+                package,
+                package.path(),
+                FixtureScope::Package,
+            )
         {
             self.register_error_package_tests(package, &error);
             return false;
@@ -278,7 +291,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             }
         }
 
-        self.report_scope_cleanup(py, FixtureScope::Package);
+        self.report_scope_cleanup(py, ScopeKey::Package(package.path()));
         passed
     }
 }

@@ -1,3 +1,6 @@
+use std::rc::Rc;
+
+use camino::{Utf8Path, Utf8PathBuf};
 use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
@@ -49,6 +52,9 @@ pub struct NormalizedFixture {
     /// The scope at which this fixture's value is cached.
     pub(crate) scope: FixtureScope,
 
+    /// Package whose lifetime owns package-scoped values and finalizers.
+    pub(crate) package_owner: Utf8PathBuf,
+
     /// Whether this fixture uses yield for teardown logic.
     pub(crate) is_generator: bool,
 
@@ -78,6 +84,11 @@ impl NormalizedFixture {
         self.scope
     }
 
+    /// Returns the package that owns this fixture's package-scoped state.
+    pub(crate) fn package_owner(&self) -> &Utf8Path {
+        &self.package_owner
+    }
+
     /// Call this fixture with the already-resolved arguments and return the result.
     pub(crate) fn call(
         &self,
@@ -98,4 +109,3 @@ impl NormalizedFixture {
         }
     }
 }
-use std::rc::Rc;

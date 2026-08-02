@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 use ruff_db::diagnostic::Diagnostic;
 
 use crate::extensions::fixtures::{Finalizer, FixtureScope};
-use crate::runner::scoped_storage::ScopedStorage;
+use crate::runner::scoped_storage::{ScopeKey, ScopedStorage};
 
 /// Manages fixture teardown callbacks at different scope levels.
 ///
@@ -19,22 +19,27 @@ pub(super) struct FinalizerCache {
 impl FinalizerCache {
     /// Adds a finalizer to its declared scope's LIFO stack.
     pub(super) fn add_finalizer(&self, finalizer: Finalizer) {
-        self.storage
-            .get(finalizer.scope)
-            .borrow_mut()
-            .push(finalizer);
+        let package_owner = finalizer.package_owner.clone();
+        let scope = match finalizer.scope {
+            FixtureScope::Session => ScopeKey::Session,
+            FixtureScope::Package => ScopeKey::Package(&package_owner),
+            FixtureScope::Module => ScopeKey::Module,
+            FixtureScope::Function => ScopeKey::Function,
+        };
+        self.storage.with_mut(scope, |finalizers| {
+            finalizers.push(finalizer);
+        });
     }
 
     /// Drains one scope and returns diagnostics raised during teardown.
     pub(super) fn run_and_clear_scope(
         &self,
         py: Python<'_>,
-        scope: FixtureScope,
+        scope: ScopeKey<'_>,
     ) -> Vec<Diagnostic> {
         self.storage
-            .get(scope)
-            .borrow_mut()
-            .drain(..)
+            .take(scope)
+            .into_iter()
             .rev()
             .filter_map(|finalizer| finalizer.run(py).err())
             .collect()
