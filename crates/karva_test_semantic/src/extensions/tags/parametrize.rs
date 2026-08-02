@@ -426,6 +426,76 @@ impl ParametrizationArgs {
     }
 }
 
+/// Lazily expanded Cartesian product of stacked parametrization decorators.
+#[derive(Debug)]
+pub struct ParameterPlan {
+    dimensions: Vec<Vec<ParametrizationArgs>>,
+}
+
+impl ParameterPlan {
+    pub(crate) fn new(dimensions: Vec<Vec<ParametrizationArgs>>) -> Self {
+        Self { dimensions }
+    }
+}
+
+impl IntoIterator for ParameterPlan {
+    type Item = ParametrizationArgs;
+    type IntoIter = ParameterPlanIterator;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let complete = self.dimensions.iter().any(Vec::is_empty);
+        let indices = vec![0; self.dimensions.len()];
+        ParameterPlanIterator {
+            dimensions: self.dimensions,
+            indices,
+            complete,
+        }
+    }
+}
+
+/// Mixed-radix iterator that materializes only the next parameter combination.
+pub struct ParameterPlanIterator {
+    dimensions: Vec<Vec<ParametrizationArgs>>,
+    indices: Vec<usize>,
+    complete: bool,
+}
+
+impl Iterator for ParameterPlanIterator {
+    type Item = ParametrizationArgs;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.complete {
+            return None;
+        }
+
+        if self.dimensions.is_empty() {
+            self.complete = true;
+            return Some(ParametrizationArgs::default());
+        }
+
+        let mut combination = ParametrizationArgs::default();
+        for (dimension, index) in self.dimensions.iter().zip(&self.indices) {
+            combination.extend(dimension[*index].clone());
+        }
+
+        self.advance();
+        Some(combination)
+    }
+}
+
+impl ParameterPlanIterator {
+    fn advance(&mut self) {
+        for dimension_index in (0..self.indices.len()).rev() {
+            self.indices[dimension_index] += 1;
+            if self.indices[dimension_index] < self.dimensions[dimension_index].len() {
+                return;
+            }
+            self.indices[dimension_index] = 0;
+        }
+        self.complete = true;
+    }
+}
+
 fn make_unique_parametrize_ids(parametrizations: &mut [ParametrizationArgs]) {
     let mut id_counts = HashMap::new();
     for parametrization in &*parametrizations {
@@ -838,5 +908,44 @@ pub(super) fn handle_custom_parametrize_param(
         })
     } else {
         Ok(default_parametrization())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ParameterPlan, ParametrizationArgs};
+
+    fn args(id: &str) -> ParametrizationArgs {
+        ParametrizationArgs {
+            id: id.to_string(),
+            has_explicit_id: true,
+            ..ParametrizationArgs::default()
+        }
+    }
+
+    #[test]
+    fn parameter_plan_preserves_stacked_decorator_order() {
+        let combinations = ParameterPlan::new(vec![
+            vec![args("a0"), args("a1")],
+            vec![args("b0"), args("b1"), args("b2")],
+        ])
+        .into_iter()
+        .filter_map(|arguments| arguments.id().map(str::to_string))
+        .collect::<Vec<_>>();
+
+        assert_eq!(
+            combinations,
+            ["a0-b0", "a0-b1", "a0-b2", "a1-b0", "a1-b1", "a1-b2"]
+        );
+    }
+
+    #[test]
+    fn parameter_plan_emits_one_case_without_parametrization() {
+        let combinations = ParameterPlan::new(Vec::new())
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        assert_eq!(combinations.len(), 1);
+        assert_eq!(combinations[0].id(), None);
     }
 }

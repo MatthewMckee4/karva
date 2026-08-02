@@ -13,7 +13,7 @@ use pyo3::prelude::*;
 
 use crate::extensions::fixtures::{FixtureId, FixturePlan, NormalizedFixture};
 use crate::extensions::functions::snapshot::SnapshotContext;
-use crate::extensions::tags::Tags;
+use crate::extensions::tags::RuntimeTags;
 use crate::extensions::tags::expect_fail::ExpectFailTag;
 use crate::extensions::tags::fail_slow::FailSlowTag;
 use crate::extensions::tags::timeout::TimeoutTag;
@@ -60,7 +60,7 @@ struct VariantRunner<'runner, 'context, 'settings, 'test, 'py> {
     /// Function-scoped auto-use fixtures.
     auto_use_fixtures: Rc<[FixtureId]>,
     /// Test, parameter, and fixture tags resolved for this variant.
-    tags: Tags,
+    tags: RuntimeTags,
     /// Module path used to build stable snapshot identity.
     module_path: camino::Utf8PathBuf,
 }
@@ -74,7 +74,6 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         py: Python<'py>,
         variant: TestVariant<'test>,
     ) -> Self {
-        let tags = variant.resolved_tags();
         let module_path = variant.module_path().clone();
         let TestVariant {
             test,
@@ -84,7 +83,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             fixture_dependencies,
             use_fixture_dependencies,
             auto_use_fixtures,
-            tags: _,
+            tags,
         } = variant;
 
         Self {
