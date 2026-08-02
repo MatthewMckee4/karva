@@ -22,6 +22,7 @@ pub use traits::{HasFixtures, RequiresFixtures};
 pub use utils::missing_arguments_from_error;
 
 use crate::discovery::DiscoveredPackage;
+use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::python::InvalidFixtureError;
 use crate::extensions::fixtures::scope::fixture_scope;
 
@@ -32,14 +33,8 @@ use crate::extensions::fixtures::scope::fixture_scope;
 /// be auto-used without explicit declaration.
 #[derive(Clone, Debug)]
 pub struct DiscoveredFixture {
-    /// Fully qualified name including module path and function name.
-    name: QualifiedFunctionName,
-
-    /// AST representation of the fixture function definition.
-    stmt_function_def: Rc<StmtFunctionDef>,
-
-    /// Source code captured during discovery for diagnostic reporting.
-    source_file: SourceFile,
+    /// Immutable source identity and syntax.
+    definition: Rc<FunctionDefinition>,
 
     /// The scope at which this fixture's value is cached.
     scope: FixtureScope,
@@ -60,16 +55,13 @@ pub struct DiscoveredFixture {
 #[derive(Clone, Debug)]
 pub struct RejectedFixture {
     /// Unqualified fixture name used for later lookup failures.
-    pub(crate) name: String,
+    name: String,
 
     /// Discovery error retained for dependency diagnostics.
-    pub(crate) reason: String,
+    reason: String,
 
-    /// Definition used to underline the rejected fixture.
-    pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
-
-    /// Source containing the rejected definition.
-    pub(crate) source_file: SourceFile,
+    /// Immutable source identity and syntax.
+    definition: Rc<FunctionDefinition>,
 }
 
 impl RejectedFixture {
@@ -78,13 +70,35 @@ impl RejectedFixture {
         reason: String,
         stmt_function_def: Rc<StmtFunctionDef>,
         source_file: SourceFile,
+        module_path: ModulePath,
     ) -> Self {
+        let qualified_name =
+            QualifiedFunctionName::new(stmt_function_def.name.to_string(), module_path);
         Self {
             name,
             reason,
-            stmt_function_def,
-            source_file,
+            definition: Rc::new(FunctionDefinition::new(
+                qualified_name,
+                stmt_function_def,
+                source_file,
+            )),
         }
+    }
+
+    pub(crate) fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub(crate) fn reason(&self) -> &str {
+        &self.reason
+    }
+
+    pub(crate) fn statement(&self) -> &StmtFunctionDef {
+        self.definition.statement()
+    }
+
+    pub(crate) fn source_file(&self) -> &SourceFile {
+        self.definition.source_file()
     }
 }
 
@@ -99,9 +113,11 @@ impl DiscoveredFixture {
         is_generator: bool,
     ) -> Self {
         Self {
-            name,
-            stmt_function_def,
-            source_file,
+            definition: Rc::new(FunctionDefinition::new(
+                name,
+                stmt_function_def,
+                source_file,
+            )),
             scope,
             auto_use,
             function: Rc::new(function),
@@ -110,7 +126,7 @@ impl DiscoveredFixture {
     }
 
     pub(crate) fn name(&self) -> &QualifiedFunctionName {
-        &self.name
+        self.definition.name()
     }
 
     pub(crate) fn scope(&self) -> FixtureScope {
@@ -130,11 +146,11 @@ impl DiscoveredFixture {
     }
 
     pub(crate) fn stmt_function_def(&self) -> &Rc<StmtFunctionDef> {
-        &self.stmt_function_def
+        self.definition.statement_rc()
     }
 
     pub(crate) fn source_file(&self) -> &SourceFile {
-        &self.source_file
+        self.definition.source_file()
     }
 
     pub(crate) fn try_from_function(

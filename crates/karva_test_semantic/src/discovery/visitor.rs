@@ -14,11 +14,7 @@ use ruff_source_file::SourceFileBuilder;
 use ruff_text_size::TextRange;
 
 use crate::Context;
-use crate::diagnostic::{
-    report_duplicate_fixture, report_duplicate_test, report_failed_to_discover_imported_fixture,
-    report_failed_to_import_module, report_generator_test, report_invalid_fixture,
-};
-use crate::discovery::{DiscoveredModule, DiscoveredTestFunction};
+use crate::discovery::{DiscoveredModule, DiscoveredTestFunction, DiscoveryError, DiscoveryIssue};
 use crate::extensions::fixtures::python::FixtureFunctionDefinition;
 use crate::extensions::fixtures::{DiscoveredFixture, RejectedFixture};
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
@@ -42,6 +38,9 @@ struct FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
 
     /// Flag to prevent multiple import attempts for the same module.
     tried_to_import_module: bool,
+
+    /// Issues produced while discovering this module, in source order.
+    issues: Vec<DiscoveryIssue>,
 }
 
 impl<'ctx, 'py, 'a, 'b> FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
@@ -52,6 +51,7 @@ impl<'ctx, 'py, 'a, 'b> FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
             py_module: None,
             py,
             tried_to_import_module: false,
+            issues: Vec::new(),
         }
     }
 
@@ -72,16 +72,16 @@ impl<'ctx, 'py, 'a, 'b> FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
             }
             Err(error) => {
                 if is_skip_exception(self.py, &error) {
-                    self.context.register_module_skip(
-                        self.module.module_path(),
-                        extract_skip_reason(self.py, &error),
-                    );
+                    self.issues.push(DiscoveryIssue::SkippedModule {
+                        module_path: self.module.module_path().clone(),
+                        reason: extract_skip_reason(self.py, &error),
+                    });
                 } else {
-                    report_failed_to_import_module(
-                        self.context,
-                        self.module.name(),
-                        &error.value(self.py).to_string(),
-                    );
+                    self.issues
+                        .push(DiscoveryIssue::Error(DiscoveryError::Import {
+                            module_name: self.module.name().to_string(),
+                            reason: error.value(self.py).to_string(),
+                        }));
                 }
             }
         }
@@ -117,14 +117,14 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                     error.value(self.py).to_string(),
                     Rc::clone(&stmt_function_def),
                     source_file,
+                    self.module.module_path().clone(),
                 ));
-                report_invalid_fixture(
-                    self.context,
-                    self.py,
-                    self.module.source_file(),
-                    &stmt_function_def,
-                    &error,
-                );
+                self.issues
+                    .push(DiscoveryIssue::Error(DiscoveryError::InvalidFixture {
+                        source_file: self.module.source_file(),
+                        definition: stmt_function_def,
+                        reason: error.value(self.py).to_string(),
+                    }));
                 None
             }
         }
@@ -147,11 +147,11 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             ) {
                 Ok(test_function) => self.module.add_test_function(test_function),
                 Err(error) => {
-                    report_failed_to_import_module(
-                        self.context,
-                        self.module.name(),
-                        &error.value(self.py).to_string(),
-                    );
+                    self.issues
+                        .push(DiscoveryIssue::Error(DiscoveryError::Import {
+                            module_name: self.module.name().to_string(),
+                            reason: error.value(self.py).to_string(),
+                        }));
                 }
             }
         }
@@ -206,7 +206,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             .module
             .test_functions()
             .iter()
-            .any(|f| f.name.function_name() == name)
+            .any(|f| f.name().function_name() == name)
         {
             return None;
         }
@@ -243,12 +243,12 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
         let source_text = match fs::read_to_string(utf8_file_name) {
             Ok(source_text) => source_text,
             Err(err) => {
-                report_failed_to_discover_imported_fixture(
-                    self.context,
-                    name,
-                    utf8_file_name,
-                    &err,
-                );
+                self.issues
+                    .push(DiscoveryIssue::Error(DiscoveryError::ImportedFixture {
+                        fixture_name: name.to_string(),
+                        source_path: utf8_file_name.to_path_buf(),
+                        error: err,
+                    }));
                 return None;
             }
         };
@@ -274,14 +274,14 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                     error.value(self.py).to_string(),
                     Rc::clone(&stmt_function_def),
                     source_file.clone(),
+                    module_path.clone(),
                 ));
-                report_invalid_fixture(
-                    self.context,
-                    self.py,
-                    source_file,
-                    stmt_function_def.as_ref(),
-                    &error,
-                );
+                self.issues
+                    .push(DiscoveryIssue::Error(DiscoveryError::InvalidFixture {
+                        source_file,
+                        definition: stmt_function_def,
+                        reason: error.value(self.py).to_string(),
+                    }));
             }
         }
 
@@ -299,7 +299,7 @@ pub fn discover(
     module: &mut DiscoveredModule,
     test_function_defs: Vec<StmtFunctionDef>,
     fixture_function_defs: Vec<StmtFunctionDef>,
-) {
+) -> Vec<DiscoveryIssue> {
     let is_conftest = module
         .path()
         .file_name()
@@ -312,13 +312,14 @@ pub fn discover(
         |test_function_def| test_function_def.name.to_string(),
         |test_function_def| test_function_def.range,
         |name, first_definition, duplicate_definition| {
-            report_duplicate_test(
-                context,
-                visitor.module.source_file(),
-                name,
-                first_definition,
-                duplicate_definition,
-            );
+            visitor
+                .issues
+                .push(DiscoveryIssue::Error(DiscoveryError::DuplicateTest {
+                    source_file: visitor.module.source_file(),
+                    test_name: name.to_string(),
+                    first_definition: Rc::new(first_definition.clone()),
+                    duplicate_definition: Rc::new(duplicate_definition.clone()),
+                }));
         },
     );
 
@@ -328,7 +329,12 @@ pub fn discover(
         }
 
         if is_generator(&test_function_def) {
-            report_generator_test(context, visitor.module.source_file(), &test_function_def);
+            visitor
+                .issues
+                .push(DiscoveryIssue::Error(DiscoveryError::GeneratorTest {
+                    source_file: visitor.module.source_file(),
+                    definition: Rc::new(test_function_def),
+                }));
             continue;
         }
 
@@ -347,13 +353,14 @@ pub fn discover(
         |fixture| fixture.name().function_name().to_string(),
         |fixture| fixture.stmt_function_def().range,
         |name, first_definition, duplicate_definition| {
-            report_duplicate_fixture(
-                context,
-                visitor.module.source_file(),
-                name,
-                first_definition.stmt_function_def(),
-                duplicate_definition.stmt_function_def(),
-            );
+            visitor
+                .issues
+                .push(DiscoveryIssue::Error(DiscoveryError::DuplicateFixture {
+                    source_file: visitor.module.source_file(),
+                    fixture_name: name.to_string(),
+                    first_definition: Rc::clone(first_definition.stmt_function_def()),
+                    duplicate_definition: Rc::clone(duplicate_definition.stmt_function_def()),
+                }));
         },
     );
 
@@ -368,6 +375,8 @@ pub fn discover(
     if is_conftest || context.settings().test().try_import_fixtures {
         visitor.find_extra_fixtures();
     }
+
+    visitor.issues
 }
 
 fn duplicate_definition_indices<T>(

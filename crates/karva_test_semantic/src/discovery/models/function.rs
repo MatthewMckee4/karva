@@ -7,6 +7,7 @@ use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
 
 use crate::discovery::DiscoveredModule;
+use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::tags::Tags;
 
 /// Represents a single test function discovered from Python source code.
@@ -16,14 +17,8 @@ use crate::extensions::tags::Tags;
 /// any associated decorator tags.
 #[derive(Debug)]
 pub struct DiscoveredTestFunction {
-    /// Fully qualified name including module path and function name.
-    pub(crate) name: QualifiedFunctionName,
-
-    /// AST representation of the function definition.
-    pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
-
-    /// Source code captured during discovery for diagnostic reporting.
-    pub(crate) source_file: SourceFile,
+    /// Immutable source identity and syntax.
+    definition: Rc<FunctionDefinition>,
 
     /// Reference to the actual Python callable object.
     pub(crate) py_function: Py<PyAny>,
@@ -54,11 +49,29 @@ impl DiscoveredTestFunction {
         }
 
         Ok(Self {
-            name,
-            stmt_function_def,
-            source_file: module.source_file(),
+            definition: Rc::new(FunctionDefinition::new(
+                name,
+                stmt_function_def,
+                module.source_file(),
+            )),
             py_function,
             tags,
         })
+    }
+
+    pub(crate) fn definition(&self) -> &Rc<FunctionDefinition> {
+        &self.definition
+    }
+
+    pub(crate) fn name(&self) -> &QualifiedFunctionName {
+        self.definition.name()
+    }
+
+    pub(crate) fn statement(&self) -> &StmtFunctionDef {
+        self.definition.statement()
+    }
+
+    pub(crate) fn source_file(&self) -> &SourceFile {
+        self.definition.source_file()
     }
 }
