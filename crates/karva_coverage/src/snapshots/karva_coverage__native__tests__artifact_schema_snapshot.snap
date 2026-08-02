@@ -1,0 +1,63 @@
+---
+source: crates/karva_coverage/src/native.rs
+expression: "serde_json::to_string_pretty(&artifact()).expect(\"serialize artifact\")"
+---
+{
+  "format_version": 1,
+  "karva_version": "0.0.0",
+  "mode": "branch",
+  "project_root": "/project",
+  "source_roots": [
+    "src"
+  ],
+  "run_context": "linux-py313",
+  "files": {
+    "src/package.py": {
+      "source_fingerprint": "8198f531bcf087563f2129915ed5fd21",
+      "executable": [
+        1,
+        2
+      ],
+      "excluded": [
+        2
+      ],
+      "executed": [
+        1
+      ],
+      "line_contexts": {
+        "1": [
+          "tests/test_package.py::test_ready"
+        ]
+      },
+      "branches": {
+        "possible": [
+          {
+            "from": 1,
+            "to": 0
+          },
+          {
+            "from": 1,
+            "to": 2
+          }
+        ],
+        "executed": [
+          {
+            "from": 1,
+            "to": 2
+          }
+        ],
+        "contexts": [
+          {
+            "arc": {
+              "from": 1,
+              "to": 2
+            },
+            "contexts": [
+              "tests/test_package.py::test_ready"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
