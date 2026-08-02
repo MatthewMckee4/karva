@@ -38,9 +38,17 @@ pub(super) struct OutcomeContext<'a> {
     /// Fixture and parameter values supplied to the test.
     pub(super) function_arguments: &'a FixtureArguments,
     /// Active expected-failure policy, when configured.
-    pub(super) expect_fail_tag: Option<ExpectFailTag>,
+    pub(super) expect_fail_tag: Option<&'a ExpectFailTag>,
     /// Whether failure diagnostics should include every Python call frame.
     pub(super) verbose: bool,
+}
+
+/// Classified test-body outcome and whether retry policy may run it again.
+pub(super) struct ClassifiedTestResult {
+    /// User-visible semantic outcome.
+    pub(super) outcome: TestExecutionOutcome,
+    /// Whether another attempt could change this outcome.
+    pub(super) retryable: bool,
 }
 
 /// Durations for each phase of one complete test attempt.
@@ -83,41 +91,19 @@ pub(super) fn reject_non_none_return(py: Python<'_>, value: &Py<PyAny>) -> TestC
     }
 }
 
-/// Returns whether a call result qualifies for another attempt.
-pub(super) fn should_retry_result(
-    py: Python<'_>,
-    test_result: &PyResult<TestCallOutcome>,
-    expect_fail: bool,
-    test_name: &str,
-) -> bool {
-    if expect_fail {
-        return false;
-    }
-
-    match test_result {
-        Ok(TestCallOutcome::ReturnedNone) => false,
-        Ok(TestCallOutcome::ReturnedValue(_)) => true,
-        Err(error) => {
-            !is_skip_exception(py, error)
-                && missing_arguments_from_error(test_name, &error.to_string()).is_empty()
-        }
-    }
-}
-
-/// Classifies a Python call result and attaches source diagnostics.
+/// Classifies a Python call result and its retry eligibility together.
 pub(super) fn classify_test_result(
     py: Python<'_>,
     test_result: PyResult<TestCallOutcome>,
     context: &OutcomeContext<'_>,
-) -> TestExecutionOutcome {
+) -> ClassifiedTestResult {
     let expect_fail = context
         .expect_fail_tag
-        .as_ref()
         .is_some_and(ExpectFailTag::should_expect_fail);
 
     let error = match test_result {
         Ok(TestCallOutcome::ReturnedValue(_)) if expect_fail => {
-            return TestExecutionOutcome::Passed;
+            return ClassifiedTestResult::new(TestExecutionOutcome::Passed, false);
         }
         Ok(TestCallOutcome::ReturnedValue(value)) => {
             let diagnostic = test_returned_value_diagnostic(
@@ -125,32 +111,34 @@ pub(super) fn classify_test_result(
                 context.stmt_function_def,
                 &value,
             );
-            return TestExecutionOutcome::failed(diagnostic);
+            return ClassifiedTestResult::new(TestExecutionOutcome::failed(diagnostic), true);
         }
         Ok(TestCallOutcome::ReturnedNone) if expect_fail => {
-            let reason = context
-                .expect_fail_tag
-                .as_ref()
-                .and_then(ExpectFailTag::reason);
+            let reason = context.expect_fail_tag.and_then(ExpectFailTag::reason);
             let diagnostic = test_pass_on_expect_failure_diagnostic(
                 context.source_file.clone(),
                 context.stmt_function_def,
                 reason,
             );
-            return TestExecutionOutcome::failed(diagnostic);
+            return ClassifiedTestResult::new(TestExecutionOutcome::failed(diagnostic), false);
         }
-        Ok(TestCallOutcome::ReturnedNone) => return TestExecutionOutcome::Passed,
+        Ok(TestCallOutcome::ReturnedNone) => {
+            return ClassifiedTestResult::new(TestExecutionOutcome::Passed, false);
+        }
         Err(error) => error,
     };
 
     if is_skip_exception(py, &error) {
-        return TestExecutionOutcome::Skipped {
-            reason: extract_skip_reason(py, &error),
-        };
+        return ClassifiedTestResult::new(
+            TestExecutionOutcome::Skipped {
+                reason: extract_skip_reason(py, &error),
+            },
+            false,
+        );
     }
 
     if expect_fail {
-        return TestExecutionOutcome::Passed;
+        return ClassifiedTestResult::new(TestExecutionOutcome::Passed, false);
     }
 
     let missing_arguments =
@@ -164,7 +152,7 @@ pub(super) fn classify_test_result(
             &error,
             context.verbose,
         );
-        TestExecutionOutcome::failed(diagnostic)
+        ClassifiedTestResult::new(TestExecutionOutcome::failed(diagnostic), true)
     } else {
         let diagnostic = missing_fixtures_diagnostic(
             context.source_file.clone(),
@@ -172,25 +160,33 @@ pub(super) fn classify_test_result(
             &missing_arguments,
             karva_python_semantic::FunctionKind::Test,
         );
-        TestExecutionOutcome::error(diagnostic)
+        ClassifiedTestResult::new(TestExecutionOutcome::error(diagnostic), false)
     }
 }
 
-/// Attaches teardown failures while preserving an existing primary failure.
-pub(super) fn attach_finalizer_diagnostics(
-    outcome: TestExecutionOutcome,
-    mut diagnostics: Vec<Diagnostic>,
-) -> TestExecutionOutcome {
-    if diagnostics.is_empty() {
-        return outcome;
+impl ClassifiedTestResult {
+    fn new(outcome: TestExecutionOutcome, retryable: bool) -> Self {
+        Self { outcome, retryable }
     }
+}
+
+/// Attaches later diagnostics while preserving an existing primary failure.
+pub(super) fn attach_related_diagnostics(
+    outcome: TestExecutionOutcome,
+    diagnostics: Vec<Diagnostic>,
+) -> TestExecutionOutcome {
+    let mut diagnostics = diagnostics.into_iter();
+    let Some(first) = diagnostics.next() else {
+        return outcome;
+    };
 
     match outcome {
         TestExecutionOutcome::Failed {
             diagnostic,
             mut related,
         } => {
-            related.append(&mut diagnostics);
+            related.push(first);
+            related.extend(diagnostics);
             TestExecutionOutcome::Failed {
                 diagnostic,
                 related,
@@ -201,7 +197,8 @@ pub(super) fn attach_finalizer_diagnostics(
             mut related,
             fixture_failures,
         } => {
-            related.append(&mut diagnostics);
+            related.push(first);
+            related.extend(diagnostics);
             TestExecutionOutcome::Error {
                 diagnostic,
                 related,
@@ -209,8 +206,7 @@ pub(super) fn attach_finalizer_diagnostics(
             }
         }
         TestExecutionOutcome::Passed | TestExecutionOutcome::Skipped { .. } => {
-            let diagnostic = diagnostics.remove(0);
-            TestExecutionOutcome::error_with_related(diagnostic, diagnostics)
+            TestExecutionOutcome::error_with_related(first, diagnostics.collect())
         }
     }
 }
@@ -242,7 +238,7 @@ pub(super) fn apply_fail_slow_budget(
     match outcome {
         TestExecutionOutcome::Passed => TestExecutionOutcome::failed(diagnostic),
         TestExecutionOutcome::Skipped { reason } => TestExecutionOutcome::Skipped { reason },
-        other => attach_finalizer_diagnostics(other, vec![diagnostic]),
+        other => attach_related_diagnostics(other, vec![diagnostic]),
     }
 }
 

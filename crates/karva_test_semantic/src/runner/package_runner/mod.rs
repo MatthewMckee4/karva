@@ -3,10 +3,8 @@
 use std::cell::Cell;
 
 use karva_coverage::CoverageSession;
-use karva_diagnostic::{FixtureFailure, TestExecutionOutcome};
 use karva_python_semantic::QualifiedTestName;
 use pyo3::prelude::*;
-use ruff_db::diagnostic::Diagnostic;
 
 use crate::Context;
 use crate::diagnostic::{fixture_resolution_diagnostic, invalid_parametrize_diagnostic};
@@ -16,11 +14,14 @@ use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::runner::test_iterator::TestVariantIterator;
 use crate::runner::{FinalizerCache, FixtureCache};
 
+mod failure;
 mod fixture;
 mod outcome;
 mod variant;
 
 pub use fixture::{FixtureCallError, FixtureChainEntry};
+
+use failure::TestError;
 
 /// Executes one discovered package tree inside an attached Python interpreter.
 ///
@@ -73,20 +74,10 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
     }
 
     /// Registers a discovery or setup error against one test.
-    fn register_error_test(
-        &self,
-        test: &DiscoveredTestFunction,
-        diagnostic: Diagnostic,
-        related: Vec<Diagnostic>,
-        fixture_failures: Vec<FixtureFailure>,
-    ) {
+    fn register_error_test(&self, test: &DiscoveredTestFunction, error: TestError) {
         self.context.register_test_case_result(
             &QualifiedTestName::new(test.name.clone(), None),
-            TestExecutionOutcome::error_with_fixture_failures(
-                diagnostic,
-                related,
-                fixture_failures,
-            ),
+            error.into_outcome(),
             std::time::Duration::ZERO,
             None,
         );
@@ -94,20 +85,9 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
     }
 
     /// Registers one shared module error against tests not blocked by `max-fail`.
-    fn register_error_module_tests(
-        &self,
-        module: &DiscoveredModule,
-        diagnostic: &Diagnostic,
-        related: &[Diagnostic],
-        fixture_failures: &[FixtureFailure],
-    ) {
+    fn register_error_module_tests(&self, module: &DiscoveredModule, error: &TestError) {
         for test in module.test_functions() {
-            self.register_error_test(
-                test,
-                diagnostic.clone(),
-                related.to_vec(),
-                fixture_failures.to_vec(),
-            );
+            self.register_error_test(test, error.clone());
             if self.max_fail_reached() {
                 return;
             }
@@ -115,21 +95,15 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
     }
 
     /// Registers one shared package error throughout its remaining test tree.
-    fn register_error_package_tests(
-        &self,
-        package: &DiscoveredPackage,
-        diagnostic: &Diagnostic,
-        related: &[Diagnostic],
-        fixture_failures: &[FixtureFailure],
-    ) {
+    fn register_error_package_tests(&self, package: &DiscoveredPackage, error: &TestError) {
         for module in package.modules().values() {
-            self.register_error_module_tests(module, diagnostic, related, fixture_failures);
+            self.register_error_module_tests(module, error);
             if self.max_fail_reached() {
                 return;
             }
         }
         for child_package in package.packages().values() {
-            self.register_error_package_tests(child_package, diagnostic, related, fixture_failures);
+            self.register_error_package_tests(child_package, error);
             if self.max_fail_reached() {
                 return;
             }
@@ -151,7 +125,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                         &test.stmt_function_def,
                         &error,
                     );
-                    self.register_error_test(test, diagnostic, Vec::new(), Vec::new());
+                    self.register_error_test(test, TestError::new(diagnostic));
                     valid = false;
                     if self.max_fail_reached() {
                         return false;
@@ -176,16 +150,8 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             return;
         }
 
-        if let Err(mut failure) =
-            self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session)
-        {
-            let diagnostic = failure.diagnostics.remove(0);
-            self.register_error_package_tests(
-                session,
-                &diagnostic,
-                &failure.diagnostics,
-                &failure.fixture_failures,
-            );
+        if let Err(error) = self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session) {
+            self.register_error_package_tests(session, &error);
             return;
         }
 
@@ -200,16 +166,8 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         module: &DiscoveredModule,
         parents: &[&DiscoveredPackage],
     ) -> bool {
-        if let Err(mut failure) =
-            self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module)
-        {
-            let diagnostic = failure.diagnostics.remove(0);
-            self.register_error_module_tests(
-                module,
-                &diagnostic,
-                &failure.diagnostics,
-                &failure.fixture_failures,
-            );
+        if let Err(error) = self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module) {
+            self.register_error_module_tests(module, &error);
             return false;
         }
 
@@ -221,9 +179,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                 Err(error) => {
                     self.register_error_test(
                         test,
-                        fixture_resolution_diagnostic(error),
-                        Vec::new(),
-                        Vec::new(),
+                        TestError::new(fixture_resolution_diagnostic(error)),
                     );
                     passed = false;
                     if self.max_fail_reached() {
@@ -263,16 +219,10 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         child_parents.push(package);
 
         if package.configuration_module_impl().is_some()
-            && let Err(mut failure) =
+            && let Err(error) =
                 self.run_auto_use_fixtures(py, parents, package, FixtureScope::Package)
         {
-            let diagnostic = failure.diagnostics.remove(0);
-            self.register_error_package_tests(
-                package,
-                &diagnostic,
-                &failure.diagnostics,
-                &failure.fixture_failures,
-            );
+            self.register_error_package_tests(package, &error);
             return false;
         }
 

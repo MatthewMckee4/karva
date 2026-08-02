@@ -5,16 +5,15 @@ use std::time::{Duration, Instant};
 use karva_diagnostic::{CapturedTestOutput, TestExecutionAttempt, TestExecutionOutcome};
 use pyo3::prelude::*;
 
-use crate::extensions::fixtures::FixtureScope;
 use crate::extensions::functions::snapshot::set_snapshot_context;
 use crate::utils::{run_coroutine, run_test_with_timeout};
 
 use super::{VariantRunner, VariantSettings, finish_output_capture};
 use crate::output_capture::PythonOutputCapture;
-use crate::runner::package_runner::fixture::{PreparedFixtures, fixture_failure_diagnostics};
+use crate::runner::package_runner::fixture::PreparedFixtures;
 use crate::runner::package_runner::outcome::{
-    OutcomeContext, PhaseDurations, apply_fail_slow_budget, attach_finalizer_diagnostics,
-    classify_test_result, reject_non_none_return, should_retry_result,
+    OutcomeContext, PhaseDurations, apply_fail_slow_budget, attach_related_diagnostics,
+    classify_test_result, reject_non_none_return,
 };
 
 impl VariantRunner<'_, '_, '_, '_, '_> {
@@ -32,152 +31,55 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             fixtures:
                 PreparedFixtures {
                     function_arguments,
-                    fixture_call_errors,
+                    setup_result,
                     test_finalizers,
                 },
             setup_duration,
             output_capture,
         } = prepared;
 
-        let (outcome, duration, retryable) = if fixture_call_errors.is_empty() {
-            set_snapshot_context(settings.snapshot_context.clone());
-            let prepared_call = attempt_env_result.and_then(|()| {
-                if let Err(error) = test_name_env_result {
-                    return Err(error.clone_ref(self.py));
-                }
-                if let Err(error) = &settings.async_patch_result {
-                    return Err(error.clone_ref(self.py));
-                }
-                if function_arguments.is_empty() || settings.timeout_seconds.is_some() {
-                    Ok(None)
-                } else {
-                    function_arguments.to_kwargs(self.py).map(Some)
-                }
-            });
-            let (test_result, call_duration) = match prepared_call {
-                Ok(keyword_arguments) => {
-                    let call_start = Instant::now();
-                    let result = if let Some(seconds) = settings.timeout_seconds {
-                        run_test_with_timeout(
-                            self.py,
-                            function,
-                            &function_arguments,
-                            settings.is_async,
-                            seconds,
-                            &settings.snapshot_context,
-                        )
-                    } else {
-                        let result = if let Some(keyword_arguments) = keyword_arguments {
-                            function.call(self.py, (), Some(&keyword_arguments))
-                        } else {
-                            function.call0(self.py)
-                        };
-                        if settings.is_async {
-                            result.and_then(|coroutine| run_coroutine(self.py, coroutine))
-                        } else {
-                            result
-                        }
-                    };
-                    (
-                        result.map(|value| reject_non_none_return(self.py, &value)),
-                        call_start.elapsed(),
-                    )
-                }
-                Err(error) => (Err(error), Duration::ZERO),
-            };
-            let retryable_result = should_retry_result(
-                self.py,
-                &test_result,
-                settings.expect_fail,
-                settings.qualified_test_name.function_name().function_name(),
-            );
-            let outcome = classify_test_result(
-                self.py,
-                test_result,
-                &OutcomeContext {
-                    name: &self.test.name,
-                    source_file: &self.test.source_file,
-                    stmt_function_def: &self.test.stmt_function_def,
-                    function_arguments: &function_arguments,
-                    expect_fail_tag: settings.expect_fail_tag.clone(),
-                    verbose: self.package_runner.context.is_verbose(),
-                },
-            );
-            let skipped = outcome.is_skipped();
-
-            let teardown_start = Instant::now();
-            let mut finalizer_diagnostics = test_finalizers
-                .into_iter()
-                .rev()
-                .filter_map(|finalizer| finalizer.run(self.py))
-                .collect::<Vec<_>>();
-            finalizer_diagnostics.extend(
-                self.package_runner
-                    .clean_up_scope(self.py, FixtureScope::Function),
-            );
-            let teardown_failed = !finalizer_diagnostics.is_empty();
-            let phases = PhaseDurations {
-                setup: setup_duration,
-                call: call_duration,
-                teardown: teardown_start.elapsed(),
-            };
-            let duration = phases.total();
-            let budget_exceeded = settings
-                .fail_slow_budget
-                .is_some_and(|budget| duration > budget);
-            let outcome = attach_finalizer_diagnostics(outcome, finalizer_diagnostics);
-            let outcome = apply_fail_slow_budget(
-                outcome,
-                duration,
-                phases,
-                settings.fail_slow_budget,
-                &self.test.source_file,
-                &self.test.stmt_function_def,
-            );
-            (
-                outcome,
-                duration,
-                retryable_result || teardown_failed || (budget_exceeded && !skipped),
-            )
-        } else {
-            let (mut diagnostics, fixture_failures) = fixture_failure_diagnostics(
-                self.py,
-                fixture_call_errors,
-                self.package_runner.context.is_verbose(),
-            );
-            let teardown_start = Instant::now();
-            diagnostics.extend(
-                test_finalizers
-                    .into_iter()
-                    .rev()
-                    .filter_map(|finalizer| finalizer.run(self.py)),
-            );
-            diagnostics.extend(
-                self.package_runner
-                    .clean_up_scope(self.py, FixtureScope::Function),
-            );
-            let phases = PhaseDurations {
-                setup: setup_duration,
-                call: Duration::ZERO,
-                teardown: teardown_start.elapsed(),
-            };
-            let duration = phases.total();
-            let diagnostic = diagnostics.remove(0);
-            let outcome = TestExecutionOutcome::error_with_fixture_failures(
-                diagnostic,
-                diagnostics,
-                fixture_failures,
-            );
-            let outcome = apply_fail_slow_budget(
-                outcome,
-                duration,
-                phases,
-                settings.fail_slow_budget,
-                &self.test.source_file,
-                &self.test.stmt_function_def,
-            );
-            (outcome, duration, true)
+        let body = match setup_result {
+            Ok(()) => self.execute_test_body(
+                settings,
+                function,
+                test_name_env_result,
+                attempt_env_result,
+                &function_arguments,
+            ),
+            Err(error) => AttemptBody {
+                outcome: error
+                    .into_test_error(self.py, self.package_runner.context.is_verbose())
+                    .into_outcome(),
+                call_duration: Duration::ZERO,
+                retryable: true,
+            },
         };
+
+        let skipped = body.outcome.is_skipped();
+        let teardown_start = Instant::now();
+        let finalizer_diagnostics = self
+            .package_runner
+            .clean_up_test_attempt(self.py, test_finalizers);
+        let teardown_failed = !finalizer_diagnostics.is_empty();
+        let phases = PhaseDurations {
+            setup: setup_duration,
+            call: body.call_duration,
+            teardown: teardown_start.elapsed(),
+        };
+        let duration = phases.total();
+        let budget_exceeded = settings
+            .fail_slow_budget
+            .is_some_and(|budget| duration > budget);
+        let outcome = attach_related_diagnostics(body.outcome, finalizer_diagnostics);
+        let outcome = apply_fail_slow_budget(
+            outcome,
+            duration,
+            phases,
+            settings.fail_slow_budget,
+            &self.test.source_file,
+            &self.test.stmt_function_def,
+        );
+        let retryable = body.retryable || teardown_failed || (budget_exceeded && !skipped);
 
         let captured_output = finish_output_capture(self.py, output_capture);
 
@@ -191,6 +93,92 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             retryable,
         }
     }
+
+    /// Executes and classifies the Python test body after successful setup.
+    fn execute_test_body(
+        &self,
+        settings: &VariantSettings,
+        function: &Py<PyAny>,
+        test_name_env_result: &PyResult<()>,
+        attempt_env_result: PyResult<()>,
+        function_arguments: &crate::runner::FixtureArguments,
+    ) -> AttemptBody {
+        set_snapshot_context(settings.snapshot_context.clone());
+        let prepared_call = attempt_env_result.and_then(|()| {
+            if let Err(error) = test_name_env_result {
+                return Err(error.clone_ref(self.py));
+            }
+            if let Err(error) = &settings.async_patch_result {
+                return Err(error.clone_ref(self.py));
+            }
+            if function_arguments.is_empty() || settings.timeout_seconds.is_some() {
+                Ok(None)
+            } else {
+                function_arguments.to_kwargs(self.py).map(Some)
+            }
+        });
+        let (test_result, call_duration) = match prepared_call {
+            Ok(keyword_arguments) => {
+                let call_start = Instant::now();
+                let result = if let Some(seconds) = settings.timeout_seconds {
+                    run_test_with_timeout(
+                        self.py,
+                        function,
+                        function_arguments,
+                        settings.is_async,
+                        seconds,
+                        &settings.snapshot_context,
+                    )
+                } else {
+                    let result = if let Some(keyword_arguments) = keyword_arguments {
+                        function.call(self.py, (), Some(&keyword_arguments))
+                    } else {
+                        function.call0(self.py)
+                    };
+                    if settings.is_async {
+                        result.and_then(|coroutine| run_coroutine(self.py, coroutine))
+                    } else {
+                        result
+                    }
+                };
+                (
+                    result.map(|value| reject_non_none_return(self.py, &value)),
+                    call_start.elapsed(),
+                )
+            }
+            Err(error) => (Err(error), Duration::ZERO),
+        };
+        let result = classify_test_result(
+            self.py,
+            test_result,
+            &OutcomeContext {
+                name: &self.test.name,
+                source_file: &self.test.source_file,
+                stmt_function_def: &self.test.stmt_function_def,
+                function_arguments,
+                expect_fail_tag: settings.expect_fail_tag.as_ref(),
+                verbose: self.package_runner.context.is_verbose(),
+            },
+        );
+
+        AttemptBody {
+            outcome: result.outcome,
+            call_duration,
+            retryable: result.retryable,
+        }
+    }
+}
+
+/// Test-body result before common teardown and duration policy are applied.
+struct AttemptBody {
+    /// Classified result before teardown diagnostics and budgets.
+    outcome: TestExecutionOutcome,
+
+    /// Time spent invoking the Python test function.
+    call_duration: Duration,
+
+    /// Whether test-body policy permits another attempt.
+    retryable: bool,
 }
 
 /// Fixture setup and timing captured before one test attempt.

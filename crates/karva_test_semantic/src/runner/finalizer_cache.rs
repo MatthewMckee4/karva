@@ -36,7 +36,7 @@ impl FinalizerCache {
             .borrow_mut()
             .drain(..)
             .rev()
-            .filter_map(|finalizer| finalizer.run(py))
+            .filter_map(|finalizer| finalizer.run(py).err())
             .collect()
     }
 }
