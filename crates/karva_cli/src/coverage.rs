@@ -114,6 +114,9 @@ pub enum CoverageAction {
 
     /// Combine native coverage artifacts.
     Combine(CoverageCombineCommand),
+
+    /// Delete native combined and shard coverage data.
+    Erase,
 }
 
 #[derive(Debug, Args)]

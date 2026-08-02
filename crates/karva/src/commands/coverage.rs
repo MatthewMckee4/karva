@@ -12,6 +12,7 @@ use crate::ExitStatus;
 use crate::utils::cwd;
 
 mod combine;
+mod erase;
 
 pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
     let cwd = cwd()?;
@@ -33,9 +34,16 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
     let filters = karva_coverage::CoverageFilters::new(&settings.include, &settings.omit)?
         .with_contexts(&settings.contexts)?
         .with_path_aliases(&settings.path_aliases)?;
-    if let CoverageAction::Combine(combine) = &args.action {
-        combine::combine(combine, project.cwd(), &data_file, &filters)?;
-        return Ok(ExitStatus::Success);
+    match &args.action {
+        CoverageAction::Combine(combine) => {
+            combine::combine(combine, project.cwd(), &data_file, &filters)?;
+            return Ok(ExitStatus::Success);
+        }
+        CoverageAction::Erase => {
+            erase::erase(&data_file)?;
+            return Ok(ExitStatus::Success);
+        }
+        _ => {}
     }
     let data_files = coverage_data_files(&data_file)?;
     let analysis =
@@ -122,6 +130,7 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
             analysis.write_lcov(&output)?
         }
         CoverageAction::Combine(_) => return Ok(ExitStatus::Success),
+        CoverageAction::Erase => return Ok(ExitStatus::Success),
     };
     if let Some(threshold) = settings.fail_under
         && total < threshold
