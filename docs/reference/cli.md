@@ -68,7 +68,7 @@ karva test [OPTIONS] [PATH]...
 </dd><dt id="karva-test--cov-omit"><a href="#karva-test--cov-omit"><code>--cov-omit</code></a> <i>glob</i></dt><dd><p>Exclude coverage report files whose project-relative path matches this glob.</p>
 <p>May be passed multiple times.</p>
 </dd><dt id="karva-test--cov-report"><a href="#karva-test--cov-report"><code>--cov-report</code></a> <i>type</i></dt><dd><p>Coverage report type.</p>
-<p><code>term</code> (default) prints a compact terminal table. <code>term-missing</code> extends it with a <code>Missing</code> column listing the uncovered line numbers per file. <code>xml&#91;:PATH&#93;</code>, <code>json&#91;:PATH&#93;</code>, and <code>html&#91;:DIR&#93;</code> write reports to disk. Pass an empty value (<code>--cov-report=</code>) to persist native data only.</p>
+<p><code>term</code> (default) prints a compact terminal table. <code>term-missing</code> extends it with a <code>Missing</code> column listing the uncovered line numbers per file. <code>xml&#91;:PATH&#93;</code>, <code>json&#91;:PATH&#93;</code>, <code>html&#91;:DIR&#93;</code>, and <code>lcov&#91;:PATH&#93;</code> write reports to disk. May be passed multiple times to render several reports from one analysis. Pass an empty value (<code>--cov-report=</code>) to persist native data only.</p>
 </dd><dt id="karva-test--durations"><a href="#karva-test--durations"><code>--durations</code></a> <i>n</i></dt><dd><p>Show the N slowest tests after the run completes</p>
 </dd><dt id="karva-test--fail-fast"><a href="#karva-test--fail-fast"><code>--fail-fast</code></a> <i>fail-fast</i></dt><dd><p>Stop scheduling new tests after the first failure.</p>
 <p>Equivalent to <code>--max-fail=1</code>. Use <code>--no-fail-fast</code> to keep running after failures.</p>
@@ -113,6 +113,8 @@ karva test [OPTIONS] [PATH]...
 <p>Lets stdout/stderr from tests flow directly to the terminal, useful when debugging with print statements or interactive debuggers. Implies <code>--show-output</code> and forces a single worker so output from concurrent tests cannot interleave.</p>
 </dd><dt id="karva-test--no-cov"><a href="#karva-test--no-cov"><code>--no-cov</code></a></dt><dd><p>Disable coverage measurement for this run.</p>
 <p>Overrides any <code>--cov</code> flag and any <code>&#91;coverage&#93; sources</code> configured in <code>karva.toml</code> / <code>pyproject.toml</code>. Useful when iterating locally without editing config.</p>
+</dd><dt id="karva-test--no-cov-on-fail"><a href="#karva-test--no-cov-on-fail"><code>--no-cov-on-fail</code></a></dt><dd><p>Do not render coverage reports when tests fail.</p>
+<p>Native coverage data is still persisted.</p>
 </dd><dt id="karva-test--no-fail-fast"><a href="#karva-test--no-fail-fast"><code>--no-fail-fast</code></a></dt><dd><p>Run every test regardless of how many fail.</p>
 <p>Clears any <code>fail-fast</code> or <code>max-fail</code> value set in configuration. When <code>--max-fail</code> is provided alongside <code>--no-fail-fast</code>, <code>--max-fail</code> takes precedence.</p>
 </dd><dt id="karva-test--no-ignore"><a href="#karva-test--no-ignore"><code>--no-ignore</code></a> <i>no-ignore</i></dt><dd><p>When set, .gitignore files will not be respected</p>

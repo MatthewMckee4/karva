@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context as _, Result};
 use camino::Utf8PathBuf;
 use karva_cache::{AggregatedResults, DisplayFlakyTests};
-use karva_cli::TestCommand;
+use karva_cli::{CovReport as CliCovReport, TestCommand};
 use karva_logging::{Printer, Stdout, set_colored_override, setup_tracing};
 use karva_metadata::filter::FiltersetSet;
 use karva_metadata::{CovReport, NoTestsMode, ProjectMetadata, ProjectOptionsOverrides};
@@ -49,6 +49,8 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     };
 
     let sub_command = args.sub_command.clone();
+    let explicit_cov_reports = sub_command.cov_report.clone();
+    let no_cov_on_fail = sub_command.no_cov_on_fail.unwrap_or(false);
     let watch = args.watch;
     let durations = args.durations;
     let result_output = args.result_output.clone();
@@ -132,7 +134,8 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
             karva_coverage::CoverageFilters::new(&coverage.include, &coverage.omit)?
                 .with_contexts(&coverage.contexts)?
                 .with_path_aliases(&coverage.path_aliases)?;
-        if coverage.report_path.is_some()
+        if explicit_cov_reports.is_empty()
+            && coverage.report_path.is_some()
             && matches!(coverage.report, CovReport::Term | CovReport::TermMissing)
         {
             let mut stdout = printer.stream_for_message().lock();
@@ -151,38 +154,30 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
             else {
                 return Ok(None);
             };
-            let total = match coverage.report {
-                CovReport::None => analysis.total_percent(),
-                CovReport::Term => analysis.report_with_precision(false, coverage.precision.0)?,
-                CovReport::TermMissing => {
-                    analysis.report_with_precision(true, coverage.precision.0)?
-                }
-                CovReport::Xml => {
-                    let output = coverage_report_path(
-                        coverage.report_path.as_deref(),
-                        "coverage.xml",
-                        project.cwd(),
-                    );
-                    analysis.write_cobertura_xml(&output)?
-                }
-                CovReport::Json => {
-                    let output = coverage_report_path(
-                        coverage.report_path.as_deref(),
-                        "coverage.json",
-                        project.cwd(),
-                    );
-                    analysis.write_json(&output)?
-                }
-                CovReport::Html => {
-                    let output = coverage_report_path(
-                        coverage.report_path.as_deref(),
-                        "htmlcov",
-                        project.cwd(),
-                    );
-                    analysis.write_html(&output)?
-                }
+            let reports = if explicit_cov_reports.is_empty() {
+                vec![configured_coverage_report(
+                    coverage.report,
+                    coverage.report_path.as_deref(),
+                )]
+            } else {
+                explicit_cov_reports.clone()
             };
-            Ok(Some(total))
+            if !no_cov_on_fail || result.is_success() {
+                for report in &reports {
+                    if let Err(error) = render_coverage_report(
+                        &analysis,
+                        report,
+                        coverage.precision.0,
+                        project.cwd(),
+                    ) {
+                        tracing::error!(
+                            "Coverage {} report failed: {error:#}",
+                            coverage_report_name(report)
+                        );
+                    }
+                }
+            }
+            Ok(Some(analysis.total_percent()))
         })();
         match coverage_result {
             Ok(total) => total,
@@ -238,6 +233,81 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     };
     write_result_report(exit_status)?;
     Ok(exit_status)
+}
+
+fn configured_coverage_report(report: CovReport, path: Option<&str>) -> CliCovReport {
+    let path = path.map(Utf8PathBuf::from);
+    match report {
+        CovReport::None => CliCovReport::None,
+        CovReport::Term => CliCovReport::Term,
+        CovReport::TermMissing => CliCovReport::TermMissing,
+        CovReport::Xml => CliCovReport::Xml { path },
+        CovReport::Json => CliCovReport::Json { path },
+        CovReport::Html => CliCovReport::Html { path },
+        CovReport::Lcov => CliCovReport::Lcov { path },
+    }
+}
+
+fn render_coverage_report(
+    analysis: &karva_coverage::CoverageAnalysis,
+    report: &CliCovReport,
+    precision: usize,
+    project_root: &camino::Utf8Path,
+) -> Result<()> {
+    match report {
+        CliCovReport::None => {}
+        CliCovReport::Term => {
+            analysis.report_with_precision(false, precision)?;
+        }
+        CliCovReport::TermMissing => {
+            analysis.report_with_precision(true, precision)?;
+        }
+        CliCovReport::Xml { path } => {
+            let output = coverage_report_path(
+                path.as_ref().map(|path| path.as_str()),
+                "coverage.xml",
+                project_root,
+            );
+            analysis.write_cobertura_xml(&output)?;
+        }
+        CliCovReport::Json { path } => {
+            let output = coverage_report_path(
+                path.as_ref().map(|path| path.as_str()),
+                "coverage.json",
+                project_root,
+            );
+            analysis.write_json(&output)?;
+        }
+        CliCovReport::Html { path } => {
+            let output = coverage_report_path(
+                path.as_ref().map(|path| path.as_str()),
+                "htmlcov",
+                project_root,
+            );
+            analysis.write_html(&output)?;
+        }
+        CliCovReport::Lcov { path } => {
+            let output = coverage_report_path(
+                path.as_ref().map(|path| path.as_str()),
+                "coverage.lcov",
+                project_root,
+            );
+            analysis.write_lcov(&output)?;
+        }
+    }
+    Ok(())
+}
+
+fn coverage_report_name(report: &CliCovReport) -> &'static str {
+    match report {
+        CliCovReport::None => "none",
+        CliCovReport::Term => "term",
+        CliCovReport::TermMissing => "term-missing",
+        CliCovReport::Xml { .. } => "xml",
+        CliCovReport::Json { .. } => "json",
+        CliCovReport::Html { .. } => "html",
+        CliCovReport::Lcov { .. } => "lcov",
+    }
 }
 
 fn persist_coverage(

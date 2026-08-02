@@ -220,7 +220,7 @@ uncovered line numbers per file. `none` persists native data only.
 
 **Default value**: `term`
 
-**Type**: `none | term | term-missing | xml | json | html`
+**Type**: `none | term | term-missing | xml | json | html | lcov`
 
 **Example usage** (`pyproject.toml`):
 
@@ -235,10 +235,10 @@ report = "term-missing"
 
 Optional output path for machine-readable coverage reports.
 
-When `report = "xml"` or `report = "json"`, this path controls where
-the file is written. When `report = "html"`, it controls the output
-directory. If omitted, karva writes to `coverage.xml`,
-`coverage.json`, or `htmlcov/` in the project root.
+For XML, JSON, and LCOV reports, this controls the output file. For HTML,
+it controls the output directory. If omitted, karva writes to
+`coverage.xml`, `coverage.json`, `coverage.lcov`, or `htmlcov/` in the
+project root.
 
 **Default value**: `null`
 

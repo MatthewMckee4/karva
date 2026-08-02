@@ -704,7 +704,7 @@ pub struct CoverageOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
         default = r#"term"#,
-        value_type = r#"none | term | term-missing | xml | json | html"#,
+        value_type = r#"none | term | term-missing | xml | json | html | lcov"#,
         example = r#"
             report = "term-missing"
         "#
@@ -713,10 +713,10 @@ pub struct CoverageOptions {
 
     /// Optional output path for machine-readable coverage reports.
     ///
-    /// When `report = "xml"` or `report = "json"`, this path controls where
-    /// the file is written. When `report = "html"`, it controls the output
-    /// directory. If omitted, karva writes to `coverage.xml`,
-    /// `coverage.json`, or `htmlcov/` in the project root.
+    /// For XML, JSON, and LCOV reports, this controls the output file. For HTML,
+    /// it controls the output directory. If omitted, karva writes to
+    /// `coverage.xml`, `coverage.json`, `coverage.lcov`, or `htmlcov/` in the
+    /// project root.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
         default = r#"null"#,
@@ -921,6 +921,9 @@ pub enum CovReport {
 
     /// HTML written to disk for interactive browsing.
     Html,
+
+    /// LCOV tracefile written to disk for external tooling.
+    Lcov,
 }
 
 impl Combine for CovReport {
@@ -943,6 +946,7 @@ impl CovReport {
             Self::Xml => "xml",
             Self::Json => "json",
             Self::Html => "html",
+            Self::Lcov => "lcov",
         }
     }
 }
