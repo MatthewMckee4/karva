@@ -1,6 +1,7 @@
 //! Package-tree orchestration and run-wide execution state.
 
 use std::cell::Cell;
+use std::collections::HashMap;
 
 use karva_coverage::CoverageSession;
 use karva_python_semantic::QualifiedTestName;
@@ -10,8 +11,8 @@ use crate::Context;
 use crate::diagnostic::{fixture_resolution_diagnostic, invalid_parametrize_diagnostic};
 use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::FixtureScope;
-use crate::runner::fixture_resolver::RuntimeFixtureResolver;
-use crate::runner::test_iterator::TestVariantIterator;
+use crate::runner::fixture_resolver::{FixturePlanCompiler, FixtureResolutionError};
+use crate::runner::test_iterator::{CompiledTestPlan, TestVariantIterator};
 use crate::runner::{FinalizerCache, FixtureCache};
 
 mod failure;
@@ -22,6 +23,8 @@ mod variant;
 pub use fixture::{FixtureCallError, FixtureChainEntry};
 
 use failure::TestError;
+
+type CompiledTestPlans = HashMap<String, Result<CompiledTestPlan, FixtureResolutionError>>;
 
 /// Executes one discovered package tree inside an attached Python interpreter.
 ///
@@ -144,18 +147,44 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         valid
     }
 
+    /// Compiles every test fixture graph before any fixture code executes.
+    fn compile_test_plans(
+        py: Python<'_>,
+        package: &DiscoveredPackage,
+        parents: &[&DiscoveredPackage],
+        plans: &mut CompiledTestPlans,
+    ) {
+        let mut child_parents = parents.to_vec();
+        child_parents.push(package);
+
+        for module in package.modules().values() {
+            for test in module.test_functions() {
+                let compiler = FixturePlanCompiler::new(&child_parents, module);
+                let plan = CompiledTestPlan::compile(py, test, compiler);
+                plans.insert(test.name().to_string(), plan);
+            }
+        }
+
+        for child_package in package.packages().values() {
+            Self::compile_test_plans(py, child_package, &child_parents, plans);
+        }
+    }
+
     /// Executes all discovered tests and session-scoped fixture teardown.
     pub(crate) fn execute(&self, py: Python<'_>, session: &DiscoveredPackage) {
         if !self.validate_parametrization(session) {
             return;
         }
 
+        let mut test_plans = HashMap::new();
+        Self::compile_test_plans(py, session, &[], &mut test_plans);
+
         if let Err(error) = self.run_auto_use_fixtures(py, &[], session, FixtureScope::Session) {
             self.register_error_package_tests(session, &error);
             return;
         }
 
-        self.execute_package(py, session, &[]);
+        self.execute_package(py, session, &[], &mut test_plans);
         self.report_scope_cleanup(py, FixtureScope::Session);
     }
 
@@ -165,6 +194,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         py: Python<'_>,
         module: &DiscoveredModule,
         parents: &[&DiscoveredPackage],
+        test_plans: &mut CompiledTestPlans,
     ) -> bool {
         if let Err(error) = self.run_auto_use_fixtures(py, parents, module, FixtureScope::Module) {
             self.register_error_module_tests(module, &error);
@@ -173,9 +203,12 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
 
         let mut passed = true;
         for test in module.test_functions() {
-            let mut resolver = RuntimeFixtureResolver::new(parents, module);
-            let variants = match TestVariantIterator::new(py, test, &mut resolver) {
-                Ok(variants) => variants,
+            let Some(test_plan) = test_plans.remove(&test.name().to_string()) else {
+                passed = false;
+                continue;
+            };
+            let test_plan = match test_plan {
+                Ok(plan) => plan,
                 Err(error) => {
                     self.register_error_test(
                         test,
@@ -188,6 +221,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                     continue;
                 }
             };
+            let variants = TestVariantIterator::new(test, test_plan);
 
             for variant in variants {
                 let variant_passed = self.execute_test_variant(py, variant);
@@ -214,6 +248,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         py: Python<'_>,
         package: &DiscoveredPackage,
         parents: &[&DiscoveredPackage],
+        test_plans: &mut CompiledTestPlans,
     ) -> bool {
         let mut child_parents = parents.to_vec();
         child_parents.push(package);
@@ -228,7 +263,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
 
         let mut passed = true;
         for module in package.modules().values() {
-            passed &= self.execute_module(py, module, &child_parents);
+            passed &= self.execute_module(py, module, &child_parents, test_plans);
             if self.max_fail_reached() {
                 break;
             }
@@ -236,7 +271,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
 
         if !self.max_fail_reached() {
             for child_package in package.packages().values() {
-                passed &= self.execute_package(py, child_package, &child_parents);
+                passed &= self.execute_package(py, child_package, &child_parents, test_plans);
                 if self.max_fail_reached() {
                     break;
                 }

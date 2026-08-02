@@ -7,10 +7,10 @@ use std::sync::Arc;
 use pyo3::prelude::*;
 
 use crate::discovery::DiscoveredTestFunction;
-use crate::extensions::fixtures::NormalizedFixture;
+use crate::extensions::fixtures::{FixtureId, FixturePlan};
 use crate::extensions::tags::Tags;
 use crate::extensions::tags::parametrize::ParametrizationArgs;
-use crate::runner::fixture_resolver::{FixtureResolutionResult, RuntimeFixtureResolver};
+use crate::runner::fixture_resolver::{FixturePlanCompiler, FixtureResolutionResult};
 
 /// A single variant of a test to be executed.
 ///
@@ -34,14 +34,17 @@ pub(super) struct TestVariant<'a> {
 
     pub id: Option<String>,
 
+    /// Arena shared by all fixture root groups for this test.
+    pub(super) fixture_plan: Rc<FixturePlan>,
+
     /// Fixtures to be passed as arguments to the test function.
-    pub(super) fixture_dependencies: Rc<[Rc<NormalizedFixture>]>,
+    pub(super) fixture_dependencies: Rc<[FixtureId]>,
 
     /// Fixtures from @usefixtures (run for side effects, not passed as args).
-    pub(super) use_fixture_dependencies: Rc<[Rc<NormalizedFixture>]>,
+    pub(super) use_fixture_dependencies: Rc<[FixtureId]>,
 
     /// Auto-use fixtures that run automatically before this test.
-    pub(super) auto_use_fixtures: Rc<[Rc<NormalizedFixture>]>,
+    pub(super) auto_use_fixtures: Rc<[FixtureId]>,
 
     /// Combined tags from the test and its parameter set.
     pub(super) tags: Tags,
@@ -55,21 +58,7 @@ impl TestVariant<'_> {
 
     /// Get the resolved tags including those from fixture dependencies.
     pub(super) fn resolved_tags(&self) -> Tags {
-        let mut tags = self.tags.clone();
-
-        for dependency in self.fixture_dependencies.iter() {
-            tags.extend(&dependency.resolved_tags());
-        }
-
-        for dependency in self.use_fixture_dependencies.iter() {
-            tags.extend(&dependency.resolved_tags());
-        }
-
-        for dependency in self.auto_use_fixtures.iter() {
-            tags.extend(&dependency.resolved_tags());
-        }
-
-        tags
+        self.tags.clone()
     }
 }
 
@@ -86,34 +75,42 @@ pub(super) struct TestVariantIterator<'a> {
     /// `ParametrizationArgs` are moved into the emitted variant (not cloned).
     param_args: std::vec::IntoIter<ParametrizationArgs>,
     /// Resolved fixtures passed as test arguments.
-    fixture_dependencies: Rc<[Rc<NormalizedFixture>]>,
+    fixture_plan: Rc<FixturePlan>,
+    fixture_dependencies: Rc<[FixtureId]>,
     /// Resolved side-effect-only fixtures.
-    use_fixture_dependencies: Rc<[Rc<NormalizedFixture>]>,
+    use_fixture_dependencies: Rc<[FixtureId]>,
     /// Resolved function-scoped auto-use fixtures.
-    auto_use_fixtures: Rc<[Rc<NormalizedFixture>]>,
+    auto_use_fixtures: Rc<[FixtureId]>,
 }
 
-impl<'a> TestVariantIterator<'a> {
-    /// Creates an iterator for one discovered test function.
-    ///
-    /// Resolves fixtures and computes all parametrize variants.
-    pub(super) fn new(
+/// Fixture roots and parameter cases compiled before any test fixture executes.
+pub(super) struct CompiledTestPlan {
+    fixture_plan: Rc<FixturePlan>,
+    fixture_dependencies: Rc<[FixtureId]>,
+    use_fixture_dependencies: Rc<[FixtureId]>,
+    auto_use_fixtures: Rc<[FixtureId]>,
+    param_args: Vec<ParametrizationArgs>,
+}
+
+impl CompiledTestPlan {
+    /// Resolves all fixture roots for one test without executing fixture code.
+    pub(super) fn compile(
         py: Python,
-        test: &'a DiscoveredTestFunction,
-        resolver: &mut RuntimeFixtureResolver,
+        test: &DiscoveredTestFunction,
+        mut compiler: FixturePlanCompiler<'_>,
     ) -> FixtureResolutionResult<Self> {
         let parametrize_param_names = test.tags.parametrize_names();
 
-        let auto_use_fixtures = resolver.get_normalized_auto_use_fixtures(
+        let auto_use_fixtures = compiler.get_normalized_auto_use_fixtures(
             py,
             crate::extensions::fixtures::FixtureScope::Function,
         )?;
 
         let fixture_dependencies =
-            resolver.resolve_test_fixtures(py, test, &parametrize_param_names)?;
+            compiler.resolve_test_fixtures(py, test, &parametrize_param_names)?;
 
         let use_fixture_names = test.tags.required_fixtures_names();
-        let use_fixture_dependencies = resolver.resolve_use_fixtures(py, &use_fixture_names)?;
+        let use_fixture_dependencies = compiler.resolve_use_fixtures(py, &use_fixture_names)?;
 
         let test_params = test.tags.parametrize_args();
         let param_args = if test_params.is_empty() {
@@ -123,12 +120,26 @@ impl<'a> TestVariantIterator<'a> {
         };
 
         Ok(Self {
-            test,
-            param_args: param_args.into_iter(),
+            fixture_plan: Rc::new(compiler.finish()),
             fixture_dependencies: Rc::from(fixture_dependencies),
             use_fixture_dependencies: Rc::from(use_fixture_dependencies),
             auto_use_fixtures: Rc::from(auto_use_fixtures),
+            param_args,
         })
+    }
+}
+
+impl<'a> TestVariantIterator<'a> {
+    /// Consumes one compiled plan into concrete test variants.
+    pub(super) fn new(test: &'a DiscoveredTestFunction, plan: CompiledTestPlan) -> Self {
+        Self {
+            test,
+            param_args: plan.param_args.into_iter(),
+            fixture_plan: plan.fixture_plan,
+            fixture_dependencies: plan.fixture_dependencies,
+            use_fixture_dependencies: plan.use_fixture_dependencies,
+            auto_use_fixtures: plan.auto_use_fixtures,
+        }
     }
 }
 
@@ -145,6 +156,7 @@ impl<'a> Iterator for TestVariantIterator<'a> {
             test: self.test,
             id: param_args.id().map(str::to_string),
             params: param_args.values,
+            fixture_plan: Rc::clone(&self.fixture_plan),
             fixture_dependencies: Rc::clone(&self.fixture_dependencies),
             use_fixture_dependencies: Rc::clone(&self.use_fixture_dependencies),
             auto_use_fixtures: Rc::clone(&self.auto_use_fixtures),

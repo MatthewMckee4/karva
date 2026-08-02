@@ -9,11 +9,11 @@ use ruff_source_file::SourceFile;
 
 use crate::discovery::{DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::{
-    DiscoveredFixture, FixtureScope, HasFixtures, NormalizedFixture, RejectedFixture,
-    RequiresFixtures, get_auto_use_fixtures,
+    DiscoveredFixture, FixtureId, FixturePlan, FixtureScope, HasFixtures, NormalizedFixture,
+    RejectedFixture, RequiresFixtures, get_auto_use_fixtures,
 };
 
-/// Resolves fixtures at runtime during test execution.
+/// Compiles fixture lookup results into an arena for one request context.
 ///
 /// Unlike pre-normalization, this resolver finds and normalizes fixtures
 /// on-demand when tests need them. `current` is typed as a trait object so
@@ -21,13 +21,16 @@ use crate::extensions::fixtures::{
 /// resolution), a package (package-autouse resolution), or the session package
 /// itself (session-autouse resolution). Package providers expose both user and
 /// framework fixtures through their `HasFixtures` implementation.
-pub(super) struct RuntimeFixtureResolver<'a> {
+pub(super) struct FixturePlanCompiler<'a> {
     /// Package chain searched from session root toward the current module.
     parents: &'a [&'a DiscoveredPackage],
     /// Fixture provider at the active package, module, or session scope.
     current: &'a (dyn HasFixtures<'a> + 'a),
-    /// Normalized non-function fixtures reused within this resolution pass.
-    fixture_cache: HashMap<String, Rc<NormalizedFixture>>,
+    /// Definition IDs reused within this compilation pass.
+    fixture_ids: HashMap<String, FixtureId>,
+
+    /// Arena under construction.
+    fixtures: Vec<NormalizedFixture>,
 }
 
 /// Source-backed fixture metadata retained for resolution diagnostics.
@@ -154,7 +157,7 @@ impl<'a> FixturePath<'a> {
     }
 }
 
-impl<'a> RuntimeFixtureResolver<'a> {
+impl<'a> FixturePlanCompiler<'a> {
     /// Creates a resolver for one current fixture provider and package chain.
     pub(super) fn new(
         parents: &'a [&'a DiscoveredPackage],
@@ -163,28 +166,30 @@ impl<'a> RuntimeFixtureResolver<'a> {
         Self {
             parents,
             current,
-            fixture_cache: HashMap::new(),
+            fixture_ids: HashMap::new(),
+            fixtures: Vec::new(),
         }
+    }
+
+    /// Finishes the immutable arena after all requested root groups are compiled.
+    pub(super) fn finish(self) -> FixturePlan {
+        FixturePlan::new(self.fixtures)
     }
 
     /// Normalizes a fixture and its dependencies recursively.
     ///
-    /// Function-scoped fixtures are NOT cached because their built-in dependencies
-    /// (e.g. `tmp_path`) must be fresh for each test invocation. Broader-scoped
-    /// fixtures are cached so they are shared across tests within the appropriate
-    /// scope.
+    /// A definition is stored once per request context. Runtime scope caches still
+    /// decide when its Python value is reused.
     fn normalize_fixture(
         &mut self,
         py: Python,
         fixture: &'a DiscoveredFixture,
         path: &mut FixturePath<'a>,
-    ) -> FixtureResolutionResult<Rc<NormalizedFixture>> {
+    ) -> FixtureResolutionResult<FixtureId> {
         let cache_key = fixture.name().to_string();
 
-        if fixture.scope() != FixtureScope::Function {
-            if let Some(cached) = self.fixture_cache.get(&cache_key) {
-                return Ok(Rc::clone(cached));
-            }
+        if let Some(cached) = self.fixture_ids.get(&cache_key) {
+            return Ok(*cached);
         }
 
         let dependent_fixtures = path.enter(fixture, |path| {
@@ -192,21 +197,21 @@ impl<'a> RuntimeFixtureResolver<'a> {
             self.get_dependent_fixtures(py, Some(fixture), &required_fixtures, path)
         })?;
 
-        let result = Rc::new(NormalizedFixture {
+        let result = NormalizedFixture {
             name: fixture.name().clone(),
             dependencies: dependent_fixtures,
             scope: fixture.scope(),
             is_generator: fixture.is_generator(),
-            py_function: Rc::new(fixture.function().clone_ref(py)),
+            py_function: fixture.function().clone_ref(py),
             stmt_function_def: Rc::clone(fixture.stmt_function_def()),
             source_file: fixture.source_file().clone(),
-        });
+        };
 
-        if fixture.scope() != FixtureScope::Function {
-            self.fixture_cache.insert(cache_key, Rc::clone(&result));
-        }
+        let fixture_id = FixtureId::new(self.fixtures.len());
+        self.fixtures.push(result);
+        self.fixture_ids.insert(cache_key, fixture_id);
 
-        Ok(result)
+        Ok(fixture_id)
     }
 
     /// Returns normalized auto-use fixtures for a given scope.
@@ -214,7 +219,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         &mut self,
         py: Python,
         scope: FixtureScope,
-    ) -> FixtureResolutionResult<Vec<Rc<NormalizedFixture>>> {
+    ) -> FixtureResolutionResult<Vec<FixtureId>> {
         let auto_use_fixtures = get_auto_use_fixtures(self.parents, self.current, scope);
         let mut path = FixturePath::default();
 
@@ -230,7 +235,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         py: Python,
         test: &DiscoveredTestFunction,
         parametrize_param_names: &HashSet<&str>,
-    ) -> FixtureResolutionResult<Vec<Rc<NormalizedFixture>>> {
+    ) -> FixtureResolutionResult<Vec<FixtureId>> {
         let fixture_names = test.statement().required_fixtures(py);
         let regular_fixture_names: Vec<String> = fixture_names
             .iter()
@@ -268,7 +273,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         &mut self,
         py: Python,
         fixture_names: &[String],
-    ) -> FixtureResolutionResult<Vec<Rc<NormalizedFixture>>> {
+    ) -> FixtureResolutionResult<Vec<FixtureId>> {
         let mut path = FixturePath::default();
         self.get_dependent_fixtures(py, None, fixture_names, &mut path)
     }
@@ -280,7 +285,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         current_fixture: Option<&'a DiscoveredFixture>,
         fixture_names: &[String],
         path: &mut FixturePath<'a>,
-    ) -> FixtureResolutionResult<Vec<Rc<NormalizedFixture>>> {
+    ) -> FixtureResolutionResult<Vec<FixtureId>> {
         let mut normalized_fixtures = Vec::with_capacity(fixture_names.len());
         let mut missing_fixtures = Vec::new();
         let mut rejected_fixtures = Vec::new();

@@ -1,27 +1,50 @@
-use std::rc::Rc;
-
 use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
 
 use crate::extensions::fixtures::FixtureScope;
-use crate::extensions::tags::Tags;
 use crate::runner::FixtureArguments;
 use crate::utils::run_coroutine;
+
+/// Stable index into one compiled [`FixturePlan`].
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct FixtureId(usize);
+
+impl FixtureId {
+    pub(crate) fn new(index: usize) -> Self {
+        Self(index)
+    }
+}
+
+/// Arena containing every fixture definition needed by one resolution context.
+#[derive(Debug)]
+pub struct FixturePlan {
+    fixtures: Vec<NormalizedFixture>,
+}
+
+impl FixturePlan {
+    pub(crate) fn new(fixtures: Vec<NormalizedFixture>) -> Self {
+        Self { fixtures }
+    }
+
+    pub(crate) fn fixture(&self, id: FixtureId) -> &NormalizedFixture {
+        &self.fixtures[id.0]
+    }
+}
 
 /// A normalized fixture represents a concrete instance of a fixture ready for execution.
 ///
 /// All fixtures — both user-defined and framework-provided — share this single
 /// representation. Framework fixtures (from `karva._builtins`) are discovered
 /// and normalized the same way as user-defined ones.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct NormalizedFixture {
     /// Fully qualified name including module path and function name.
     pub(crate) name: QualifiedFunctionName,
 
     /// Resolved fixture dependencies this fixture requires.
-    pub(crate) dependencies: Vec<Rc<Self>>,
+    pub(crate) dependencies: Vec<FixtureId>,
 
     /// The scope at which this fixture's value is cached.
     pub(crate) scope: FixtureScope,
@@ -30,10 +53,7 @@ pub struct NormalizedFixture {
     pub(crate) is_generator: bool,
 
     /// Reference to the Python callable that produces the fixture value.
-    /// Wrapped in ``Rc`` so ``NormalizedFixture`` stays cheaply ``Clone``
-    /// without needing a Python token (``Py<T>`` only supports
-    /// ``clone_ref(py)``).
-    pub(crate) py_function: Rc<Py<PyAny>>,
+    pub(crate) py_function: Py<PyAny>,
 
     /// AST representation of the fixture function definition.
     pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
@@ -49,24 +69,13 @@ impl NormalizedFixture {
     }
 
     /// Returns the fixture dependencies.
-    pub(crate) fn dependencies(&self) -> &Vec<Rc<Self>> {
+    pub(crate) fn dependencies(&self) -> &[FixtureId] {
         &self.dependencies
     }
 
     /// Returns the fixture scope.
     pub(crate) fn scope(&self) -> FixtureScope {
         self.scope
-    }
-
-    /// Combines tags inherited through the fixture dependency graph.
-    pub(crate) fn resolved_tags(&self) -> Tags {
-        let mut tags = Tags::default();
-
-        for dependency in self.dependencies() {
-            tags.extend(&dependency.resolved_tags());
-        }
-
-        tags
     }
 
     /// Call this fixture with the already-resolved arguments and return the result.
@@ -89,3 +98,4 @@ impl NormalizedFixture {
         }
     }
 }
+use std::rc::Rc;

@@ -16,7 +16,7 @@ mod traits;
 mod utils;
 
 pub use finalizer::Finalizer;
-pub use normalized_fixture::NormalizedFixture;
+pub use normalized_fixture::{FixtureId, FixturePlan, NormalizedFixture};
 pub use scope::FixtureScope;
 pub use traits::{HasFixtures, RequiresFixtures};
 pub use utils::missing_arguments_from_error;
