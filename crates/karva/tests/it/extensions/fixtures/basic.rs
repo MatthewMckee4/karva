@@ -106,6 +106,69 @@ def test_fixture_with_name_parameter(fixture_name):
 }
 
 #[test]
+fn test_parent_package_fixture_lives_through_descendant_packages() {
+    let context = TestContext::with_files([
+        (
+            "parent/conftest.py",
+            r#"
+from pathlib import Path
+
+import karva
+
+LOG = Path("lifecycle.log")
+LOG.write_text("")
+
+@karva.fixture(scope="package")
+def parent_fixture():
+    with LOG.open("a") as stream:
+        stream.write("setup\n")
+    yield "parent"
+    with LOG.open("a") as stream:
+        stream.write("teardown\n")
+"#,
+        ),
+        (
+            "parent/first/test_first.py",
+            r#"
+from pathlib import Path
+
+def test_first(parent_fixture):
+    assert parent_fixture == "parent"
+    assert Path("lifecycle.log").read_text() == "setup\n"
+"#,
+        ),
+        (
+            "parent/second/test_second.py",
+            r#"
+from pathlib import Path
+
+def test_second(parent_fixture):
+    assert parent_fixture == "parent"
+    assert Path("lifecycle.log").read_text() == "setup\n"
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] parent.first.test_first::test_first(parent_fixture='parent')
+            PASS [TIME] parent.second.test_second::test_second(parent_fixture='parent')
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert_eq!(
+        std::fs::read_to_string(context.root().join("lifecycle.log"))
+            .expect("read fixture lifecycle log"),
+        "setup\nteardown\n"
+    );
+}
+
+#[test]
 fn test_fixture_is_different_in_different_functions() {
     let context = TestContext::with_file(
         "test.py",

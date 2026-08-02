@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use camino::Utf8Path;
 use karva_diagnostic::{FixtureFailure, FixtureUsage};
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
@@ -17,6 +18,7 @@ use crate::extensions::fixtures::{
 };
 use crate::runner::FixtureArguments;
 use crate::runner::fixture_resolver::FixturePlanCompiler;
+use crate::runner::scoped_storage::ScopeKey;
 use crate::utils::run_coroutine;
 
 use super::PackageRunner;
@@ -33,14 +35,16 @@ impl PackageRunner<'_, '_> {
         py: Python<'_>,
         parents: &'a [&'a crate::discovery::DiscoveredPackage],
         current: &'a (dyn HasFixtures<'a> + 'a),
+        current_package: &'a Utf8Path,
         scope: FixtureScope,
     ) -> Result<(), TestError> {
-        let mut compiler = FixturePlanCompiler::new(parents, current);
+        let scope_key = scope_key(scope, current_package);
+        let mut compiler = FixturePlanCompiler::new(parents, current, current_package);
         let auto_use_fixtures = match compiler.get_normalized_auto_use_fixtures(py, scope) {
             Ok(fixtures) => fixtures,
             Err(error) => {
                 return Err(TestError::new(fixture_resolution_diagnostic(error))
-                    .with_related(self.clean_up_scope(py, scope)));
+                    .with_related(self.clean_up_scope(py, scope_key)));
             }
         };
         let fixture_plan = compiler.finish();
@@ -53,7 +57,7 @@ impl PackageRunner<'_, '_> {
 
         Err(failures
             .into_test_error(py, self.context.is_verbose())
-            .with_related(self.clean_up_scope(py, scope)))
+            .with_related(self.clean_up_scope(py, scope_key)))
     }
 
     /// Runs function-scoped finalizers and clears their cached fixture values.
@@ -67,19 +71,19 @@ impl PackageRunner<'_, '_> {
             .rev()
             .filter_map(|finalizer| finalizer.run(py).err())
             .collect::<Vec<_>>();
-        diagnostics.extend(self.clean_up_scope(py, FixtureScope::Function));
+        diagnostics.extend(self.clean_up_scope(py, ScopeKey::Function));
         diagnostics
     }
 
     /// Clears cached fixture values and runs finalizers for one completed scope.
-    pub(super) fn clean_up_scope(&self, py: Python<'_>, scope: FixtureScope) -> Vec<Diagnostic> {
+    pub(super) fn clean_up_scope(&self, py: Python<'_>, scope: ScopeKey<'_>) -> Vec<Diagnostic> {
         let diagnostics = self.finalizer_cache.run_and_clear_scope(py, scope);
         self.fixture_cache.clear_scope(scope);
         diagnostics
     }
 
     /// Cleans one scope and promotes teardown failures to run diagnostics.
-    pub(super) fn report_scope_cleanup(&self, py: Python<'_>, scope: FixtureScope) {
+    pub(super) fn report_scope_cleanup(&self, py: Python<'_>, scope: ScopeKey<'_>) {
         for diagnostic in self.clean_up_scope(py, scope) {
             self.context.add_run_diagnostic(diagnostic);
         }
@@ -156,10 +160,8 @@ impl PackageRunner<'_, '_> {
         fixture_id: FixtureId,
     ) -> Result<(Py<PyAny>, Option<Finalizer>), FixtureCallError> {
         let fixture = fixture_plan.fixture(fixture_id);
-        if let Some(cached) = self
-            .fixture_cache
-            .get(py, fixture.function_name(), fixture.scope())
-        {
+        let scope = scope_key(fixture.scope(), fixture.package_owner());
+        if let Some(cached) = self.fixture_cache.get(py, fixture.function_name(), scope) {
             return Ok((cached, None));
         }
 
@@ -191,7 +193,7 @@ impl PackageRunner<'_, '_> {
         self.fixture_cache.insert(
             fixture.function_name().to_string(),
             value.clone_ref(py),
-            fixture.scope(),
+            scope,
         );
 
         let function_finalizer = finalizer.and_then(|finalizer| {
@@ -228,6 +230,15 @@ impl PackageRunner<'_, '_> {
             }
         }
         errors
+    }
+}
+
+fn scope_key(scope: FixtureScope, package_owner: &Utf8Path) -> ScopeKey<'_> {
+    match scope {
+        FixtureScope::Session => ScopeKey::Session,
+        FixtureScope::Package => ScopeKey::Package(package_owner),
+        FixtureScope::Module => ScopeKey::Module,
+        FixtureScope::Function => ScopeKey::Function,
     }
 }
 
@@ -391,6 +402,7 @@ fn get_value_and_finalizer(
             fixture_return: fixture_call_result,
             is_async: true,
             scope: fixture.scope(),
+            package_owner: fixture.package_owner().to_path_buf(),
             stmt_function_def: Rc::clone(&fixture.stmt_function_def),
             source_file: fixture.source_file.clone(),
         };
@@ -412,6 +424,7 @@ fn get_value_and_finalizer(
                     fixture_return: bound_iterator.clone().unbind().into_any(),
                     is_async: false,
                     scope: fixture.scope(),
+                    package_owner: fixture.package_owner().to_path_buf(),
                     stmt_function_def: Rc::clone(&fixture.stmt_function_def),
                     source_file: fixture.source_file.clone(),
                 };
