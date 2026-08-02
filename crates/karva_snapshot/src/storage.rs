@@ -393,7 +393,10 @@ pub struct UnreferencedSnapshot {
 /// Handles formats like `test.py:5::test_name` and `test.py::test_name`.
 pub fn parse_source(source: &str) -> Option<(&str, &str)> {
     let (file, name) = source.split_once("::")?;
-    let file = file.rsplit_once(':').map_or(file, |(f, _)| f);
+    let file = file
+        .rsplit_once(':')
+        .filter(|(_, line)| !line.is_empty() && line.bytes().all(|byte| byte.is_ascii_digit()))
+        .map_or(file, |(file, _)| file);
     if file.is_empty() || name.is_empty() {
         return None;
     }
@@ -816,6 +819,17 @@ mod tests {
         let (file, name) = parse_source("test.py::test_foo").expect("parse");
         insta::assert_snapshot!(file, @"test.py");
         insta::assert_snapshot!(name, @"test_foo");
+    }
+
+    #[test]
+    fn parse_source_preserves_colons_in_file_name() {
+        let (without_line, _) = parse_source("C:/tests/test.py::test_foo").expect("parse");
+        let (with_line, _) = parse_source("C:/tests/test.py:5::test_foo").expect("parse");
+        let (non_numeric, _) = parse_source("test.py:label::test_foo").expect("parse");
+
+        assert_eq!(without_line, "C:/tests/test.py");
+        assert_eq!(with_line, "C:/tests/test.py");
+        assert_eq!(non_numeric, "test.py:label");
     }
 
     #[test]
