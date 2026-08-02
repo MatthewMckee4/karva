@@ -604,6 +604,20 @@ pub struct CoverageOptions {
     )]
     pub data_file: Option<String>,
 
+    /// Ordered `FROM=TO` path mappings applied when native artifacts are read.
+    ///
+    /// Use aliases to relocate absolute sources collected outside the project
+    /// or artifacts produced under a different CI checkout layout.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"null"#,
+        value_type = r#"list[str]"#,
+        example = r#"
+            path-aliases = ["/workspace=.", "C:/repo=."]
+        "#
+    )]
+    pub path_aliases: Option<Vec<String>>,
+
     /// Source paths to measure coverage for.
     ///
     /// Equivalent to passing `--cov=<path>` on the command line; may be
@@ -754,6 +768,9 @@ impl Combine for CoverageOptions {
         let report_overridden = self.report.is_some();
 
         self.data_file = self.data_file.take().combine(other.data_file);
+        if self.path_aliases.is_none() {
+            self.path_aliases = other.path_aliases;
+        }
         self.sources = self.sources.take().combine(other.sources);
         self.include = self.include.take().combine(other.include);
         self.omit = self.omit.take().combine(other.omit);
@@ -785,6 +802,7 @@ impl CoverageOptions {
                 .data_file
                 .clone()
                 .unwrap_or_else(|| DEFAULT_COVERAGE_DATA_FILE.to_owned()),
+            path_aliases: self.path_aliases.clone().unwrap_or_default(),
             sources,
             include: self.include.clone().unwrap_or_default(),
             omit: self.omit.clone().unwrap_or_default(),
@@ -1418,6 +1436,7 @@ retry = 5
         let toml = r#"
 [profile.default.coverage]
 data-file = "build/coverage-data.json"
+path-aliases = ["/workspace=."]
 sources = ["src", "tests"]
 include = ["src/**"]
 omit = ["**/generated.py"]
@@ -1435,6 +1454,11 @@ report-path = "build/coverage.xml"
             CoverageOptions {
                 data_file: Some(
                     "build/coverage-data.json",
+                ),
+                path_aliases: Some(
+                    [
+                        "/workspace=.",
+                    ],
                 ),
                 sources: Some(
                     [
@@ -1539,6 +1563,7 @@ store-failure-output = false
         assert_debug_snapshot!(cli.combine(file), @r#"
         CoverageOptions {
             data_file: None,
+            path_aliases: None,
             sources: Some(
                 [
                     "src",
@@ -1577,6 +1602,7 @@ store-failure-output = false
         assert_debug_snapshot!(cli.combine(file), @r#"
         CoverageOptions {
             data_file: None,
+            path_aliases: None,
             sources: None,
             include: Some(
                 [
@@ -1651,6 +1677,7 @@ store-failure-output = false
         assert_debug_snapshot!(cli.combine(file), @"
         CoverageOptions {
             data_file: None,
+            path_aliases: None,
             sources: None,
             include: None,
             omit: None,
@@ -1717,7 +1744,7 @@ nonsense = 1
           |
         4 | nonsense = 1
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `data-file`, `sources`, `include`, `omit`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
+        unknown field `nonsense`, expected one of `data-file`, `path-aliases`, `sources`, `include`, `omit`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
         "
         );
     }

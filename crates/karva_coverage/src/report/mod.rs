@@ -25,6 +25,14 @@ pub struct CoverageFilters {
     include: Option<GlobSet>,
     omit: Option<GlobSet>,
     contexts: Option<RegexSet>,
+    path_aliases: Vec<PathAlias>,
+}
+
+#[derive(Debug)]
+struct PathAlias {
+    from: String,
+    to: String,
+    case_insensitive: bool,
 }
 
 impl CoverageFilters {
@@ -34,12 +42,19 @@ impl CoverageFilters {
             include: compile_globs("include", include)?,
             omit: compile_globs("omit", omit)?,
             contexts: None,
+            path_aliases: Vec::new(),
         })
     }
 
     /// Adds context patterns used to select executed lines and branches.
     pub fn with_contexts(mut self, contexts: &[String]) -> Result<Self> {
         self.contexts = compile_contexts(contexts)?;
+        Ok(self)
+    }
+
+    /// Adds ordered `FROM=TO` mappings for paths stored in native artifacts.
+    pub fn with_path_aliases(mut self, aliases: &[String]) -> Result<Self> {
+        self.path_aliases = compile_path_aliases(aliases)?;
         Ok(self)
     }
 
@@ -59,6 +74,118 @@ impl CoverageFilters {
             .as_ref()
             .is_none_or(|contexts| contexts.is_match(context))
     }
+
+    fn map_path(&self, path: &str) -> String {
+        let normalized = normalize_path(path);
+        for alias in &self.path_aliases {
+            if let Some(suffix) = strip_alias_prefix(&normalized, alias) {
+                let mapped = if suffix.is_empty() {
+                    alias.to.clone()
+                } else if alias.to == "." {
+                    suffix.to_owned()
+                } else {
+                    format!("{}/{suffix}", alias.to.trim_end_matches('/'))
+                };
+                return normalize_path(&mapped);
+            }
+        }
+        normalized
+    }
+}
+
+fn compile_path_aliases(aliases: &[String]) -> Result<Vec<PathAlias>> {
+    let mut compiled: Vec<PathAlias> = Vec::new();
+    for raw in aliases {
+        let (from, to) = raw.split_once('=').ok_or_else(|| {
+            anyhow::anyhow!("invalid coverage path alias `{raw}`: expected `FROM=TO`")
+        })?;
+        if from.is_empty() || to.is_empty() {
+            anyhow::bail!("invalid coverage path alias `{raw}`: both FROM and TO are required");
+        }
+        let from = normalize_path(from);
+        let to = normalize_path(to);
+        let case_insensitive = is_windows_absolute(&from) || from.starts_with("//");
+        if let Some(previous) = compiled.iter().find(|alias| {
+            alias.case_insensitive == case_insensitive
+                && if case_insensitive {
+                    alias.from.eq_ignore_ascii_case(&from)
+                } else {
+                    alias.from == from
+                }
+        }) {
+            if previous.to != to {
+                anyhow::bail!(
+                    "ambiguous coverage path aliases for `{from}`: `{}` and `{to}`",
+                    previous.to
+                );
+            }
+            continue;
+        }
+        compiled.push(PathAlias {
+            from,
+            to,
+            case_insensitive,
+        });
+    }
+    Ok(compiled)
+}
+
+fn strip_alias_prefix<'a>(path: &'a str, alias: &PathAlias) -> Option<&'a str> {
+    if alias.from == "." && !path.starts_with('/') && !is_windows_absolute(path) {
+        return Some(path.trim_start_matches("./"));
+    }
+    let matches = if alias.case_insensitive {
+        path.get(..alias.from.len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(&alias.from))
+    } else {
+        path.starts_with(&alias.from)
+    };
+    if !matches {
+        return None;
+    }
+    let suffix = &path[alias.from.len()..];
+    (suffix.is_empty() || suffix.starts_with('/')).then(|| suffix.trim_start_matches('/'))
+}
+
+fn normalize_path(raw: &str) -> String {
+    let raw = raw.replace('\\', "/");
+    let unc = raw.starts_with("//");
+    let unix_absolute = raw.starts_with('/');
+    let drive = is_windows_absolute(&raw).then(|| &raw[..2]);
+    let mut components: Vec<&str> = Vec::new();
+    for component in raw.split('/').skip(usize::from(drive.is_some())) {
+        match component {
+            "" | "." => {}
+            ".." if components.last().is_some_and(|part| *part != "..") => {
+                components.pop();
+            }
+            ".." if !unix_absolute && drive.is_none() => components.push(component),
+            ".." => {}
+            _ => components.push(component),
+        }
+    }
+    let body = components.join("/");
+    if let Some(drive) = drive {
+        if body.is_empty() {
+            format!("{drive}/")
+        } else {
+            format!("{drive}/{body}")
+        }
+    } else if unc {
+        format!("//{body}")
+    } else if unix_absolute {
+        format!("/{body}")
+    } else if body.is_empty() {
+        ".".to_owned()
+    } else {
+        body
+    }
+}
+
+fn is_windows_absolute(path: &str) -> bool {
+    path.as_bytes().get(1) == Some(&b':')
+        && path.as_bytes().get(2) == Some(&b'/')
+        && path.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
 }
 
 fn compile_contexts(patterns: &[String]) -> Result<Option<RegexSet>> {
@@ -167,7 +294,7 @@ mod tests {
     use camino::{Utf8Path, Utf8PathBuf};
     use fs_err as fs;
 
-    use super::{CoverageAnalysis, CoverageFilters};
+    use super::{CoverageAnalysis, CoverageFilters, normalize_path};
     use crate::data::BranchArc;
     use crate::native::{
         CoverageMode, NativeBranchCoverage, NativeCoverage, NativeFileCoverage, SourceFingerprint,
@@ -193,7 +320,6 @@ mod tests {
         });
         let artifact = NativeCoverage::new(
             mode,
-            project_root.clone(),
             BTreeSet::from([Utf8PathBuf::from("src")]),
             None,
             BTreeMap::from([(
@@ -234,6 +360,70 @@ mod tests {
                 .contains("invalid coverage include glob `[`"),
             "{err:?}"
         );
+    }
+
+    #[test]
+    fn path_aliases_combine_windows_and_unix_artifacts() {
+        let directory = tempfile::tempdir().expect("create temp directory");
+        let project_root =
+            Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).expect("UTF-8 temp path");
+        fs::create_dir_all(project_root.join("src")).expect("create source directory");
+        fs::write(project_root.join("src/app.py"), SOURCE).expect("write source");
+        let unix = write_artifact(
+            &directory,
+            "unix.json",
+            CoverageMode::Line,
+            BTreeSet::from([1]),
+            BTreeMap::new(),
+        );
+        let mut windows = NativeCoverage::read(&unix).expect("read unix artifact");
+        windows.source_roots = BTreeSet::from([Utf8PathBuf::from(r"C:\repo\src")]);
+        let file = windows
+            .files
+            .remove(Utf8Path::new("src/app.py"))
+            .expect("source coverage");
+        windows
+            .files
+            .insert(Utf8PathBuf::from(r"C:\repo\src\app.py"), file);
+        let windows_path = project_root.join("windows.json");
+        windows
+            .write(&windows_path)
+            .expect("write windows artifact");
+        let filters = CoverageFilters::new(&["src/**".to_owned()], &[])
+            .expect("filters")
+            .with_path_aliases(&[r"C:\repo=.".to_owned()])
+            .expect("path alias");
+
+        let analysis =
+            CoverageAnalysis::load_native(&project_root, &[unix, windows_path], &filters)
+                .expect("load artifacts")
+                .expect("coverage analysis");
+
+        assert_eq!(analysis.file_count(), 1);
+    }
+
+    #[test]
+    fn path_aliases_reject_ambiguous_sources() {
+        let error = CoverageFilters::new(&[], &[])
+            .expect("filters")
+            .with_path_aliases(&["/workspace=src".to_owned(), "/workspace=vendor".to_owned()])
+            .expect_err("reject ambiguity");
+
+        assert!(
+            error
+                .to_string()
+                .contains("ambiguous coverage path aliases")
+        );
+    }
+
+    #[test]
+    fn paths_normalize_platform_separators_and_components() {
+        assert_eq!(normalize_path(r"C:\repo\src\..\app.py"), "C:/repo/app.py");
+        assert_eq!(
+            normalize_path(r"\\server\share\src\app.py"),
+            "//server/share/src/app.py"
+        );
+        assert_eq!(normalize_path("src/./package/../app.py"), "src/app.py");
     }
 
     #[test]

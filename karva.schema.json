@@ -133,6 +133,16 @@
             "type": "string"
           }
         },
+        "path-aliases": {
+          "description": "Ordered `FROM=TO` path mappings applied when native artifacts are read.\n\nUse aliases to relocate absolute sources collected outside the project\nor artifacts produced under a different CI checkout layout.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "precision": {
           "description": "Decimal places shown in coverage percentages.",
           "anyOf": [

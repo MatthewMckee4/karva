@@ -40,7 +40,8 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
     }
 
     let filters = karva_coverage::CoverageFilters::new(&settings.include, &settings.omit)?
-        .with_contexts(&settings.contexts)?;
+        .with_contexts(&settings.contexts)?
+        .with_path_aliases(&settings.path_aliases)?;
     let analysis = karva_coverage::CoverageAnalysis::load_native(
         project.cwd(),
         std::slice::from_ref(&data_file),

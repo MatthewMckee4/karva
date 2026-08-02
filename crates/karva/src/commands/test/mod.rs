@@ -130,7 +130,8 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         let coverage = project.settings().coverage();
         let coverage_filters =
             karva_coverage::CoverageFilters::new(&coverage.include, &coverage.omit)?
-                .with_contexts(&coverage.contexts)?;
+                .with_contexts(&coverage.contexts)?
+                .with_path_aliases(&coverage.path_aliases)?;
         if coverage.report_path.is_some()
             && matches!(coverage.report, CovReport::Term | CovReport::TermMissing)
         {

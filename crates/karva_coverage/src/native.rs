@@ -19,7 +19,7 @@ use tempfile::NamedTempFile;
 use crate::data::{BranchArc, WorkerFile};
 
 /// Current native coverage schema version.
-pub const FORMAT_VERSION: u32 = 1;
+pub const FORMAT_VERSION: u32 = 2;
 
 /// Karva coverage data retained after one or more test runs.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -30,14 +30,15 @@ pub struct NativeCoverage {
     pub karva_version: String,
     /// Whether collection measured statements alone or statements and branches.
     pub mode: CoverageMode,
-    /// Normalized absolute project root used during collection.
-    pub project_root: Utf8PathBuf,
-    /// Normalized source roots measured during collection.
+    /// Portable project-relative source roots, or absolute roots outside the project.
     pub source_roots: BTreeSet<Utf8PathBuf>,
     /// User-provided context attached to the whole run.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_context: Option<String>,
-    /// Coverage keyed by normalized project-relative source path.
+    /// Coverage keyed by `/`-separated project-relative paths.
+    ///
+    /// Sources outside the project retain normalized absolute paths and require
+    /// a report-time path alias when consumed from another machine.
     pub files: BTreeMap<Utf8PathBuf, NativeFileCoverage>,
 }
 
@@ -45,7 +46,6 @@ impl NativeCoverage {
     /// Creates an artifact for the current schema and Karva version.
     pub fn new(
         mode: CoverageMode,
-        project_root: Utf8PathBuf,
         source_roots: BTreeSet<Utf8PathBuf>,
         run_context: Option<String>,
         files: BTreeMap<Utf8PathBuf, NativeFileCoverage>,
@@ -54,7 +54,6 @@ impl NativeCoverage {
             format_version: FORMAT_VERSION,
             karva_version: env!("CARGO_PKG_VERSION").to_owned(),
             mode,
-            project_root,
             source_roots,
             run_context,
             files,
@@ -106,9 +105,9 @@ impl NativeCoverage {
     }
 
     /// Fails when any source differs from the bytes measured during collection.
-    pub fn verify_sources(&self) -> Result<()> {
+    pub fn verify_sources(&self, project_root: &Utf8Path) -> Result<()> {
         for (source_path, coverage) in &self.files {
-            let path = self.project_root.join(source_path);
+            let path = project_root.join(source_path);
             let source = fs::read(&path)
                 .with_context(|| format!("failed to verify coverage source `{path}`"))?;
             if !coverage.source_fingerprint.matches(&source) {
@@ -155,8 +154,7 @@ impl NativeCoverage {
 
         Ok(Self::new(
             mode,
-            canonical_root,
-            source_roots.iter().map(Utf8PathBuf::from).collect(),
+            normalize_source_roots(&canonical_root, source_roots)?,
             None,
             native_files,
         ))
@@ -169,13 +167,6 @@ impl NativeCoverage {
                 "cannot append coverage collected in {:?} mode to coverage collected in {:?} mode",
                 other.mode,
                 self.mode
-            );
-        }
-        if self.project_root != other.project_root {
-            bail!(
-                "cannot append coverage from project root `{}` to coverage from `{}`",
-                other.project_root,
-                self.project_root
             );
         }
         if self.source_roots != other.source_roots {
@@ -213,10 +204,11 @@ fn merge_worker_file(
             path.display()
         )
     })?;
-    let stored_path = source_path
-        .strip_prefix(project_root)
-        .unwrap_or(&source_path)
-        .to_path_buf();
+    let stored_path = portable_path(
+        source_path
+            .strip_prefix(project_root)
+            .unwrap_or(&source_path),
+    );
     let source_bytes = fs::read(&source_path).with_context(|| {
         format!("coverage worker artifact `{worker_path}` references unreadable source `{source}`")
     })?;
@@ -258,6 +250,39 @@ fn merge_worker_file(
         files.insert(stored_path, incoming);
         Ok(())
     }
+}
+
+fn normalize_source_roots(
+    project_root: &Utf8Path,
+    source_roots: &[String],
+) -> Result<BTreeSet<Utf8PathBuf>> {
+    source_roots
+        .iter()
+        .map(|source| {
+            let source = if source.is_empty() { "." } else { source };
+            let path = Utf8Path::new(source);
+            let path = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                project_root.join(path)
+            };
+            let path = dunce::canonicalize(&path)
+                .with_context(|| format!("failed to resolve coverage source root `{source}`"))?;
+            let path = Utf8PathBuf::from_path_buf(path).map_err(|path| {
+                anyhow::anyhow!(
+                    "coverage source root contains non-Unicode characters: `{}`",
+                    path.display()
+                )
+            })?;
+            Ok(portable_path(
+                path.strip_prefix(project_root).unwrap_or(&path),
+            ))
+        })
+        .collect()
+}
+
+fn portable_path(path: &Utf8Path) -> Utf8PathBuf {
+    Utf8PathBuf::from(path.as_str().replace('\\', "/"))
 }
 
 fn merge_native_file(
@@ -391,7 +416,6 @@ mod tests {
     fn artifact() -> NativeCoverage {
         NativeCoverage::new(
             CoverageMode::Branch,
-            Utf8PathBuf::from("/project"),
             BTreeSet::from([Utf8PathBuf::from("src")]),
             Some("linux-py313".to_owned()),
             BTreeMap::from([(
@@ -468,14 +492,14 @@ mod tests {
         let directory = tempfile::tempdir().expect("create temp directory");
         let path = Utf8PathBuf::from_path_buf(directory.path().join("data.json"))
             .expect("UTF-8 temp path");
-        fs::write(&path, br#"{"format_version":2}"#).expect("write artifact");
+        fs::write(&path, br#"{"format_version":3}"#).expect("write artifact");
 
         let error = NativeCoverage::read(&path).expect_err("reject future version");
         let message = error.to_string();
 
         assert!(message.contains(path.as_str()));
-        assert!(message.contains("found format version 2"));
-        assert!(message.contains("supported version is 1"));
+        assert!(message.contains("found format version 3"));
+        assert!(message.contains("supported version is 2"));
     }
 
     #[test]
@@ -494,11 +518,10 @@ mod tests {
             Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).expect("UTF-8 temp path");
         fs::create_dir(project_root.join("src")).expect("create source directory");
         fs::write(project_root.join("src/package.py"), "value = 2\n").expect("write source");
-        let mut coverage = artifact();
-        coverage.project_root = project_root;
+        let coverage = artifact();
 
         let error = coverage
-            .verify_sources()
+            .verify_sources(&project_root)
             .expect_err("reject changed source");
 
         assert!(

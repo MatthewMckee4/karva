@@ -13,7 +13,6 @@ fn write_coverage(context: &TestContext, path: &Utf8Path) {
     let root = context.root();
     let artifact = NativeCoverage::new(
         CoverageMode::Line,
-        root.clone(),
         BTreeSet::from([Utf8PathBuf::from("src")]),
         None,
         BTreeMap::from([(
