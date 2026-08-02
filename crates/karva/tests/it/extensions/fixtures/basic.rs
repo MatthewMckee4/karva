@@ -161,11 +161,9 @@ def test_second(parent_fixture):
 
     ----- stderr -----
     ");
-    assert_eq!(
-        std::fs::read_to_string(context.root().join("lifecycle.log"))
-            .expect("read fixture lifecycle log"),
-        "setup\nteardown\n"
-    );
+    let lifecycle = std::fs::read_to_string(context.root().join("lifecycle.log"))
+        .expect("read fixture lifecycle log");
+    assert_eq!(lifecycle.lines().collect::<Vec<_>>(), ["setup", "teardown"]);
 }
 
 #[test]
