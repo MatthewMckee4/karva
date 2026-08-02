@@ -20,28 +20,53 @@ use karva_runner::RunOutput;
 use karva_static::ToolEnvVars;
 use ruff_python_ast::PythonVersion;
 
+/// Fixed worker count used to remove scheduling variance from wall-time samples.
 pub const WORKER_COUNT: usize = 1;
 
 #[derive(Debug, Clone, Copy)]
+/// Reproducible dependency-install strategy for a benchmark checkout.
 pub enum DependencySetup {
+    /// Sync exactly from the repository's uv lockfile.
     LockedUvSync {
+        /// Dependency group containing test requirements.
         group: &'static str,
     },
+
+    /// Resolve dependencies while excluding releases newer than a fixed date.
     DateCappedUvSync {
+        /// uv-compatible date cap preserving benchmark reproducibility.
         exclude_newer: &'static str,
+
+        /// Whether every optional dependency extra is installed.
         all_extras: bool,
+
+        /// Dependency groups installed for test execution.
         groups: &'static [&'static str],
     },
 }
 
 #[derive(Debug, Clone, Copy)]
+/// Pinned external project and settings used as one benchmark workload.
 pub struct BenchmarkProject {
+    /// Stable identifier used in reports and cache paths.
     pub name: &'static str,
+
+    /// Git repository cloned for this workload.
     pub repository: &'static str,
+
+    /// Exact Git revision preventing workload drift.
     pub commit: &'static str,
+
+    /// Test selections executed inside checkout.
     pub paths: &'static [&'static str],
+
+    /// Python grammar and environment version for workload.
     pub python_version: PythonVersion,
+
+    /// Reproducible dependency installation recipe.
     pub dependency_setup: DependencySetup,
+
+    /// Whether Karva must import modules to discover this project's fixtures.
     pub try_import_fixtures: bool,
 }
 
@@ -251,6 +276,7 @@ pub const WERKZEUG_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: true,
 };
 
+/// All pinned third-party workloads included in benchmark comparisons.
 pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
     REQUESTS_PROJECT,
     FASTAPI_PROJECT,
@@ -268,12 +294,14 @@ pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
     WERKZEUG_PROJECT,
 ];
 
+/// Prepares a benchmark checkout using Karva's newest locally built wheel.
 pub fn prepare_benchmark_project(config: &BenchmarkProject) -> Result<Project> {
     let karva_wheel = karva_project::find_karva_wheel()
         .context("Karva wheel must be built before benchmarking")?;
     prepare_benchmark_project_with_wheel(config, &karva_wheel)
 }
 
+/// Prepares a benchmark checkout using an explicit Karva wheel.
 pub fn prepare_benchmark_project_with_wheel(
     config: &BenchmarkProject,
     karva_wheel: &Utf8Path,
@@ -285,6 +313,7 @@ pub fn prepare_benchmark_project_with_wheel(
     Ok(project)
 }
 
+/// Creates or updates a checkout, installs dependencies, and resolves its project.
 pub fn prepare_benchmark_project_environment(config: &BenchmarkProject) -> Result<Project> {
     let project_root = ensure_checkout(config).context("Failed to checkout benchmark project")?;
     install_dependencies(config, &project_root)
@@ -312,6 +341,7 @@ pub fn prepare_benchmark_project_environment(config: &BenchmarkProject) -> Resul
     Ok(Project::from_metadata(metadata))
 }
 
+/// Executes one silent single-worker benchmark iteration and validates success.
 pub fn try_run_project(project: &Project) -> Result<RunOutput> {
     // Single worker keeps wall-time benchmarks deterministic across iterations:
     // no inter-process scheduling jitter, shared-cache contention, or variance
@@ -350,10 +380,12 @@ pub fn try_run_project(project: &Project) -> Result<RunOutput> {
     Ok(output)
 }
 
+/// Removes cached Karva run artifacts that would contaminate benchmark timing.
 pub fn clean_project_cache(project_root: &Utf8Path) -> Result<bool> {
     clean_cache(&project_root.join(CACHE_DIR)).context("Failed to remove Karva benchmark cache")
 }
 
+/// Registers one project workload with Divan.
 pub fn bench_project(bencher: Bencher, config: &'static BenchmarkProject) {
     bencher
         .with_inputs(move || {
@@ -364,6 +396,7 @@ pub fn bench_project(bencher: Bencher, config: &'static BenchmarkProject) {
         });
 }
 
+/// Looks up a pinned workload by report identifier.
 pub fn find_benchmark_project(name: &str) -> Option<&'static BenchmarkProject> {
     BENCHMARK_PROJECTS
         .iter()
@@ -508,6 +541,7 @@ fn install_dependencies(config: &BenchmarkProject, project_root: &Utf8PathBuf) -
     Ok(())
 }
 
+/// Installs benchmarked Karva wheel and pytest into prepared project environment.
 pub fn install_benchmark_tools(
     config: &BenchmarkProject,
     project_root: &Utf8Path,

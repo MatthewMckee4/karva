@@ -1,3 +1,5 @@
+//! Shared Python semantic types independent of Karva's test runner.
+
 use camino::{Utf8Path, Utf8PathBuf};
 
 mod function_kind;
@@ -30,9 +32,9 @@ pub fn is_fixture(expr: &Expr) -> bool {
     }
 }
 
-/// Gets the module name from a path.
+/// Converts a Python file below `cwd` into its dotted import path.
 ///
-/// This can return None if the path is not relative to the current working directory.
+/// Returns `None` when `path` lies outside `cwd`.
 pub fn module_name(cwd: &Utf8PathBuf, path: &Utf8Path) -> Option<String> {
     let relative_path = path.strip_prefix(cwd).ok()?;
 

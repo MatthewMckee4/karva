@@ -78,6 +78,7 @@ pub fn write_pending_snapshot(snap_path: &Utf8Path, snapshot: &SnapshotFile) -> 
 pub struct PendingSnapshotInfo {
     /// Path to the `.snap.new` file.
     pub pending_path: Utf8PathBuf,
+
     /// Path to the corresponding `.snap` file (may not exist yet).
     pub snap_path: Utf8PathBuf,
 }
@@ -217,10 +218,18 @@ pub fn accept_pending(pending_path: &Utf8Path) -> io::Result<()> {
     fs::rename(pending_path, snap_path)
 }
 
+/// Pending inline update normalized for bottom-to-top source rewriting.
 struct InlineInfo<'a> {
+    /// Pending snapshot removed after source rewrite.
     pending_path: &'a Utf8Path,
+
+    /// One-based source line recorded when snapshot was produced.
     line: u32,
+
+    /// Replacement snapshot value.
     content: String,
+
+    /// Owning test used to avoid rewriting a neighboring function.
     function_name: Option<String>,
 }
 
@@ -309,16 +318,30 @@ pub fn reject_pending(pending_path: &Utf8Path) -> io::Result<()> {
 /// Information about a snapshot file found on disk.
 #[derive(Debug, Clone)]
 pub struct SnapshotInfo {
+    /// Path to committed `.snap` file.
     pub snap_path: Utf8PathBuf,
 }
 
 /// Why a snapshot is considered unreferenced.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnreferencedReason {
+    /// Snapshot frontmatter contains no source test.
     NoSource,
+
+    /// Source metadata cannot be split into file and test names.
     InvalidSource(String),
+
+    /// Referenced Python file no longer exists.
     TestFileNotFound(String),
-    FunctionNotFound { file: String, function: String },
+
+    /// Referenced test function no longer exists in its source file.
+    FunctionNotFound {
+        /// Python source file named by snapshot metadata.
+        file: String,
+
+        /// Test function named by snapshot metadata.
+        function: String,
+    },
 }
 
 impl std::fmt::Display for UnreferencedReason {
@@ -337,7 +360,10 @@ impl std::fmt::Display for UnreferencedReason {
 /// A snapshot whose source test no longer exists.
 #[derive(Debug, Clone)]
 pub struct UnreferencedSnapshot {
+    /// Path to committed snapshot.
     pub snap_path: Utf8PathBuf,
+
+    /// Failed source-reference check.
     pub reason: UnreferencedReason,
 }
 
@@ -426,6 +452,7 @@ pub fn find_snapshots(root: &Utf8Path) -> io::Result<Vec<SnapshotInfo>> {
 /// A snapshot file of any kind (`.snap` or `.snap.new`) found on disk.
 #[derive(Debug, Clone)]
 pub struct AnySnapshotInfo {
+    /// Path to committed or pending snapshot file.
     pub path: Utf8PathBuf,
 }
 

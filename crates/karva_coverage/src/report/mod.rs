@@ -21,12 +21,14 @@ pub use terminal::write_json_report;
 use self::shared::combine;
 
 #[derive(Debug, Default)]
+/// Include and omit globs applied to normalized coverage report paths.
 pub struct CoverageFilters {
     include: Option<GlobSet>,
     omit: Option<GlobSet>,
 }
 
 impl CoverageFilters {
+    /// Compiles coverage path filters, reporting invalid glob syntax.
     pub fn new(include: &[String], omit: &[String]) -> Result<Self> {
         Ok(Self {
             include: compile_globs("include", include)?,

@@ -1,3 +1,5 @@
+//! End-to-end orchestration of one `karva test` invocation.
+
 mod junit;
 mod result_report;
 mod watch;

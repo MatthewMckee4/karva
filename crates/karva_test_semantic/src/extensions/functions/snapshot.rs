@@ -21,6 +21,9 @@ pyo3::create_exception!(
     pyo3::exceptions::PyAssertionError
 );
 
+/// Per-test identity used to locate and name snapshot assertions.
+///
+/// Counter advances independently for each test and is reset for every retry.
 #[derive(Clone)]
 pub struct SnapshotContext {
     test_file: String,
@@ -29,6 +32,7 @@ pub struct SnapshotContext {
 }
 
 impl SnapshotContext {
+    /// Starts snapshot numbering at zero for one test variant.
     pub fn new(test_file: String, test_name: String) -> Self {
         Self {
             test_file,
@@ -44,6 +48,7 @@ struct ActiveSettings {
     allow_duplicates: bool,
 }
 
+/// Snapshot context and settings copied into a timeout worker thread.
 #[derive(Clone)]
 pub struct SnapshotThreadState {
     context: SnapshotContext,
@@ -55,6 +60,9 @@ thread_local! {
     static SNAPSHOT_SETTINGS: RefCell<Vec<ActiveSettings>> = const { RefCell::new(Vec::new()) };
 }
 
+/// Python context manager applying nested filters and duplicate-name policy.
+///
+/// Settings use a thread-local stack, so inner contexts augment outer filters.
 #[pyclass]
 pub struct SnapshotSettings {
     filters: Vec<(String, String)>,
@@ -101,6 +109,9 @@ pub fn snapshot_settings(
     SnapshotSettings::new(filters, allow_duplicates)
 }
 
+/// Mutable command builder consumed by [`assert_cmd_snapshot`].
+///
+/// Each assertion executes the configured program once with piped output.
 #[pyclass]
 pub struct Command {
     inner: process::Command,
@@ -274,6 +285,7 @@ pub fn set_snapshot_context(context: SnapshotContext) {
     });
 }
 
+/// Captures thread-local snapshot settings for execution on a timeout worker thread.
 pub fn capture_snapshot_thread_state(context: SnapshotContext) -> SnapshotThreadState {
     SnapshotThreadState {
         context,
@@ -281,6 +293,7 @@ pub fn capture_snapshot_thread_state(context: SnapshotContext) -> SnapshotThread
     }
 }
 
+/// Installs snapshot state previously captured on the test runner thread.
 pub fn set_snapshot_thread_state(state: SnapshotThreadState) {
     set_snapshot_context(state.context);
     SNAPSHOT_SETTINGS.with(|stack| {

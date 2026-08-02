@@ -71,7 +71,7 @@ karva test [OPTIONS] [PATH]...
 <li><code>true</code></li>
 <li><code>false</code></li>
 </ul></dd><dt id="karva-test--fail-slow"><a href="#karva-test--fail-slow"><code>--fail-slow</code></a> <i>seconds</i></dt><dd><p>Duration budget, in seconds, for a test's full lifecycle.</p>
-<p>Unlike <code>--timeout</code>, a test is always allowed to finish — including fixture teardown — before being reported as a failure if the total duration exceeded this budget. A test-level &#91;<code>@karva.tags.fail_slow</code>&#93; decorator overrides the default for that specific test.</p>
+<p>Unlike <code>--timeout</code>, a test is always allowed to finish — including fixture teardown — before being reported as a failure if the total duration exceeded this budget. A test-level <code>@karva.tags.fail_slow</code> decorator overrides the default for that specific test.</p>
 <p>Accepts fractional seconds such as <code>--fail-slow=1</code> or <code>--fail-slow=0.25</code>.</p>
 </dd><dt id="karva-test--filter"><a href="#karva-test--filter"><code>--filter</code></a>, <code>-E</code> <i>filter-expressions</i></dt><dd><p>Filter tests using a filterset expression.</p>
 <p>Predicates: <code>test(&lt;matcher&gt;)</code> matches the fully qualified test name; <code>tag(&lt;matcher&gt;)</code> matches any custom tag on the test.</p>
@@ -92,8 +92,8 @@ karva test [OPTIONS] [PATH]...
 </ul></dd><dt id="karva-test--flaky-result"><a href="#karva-test--flaky-result"><code>--flaky-result</code></a> <i>action</i></dt><dd><p>Whether tests that pass only after a retry should pass or fail the run</p>
 <p>May also be set with the <code>KARVA_FLAKY_RESULT</code> environment variable.</p><p>Possible values:</p>
 <ul>
-<li><code>pass</code></li>
-<li><code>fail</code></li>
+<li><code>pass</code>:  A test that passes after retrying does not fail the run</li>
+<li><code>fail</code>:  Any test requiring a retry fails the run</li>
 </ul></dd><dt id="karva-test--help"><a href="#karva-test--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help (see a summary with '-h')</p>
 </dd><dt id="karva-test--last-failed"><a href="#karva-test--last-failed"><code>--last-failed</code></a>, <code>--lf</code></dt><dd><p>Re-run only the tests that failed in the previous run</p>
 </dd><dt id="karva-test--max-fail"><a href="#karva-test--max-fail"><code>--max-fail</code></a> <i>n</i></dt><dd><p>Stop scheduling new tests after this many failures.</p>
@@ -179,7 +179,7 @@ karva test [OPTIONS] [PATH]...
 <p>When karva stops workers because of Ctrl+C, fail-fast, or <code>--run-timeout</code>, it first asks them to terminate gracefully. If they are still running after this period, karva force-kills them. Pass <code>0</code> to force-kill immediately after graceful termination.</p>
 </dd><dt id="karva-test--test-prefix"><a href="#karva-test--test-prefix"><code>--test-prefix</code></a> <i>test-prefix</i></dt><dd><p>The prefix of the test functions</p>
 </dd><dt id="karva-test--timeout"><a href="#karva-test--timeout"><code>--timeout</code></a> <i>seconds</i></dt><dd><p>Hard per-test timeout, in seconds.</p>
-<p>Tests that run longer than this duration are killed and reported as failures. A test-level &#91;<code>@karva.tags.timeout</code>&#93; decorator overrides the default for that specific test.</p>
+<p>Tests that run longer than this duration are killed and reported as failures. A test-level <code>@karva.tags.timeout</code> decorator overrides the default for that specific test.</p>
 <p>Accepts fractional seconds such as <code>--timeout=120</code> or <code>--timeout=0.5</code>.</p>
 </dd><dt id="karva-test--try-import-fixtures"><a href="#karva-test--try-import-fixtures"><code>--try-import-fixtures</code></a> <i>try-import-fixtures</i></dt><dd><p>When set, we will try to import functions in each test file as well as parsing the ast to find them.</p>
 <p>This is often slower, so it is not recommended for most projects.</p>

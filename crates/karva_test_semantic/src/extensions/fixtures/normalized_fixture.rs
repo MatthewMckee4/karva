@@ -58,6 +58,7 @@ impl NormalizedFixture {
         self.scope
     }
 
+    /// Combines tags inherited through the fixture dependency graph.
     pub(crate) fn resolved_tags(&self) -> Tags {
         let mut tags = Tags::default();
 

@@ -221,6 +221,7 @@ pub(crate) fn set_test_name_env(py: Python<'_>, qualified_name: &str) -> PyResul
     Ok(())
 }
 
+/// Formats Python values for test identity, quoting strings and escaping NUL bytes.
 pub(crate) fn display_value(value: &Bound<'_, PyAny>) -> String {
     let display = if value.is_instance_of::<PyString>()
         && let Ok(repr) = value.repr()
@@ -264,6 +265,7 @@ pub(crate) fn add_to_sys_path(py: Python<'_>, path: &Utf8Path, index: isize) -> 
     Ok(())
 }
 
+/// Builds a variant name in Python signature order, omitting values for fixture-only names.
 pub(crate) fn full_test_name(
     py: Python,
     function: String,
@@ -297,6 +299,7 @@ pub(crate) fn full_test_name(
 /// CLI output by truncating long values with an ellipsis.
 const TRUNCATE_LENGTH: usize = 30;
 
+/// Truncates user-facing text by Unicode scalar count, preserving a three-character ellipsis.
 pub(crate) fn truncate_string(value: &str) -> String {
     if value.chars().count() > TRUNCATE_LENGTH {
         let truncated: String = value.chars().take(TRUNCATE_LENGTH - 3).collect();

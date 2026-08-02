@@ -1,12 +1,14 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Stdout and stderr captured during one test attempt.
 pub struct CapturedTestOutput {
     stdout: String,
     stderr: String,
 }
 
 impl CapturedTestOutput {
+    /// Creates captured output without altering stream contents.
     pub fn new(stdout: String, stderr: String) -> Self {
         Self { stdout, stderr }
     }

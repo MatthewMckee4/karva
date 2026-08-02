@@ -53,6 +53,10 @@ const COVERAGE_SCHEMA: &str = "
     );
 ";
 
+/// Writes coverage observations using coverage.py's `SQLite` schema.
+///
+/// Existing output is replaced. Returns `None` when no worker artifact contains
+/// source data.
 pub fn write_coveragepy_sqlite(
     cwd: &Utf8Path,
     files: &[impl AsRef<Utf8Path>],

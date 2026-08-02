@@ -1,3 +1,5 @@
+//! Fast, syntax-only collection of Python test and fixture definitions.
+
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use ruff_python_ast::{PythonVersion, Stmt};
@@ -12,10 +14,15 @@ mod models;
 pub use models::{CollectedModule, CollectedPackage, ModuleType};
 
 #[derive(Debug, Error)]
+/// Failure to load source required for syntax collection.
 pub enum CollectionError {
+    /// Python source could not be read from disk.
     #[error("failed to read Python source file `{path}`: {source}")]
     ReadSource {
+        /// Source path that could not be read.
         path: Utf8PathBuf,
+
+        /// Underlying filesystem error.
         #[source]
         source: std::io::Error,
     },
@@ -25,10 +32,13 @@ pub enum CollectionError {
 pub struct CollectionSettings<'a> {
     /// The Python version to use when parsing source files.
     pub python_version: PythonVersion,
+
     /// The prefix used to identify test functions (e.g., `"test_"`).
     pub test_function_prefix: &'a str,
+
     /// Whether to respect `.gitignore` and similar ignore files during file discovery.
     pub respect_ignore_files: bool,
+
     /// Whether to collect fixture function definitions in addition to test functions.
     pub collect_fixtures: bool,
 }

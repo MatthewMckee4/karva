@@ -6,24 +6,33 @@ use ruff_text_size::{TextRange, TextSize};
 /// Parsed representation of a Python traceback from a `PyErr` object.
 #[derive(Debug, Clone)]
 pub struct Traceback {
+    /// Frames ordered as reported by Python's traceback formatter.
     pub frames: Vec<TracebackFrame>,
 }
 
 #[derive(Debug, Clone)]
+/// One Python traceback frame with optional loaded source context.
 pub struct TracebackFrame {
+    /// Python callable name reported for the frame.
     pub function_name: String,
 
+    /// Source file referenced by the frame.
     pub file_path: Utf8PathBuf,
 
+    /// One-indexed source line reported by Python.
     pub line_number: OneIndexed,
 
+    /// Loaded source and exact line range when the file remains readable.
     pub source: Option<TracebackFrameSource>,
 }
 
 #[derive(Debug, Clone)]
+/// Source material used to render one traceback frame diagnostic.
 pub struct TracebackFrameSource {
+    /// Ruff source-file snapshot for diagnostic rendering.
     pub source_file: SourceFile,
 
+    /// Byte range covering the reported source line.
     pub location: TextRange,
 }
 
@@ -35,10 +44,12 @@ struct TracebackLocation {
 }
 
 impl Traceback {
+    /// Extracts traceback frames, loading referenced files from disk when available.
     pub fn from_error(py: Python, error: &PyErr) -> Option<Self> {
         Self::from_error_with_fallback(py, error, None)
     }
 
+    /// Extracts traceback frames while reusing a known source snapshot when it matches.
     pub fn from_error_with_source(
         py: Python,
         error: &PyErr,

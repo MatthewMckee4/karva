@@ -1,3 +1,5 @@
+//! Controller-side collection, partitioning, and worker-process orchestration.
+
 mod binary;
 mod collection;
 mod orchestration;

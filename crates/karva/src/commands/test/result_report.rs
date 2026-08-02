@@ -93,21 +93,36 @@ fn push_jsonl_record<T: Serialize>(
 }
 
 #[derive(Serialize)]
+/// JSONL envelope shared by each streaming result-record kind.
 struct JsonlRecord<'a, T> {
+    /// Version governing serialized record shape.
     schema_version: u8,
+
+    /// Record discriminator consumed before flattened payload fields.
     #[serde(rename = "type")]
     kind: &'a str,
+
+    /// Kind-specific fields flattened into top-level record.
     #[serde(flatten)]
     data: T,
 }
 
 #[derive(Serialize)]
+/// Complete JSON report for one test run.
 struct RunReport<'a> {
+    /// Version governing serialized report shape.
     schema_version: u8,
+
     status: RunStatus,
+
+    /// Whole-run wall-clock duration in seconds.
     elapsed_seconds: f64,
+
     stats: StatsReport,
+
     tests: Vec<TestReport<'a>>,
+
+    /// Diagnostics not owned by one test, omitted when empty.
     #[serde(skip_serializing_if = "Option::is_none")]
     run_diagnostics: Option<Vec<DiagnosticReport<'a>>>,
 }
@@ -136,6 +151,7 @@ impl<'a> RunReport<'a> {
 
 #[derive(Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
+/// Overall run outcome exposed by machine-readable reports.
 enum RunStatus {
     Passed,
     Failed,
@@ -151,6 +167,7 @@ impl From<ExitStatus> for RunStatus {
 }
 
 #[derive(Clone, Copy, Serialize)]
+/// Aggregate test outcome counts exposed by reports.
 struct StatsReport {
     total: usize,
     passed: usize,
@@ -176,11 +193,17 @@ impl StatsReport {
 }
 
 #[derive(Serialize)]
+/// Final outcome and supporting data for one collected test.
 struct TestReport<'a> {
     module: &'a str,
     name: &'a str,
+
+    /// Fully qualified test identifier used elsewhere in Karva output.
     full_name: &'a str,
+
     status: TestStatus,
+
+    /// Full test lifecycle duration in seconds.
     duration_seconds: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     skip_reason: Option<&'a str>,
@@ -240,9 +263,14 @@ impl<'a> TestReport<'a> {
 }
 
 #[derive(Serialize)]
+/// Outcome data for one execution attempt within a retried test.
 struct AttemptReport<'a> {
+    /// One-based attempt number.
     attempt: u32,
+
     status: TestStatus,
+
+    /// Attempt duration in seconds.
     duration_seconds: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     captured_output: Option<CapturedOutputReport<'a>>,
@@ -286,6 +314,7 @@ impl<'a> AttemptReport<'a> {
 
 #[derive(Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
+/// Stable serialized outcome vocabulary for tests and attempts.
 enum TestStatus {
     Passed,
     Failed,
@@ -294,8 +323,12 @@ enum TestStatus {
 }
 
 #[derive(Clone, Copy, Serialize)]
+/// Retry progress at test completion.
 struct RetryReport {
+    /// Attempts already executed, including initial attempt.
     attempts: u32,
+
+    /// Maximum attempts permitted, including initial attempt.
     max_attempts: u32,
 }
 
@@ -309,6 +342,7 @@ impl RetryReport {
 }
 
 #[derive(Serialize)]
+/// Captured process streams, with empty streams omitted.
 struct CapturedOutputReport<'a> {
     #[serde(skip_serializing_if = "str::is_empty")]
     stdout: &'a str,
@@ -326,11 +360,13 @@ impl<'a> CapturedOutputReport<'a> {
 }
 
 #[derive(Serialize)]
+/// JSONL payload for a diagnostic not owned by one test.
 struct RunDiagnosticRecord<'a> {
     diagnostic: DiagnosticReport<'a>,
 }
 
 #[derive(Clone, Copy, Serialize)]
+/// Stable machine-readable and rendered forms of one diagnostic.
 struct DiagnosticReport<'a> {
     code: &'a str,
     severity: &'static str,
@@ -350,8 +386,11 @@ impl<'a> DiagnosticReport<'a> {
 }
 
 #[derive(Serialize)]
+/// Terminal JSONL record summarizing completed run.
 struct RunFinishedRecord {
     status: RunStatus,
+
+    /// Whole-run wall-clock duration in seconds.
     elapsed_seconds: f64,
     stats: StatsReport,
 }

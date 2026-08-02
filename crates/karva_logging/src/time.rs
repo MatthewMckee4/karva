@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+/// Formats short durations in milliseconds and longer durations in seconds.
 pub fn format_duration(duration: Duration) -> String {
     if duration.as_secs() < 2 {
         format!("{}ms", duration.as_millis())

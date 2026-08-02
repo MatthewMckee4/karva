@@ -8,14 +8,18 @@ use ruff_python_ast::StmtFunctionDef;
 /// This is populated during the parallel collection phase.
 #[derive(Debug, Clone)]
 pub struct CollectedModule {
-    /// The path of the module.
+    /// Python import path and corresponding source path.
     pub path: ModulePath,
-    /// The type of module.
+
+    /// Whether source defines tests or package configuration.
     pub module_type: ModuleType,
+
     /// The source text of the file (cached to avoid re-reading)
     pub source_text: String,
+
     /// Test function definitions (functions starting with test prefix)
     pub test_function_defs: Vec<StmtFunctionDef>,
+
     /// Fixture function definitions (functions with fixture decorators)
     pub fixture_function_defs: Vec<StmtFunctionDef>,
 }
@@ -43,6 +47,7 @@ impl CollectedModule {
         self.path.path()
     }
 
+    /// Returns whether module provides tests or package configuration.
     pub fn module_type(&self) -> ModuleType {
         self.module_type
     }
@@ -58,15 +63,19 @@ impl CollectedModule {
 pub struct CollectedPackage {
     /// The root directory path of this package.
     pub path: Utf8PathBuf,
+
     /// Test modules directly contained in this package, keyed by file path.
     pub modules: HashMap<Utf8PathBuf, CollectedModule>,
+
     /// Subpackages contained in this package, keyed by directory path.
     pub packages: HashMap<Utf8PathBuf, Self>,
+
     /// The `conftest.py` configuration module for this package, if any.
     pub configuration_module: Option<CollectedModule>,
 }
 
 impl CollectedPackage {
+    /// Creates an empty package rooted at `path`.
     pub fn new(path: Utf8PathBuf) -> Self {
         Self {
             path,
@@ -246,6 +255,7 @@ fn add_new_definitions(existing: &mut Vec<StmtFunctionDef>, new_defs: Vec<StmtFu
 pub enum ModuleType {
     /// A test module containing test function definitions.
     Test,
+
     /// A configuration module (e.g., `conftest.py`) containing fixtures and hooks.
     Configuration,
 }

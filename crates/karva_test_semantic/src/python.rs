@@ -14,6 +14,7 @@ use crate::extensions::functions::{
 };
 use crate::extensions::tags::python::{PyTags, PyTestFunction, tags};
 
+/// Populates the native `karva` Python module with its functions, classes, and exceptions.
 pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fixture_decorator, m)?)?;
     m.add_function(wrap_pyfunction!(skip, m)?)?;

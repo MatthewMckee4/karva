@@ -2,9 +2,16 @@ use std::borrow::Cow;
 
 /// Output captured from running a command.
 pub struct CommandOutput {
+    /// Whether process exited successfully.
     pub success: bool,
+
+    /// Numeric process exit status.
     pub exit_code: i32,
+
+    /// Captured standard output.
     pub stdout: String,
+
+    /// Captured standard error.
     pub stderr: String,
 }
 

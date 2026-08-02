@@ -1,3 +1,5 @@
+//! Snapshot command dispatch and shared path filtering.
+
 mod accept;
 mod delete;
 mod pending;

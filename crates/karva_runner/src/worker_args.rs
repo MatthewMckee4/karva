@@ -13,18 +13,35 @@ use crate::partition::Partition;
 
 /// Inputs shared by every worker spawned in a single run.
 pub struct WorkerSpawn<'a> {
+    /// Project whose tests the worker executes.
     pub project: &'a Project,
+
+    /// Cache root passed across the process boundary.
     pub cache_dir: &'a Utf8PathBuf,
+
+    /// Run-scoped cache used to derive worker artifact paths.
     pub cache: &'a RunCache,
+
+    /// Identifier shared by controller and all workers in this run.
     pub run_hash: &'a RunHash,
+
+    /// User CLI options that must be forwarded to workers.
     pub args: &'a SubTestCommand,
+
+    /// Effective worker count exposed to test processes.
     pub num_workers: usize,
+
+    /// Resolved configuration profile propagated through `KARVA_PROFILE`.
     pub profile: &'a str,
+
+    /// Executable selected for the worker subprocess.
     pub worker_binary: &'a Utf8PathBuf,
+
+    /// Whether each worker must write a coverage artifact.
     pub coverage_enabled: bool,
 }
 
-/// Build the `Command` for a single worker.
+/// Builds one worker command with its test selectors and resolved controller settings.
 pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize, partition: &Partition) -> Command {
     let mut cmd = Command::new(spawn.worker_binary);
     cmd.arg("--cache-dir")

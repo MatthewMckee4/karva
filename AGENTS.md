@@ -58,6 +58,14 @@ files and lines, and distinguish blockers from improvements.
 - Prefer narrow visibility because this workspace is generally its own
   consumer; use `pub` when another workspace crate genuinely needs an item.
 - Keep Rust imports at the top of files and prefer short imports.
+- Document production crates and non-obvious functions, structs, enums, traits,
+  and fields with Rust doc comments. Add module docs when a module has an
+  architectural role or boundary that its name and contents do not make clear.
+  Explain contracts: purpose, invariants, units, side effects, failure behavior,
+  and architectural role. Do not restate names, types, signatures, or
+  implementation steps; omit a comment when those already communicate
+  everything. Separate documented struct fields and enum variants with blank
+  lines. Update or remove stale comments when behavior changes.
 - Avoid `panic!`, `unreachable!`, `.unwrap()`, unsafe code, and Clippy ignores.
   Encode constraints in the type system.
 - Prefer `if let` and let chains for fallibility.

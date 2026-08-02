@@ -289,6 +289,10 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
     }
 }
 
+/// Binds collected AST definitions to imported Python callables.
+///
+/// Duplicate or invalid definitions emit diagnostics and are excluded. Imported fixtures
+/// are scanned only for `conftest.py` or when `try_import_fixtures` is enabled.
 pub fn discover(
     context: &Context,
     py: Python,
@@ -439,6 +443,7 @@ fn is_fixture_value(value: &Bound<'_, PyAny>) -> bool {
         || value.cast::<FixtureFunctionDefinition>().is_ok()
 }
 
+/// Finds only top-level functions; nested definitions cannot be imported module fixtures.
 fn find_function_statement(
     name: &str,
     source_text: &str,

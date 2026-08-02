@@ -6,17 +6,30 @@ use karva_logging::time::format_duration_bracketed;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Test that failed at least once before eventually passing.
 pub struct FlakyTest {
+    /// Import-qualified Python module containing the test.
     pub module_name: String,
+
+    /// Function name without parameter display suffix.
     pub function_name: String,
+
+    /// Parameter display suffix, including delimiters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub params: Option<String>,
+
+    /// One-based attempt on which the test passed.
     pub passed_on: u32,
+
+    /// Maximum attempts permitted by retry configuration.
     pub total_attempts: u32,
+
+    /// Combined duration across all attempts.
     pub duration: Duration,
 }
 
 impl FlakyTest {
+    /// Splits a displayed test name into function and parameter components.
     pub fn from_display_name(
         module_name: &str,
         name: &str,
@@ -38,11 +51,13 @@ impl FlakyTest {
         }
     }
 
+    /// Returns terminal-display formatting for this flaky result.
     pub fn display(&self) -> DisplayFlakyTest<'_> {
         DisplayFlakyTest(self)
     }
 }
 
+/// Terminal-display wrapper for one flaky result.
 pub struct DisplayFlakyTest<'a>(&'a FlakyTest);
 
 impl fmt::Display for DisplayFlakyTest<'_> {
@@ -71,6 +86,7 @@ impl fmt::Display for DisplayFlakyTest<'_> {
 pub struct DisplayFlakyTests<'a>(&'a [FlakyTest]);
 
 impl<'a> DisplayFlakyTests<'a> {
+    /// Wraps records for compact multi-line terminal display.
     pub fn new(records: &'a [FlakyTest]) -> Self {
         Self(records)
     }

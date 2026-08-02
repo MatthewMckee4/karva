@@ -19,15 +19,29 @@ pub struct RunHash {
 }
 
 #[derive(Debug)]
+/// Why a strict run identifier could not be decoded.
 pub enum ParseRunHashError {
+    /// Identifier has no timestamp component.
     MissingTimestamp,
+
+    /// Timestamp component is not an unsigned integer.
     InvalidTimestamp {
+        /// Original timestamp component.
         value: String,
+
+        /// Integer parsing failure.
         source: ParseIntError,
     },
+
+    /// Identifier has no UUID component.
     MissingUuid,
+
+    /// UUID component is malformed.
     InvalidUuid {
+        /// Original UUID component.
         value: String,
+
+        /// UUID parsing failure.
         source: uuid::Error,
     },
 }

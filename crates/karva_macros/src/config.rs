@@ -12,6 +12,7 @@ use syn::{
     clippy::redundant_pub_crate,
     reason = "parent module calls this helper while unreachable_pub rejects plain pub"
 )]
+/// Generates runtime option metadata from a named-field configuration struct.
 pub(super) fn derive_impl(input: DeriveInput) -> syn::Result<TokenStream> {
     let DeriveInput {
         ident,
@@ -237,10 +238,18 @@ fn handle_option(field: &Field, attr: &Attribute) -> syn::Result<proc_macro2::To
 }
 
 #[derive(Debug)]
+/// Required metadata parsed from one `#[option(...)]` attribute.
 struct FieldAttributes {
+    /// Serialized default shown in generated configuration reference.
     default: String,
+
+    /// Human-readable accepted-value syntax.
     value_type: String,
+
+    /// TOML example included in generated reference.
     example: String,
+
+    /// Optional scope grouping used by metadata consumers.
     scope: Option<String>,
 }
 
@@ -359,7 +368,11 @@ fn get_string_literal(
 }
 
 #[derive(Default, Debug)]
+/// Optional fields supported by Rust's `#[deprecated(...)]` attribute.
 struct DeprecatedAttribute {
+    /// Version in which option became deprecated.
     since: Option<String>,
+
+    /// Migration guidance shown to users.
     note: Option<String>,
 }

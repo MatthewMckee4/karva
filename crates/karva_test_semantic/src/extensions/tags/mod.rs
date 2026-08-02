@@ -1,3 +1,5 @@
+//! Registration, inheritance, and execution hooks for Karva test tags.
+
 use std::{collections::HashSet, ffi::CString, ops::Deref, sync::Arc};
 
 use pyo3::exceptions::PyValueError;
@@ -28,8 +30,13 @@ use use_fixtures::UseFixturesTag;
 ///
 /// Used by both `SkipTag` and `ExpectFailTag` which share identical parsing logic.
 pub struct ParsedMarkArgs {
+    /// Evaluated positional conditions; empty means an unconditional mark.
     pub conditions: Vec<bool>,
+
+    /// Explicit reason or generated description of a true string condition.
     pub reason: Option<String>,
+
+    /// Whether pytest compatibility requires an explicit reason.
     pub requires_reason: bool,
 }
 

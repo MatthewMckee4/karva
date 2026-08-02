@@ -15,6 +15,7 @@ pub struct PartitionSelection {
 }
 
 impl PartitionSelection {
+    /// Creates a slice partition when `index` is within `1..=total`.
     #[must_use]
     pub fn new(index: NonZeroU32, total: NonZeroU32) -> Option<Self> {
         Self::with_strategy(PartitionStrategy::Slice, index, total)
@@ -36,11 +37,13 @@ impl PartitionSelection {
         }
     }
 
+    /// Returns the selected one-based partition index.
     #[must_use]
     pub fn index(self) -> NonZeroU32 {
         self.index
     }
 
+    /// Returns the total number of partitions.
     #[must_use]
     pub fn total(self) -> NonZeroU32 {
         self.total
@@ -52,6 +55,7 @@ impl PartitionSelection {
         self.contains_position(position)
     }
 
+    /// Tests membership using this selection's slice or stable-hash strategy.
     #[must_use]
     pub fn contains_test(self, position: usize, qualified_name: &str) -> bool {
         match self.strategy {

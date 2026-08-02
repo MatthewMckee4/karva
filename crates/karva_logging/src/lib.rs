@@ -1,3 +1,5 @@
+//! Logging initialization, terminal output, and display-level policy.
+
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufWriter};
@@ -21,6 +23,7 @@ pub use printer::{Printer, Stdout};
 pub use status_level::{FinalStatusLevel, StatusLevel};
 pub use verbosity::VerbosityLevel;
 
+/// Whether an error chain contains stdout's normal early-consumer shutdown signal.
 pub fn error_chain_contains_broken_pipe<'a>(
     causes: impl IntoIterator<Item = &'a (dyn std::error::Error + 'static)>,
 ) -> bool {
@@ -31,6 +34,7 @@ pub fn error_chain_contains_broken_pipe<'a>(
     })
 }
 
+/// Writes Karva's top-level failure heading followed by each causal error.
 pub fn write_error_chain<'a>(
     writer: &mut impl io::Write,
     causes: impl IntoIterator<Item = &'a (dyn std::error::Error + 'static)>,
@@ -42,6 +46,7 @@ pub fn write_error_chain<'a>(
     Ok(())
 }
 
+/// Installs process-global tracing and returns resources that must outlive the run.
 pub fn setup_tracing(level: VerbosityLevel) -> TracingGuard {
     use tracing_subscriber::prelude::*;
 
@@ -102,9 +107,15 @@ pub fn setup_tracing(level: VerbosityLevel) -> TracingGuard {
     }
 }
 
+/// Optional tracing profile layer plus resources and recoverable setup warning.
 struct ProfileSetup<S> {
+    /// Layer installed when profile file creation succeeds.
     layer: Option<tracing_flame::FlameLayer<S, BufWriter<File>>>,
+
+    /// Guard that flushes buffered profile data.
     guard: Option<tracing_flame::FlushGuard<BufWriter<File>>>,
+
+    /// Setup failure reported after normal tracing starts.
     warning: Option<String>,
 }
 
@@ -149,13 +160,20 @@ where
     }
 }
 
+/// Keeps optional tracing-profile output alive and flushes it on drop.
 pub struct TracingGuard {
     _flame_guard: Option<tracing_flame::FlushGuard<BufWriter<File>>>,
 }
 
+/// Compact event formatter used below trace verbosity.
 struct KarvaFormat {
+    /// Whether each event starts with local wall-clock time.
     display_timestamp: bool,
+
+    /// Whether each event includes its tracing level.
     display_level: bool,
+
+    /// Whether events include their enclosing span path.
     show_spans: bool,
 }
 
@@ -229,6 +247,7 @@ where
     }
 }
 
+/// Applies user color policy to the global `colored` output controller.
 pub fn set_colored_override(color: Option<TerminalColor>) {
     let Some(color) = color else {
         return;
@@ -262,6 +281,7 @@ pub enum TerminalColor {
 }
 
 impl TerminalColor {
+    /// Returns the canonical configuration spelling.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Auto => "auto",

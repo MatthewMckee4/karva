@@ -47,6 +47,7 @@ pub struct CoverageSession {
 }
 
 impl CoverageSession {
+    /// Installs the best tracer supported by the embedded Python version.
     pub fn start(py: Python<'_>, cwd: &Utf8Path, config: &CoverageConfig) -> PyResult<Self> {
         let roots: Vec<PathBuf> = config
             .sources
@@ -85,6 +86,7 @@ impl CoverageSession {
         })
     }
 
+    /// Stops tracing and atomically persists this worker's collected coverage.
     pub fn stop_and_save(self, py: Python<'_>) -> PyResult<()> {
         let Self { tracer, data_file } = self;
         let bound = tracer.bind(py);
@@ -140,6 +142,7 @@ impl CoverageSession {
         Ok(())
     }
 
+    /// Attributes subsequent observations to a test, or clears attribution between tests.
     pub fn set_current_context(&self, py: Python<'_>, context: Option<&str>) {
         self.tracer.bind(py).borrow().set_current_context(context);
     }
@@ -167,6 +170,7 @@ struct TracerState {
     frame_last_lines: HashMap<usize, u32>,
 }
 
+/// Cached metadata retained with its Python code object to prevent pointer reuse bugs.
 struct TrackedCode {
     code: Py<PyAny>,
     path: Option<PathBuf>,
@@ -175,6 +179,7 @@ struct TrackedCode {
 }
 
 #[derive(Clone)]
+/// Mapping from a bytecode offset interval to its Python source line.
 struct CodeLineRange {
     start: u32,
     end: u32,

@@ -1,12 +1,15 @@
 use clap::Parser;
 
 #[derive(Debug, Parser)]
+/// Parsed arguments for `karva snapshot`.
 pub struct SnapshotCommand {
+    /// Snapshot operation to execute.
     #[command(subcommand)]
     pub action: SnapshotAction,
 }
 
 #[derive(Debug, clap::Subcommand)]
+/// Supported external snapshot operations.
 pub enum SnapshotAction {
     /// Accept all (or filtered) pending snapshots.
     Accept(SnapshotFilterArgs),
@@ -28,6 +31,7 @@ pub enum SnapshotAction {
 }
 
 #[derive(Debug, Parser, Default)]
+/// Path filters shared by non-destructive snapshot operations.
 pub struct SnapshotFilterArgs {
     /// Optional paths to filter snapshots by directory or file.
     #[clap(value_name = "PATH")]
@@ -35,6 +39,7 @@ pub struct SnapshotFilterArgs {
 }
 
 #[derive(Debug, Parser, Default)]
+/// Arguments controlling removal of snapshots no longer produced by tests.
 pub struct SnapshotPruneArgs {
     /// Optional paths to filter snapshots by directory or file.
     #[clap(value_name = "PATH")]
@@ -46,6 +51,7 @@ pub struct SnapshotPruneArgs {
 }
 
 #[derive(Debug, Parser, Default)]
+/// Arguments controlling explicit deletion of snapshot files.
 pub struct SnapshotDeleteArgs {
     /// Optional paths to filter which snapshot files are deleted.
     #[clap(value_name = "PATH")]

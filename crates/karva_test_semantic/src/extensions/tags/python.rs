@@ -5,6 +5,7 @@ use pyo3::types::{PyDict, PyTuple};
 
 use crate::extensions::functions::python::Param;
 
+/// Python-facing tag payload retained until discovery converts it into [`crate::extensions::tags::Tag`].
 #[derive(Debug)]
 #[pyclass(name = "tag")]
 pub enum PyTag {
@@ -82,9 +83,11 @@ impl PyTag {
     }
 }
 
+/// Stackable Python decorator containing one or more pending tags.
 #[derive(Debug)]
 #[pyclass(name = "Tags")]
 pub struct PyTags {
+    /// Tags applied together when this object decorates a function.
     pub inner: Vec<PyTag>,
 }
 
@@ -286,6 +289,7 @@ pub mod tags {
 #[derive(Debug, Clone)]
 #[pyclass(name = "CustomTagBuilder", from_py_object)]
 pub struct CustomTagBuilder {
+    /// Attribute name captured from `karva.tags.<name>`.
     pub(crate) tag_name: String,
 }
 
@@ -359,10 +363,14 @@ impl CustomTagBuilder {
     }
 }
 
+/// Callable wrapper preserving tags without replacing the decorated Python function.
 #[derive(Debug)]
 #[pyclass(name = "TestFunction")]
 pub struct PyTestFunction {
+    /// Tags accumulated across stacked decorators.
     pub tags: PyTags,
+
+    /// Original callable invoked when the wrapper is called.
     pub function: Py<PyAny>,
 }
 

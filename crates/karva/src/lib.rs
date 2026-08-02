@@ -1,3 +1,5 @@
+//! Top-level CLI entry point shared by the `karva` binary and integration tests.
+
 use std::ffi::OsString;
 use std::io::stdout;
 

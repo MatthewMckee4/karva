@@ -95,6 +95,9 @@ impl<'a> Context<'a> {
         self.reporter.report_test_finished(test_case_name);
     }
 
+    /// Stores and reports a final non-retried test outcome.
+    ///
+    /// Returns whether the outcome counts as successful for failure-budget accounting.
     pub fn register_test_case_result(
         &self,
         test_case_name: &QualifiedTestName,
@@ -188,6 +191,7 @@ impl<'a> Context<'a> {
         self.result().add_run_diagnostic(diagnostic);
     }
 
+    /// Returns the parser target matching the embedded interpreter.
     pub fn python_version(&self) -> PythonVersion {
         self.python_version
     }

@@ -1,3 +1,5 @@
+//! Procedural derives for Karva's layered configuration models.
+
 #![warn(unreachable_pub)]
 
 use proc_macro::TokenStream;
@@ -8,6 +10,7 @@ pub(crate) mod combine_options;
 pub(crate) mod config;
 
 #[proc_macro_derive(OptionsMetadata, attributes(option, option_group))]
+/// Generates configuration-reference metadata from option attributes and docs.
 pub fn derive_options_metadata(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -17,6 +20,7 @@ pub fn derive_options_metadata(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_derive(CombineOptions)]
+/// Generates field-wise precedence merging for optional plugin settings.
 pub fn derive_combine_options(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 

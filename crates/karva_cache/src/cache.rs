@@ -25,6 +25,7 @@ use crate::{RUN_PREFIX, RunHash, WORKER_PREFIX, worker_folder};
 pub struct CurrentTest {
     /// Fully qualified test name (`module::function[params]`).
     pub name: String,
+
     /// Wall-clock start of the test, milliseconds since the Unix epoch.
     pub start_unix_ms: u64,
 }
@@ -32,14 +33,29 @@ pub struct CurrentTest {
 /// Aggregated test results collected from all worker processes.
 #[derive(Default)]
 pub struct AggregatedResults {
+    /// Outcome counters merged across every worker.
     pub stats: TestResultStats,
+
+    /// Collection and infrastructure diagnostics not owned by one test case.
     pub run_diagnostics: Vec<RenderedDiagnostic>,
+
+    /// Base test names used to seed the next run's `--last-failed` selection.
     pub failed_tests: Vec<String>,
+
+    /// Tests that passed only after one or more failed attempts.
     pub flaky_tests: Vec<FlakyTest>,
+
+    /// Full result and retry history for every executed test case.
     pub test_cases: Vec<TestCaseResult>,
+
+    /// Total duration keyed by unparameterized qualified test name.
     pub durations: HashMap<String, Duration>,
 }
 
+/// Serializable subset of one worker's results.
+///
+/// Durations live in a separate artifact so partitioning can read them without
+/// deserializing diagnostics and test histories.
 #[derive(Default, Serialize, Deserialize)]
 struct WorkerResults {
     stats: TestResultStats,
@@ -48,6 +64,7 @@ struct WorkerResults {
 }
 
 impl AggregatedResults {
+    /// Whether every test and run-level diagnostic completed successfully.
     pub fn is_success(&self) -> bool {
         self.stats.is_success()
             && !self
@@ -56,16 +73,19 @@ impl AggregatedResults {
                 .any(RenderedDiagnostic::is_error)
     }
 
+    /// Whether collection or worker infrastructure produced an error diagnostic.
     pub fn has_run_errors(&self) -> bool {
         self.run_diagnostics
             .iter()
             .any(RenderedDiagnostic::is_error)
     }
 
+    /// Whether any test exhausted retries without passing.
     pub fn has_flaky_failures(&self) -> bool {
         self.test_cases.iter().any(TestCaseResult::is_flaky_failure)
     }
 
+    /// Records a test interrupted by controller shutdown as a failed result.
     pub fn register_interrupted_test(&mut self, name: &str, duration: Duration) {
         let function_name = base_test_name(name);
         self.stats.add(TestResultKind::Failed);
@@ -121,6 +141,7 @@ fn base_test_name(name: &str) -> String {
 
 /// Reads and writes test results in the cache directory for a specific run.
 pub struct RunCache {
+    /// Run-scoped directory containing every worker's artifacts.
     run_dir: Utf8PathBuf,
 }
 

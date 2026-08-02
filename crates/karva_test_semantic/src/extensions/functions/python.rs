@@ -12,13 +12,14 @@ pyo3::create_exception!(karva, SkipError, pyo3::exceptions::PyException);
 // FailError exception that can be raised to fail tests at runtime with an optional reason
 pyo3::create_exception!(karva, FailError, pyo3::exceptions::PyException);
 
+/// One explicit parameter row created by Python's `karva.param(...)` helper.
 #[derive(Debug, Clone)]
 #[pyclass(from_py_object)]
 pub struct Param {
-    /// The values of the arguments
+    /// Positional values later matched to a `parametrize` tag's argument names.
     pub(crate) values: Vec<Arc<Py<PyAny>>>,
 
-    /// Tags associated with this parametrization
+    /// Tags applied only to this parameter row.
     pub(crate) tags: Tags,
 
     /// Explicit display ID.
@@ -109,6 +110,7 @@ pub fn fail(_py: Python<'_>, reason: Option<String>) -> PyResult<()> {
 
 #[pyfunction]
 #[pyo3(signature = (*values, tags = None))]
+/// Creates one parameter row with optional row-specific tags.
 pub fn param(
     py: Python<'_>,
     values: Vec<Py<PyAny>>,

@@ -42,6 +42,7 @@ pub struct Finalizer {
 }
 
 impl Finalizer {
+    /// Resumes teardown once and returns a diagnostic for invalid generator behavior.
     pub(crate) fn run(self, py: Python<'_>) -> Option<Diagnostic> {
         let invalid_finalizer_reason = if self.is_async {
             self.run_async_teardown(py)

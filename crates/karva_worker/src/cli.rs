@@ -41,11 +41,13 @@ struct Args {
 }
 
 impl Args {
+    /// Returns verbosity inherited from the controller invocation.
     pub fn verbosity(&self) -> &Verbosity {
         &self.sub_command.verbosity
     }
 }
 
+/// Runs one worker invocation, translating broken pipes into successful exits.
 pub fn karva_worker_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> ExitStatus {
     run(f).unwrap_or_else(|error| {
         if karva_logging::error_chain_contains_broken_pipe(error.chain()) {
@@ -192,6 +194,7 @@ fn cwd() -> anyhow::Result<Utf8PathBuf> {
     })
 }
 
+/// Builds worker coverage settings and rejects incomplete controller arguments.
 fn worker_coverage_config(
     sub_command: &SubTestCommand,
 ) -> anyhow::Result<Option<karva_test_semantic::CoverageConfig>> {

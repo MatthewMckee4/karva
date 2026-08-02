@@ -1,3 +1,5 @@
+//! Loading and resolution of Karva project metadata and runtime settings.
+
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use karva_combine::Combine;
@@ -32,12 +34,16 @@ use crate::options::KarvaTomlError;
 /// overrides on top of it.
 #[derive(Default, Debug, Clone)]
 pub struct ProjectMetadata {
+    /// Directory against which relative project paths resolve.
     pub root: Utf8PathBuf,
 
+    /// Target Python grammar version used during syntax collection.
     pub python_version: PythonVersion,
 
+    /// Parsed file-level configuration before profile selection.
     pub config: Config,
 
+    /// Effective options after profile and CLI precedence is applied.
     pub options: Options,
 }
 
@@ -52,6 +58,7 @@ impl ProjectMetadata {
         }
     }
 
+    /// Loads an explicit Karva configuration file without project discovery.
     pub fn from_config_file(
         path: &Utf8Path,
         cwd: &Utf8Path,
@@ -200,6 +207,7 @@ impl ProjectMetadata {
         &self.root
     }
 
+    /// Replaces root while preserving parsed configuration and resolved options.
     #[must_use]
     pub fn with_root(mut self, root: Utf8PathBuf) -> Self {
         self.root = root;
@@ -332,25 +340,39 @@ fn check_required_version(config: &Config, path: &Utf8Path) -> Result<(), Projec
 }
 
 #[derive(Debug, Error)]
+/// Failure while discovering or loading project configuration.
 pub enum ProjectMetadataError {
+    /// Discovery started from a path that is not a directory.
     #[error("project path '{0}' is not a directory")]
     NotADirectory(Utf8PathBuf),
 
+    /// A discovered `pyproject.toml` could not be loaded.
     #[error("{path} is not a valid `pyproject.toml`: {source}")]
     InvalidPyProject {
+        /// Parsing or filesystem failure.
         source: Box<PyProjectError>,
+
+        /// Configuration path that failed.
         path: Utf8PathBuf,
     },
 
+    /// An explicit or discovered `karva.toml` could not be loaded.
     #[error("{path} is not a valid `karva.toml`: {source}")]
     InvalidKarvaToml {
+        /// Parsing, validation, or filesystem failure.
         source: Box<KarvaTomlError>,
+
+        /// Configuration path that failed.
         path: Utf8PathBuf,
     },
 
+    /// Running Karva version violates configured `required-version`.
     #[error("{path}: {source}")]
     IncompatibleVersion {
+        /// Configuration path declaring requirement.
         path: Utf8PathBuf,
+
+        /// Version mismatch or internal version parse error.
         #[source]
         source: IncompatibleVersionError,
     },

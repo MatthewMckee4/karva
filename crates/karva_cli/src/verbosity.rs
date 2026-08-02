@@ -2,6 +2,7 @@ use karva_logging::VerbosityLevel;
 
 #[derive(clap::Args, Debug, Clone, Default)]
 #[command(about = None, long_about = None)]
+/// Repeatable `-v` flags mapped onto Karva's bounded verbosity levels.
 pub struct Verbosity {
     #[arg(
         long,

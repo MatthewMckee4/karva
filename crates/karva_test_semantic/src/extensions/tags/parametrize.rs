@@ -14,9 +14,13 @@ use crate::extensions::functions::Param;
 use crate::extensions::tags::Tags;
 use crate::utils::display_value;
 
+/// Source annotation attached to an invalid `parametrize` diagnostic.
 #[derive(Debug)]
 pub struct ParametrizeAnnotation {
+    /// Exact source range to underline.
     pub(crate) range: TextRange,
+
+    /// Label rendered beside the underline.
     pub(crate) message: String,
 }
 
@@ -29,9 +33,13 @@ impl ParametrizeAnnotation {
     }
 }
 
+/// Primary and supporting source locations for a parametrization error.
 #[derive(Debug)]
 pub struct ParametrizeDiagnosticLocation {
+    /// Location that receives the main diagnostic label.
     pub(crate) primary: ParametrizeAnnotation,
+
+    /// Related locations explaining conflicts or expected structure.
     pub(crate) secondary: Vec<ParametrizeAnnotation>,
 }
 
@@ -39,6 +47,7 @@ const fn value_noun(count: usize) -> &'static str {
     if count == 1 { "value" } else { "values" }
 }
 
+/// Validation failures shared by native and pytest-compatible parametrization.
 #[derive(Debug, Error)]
 pub enum InvalidParametrizeError {
     #[error("Parameter name cannot be empty")]
@@ -73,6 +82,7 @@ struct ParametrizeSyntax<'a> {
 }
 
 impl InvalidParametrizeError {
+    /// Maps semantic failure data back onto decorator expressions when unambiguous.
     pub fn diagnostic_location(
         &self,
         function: &StmtFunctionDef,
@@ -452,6 +462,7 @@ fn make_unique_parametrize_ids(parametrizations: &mut [ParametrizationArgs]) {
     }
 }
 
+/// Builds pytest-compatible display identity from Python values.
 pub fn default_param_id(py: Python<'_>, values: &[Arc<Py<PyAny>>]) -> String {
     values
         .iter()
@@ -508,6 +519,7 @@ pub(super) fn parse_parametrize_args(
     Ok((names, parametrizations))
 }
 
+/// Applies an ID sequence or callable without replacing IDs embedded in `param(...)` values.
 pub(super) fn apply_parametrize_ids(
     ids: Option<&Bound<'_, PyAny>>,
     parametrizations: &mut [Parametrization],

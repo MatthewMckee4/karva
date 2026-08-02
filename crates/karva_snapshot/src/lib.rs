@@ -1,3 +1,5 @@
+//! Snapshot matching, persistence, review, and source update support.
+
 pub mod cmd;
 pub mod diff;
 pub mod filters;

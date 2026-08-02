@@ -17,6 +17,7 @@ fn is_false(value: &bool) -> bool {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Final outcome and complete attempt history for one collected test variant.
 pub struct TestCaseResult<D = RenderedDiagnostic> {
     module_name: String,
     name: String,
@@ -32,6 +33,7 @@ pub struct TestCaseResult<D = RenderedDiagnostic> {
 }
 
 impl<D> TestCaseResult<D> {
+    /// Builds a result for a test executed once.
     pub fn new(
         test_case_name: &QualifiedTestName,
         outcome: TestCaseOutcome<D>,
@@ -59,6 +61,7 @@ impl<D> TestCaseResult<D> {
         }
     }
 
+    /// Builds a result whose final outcome followed earlier failed attempts.
     pub fn retried(
         test_case_name: &QualifiedTestName,
         outcome: TestCaseOutcome<D>,
@@ -73,6 +76,7 @@ impl<D> TestCaseResult<D> {
         result
     }
 
+    /// Builds a synthetic result when no semantic [`QualifiedTestName`] is available.
     pub fn from_display_name(
         full_name: &str,
         outcome: TestCaseOutcome<D>,
@@ -141,6 +145,7 @@ impl<D> TestCaseResult<D> {
         &self.attempts
     }
 
+    /// Converts every diagnostic while preserving outcome and retry structure.
     pub fn try_map_diagnostic<T, E>(
         self,
         mut map: impl FnMut(&D) -> Result<T, E>,
@@ -163,6 +168,7 @@ impl<D> TestCaseResult<D> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Outcome, duration, and output captured for one retry attempt.
 pub struct TestCaseAttempt<D = RenderedDiagnostic> {
     attempt: u32,
     outcome: TestCaseOutcome<D>,
@@ -172,6 +178,7 @@ pub struct TestCaseAttempt<D = RenderedDiagnostic> {
 }
 
 impl<D> TestCaseAttempt<D> {
+    /// Records one numbered attempt; attempt numbers are one-based.
     pub fn new(
         attempt: u32,
         outcome: TestCaseOutcome<D>,
@@ -216,6 +223,7 @@ impl<D> TestCaseAttempt<D> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Retry summary and policies applied to a final test result.
 pub struct TestCaseRetry {
     attempts: u32,
     max_attempts: u32,
@@ -226,6 +234,7 @@ pub struct TestCaseRetry {
 }
 
 impl TestCaseRetry {
+    /// Records attempts consumed and maximum attempts permitted.
     pub fn new(attempts: u32, max_attempts: u32) -> Self {
         Self {
             attempts,
@@ -235,6 +244,7 @@ impl TestCaseRetry {
         }
     }
 
+    /// Marks whether retrying fails Karva's run and `JUnit` outcomes.
     #[must_use]
     pub fn with_failure_policy(mut self, flaky_failure: bool, junit_flaky_failure: bool) -> Self {
         self.flaky_failure = flaky_failure;
@@ -261,26 +271,44 @@ impl TestCaseRetry {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+/// Semantic outcome of one test, parameterized by diagnostic representation.
 pub enum TestCaseOutcome<D = RenderedDiagnostic> {
+    /// Test completed without failure.
     Passed,
+
+    /// Assertion or explicit test failure.
     Failed {
+        /// Primary failure diagnostic.
         diagnostic: D,
+
+        /// Additional diagnostics belonging to the same failure.
         #[serde(default = "Vec::new", skip_serializing_if = "Vec::is_empty")]
         related: Vec<D>,
     },
+
+    /// Collection, fixture, or execution error rather than a test assertion failure.
     Error {
+        /// Primary error diagnostic.
         diagnostic: D,
+
+        /// Additional diagnostics belonging to the same error.
         #[serde(default = "Vec::new", skip_serializing_if = "Vec::is_empty")]
         related: Vec<D>,
+
+        /// Fixture failures that explain how this error reached the test.
         #[serde(default = "Vec::new", skip_serializing_if = "Vec::is_empty")]
         fixture_failures: Vec<FixtureFailure>,
     },
+
+    /// Test intentionally did not execute.
     Skipped {
+        /// User-provided skip reason, when available.
         reason: Option<String>,
     },
 }
 
 impl<D> TestCaseOutcome<D> {
+    /// Creates a failure with no related diagnostics.
     pub fn failed(diagnostic: D) -> Self {
         Self::Failed {
             diagnostic,
@@ -288,14 +316,17 @@ impl<D> TestCaseOutcome<D> {
         }
     }
 
+    /// Creates an execution error with no related diagnostics.
     pub fn error(diagnostic: D) -> Self {
         Self::error_with_related(diagnostic, Vec::new())
     }
 
+    /// Creates an execution error retaining secondary diagnostics.
     pub fn error_with_related(diagnostic: D, related: Vec<D>) -> Self {
         Self::error_with_fixture_failures(diagnostic, related, Vec::new())
     }
 
+    /// Creates an execution error with its fixture dependency context.
     pub fn error_with_fixture_failures(
         diagnostic: D,
         related: Vec<D>,
@@ -338,6 +369,7 @@ impl<D> TestCaseOutcome<D> {
         }
     }
 
+    /// Returns fixture failures attached to execution errors.
     pub fn fixture_failures(&self) -> &[FixtureFailure] {
         match self {
             Self::Error {
@@ -347,6 +379,7 @@ impl<D> TestCaseOutcome<D> {
         }
     }
 
+    /// Maps this semantic outcome into its reporting and statistics category.
     pub fn result_kind(&self) -> IndividualTestResultKind {
         match self {
             Self::Passed => IndividualTestResultKind::Passed,
@@ -392,13 +425,20 @@ impl<D> TestCaseOutcome<D> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Fixture setup failure and the dependency path that exposed it to a test.
 pub struct FixtureFailure {
+    /// Fixture whose setup failed.
     fixture: String,
+
+    /// How the test acquired the fixture.
     usage: FixtureUsage,
+
+    /// Fixture dependency path from the test to the failure.
     dependency_chain: Vec<String>,
 }
 
 impl FixtureFailure {
+    /// Records a fixture failure and how it reached the test.
     pub fn new(fixture: String, usage: FixtureUsage, dependency_chain: Vec<String>) -> Self {
         Self {
             fixture,
@@ -419,6 +459,7 @@ impl FixtureFailure {
         &self.dependency_chain
     }
 
+    /// Describes the failed fixture relationship for user-facing diagnostics.
     pub fn description(&self) -> String {
         match self.usage {
             FixtureUsage::Required => format!("requires fixture `{}`", self.fixture),
@@ -432,12 +473,21 @@ impl FixtureFailure {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+/// Mechanism through which a test depends on a fixture.
 pub enum FixtureUsage {
+    /// Fixture appears as a test or fixture parameter.
     Required,
+
+    /// Fixture was requested by `@karva.tags.use_fixtures`.
     UseFixtures,
+
+    /// Fixture applies automatically without an explicit request.
     AutoUse,
 }
 
+/// Worker-side test result retaining Ruff diagnostics.
 pub type TestExecutionResult = TestCaseResult<Diagnostic>;
+/// Worker-side test outcome retaining Ruff diagnostics.
 pub type TestExecutionOutcome = TestCaseOutcome<Diagnostic>;
+/// Worker-side retry attempt retaining Ruff diagnostics.
 pub type TestExecutionAttempt = TestCaseAttempt<Diagnostic>;

@@ -11,12 +11,15 @@ use ignore::types::Types;
 use ignore::{WalkBuilder, WalkState};
 use karva_project::path::{TestPath, TestPathFunction};
 
-/// Collector used for collecting all test functions and fixtures in a package.
+/// Discovers test modules concurrently in the controller process.
 ///
-/// This is only used in the main `karva` cli.
-/// If we used this in the `karva-worker` cli, this would be very inefficient.
+/// Workers receive already-selected test paths, so repeating this directory
+/// walk inside each worker would multiply collection cost.
 pub struct ParallelCollector<'a> {
+    /// Project root used to resolve collected module names.
     cwd: &'a Utf8Path,
+
+    /// Syntax and discovery rules shared with single-file collection.
     settings: CollectionSettings<'a>,
 }
 
@@ -26,11 +29,12 @@ enum CollectionMessage {
 }
 
 impl<'a> ParallelCollector<'a> {
+    /// Creates a controller-side collector rooted at `cwd`.
     pub fn new(cwd: &'a Utf8Path, settings: CollectionSettings<'a>) -> Self {
         Self { cwd, settings }
     }
 
-    /// Collect from a directory in parallel using `WalkParallel`.
+    /// Walks a directory concurrently while serializing package mutation on a receiver thread.
     pub(crate) fn collect_directory(&self, path: &Utf8PathBuf) -> Result<CollectedPackage> {
         let (tx, rx) = unbounded::<CollectionMessage>();
 
@@ -128,7 +132,7 @@ impl<'a> ParallelCollector<'a> {
         Ok(package)
     }
 
-    /// Collect from all paths and build a complete package structure.
+    /// Collects explicit files, functions, and directories into one package tree.
     pub fn collect_all(&self, test_paths: Vec<TestPath>) -> Result<CollectedPackage> {
         let mut session_package = CollectedPackage::new(self.cwd.to_path_buf());
 

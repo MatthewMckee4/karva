@@ -1,3 +1,5 @@
+//! Command-line syntax shared by the controller and worker binaries.
+
 use clap::Parser;
 use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
@@ -35,12 +37,15 @@ const STYLES: Styles = Styles::styled()
 #[command(author, name = "karva", about = "A Python test runner.")]
 #[command(version = karva_version::version())]
 #[command(styles = STYLES)]
+/// Root command-line arguments for the `karva` executable.
 pub struct Args {
+    /// Top-level operation selected by the user.
     #[command(subcommand)]
     pub command: Command,
 }
 
 #[derive(Debug, clap::Subcommand)]
+/// Top-level operations supported by the `karva` executable.
 pub enum Command {
     /// Run tests.
     Test(Box<TestCommand>),
