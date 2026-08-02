@@ -1,9 +1,10 @@
 use std::cmp::Reverse;
 use std::collections::HashMap;
-use std::io;
+use std::io::{self, Write};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
+use tempfile::NamedTempFile;
 
 use crate::format::SnapshotFile;
 
@@ -56,21 +57,28 @@ pub fn read_snapshot(path: &Utf8Path) -> io::Result<Option<SnapshotFile>> {
     })
 }
 
-/// Write a snapshot file, creating parent directories as needed.
+/// Atomically write a snapshot file, creating parent directories as needed.
 pub fn write_snapshot(path: &Utf8Path, snapshot: &SnapshotFile) -> io::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(path, snapshot.serialize())
+    write_snapshot_file(path, snapshot)
 }
 
-/// Write a pending snapshot file (`.snap.new`), creating parent directories as needed.
+/// Atomically write a pending snapshot file (`.snap.new`), creating parent directories as needed.
 pub fn write_pending_snapshot(snap_path: &Utf8Path, snapshot: &SnapshotFile) -> io::Result<()> {
-    let pending = pending_path(snap_path);
-    if let Some(parent) = pending.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(pending, snapshot.serialize())
+    write_snapshot_file(&pending_path(snap_path), snapshot)
+}
+
+fn write_snapshot_file(path: &Utf8Path, snapshot: &SnapshotFile) -> io::Result<()> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_str().is_empty())
+        .unwrap_or_else(|| Utf8Path::new("."));
+    fs::create_dir_all(parent)?;
+
+    let mut temp = NamedTempFile::new_in(parent)?;
+    temp.write_all(snapshot.serialize().as_bytes())?;
+    temp.flush()?;
+    temp.persist(path.as_std_path()).map_err(|err| err.error)?;
+    Ok(())
 }
 
 /// Information about a pending snapshot found on disk.
@@ -611,22 +619,27 @@ mod tests {
     }
 
     #[test]
-    fn write_and_read_snapshot() {
+    fn write_snapshot_replaces_existing_file() {
         let dir = tempfile::tempdir().expect("temp dir");
         let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
         let snap_path = dir_path.join("snapshots").join("mod__test.snap");
 
-        let snapshot = SnapshotFile {
+        let first = SnapshotFile {
             metadata: crate::format::SnapshotMetadata {
                 source: Some("test.py:3::test_foo".to_string()),
                 ..Default::default()
             },
             content: "hello world\n".to_string(),
         };
+        let second = SnapshotFile {
+            content: "goodbye world\n".to_string(),
+            ..first.clone()
+        };
 
-        write_snapshot(&snap_path, &snapshot).expect("write");
+        write_snapshot(&snap_path, &first).expect("write first");
+        write_snapshot(&snap_path, &second).expect("write second");
         let read_back = read_snapshot(&snap_path).expect("read").expect("snapshot");
-        assert_eq!(read_back, snapshot);
+        assert_eq!(read_back, second);
     }
 
     #[test]
