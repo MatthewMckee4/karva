@@ -13,9 +13,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use pyo3::prelude::*;
 
-use crate::branches::branch_arcs;
+use crate::branches::branch_arcs_with_exclusions;
 use crate::data::{BranchArc, BranchContextEntry, BranchEntry, FileEntry, WorkerFile};
-use crate::executable::executable_lines;
+use crate::executable::{CoverageExclusions, executable_lines_with_exclusions};
 
 /// Configuration for a single worker's coverage measurement.
 #[derive(Debug, Clone)]
@@ -32,6 +32,9 @@ pub struct CoverageConfig {
 
     /// Whether to record branch arcs in addition to executed lines.
     pub branches: bool,
+
+    /// Regular expressions excluding matched source lines and clauses.
+    pub exclude_lines: Vec<String>,
 }
 
 /// Path components inside a source root that suppress tracking. These match
@@ -44,11 +47,14 @@ const PATH_EXCLUDES: &[&str] = &["site-packages", "dist-packages", ".venv", ".to
 pub struct CoverageSession {
     tracer: Py<CoverageTracer>,
     data_file: Utf8PathBuf,
+    exclusions: CoverageExclusions,
 }
 
 impl CoverageSession {
     /// Installs the best tracer supported by the embedded Python version.
     pub fn start(py: Python<'_>, cwd: &Utf8Path, config: &CoverageConfig) -> PyResult<Self> {
+        let exclusions = CoverageExclusions::new(&config.exclude_lines)
+            .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
         let roots: Vec<PathBuf> = config
             .sources
             .iter()
@@ -83,12 +89,17 @@ impl CoverageSession {
         Ok(Self {
             tracer,
             data_file: config.data_file.clone(),
+            exclusions,
         })
     }
 
     /// Stops tracing and atomically persists this worker's collected coverage.
     pub fn stop_and_save(self, py: Python<'_>) -> PyResult<()> {
-        let Self { tracer, data_file } = self;
+        let Self {
+            tracer,
+            data_file,
+            exclusions,
+        } = self;
         let bound = tracer.bind(py);
         let tool_id = bound.borrow().monitoring_tool_id.get().copied();
 
@@ -127,12 +138,15 @@ impl CoverageSession {
         drop(borrowed);
         save_data(
             &data_file,
-            into_owned_paths(executed),
-            into_owned_paths(contexts),
-            into_owned_paths(arcs),
-            into_owned_paths(arc_contexts),
+            CollectedCoverage {
+                executed: into_owned_paths(executed),
+                contexts: into_owned_paths(contexts),
+                arcs: into_owned_paths(arcs),
+                arc_contexts: into_owned_paths(arc_contexts),
+            },
             branches,
             &roots,
+            &exclusions,
         )
         .map_err(|err| {
             pyo3::exceptions::PyOSError::new_err(format!(
@@ -769,22 +783,33 @@ fn into_owned_paths<V>(map: HashMap<TrackedPath, V>) -> HashMap<PathBuf, V> {
         .collect()
 }
 
+struct CollectedCoverage {
+    executed: HashMap<PathBuf, HashSet<u32>>,
+    contexts: HashMap<PathBuf, HashMap<u32, HashSet<String>>>,
+    arcs: HashMap<PathBuf, HashSet<BranchArc>>,
+    arc_contexts: HashMap<PathBuf, HashMap<BranchArc, HashSet<String>>>,
+}
+
 fn save_data(
     data_file: &Utf8Path,
-    mut executed: HashMap<PathBuf, HashSet<u32>>,
-    mut contexts: HashMap<PathBuf, HashMap<u32, HashSet<String>>>,
-    mut arcs: HashMap<PathBuf, HashSet<BranchArc>>,
-    mut arc_contexts: HashMap<PathBuf, HashMap<BranchArc, HashSet<String>>>,
+    collected: CollectedCoverage,
     branches: bool,
     roots: &[PathBuf],
+    exclusions: &CoverageExclusions,
 ) -> std::io::Result<()> {
+    let CollectedCoverage {
+        mut executed,
+        mut contexts,
+        mut arcs,
+        mut arc_contexts,
+    } = collected;
     for path in walk_source_files(roots) {
         executed.entry(path).or_default();
     }
 
     let mut files = BTreeMap::new();
     for (path, hits) in executed {
-        let executable = executable_lines(&path)?;
+        let (executable, excluded) = executable_lines_with_exclusions(&path, exclusions)?;
         if executable.is_empty() {
             continue;
         }
@@ -800,7 +825,7 @@ fn save_data(
             .map(|(line, contexts)| (line, contexts.into_iter().collect::<BTreeSet<_>>()))
             .collect();
         let branches = if branches {
-            let possible = branch_arcs(&path)?;
+            let possible = branch_arcs_with_exclusions(&path, exclusions)?;
             let executed_arcs = arcs.remove(&path).unwrap_or_default();
             let mut possible_vec: Vec<BranchArc> = possible.iter().copied().collect();
             possible_vec.sort_unstable();
@@ -828,6 +853,11 @@ fn save_data(
             path.to_string_lossy().into_owned(),
             FileEntry {
                 executable: executable_lines_vec,
+                excluded: {
+                    let mut lines: Vec<_> = excluded.into_iter().collect();
+                    lines.sort_unstable();
+                    lines
+                },
                 executed: executed_lines,
                 contexts: context_lines,
                 branches,
@@ -1014,12 +1044,15 @@ code = Code()
 
         let err = save_data(
             &data_file,
-            executed,
-            HashMap::new(),
-            HashMap::new(),
-            HashMap::new(),
+            CollectedCoverage {
+                executed,
+                contexts: HashMap::new(),
+                arcs: HashMap::new(),
+                arc_contexts: HashMap::new(),
+            },
             false,
             &[],
+            &CoverageExclusions::default(),
         )
         .expect_err("missing source should fail");
 

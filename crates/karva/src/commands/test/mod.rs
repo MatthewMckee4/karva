@@ -77,6 +77,15 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
 
     let project = Project::from_metadata(project_metadata);
 
+    let exclusion_patterns = project
+        .settings()
+        .coverage()
+        .exclude_lines
+        .iter()
+        .map(|pattern| pattern.as_str().to_owned())
+        .collect::<Vec<_>>();
+    karva_coverage::executable::CoverageExclusions::new(&exclusion_patterns)?;
+
     let printer = Printer::new(
         project.settings().terminal().status_level,
         project.settings().terminal().final_status_level,

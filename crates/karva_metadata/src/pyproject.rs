@@ -3,7 +3,8 @@ use thiserror::Error;
 
 use camino::Utf8PathBuf;
 
-use crate::options::Config;
+use crate::options::{Config, CoverageOptions, DEFAULT_PROFILE};
+use crate::settings::CoverageExcludePattern;
 
 /// A `pyproject.toml` as specified in PEP 517.
 #[derive(Deserialize, Serialize, Debug, Default, Clone)]
@@ -50,4 +51,56 @@ impl PyProject {
 pub struct Tool {
     /// Parsed `[tool.karva]` configuration, when present.
     pub karva: Option<Config>,
+
+    /// coverage.py-compatible settings Karva can consume without coverage.py.
+    pub coverage: Option<CoveragePyOptions>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq)]
+/// Supported subset of `[tool.coverage]`.
+pub struct CoveragePyOptions {
+    /// Report analysis settings.
+    pub report: Option<CoveragePyReportOptions>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq)]
+/// Supported subset of `[tool.coverage.report]`.
+pub struct CoveragePyReportOptions {
+    /// Regular expressions excluding matching source lines or clauses.
+    #[serde(default, rename = "exclude_lines")]
+    pub exclude_lines: Vec<CoverageExcludePattern>,
+}
+
+impl PyProject {
+    pub(crate) fn into_karva_config(self) -> Config {
+        let mut config = self
+            .tool
+            .as_ref()
+            .and_then(|tool| tool.karva.clone())
+            .unwrap_or_default();
+        self.apply_coverage_exclusions(&mut config);
+        config
+    }
+
+    pub(crate) fn apply_coverage_exclusions(&self, config: &mut Config) {
+        let patterns = self
+            .tool
+            .as_ref()
+            .and_then(|tool| tool.coverage.as_ref())
+            .and_then(|coverage| coverage.report.as_ref())
+            .map(|report| report.exclude_lines.clone())
+            .unwrap_or_default();
+        if !patterns.is_empty() {
+            let options = config
+                .profile
+                .entry(DEFAULT_PROFILE.to_owned())
+                .or_default();
+            let coverage = options
+                .coverage
+                .get_or_insert_with(CoverageOptions::default);
+            if coverage.exclude_lines.is_none() {
+                coverage.exclude_lines = Some(patterns);
+            }
+        }
+    }
 }

@@ -211,6 +211,7 @@ fn worker_coverage_config(
         data_file,
         contexts: sub_command.cov_context == Some(karva_cli::CovContext::Test),
         branches: sub_command.cov_branch,
+        exclude_lines: sub_command.cov_exclude_line.clone(),
     }))
 }
 

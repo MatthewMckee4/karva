@@ -236,7 +236,7 @@ fn merge_worker_file(
     let incoming = NativeFileCoverage {
         source_fingerprint: fingerprint,
         executable: file.executable.into_iter().collect(),
-        excluded: BTreeSet::new(),
+        excluded: file.excluded.into_iter().collect(),
         executed: file.executed.into_iter().collect(),
         line_contexts: file.contexts,
         branches: match (mode, file.branches) {
@@ -565,6 +565,7 @@ mod tests {
                 source.to_string(),
                 crate::data::FileEntry {
                     executable: vec![1, 2],
+                    excluded: Vec::new(),
                     executed: vec![executed],
                     contexts: BTreeMap::from([(executed, BTreeSet::from([context.to_owned()]))]),
                     branches: None,

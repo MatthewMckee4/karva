@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use karva_combine::Combine;
 use karva_logging::{FinalStatusLevel, StatusLevel};
+use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::filter::{EvalContext, FiltersetSet, ValidatedFilter};
@@ -10,6 +11,34 @@ use crate::options::{CovReport, OutputFormat};
 
 /// Project-relative native coverage artifact used when no path is configured.
 pub const DEFAULT_COVERAGE_DATA_FILE: &str = ".karva/coverage/data.json";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(transparent)]
+/// Validated regular expression used to exclude coverage opportunities.
+pub struct CoverageExcludePattern(String);
+
+impl CoverageExcludePattern {
+    /// Returns original configured regular expression.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for CoverageExcludePattern {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let pattern = String::deserialize(deserializer)?;
+        Regex::new(&pattern).map_err(|error| {
+            serde::de::Error::custom(format!(
+                "invalid coverage exclusion pattern `{pattern}`: {error}"
+            ))
+        })?;
+        Ok(Self(pattern))
+    }
+}
 
 macro_rules! impl_duration_secs_deserialize {
     ($type:ident, $option:literal) => {
@@ -624,6 +653,9 @@ pub struct CoverageSettings {
 
     /// Report-path globs excluded after inclusion.
     pub omit: Vec<String>,
+
+    /// Regular expressions excluding matched source lines and clauses.
+    pub exclude_lines: Vec<CoverageExcludePattern>,
 
     /// Regular expressions selecting execution contexts for reports.
     pub contexts: Vec<String>,

@@ -18,6 +18,10 @@ pub struct FileEntry {
     /// Sorted executable source-line numbers.
     pub executable: Vec<u32>,
 
+    /// Executable source lines removed by exclusion rules.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub excluded: Vec<u32>,
+
     /// Source-line numbers observed at runtime.
     pub executed: Vec<u32>,
 

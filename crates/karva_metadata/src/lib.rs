@@ -20,10 +20,10 @@ pub use options::{
 };
 pub use pyproject::{PyProject, PyProjectError};
 pub use settings::{
-    CovFailUnder, CoveragePrecision, CoverageSettings, DEFAULT_COVERAGE_DATA_FILE, FailSlowSecs,
-    FlakyResult, JunitFlakyFailStatus, JunitSettings, NoTestsMode, OverrideSettings,
-    ProjectSettings, RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs, TerminationGracePeriodSecs,
-    TestTimeoutSecs,
+    CovFailUnder, CoverageExcludePattern, CoveragePrecision, CoverageSettings,
+    DEFAULT_COVERAGE_DATA_FILE, FailSlowSecs, FlakyResult, JunitFlakyFailStatus, JunitSettings,
+    NoTestsMode, OverrideSettings, ProjectSettings, RunIgnoredMode, RunTimeoutSecs,
+    SlowTimeoutSecs, TerminationGracePeriodSecs, TestTimeoutSecs,
 };
 
 use crate::options::KarvaTomlError;
@@ -90,14 +90,7 @@ impl ProjectMetadata {
         root: Utf8PathBuf,
         python_version: PythonVersion,
     ) -> Self {
-        Self::from_config(
-            pyproject
-                .tool
-                .and_then(|tool| tool.karva)
-                .unwrap_or_default(),
-            root,
-            python_version,
-        )
+        Self::from_config(pyproject.into_karva_config(), root, python_version)
     }
 
     /// Loads a project from a parsed [`Config`].
@@ -138,13 +131,17 @@ impl ProjectMetadata {
         for project_root in path.ancestors() {
             let pyproject = try_load_pyproject(project_root)?;
 
-            if let Some(config) = try_load_karva_toml(project_root)? {
+            if let Some(mut config) = try_load_karva_toml(project_root)? {
                 if has_karva_section(pyproject.as_ref()) {
                     let pyproject_path = project_root.join("pyproject.toml");
                     let karva_toml_path = project_root.join("karva.toml");
                     tracing::warn!(
                         "Ignoring the `tool.karva` section in `{pyproject_path}` because `{karva_toml_path}` takes precedence."
                     );
+                }
+
+                if let Some(pyproject) = &pyproject {
+                    pyproject.apply_coverage_exclusions(&mut config);
                 }
 
                 check_required_version(&config, &project_root.join("karva.toml"))?;

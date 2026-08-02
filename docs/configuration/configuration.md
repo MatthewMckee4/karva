@@ -109,6 +109,23 @@ data-file = ".karva/coverage/data.json"
 
 ---
 
+### `exclude-lines`
+
+Regular expressions excluding matching source lines or whole clauses.
+
+**Default value**: `null`
+
+**Type**: `list[str]`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.coverage]
+exclude-lines = ["if TYPE_CHECKING:"]
+```
+
+---
+
 ### `fail-under`
 
 Minimum total coverage percentage required for the run to succeed.

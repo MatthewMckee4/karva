@@ -311,6 +311,10 @@ pub struct SubTestCommand {
     #[clap(long, hide = true, value_name = "PATH")]
     pub cov_data_file: Option<Utf8PathBuf>,
 
+    /// Internal: validated exclusion expression forwarded to workers.
+    #[clap(long, hide = true, action = clap::ArgAction::Append)]
+    pub cov_exclude_line: Vec<String>,
+
     /// Internal: a single per-test override entry, encoded as JSON.
     ///
     /// Workers receive overrides from the main process via this flag, one
@@ -516,6 +520,7 @@ impl SubTestCommand {
                 sources: (!self.cov.is_empty()).then_some(self.cov),
                 include: (!self.cov_include.is_empty()).then_some(self.cov_include),
                 omit: (!self.cov_omit.is_empty()).then_some(self.cov_omit),
+                exclude_lines: None,
                 contexts: None,
                 precision: None,
                 append: self.cov_append,
