@@ -111,7 +111,7 @@ def test_yes():
 
     Name             Stmts   Miss   Branch   BrPart   Cover   Missing
     [LONG-LINE]
-    test_branch.py       6      1        2        1     75%   5
+    test_branch.py       6      1        2        1     75%   5, 3->5
     [LONG-LINE]
     TOTAL                6      1        2        1     75%
 
@@ -254,7 +254,7 @@ def test_yes():
 
     Name                    Stmts   Miss   Branch   BrPart   Cover   Missing
     [LONG-LINE]
-    test_branch_config.py       6      1        2        1     75%   5
+    test_branch_config.py       6      1        2        1     75%   5, 3->5
     [LONG-LINE]
     TOTAL                       6      1        2        1     75%
 

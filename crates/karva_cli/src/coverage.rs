@@ -103,7 +103,69 @@ pub enum CoverageAction {
 
 #[derive(Debug, Args)]
 /// Options specific to the terminal coverage report.
-pub struct CoverageReportCommand;
+pub struct CoverageReportCommand {
+    /// File paths, directories, or dotted module names to include.
+    #[arg(value_name = "SELECTOR")]
+    pub selectors: Vec<String>,
+
+    /// Show missing line ranges and branch arcs.
+    #[arg(long)]
+    pub show_missing: bool,
+
+    /// Hide files with complete coverage without changing totals.
+    #[arg(long)]
+    pub skip_covered: bool,
+
+    /// Hide files with no statements or branches without changing totals.
+    #[arg(long)]
+    pub skip_empty: bool,
+
+    /// Column used to order displayed files.
+    #[arg(long, value_enum, default_value_t)]
+    pub sort: CoverageSort,
+
+    /// Report representation.
+    #[arg(long, value_enum, default_value_t)]
+    pub format: CoverageFormat,
+
+    /// Write the report to this path instead of stdout.
+    #[arg(long, value_name = "PATH")]
+    pub output: Option<Utf8PathBuf>,
+
+    /// Append to the output file instead of replacing it.
+    #[arg(long, requires = "output", default_missing_value = "true", require_equals = true, num_args = 0..=1)]
+    pub append: Option<bool>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, clap::ValueEnum)]
+/// Terminal coverage report representation.
+pub enum CoverageFormat {
+    /// Human-readable aligned table.
+    #[default]
+    Text,
+    /// GitHub-flavored Markdown table.
+    Markdown,
+    /// Numeric total percentage only.
+    Total,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, clap::ValueEnum)]
+/// Column used to order displayed coverage files.
+pub enum CoverageSort {
+    /// Source path.
+    #[default]
+    Name,
+    /// Statement count.
+    Statements,
+    /// Missing statement count.
+    Misses,
+    /// Branch count.
+    Branches,
+    /// Partial branch count.
+    PartialBranches,
+    /// Coverage percentage.
+    Coverage,
+}
 
 #[cfg(test)]
 mod tests {

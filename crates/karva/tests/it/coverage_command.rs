@@ -53,6 +53,29 @@ fn report_reads_default_native_data() {
 }
 
 #[test]
+fn report_auto_combines_pending_shards() {
+    let context = TestContext::new();
+    write_coverage(
+        &context,
+        Utf8Path::new(".karva/coverage/pending/shard-a.json"),
+    );
+
+    assert_cmd_snapshot!(context.coverage("report"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Name         Stmts   Miss   Cover
+    [LONG-LINE]
+    src/app.py       2      1     50%
+    [LONG-LINE]
+    TOTAL            2      1     50%
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn report_discovers_project_from_subdirectory_and_honors_config() {
     let context = TestContext::new();
     context.write_file(
@@ -133,9 +156,9 @@ fn report_fail_under_returns_failure() {
     let context = TestContext::new();
     write_coverage(&context, Utf8Path::new(".karva/coverage/data.json"));
 
-    assert_cmd_snapshot!(context.coverage("report").arg("--fail-under=75"), @r"
+    assert_cmd_snapshot!(context.coverage("report").arg("--fail-under=75"), @"
     success: false
-    exit_code: 1
+    exit_code: 2
     ----- stdout -----
 
     Name         Stmts   Miss   Cover
@@ -144,9 +167,104 @@ fn report_fail_under_returns_failure() {
     [LONG-LINE]
     TOTAL            2      1     50%
 
+    ----- stderr -----
     coverage failure: required total coverage of 75% not reached, total coverage was 50%
+    ");
+}
+
+#[test]
+fn report_total_outputs_only_percentage() {
+    let context = TestContext::new();
+    write_coverage(&context, Utf8Path::new(".karva/coverage/data.json"));
+
+    assert_cmd_snapshot!(context.coverage("report").args(["--format", "total"]), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    50
 
     ----- stderr -----
+    ");
+}
+
+#[test]
+fn report_show_missing_lists_ranges() {
+    let context = TestContext::new();
+    write_coverage(&context, Utf8Path::new(".karva/coverage/data.json"));
+
+    assert_cmd_snapshot!(context.coverage("report").arg("--show-missing"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Name         Stmts   Miss   Cover   Missing
+    [LONG-LINE]
+    src/app.py       2      1     50%   2
+    [LONG-LINE]
+    TOTAL            2      1     50%
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn report_rejects_unmatched_selector() {
+    let context = TestContext::new();
+    write_coverage(&context, Utf8Path::new(".karva/coverage/data.json"));
+
+    assert_cmd_snapshot!(context.coverage("report").arg("missing.module"), @r"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    Karva failed
+      Cause: coverage selector `missing.module` matched no source files
+    ");
+}
+
+#[test]
+fn report_writes_and_appends_markdown() {
+    let context = TestContext::new();
+    write_coverage(&context, Utf8Path::new(".karva/coverage/data.json"));
+
+    assert_cmd_snapshot!(
+        context
+            .coverage("report")
+            .args(["--format", "markdown", "--output", "summary.md"]),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    "
+    );
+    assert_cmd_snapshot!(
+        context.coverage("report").args([
+            "--format",
+            "markdown",
+            "--output",
+            "summary.md",
+            "--append",
+        ]),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    "
+    );
+    insta::assert_snapshot!(context.read_file("summary.md"), @r"
+    | Name | Stmts | Miss | Cover |
+    | --- | ---: | ---: | ---: |
+    | src/app.py | 2 | 1 | 50% |
+    | **TOTAL** | 2 | 1 | **50%** |
+    | Name | Stmts | Miss | Cover |
+    | --- | ---: | ---: | ---: |
+    | src/app.py | 2 | 1 | 50% |
+    | **TOTAL** | 2 | 1 | **50%** |
     ");
 }
 
