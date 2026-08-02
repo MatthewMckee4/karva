@@ -1725,7 +1725,7 @@ disabled = true
           |
         3 | disabled = true
           | ^^^^^^^^
-        unknown field `disabled`, expected one of `data-file`, `sources`, `include`, `omit`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
+        unknown field `disabled`, expected one of `data-file`, `path-aliases`, `sources`, `include`, `omit`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
         "
         );
     }

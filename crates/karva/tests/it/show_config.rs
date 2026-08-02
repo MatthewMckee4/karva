@@ -202,7 +202,6 @@ fail-under = 90
 
     [coverage]
     data-file = ".karva/coverage/data.json"
-    path-aliases = []
     sources = ["src"]
     include = ["src/app/*"]
     omit = ["**/generated.py"]
