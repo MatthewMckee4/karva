@@ -1,7 +1,6 @@
 //! Fixture setup, caching, and teardown for package-runner scopes.
 
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -13,9 +12,11 @@ use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
 
 use crate::diagnostic::fixture_resolution_diagnostic;
-use crate::extensions::fixtures::{Finalizer, FixtureScope, HasFixtures, NormalizedFixture};
+use crate::extensions::fixtures::{
+    Finalizer, FixtureId, FixturePlan, FixtureScope, HasFixtures, NormalizedFixture,
+};
 use crate::runner::FixtureArguments;
-use crate::runner::fixture_resolver::RuntimeFixtureResolver;
+use crate::runner::fixture_resolver::FixturePlanCompiler;
 use crate::utils::run_coroutine;
 
 use super::PackageRunner;
@@ -34,16 +35,18 @@ impl PackageRunner<'_, '_> {
         current: &'a (dyn HasFixtures<'a> + 'a),
         scope: FixtureScope,
     ) -> Result<(), TestError> {
-        let mut resolver = RuntimeFixtureResolver::new(parents, current);
-        let auto_use_fixtures = match resolver.get_normalized_auto_use_fixtures(py, scope) {
+        let mut compiler = FixturePlanCompiler::new(parents, current);
+        let auto_use_fixtures = match compiler.get_normalized_auto_use_fixtures(py, scope) {
             Ok(fixtures) => fixtures,
             Err(error) => {
                 return Err(TestError::new(fixture_resolution_diagnostic(error))
                     .with_related(self.clean_up_scope(py, scope)));
             }
         };
+        let fixture_plan = compiler.finish();
 
-        let failures = self.run_fixtures(py, &auto_use_fixtures, FixtureUsage::AutoUse);
+        let failures =
+            self.run_fixtures(py, &fixture_plan, &auto_use_fixtures, FixtureUsage::AutoUse);
         let Some(failures) = FixtureSetupError::from_vec(failures) else {
             return Ok(());
         };
@@ -89,18 +92,24 @@ impl PackageRunner<'_, '_> {
     pub(super) fn prepare_test_fixtures(
         &self,
         py: Python<'_>,
-        fixture_dependencies: &[Rc<NormalizedFixture>],
-        use_fixture_dependencies: &[Rc<NormalizedFixture>],
-        auto_use_fixtures: &[Rc<NormalizedFixture>],
+        fixture_plan: &FixturePlan,
+        fixture_dependencies: &[FixtureId],
+        use_fixture_dependencies: &[FixtureId],
+        auto_use_fixtures: &[FixtureId],
         params: HashMap<String, Arc<Py<PyAny>>>,
     ) -> PreparedFixtures {
         let mut test_finalizers = Vec::new();
-        let mut fixture_call_errors =
-            self.run_fixtures(py, use_fixture_dependencies, FixtureUsage::UseFixtures);
+        let mut fixture_call_errors = self.run_fixtures(
+            py,
+            fixture_plan,
+            use_fixture_dependencies,
+            FixtureUsage::UseFixtures,
+        );
         let mut function_arguments = FixtureArguments::default();
 
-        for fixture in fixture_dependencies {
-            match self.run_fixture(py, fixture) {
+        for fixture_id in fixture_dependencies {
+            let fixture = fixture_plan.fixture(*fixture_id);
+            match self.run_fixture(py, fixture_plan, *fixture_id) {
                 Ok((value, finalizer)) => {
                     function_arguments
                         .insert(fixture.function_name().to_string(), value.clone_ref(py));
@@ -117,7 +126,12 @@ impl PackageRunner<'_, '_> {
             }
         }
 
-        fixture_call_errors.extend(self.run_fixtures(py, auto_use_fixtures, FixtureUsage::AutoUse));
+        fixture_call_errors.extend(self.run_fixtures(
+            py,
+            fixture_plan,
+            auto_use_fixtures,
+            FixtureUsage::AutoUse,
+        ));
 
         for (key, value) in params {
             function_arguments.insert(
@@ -138,8 +152,10 @@ impl PackageRunner<'_, '_> {
     fn run_fixture(
         &self,
         py: Python<'_>,
-        fixture: &NormalizedFixture,
+        fixture_plan: &FixturePlan,
+        fixture_id: FixtureId,
     ) -> Result<(Py<PyAny>, Option<Finalizer>), FixtureCallError> {
+        let fixture = fixture_plan.fixture(fixture_id);
         if let Some(cached) = self
             .fixture_cache
             .get(py, fixture.function_name(), fixture.scope())
@@ -149,8 +165,9 @@ impl PackageRunner<'_, '_> {
 
         let mut function_arguments = FixtureArguments::default();
 
-        for dependency in fixture.dependencies() {
-            match self.run_fixture(py, dependency) {
+        for dependency_id in fixture.dependencies() {
+            let dependency = fixture_plan.fixture(*dependency_id);
+            match self.run_fixture(py, fixture_plan, *dependency_id) {
                 Ok((value, finalizer)) => {
                     function_arguments
                         .insert(dependency.function_name().to_string(), value.clone_ref(py));
@@ -190,15 +207,17 @@ impl PackageRunner<'_, '_> {
     }
 
     /// Runs fixtures whose values are not passed to the test call.
-    fn run_fixtures<P: Deref<Target = NormalizedFixture>>(
+    fn run_fixtures(
         &self,
         py: Python<'_>,
-        fixtures: &[P],
+        fixture_plan: &FixturePlan,
+        fixture_ids: &[FixtureId],
         usage: FixtureUsage,
     ) -> Vec<PreparedFixtureFailure> {
         let mut errors = Vec::new();
-        for fixture in fixtures {
-            match self.run_fixture(py, fixture) {
+        for fixture_id in fixture_ids {
+            let fixture = fixture_plan.fixture(*fixture_id);
+            match self.run_fixture(py, fixture_plan, *fixture_id) {
                 Ok((_, Some(finalizer))) => self.finalizer_cache.add_finalizer(finalizer),
                 Ok((_, None)) => {}
                 Err(error) => errors.push(PreparedFixtureFailure::new(

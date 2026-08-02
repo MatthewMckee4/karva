@@ -11,7 +11,7 @@ use karva_metadata::{FlakyResult, JunitFlakyFailStatus, RunIgnoredMode};
 use karva_python_semantic::QualifiedTestName;
 use pyo3::prelude::*;
 
-use crate::extensions::fixtures::NormalizedFixture;
+use crate::extensions::fixtures::{FixtureId, FixturePlan, NormalizedFixture};
 use crate::extensions::functions::snapshot::SnapshotContext;
 use crate::extensions::tags::Tags;
 use crate::extensions::tags::expect_fail::ExpectFailTag;
@@ -51,12 +51,14 @@ struct VariantRunner<'runner, 'context, 'settings, 'test, 'py> {
     params: HashMap<String, Arc<Py<PyAny>>>,
     /// User-defined parameter ID used in the displayed test name.
     id: Option<String>,
+    /// Compiled fixture arena for this test.
+    fixture_plan: Rc<FixturePlan>,
     /// Fixtures passed as Python keyword arguments.
-    fixture_dependencies: Rc<[Rc<NormalizedFixture>]>,
+    fixture_dependencies: Rc<[FixtureId]>,
     /// Fixtures run for side effects but omitted from test arguments.
-    use_fixture_dependencies: Rc<[Rc<NormalizedFixture>]>,
+    use_fixture_dependencies: Rc<[FixtureId]>,
     /// Function-scoped auto-use fixtures.
-    auto_use_fixtures: Rc<[Rc<NormalizedFixture>]>,
+    auto_use_fixtures: Rc<[FixtureId]>,
     /// Test, parameter, and fixture tags resolved for this variant.
     tags: Tags,
     /// Module path used to build stable snapshot identity.
@@ -78,6 +80,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             test,
             params,
             id,
+            fixture_plan,
             fixture_dependencies,
             use_fixture_dependencies,
             auto_use_fixtures,
@@ -90,6 +93,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             test,
             params,
             id,
+            fixture_plan,
             fixture_dependencies,
             use_fixture_dependencies,
             auto_use_fixtures,
@@ -164,6 +168,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let setup_start = Instant::now();
         let fixtures = self.package_runner.prepare_test_fixtures(
             self.py,
+            &self.fixture_plan,
             &self.fixture_dependencies,
             &self.use_fixture_dependencies,
             &self.auto_use_fixtures,
@@ -194,13 +199,14 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let fixture_names = self
             .fixture_dependencies
             .iter()
-            .map(|fixture| fixture.function_name())
+            .map(|fixture_id| self.fixture_plan.fixture(*fixture_id).function_name())
             .collect::<Vec<_>>();
         let framework_fixture_names = self
             .fixture_dependencies
             .iter()
+            .map(|fixture_id| self.fixture_plan.fixture(*fixture_id))
             .filter(|fixture| fixture.name.module_path().module_name() == "karva._builtins")
-            .map(|fixture| fixture.function_name())
+            .map(NormalizedFixture::function_name)
             .collect::<Vec<_>>();
         let full_name = if let Some(id) = &self.id {
             format!("{name}({id})")
