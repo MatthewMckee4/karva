@@ -4,8 +4,8 @@ use camino::{Utf8Path, Utf8PathBuf};
 use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
-use ruff_source_file::SourceFile;
 
+use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::FixtureScope;
 use crate::runner::FixtureArguments;
 use crate::utils::run_coroutine;
@@ -43,8 +43,8 @@ impl FixturePlan {
 /// and normalized the same way as user-defined ones.
 #[derive(Debug)]
 pub struct NormalizedFixture {
-    /// Fully qualified name including module path and function name.
-    pub(crate) name: QualifiedFunctionName,
+    /// Immutable fixture identity, syntax, and source.
+    pub(crate) definition: Rc<FunctionDefinition>,
 
     /// Resolved fixture dependencies this fixture requires.
     pub(crate) dependencies: Vec<FixtureId>,
@@ -60,18 +60,20 @@ pub struct NormalizedFixture {
 
     /// Reference to the Python callable that produces the fixture value.
     pub(crate) py_function: Py<PyAny>,
-
-    /// AST representation of the fixture function definition.
-    pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
-
-    /// Source code captured during discovery for diagnostic reporting.
-    pub(crate) source_file: SourceFile,
 }
 
 impl NormalizedFixture {
     /// Returns the fixture's unqualified function name.
     pub(crate) fn function_name(&self) -> &str {
-        self.name.function_name()
+        self.definition.name().function_name()
+    }
+
+    pub(crate) fn name(&self) -> &QualifiedFunctionName {
+        self.definition.name()
+    }
+
+    pub(crate) fn statement(&self) -> &StmtFunctionDef {
+        self.definition.statement()
     }
 
     /// Returns the fixture dependencies.
@@ -102,7 +104,7 @@ impl NormalizedFixture {
             self.py_function.call(py, (), Some(&kwargs_dict))
         };
 
-        if self.stmt_function_def.is_async && !self.is_generator {
+        if self.statement().is_async && !self.is_generator {
             result.and_then(|coroutine| run_coroutine(py, coroutine))
         } else {
             result

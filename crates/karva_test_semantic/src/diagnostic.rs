@@ -260,8 +260,8 @@ fn report_dependency_chain(
             format!("Fixture `{}` requires `{next_name}`", entry.name),
         );
 
-        let span =
-            Span::from(entry.source_file.clone()).with_range(entry.stmt_function_def.name.range);
+        let span = Span::from(entry.definition.source_file().clone())
+            .with_range(entry.definition.statement().name.range);
 
         sub.annotate(Annotation::primary(span));
         diagnostic.sub(sub);
@@ -359,8 +359,7 @@ pub fn fixture_failure_diagnostic(
     let FixtureCallError {
         fixture_name,
         error,
-        stmt_function_def,
-        source_file,
+        definition,
         arguments,
         dependency_chain,
     } = error;
@@ -372,8 +371,8 @@ pub fn fixture_failure_diagnostic(
     handle_failed_function_call(
         &mut diagnostic,
         py,
-        &source_file,
-        &stmt_function_def,
+        definition.source_file(),
+        definition.statement(),
         &arguments,
         FailedFunctionCallOptions {
             function_kind: FunctionKind::Fixture,
@@ -398,12 +397,11 @@ pub fn fixture_resolution_diagnostic(error: FixtureResolutionError) -> Diagnosti
             rejected_fixtures,
         } => fixture_missing_fixtures_diagnostic(&fixture, &missing_fixtures, &rejected_fixtures),
         FixtureResolutionError::MissingTestFixtures {
-            stmt_function_def,
-            source_file,
+            definition,
             missing_fixtures,
         } => missing_fixtures_diagnostic(
-            source_file,
-            &stmt_function_def,
+            definition.source_file().clone(),
+            definition.statement(),
             &missing_fixtures,
             FunctionKind::Test,
         ),
@@ -416,8 +414,8 @@ fn fixture_cycle_diagnostic(cycle: &[FixtureResolutionEntry]) -> Diagnostic {
     if let Some(first_fixture) = cycle.first() {
         annotate_function_name(
             &mut diagnostic,
-            first_fixture.source_file.clone(),
-            &first_fixture.stmt_function_def,
+            first_fixture.definition.source_file().clone(),
+            first_fixture.definition.statement(),
         );
     }
 
@@ -429,8 +427,8 @@ fn fixture_cycle_diagnostic(cycle: &[FixtureResolutionEntry]) -> Diagnostic {
             SubDiagnosticSeverity::Info,
             format!("Fixture `{}` requires `{}`", fixture.name, dependency.name),
         );
-        let span = Span::from(fixture.source_file.clone())
-            .with_range(fixture.stmt_function_def.name.range);
+        let span = Span::from(fixture.definition.source_file().clone())
+            .with_range(fixture.definition.statement().name.range);
         sub.annotate(Annotation::primary(span));
         diagnostic.sub(sub);
     }
@@ -460,8 +458,8 @@ fn fixture_scope_mismatch_diagnostic(
 
     annotate_function_name(
         &mut diagnostic,
-        fixture.source_file.clone(),
-        &fixture.stmt_function_def,
+        fixture.definition.source_file().clone(),
+        fixture.definition.statement(),
     );
 
     for (index, path_fixture) in dependency_path.iter().enumerate() {
@@ -473,8 +471,8 @@ fn fixture_scope_mismatch_diagnostic(
                 path_fixture.name, next_fixture.name
             ),
         );
-        let span = Span::from(path_fixture.source_file.clone())
-            .with_range(path_fixture.stmt_function_def.name.range);
+        let span = Span::from(path_fixture.definition.source_file().clone())
+            .with_range(path_fixture.definition.statement().name.range);
         sub.annotate(Annotation::primary(span));
         diagnostic.sub(sub);
     }
@@ -487,8 +485,8 @@ fn fixture_scope_mismatch_diagnostic(
             dependency.scope.name()
         ),
     );
-    let span = Span::from(dependency.source_file.clone())
-        .with_range(dependency.stmt_function_def.name.range);
+    let span = Span::from(dependency.definition.source_file().clone())
+        .with_range(dependency.definition.statement().name.range);
     dependency_sub.annotate(Annotation::primary(span));
     diagnostic.sub(dependency_sub);
     diagnostic
@@ -500,8 +498,8 @@ fn fixture_missing_fixtures_diagnostic(
     rejected_fixtures: &[RejectedFixture],
 ) -> Diagnostic {
     let mut diagnostic = missing_fixtures_diagnostic(
-        fixture.source_file.clone(),
-        &fixture.stmt_function_def,
+        fixture.definition.source_file().clone(),
+        fixture.definition.statement(),
         missing_fixtures,
         FunctionKind::Fixture,
     );
