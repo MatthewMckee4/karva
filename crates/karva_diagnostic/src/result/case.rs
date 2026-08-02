@@ -43,11 +43,10 @@ impl<D> TestCaseResult<D> {
         let function_name = test_case_name.function_name();
         let module_name = function_name.module_path().module_name().to_string();
         let full_name = test_case_name.to_string();
-        let prefix = format!("{module_name}::");
-        let name = full_name
-            .strip_prefix(&prefix)
-            .unwrap_or(&full_name)
-            .to_string();
+        let name = test_case_name.parameters().map_or_else(
+            || function_name.function_name().to_string(),
+            |parameters| format!("{}({parameters})", function_name.function_name()),
+        );
 
         Self {
             module_name,
@@ -491,3 +490,28 @@ pub type TestExecutionResult = TestCaseResult<Diagnostic>;
 pub type TestExecutionOutcome = TestCaseOutcome<Diagnostic>;
 /// Worker-side retry attempt retaining Ruff diagnostics.
 pub type TestExecutionAttempt = TestCaseAttempt<Diagnostic>;
+
+#[cfg(test)]
+mod tests {
+    use karva_python_semantic::{ModulePath, QualifiedFunctionName};
+
+    use super::*;
+
+    #[test]
+    fn test_case_result_uses_structured_parameterized_name() {
+        let name = QualifiedTestName::with_parameters(
+            QualifiedFunctionName::new(
+                "test_example".to_string(),
+                ModulePath::new_with_name("test.py", "tests.test".to_string()),
+            ),
+            "value=1".to_string(),
+        );
+
+        let result =
+            TestCaseResult::<()>::new(&name, TestCaseOutcome::Passed, Duration::ZERO, None);
+
+        assert_eq!(result.module_name(), "tests.test");
+        assert_eq!(result.name(), "test_example(value=1)");
+        assert_eq!(result.full_name(), "tests.test::test_example(value=1)");
+    }
+}
