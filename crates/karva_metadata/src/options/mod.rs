@@ -1672,12 +1672,12 @@ disabled = true
 ";
         assert_snapshot!(
             Config::from_toml_str(toml).expect_err("unknown field"),
-            @r"
+            @"
         TOML parse error at line 3, column 1
           |
         3 | disabled = true
           | ^^^^^^^^
-        unknown field `disabled`, expected one of `sources`, `include`, `omit`, `report`, `report-path`, `branch`, `fail-under`
+        unknown field `disabled`, expected one of `data-file`, `sources`, `include`, `omit`, `contexts`, `precision`, `report`, `report-path`, `branch`, `fail-under`
         "
         );
     }
