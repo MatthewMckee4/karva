@@ -98,10 +98,49 @@ jobs:
 
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
 
-      - name: "Install Rust components"
-        run: rustup component add rustfmt clippy
-
       - uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
+
+  cargo-fmt:
+    name: "cargo fmt"
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    needs: determine_changes
+    if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup component add rustfmt
+
+      - name: "Check Rust formatting"
+        run: cargo fmt --all --check
+
+  cargo-clippy:
+    name: "cargo clippy"
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    needs: determine_changes
+    if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: "Install Rust toolchain"
+        run: rustup component add clippy
+
+      - name: "Lint Rust"
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
   cargo-shear:
     name: "cargo shear"
@@ -334,6 +373,8 @@ jobs:
     needs:
       - determine_changes
       - pre-commit
+      - cargo-fmt
+      - cargo-clippy
       - cargo-shear
       - cargo-test
       - wheel-smoke
@@ -347,6 +388,8 @@ jobs:
         env:
           BUILD_DOCS_RESULT: ${{ needs.build-docs.result }}
           BUILD_WINDOWS_TESTS_RESULT: ${{ needs.build-windows-tests.result }}
+          CARGO_CLIPPY_RESULT: ${{ needs.cargo-clippy.result }}
+          CARGO_FMT_RESULT: ${{ needs.cargo-fmt.result }}
           CARGO_SHEAR_RESULT: ${{ needs.cargo-shear.result }}
           CARGO_TEST_RESULT: ${{ needs.cargo-test.result }}
           CARGO_TEST_WINDOWS_RESULT: ${{ needs.cargo-test-windows.result }}
@@ -389,6 +432,8 @@ jobs:
           fi
 
           require_code_validation "cargo shear" "$CARGO_SHEAR_RESULT"
+          require_code_validation "cargo fmt" "$CARGO_FMT_RESULT"
+          require_code_validation "cargo clippy" "$CARGO_CLIPPY_RESULT"
           require_code_validation "cargo test" "$CARGO_TEST_RESULT"
           require_code_validation "wheel smoke" "$WHEEL_SMOKE_RESULT"
           require_code_validation "build tests archive | windows" "$BUILD_WINDOWS_TESTS_RESULT"

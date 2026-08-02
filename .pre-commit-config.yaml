@@ -1,11 +1,6 @@
 fail_fast: false
 
-exclude:
-  glob:
-    - "*.svg"
-    - docs/configuration/configuration.md
-    - docs/reference/cli.md
-    - docs/reference/env-vars.md
+exclude: \.svg$|^docs/configuration/configuration\.md$|^docs/reference/(cli|env-vars)\.md$
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -51,7 +46,7 @@ repos:
         priority: 0
 
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: v1.28.0
+    rev: v1.29.0
     hooks:
       - id: zizmor
         priority: 0
@@ -67,16 +62,6 @@ repos:
     hooks:
       - id: mdformat
         exclude: ^docs/(get-started/installation|index)\.md$
-        priority: 1
-
-  - repo: local
-    hooks:
-      - id: cargo-fmt
-        name: cargo fmt
-        entry: cargo fmt --
-        language: system
-        types: [rust]
-        pass_filenames: false
         priority: 1
 
   - repo: https://github.com/astral-sh/ty-pre-commit
@@ -110,14 +95,4 @@ repos:
     rev: v0.49.1
     hooks:
       - id: markdownlint-fix
-        priority: 2
-
-  - repo: https://github.com/doublify/pre-commit-rust
-    rev: v1.0
-    hooks:
-      - id: cargo-check
-        args: ["--all-targets", "--all-features"]
-        priority: 2
-      - id: clippy
-        args: ["--all-targets", "--all-features", "--", "-D", "warnings"]
         priority: 2
