@@ -54,15 +54,23 @@ impl Serialize for QualifiedFunctionName {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct QualifiedTestName {
     function_name: QualifiedFunctionName,
-    full_name: Option<String>,
+    parameters: Option<String>,
 }
 
 impl QualifiedTestName {
-    /// Creates an identity whose `full_name`, when present, must start with `function_name`.
-    pub fn new(function_name: QualifiedFunctionName, full_name: Option<String>) -> Self {
+    /// Creates an identity for an unparameterized test function.
+    pub fn new(function_name: QualifiedFunctionName) -> Self {
         Self {
             function_name,
-            full_name,
+            parameters: None,
+        }
+    }
+
+    /// Creates an identity with the rendered contents of its parameter list.
+    pub fn with_parameters(function_name: QualifiedFunctionName, parameters: String) -> Self {
+        Self {
+            function_name,
+            parameters: Some(parameters),
         }
     }
 
@@ -71,21 +79,19 @@ impl QualifiedTestName {
         &self.function_name
     }
 
-    /// Return the parameter portion of the test name (e.g., `"(a=1, b=2)"`), if any.
-    pub fn params(&self) -> Option<&str> {
-        let full_name = self.full_name.as_deref()?;
-        let base = self.function_name.to_string();
-        full_name.strip_prefix(&base)
+    /// Returns the rendered contents of the parameter list, without parentheses.
+    pub fn parameters(&self) -> Option<&str> {
+        self.parameters.as_deref()
     }
 }
 
 impl std::fmt::Display for QualifiedTestName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(full_name) = &self.full_name {
-            write!(f, "{full_name}")
-        } else {
-            write!(f, "{}", self.function_name)
+        write!(f, "{}", self.function_name)?;
+        if let Some(parameters) = &self.parameters {
+            write!(f, "({parameters})")?;
         }
+        Ok(())
     }
 }
 
@@ -123,5 +129,33 @@ impl ModulePath {
     /// Return the filesystem path of this module.
     pub fn path(&self) -> &Utf8PathBuf {
         &self.path
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn function_name() -> QualifiedFunctionName {
+        QualifiedFunctionName::new(
+            "test_example".to_string(),
+            ModulePath::new_with_name("test.py", "tests.test".to_string()),
+        )
+    }
+
+    #[test]
+    fn unparameterized_test_name_uses_function_identity() {
+        let name = QualifiedTestName::new(function_name());
+
+        assert_eq!(name.to_string(), "tests.test::test_example");
+        assert_eq!(name.parameters(), None);
+    }
+
+    #[test]
+    fn parameterized_test_name_appends_rendered_parameters() {
+        let name = QualifiedTestName::with_parameters(function_name(), "value=1".to_string());
+
+        assert_eq!(name.to_string(), "tests.test::test_example(value=1)");
+        assert_eq!(name.parameters(), Some("value=1"));
     }
 }

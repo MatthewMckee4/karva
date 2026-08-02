@@ -380,8 +380,8 @@ fn format_test_path(test_name: &QualifiedTestName) -> String {
     let module = test_name.function_name().module_path().module_name().cyan();
     let fn_name = test_name.function_name().function_name().blue().bold();
     let params = test_name
-        .params()
-        .map(|p| p.blue().bold().to_string())
+        .parameters()
+        .map(|parameters| format!("({parameters})").blue().bold().to_string())
         .unwrap_or_default();
     format!("{module}::{fn_name}{params}")
 }
@@ -442,13 +442,10 @@ mod tests {
     use super::*;
 
     fn qualified_test_name() -> QualifiedTestName {
-        QualifiedTestName::new(
-            QualifiedFunctionName::new(
-                "test_example".to_string(),
-                ModulePath::new_with_name("test_module.py", "test_module".to_string()),
-            ),
-            None,
-        )
+        QualifiedTestName::new(QualifiedFunctionName::new(
+            "test_example".to_string(),
+            ModulePath::new_with_name("test_module.py", "test_module".to_string()),
+        ))
     }
 
     fn wait_for_progress_snapshot(
@@ -510,13 +507,10 @@ mod tests {
             .with_progress_file(&path)
             .expect("progress file should open");
 
-        reporter.report_test_started(&QualifiedTestName::new(
-            QualifiedFunctionName::new(
-                "test_example_with_a_much_longer_name".to_string(),
-                ModulePath::new_with_name("test_module.py", "test_module".to_string()),
-            ),
-            None,
-        ));
+        reporter.report_test_started(&QualifiedTestName::new(QualifiedFunctionName::new(
+            "test_example_with_a_much_longer_name".to_string(),
+            ModulePath::new_with_name("test_module.py", "test_module".to_string()),
+        )));
         let progress = wait_for_progress_snapshot(&path, |progress| {
             progress["name"] == "test_module::test_example_with_a_much_longer_name"
         });

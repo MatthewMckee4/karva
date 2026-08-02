@@ -125,10 +125,10 @@ impl RunState {
         module_path: &ModulePath,
         reason: Option<String>,
     ) {
-        let name = QualifiedTestName::new(
-            QualifiedFunctionName::new("<module>".to_string(), module_path.clone()),
-            None,
-        );
+        let name = QualifiedTestName::new(QualifiedFunctionName::new(
+            "<module>".to_string(),
+            module_path.clone(),
+        ));
         self.register_test_case_result(
             context,
             &name,
