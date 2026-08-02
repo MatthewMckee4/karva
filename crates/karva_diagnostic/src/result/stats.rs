@@ -3,20 +3,35 @@ use std::time::Instant;
 
 use colored::Colorize;
 use karva_logging::time::format_duration_bracketed;
-use serde::de::{self, MapAccess, Visitor};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 use super::kind::TestResultKind;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 /// Outcome counters for a run; flaky and slow are additional markers, not tests.
 pub struct TestResultStats {
+    #[serde(skip_serializing_if = "is_default")]
     passed: usize,
+
+    #[serde(skip_serializing_if = "is_default")]
     failed: usize,
+
+    #[serde(rename = "error", skip_serializing_if = "is_default")]
     errors: usize,
+
+    #[serde(skip_serializing_if = "is_default")]
     skipped: usize,
+
+    #[serde(skip_serializing_if = "is_default")]
     flaky: usize,
+
+    #[serde(skip_serializing_if = "is_default")]
     slow: usize,
+}
+
+fn is_default<T: Default + PartialEq>(value: &T) -> bool {
+    *value == T::default()
 }
 
 impl TestResultStats {
@@ -80,77 +95,6 @@ impl TestResultStats {
     /// Returns summary formatting using elapsed time since `start_time`.
     pub fn display(&self, start_time: Instant, success: bool) -> DisplayTestResultStats<'_> {
         DisplayTestResultStats::new(self, start_time, success)
-    }
-}
-
-impl Serialize for TestResultStats {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        use serde::ser::SerializeMap;
-
-        let counts = [
-            (TestResultKind::Passed, self.passed),
-            (TestResultKind::Failed, self.failed),
-            (TestResultKind::Error, self.errors),
-            (TestResultKind::Skipped, self.skipped),
-            (TestResultKind::Flaky, self.flaky),
-            (TestResultKind::Slow, self.slow),
-        ];
-        let mut map = serializer
-            .serialize_map(Some(counts.iter().filter(|(_, count)| *count > 0).count()))?;
-        for (kind, count) in counts {
-            if count > 0 {
-                map.serialize_entry(kind.as_str(), &count)?;
-            }
-        }
-        map.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for TestResultStats {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct StatsVisitor;
-
-        impl<'de> Visitor<'de> for StatsVisitor {
-            type Value = TestResultStats;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a map of test result kinds to counts")
-            }
-
-            fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
-            where
-                M: MapAccess<'de>,
-            {
-                let mut stats = TestResultStats::default();
-
-                while let Some((key, value)) = access.next_entry::<String, usize>()? {
-                    let kind = TestResultKind::from_str(&key).map_err(|_| {
-                        de::Error::unknown_field(
-                            &key,
-                            &["passed", "failed", "error", "skipped", "flaky", "slow"],
-                        )
-                    })?;
-                    match kind {
-                        TestResultKind::Passed => stats.passed = value,
-                        TestResultKind::Failed => stats.failed = value,
-                        TestResultKind::Error => stats.errors = value,
-                        TestResultKind::Skipped => stats.skipped = value,
-                        TestResultKind::Flaky => stats.flaky = value,
-                        TestResultKind::Slow => stats.slow = value,
-                    }
-                }
-
-                Ok(stats)
-            }
-        }
-
-        deserializer.deserialize_map(StatsVisitor)
     }
 }
 
@@ -257,16 +201,19 @@ mod tests {
         stats.add(TestResultKind::Passed);
         stats.add(TestResultKind::Passed);
         stats.add(TestResultKind::Failed);
+        stats.add(TestResultKind::Error);
         stats.add(TestResultKind::Skipped);
+        stats.add(TestResultKind::Flaky);
+        stats.add(TestResultKind::Slow);
 
         let json = serde_json::to_string(&stats).unwrap();
-        assert_eq!(json, r#"{"passed":2,"failed":1,"skipped":1}"#);
+        assert_eq!(
+            json,
+            r#"{"passed":2,"failed":1,"error":1,"skipped":1,"flaky":1,"slow":1}"#
+        );
         let deserialized: TestResultStats = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(deserialized.passed(), 2);
-        assert_eq!(deserialized.failed(), 1);
-        assert_eq!(deserialized.skipped(), 1);
-        assert_eq!(deserialized.total(), 4);
+        assert_eq!(deserialized, stats);
     }
 
     #[test]
