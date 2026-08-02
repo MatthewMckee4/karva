@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
@@ -127,10 +127,10 @@ impl CoverageSession {
         drop(borrowed);
         save_data(
             &data_file,
-            executed,
-            contexts,
-            arcs,
-            arc_contexts,
+            into_owned_paths(executed),
+            into_owned_paths(contexts),
+            into_owned_paths(arcs),
+            into_owned_paths(arc_contexts),
             branches,
             &roots,
         )
@@ -151,17 +151,17 @@ impl CoverageSession {
 #[derive(Default)]
 struct TracerState {
     /// Files with the set of executed line numbers.
-    executed: HashMap<PathBuf, HashSet<u32>>,
+    executed: HashMap<TrackedPath, HashSet<u32>>,
     /// Per-line test contexts for files with executed lines.
-    contexts: HashMap<PathBuf, HashMap<u32, HashSet<String>>>,
+    contexts: HashMap<TrackedPath, HashMap<u32, HashSet<String>>>,
     /// Line-to-line arcs executed in each file.
-    arcs: HashMap<PathBuf, HashSet<BranchArc>>,
+    arcs: HashMap<TrackedPath, HashSet<BranchArc>>,
     /// Per-arc test contexts for files with executed arcs.
-    arc_contexts: HashMap<PathBuf, HashMap<BranchArc, HashSet<String>>>,
+    arc_contexts: HashMap<TrackedPath, HashMap<BranchArc, HashSet<String>>>,
     /// Current test context, if `--cov-context=test` is active and a test is running.
     current_context: Option<String>,
     /// Memoized result of [`compute_tracked_path`] per filename string.
-    track_cache: HashMap<String, Option<PathBuf>>,
+    track_cache: HashMap<String, Option<TrackedPath>>,
     /// Memoized result of [`compute_tracked_path`] per live Python code object.
     code_cache: HashMap<usize, TrackedCode>,
     /// Last executed line per live Python code object for `sys.monitoring` arcs.
@@ -173,10 +173,10 @@ struct TracerState {
 /// Cached metadata retained with its Python code object to prevent pointer reuse bugs.
 struct TrackedCode {
     code: Py<PyAny>,
-    path: Option<PathBuf>,
-    first_line: i32,
-    line_ranges: Vec<CodeLineRange>,
+    info: Option<TrackedCodeInfo>,
 }
+
+type TrackedPath = Arc<Path>;
 
 #[derive(Clone)]
 /// Mapping from a bytecode offset interval to its Python source line.
@@ -336,7 +336,13 @@ impl CoverageTracer {
         }
     }
 
-    fn record_monitoring_line(&self, code_id: usize, path: PathBuf, first_line: i32, lineno: u32) {
+    fn record_monitoring_line(
+        &self,
+        code_id: usize,
+        path: TrackedPath,
+        first_line: i32,
+        lineno: u32,
+    ) {
         if let Ok(mut state) = self.state.lock() {
             if self.branches {
                 let arc = state
@@ -358,7 +364,7 @@ impl CoverageTracer {
         }
     }
 
-    fn record_monitoring_return(&self, code_id: usize, path: PathBuf, first_line: i32) {
+    fn record_monitoring_return(&self, code_id: usize, path: TrackedPath, first_line: i32) {
         if !self.branches {
             return;
         }
@@ -377,7 +383,7 @@ impl CoverageTracer {
         }
     }
 
-    fn record_frame_line(&self, frame_id: usize, path: PathBuf, first_line: i32, lineno: u32) {
+    fn record_frame_line(&self, frame_id: usize, path: TrackedPath, first_line: i32, lineno: u32) {
         if let Ok(mut state) = self.state.lock() {
             if self.branches {
                 let arc = state.frame_last_lines.insert(frame_id, lineno).map_or_else(
@@ -396,7 +402,7 @@ impl CoverageTracer {
         }
     }
 
-    fn record_frame_return(&self, frame_id: usize, path: PathBuf, first_line: i32) {
+    fn record_frame_return(&self, frame_id: usize, path: TrackedPath, first_line: i32) {
         if !self.branches {
             return;
         }
@@ -415,7 +421,7 @@ impl CoverageTracer {
         }
     }
 
-    fn record_arc(&self, path: PathBuf, arc: BranchArc) {
+    fn record_arc(&self, path: TrackedPath, arc: BranchArc) {
         if !self.branches || arc.from == arc.to {
             return;
         }
@@ -432,47 +438,44 @@ impl CoverageTracer {
             && let Some(cached) = state.code_cache.get(&code_id)
         {
             debug_assert!(cached.code.is(code));
-            return Ok(cached.path.clone().map(|path| TrackedCodeInfo {
-                path,
-                first_line: cached.first_line,
-                line_ranges: cached.line_ranges.clone(),
-            }));
+            return Ok(cached.info.clone());
         }
 
         let filename: String = code.getattr("co_filename")?.extract()?;
-        let path = self.tracked_path(&filename);
-        let first_line = code.getattr("co_firstlineno")?.extract()?;
-        let line_ranges = code_line_ranges(code)?;
+        let info = if let Some(path) = self.tracked_path(&filename) {
+            Some(TrackedCodeInfo {
+                path,
+                first_line: code.getattr("co_firstlineno")?.extract()?,
+                line_ranges: code_line_ranges(code)?.into(),
+            })
+        } else {
+            None
+        };
 
         if let Ok(mut state) = self.state.lock() {
             state.code_cache.insert(
                 code_id,
                 TrackedCode {
                     code: code.clone().unbind(),
-                    path: path.clone(),
-                    first_line,
-                    line_ranges: line_ranges.clone(),
+                    info: info.clone(),
                 },
             );
         }
 
-        Ok(path.map(|path| TrackedCodeInfo {
-            path,
-            first_line,
-            line_ranges,
-        }))
+        Ok(info)
     }
 
     /// Resolve `filename` against the source roots. Returns the canonical
     /// path if the file should be tracked, or `None` otherwise. Memoized
     /// per filename string.
-    fn tracked_path(&self, filename: &str) -> Option<PathBuf> {
+    fn tracked_path(&self, filename: &str) -> Option<TrackedPath> {
         if let Ok(state) = self.state.lock()
             && let Some(cached) = state.track_cache.get(filename)
         {
             return cached.clone();
         }
-        let resolved = compute_tracked_path(filename, &self.roots);
+        let resolved = compute_tracked_path(filename, &self.roots)
+            .map(|path| TrackedPath::from(path.into_boxed_path()));
         if let Ok(mut state) = self.state.lock() {
             state
                 .track_cache
@@ -482,16 +485,17 @@ impl CoverageTracer {
     }
 }
 
+#[derive(Clone)]
 struct TrackedCodeInfo {
-    path: PathBuf,
+    path: TrackedPath,
     first_line: i32,
-    line_ranges: Vec<CodeLineRange>,
+    line_ranges: Arc<[CodeLineRange]>,
 }
 
 fn record_line_in_state(
     state: &mut TracerState,
     contexts_enabled: bool,
-    path: PathBuf,
+    path: TrackedPath,
     lineno: u32,
 ) {
     if contexts_enabled && let Some(context) = state.current_context.clone() {
@@ -515,7 +519,7 @@ fn record_line_in_state(
 fn record_arc_in_state(
     state: &mut TracerState,
     contexts_enabled: bool,
-    path: PathBuf,
+    path: TrackedPath,
     arc: BranchArc,
 ) {
     if arc.from == arc.to {
@@ -759,6 +763,12 @@ fn is_python_source(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()) == Some("py")
 }
 
+fn into_owned_paths<V>(map: HashMap<TrackedPath, V>) -> HashMap<PathBuf, V> {
+    map.into_iter()
+        .map(|(path, value)| (path.to_path_buf(), value))
+        .collect()
+}
+
 fn save_data(
     data_file: &Utf8Path,
     mut executed: HashMap<PathBuf, HashSet<u32>>,
@@ -866,20 +876,28 @@ mod tests {
                     r#"
 class Code:
     def __init__(self):
-        self.calls = 0
+        self.filename_calls = 0
+        self.first_line_calls = 0
+        self.lines_calls = 0
 
     @property
     def co_filename(self):
-        self.calls += 1
-        if self.calls > 1:
+        self.filename_calls += 1
+        if self.filename_calls > 1:
             raise AssertionError("co_filename should be cached")
         return filename
 
     @property
     def co_firstlineno(self):
+        self.first_line_calls += 1
+        if self.first_line_calls > 1:
+            raise AssertionError("co_firstlineno should be cached")
         return 1
 
     def co_lines(self):
+        self.lines_calls += 1
+        if self.lines_calls > 1:
+            raise AssertionError("co_lines should be cached")
         return iter([(0, 2, 1)])
 
 code = Code()
@@ -891,16 +909,24 @@ code = Code()
             let code = locals.get_item("code")?.expect("code object");
 
             assert_eq!(
-                tracer.tracked_code_info(&code)?.map(|info| info.path),
+                tracer
+                    .tracked_code_info(&code)?
+                    .map(|info| info.path.to_path_buf()),
                 expected
             );
             assert_eq!(
-                tracer.tracked_code_info(&code)?.map(|info| info.path),
+                tracer
+                    .tracked_code_info(&code)?
+                    .map(|info| info.path.to_path_buf()),
                 expected
             );
 
-            let calls: u32 = code.getattr("calls")?.extract()?;
-            assert_eq!(calls, 1);
+            let calls = (
+                code.getattr("filename_calls")?.extract::<u32>()?,
+                code.getattr("first_line_calls")?.extract::<u32>()?,
+                code.getattr("lines_calls")?.extract::<u32>()?,
+            );
+            assert_eq!(calls, (1, 1, 1));
 
             let state = tracer.state.lock().expect("state lock");
             let cached = state
@@ -908,6 +934,48 @@ code = Code()
                 .get(&(code.as_ptr() as usize))
                 .expect("cached code");
             assert!(cached.code.is(&code));
+
+            Ok(())
+        })
+        .expect("python assertions");
+    }
+
+    #[test]
+    fn untracked_code_skips_line_metadata() {
+        Python::initialize();
+        Python::attach(|py| -> PyResult<()> {
+            let tracer = CoverageTracer {
+                roots: Vec::new(),
+                contexts: false,
+                branches: false,
+                state: Mutex::new(TracerState::default()),
+                monitoring_tool_id: OnceLock::new(),
+                monitoring_disable: OnceLock::new(),
+            };
+            let locals = PyDict::new(py);
+            py.run(
+                c_str!(
+                    r#"
+class Code:
+    co_filename = "<generated>"
+
+    @property
+    def co_firstlineno(self):
+        raise AssertionError("untracked code should skip co_firstlineno")
+
+    def co_lines(self):
+        raise AssertionError("untracked code should skip co_lines")
+
+code = Code()
+"#
+                ),
+                Some(&locals),
+                Some(&locals),
+            )?;
+            let code = locals.get_item("code")?.expect("code object");
+
+            assert!(tracer.tracked_code_info(&code)?.is_none());
+            assert!(tracer.tracked_code_info(&code)?.is_none());
 
             Ok(())
         })
