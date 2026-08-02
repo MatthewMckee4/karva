@@ -436,7 +436,7 @@ fn line_declares_function(line: &str, name: &str) -> bool {
     };
 
     rest.strip_prefix(name)
-        .is_some_and(|after_name| after_name.starts_with('('))
+        .is_some_and(|after_name| after_name.trim_start().starts_with('('))
 }
 
 /// Recursively find all committed snapshot files (`.snap`, not `.snap.new`).
@@ -802,6 +802,15 @@ mod tests {
     fn base_function_name_named() {
         insta::assert_snapshot!(base_function_name("test_foo--header"), @"test_foo");
         insta::assert_snapshot!(base_function_name("test_foo--header(x=1)"), @"test_foo");
+    }
+
+    #[test]
+    fn function_declaration_allows_space_before_parameters() {
+        assert!(line_declares_function("def test_foo ():", "test_foo"));
+        assert!(line_declares_function(
+            "async def test_foo \t():",
+            "test_foo"
+        ));
     }
 
     #[test]
