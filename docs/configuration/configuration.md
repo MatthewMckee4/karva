@@ -33,7 +33,11 @@ required-version = ">=0.5.0"
 
 ---
 
+Configuration groups combined across defaults, profiles, environment, and CLI.
+
 ## `coverage`
+
+Controls measured Python sources and coverage report generation.
 
 ### `branch`
 
@@ -182,6 +186,8 @@ sources = ["src"]
 
 ## `junit`
 
+Controls `JUnit` XML output, captured streams, and flaky-test representation.
+
 ### `flaky-fail-status`
 
 How flaky tests configured to fail are represented in `JUnit`.
@@ -271,6 +277,8 @@ store-success-output = true
 
 ## `src`
 
+Controls test-path discovery and whether filesystem ignore rules are honored.
+
 ### `include`
 
 A list of files and directories to check.
@@ -315,6 +323,8 @@ respect-ignore-files = false
 ---
 
 ## `terminal`
+
+Controls diagnostic formatting, captured output, and displayed test statuses.
 
 ### `final-status-level`
 
@@ -401,6 +411,8 @@ status-level = "fail"
 ---
 
 ## `test`
+
+Controls test selection, retries, timeouts, and failure policies.
 
 ### `fail-fast`
 

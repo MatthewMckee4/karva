@@ -2,6 +2,7 @@ use ruff_db::diagnostic::Severity;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Diagnostic serialized for controller-side display after worker execution.
 pub struct RenderedDiagnostic {
     code: String,
     #[serde(with = "SerializableSeverity")]
@@ -13,6 +14,7 @@ pub struct RenderedDiagnostic {
 }
 
 impl RenderedDiagnostic {
+    /// Creates a diagnostic with plain rendering and no terminal-specific variant.
     pub fn new(
         code: impl Into<String>,
         severity: Severity,
@@ -28,6 +30,7 @@ impl RenderedDiagnostic {
         }
     }
 
+    /// Stores a colored rendering only when it differs from plain output.
     #[must_use]
     pub fn with_colored_rendered(mut self, rendered: String) -> Self {
         if rendered != self.rendered {
@@ -36,6 +39,7 @@ impl RenderedDiagnostic {
         self
     }
 
+    /// Creates the synthetic diagnostic used when shutdown interrupts a test.
     pub fn interrupted(test_name: &str) -> Self {
         let message = format!("Test `{test_name}` was interrupted");
         Self::new(
@@ -75,6 +79,7 @@ impl RenderedDiagnostic {
         &self.rendered
     }
 
+    /// Returns rendering appropriate for a color-capable terminal.
     pub fn rendered_for_terminal(&self) -> &str {
         self.colored_rendered.as_deref().unwrap_or(&self.rendered)
     }

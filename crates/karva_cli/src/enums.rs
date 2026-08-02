@@ -126,6 +126,7 @@ pub enum CovContext {
 }
 
 impl CovContext {
+    /// Returns the value forwarded to coverage configuration.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Test => "test",
@@ -144,6 +145,7 @@ pub enum RunIgnored {
 }
 
 impl RunIgnored {
+    /// Returns the canonical CLI spelling.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Only => "only",
@@ -192,7 +194,10 @@ impl From<NoTests> for NoTestsMode {
 /// Whether flaky tests pass or fail the run.
 #[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, clap::ValueEnum)]
 pub enum FlakyResult {
+    /// A test that passes after retrying does not fail the run.
     Pass,
+
+    /// Any test requiring a retry fails the run.
     Fail,
 }
 
@@ -205,9 +210,13 @@ impl From<FlakyResult> for FlakyResultMode {
     }
 }
 
+/// `JUnit` outcome assigned to attempts that fail before a later retry passes.
 #[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, clap::ValueEnum)]
 pub enum JunitFlakyFailStatus {
+    /// Emit failed attempts as `JUnit` failures.
     Failure,
+
+    /// Preserve the final successful outcome without `JUnit` failures.
     Success,
 }
 

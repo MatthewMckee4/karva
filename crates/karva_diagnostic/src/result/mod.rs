@@ -1,3 +1,5 @@
+//! Serializable execution results exchanged between workers and controller.
+
 mod case;
 mod diagnostic;
 mod flaky;
@@ -62,10 +64,12 @@ fn diagnostic_display_ordering(a: &Diagnostic, b: &Diagnostic) -> std::cmp::Orde
 }
 
 impl TestRunResult {
+    /// Returns diagnostics belonging to collection or run infrastructure.
     pub fn run_diagnostics(&self) -> &[Diagnostic] {
         &self.run_diagnostics
     }
 
+    /// Adds a diagnostic not owned by one test case.
     pub fn add_run_diagnostic(&mut self, diagnostic: Diagnostic) {
         self.run_diagnostics.push(diagnostic);
     }
@@ -74,6 +78,7 @@ impl TestRunResult {
         &self.stats
     }
 
+    /// Records one final test outcome and reports it immediately when requested.
     pub fn register_test_case_result(
         &mut self,
         test_case_name: &QualifiedTestName,
@@ -172,6 +177,7 @@ impl TestRunResult {
         }
     }
 
+    /// Sorts diagnostics and cases into deterministic display order.
     #[must_use]
     pub fn into_sorted(mut self) -> Self {
         self.run_diagnostics.sort_by(diagnostic_display_ordering);
@@ -191,6 +197,7 @@ impl TestRunResult {
         &self.test_cases
     }
 
+    /// Decomposes this run for serialization into the worker cache.
     pub fn into_parts(
         self,
     ) -> (

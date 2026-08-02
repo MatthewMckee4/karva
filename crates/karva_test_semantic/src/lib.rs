@@ -1,3 +1,5 @@
+//! Python test semantics, fixture resolution, extensions, and in-process execution.
+
 pub(crate) mod collection;
 mod context;
 pub(crate) mod diagnostic;
@@ -24,10 +26,9 @@ use crate::discovery::StandardDiscoverer;
 use crate::py_attach::attach_with_output;
 use crate::runner::PackageRunner;
 
-/// Run tests given the system, settings, Python version, reporter, and test paths.
+/// Runs discovery and execution inside one interpreter attachment.
 ///
-/// This encapsulates the core test execution logic: attaching to a Python interpreter,
-/// discovering tests, and running them.
+/// Coverage startup or persistence failures are logged but do not discard test results.
 pub fn run_tests(
     cwd: &Utf8Path,
     settings: &ProjectSettings,

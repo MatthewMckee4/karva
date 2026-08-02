@@ -100,6 +100,7 @@ impl FixtureFunctionDefinition {
 
 #[pyfunction(name = "fixture")]
 #[pyo3(signature = (func=None, *, scope=None, name=None, auto_use=false))]
+/// Supports both `@fixture` and configured `@fixture(...)` decorator forms.
 pub fn fixture_decorator(
     py: Python<'_>,
     func: Option<Py<PyAny>>,

@@ -3,12 +3,14 @@ use std::io::{self, StdoutLock, Write};
 use crate::status_level::{FinalStatusLevel, StatusLevel};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// Selects output streams according to live and final status policies.
 pub struct Printer {
     status_level: StatusLevel,
     final_status_level: FinalStatusLevel,
 }
 
 impl Printer {
+    /// Creates a printer with independent live-result and final-summary levels.
     pub fn new(status_level: StatusLevel, final_status_level: FinalStatusLevel) -> Self {
         Self {
             status_level,
@@ -61,6 +63,7 @@ impl Printer {
 }
 
 #[derive(Debug)]
+/// Conditionally enabled standard output implementing [`Write`].
 pub struct Stdout {
     enabled: bool,
     lock: Option<StdoutLock<'static>>,
@@ -74,6 +77,7 @@ impl Stdout {
         }
     }
 
+    /// Holds stdout's lock across future writes when output is enabled.
     #[must_use]
     pub fn lock(mut self) -> Self {
         if self.enabled {

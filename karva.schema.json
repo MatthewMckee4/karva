@@ -5,6 +5,7 @@
   "type": "object",
   "properties": {
     "profile": {
+      "description": "Named option profiles; `default` forms the base for every named profile.",
       "type": "object",
       "additionalProperties": {
         "$ref": "#/definitions/Options"
@@ -62,6 +63,7 @@
       ]
     },
     "CoverageOptions": {
+      "description": "Controls measured Python sources and coverage report generation.",
       "type": "object",
       "properties": {
         "branch": {
@@ -134,7 +136,7 @@
       "additionalProperties": false
     },
     "FailSlowSecs": {
-      "description": "A per-test duration budget expressed in seconds.\n\nWraps `f64` for the same reason as [`SlowTimeoutSecs`]. Unlike\n[`SlowTimeoutSecs`] (informational) or [`TestTimeoutSecs`] (kills the\ntest mid-flight), a test exceeding this budget is allowed to finish its\nfull lifecycle — including fixture teardown — and is then reported as a\nfailure (see [`crate::settings::TestSettings::fail_slow`]).",
+      "description": "A per-test duration budget expressed in seconds.\n\nWraps `f64` for the same reason as [`SlowTimeoutSecs`]. Unlike\n[`SlowTimeoutSecs`] (informational) or [`TestTimeoutSecs`] (kills the\ntest mid-flight), a test exceeding this budget is allowed to finish its\nfull lifecycle — including fixture teardown — and is then reported as a\nfailure (see `TestSettings::fail_slow`).",
       "type": "number",
       "format": "double"
     },
@@ -179,20 +181,35 @@
       ]
     },
     "FlakyResult": {
-      "type": "string",
-      "enum": [
-        "pass",
-        "fail"
+      "oneOf": [
+        {
+          "description": "Tests that eventually pass remain successful.",
+          "type": "string",
+          "const": "pass"
+        },
+        {
+          "description": "Any test that needed a retry fails the run.",
+          "type": "string",
+          "const": "fail"
+        }
       ]
     },
     "JunitFlakyFailStatus": {
-      "type": "string",
-      "enum": [
-        "failure",
-        "success"
+      "oneOf": [
+        {
+          "description": "Record failed attempts as `JUnit` failures.",
+          "type": "string",
+          "const": "failure"
+        },
+        {
+          "description": "Represent eventually passing tests as successful in `JUnit`.",
+          "type": "string",
+          "const": "success"
+        }
       ]
     },
     "JunitOptions": {
+      "description": "Controls `JUnit` XML output, captured streams, and flaky-test representation.",
       "type": "object",
       "properties": {
         "flaky-fail-status": {
@@ -247,18 +264,35 @@
       "minimum": 1
     },
     "NoTestsMode": {
-      "type": "string",
-      "enum": [
-        "auto",
-        "pass",
-        "warn",
-        "fail"
+      "oneOf": [
+        {
+          "description": "Fail without filters, but pass when explicit filters match nothing.",
+          "type": "string",
+          "const": "auto"
+        },
+        {
+          "description": "Exit successfully without a diagnostic.",
+          "type": "string",
+          "const": "pass"
+        },
+        {
+          "description": "Warn and exit successfully.",
+          "type": "string",
+          "const": "warn"
+        },
+        {
+          "description": "Report an error and return failure.",
+          "type": "string",
+          "const": "fail"
+        }
       ]
     },
     "Options": {
+      "description": "Configuration groups combined across defaults, profiles, environment, and CLI.",
       "type": "object",
       "properties": {
         "coverage": {
+          "description": "Coverage collection and report overrides.",
           "anyOf": [
             {
               "$ref": "#/definitions/CoverageOptions"
@@ -269,6 +303,7 @@
           ]
         },
         "junit": {
+          "description": "`JUnit` report overrides.",
           "anyOf": [
             {
               "$ref": "#/definitions/JunitOptions"
@@ -286,6 +321,7 @@
           }
         },
         "src": {
+          "description": "Source discovery overrides.",
           "anyOf": [
             {
               "$ref": "#/definitions/SrcOptions"
@@ -296,6 +332,7 @@
           ]
         },
         "terminal": {
+          "description": "Terminal presentation overrides.",
           "anyOf": [
             {
               "$ref": "#/definitions/TerminalOptions"
@@ -306,6 +343,7 @@
           ]
         },
         "test": {
+          "description": "Test execution overrides.",
           "anyOf": [
             {
               "$ref": "#/definitions/TestOptions"
@@ -320,13 +358,21 @@
     },
     "OutputFormat": {
       "description": "The diagnostic output format.",
-      "type": "string",
-      "enum": [
-        "full",
-        "concise"
+      "oneOf": [
+        {
+          "description": "Multi-line diagnostics with source context and hints.",
+          "type": "string",
+          "const": "full"
+        },
+        {
+          "description": "One diagnostic per line.",
+          "type": "string",
+          "const": "concise"
+        }
       ]
     },
     "OverrideJunitOptions": {
+      "description": "`JUnit`-specific values available inside one per-test override.",
       "type": "object",
       "properties": {
         "flaky-fail-status": {
@@ -432,6 +478,7 @@
       "format": "double"
     },
     "SrcOptions": {
+      "description": "Controls test-path discovery and whether filesystem ignore rules are honored.",
       "type": "object",
       "properties": {
         "include": {
@@ -495,6 +542,7 @@
       ]
     },
     "TerminalOptions": {
+      "description": "Controls diagnostic formatting, captured output, and displayed test statuses.",
       "type": "object",
       "properties": {
         "final-status-level": {
@@ -546,6 +594,7 @@
       "format": "double"
     },
     "TestOptions": {
+      "description": "Controls test selection, retries, timeouts, and failure policies.",
       "type": "object",
       "properties": {
         "fail-fast": {
@@ -670,7 +719,7 @@
       "additionalProperties": false
     },
     "TestTimeoutSecs": {
-      "description": "A per-test timeout expressed in seconds.\n\nWraps `f64` for the same reason as [`SlowTimeoutSecs`]. Tests exceeding\nthis duration are killed and reported as failures (see\n[`crate::settings::TestSettings::timeout`]).",
+      "description": "A per-test timeout expressed in seconds.\n\nWraps `f64` for the same reason as [`SlowTimeoutSecs`]. Tests exceeding\nthis duration are killed and reported as failures (see\n`TestSettings::timeout`).",
       "type": "number",
       "format": "double"
     }

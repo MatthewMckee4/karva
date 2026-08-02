@@ -1,3 +1,5 @@
+//! Fixture definitions, dependency resolution, caching, and teardown semantics.
+
 use std::rc::Rc;
 
 use karva_python_semantic::{ModulePath, QualifiedFunctionName};
@@ -57,9 +59,16 @@ pub struct DiscoveredFixture {
 /// Fixture definition rejected during discovery.
 #[derive(Clone, Debug)]
 pub struct RejectedFixture {
+    /// Unqualified fixture name used for later lookup failures.
     pub(crate) name: String,
+
+    /// Discovery error retained for dependency diagnostics.
     pub(crate) reason: String,
+
+    /// Definition used to underline the rejected fixture.
     pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
+
+    /// Source containing the rejected definition.
     pub(crate) source_file: SourceFile,
 }
 
@@ -261,6 +270,7 @@ fn get_fixture_function<'py>(function: &Bound<'py, PyAny>) -> PyResult<Bound<'py
     Err(PyAttributeError::new_err(MISSING_FIXTURE_INFO))
 }
 
+/// Resolves visible auto-use fixtures with nearer definitions shadowing parent names.
 pub fn get_auto_use_fixtures<'a>(
     parents: &'a [&'a DiscoveredPackage],
     current: &'a dyn HasFixtures<'a>,

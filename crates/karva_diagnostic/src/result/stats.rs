@@ -9,6 +9,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use super::kind::TestResultKind;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// Outcome counters for a run; flaky and slow are additional markers, not tests.
 pub struct TestResultStats {
     passed: usize,
     failed: usize,
@@ -25,10 +26,12 @@ impl TestResultStats {
         self.passed() + self.failed() + self.errors() + self.skipped()
     }
 
+    /// Whether no failed or errored tests were recorded.
     pub fn is_success(&self) -> bool {
         self.failed() == 0 && self.errors() == 0
     }
 
+    /// Adds counters from another worker or partial run.
     pub fn merge(&mut self, other: &Self) {
         self.passed += other.passed;
         self.failed += other.failed;
@@ -62,6 +65,7 @@ impl TestResultStats {
         self.slow
     }
 
+    /// Increments the counter represented by `kind`.
     pub fn add(&mut self, kind: TestResultKind) {
         match kind {
             TestResultKind::Passed => self.passed += 1,
@@ -73,6 +77,7 @@ impl TestResultStats {
         }
     }
 
+    /// Returns summary formatting using elapsed time since `start_time`.
     pub fn display(&self, start_time: Instant, success: bool) -> DisplayTestResultStats<'_> {
         DisplayTestResultStats::new(self, start_time, success)
     }

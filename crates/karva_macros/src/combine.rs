@@ -6,6 +6,7 @@ use syn::{Data, DataStruct, DeriveInput};
     clippy::redundant_pub_crate,
     reason = "parent module calls this helper while unreachable_pub rejects plain pub"
 )]
+/// Generates a field-wise [`karva_combine::Combine`] implementation.
 pub(super) fn derive_impl(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let DeriveInput { ident, data, .. } = input;
 

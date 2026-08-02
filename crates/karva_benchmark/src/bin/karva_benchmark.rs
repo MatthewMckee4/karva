@@ -1,3 +1,5 @@
+//! Compares pinned Karva workloads across wheels and emits mergeable CI reports.
+
 #![expect(
     clippy::print_stdout,
     clippy::print_stderr,
@@ -89,6 +91,7 @@ struct MergeReportsArgs {
 }
 
 #[derive(Debug, Serialize)]
+/// GitHub Actions matrix emitted for pinned benchmark workloads.
 struct Matrix {
     include: Vec<MatrixProject>,
 }
@@ -100,6 +103,7 @@ struct MatrixProject {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+/// Mergeable comparison report for one performance metric.
 struct ComparisonReport {
     metric: BenchmarkMetric,
     baseline_label: String,
@@ -110,6 +114,7 @@ struct ComparisonReport {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+/// Baseline and candidate measurements for one pinned workload.
 struct ProjectComparison {
     name: String,
     iterations: usize,
@@ -121,6 +126,7 @@ struct ProjectComparison {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+/// Normalized test-summary comparison retained beside performance results.
 struct DiagnosticComparison {
     baseline: Option<TestStats>,
     candidate: Option<TestStats>,
@@ -137,8 +143,12 @@ struct TestStats {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+/// Numeric samples and their median for one benchmark subject.
 struct Measurement {
+    /// Raw samples in metric-native units.
     values: Vec<f64>,
+
+    /// Median in seconds for wall time or KiB for peak memory.
     median: f64,
 }
 
@@ -164,15 +174,22 @@ enum BenchmarkMetric {
     Memory,
 }
 
+/// Executable, environment path, and arguments for one benchmarked Karva run.
 struct KarvaInvocation {
     binary: Utf8PathBuf,
     path: std::ffi::OsString,
     args: Vec<String>,
 }
 
+/// Observations captured from one benchmark process invocation.
 struct RunMeasurement {
+    /// Elapsed wall-clock time in seconds.
     wall_time: f64,
+
+    /// Peak resident set size in KiB.
     peak_rss_kib: f64,
+
+    /// Complete process status and streams used for correctness checks.
     output: Output,
 }
 

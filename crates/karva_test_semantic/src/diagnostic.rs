@@ -1,8 +1,7 @@
-//! Karva Diagnostics
+//! Converts collection and execution failures into source-backed `ruff_db` diagnostics.
 //!
-//! We use `ruff_db` diagnostics for all test diagnostics.
-//!
-//! `ruff_db` diagnostics look great and have a great API.
+//! `report_*` functions mutate run context during discovery. Other builders return a
+//! diagnostic for attachment to a specific test outcome.
 
 use camino::Utf8Path;
 use karva_collector::CollectionError;

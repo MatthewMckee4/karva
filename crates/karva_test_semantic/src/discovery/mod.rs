@@ -1,3 +1,5 @@
+//! Project traversal and import-aware discovery models.
+
 pub mod discoverer;
 pub mod models;
 pub mod visitor;

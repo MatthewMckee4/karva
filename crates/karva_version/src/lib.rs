@@ -1,3 +1,5 @@
+//! Build-time Karva version and commit metadata.
+
 /// Return the application version.
 ///
 /// This should be in sync with the release version based on the crate version.

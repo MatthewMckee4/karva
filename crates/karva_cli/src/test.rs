@@ -30,6 +30,7 @@ pub struct SubTestCommand {
     #[arg(long)]
     pub color: Option<TerminalColor>,
 
+    /// Repeatable verbosity flags shared by controller and worker invocations.
     #[clap(flatten)]
     pub verbosity: Verbosity,
 
@@ -135,7 +136,7 @@ pub struct SubTestCommand {
     /// Hard per-test timeout, in seconds.
     ///
     /// Tests that run longer than this duration are killed and reported
-    /// as failures. A test-level [`@karva.tags.timeout`] decorator
+    /// as failures. A test-level `@karva.tags.timeout` decorator
     /// overrides the default for that specific test.
     ///
     /// Accepts fractional seconds such as `--timeout=120` or `--timeout=0.5`.
@@ -147,7 +148,7 @@ pub struct SubTestCommand {
     /// Unlike `--timeout`, a test is always allowed to finish — including
     /// fixture teardown — before being reported as a failure if the total
     /// duration exceeded this budget. A test-level
-    /// [`@karva.tags.fail_slow`] decorator overrides the default for that
+    /// `@karva.tags.fail_slow` decorator overrides the default for that
     /// specific test.
     ///
     /// Accepts fractional seconds such as `--fail-slow=1` or `--fail-slow=0.25`.
@@ -310,7 +311,9 @@ pub struct SubTestCommand {
 }
 
 #[derive(Debug, Parser)]
+/// Controller-only test options layered above worker-compatible test options.
 pub struct TestCommand {
+    /// Options forwarded to each worker process.
     #[clap(flatten)]
     pub sub_command: SubTestCommand,
 
@@ -428,12 +431,14 @@ pub struct TestCommand {
 }
 
 impl TestCommand {
+    /// Returns verbosity selected in shared test arguments.
     pub fn verbosity(&self) -> &Verbosity {
         &self.sub_command.verbosity
     }
 }
 
 impl SubTestCommand {
+    /// Converts worker-compatible CLI arguments into configuration overrides.
     pub fn into_options(self) -> Options {
         // `--no-fail-fast` forces `fail_fast = false` and clears any
         // `max-fail` limit from config. `overrides_with` guarantees
@@ -507,6 +512,7 @@ impl SubTestCommand {
 }
 
 impl TestCommand {
+    /// Converts all CLI arguments into controller runtime overrides.
     pub fn into_options(self) -> Options {
         let run_timeout = self.run_timeout;
         let termination_grace_period = self.termination_grace_period;

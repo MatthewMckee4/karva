@@ -28,6 +28,7 @@ use crate::worker_args::{WorkerSpawn, worker_command};
 /// Width that result labels (`PASS`, `FAIL`, `SIGINT`) are right-padded to so
 /// columns align. Mirrors the constant in `karva_diagnostic::reporter`.
 const LABEL_COLUMN_WIDTH: usize = 12;
+/// Delay before reading progress files so workers can publish current test state.
 const CURRENT_TEST_SETTLE: Duration = Duration::from_millis(50);
 
 /// How `wait_for_completion` exited.
@@ -35,15 +36,19 @@ const CURRENT_TEST_SETTLE: Duration = Duration::from_millis(50);
 enum WaitOutcome {
     /// Every worker exited on its own.
     AllCompleted,
+
     /// Ctrl+C was received; remaining workers must be killed.
     Cancelled,
+
     /// A worker hit the fail-fast budget; remaining workers must be killed.
     FailFast,
+
     /// The run timeout elapsed before the workers finished.
     TimedOut,
 }
 
 #[derive(Debug)]
+/// Child process plus controller-owned output forwarding and timing state.
 struct Worker {
     id: usize,
     child: Child,
@@ -73,11 +78,13 @@ impl Worker {
 }
 
 #[derive(Default, Debug)]
+/// Owns all live workers and guarantees they are reaped during shutdown.
 struct WorkerManager {
     workers: Vec<Worker>,
 }
 
 #[derive(Debug)]
+/// Background thread preserving worker stdout order without blocking orchestration.
 struct WorkerOutputForwarder {
     handle: JoinHandle<std::io::Result<()>>,
 }
@@ -114,12 +121,14 @@ fn forward_worker_stdout(stdout: ChildStdout) -> std::io::Result<()> {
     }
 }
 
+/// Snapshot of a worker's progress file taken before process termination.
 struct InFlightTest {
     worker_id: usize,
     name: Option<String>,
     elapsed: Duration,
 }
 
+/// Executing test converted into a synthetic failed result after interruption.
 struct InterruptedTest {
     name: String,
     duration: Duration,
@@ -435,22 +444,31 @@ fn format_in_flight_test(name: &str) -> String {
     }
 }
 
+/// Controller settings that affect worker count, selection, and lifecycle.
 pub struct ParallelTestConfig {
+    /// Maximum worker processes before capping against collected test count.
     pub num_workers: usize,
+
+    /// Whether historical durations and last-failed data may be read.
     pub no_cache: bool,
+
     /// Whether to create a Ctrl+C handler for graceful shutdown.
     ///
     /// When `true`, a signal handler is installed (idempotently) to handle
     /// Ctrl+C and gracefully stop workers. Set to `false` in contexts where
     /// the handler should not be installed (e.g., benchmarks).
     pub create_ctrlc_handler: bool,
+
     /// When `true`, only tests that failed in the previous run will be executed.
     pub last_failed: bool,
+
     /// Active configuration profile name. Propagated to workers as
     /// `KARVA_PROFILE`; falls back to `"default"` when `None`.
     pub profile: Option<String>,
+
     /// When set, restrict the run to the selected slice of collected tests.
     pub partition: Option<PartitionSelection>,
+
     /// Ordering strategy for partition inputs. Normal runs shuffle tests
     /// without duration history to avoid sticky first-run imbalance; benchmarks
     /// use stable ordering for deterministic inputs.
@@ -539,15 +557,18 @@ pub fn collect_tests(project: &Project) -> Result<CollectedPackage> {
 pub struct RunOutput {
     /// Test results merged across all workers.
     pub results: AggregatedResults,
+
     /// Paths to per-worker coverage files written during the run. Empty when
     /// coverage was disabled. The caller hands this to
-    /// [`karva_coverage::combine_and_report`] to render the coverage table at
+    /// `karva_coverage::combine_and_report` to render the coverage table at
     /// the right point in its output sequence (after the test summary).
     pub coverage_files: Vec<Utf8PathBuf>,
+
     /// Whether the run was stopped because the configured run timeout elapsed.
     pub timed_out: bool,
 }
 
+/// Collects, partitions, executes, and aggregates one controller-side test run.
 pub fn run_parallel_tests(
     project: &Project,
     config: &ParallelTestConfig,

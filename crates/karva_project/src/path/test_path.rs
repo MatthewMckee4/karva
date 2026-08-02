@@ -21,8 +21,12 @@ fn try_convert_to_py_path(path: &Utf8Path) -> Result<Utf8PathBuf, TestPathError>
 }
 
 #[derive(Eq, PartialEq, Clone, Hash, PartialOrd, Ord, Debug)]
+/// Selection of one function within a Python source path.
 pub struct TestPathFunction {
+    /// Resolved Python source file.
     pub path: Utf8PathBuf,
+
+    /// Function selector exactly as supplied after `::`.
     pub function_name: String,
 }
 
@@ -62,6 +66,7 @@ fn parse_function_spec(value: &str) -> Result<Option<TestPathFunction>, TestPath
 }
 
 #[derive(Eq, PartialEq, Clone, Hash, PartialOrd, Ord, Debug)]
+/// Resolved user test selection targeting a file, directory, or function.
 pub enum TestPath {
     /// A file containing test functions.
     ///
@@ -85,6 +90,7 @@ pub enum TestPath {
 }
 
 impl TestPath {
+    /// Resolves a CLI path, accepting omitted `.py` suffixes and dotted module paths.
     pub fn new(value: &str) -> Result<Self, TestPathError> {
         if let Some(function) = parse_function_spec(value)? {
             return Ok(Self::Function(function));
@@ -116,6 +122,7 @@ impl TestPath {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
+/// Reason a user-provided test path could not become a valid selection.
 pub enum TestPathError {
     #[error("path `{0}` could not be found")]
     NotFound(Utf8PathBuf),

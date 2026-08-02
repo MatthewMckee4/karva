@@ -5,6 +5,7 @@ use syn::{Data, DataStruct, DeriveInput, Field, Fields, Path, PathSegment, Type,
     clippy::redundant_pub_crate,
     reason = "parent module calls this helper while unreachable_pub rejects plain pub"
 )]
+/// Generates plugin-option precedence merging for a named-field struct.
 pub(super) fn derive_impl(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let DeriveInput { ident, data, .. } = input;
 
@@ -40,6 +41,7 @@ pub(super) fn derive_impl(input: DeriveInput) -> syn::Result<proc_macro2::TokenS
     }
 }
 
+/// Emits left-biased merging for one optional field.
 fn handle_field(field: &Field) -> syn::Result<proc_macro2::TokenStream> {
     let ident = field
         .ident

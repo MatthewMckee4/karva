@@ -1,3 +1,5 @@
+//! Layered configuration models before resolution into runtime settings.
+
 mod config;
 mod overrides;
 
@@ -24,19 +26,29 @@ use crate::settings::{
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
+/// Configuration groups combined across defaults, profiles, environment, and CLI.
 pub struct Options {
+    /// Source discovery overrides.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option_group]
     pub src: Option<SrcOptions>,
+
+    /// Terminal presentation overrides.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option_group]
     pub terminal: Option<TerminalOptions>,
+
+    /// Test execution overrides.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option_group]
     pub test: Option<TestOptions>,
+
+    /// Coverage collection and report overrides.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option_group]
     pub coverage: Option<CoverageOptions>,
+
+    /// `JUnit` report overrides.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option_group]
     pub junit: Option<JunitOptions>,
@@ -67,6 +79,7 @@ impl Combine for Options {
 }
 
 impl Options {
+    /// Resolves sparse values into complete runtime settings and compiled overrides.
     pub fn to_settings(&self) -> ProjectSettings {
         ProjectSettings {
             terminal: self.terminal.clone().unwrap_or_default().to_settings(),
@@ -194,6 +207,7 @@ impl OverrideOptions {
 #[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize, OptionsMetadata)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
+/// `JUnit`-specific values available inside one per-test override.
 pub struct OverrideJunitOptions {
     /// Whether matching flaky-fail tests appear as failures or successes in
     /// `JUnit`, while preserving their flaky attempt details.
@@ -213,6 +227,7 @@ pub struct OverrideJunitOptions {
 )]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
+/// Controls test-path discovery and whether filesystem ignore rules are honored.
 pub struct SrcOptions {
     /// Whether to automatically exclude files that are ignored by `.ignore`,
     /// `.gitignore`, `.git/info/exclude`, and global `gitignore` files.
@@ -260,6 +275,7 @@ impl SrcOptions {
 )]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
+/// Controls diagnostic formatting, captured output, and displayed test statuses.
 pub struct TerminalOptions {
     /// The format to use for printing diagnostic messages.
     ///
@@ -323,6 +339,7 @@ pub struct TerminalOptions {
 }
 
 impl TerminalOptions {
+    /// Applies defaults and produces terminal settings ready for runtime use.
     pub fn to_settings(&self) -> TerminalSettings {
         TerminalSettings {
             output_format: self.output_format.unwrap_or_default(),
@@ -338,6 +355,7 @@ impl TerminalOptions {
 )]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
+/// Controls test selection, retries, timeouts, and failure policies.
 pub struct TestOptions {
     /// The prefix to use for test functions.
     ///
@@ -538,6 +556,7 @@ pub struct TestOptions {
 }
 
 impl TestOptions {
+    /// Applies defaults and converts second-based limits into platform durations.
     pub fn to_settings(&self) -> TestSettings {
         let max_fail = self
             .max_fail
@@ -570,6 +589,7 @@ impl TestOptions {
 #[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize, OptionsMetadata)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
+/// Controls measured Python sources and coverage report generation.
 pub struct CoverageOptions {
     /// Source paths to measure coverage for.
     ///
@@ -703,6 +723,7 @@ impl Combine for CoverageOptions {
 }
 
 impl CoverageOptions {
+    /// Applies defaults and honors runtime-only coverage disablement.
     pub fn to_settings(&self) -> CoverageSettings {
         let sources = if self.disabled.unwrap_or(false) {
             Vec::new()
@@ -726,6 +747,7 @@ impl CoverageOptions {
 )]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
+/// Controls `JUnit` XML output, captured streams, and flaky-test representation.
 pub struct JunitOptions {
     /// Output path for the `JUnit` XML report.
     ///
@@ -786,6 +808,7 @@ pub struct JunitOptions {
 }
 
 impl JunitOptions {
+    /// Applies `JUnit` defaults and produces report settings.
     pub fn to_settings(&self) -> JunitSettings {
         JunitSettings {
             path: self.path.clone(),
@@ -833,6 +856,7 @@ impl Combine for CovReport {
 }
 
 impl CovReport {
+    /// Returns canonical configuration spelling.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Term => "term",
@@ -849,9 +873,11 @@ impl CovReport {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum OutputFormat {
+    /// Multi-line diagnostics with source context and hints.
     #[default]
     Full,
 
+    /// One diagnostic per line.
     Concise,
 }
 
@@ -865,6 +891,7 @@ impl OutputFormat {
         matches!(self, Self::Full | Self::Concise)
     }
 
+    /// Returns canonical configuration spelling.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Full => "full",

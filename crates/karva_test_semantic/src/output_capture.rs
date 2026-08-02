@@ -1,5 +1,9 @@
 use pyo3::prelude::*;
 
+/// Process-global Python stream redirection for one test attempt.
+///
+/// `start` replaces `sys.stdout` and `sys.stderr` with `StringIO` objects;
+/// callers must consume the value with [`Self::finish`] to restore both streams.
 pub struct PythonOutputCapture {
     old_stdout: Py<PyAny>,
     old_stderr: Py<PyAny>,
@@ -8,6 +12,7 @@ pub struct PythonOutputCapture {
 }
 
 impl PythonOutputCapture {
+    /// Redirects both Python output streams, rolling back stdout if stderr setup fails.
     pub fn start(py: Python<'_>) -> PyResult<Self> {
         let sys = py.import("sys")?;
         let string_io = py.import("io")?.getattr("StringIO")?;
@@ -35,6 +40,7 @@ impl PythonOutputCapture {
         })
     }
 
+    /// Flushes captured streams, restores their original objects, and returns captured text.
     pub fn finish(self, py: Python<'_>) -> PyResult<CapturedPythonOutput> {
         let sys = py.import("sys")?;
         flush_current_streams(&sys);
@@ -48,8 +54,12 @@ impl PythonOutputCapture {
     }
 }
 
+/// Text emitted through Python's stdout and stderr during one capture window.
 pub struct CapturedPythonOutput {
+    /// Captured stdout, preserving write order within that stream.
     pub stdout: String,
+
+    /// Captured stderr, preserving write order within that stream.
     pub stderr: String,
 }
 

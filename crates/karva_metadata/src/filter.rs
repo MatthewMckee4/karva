@@ -11,10 +11,13 @@ use thiserror::Error;
 pub enum Matcher {
     /// The value must equal the pattern exactly.
     Exact(String),
+
     /// The pattern must appear anywhere in the value.
     Substring(String),
+
     /// The value must match the compiled regular expression.
     Regex(Regex),
+
     /// The value must match the compiled glob pattern.
     Glob(GlobMatcher),
 }
@@ -35,6 +38,7 @@ impl Matcher {
 pub enum Predicate {
     /// Evaluated against the fully qualified test name.
     Test(Matcher),
+
     /// Evaluated against each custom tag on the test; matches if any tag matches.
     Tag(Matcher),
 }
@@ -42,7 +46,10 @@ pub enum Predicate {
 /// The value a [`Filterset`] is evaluated against.
 #[derive(Debug, Clone, Copy)]
 pub struct EvalContext<'a> {
+    /// Fully qualified test variant name.
     pub test_name: &'a str,
+
+    /// Custom tags attached to the test.
     pub tags: &'a [&'a str],
 }
 
@@ -75,6 +82,7 @@ pub struct Filterset {
 }
 
 impl Filterset {
+    /// Parses one filter DSL expression into an evaluable tree.
     pub fn new(input: &str) -> Result<Self, FilterError> {
         let tokens = tokenize(input)?;
         let mut parser = Parser::new(&tokens, input);
@@ -88,6 +96,7 @@ impl Filterset {
         Ok(Self { expr })
     }
 
+    /// Evaluates this expression against one test and its tags.
     pub fn matches(&self, ctx: &EvalContext<'_>) -> bool {
         self.expr.matches(ctx)
     }
@@ -106,6 +115,7 @@ pub struct ValidatedFilter {
 }
 
 impl ValidatedFilter {
+    /// Validates and compiles a filter while retaining its serialized spelling.
     pub fn new(raw: String) -> Result<Self, FilterError> {
         let compiled = Filterset::new(&raw)?;
         Ok(Self { raw, compiled })
@@ -115,6 +125,7 @@ impl ValidatedFilter {
         &self.raw
     }
 
+    /// Evaluates the precompiled filter against one test.
     pub fn matches(&self, ctx: &EvalContext<'_>) -> bool {
         self.compiled.matches(ctx)
     }
@@ -159,6 +170,7 @@ pub struct FiltersetSet {
 }
 
 impl FiltersetSet {
+    /// Parses independent expressions combined with OR semantics.
     pub fn new(expressions: &[String]) -> Result<Self, FilterError> {
         let filters = expressions
             .iter()
@@ -171,12 +183,14 @@ impl FiltersetSet {
         self.filters.is_empty()
     }
 
+    /// Evaluates OR semantics; an empty set deliberately matches everything.
     pub fn matches(&self, ctx: &EvalContext<'_>) -> bool {
         self.filters.is_empty() || self.filters.iter().any(|f| f.matches(ctx))
     }
 }
 
 #[derive(Debug, Error)]
+/// Syntax or pattern-compilation failure in Karva's filter DSL.
 pub enum FilterError {
     #[error("unexpected character `{character}` in filter expression `{expression}`")]
     UnexpectedCharacter { character: char, expression: String },

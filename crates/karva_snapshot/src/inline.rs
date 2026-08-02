@@ -6,8 +6,10 @@ use fs_err as fs;
 pub struct InlineLocation {
     /// Byte offset of string literal start (including quotes).
     pub start: usize,
+
     /// Byte offset of string literal end (including quotes).
     pub end: usize,
+
     /// Column indentation of the `assert_snapshot` call.
     pub indent: usize,
 }

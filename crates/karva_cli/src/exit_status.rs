@@ -1,6 +1,7 @@
 use std::process::{ExitCode, Termination};
 
 #[derive(Copy, Clone)]
+/// Stable process exit codes distinguishing test failures from runner errors.
 pub enum ExitStatus {
     /// Checking was successful and there were no errors.
     Success = 0,
@@ -19,6 +20,7 @@ impl Termination for ExitStatus {
 }
 
 impl ExitStatus {
+    /// Returns the numeric process exit code.
     pub fn to_i32(self) -> i32 {
         self as i32
     }

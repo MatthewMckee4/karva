@@ -3,23 +3,40 @@ use std::fmt::{self, Write};
 /// Metadata stored in the YAML frontmatter of a snapshot file.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SnapshotMetadata {
+    /// Qualified test source that owns an external snapshot.
     pub source: Option<String>,
+
+    /// Python source file containing an inline snapshot.
     pub inline_source: Option<String>,
+
+    /// One-based source line containing an inline snapshot.
     pub inline_line: Option<u32>,
 }
 
 /// A parsed snapshot file containing metadata and content.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnapshotFile {
+    /// Parsed frontmatter fields.
     pub metadata: SnapshotMetadata,
+
+    /// Snapshot body preserved after frontmatter.
     pub content: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Structural error while parsing snapshot frontmatter.
 pub enum ParseSnapshotError {
+    /// File does not start with `---`.
     MissingOpeningSeparator,
+
+    /// Frontmatter has no terminating `---`.
     MissingClosingSeparator,
-    InvalidInlineLine { value: String },
+
+    /// `inline_line` is not an unsigned source-line number.
+    InvalidInlineLine {
+        /// Value found in the `inline_line` frontmatter field.
+        value: String,
+    },
 }
 
 impl fmt::Display for ParseSnapshotError {

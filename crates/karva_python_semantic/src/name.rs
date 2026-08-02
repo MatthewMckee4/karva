@@ -3,7 +3,7 @@ use serde::{Serialize, Serializer};
 
 use crate::module_name;
 
-/// Represents a fully qualified function name including its module path.
+/// Stable function identity serialized as `<module>::<function>`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct QualifiedFunctionName {
     function_name: String,
@@ -11,7 +11,7 @@ pub struct QualifiedFunctionName {
 }
 
 impl QualifiedFunctionName {
-    /// Create a new qualified function name.
+    /// Combines an unqualified Python name with its owning module.
     pub fn new(function_name: String, module_path: ModulePath) -> Self {
         Self {
             function_name,
@@ -50,7 +50,7 @@ impl Serialize for QualifiedFunctionName {
     }
 }
 
-/// Represents a fully qualified test name, optionally including a parametrized variant.
+/// User-visible test identity, optionally specialized to one parameter variant.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct QualifiedTestName {
     function_name: QualifiedFunctionName,
@@ -58,7 +58,7 @@ pub struct QualifiedTestName {
 }
 
 impl QualifiedTestName {
-    /// Create a new qualified test name.
+    /// Creates an identity whose `full_name`, when present, must start with `function_name`.
     pub fn new(function_name: QualifiedFunctionName, full_name: Option<String>) -> Self {
         Self {
             function_name,
@@ -89,7 +89,7 @@ impl std::fmt::Display for QualifiedTestName {
     }
 }
 
-/// A Python module path combining the filesystem path with its dotted module name.
+/// Filesystem and import-system identities for the same Python module.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ModulePath {
     path: Utf8PathBuf,

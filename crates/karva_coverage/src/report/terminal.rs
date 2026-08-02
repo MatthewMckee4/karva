@@ -12,6 +12,9 @@ use super::json::build_json_report;
 use super::shared::{FileRow, row_percent, total_percent, totals_row};
 use super::xml::build_cobertura_xml;
 
+/// Prints the terminal coverage table and returns its total percentage.
+///
+/// Returns `None` when no worker coverage artifacts contain source data.
 pub fn combine_and_report(
     cwd: &Utf8Path,
     files: &[impl AsRef<Utf8Path>],
@@ -25,6 +28,7 @@ pub fn combine_and_report(
     Ok(Some(total))
 }
 
+/// Writes a Cobertura-compatible XML report and returns its total percentage.
 pub fn write_cobertura_xml(
     cwd: &Utf8Path,
     files: &[impl AsRef<Utf8Path>],
@@ -50,6 +54,7 @@ pub fn write_cobertura_xml(
     Ok(Some(total_pct))
 }
 
+/// Writes a coverage.py-compatible JSON report and returns its total percentage.
 pub fn write_json_report(
     cwd: &Utf8Path,
     files: &[impl AsRef<Utf8Path>],
@@ -75,6 +80,7 @@ pub fn write_json_report(
     Ok(Some(total_pct))
 }
 
+/// Writes a standalone HTML coverage report and returns its total percentage.
 pub fn write_html_report(
     cwd: &Utf8Path,
     files: &[impl AsRef<Utf8Path>],

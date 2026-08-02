@@ -1,3 +1,5 @@
+//! Paths with Python package and test-selection semantics.
+
 mod test_path;
 mod utils;
 

@@ -1,3 +1,5 @@
+//! Shared on-disk cache for controller and worker processes.
+
 pub(crate) mod artifact;
 pub(crate) mod cache;
 pub(crate) mod diagnostics;

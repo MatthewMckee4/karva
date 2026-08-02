@@ -8,18 +8,24 @@ use karva_cli::PartitionSelection;
 pub enum TestOrdering {
     /// Randomize unknown-duration tests to avoid sticky first-run imbalance.
     ShuffleUnknownDurations,
+
     /// Use qualified-name ordering for deterministic benchmark inputs.
     Stable,
 }
 
-/// Test metadata used for partitioning decisions
+/// Test metadata needed to filter, group, weight, and dispatch one test.
 #[derive(Debug, Clone)]
 struct TestInfo {
+    /// Importable module name used to keep cheap modules together.
     module_name: String,
+
     /// The qualified name of the test (e.g., `test_a::test_1`), used for last-failed filtering.
     qualified_name: String,
+
+    /// Worker CLI selector for this exact test.
     path: String,
-    /// Actual runtime from previous test run (if available)
+
+    /// Wall-clock runtime from the previous run, when cached.
     duration: Option<Duration>,
 }
 
@@ -30,11 +36,13 @@ fn test_weight(duration: Option<Duration>) -> u128 {
     duration.map_or(1, |d| d.as_micros())
 }
 
-/// A group of tests from the same module with calculated weight
+/// Tests sharing one module import, weighted as a unit before large groups split.
 #[derive(Debug)]
 struct ModuleGroup {
+    /// Tests collected from this module.
     tests: Vec<TestInfo>,
-    /// Total weight of all tests in this module
+
+    /// Sum of historical microseconds, using one for each unknown duration.
     total_weight: u128,
 }
 
@@ -56,11 +64,13 @@ impl ModuleGroup {
     }
 }
 
-/// A partition of tests assigned to a single worker
+/// Worker assignment produced by module-aware load balancing.
 #[derive(Debug)]
 pub struct Partition {
+    /// Worker CLI selectors in execution order.
     tests: Vec<String>,
-    /// Cumulative weight (duration in microseconds or 1 for unknown tests)
+
+    /// Cumulative historical microseconds, using one per unknown test.
     weight: u128,
 }
 

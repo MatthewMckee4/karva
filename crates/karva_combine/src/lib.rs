@@ -1,3 +1,5 @@
+//! Composition rules used to merge configuration from multiple sources.
+
 use std::collections::{BTreeMap, HashMap};
 use std::hash::BuildHasher;
 
@@ -5,6 +7,7 @@ use ruff_python_ast::PythonVersion;
 
 /// Combine two values, preferring the values in `self`.
 pub trait Combine {
+    /// Returns `self` after filling or appending values from lower-precedence `other`.
     #[must_use]
     fn combine(mut self, other: Self) -> Self
     where
@@ -14,6 +17,7 @@ pub trait Combine {
         self
     }
 
+    /// Merges lower-precedence `other` into `self` in place.
     fn combine_with(&mut self, other: Self);
 }
 

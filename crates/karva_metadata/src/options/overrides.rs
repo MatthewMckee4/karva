@@ -4,13 +4,20 @@ use karva_combine::Combine;
 use super::{Config, Options, UnknownProfile};
 
 #[derive(Debug, Default, PartialEq, Eq, Clone)]
+/// Explicit config path, profile, and CLI options supplied by one invocation.
 pub struct ProjectOptionsOverrides {
+    /// Configuration file replacing automatic project discovery.
     pub config_file_override: Option<Utf8PathBuf>,
+
+    /// Named profile selected from loaded configuration.
     pub profile: Option<String>,
+
+    /// Highest-precedence options parsed from CLI arguments.
     pub options: Options,
 }
 
 impl ProjectOptionsOverrides {
+    /// Creates invocation overrides using default profile selection.
     pub fn new(config_file_override: Option<Utf8PathBuf>, options: Options) -> Self {
         Self {
             config_file_override,
@@ -19,6 +26,7 @@ impl ProjectOptionsOverrides {
         }
     }
 
+    /// Sets named profile selection.
     #[must_use]
     pub fn with_profile(mut self, profile: Option<String>) -> Self {
         self.profile = profile;

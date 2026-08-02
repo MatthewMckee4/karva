@@ -1,6 +1,7 @@
 use tracing_subscriber::filter::LevelFilter;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Default)]
+/// Bounded logging verbosity selected by repeated `-v` flags.
 pub enum VerbosityLevel {
     /// Default output level. Only shows karva events up to the [`WARN`](tracing::Level::WARN).
     #[default]
@@ -19,6 +20,7 @@ pub enum VerbosityLevel {
 }
 
 impl VerbosityLevel {
+    /// Returns the maximum tracing level enabled for Karva targets.
     pub fn level_filter(self) -> LevelFilter {
         match self {
             Self::Default => LevelFilter::WARN,
@@ -40,6 +42,7 @@ impl VerbosityLevel {
         matches!(self, Self::ExtraVerbose)
     }
 
+    /// Returns the CLI flags needed to reproduce this level in a worker.
     pub fn cli_arg(self) -> Option<&'static str> {
         match self {
             Self::Default => None,

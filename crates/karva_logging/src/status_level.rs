@@ -23,24 +23,31 @@ use serde::{Deserialize, Serialize};
 pub enum StatusLevel {
     /// Don't display any test result lines (or the "Starting" header).
     None,
+
     /// Only display failed test results.
     Fail,
+
     /// Display failed test results plus a `TRY N FAIL` line for each failed
     /// attempt that was retried.
     Retry,
+
     /// Display failed, retried, and slow test results. Karva does not yet
     /// have a slow-test threshold, so this currently behaves like `retry`.
     Slow,
+
     /// Display failed, retried, slow, and passing test results (default).
     #[default]
     Pass,
+
     /// Additionally display skipped test results.
     Skip,
+
     /// Display all test result statuses.
     All,
 }
 
 impl StatusLevel {
+    /// Returns the canonical configuration and CLI spelling.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::None => "none",
@@ -86,24 +93,31 @@ impl Combine for StatusLevel {
 pub enum FinalStatusLevel {
     /// Don't display the summary line or any diagnostic blocks.
     None,
+
     /// Only display the summary line and diagnostics on failure.
     Fail,
+
     /// Display the summary line plus diagnostics on failure or when any
     /// test was retried. The summary line gains a `N retried` count whenever
     /// a retry happened.
     Retry,
+
     /// Same as `retry` until a slow-test threshold is implemented.
     Slow,
+
     /// Always display the summary line and diagnostics (default).
     #[default]
     Pass,
+
     /// Same as `pass` until skip-specific summary lines are emitted.
     Skip,
+
     /// Always display every summary status.
     All,
 }
 
 impl FinalStatusLevel {
+    /// Returns the canonical configuration and CLI spelling.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::None => "none",

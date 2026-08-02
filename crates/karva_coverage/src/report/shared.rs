@@ -7,6 +7,7 @@ use fs_err as fs;
 use crate::data::{BranchArc, WorkerFile};
 
 #[derive(Debug, Default)]
+/// Union of raw coverage observations for one normalized source path.
 pub(super) struct CombinedFile {
     executable: BTreeSet<u32>,
     executed: BTreeSet<u32>,
@@ -17,9 +18,14 @@ pub(super) struct CombinedFile {
     arc_contexts: BTreeMap<BranchArc, BTreeSet<String>>,
 }
 
+/// Report-ready metrics and source data shared by every output format.
 pub(super) struct FileRow {
+    /// Display path, relative to the coverage root when possible.
     pub name: String,
+
+    /// Canonical source path used by machine-readable formats.
     pub absolute_name: String,
+
     pub stmts: u32,
     pub hit: u32,
     pub miss: u32,
@@ -27,7 +33,10 @@ pub(super) struct FileRow {
     pub executable: Vec<u32>,
     pub executed: Vec<u32>,
     pub contexts: BTreeMap<u32, BTreeSet<String>>,
+
+    /// Whether branch metrics should appear, even when this file has no branches.
     pub branches_enabled: bool,
+
     pub branches: u32,
     pub branch_hit: u32,
     pub branch_miss: u32,
@@ -35,10 +44,14 @@ pub(super) struct FileRow {
     pub branch_possible: Vec<BranchArc>,
     pub branch_executed: Vec<BranchArc>,
     pub branch_missing: Vec<BranchArc>,
+
+    /// All observed arcs, including arcs absent from static analysis.
     pub arcs: Vec<BranchArc>,
+
     pub arc_contexts: BTreeMap<BranchArc, BTreeSet<String>>,
 }
 
+/// Unions per-worker payloads so each source path has one coverage record.
 pub(super) fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String, CombinedFile>> {
     let mut combined: BTreeMap<String, CombinedFile> = BTreeMap::new();
 
@@ -74,6 +87,7 @@ pub(super) fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String,
     Ok(combined)
 }
 
+/// Converts combined observations into normalized metrics consumed by report writers.
 pub(super) fn build_rows(
     cwd_real: &std::path::Path,
     combined: &BTreeMap<String, CombinedFile>,

@@ -1,3 +1,5 @@
+//! Project discovery and Python module-path modeling.
+
 pub mod path;
 
 use anyhow::Context;
@@ -68,6 +70,7 @@ fn is_karva_wheel_name(name: &str) -> bool {
 }
 
 #[derive(Debug, Clone)]
+/// Loaded project metadata paired with its fully resolved runtime settings.
 pub struct Project {
     settings: ProjectSettings,
 
@@ -75,6 +78,7 @@ pub struct Project {
 }
 
 impl Project {
+    /// Resolves settings from previously discovered project metadata.
     pub fn from_metadata(metadata: ProjectMetadata) -> Self {
         let settings = metadata.options.to_settings();
         Self { settings, metadata }
@@ -88,6 +92,7 @@ impl Project {
         self.metadata.root()
     }
 
+    /// Resolves configured include paths, defaulting to `tests` or project root.
     pub fn test_paths(&self) -> Vec<Result<TestPath, TestPathError>> {
         if self.settings.src().include_paths.is_empty() {
             let tests = self.cwd().join("tests");

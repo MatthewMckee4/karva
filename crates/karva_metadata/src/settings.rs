@@ -30,10 +30,16 @@ macro_rules! impl_duration_secs_deserialize {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+/// Runtime selection for tests marked ignored or skipped.
 pub enum RunIgnoredMode {
+    /// Preserve configured skip behavior.
     #[default]
     Default,
+
+    /// Run ignored tests and exclude normal tests.
     Only,
+
+    /// Run ignored and normal tests.
     All,
 }
 
@@ -41,10 +47,17 @@ pub enum RunIgnoredMode {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum NoTestsMode {
+    /// Fail without filters, but pass when explicit filters match nothing.
     #[default]
     Auto,
+
+    /// Exit successfully without a diagnostic.
     Pass,
+
+    /// Warn and exit successfully.
     Warn,
+
+    /// Report an error and return failure.
     Fail,
 }
 
@@ -52,8 +65,11 @@ pub enum NoTestsMode {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum FlakyResult {
+    /// Tests that eventually pass remain successful.
     #[default]
     Pass,
+
+    /// Any test that needed a retry fails the run.
     Fail,
 }
 
@@ -61,8 +77,11 @@ pub enum FlakyResult {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum JunitFlakyFailStatus {
+    /// Record failed attempts as `JUnit` failures.
     #[default]
     Failure,
+
+    /// Represent eventually passing tests as successful in `JUnit`.
     Success,
 }
 
@@ -128,6 +147,7 @@ pub struct SlowTimeoutSecs(pub f64);
 impl Eq for SlowTimeoutSecs {}
 
 impl SlowTimeoutSecs {
+    /// Converts positive, platform-representable seconds; non-positive values disable tracking.
     pub fn as_duration(self) -> Option<Duration> {
         if self.0.is_finite() && self.0 > 0.0 {
             Duration::try_from_secs_f64(self.0)
@@ -155,7 +175,7 @@ impl Combine for SlowTimeoutSecs {
 ///
 /// Wraps `f64` for the same reason as [`SlowTimeoutSecs`]. Tests exceeding
 /// this duration are killed and reported as failures (see
-/// [`crate::settings::TestSettings::timeout`]).
+/// `TestSettings::timeout`).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(transparent)]
@@ -164,6 +184,7 @@ pub struct TestTimeoutSecs(pub f64);
 impl Eq for TestTimeoutSecs {}
 
 impl TestTimeoutSecs {
+    /// Converts positive, platform-representable seconds; non-positive values disable timeout.
     pub fn as_duration(self) -> Option<Duration> {
         if self.0.is_finite() && self.0 > 0.0 {
             Duration::try_from_secs_f64(self.0)
@@ -193,7 +214,7 @@ impl Combine for TestTimeoutSecs {
 /// [`SlowTimeoutSecs`] (informational) or [`TestTimeoutSecs`] (kills the
 /// test mid-flight), a test exceeding this budget is allowed to finish its
 /// full lifecycle — including fixture teardown — and is then reported as a
-/// failure (see [`crate::settings::TestSettings::fail_slow`]).
+/// failure (see `TestSettings::fail_slow`).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(transparent)]
@@ -202,6 +223,7 @@ pub struct FailSlowSecs(pub f64);
 impl Eq for FailSlowSecs {}
 
 impl FailSlowSecs {
+    /// Converts positive, platform-representable seconds; non-positive values disable budget.
     pub fn as_duration(self) -> Option<Duration> {
         if self.0.is_finite() && self.0 > 0.0 {
             Duration::try_from_secs_f64(self.0)
@@ -234,6 +256,7 @@ pub struct RunTimeoutSecs(pub f64);
 impl Eq for RunTimeoutSecs {}
 
 impl RunTimeoutSecs {
+    /// Converts positive, platform-representable seconds; non-positive values disable timeout.
     pub fn as_duration(self) -> Option<Duration> {
         if self.0.is_finite() && self.0 > 0.0 {
             Duration::try_from_secs_f64(self.0)
@@ -266,6 +289,7 @@ pub struct TerminationGracePeriodSecs(pub f64);
 impl Eq for TerminationGracePeriodSecs {}
 
 impl TerminationGracePeriodSecs {
+    /// Converts non-negative, platform-representable seconds; zero requests immediate kill.
     pub fn as_duration(self) -> Option<Duration> {
         if self.0.is_finite() && self.0 >= 0.0 {
             Duration::try_from_secs_f64(self.0).ok()
@@ -312,6 +336,7 @@ impl Combine for CovFailUnder {
 
 #[derive(Default, Debug, Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
+/// Fully resolved settings after configuration profiles and CLI overrides combine.
 pub struct ProjectSettings {
     pub(crate) src: SrcSettings,
     pub(crate) terminal: TerminalSettings,
@@ -327,17 +352,30 @@ pub struct ProjectSettings {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct OverrideSettings {
+    /// Compiled selector deciding which tests receive this override.
     pub filter: ValidatedFilter,
+
+    /// Retry count replacing profile-level retry policy.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retries: Option<u32>,
+
+    /// Flaky-result policy replacing profile-level policy.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub flaky_result: Option<FlakyResult>,
+
+    /// `JUnit` flaky policy replacing profile-level policy.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub junit_flaky_fail_status: Option<JunitFlakyFailStatus>,
+
+    /// Hard timeout in seconds; non-positive values disable it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout: Option<TestTimeoutSecs>,
+
+    /// Slow-test threshold in seconds; non-positive values disable it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slow_timeout: Option<SlowTimeoutSecs>,
+
+    /// Post-run duration budget in seconds; non-positive values disable it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fail_slow: Option<FailSlowSecs>,
 }
@@ -392,17 +430,19 @@ impl ProjectSettings {
     ///
     /// Walks through the configured overrides in order; the first match
     /// with `retries` set wins. Falls back to the profile-level
-    /// [`TestSettings::retry`] when no override matches.
+    /// `TestSettings::retry` when no override matches.
     pub fn retry_for(&self, ctx: &EvalContext<'_>) -> u32 {
         self.first_matching_override(ctx, |ovr| ovr.retries)
             .unwrap_or(self.test.retry)
     }
 
+    /// Resolves first matching flaky-result override, then profile policy.
     pub fn flaky_result_for(&self, ctx: &EvalContext<'_>) -> FlakyResult {
         self.first_matching_override(ctx, |ovr| ovr.flaky_result)
             .unwrap_or(self.test.flaky_result)
     }
 
+    /// Resolves first matching `JUnit` flaky override, then report policy.
     pub fn junit_flaky_fail_status_for(&self, ctx: &EvalContext<'_>) -> JunitFlakyFailStatus {
         self.first_matching_override(ctx, |ovr| ovr.junit_flaky_fail_status)
             .unwrap_or(self.junit.flaky_fail_status)
@@ -446,10 +486,12 @@ impl ProjectSettings {
         self.test.fail_slow
     }
 
+    /// Replaces runtime-only CLI filter selection after configuration resolution.
     pub fn set_filter(&mut self, filter: FiltersetSet) {
         self.test.filter = filter;
     }
 
+    /// Replaces runtime-only ignored-test selection after configuration resolution.
     pub fn set_run_ignored(&mut self, mode: RunIgnoredMode) {
         self.test.run_ignored = mode;
     }
@@ -473,31 +515,56 @@ fn serialize_duration_secs<S: Serializer>(
 
 #[derive(Default, Debug, Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
+/// Resolved terminal presentation settings.
 pub struct TerminalSettings {
+    /// Human or machine diagnostic rendering.
     pub output_format: OutputFormat,
+
+    /// Whether captured Python streams are printed for successful tests.
     pub show_python_output: bool,
+
+    /// Minimum status shown while tests execute.
     pub status_level: StatusLevel,
+
+    /// Minimum status shown in final output.
     pub final_status_level: FinalStatusLevel,
 }
 
 #[derive(Default, Debug, Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
+/// Resolved source-discovery settings.
 pub struct SrcSettings {
+    /// Whether filesystem discovery honors ignore files.
     pub respect_ignore_files: bool,
+
+    /// User selections passed into project test-path resolution.
     #[serde(rename = "include")]
     pub include_paths: Vec<String>,
 }
 
 #[derive(Default, Debug, Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
+/// Resolved coverage collection and reporting settings.
 pub struct CoverageSettings {
+    /// Source roots measured by worker tracers.
     pub sources: Vec<String>,
+
+    /// Report-path globs that must match for inclusion.
     pub include: Vec<String>,
+
+    /// Report-path globs excluded after inclusion.
     pub omit: Vec<String>,
+
+    /// Selected report backend.
     pub report: CovReport,
+
+    /// Optional output path for file-based reports.
     pub report_path: Option<String>,
+
+    /// Whether workers record branch arcs.
     #[serde(skip_serializing_if = "is_false")]
     pub branch: bool,
+
     /// Minimum total coverage percentage (`0..=100`). When set and the
     /// reported `TOTAL` coverage is below this value, the test command
     /// exits with a non-zero status even if every test passed.
@@ -507,13 +574,23 @@ pub struct CoverageSettings {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
+/// Resolved `JUnit` XML report settings.
 pub struct JunitSettings {
+    /// Output file; `None` disables `JUnit` generation.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+
+    /// Root testsuites name written into XML.
     pub report_name: String,
+
+    /// Whether passing-test captured streams are written into XML.
     #[serde(skip_serializing_if = "is_false")]
     pub store_success_output: bool,
+
+    /// Whether failed-test captured streams are written into XML.
     pub store_failure_output: bool,
+
+    /// Outcome assigned to failed attempts before an eventual pass.
     pub flaky_fail_status: JunitFlakyFailStatus,
 }
 
@@ -539,22 +616,36 @@ fn is_false(value: &bool) -> bool {
 
 #[derive(Default, Debug, Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
+/// Resolved test selection, retry, timeout, and failure settings.
 pub struct TestSettings {
+    /// Prefix identifying Python test functions during syntax collection.
     pub test_function_prefix: String,
+
     /// `MaxFail::unlimited()` wraps `None`, which TOML cannot represent —
     /// omit the field when no limit is configured.
     #[serde(skip_serializing_if = "MaxFail::is_unlimited")]
     pub max_fail: MaxFail,
+
+    /// Whether collection imports modules to discover fixtures dynamically.
     pub try_import_fixtures: bool,
+
+    /// Additional attempts permitted after first failure.
     pub retry: u32,
+
+    /// Whether eventual success after retry passes the run.
     pub flaky_result: FlakyResult,
+
     /// Runtime-only: filters are sourced from CLI flags, never config files.
     #[serde(skip)]
     pub filter: FiltersetSet,
+
     /// Runtime-only: run-ignored mode is sourced from CLI flags.
     #[serde(skip)]
     pub run_ignored: RunIgnoredMode,
+
+    /// Behavior when selection produces no runnable tests.
     pub no_tests: NoTestsMode,
+
     /// Threshold after which a test is flagged as slow. `None` disables
     /// slow-test detection entirely.
     #[serde(
@@ -562,6 +653,7 @@ pub struct TestSettings {
         serialize_with = "serialize_duration_secs"
     )]
     pub slow_timeout: Option<Duration>,
+
     /// Duration budget for a test's full lifecycle (setup + call +
     /// teardown). `None` disables budget checking. Unlike `timeout`, a test
     /// exceeding this budget is allowed to finish (including teardown)
@@ -571,6 +663,7 @@ pub struct TestSettings {
         serialize_with = "serialize_duration_secs"
     )]
     pub fail_slow: Option<Duration>,
+
     /// Hard per-test timeout. Tests that run longer than this duration are
     /// killed and reported as failures. `None` disables the hard timeout
     /// (tests may still set their own limit via `@karva.tags.timeout`).
@@ -579,10 +672,12 @@ pub struct TestSettings {
         serialize_with = "serialize_duration_secs"
     )]
     pub timeout: Option<Duration>,
+
     /// Wall-clock limit for the entire run. When the run exceeds this
     /// duration, the remaining workers are stopped and the run fails.
     /// `None` disables the limit.
     pub run_timeout: Option<Duration>,
+
     /// Grace period between graceful termination and force-kill when karva
     /// stops workers because of Ctrl+C, fail-fast, or run timeout.
     #[serde(
@@ -593,12 +688,14 @@ pub struct TestSettings {
 }
 
 impl TestSettings {
+    /// Returns configured shutdown grace period or platform-independent default.
     pub fn termination_grace_period(&self) -> Duration {
         self.termination_grace_period
             .unwrap_or_else(default_termination_grace_period)
     }
 }
 
+/// Default delay between graceful worker termination and forced kill.
 pub fn default_termination_grace_period() -> Duration {
     Duration::from_secs(10)
 }

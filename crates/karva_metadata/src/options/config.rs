@@ -41,6 +41,7 @@ pub struct Config {
 
     #[cfg_attr(feature = "schemars", schemars(schema_with = "profile_schema"))]
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    /// Named option profiles; `default` forms the base for every named profile.
     pub profile: BTreeMap<String, Options>,
 }
 
@@ -58,6 +59,7 @@ fn profile_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema
 }
 
 impl Config {
+    /// Parses configuration text and validates all profile names.
     pub fn from_toml_str(content: &str) -> Result<Self, KarvaTomlError> {
         let config: Self = toml::from_str(content)?;
         validate_profile_names(&config.profile)?;
@@ -182,35 +184,56 @@ fn validate_profile_names(profiles: &BTreeMap<String, Options>) -> Result<(), Ka
     available.join(", ")
 )]
 pub struct UnknownProfile {
+    /// Requested undefined profile name.
     pub name: String,
+
+    /// Sorted profile names available to the user, including implicit `default`.
     pub available: Vec<String>,
 }
 
 #[derive(Debug, Error)]
+/// Failure to compare running Karva version with `required-version`.
 pub enum IncompatibleVersionError {
+    /// Installed version does not satisfy configured requirement.
     #[error("the installed karva {installed} does not satisfy `required-version = \"{required}\"`")]
     Mismatch {
+        /// Configured semantic-version requirement.
         required: VersionReq,
+
+        /// Parsed running Karva version.
         installed: Version,
     },
+    /// Build supplied a version string that is not valid semantic versioning.
     #[error("internal error: failed to parse installed karva {version}: {source}")]
     InvalidInstalledVersion {
+        /// Invalid build version.
         version: String,
+
+        /// Semantic-version parser failure.
         #[source]
         source: semver::Error,
     },
 }
 
 #[derive(Error, Debug)]
+/// Failure while reading, decoding, or validating `karva.toml`.
 pub enum KarvaTomlError {
+    /// TOML syntax or schema decoding failed.
     #[error(transparent)]
     TomlSyntax(#[from] toml::de::Error),
+
+    /// Configuration file could not be read.
     #[error("Failed to read `{path}`: {source}")]
     FileReadError {
+        /// Underlying filesystem failure.
         #[source]
         source: std::io::Error,
+
+        /// Configuration path that failed.
         path: Utf8PathBuf,
     },
+
+    /// Profile name violates naming or reserved-prefix rules.
     #[error("invalid profile name `{name}`: {reason}")]
     InvalidProfileName { name: String, reason: &'static str },
 }

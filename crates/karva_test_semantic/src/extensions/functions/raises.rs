@@ -3,14 +3,20 @@ use pyo3::types::PyType;
 
 use super::FailError;
 
+/// Exception details populated after a matching [`raises`] context exits.
+///
+/// Fields remain `None` while the context body is running and when exit fails.
 #[pyclass]
 pub struct ExceptionInfo {
+    /// Concrete Python exception type raised by the context body.
     #[pyo3(get, name = "type")]
     pub exc_type: Option<Py<PyAny>>,
 
+    /// Exception instance raised by the context body.
     #[pyo3(get)]
     pub value: Option<Py<PyAny>>,
 
+    /// Python traceback associated with the exception.
     #[pyo3(get)]
     pub tb: Option<Py<PyAny>>,
 }
@@ -27,6 +33,9 @@ impl ExceptionInfo {
     }
 }
 
+/// Python context manager enforcing exception type and optional message matching.
+///
+/// Matching exceptions are suppressed; unexpected exception types propagate unchanged.
 #[pyclass]
 pub struct RaisesContext {
     expected_exception: Py<PyAny>,

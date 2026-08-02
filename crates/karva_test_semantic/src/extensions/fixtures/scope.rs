@@ -3,10 +3,17 @@ use pyo3::prelude::*;
 /// A scope for a fixture.
 #[derive(Copy, Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub enum FixtureScope {
+    /// Recreated for every test attempt.
     #[default]
     Function,
+
+    /// Shared by tests in one Python module.
     Module,
+
+    /// Shared by modules in one discovered package.
     Package,
+
+    /// Shared for the complete worker session.
     Session,
 }
 
@@ -52,7 +59,7 @@ impl TryFrom<String> for FixtureScope {
     }
 }
 
-/// Resolve a dynamic scope function to a concrete `FixtureScope`
+/// Calls a pytest-compatible dynamic scope function once during fixture discovery.
 pub fn resolve_dynamic_scope(
     py: Python<'_>,
     scope_fn: &Bound<'_, PyAny>,
@@ -79,6 +86,7 @@ pub fn resolve_dynamic_scope(
     FixtureScope::try_from(scope_str)
 }
 
+/// Converts either a scope string or dynamic scope callable into a concrete lifetime.
 pub fn fixture_scope(
     py: Python<'_>,
     scope_obj: &Bound<'_, PyAny>,

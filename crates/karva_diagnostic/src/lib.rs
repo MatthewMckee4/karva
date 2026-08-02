@@ -1,3 +1,5 @@
+//! Test outcomes, diagnostics, tracebacks, and user-facing result reporting.
+
 mod reporter;
 mod result;
 #[cfg(feature = "traceback")]

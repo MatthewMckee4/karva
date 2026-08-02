@@ -1,5 +1,3 @@
-//! Compute branch destinations for Python source files.
-
 use std::collections::{BTreeSet, HashSet};
 use std::io;
 use std::path::Path;
@@ -21,6 +19,9 @@ use crate::executable::pragma_no_cover_lines;
     clippy::redundant_pub_crate,
     reason = "sibling modules use this helper, while unreachable_pub rejects `pub` here"
 )]
+/// Finds possible control-flow arcs, excluding branches suppressed by no-cover pragmas.
+///
+/// Negative endpoints encode function entry and exit using coverage.py's arc convention.
 pub(crate) fn branch_arcs(path: &Path) -> io::Result<BTreeSet<BranchArc>> {
     let source = fs::read_to_string(path)?;
     Ok(branch_arcs_for_source(&source))
@@ -45,6 +46,7 @@ fn branch_arcs_for_source(source: &str) -> BTreeSet<BranchArc> {
     collector.arcs
 }
 
+/// Walks nested Python bodies while carrying each statement's fallthrough target.
 struct BranchCollector<'a> {
     line_index: &'a LineIndex,
     pragma_lines: &'a HashSet<u32>,

@@ -18,10 +18,12 @@ pub struct TestFunctionCollector<'a> {
 }
 
 impl<'a> TestFunctionCollector<'a> {
+    /// Creates a collector whose file paths and ignore rules are relative to `cwd`.
     pub fn new(cwd: &'a Utf8Path, settings: CollectionSettings<'a>) -> Self {
         Self { cwd, settings }
     }
 
+    /// Collects requested functions while including every ancestor `conftest.py` once.
     pub fn collect_all(
         &self,
         test_paths: Vec<TestPathFunction>,
