@@ -14,7 +14,7 @@ use fs_err as fs;
 use pyo3::prelude::*;
 
 use crate::branches::branch_arcs;
-use crate::data::{BranchArc, BranchEntry, FileEntry, WorkerFile};
+use crate::data::{BranchArc, BranchContextEntry, BranchEntry, FileEntry, WorkerFile};
 use crate::executable::executable_lines;
 
 /// Configuration for a single worker's coverage measurement.
@@ -105,11 +105,12 @@ impl CoverageSession {
         }
 
         let borrowed = bound.borrow();
-        let (executed, contexts, arcs) = match borrowed.state.lock() {
+        let (executed, contexts, arcs, arc_contexts) = match borrowed.state.lock() {
             Ok(mut state) => (
                 std::mem::take(&mut state.executed),
                 std::mem::take(&mut state.contexts),
                 std::mem::take(&mut state.arcs),
+                std::mem::take(&mut state.arc_contexts),
             ),
             Err(poisoned) => {
                 let mut state = poisoned.into_inner();
@@ -117,6 +118,7 @@ impl CoverageSession {
                     std::mem::take(&mut state.executed),
                     std::mem::take(&mut state.contexts),
                     std::mem::take(&mut state.arcs),
+                    std::mem::take(&mut state.arc_contexts),
                 )
             }
         };
@@ -128,6 +130,7 @@ impl CoverageSession {
             into_owned_paths(executed),
             into_owned_paths(contexts),
             into_owned_paths(arcs),
+            into_owned_paths(arc_contexts),
             branches,
             &roots,
         )
@@ -153,6 +156,8 @@ struct TracerState {
     contexts: HashMap<TrackedPath, HashMap<u32, HashSet<String>>>,
     /// Line-to-line arcs executed in each file.
     arcs: HashMap<TrackedPath, HashSet<BranchArc>>,
+    /// Per-arc test contexts for files with executed arcs.
+    arc_contexts: HashMap<TrackedPath, HashMap<BranchArc, HashSet<String>>>,
     /// Current test context, if `--cov-context=test` is active and a test is running.
     current_context: Option<String>,
     /// Memoized result of [`compute_tracked_path`] per filename string.
@@ -353,7 +358,7 @@ impl CoverageTracer {
                             to: line_to_i32(lineno),
                         },
                     );
-                record_arc_in_state(&mut state, path.clone(), arc);
+                record_arc_in_state(&mut state, self.contexts, path.clone(), arc);
             }
             record_line_in_state(&mut state, self.contexts, path, lineno);
         }
@@ -368,6 +373,7 @@ impl CoverageTracer {
         {
             record_arc_in_state(
                 &mut state,
+                self.contexts,
                 path,
                 BranchArc {
                     from: line_to_i32(from),
@@ -390,7 +396,7 @@ impl CoverageTracer {
                         to: line_to_i32(lineno),
                     },
                 );
-                record_arc_in_state(&mut state, path.clone(), arc);
+                record_arc_in_state(&mut state, self.contexts, path.clone(), arc);
             }
             record_line_in_state(&mut state, self.contexts, path, lineno);
         }
@@ -405,6 +411,7 @@ impl CoverageTracer {
         {
             record_arc_in_state(
                 &mut state,
+                self.contexts,
                 path,
                 BranchArc {
                     from: line_to_i32(from),
@@ -419,7 +426,7 @@ impl CoverageTracer {
             return;
         }
         if let Ok(mut state) = self.state.lock() {
-            record_arc_in_state(&mut state, path, arc);
+            record_arc_in_state(&mut state, self.contexts, path, arc);
         }
     }
 
@@ -509,11 +516,27 @@ fn record_line_in_state(
     }
 }
 
-fn record_arc_in_state(state: &mut TracerState, path: TrackedPath, arc: BranchArc) {
+fn record_arc_in_state(
+    state: &mut TracerState,
+    contexts_enabled: bool,
+    path: TrackedPath,
+    arc: BranchArc,
+) {
     if arc.from == arc.to {
         return;
     }
-    state.arcs.entry(path).or_default().insert(arc);
+    if contexts_enabled && let Some(context) = state.current_context.clone() {
+        state.arcs.entry(path.clone()).or_default().insert(arc);
+        state
+            .arc_contexts
+            .entry(path)
+            .or_default()
+            .entry(arc)
+            .or_default()
+            .insert(context);
+    } else {
+        state.arcs.entry(path).or_default().insert(arc);
+    }
 }
 
 fn code_line_ranges(code: &Bound<'_, PyAny>) -> PyResult<Vec<CodeLineRange>> {
@@ -751,6 +774,7 @@ fn save_data(
     mut executed: HashMap<PathBuf, HashSet<u32>>,
     mut contexts: HashMap<PathBuf, HashMap<u32, HashSet<String>>>,
     mut arcs: HashMap<PathBuf, HashSet<BranchArc>>,
+    mut arc_contexts: HashMap<PathBuf, HashMap<BranchArc, HashSet<String>>>,
     branches: bool,
     roots: &[PathBuf],
 ) -> std::io::Result<()> {
@@ -782,9 +806,20 @@ fn save_data(
             possible_vec.sort_unstable();
             let mut executed_vec: Vec<BranchArc> = executed_arcs.iter().copied().collect();
             executed_vec.sort_unstable();
+            let contexts = arc_contexts
+                .remove(&path)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|(arc, _)| executed_arcs.contains(arc))
+                .map(|(arc, contexts)| BranchContextEntry {
+                    arc,
+                    contexts: contexts.into_iter().collect(),
+                })
+                .collect();
             Some(BranchEntry {
                 possible: possible_vec,
                 executed: executed_vec,
+                contexts,
             })
         } else {
             None
@@ -815,6 +850,27 @@ mod tests {
     use pyo3::types::PyDict;
 
     use super::*;
+
+    #[test]
+    fn record_arc_attributes_the_current_context() {
+        let path: TrackedPath = Arc::from(PathBuf::from("module.py").into_boxed_path());
+        let arc = BranchArc { from: 1, to: 2 };
+        let mut state = TracerState {
+            current_context: Some("test_module::test_value".to_string()),
+            ..TracerState::default()
+        };
+
+        record_arc_in_state(&mut state, true, path.clone(), arc);
+
+        assert_eq!(state.arcs.get(&path), Some(&HashSet::from([arc])));
+        assert_eq!(
+            state
+                .arc_contexts
+                .get(&path)
+                .and_then(|arcs| arcs.get(&arc)),
+            Some(&HashSet::from(["test_module::test_value".to_string()]))
+        );
+    }
 
     #[test]
     fn tracked_code_path_uses_code_cache_after_first_lookup() {
@@ -959,6 +1015,7 @@ code = Code()
         let err = save_data(
             &data_file,
             executed,
+            HashMap::new(),
             HashMap::new(),
             HashMap::new(),
             false,
