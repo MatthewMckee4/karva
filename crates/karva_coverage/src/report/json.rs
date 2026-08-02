@@ -91,7 +91,7 @@ pub(super) fn build_json_report(rows: &[FileRow]) -> Result<String> {
                     executed_lines: row.executed.clone(),
                     summary: json_summary(row),
                     missing_lines: missing_lines(row),
-                    excluded_lines: Vec::new(),
+                    excluded_lines: row.excluded.clone(),
                     contexts: row.contexts.clone(),
                     executed_branches: row
                         .branches_enabled
@@ -125,7 +125,7 @@ fn json_summary(row: &FileRow) -> JsonFileSummary {
         num_statements: row.stmts,
         percent_covered: row_percent(row),
         missing_lines: missing_lines(row),
-        excluded_lines: Vec::new(),
+        excluded_lines: row.excluded.clone(),
         num_branches: row.branches_enabled.then_some(row.branches),
         num_partial_branches: row.branches_enabled.then_some(row.branch_partial),
         covered_branches: row.branches_enabled.then_some(row.branch_hit),

@@ -1,23 +1,30 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Context, Result};
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 
 use crate::data::{BranchArc, WorkerFile};
+use crate::native::{CoverageMode, NativeCoverage, SourceFingerprint};
+use crate::report::CoverageFilters;
 
 #[derive(Debug, Default)]
 /// Union of raw coverage observations for one normalized source path.
 pub(super) struct CombinedFile {
+    source_fingerprint: Option<SourceFingerprint>,
+    fingerprint_artifact: Option<Utf8PathBuf>,
     executable: BTreeSet<u32>,
+    excluded: BTreeSet<u32>,
     executed: BTreeSet<u32>,
     contexts: BTreeMap<u32, BTreeSet<String>>,
     branches_enabled: bool,
     branch_possible: BTreeSet<BranchArc>,
     branch_executed: BTreeSet<BranchArc>,
+    arc_contexts: BTreeMap<BranchArc, BTreeSet<String>>,
 }
 
 /// Report-ready metrics and source data shared by every output format.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct FileRow {
     /// Display path, relative to the coverage root when possible.
     pub name: String,
@@ -30,6 +37,7 @@ pub(super) struct FileRow {
     pub miss: u32,
     pub missing: String,
     pub executable: Vec<u32>,
+    pub excluded: Vec<u32>,
     pub executed: Vec<u32>,
     pub contexts: BTreeMap<u32, BTreeSet<String>>,
 
@@ -43,6 +51,7 @@ pub(super) struct FileRow {
     pub branch_possible: Vec<BranchArc>,
     pub branch_executed: Vec<BranchArc>,
     pub branch_missing: Vec<BranchArc>,
+    pub arc_contexts: BTreeMap<BranchArc, BTreeSet<String>>,
 }
 
 /// Unions per-worker payloads so each source path has one coverage record.
@@ -67,11 +76,186 @@ pub(super) fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String,
                 bucket.branches_enabled = true;
                 bucket.branch_possible.extend(branches.possible);
                 bucket.branch_executed.extend(branches.executed);
+                for entry in branches.contexts {
+                    bucket
+                        .arc_contexts
+                        .entry(entry.arc)
+                        .or_default()
+                        .extend(entry.contexts);
+                }
             }
         }
     }
 
     Ok(combined)
+}
+
+/// Loads, validates, and deterministically unions durable native artifacts.
+pub(super) fn combine_native(
+    files: &[impl AsRef<Utf8Path>],
+    filters: &CoverageFilters,
+) -> Result<Option<BTreeMap<String, CombinedFile>>> {
+    let Some(first_path) = files.first().map(AsRef::as_ref) else {
+        return Ok(None);
+    };
+    let first = NativeCoverage::read(first_path)?;
+    let mut combined = BTreeMap::new();
+    merge_native(&mut combined, first_path, &first, filters)?;
+
+    for path in &files[1..] {
+        let path = path.as_ref();
+        let artifact = NativeCoverage::read(path)?;
+        validate_identity(first_path, &first, path, &artifact)?;
+        merge_native(&mut combined, path, &artifact, filters)?;
+    }
+
+    Ok(Some(combined))
+}
+
+fn validate_identity(
+    expected_path: &Utf8Path,
+    expected: &NativeCoverage,
+    path: &Utf8Path,
+    artifact: &NativeCoverage,
+) -> Result<()> {
+    if artifact.mode != expected.mode {
+        anyhow::bail!(
+            "incompatible native coverage artifact `{path}`: expected collection mode {:?} from `{expected_path}`, found {:?}",
+            expected.mode,
+            artifact.mode
+        );
+    }
+    if artifact.source_roots != expected.source_roots {
+        anyhow::bail!(
+            "incompatible native coverage artifact `{path}`: expected source-root identity from `{expected_path}`"
+        );
+    }
+    Ok(())
+}
+
+fn merge_native(
+    combined: &mut BTreeMap<String, CombinedFile>,
+    path: &Utf8Path,
+    artifact: &NativeCoverage,
+    filters: &CoverageFilters,
+) -> Result<()> {
+    let run_context_matches = artifact
+        .run_context
+        .as_deref()
+        .is_some_and(|context| filters.matches_context(context));
+    for (source_path, file) in &artifact.files {
+        let bucket = combined.entry(source_path.to_string()).or_default();
+        if let Some(expected) = &bucket.source_fingerprint
+            && expected != &file.source_fingerprint
+        {
+            anyhow::bail!(
+                "incompatible native coverage artifact `{path}`: expected source fingerprint {} for `{source_path}`, found {}",
+                expected.as_str(),
+                file.source_fingerprint.as_str()
+            );
+        }
+        bucket.source_fingerprint = Some(file.source_fingerprint.clone());
+        bucket
+            .fingerprint_artifact
+            .get_or_insert_with(|| path.to_path_buf());
+        bucket.executable.extend(&file.executable);
+        bucket.excluded.extend(&file.excluded);
+        bucket.branches_enabled = artifact.mode == CoverageMode::Branch;
+        merge_line_observations(bucket, file, filters, run_context_matches);
+        if let Some(branches) = &file.branches {
+            bucket.branches_enabled = true;
+            bucket.branch_possible.extend(&branches.possible);
+            merge_branch_observations(bucket, branches, filters, run_context_matches);
+        }
+    }
+    Ok(())
+}
+
+/// Verifies combined source fingerprints against the current project checkout.
+pub(super) fn verify_combined_sources(
+    project_root: &Utf8Path,
+    combined: &BTreeMap<String, CombinedFile>,
+) -> Result<()> {
+    for (source_path, file) in combined {
+        let path = project_root.join(source_path);
+        let artifact = file
+            .fingerprint_artifact
+            .as_deref()
+            .unwrap_or_else(|| Utf8Path::new("<unknown>"));
+        let source = fs::read(&path).with_context(|| {
+            format!("native coverage artifact `{artifact}` expected source `{path}` to exist")
+        })?;
+        if let Some(fingerprint) = &file.source_fingerprint
+            && !fingerprint.matches(&source)
+        {
+            anyhow::bail!(
+                "native coverage artifact `{artifact}` expected unchanged source `{path}` with fingerprint {}",
+                fingerprint.as_str()
+            );
+        }
+    }
+    Ok(())
+}
+
+fn merge_line_observations(
+    bucket: &mut CombinedFile,
+    file: &crate::native::NativeFileCoverage,
+    filters: &CoverageFilters,
+    run_context_matches: bool,
+) {
+    if !filters.has_contexts() || run_context_matches {
+        bucket.executed.extend(&file.executed);
+    }
+    for (line, contexts) in &file.line_contexts {
+        let matching: BTreeSet<String> = contexts
+            .iter()
+            .filter(|context| filters.matches_context(context))
+            .cloned()
+            .collect();
+        if !matching.is_empty() {
+            bucket.executed.insert(*line);
+            bucket.contexts.entry(*line).or_default().extend(matching);
+        } else if !filters.has_contexts() {
+            bucket
+                .contexts
+                .entry(*line)
+                .or_default()
+                .extend(contexts.iter().cloned());
+        }
+    }
+}
+
+fn merge_branch_observations(
+    bucket: &mut CombinedFile,
+    branches: &crate::native::NativeBranchCoverage,
+    filters: &CoverageFilters,
+    run_context_matches: bool,
+) {
+    if !filters.has_contexts() || run_context_matches {
+        bucket.branch_executed.extend(&branches.executed);
+    }
+    for entry in &branches.contexts {
+        let matching: BTreeSet<String> = entry
+            .contexts
+            .iter()
+            .filter(|context| filters.matches_context(context))
+            .cloned()
+            .collect();
+        if !matching.is_empty() {
+            bucket.branch_executed.insert(entry.arc);
+            bucket
+                .arc_contexts
+                .entry(entry.arc)
+                .or_default()
+                .extend(matching);
+        } else if !filters.has_contexts() {
+            bucket
+                .arc_contexts
+                .entry(entry.arc)
+                .or_default()
+                .extend(entry.contexts.iter().cloned());
+        }
+    }
 }
 
 /// Converts combined observations into normalized metrics consumed by report writers.
@@ -84,8 +268,19 @@ pub(super) fn build_rows(
         .iter()
         .map(|(filename, data)| {
             let absolute_name = simplify_path(filename);
-            let executable: Vec<u32> = data.executable.iter().copied().collect();
-            let executed: Vec<u32> = data.executed.iter().copied().collect();
+            let executable_set: BTreeSet<u32> = data
+                .executable
+                .difference(&data.excluded)
+                .copied()
+                .collect();
+            let executed_set: BTreeSet<u32> = data
+                .executed
+                .intersection(&executable_set)
+                .copied()
+                .collect();
+            let executable: Vec<u32> = executable_set.iter().copied().collect();
+            let excluded: Vec<u32> = data.excluded.iter().copied().collect();
+            let executed: Vec<u32> = executed_set.iter().copied().collect();
             let stmts = u32::try_from(executable.len()).unwrap_or(u32::MAX);
             let hit = u32::try_from(executed.len()).unwrap_or(u32::MAX);
             let miss = stmts.saturating_sub(hit);
@@ -104,11 +299,8 @@ pub(super) fn build_rows(
             let branch_miss = branches.saturating_sub(branch_hit);
             let branch_partial = partial_branch_count(&data.branch_possible, &branch_executed);
             let missing = if show_missing {
-                let uncovered: BTreeSet<u32> = data
-                    .executable
-                    .difference(&data.executed)
-                    .copied()
-                    .collect();
+                let uncovered: BTreeSet<u32> =
+                    executable_set.difference(&executed_set).copied().collect();
                 collapse_missing(&uncovered, &branch_missing)
             } else {
                 String::new()
@@ -121,6 +313,7 @@ pub(super) fn build_rows(
                 miss,
                 missing,
                 executable,
+                excluded,
                 executed,
                 contexts: data.contexts.clone(),
                 branches_enabled: data.branches_enabled,
@@ -131,6 +324,7 @@ pub(super) fn build_rows(
                 branch_possible: data.branch_possible.iter().copied().collect(),
                 branch_executed: branch_executed.iter().copied().collect(),
                 branch_missing: branch_missing.iter().copied().collect(),
+                arc_contexts: data.arc_contexts.clone(),
             }
         })
         .collect()
@@ -186,6 +380,7 @@ pub(super) fn totals_row(rows: &[FileRow]) -> FileRow {
         miss,
         missing: collapse_ranges(&missing.iter().copied().collect()),
         executable: Vec::new(),
+        excluded: Vec::new(),
         executed: Vec::new(),
         contexts: BTreeMap::new(),
         branches_enabled: rows.iter().any(|row| row.branches_enabled),
@@ -196,6 +391,7 @@ pub(super) fn totals_row(rows: &[FileRow]) -> FileRow {
         branch_possible: Vec::new(),
         branch_executed: Vec::new(),
         branch_missing: Vec::new(),
+        arc_contexts: BTreeMap::new(),
     }
 }
 
@@ -456,6 +652,7 @@ mod tests {
             miss: 0,
             missing: String::new(),
             executable: Vec::new(),
+            excluded: Vec::new(),
             executed: Vec::new(),
             contexts: BTreeMap::new(),
             branches_enabled: false,
@@ -466,6 +663,7 @@ mod tests {
             branch_possible: Vec::new(),
             branch_executed: Vec::new(),
             branch_missing: Vec::new(),
+            arc_contexts: BTreeMap::new(),
         };
 
         assert_eq!(
