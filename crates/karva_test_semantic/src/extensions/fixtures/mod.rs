@@ -129,6 +129,10 @@ impl DiscoveredFixture {
         self.definition.name()
     }
 
+    pub(crate) fn definition(&self) -> &Rc<FunctionDefinition> {
+        &self.definition
+    }
+
     pub(crate) fn scope(&self) -> FixtureScope {
         self.scope
     }
@@ -147,10 +151,6 @@ impl DiscoveredFixture {
 
     pub(crate) fn stmt_function_def(&self) -> &Rc<StmtFunctionDef> {
         self.definition.statement_rc()
-    }
-
-    pub(crate) fn source_file(&self) -> &SourceFile {
-        self.definition.source_file()
     }
 
     pub(crate) fn try_from_function(

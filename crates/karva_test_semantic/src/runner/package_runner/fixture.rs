@@ -9,10 +9,9 @@ use karva_diagnostic::{FixtureFailure, FixtureUsage};
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
 use ruff_db::diagnostic::Diagnostic;
-use ruff_python_ast::StmtFunctionDef;
-use ruff_source_file::SourceFile;
 
 use crate::diagnostic::fixture_resolution_diagnostic;
+use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::{
     Finalizer, FixtureId, FixturePlan, FixtureScope, HasFixtures, NormalizedFixture,
 };
@@ -346,10 +345,8 @@ pub struct FixtureCallError {
     pub(crate) fixture_name: String,
     /// Python exception raised by fixture setup.
     pub(crate) error: PyErr,
-    /// Fixture definition used to locate the failure.
-    pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
-    /// Source containing the failing fixture.
-    pub(crate) source_file: SourceFile,
+    /// Immutable fixture identity, syntax, and source.
+    pub(crate) definition: Rc<FunctionDefinition>,
     /// Arguments already prepared for the failing fixture.
     pub(crate) arguments: FixtureArguments,
     /// Intermediate fixtures between the requested fixture and failing fixture.
@@ -362,10 +359,8 @@ pub struct FixtureCallError {
 pub struct FixtureChainEntry {
     /// Fixture name shown in dependency diagnostics.
     pub(crate) name: String,
-    /// Source containing this intermediate fixture.
-    pub(crate) source_file: SourceFile,
-    /// Fixture definition used to locate this dependency step.
-    pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
+    /// Immutable fixture identity, syntax, and source.
+    pub(crate) definition: Rc<FunctionDefinition>,
 }
 
 impl FixtureCallError {
@@ -373,8 +368,7 @@ impl FixtureCallError {
         Self {
             fixture_name: fixture.function_name().to_string(),
             error,
-            stmt_function_def: Rc::clone(&fixture.stmt_function_def),
-            source_file: fixture.source_file.clone(),
+            definition: Rc::clone(&fixture.definition),
             arguments,
             dependency_chain: Vec::new(),
         }
@@ -384,8 +378,7 @@ impl FixtureCallError {
     fn with_dependent(mut self, fixture: &NormalizedFixture) -> Self {
         self.dependency_chain.push(FixtureChainEntry {
             name: fixture.function_name().to_string(),
-            source_file: fixture.source_file.clone(),
-            stmt_function_def: Rc::clone(&fixture.stmt_function_def),
+            definition: Rc::clone(&fixture.definition),
         });
         self
     }
@@ -397,7 +390,7 @@ fn get_value_and_finalizer(
     fixture: &NormalizedFixture,
     fixture_call_result: Py<PyAny>,
 ) -> PyResult<(Py<PyAny>, Option<Finalizer>)> {
-    if fixture.is_generator && fixture.stmt_function_def.is_async {
+    if fixture.is_generator && fixture.statement().is_async {
         let bound = fixture_call_result.bind(py);
         let anext_coroutine = bound.call_method0("__anext__")?;
         let value = run_coroutine(py, anext_coroutine.unbind())?;
@@ -407,8 +400,7 @@ fn get_value_and_finalizer(
             is_async: true,
             scope: fixture.scope(),
             package_owner: fixture.package_owner().to_path_buf(),
-            stmt_function_def: Rc::clone(&fixture.stmt_function_def),
-            source_file: fixture.source_file.clone(),
+            definition: Rc::clone(&fixture.definition),
         };
 
         Ok((value, Some(finalizer)))
@@ -429,8 +421,7 @@ fn get_value_and_finalizer(
                     is_async: false,
                     scope: fixture.scope(),
                     package_owner: fixture.package_owner().to_path_buf(),
-                    stmt_function_def: Rc::clone(&fixture.stmt_function_def),
-                    source_file: fixture.source_file.clone(),
+                    definition: Rc::clone(&fixture.definition),
                 };
 
                 Ok((value.unbind(), Some(finalizer)))

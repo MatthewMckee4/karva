@@ -209,7 +209,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .fixture_dependencies
             .iter()
             .map(|fixture_id| self.fixture_plan.fixture(*fixture_id))
-            .filter(|fixture| fixture.name.module_path().module_name() == "karva._builtins")
+            .filter(|fixture| fixture.name().module_path().module_name() == "karva._builtins")
             .map(NormalizedFixture::function_name)
             .collect::<Vec<_>>();
         let full_name = if let Some(id) = &self.id {

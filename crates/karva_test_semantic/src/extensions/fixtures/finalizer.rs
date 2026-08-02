@@ -3,8 +3,6 @@ use std::rc::Rc;
 use camino::Utf8PathBuf;
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
-use ruff_python_ast::StmtFunctionDef;
-use ruff_source_file::SourceFile;
 use thiserror::Error;
 
 use ruff_db::diagnostic::Diagnostic;
@@ -51,11 +49,8 @@ pub struct Finalizer {
     /// Defining package for package-scoped teardown.
     pub(crate) package_owner: Utf8PathBuf,
 
-    /// AST definition used to locate teardown errors.
-    pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
-
-    /// Source code containing the fixture definition.
-    pub(crate) source_file: SourceFile,
+    /// Immutable fixture identity, syntax, and source.
+    pub(crate) definition: Rc<FunctionDefinition>,
 }
 
 impl Finalizer {
@@ -69,8 +64,8 @@ impl Finalizer {
 
         result.map_err(|error| {
             invalid_fixture_finalizer_diagnostic(
-                self.source_file,
-                &self.stmt_function_def,
+                self.definition.source_file().clone(),
+                self.definition.statement(),
                 &error.to_string(),
             )
         })
@@ -110,3 +105,4 @@ impl Finalizer {
         }
     }
 }
+use crate::discovery::models::definition::FunctionDefinition;

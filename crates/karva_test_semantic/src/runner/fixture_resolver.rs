@@ -5,9 +5,8 @@ use std::rc::Rc;
 
 use camino::Utf8Path;
 use pyo3::prelude::*;
-use ruff_python_ast::StmtFunctionDef;
-use ruff_source_file::SourceFile;
 
+use crate::discovery::models::definition::FunctionDefinition;
 use crate::discovery::{DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::{
     DiscoveredFixture, FixtureId, FixturePlan, FixtureScope, HasFixtures, NormalizedFixture,
@@ -42,10 +41,8 @@ pub struct FixtureResolutionEntry {
     pub(crate) name: String,
     /// Declared lifetime scope.
     pub(crate) scope: FixtureScope,
-    /// Fixture definition used to locate the diagnostic.
-    pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
-    /// Source containing the fixture definition.
-    pub(crate) source_file: SourceFile,
+    /// Immutable fixture identity, syntax, and source.
+    pub(crate) definition: Rc<FunctionDefinition>,
 }
 
 /// Structural failure discovered while resolving a fixture graph.
@@ -75,10 +72,8 @@ pub enum FixtureResolutionError {
     },
     /// Test requires names that cannot be resolved.
     MissingTestFixtures {
-        /// Test definition used to locate the diagnostic.
-        stmt_function_def: Rc<StmtFunctionDef>,
-        /// Source containing the test definition.
-        source_file: SourceFile,
+        /// Immutable test identity, syntax, and source.
+        definition: Rc<FunctionDefinition>,
         /// Unresolved fixture names.
         missing_fixtures: Vec<String>,
     },
@@ -92,8 +87,7 @@ impl FixtureResolutionEntry {
         Self {
             name: fixture.name().function_name().to_string(),
             scope: fixture.scope(),
-            stmt_function_def: Rc::clone(fixture.stmt_function_def()),
-            source_file: fixture.source_file().clone(),
+            definition: Rc::clone(fixture.definition()),
         }
     }
 }
@@ -224,14 +218,12 @@ impl<'a> FixturePlanCompiler<'a> {
         })?;
 
         let result = NormalizedFixture {
-            name: fixture.name().clone(),
+            definition: Rc::clone(fixture.definition()),
             dependencies: dependent_fixtures,
             scope: fixture.scope(),
             package_owner: self.package_owner(fixture).to_path_buf(),
             is_generator: fixture.is_generator(),
             py_function: fixture.function().clone_ref(py),
-            stmt_function_def: Rc::clone(fixture.stmt_function_def()),
-            source_file: fixture.source_file().clone(),
         };
 
         let fixture_id = FixtureId::new(self.fixtures.len());
@@ -285,8 +277,7 @@ impl<'a> FixturePlanCompiler<'a> {
 
         if !missing_fixtures.is_empty() {
             return Err(FixtureResolutionError::MissingTestFixtures {
-                stmt_function_def: Rc::clone(test.definition().statement_rc()),
-                source_file: test.source_file().clone(),
+                definition: Rc::clone(test.definition()),
                 missing_fixtures,
             });
         }
