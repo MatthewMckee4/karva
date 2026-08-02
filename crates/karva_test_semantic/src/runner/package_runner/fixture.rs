@@ -12,13 +12,14 @@ use ruff_db::diagnostic::Diagnostic;
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
 
-use crate::diagnostic::{fixture_failure_diagnostic, fixture_resolution_diagnostic};
+use crate::diagnostic::fixture_resolution_diagnostic;
 use crate::extensions::fixtures::{Finalizer, FixtureScope, HasFixtures, NormalizedFixture};
 use crate::runner::FixtureArguments;
 use crate::runner::fixture_resolver::RuntimeFixtureResolver;
 use crate::utils::run_coroutine;
 
 use super::PackageRunner;
+use super::failure::TestError;
 
 impl PackageRunner<'_, '_> {
     /// Resolves and runs auto-use fixtures at the start of one scope.
@@ -32,31 +33,52 @@ impl PackageRunner<'_, '_> {
         parents: &'a [&'a crate::discovery::DiscoveredPackage],
         current: &'a (dyn HasFixtures<'a> + 'a),
         scope: FixtureScope,
-    ) -> Result<(), FixtureSetupFailures> {
+    ) -> Result<(), TestError> {
         let mut resolver = RuntimeFixtureResolver::new(parents, current);
         let auto_use_fixtures = match resolver.get_normalized_auto_use_fixtures(py, scope) {
             Ok(fixtures) => fixtures,
             Err(error) => {
-                let mut diagnostics = vec![fixture_resolution_diagnostic(error)];
-                diagnostics.extend(self.clean_up_scope(py, scope));
-                return Err(FixtureSetupFailures {
-                    diagnostics,
-                    fixture_failures: Vec::new(),
-                });
+                return Err(TestError::new(fixture_resolution_diagnostic(error))
+                    .with_related(self.clean_up_scope(py, scope)));
             }
         };
 
-        let auto_use_errors = self.run_fixtures(py, &auto_use_fixtures, FixtureUsage::AutoUse);
-        if auto_use_errors.is_empty() {
-            Ok(())
-        } else {
-            let (mut diagnostics, fixture_failures) =
-                fixture_failure_diagnostics(py, auto_use_errors, self.context.is_verbose());
-            diagnostics.extend(self.clean_up_scope(py, scope));
-            Err(FixtureSetupFailures {
-                diagnostics,
-                fixture_failures,
-            })
+        let failures = self.run_fixtures(py, &auto_use_fixtures, FixtureUsage::AutoUse);
+        let Some(failures) = FixtureSetupError::from_vec(failures) else {
+            return Ok(());
+        };
+
+        Err(failures
+            .into_test_error(py, self.context.is_verbose())
+            .with_related(self.clean_up_scope(py, scope)))
+    }
+
+    /// Runs function-scoped finalizers and clears their cached fixture values.
+    pub(super) fn clean_up_test_attempt(
+        &self,
+        py: Python<'_>,
+        finalizers: Vec<Finalizer>,
+    ) -> Vec<Diagnostic> {
+        let mut diagnostics = finalizers
+            .into_iter()
+            .rev()
+            .filter_map(|finalizer| finalizer.run(py).err())
+            .collect::<Vec<_>>();
+        diagnostics.extend(self.clean_up_scope(py, FixtureScope::Function));
+        diagnostics
+    }
+
+    /// Clears cached fixture values and runs finalizers for one completed scope.
+    pub(super) fn clean_up_scope(&self, py: Python<'_>, scope: FixtureScope) -> Vec<Diagnostic> {
+        let diagnostics = self.finalizer_cache.run_and_clear_scope(py, scope);
+        self.fixture_cache.clear_scope(scope);
+        diagnostics
+    }
+
+    /// Cleans one scope and promotes teardown failures to run diagnostics.
+    pub(super) fn report_scope_cleanup(&self, py: Python<'_>, scope: FixtureScope) {
+        for diagnostic in self.clean_up_scope(py, scope) {
+            self.context.add_run_diagnostic(diagnostic);
         }
     }
 
@@ -106,7 +128,7 @@ impl PackageRunner<'_, '_> {
 
         PreparedFixtures {
             function_arguments,
-            fixture_call_errors,
+            setup_result: FixtureSetupError::from_vec(fixture_call_errors).map_or(Ok(()), Err),
             test_finalizers,
         }
     }
@@ -137,38 +159,17 @@ impl PackageRunner<'_, '_> {
                         self.finalizer_cache.add_finalizer(finalizer);
                     }
                 }
-                Err(mut error) => {
-                    error.dependency_chain.push(FixtureChainEntry {
-                        name: fixture.name.function_name().to_string(),
-                        source_file: fixture.source_file.clone(),
-                        stmt_function_def: Rc::clone(&fixture.stmt_function_def),
-                    });
-                    return Err(error);
-                }
+                Err(error) => return Err(error.with_dependent(fixture)),
             }
         }
 
-        let fixture_call_result =
-            fixture
-                .call(py, &function_arguments)
-                .map_err(|error| FixtureCallError {
-                    fixture_name: fixture.name.function_name().to_string(),
-                    error,
-                    stmt_function_def: Rc::clone(&fixture.stmt_function_def),
-                    source_file: fixture.source_file.clone(),
-                    arguments: function_arguments,
-                    dependency_chain: Vec::new(),
-                })?;
+        let fixture_call_result = match fixture.call(py, &function_arguments) {
+            Ok(result) => result,
+            Err(error) => return Err(FixtureCallError::new(fixture, error, function_arguments)),
+        };
 
         let (value, finalizer) = get_value_and_finalizer(py, fixture, fixture_call_result)
-            .map_err(|error| FixtureCallError {
-                fixture_name: fixture.name.function_name().to_string(),
-                error,
-                stmt_function_def: Rc::clone(&fixture.stmt_function_def),
-                source_file: fixture.source_file.clone(),
-                arguments: FixtureArguments::default(),
-                dependency_chain: Vec::new(),
-            })?;
+            .map_err(|error| FixtureCallError::new(fixture, error, function_arguments))?;
 
         self.fixture_cache.insert(
             fixture.function_name().to_string(),
@@ -186,20 +187,6 @@ impl PackageRunner<'_, '_> {
         });
 
         Ok((value, function_finalizer))
-    }
-
-    /// Clears cached fixture values and runs finalizers for one completed scope.
-    pub(super) fn clean_up_scope(&self, py: Python<'_>, scope: FixtureScope) -> Vec<Diagnostic> {
-        let diagnostics = self.finalizer_cache.run_and_clear_scope(py, scope);
-        self.fixture_cache.clear_scope(scope);
-        diagnostics
-    }
-
-    /// Cleans one scope and promotes teardown failures to run diagnostics.
-    pub(super) fn report_scope_cleanup(&self, py: Python<'_>, scope: FixtureScope) {
-        for diagnostic in self.clean_up_scope(py, scope) {
-            self.context.add_run_diagnostic(diagnostic);
-        }
     }
 
     /// Runs fixtures whose values are not passed to the test call.
@@ -229,20 +216,55 @@ impl PackageRunner<'_, '_> {
 pub(super) struct PreparedFixtures {
     /// Keyword arguments passed to the Python test function.
     pub(super) function_arguments: FixtureArguments,
-    /// Fixture setup failures that prevent the test call.
-    pub(super) fixture_call_errors: Vec<PreparedFixtureFailure>,
+    /// Whether fixture setup completed or blocked the test call.
+    pub(super) setup_result: Result<(), FixtureSetupError>,
     /// Function-scoped finalizers run after this attempt.
     pub(super) test_finalizers: Vec<Finalizer>,
 }
 
-pub(super) struct FixtureSetupFailures {
-    pub(super) diagnostics: Vec<Diagnostic>,
-    pub(super) fixture_failures: Vec<FixtureFailure>,
+/// Raw fixture call error paired with its relationship to the blocked test.
+struct PreparedFixtureFailure {
+    /// Python call failure and source context for diagnostic rendering.
+    error: FixtureCallError,
+
+    /// Requested fixture and dependency chain exposed to result consumers.
+    fixture_failure: FixtureFailure,
 }
 
-pub(super) struct PreparedFixtureFailure {
-    pub(super) error: FixtureCallError,
-    pub(super) fixture_failure: FixtureFailure,
+/// One or more fixture failures from a single setup phase.
+///
+/// Splitting the first failure from the remainder makes the primary diagnostic
+/// invariant explicit and removes unchecked indexing from error reporting.
+pub(super) struct FixtureSetupError {
+    /// Failure promoted to the primary diagnostic.
+    first: PreparedFixtureFailure,
+
+    /// Additional failures produced during the same setup phase.
+    related: Vec<PreparedFixtureFailure>,
+}
+
+impl FixtureSetupError {
+    fn from_vec(failures: Vec<PreparedFixtureFailure>) -> Option<Self> {
+        let mut failures = failures.into_iter();
+        Some(Self {
+            first: failures.next()?,
+            related: failures.collect(),
+        })
+    }
+
+    /// Renders raw Python failures into one test-owned execution error.
+    pub(super) fn into_test_error(self, py: Python<'_>, verbose: bool) -> TestError {
+        let (diagnostic, fixture_failure) = render_fixture_failure(py, self.first, verbose);
+        let mut related = Vec::with_capacity(self.related.len());
+        let mut fixture_failures = Vec::with_capacity(self.related.len() + 1);
+        fixture_failures.push(fixture_failure);
+        for failure in self.related {
+            let (diagnostic, fixture_failure) = render_fixture_failure(py, failure, verbose);
+            related.push(diagnostic);
+            fixture_failures.push(fixture_failure);
+        }
+        TestError::from_fixture_failures(diagnostic, related, fixture_failures)
+    }
 }
 
 impl PreparedFixtureFailure {
@@ -273,20 +295,15 @@ impl PreparedFixtureFailure {
     }
 }
 
-pub(super) fn fixture_failure_diagnostics(
+fn render_fixture_failure(
     py: Python<'_>,
-    failures: Vec<PreparedFixtureFailure>,
+    failure: PreparedFixtureFailure,
     verbose: bool,
-) -> (Vec<Diagnostic>, Vec<FixtureFailure>) {
-    failures
-        .into_iter()
-        .map(|failure| {
-            (
-                fixture_failure_diagnostic(py, failure.error, verbose),
-                failure.fixture_failure,
-            )
-        })
-        .unzip()
+) -> (Diagnostic, FixtureFailure) {
+    (
+        crate::diagnostic::fixture_failure_diagnostic(py, failure.error, verbose),
+        failure.fixture_failure,
+    )
 }
 
 /// Failure raised while preparing or calling a fixture.
@@ -317,6 +334,29 @@ pub struct FixtureChainEntry {
     pub(crate) stmt_function_def: Rc<StmtFunctionDef>,
 }
 
+impl FixtureCallError {
+    fn new(fixture: &NormalizedFixture, error: PyErr, arguments: FixtureArguments) -> Self {
+        Self {
+            fixture_name: fixture.function_name().to_string(),
+            error,
+            stmt_function_def: Rc::clone(&fixture.stmt_function_def),
+            source_file: fixture.source_file.clone(),
+            arguments,
+            dependency_chain: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    fn with_dependent(mut self, fixture: &NormalizedFixture) -> Self {
+        self.dependency_chain.push(FixtureChainEntry {
+            name: fixture.function_name().to_string(),
+            source_file: fixture.source_file.clone(),
+            stmt_function_def: Rc::clone(&fixture.stmt_function_def),
+        });
+        self
+    }
+}
+
 /// Extracts the value and teardown finalizer produced by a fixture call.
 fn get_value_and_finalizer(
     py: Python<'_>,
@@ -332,25 +372,29 @@ fn get_value_and_finalizer(
             fixture_return: fixture_call_result,
             is_async: true,
             scope: fixture.scope(),
-            stmt_function_def: Some(Rc::clone(&fixture.stmt_function_def)),
-            source_file: Some(fixture.source_file.clone()),
+            stmt_function_def: Rc::clone(&fixture.stmt_function_def),
+            source_file: fixture.source_file.clone(),
         };
 
         Ok((value, Some(finalizer)))
-    } else if fixture.is_generator
-        && let Ok(mut bound_iterator) = fixture_call_result
-            .clone_ref(py)
+    } else if fixture.is_generator {
+        let mut bound_iterator = fixture_call_result
             .into_bound(py)
             .cast_into::<PyIterator>()
-    {
+            .map_err(|_| {
+                pyo3::exceptions::PyTypeError::new_err(format!(
+                    "Generator fixture `{}` did not return an iterator",
+                    fixture.function_name()
+                ))
+            })?;
         match bound_iterator.next() {
             Some(Ok(value)) => {
                 let finalizer = Finalizer {
                     fixture_return: bound_iterator.clone().unbind().into_any(),
                     is_async: false,
                     scope: fixture.scope(),
-                    stmt_function_def: Some(Rc::clone(&fixture.stmt_function_def)),
-                    source_file: Some(fixture.source_file.clone()),
+                    stmt_function_def: Rc::clone(&fixture.stmt_function_def),
+                    source_file: fixture.source_file.clone(),
                 };
 
                 Ok((value.unbind(), Some(finalizer)))

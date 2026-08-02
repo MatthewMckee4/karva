@@ -1002,6 +1002,61 @@ fn test_fixture_generator_fail_in_teardown() {
 }
 
 #[test]
+fn test_fixture_generator_setup_failure_reports_arguments() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+        import karva
+
+        @karva.fixture
+        def dependency():
+            return "prepared"
+
+        @karva.fixture
+        def broken_generator(dependency):
+            raise RuntimeError("setup failed")
+            yield
+
+        def test_blocked(broken_generator):
+            raise AssertionError("test body ran")
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_blocked
+
+    failures:
+
+    test::test_blocked (requires fixture `broken_generator`):
+
+    error[fixture-failure]: Fixture `broken_generator` failed
+     --> test.py:9:5
+      |
+    9 | def broken_generator(dependency):
+      |     ^^^^^^^^^^^^^^^^
+      |
+    info: Fixture ran with arguments:
+    info: `dependency`: `prepared`
+    info: Fixture failed here
+      --> test.py:10:5
+       |
+    10 |     raise RuntimeError("setup failed")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: setup failed
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
 fn test_invalid_fixture() {
     let context = TestContext::with_file(
         "test.py",

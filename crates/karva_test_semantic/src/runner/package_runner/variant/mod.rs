@@ -264,9 +264,6 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .settings()
             .junit_flaky_fail_status_for(&evaluation_context);
         let expect_fail_tag = self.tags.expect_fail_tag();
-        let expect_fail = expect_fail_tag
-            .as_ref()
-            .is_some_and(ExpectFailTag::should_expect_fail);
         let async_patch_result = if self.test.stmt_function_def.is_async {
             crate::utils::patch_async_test_function(self.py, &self.test.py_function)
         } else {
@@ -290,7 +287,6 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             qualified_name,
             snapshot_context,
             expect_fail_tag,
-            expect_fail,
             async_patch_result,
             is_async,
             timeout_seconds,
@@ -455,8 +451,6 @@ struct VariantSettings {
     snapshot_context: SnapshotContext,
     /// Expected-failure tag needed for result classification.
     expect_fail_tag: Option<ExpectFailTag>,
-    /// Cached expected-failure decision used by retry policy.
-    expect_fail: bool,
     /// Result of patching pytest-style async wrappers.
     async_patch_result: PyResult<bool>,
     /// Whether Karva must await the returned coroutine.
