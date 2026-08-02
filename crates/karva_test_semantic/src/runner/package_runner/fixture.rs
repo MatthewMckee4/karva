@@ -372,11 +372,14 @@ impl FixtureExecutor {
             function_arguments.insert("request".to_string(), request.into_any());
         }
 
-        let fixture_call_result = fixture
-            .call(py, &function_arguments)
-            .map_err(|error| FixtureCallError::new(fixture, error, function_arguments))?;
-        let (value, finalizer) = get_value_and_finalizer(py, fixture, fixture_call_result)
-            .map_err(|error| FixtureCallError::new(fixture, error, FixtureArguments::default()))?;
+        let fixture_call_result = match fixture.call(py, &function_arguments) {
+            Ok(result) => result,
+            Err(error) => return Err(FixtureCallError::new(fixture, error, function_arguments)),
+        };
+        let (value, finalizer) = match get_value_and_finalizer(py, fixture, fixture_call_result) {
+            Ok(result) => result,
+            Err(error) => return Err(FixtureCallError::new(fixture, error, function_arguments)),
+        };
 
         self.fixture_cache.borrow_mut().insert(
             fixture.function_name().to_string(),
