@@ -260,8 +260,6 @@ mod tests {
             branch_possible: Vec::new(),
             branch_executed: Vec::new(),
             branch_missing: Vec::new(),
-            arcs: Vec::new(),
-            arc_contexts: BTreeMap::new(),
         }
     }
 

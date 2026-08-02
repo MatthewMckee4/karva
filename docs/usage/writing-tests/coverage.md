@@ -4,8 +4,6 @@ Karva measures line coverage natively. There is no plugin to install, no `.cover
 
 The implementation runs in the test worker on top of `sys.monitoring` (Python 3.12+) or `sys.settrace` (older versions), records every executed line under the configured source roots, and prints a `Name / Stmts / Miss / Cover` table at the end of the run.
 
-Every coverage run also writes a coverage.py-compatible `.coverage` SQLite file in the project root. Tools such as `coverage html`, `coverage xml`, Codecov uploaders, IDE gutters, and `diff-cover` can consume that artifact directly.
-
 ## Quick start
 
 Pass `--cov` to measure the current working directory:
@@ -54,7 +52,7 @@ test_branch.py       6      1        2        1     75%   5
 TOTAL                6      1        2        1     75%
 ```
 
-Branch coverage records line-to-line arcs for conditional control flow and compares them with statically possible branch destinations. The `Cover` percentage includes both statement and branch opportunities, matching coverage.py's branch coverage model. JSON, XML, HTML, and the `.coverage` SQLite file include branch data when branch mode is enabled.
+Branch coverage records line-to-line arcs for conditional control flow and compares them with statically possible branch destinations. The `Cover` percentage includes both statement and branch opportunities, matching coverage.py's branch coverage model. JSON, XML, and HTML reports include branch data when branch mode is enabled.
 
 Equivalent configuration:
 

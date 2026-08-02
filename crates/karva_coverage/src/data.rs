@@ -48,18 +48,4 @@ pub struct BranchEntry {
 
     /// Branch edges observed at runtime.
     pub executed: Vec<BranchArc>,
-
-    /// Test contexts grouped by executed edge.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub contexts: Vec<BranchContextEntry>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-/// Test contexts that executed one branch edge.
-pub struct BranchContextEntry {
-    /// Executed control-flow edge.
-    pub arc: BranchArc,
-
-    /// Qualified test names that traversed the edge.
-    pub contexts: BTreeSet<String>,
 }
