@@ -289,14 +289,19 @@ fn process_inline_snapshots(
 ) -> io::Result<()> {
     for (source_file, group) in inline_by_source.iter_mut() {
         group.sort_by_key(|info| Reverse(info.line));
+        let mut source = fs::read_to_string(source_file)?;
         for item in group.iter() {
             let content = item.content.trim_end();
-            crate::inline::rewrite_inline_snapshot(
+            source = crate::inline::apply_inline_snapshot_update(
+                &source,
                 source_file,
                 item.line,
                 content,
                 item.function_name.as_deref(),
             )?;
+        }
+        write_file_atomically(Utf8Path::new(source_file), source.as_bytes())?;
+        for item in group.iter() {
             fs::remove_file(item.pending_path)?;
         }
     }
@@ -686,6 +691,51 @@ mod tests {
         accept_pending(&pending).expect("accept");
         assert!(!pending.exists());
         assert!(snap_path.exists());
+    }
+
+    #[test]
+    fn batch_inline_accept_commits_source_after_all_updates_apply() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
+        let source_path = dir_path.join("test.py");
+        let source = "def test_first():\n    assert_snapshot('first', inline='old')\n\ndef test_second():\n    assert_snapshot('second', inline='old')\n";
+        std::fs::write(&source_path, source).expect("write source");
+
+        let snapshots = [
+            ("valid.snap", 5, "test.py:5::test_second", "updated\n"),
+            ("invalid.snap", 1, "test.py:1::test_missing", "missing\n"),
+        ]
+        .map(|(name, line, source, content)| {
+            let snap_path = dir_path.join(name);
+            write_pending_snapshot(
+                &snap_path,
+                &SnapshotFile {
+                    metadata: crate::format::SnapshotMetadata {
+                        source: Some(source.to_string()),
+                        inline_source: Some(source_path.to_string()),
+                        inline_line: Some(line),
+                    },
+                    content: content.to_string(),
+                },
+            )
+            .expect("write pending snapshot");
+            PendingSnapshotInfo {
+                pending_path: pending_path(&snap_path),
+                snap_path,
+            }
+        });
+
+        accept_pending_batch(&snapshots).expect_err("missing function should fail");
+
+        assert_eq!(
+            std::fs::read_to_string(&source_path).expect("read source"),
+            source
+        );
+        assert!(
+            snapshots
+                .iter()
+                .all(|snapshot| snapshot.pending_path.exists())
+        );
     }
 
     #[test]

@@ -378,8 +378,21 @@ pub fn rewrite_inline_snapshot(
     function_name: Option<&str>,
 ) -> io::Result<()> {
     let source = fs::read_to_string(source_path)?;
+    let new_source =
+        apply_inline_snapshot_update(&source, source_path, line_number, new_value, function_name)?;
 
-    let location = find_inline_argument(&source, line_number, function_name).ok_or_else(|| {
+    crate::storage::write_file_atomically(Utf8Path::new(source_path), new_source.as_bytes())
+}
+
+/// Applies one inline snapshot update to source text without writing it.
+pub(crate) fn apply_inline_snapshot_update(
+    source: &str,
+    source_path: &str,
+    line_number: u32,
+    new_value: &str,
+    function_name: Option<&str>,
+) -> io::Result<String> {
+    let location = find_inline_argument(source, line_number, function_name).ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::NotFound,
             format!("Could not find inline= argument at {source_path}:{line_number}"),
@@ -387,9 +400,12 @@ pub fn rewrite_inline_snapshot(
     })?;
 
     let new_literal = generate_inline_literal(new_value, location.indent);
-    let new_source = apply_edit(&source, location.start, location.end, &new_literal);
-
-    crate::storage::write_file_atomically(Utf8Path::new(source_path), new_source.as_bytes())
+    Ok(apply_edit(
+        source,
+        location.start,
+        location.end,
+        &new_literal,
+    ))
 }
 
 #[cfg(test)]
