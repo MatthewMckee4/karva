@@ -61,6 +61,7 @@ nav = [
     { "Reference" = [
         { "CLI" = "reference/cli.md"},
         { "Environment Variables" = "reference/env-vars.md"},
+        { "Native Coverage Format" = "reference/native-coverage-format.md"},
     ]},
 ]
 

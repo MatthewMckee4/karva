@@ -12,12 +12,16 @@
 //!
 //! The two halves communicate only through the JSON file format, defined
 //! in [`data`].
+//!
+//! [`native`] owns the versioned artifact retained after a run. Unlike the
+//! worker format, it is a stable boundary consumed by coverage commands.
 
 #![warn(unreachable_pub)]
 
 pub(crate) mod branches;
 pub mod data;
 pub mod executable;
+pub mod native;
 pub mod report;
 pub mod tracer;
 

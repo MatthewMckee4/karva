@@ -1219,6 +1219,7 @@ dependencies = [
  "ruff_text_size",
  "serde",
  "serde_json",
+ "siphasher",
  "tempfile",
  "tracing",
 ]
