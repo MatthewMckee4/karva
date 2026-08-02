@@ -265,32 +265,31 @@ pub(crate) fn add_to_sys_path(py: Python<'_>, path: &Utf8Path, index: isize) -> 
     Ok(())
 }
 
-/// Builds a variant name in Python signature order, omitting values for fixture-only names.
-pub(crate) fn full_test_name(
+/// Renders parameter-list contents in Python signature order.
+pub(crate) fn test_parameters(
     py: Python,
-    function: String,
     kwargs: &FixtureArguments,
     parameters: &Parameters,
     name_only_arguments: &[&str],
-) -> String {
+) -> Option<String> {
     if kwargs.is_empty() {
-        function
-    } else {
-        let mut args_str = String::new();
-        for (i, (key, value)) in kwargs.iter_in_signature_order(parameters).enumerate() {
-            if i > 0 {
-                args_str.push_str(", ");
-            }
-            let truncated_key = truncate_string(key);
-            if name_only_arguments.contains(&key.as_str()) {
-                let _ = write!(args_str, "{truncated_key}");
-            } else if let Ok(value) = value.cast_bound::<PyAny>(py) {
-                let trimmed_value_str = truncated_display_value(value);
-                let _ = write!(args_str, "{truncated_key}={trimmed_value_str}");
-            }
-        }
-        format!("{function}({args_str})")
+        return None;
     }
+
+    let mut rendered = String::new();
+    for (index, (key, value)) in kwargs.iter_in_signature_order(parameters).enumerate() {
+        if index > 0 {
+            rendered.push_str(", ");
+        }
+        let truncated_key = truncate_string(key);
+        if name_only_arguments.contains(&key.as_str()) {
+            let _ = write!(rendered, "{truncated_key}");
+        } else if let Ok(value) = value.cast_bound::<PyAny>(py) {
+            let trimmed_value = truncated_display_value(value);
+            let _ = write!(rendered, "{truncated_key}={trimmed_value}");
+        }
+    }
+    Some(rendered)
 }
 
 /// Maximum display length for parameter keys and values in test names.

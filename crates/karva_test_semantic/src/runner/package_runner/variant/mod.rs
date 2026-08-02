@@ -20,7 +20,7 @@ use crate::extensions::tags::timeout::TimeoutTag;
 use crate::output_capture::PythonOutputCapture;
 use crate::runner::fixture_arguments::FixtureArguments;
 use crate::runner::test_iterator::TestVariant;
-use crate::utils::{full_test_name, set_attempt_env, set_test_name_env};
+use crate::utils::{set_attempt_env, set_test_name_env, test_parameters};
 
 use super::PackageRunner;
 
@@ -212,18 +212,21 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .filter(|fixture| fixture.name().module_path().module_name() == "karva._builtins")
             .map(NormalizedFixture::function_name)
             .collect::<Vec<_>>();
-        let full_name = if let Some(id) = &self.id {
-            format!("{name}({id})")
+        let parameters = if let Some(id) = &self.id {
+            Some(id.clone())
         } else {
-            full_test_name(
+            test_parameters(
                 self.py,
-                name.to_string(),
                 function_arguments,
                 &self.test.statement().parameters,
                 &framework_fixture_names,
             )
         };
-        let qualified_test_name = QualifiedTestName::new(name.clone(), Some(full_name));
+        let qualified_test_name = if let Some(parameters) = parameters {
+            QualifiedTestName::with_parameters(name.clone(), parameters)
+        } else {
+            QualifiedTestName::new(name.clone())
+        };
         let qualified_name = qualified_test_name.to_string();
         let custom_tag_names = self.tags.custom_tag_names();
         let evaluation_context = EvalContext {
@@ -280,16 +283,19 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             Ok(false)
         };
         let is_async = self.test.statement().is_async && matches!(&async_patch_result, Ok(false));
-        let snapshot_context = SnapshotContext::new(
-            self.module_path.to_string(),
-            full_test_name(
-                self.py,
-                name.function_name().to_string(),
-                function_arguments,
-                &self.test.statement().parameters,
-                &fixture_names,
-            ),
-        );
+        let mut snapshot_test_name = name.function_name().to_string();
+        if let Some(parameters) = test_parameters(
+            self.py,
+            function_arguments,
+            &self.test.statement().parameters,
+            &fixture_names,
+        ) {
+            snapshot_test_name.push('(');
+            snapshot_test_name.push_str(&parameters);
+            snapshot_test_name.push(')');
+        }
+        let snapshot_context =
+            SnapshotContext::new(self.module_path.to_string(), snapshot_test_name);
 
         VariantSettings {
             qualified_test_name,
@@ -388,7 +394,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let run_ignored = self.package_runner.context.settings().test().run_ignored;
 
         if !filter.is_empty() {
-            let qualified = QualifiedTestName::new(self.test.name().clone(), None);
+            let qualified = QualifiedTestName::new(self.test.name().clone());
             let display_name = qualified.to_string();
             let custom_names = self.tags.custom_tag_names();
             let context = EvalContext {
@@ -417,7 +423,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let (true, reason) = skipped else {
             return None;
         };
-        let qualified = QualifiedTestName::new(self.test.name().clone(), None);
+        let qualified = QualifiedTestName::new(self.test.name().clone());
         Some(self.package_runner.state.register_test_case_result(
             self.package_runner.context,
             &qualified,
