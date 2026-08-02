@@ -1,6 +1,6 @@
 //! Shared Python semantic types independent of Karva's test runner.
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 
 mod function_kind;
 mod name;
@@ -35,15 +35,27 @@ pub fn is_fixture(expr: &Expr) -> bool {
 /// Converts a Python file below `cwd` into its dotted import path.
 ///
 /// Returns `None` when `path` lies outside `cwd`.
-pub fn module_name(cwd: &Utf8PathBuf, path: &Utf8Path) -> Option<String> {
+pub fn module_name(cwd: &Utf8Path, path: &Utf8Path) -> Option<String> {
     let relative_path = path.strip_prefix(cwd).ok()?;
+    let mut components = relative_path.components().peekable();
+    let mut name = String::with_capacity(relative_path.as_str().len());
 
-    let components: Vec<_> = relative_path
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy().into_owned())
-        .collect();
+    while let Some(component) = components.next() {
+        if !name.is_empty() {
+            name.push('.');
+        }
 
-    Some(components.join(".").trim_end_matches(".py").to_string())
+        let component = component.as_str();
+        if components.peek().is_none()
+            && let Some(stem) = component.strip_suffix(".py")
+        {
+            name.push_str(stem);
+        } else {
+            name.push_str(component);
+        }
+    }
+
+    Some(name)
 }
 
 /// Retrieves the current Python interpreter version.
@@ -83,6 +95,15 @@ mod tests {
                 &Utf8PathBuf::from("/test_dir/test.py")
             ),
             Some("test_dir.test".to_string())
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_module_name_removes_only_the_file_extension() {
+        assert_eq!(
+            module_name(Utf8Path::new("/"), Utf8Path::new("/test_suffix.py.py")),
+            Some("test_suffix.py".to_string())
         );
     }
 

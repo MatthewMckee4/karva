@@ -1,4 +1,4 @@
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use serde::{Serialize, Serializer};
 
 use crate::module_name;
@@ -98,7 +98,7 @@ pub struct ModulePath {
 
 impl ModulePath {
     /// Create a new module path by computing the dotted module name relative to `cwd`.
-    pub fn new<P: Into<Utf8PathBuf>>(path: P, cwd: &Utf8PathBuf) -> Option<Self> {
+    pub fn new<P: Into<Utf8PathBuf>>(path: P, cwd: &Utf8Path) -> Option<Self> {
         let path = path.into();
         let module_name = module_name(cwd, path.as_ref())?;
         Some(Self { path, module_name })
