@@ -1,31 +1,28 @@
-use std::sync::LazyLock;
-
-use regex::Regex;
-
-static MISSING_POSITIONAL_ARGS: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"missing \d+ required positional arguments?: (?P<args>.+)")
-        .expect("missing-arguments regex is valid")
-});
-
 /// Extract missing arguments from a test function error.
 ///
 /// If the error is of the form "missing 1 required positional argument: 'a'", return a set with "a".
 /// If the error is of the form "missing 2 required positional arguments: 'a' and 'b'", return a set with "a" and "b".
 ///
 /// We take the test name to ensure we don't provide argument names for inner functions. Only the function we expect.
-pub fn missing_arguments_from_error(test_name: &str, err: &str) -> Vec<String> {
-    if !err.contains(&format!("{test_name}()")) {
+pub fn missing_arguments_from_error(test_name: &str, error: &str) -> Vec<String> {
+    let function_error = format!("{test_name}() missing ");
+    let Some((_, message)) = error.split_once(&function_error) else {
         return Vec::new();
-    }
-
-    let Some(args) = MISSING_POSITIONAL_ARGS
-        .captures(err)
-        .and_then(|captures| captures.name("args"))
+    };
+    let Some((count, message)) = message.split_once(" required positional argument") else {
+        return Vec::new();
+    };
+    let Some(arguments) = message
+        .strip_prefix(": ")
+        .or_else(|| message.strip_prefix("s: "))
     else {
         return Vec::new();
     };
+    if count.parse::<usize>().is_err() {
+        return Vec::new();
+    }
 
-    parse_quoted_argument_list(args.as_str())
+    parse_quoted_argument_list(arguments)
 }
 
 fn parse_quoted_argument_list(arguments: &str) -> Vec<String> {

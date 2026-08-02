@@ -24,7 +24,6 @@ karva_python_semantic = { workspace = true }
 karva_snapshot = { workspace = true }
 karva_static = { workspace = true }
 pyo3 = { workspace = true }
-regex = { workspace = true }
 ruff_db = { workspace = true }
 ruff_macros = { workspace = true }
 ruff_python_ast = { workspace = true }
@@ -34,9 +33,6 @@ ruff_source_file = { workspace = true }
 ruff_text_size = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-
-[dev-dependencies]
-regex = { workspace = true }
 
 [lints]
 workspace = true

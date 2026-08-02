@@ -1426,7 +1426,6 @@ dependencies = [
  "karva_snapshot",
  "karva_static",
  "pyo3",
- "regex",
  "ruff_db",
  "ruff_macros",
  "ruff_python_ast",
