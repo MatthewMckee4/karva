@@ -18,7 +18,9 @@ use crate::extensions::fixtures::{
 };
 use crate::runner::FixtureArguments;
 use crate::runner::fixture_resolver::FixturePlanCompiler;
-use crate::runner::request::{FixtureRequest, RequestContext, RequestFixtureError, RequestRuntime};
+use crate::runner::request::{
+    FixtureRequest, RequestContext, RequestFixtureError, RequestMetadata, RequestRuntime,
+};
 use crate::runner::scoped_storage::ScopeKey;
 use crate::runner::test_iterator::FixtureParameter;
 use crate::runner::{FinalizerCache, FixtureCache, FixtureCacheKey};
@@ -50,7 +52,6 @@ impl PackageRunner<'_, '_> {
                     .with_related(self.clean_up_scope(py, scope_key)));
             }
         };
-        compiler.compile_dynamic_fixtures(py);
         let fixture_plan = Rc::new(compiler.finish());
         auto_use_fixtures
             .retain(|fixture_id| !fixture_plan.requires_variant_execution(*fixture_id));
@@ -120,6 +121,7 @@ impl PackageRunner<'_, '_> {
             auto_use_fixtures,
             params,
             fixture_params,
+            parameter_id,
         } = inputs;
         let test_requests_request = test
             .statement()
@@ -131,11 +133,14 @@ impl PackageRunner<'_, '_> {
             match RequestContext::new(
                 py,
                 test.py_function.clone_ref(py),
-                test.name().module_path().module_name(),
-                test.name().module_path().path().as_str(),
-                self.context.cwd().as_str(),
-                test.name().function_name().to_string(),
-                fixture_names,
+                RequestMetadata {
+                    module_name: test.name().module_path().module_name(),
+                    path: test.name().module_path().path().as_str(),
+                    root_path: self.context.cwd().as_str(),
+                    test_name: test.name().function_name(),
+                    parameter_id,
+                    fixture_names,
+                },
             ) {
                 Ok(context) => Some(Rc::new(context)),
                 Err(error) => {
@@ -240,6 +245,7 @@ pub(super) struct TestFixtureInputs<'a> {
     pub(super) auto_use_fixtures: &'a [FixtureId],
     pub(super) params: HashMap<String, Arc<Py<PyAny>>>,
     pub(super) fixture_params: HashMap<String, FixtureParameter>,
+    pub(super) parameter_id: Option<&'a str>,
 }
 
 /// Cloneable execution handle used by Python request objects during fixture calls.
@@ -270,16 +276,19 @@ impl FixtureExecutor {
         }
     }
 
-    fn cache_key(&self, fixture_id: FixtureId) -> FixtureCacheKey {
+    fn cache_key(&self, fixture_id: FixtureId) -> Option<FixtureCacheKey> {
         let fixture = self.plan.fixture(fixture_id);
+        if !fixture.is_parameterized() {
+            return None;
+        }
         let mut parameters = Vec::new();
         let mut visited = HashSet::new();
         self.collect_parameter_indices(fixture_id, &mut visited, &mut parameters);
         parameters.sort_unstable();
-        FixtureCacheKey {
+        Some(FixtureCacheKey {
             fixture: fixture.name().to_string(),
             parameters,
-        }
+        })
     }
 
     fn collect_parameter_indices(
@@ -310,7 +319,11 @@ impl FixtureExecutor {
         let fixture = self.plan.fixture(fixture_id);
         let scope = scope_key(fixture.scope(), fixture.package_owner());
         let cache_key = self.cache_key(fixture_id);
-        if let Some(cached) = self.fixture_cache.borrow().get(py, &cache_key, scope) {
+        if let Some(cached) =
+            self.fixture_cache
+                .borrow()
+                .get(py, fixture.function_name(), cache_key.as_ref(), scope)
+        {
             return Ok(cached);
         }
 
@@ -335,7 +348,7 @@ impl FixtureExecutor {
         self: &Rc<Self>,
         py: Python<'_>,
         fixture_id: FixtureId,
-        cache_key: FixtureCacheKey,
+        cache_key: Option<FixtureCacheKey>,
         scope: ScopeKey<'_>,
     ) -> Result<Py<PyAny>, FixtureCallError> {
         let fixture = self.plan.fixture(fixture_id);
@@ -365,9 +378,12 @@ impl FixtureExecutor {
         let (value, finalizer) = get_value_and_finalizer(py, fixture, fixture_call_result)
             .map_err(|error| FixtureCallError::new(fixture, error, FixtureArguments::default()))?;
 
-        self.fixture_cache
-            .borrow_mut()
-            .insert(cache_key, value.clone_ref(py), scope);
+        self.fixture_cache.borrow_mut().insert(
+            fixture.function_name().to_string(),
+            cache_key,
+            value.clone_ref(py),
+            scope,
+        );
         if let Some(finalizer) = finalizer {
             self.finalizer_cache.borrow_mut().add_finalizer(finalizer);
         }

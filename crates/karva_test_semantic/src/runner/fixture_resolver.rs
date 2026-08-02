@@ -205,6 +205,12 @@ impl<'a> FixturePlanCompiler<'a> {
         FixturePlan::new(self.fixtures, self.dynamic_fixtures, variant_fixture_count)
     }
 
+    pub(super) fn uses_request(&self) -> bool {
+        self.fixtures
+            .iter()
+            .any(NormalizedFixture::requests_request)
+    }
+
     /// Normalizes a fixture and its dependencies recursively.
     ///
     /// A definition is stored once per request context. Runtime scope caches still
@@ -225,6 +231,11 @@ impl<'a> FixturePlanCompiler<'a> {
             let required_fixtures: Vec<String> = fixture.required_fixtures(py);
             self.get_dependent_fixtures(py, Some(fixture), &required_fixtures, path)
         })?;
+        let parameters = fixture.parameters().map(<[_]>::to_vec);
+        let is_parameterized = parameters.is_some()
+            || dependent_fixtures
+                .iter()
+                .any(|dependency| self.fixtures[dependency.index()].is_parameterized());
 
         let result = NormalizedFixture {
             definition: Rc::clone(fixture.definition()),
@@ -233,7 +244,8 @@ impl<'a> FixturePlanCompiler<'a> {
             package_owner: self.package_owner(fixture).to_path_buf(),
             is_generator: fixture.is_generator(),
             py_function: fixture.function().clone_ref(py),
-            parameters: fixture.parameters().map(<[_]>::to_vec),
+            parameters,
+            is_parameterized,
         };
 
         let fixture_id = FixtureId::new(self.fixtures.len());

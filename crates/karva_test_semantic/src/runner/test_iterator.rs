@@ -124,7 +124,14 @@ impl CompiledTestPlan {
             compiler.resolve_use_fixtures(py, tags.required_fixtures())?;
         let (mut parameters, runtime_tags) = tags.into_runtime();
 
-        compiler.compile_dynamic_fixtures(py);
+        let test_requests_request = test
+            .statement()
+            .parameters
+            .iter_non_variadic_params()
+            .any(|parameter| parameter.parameter.name.as_str() == "request");
+        if test_requests_request || compiler.uses_request() {
+            compiler.compile_dynamic_fixtures(py);
+        }
         let fixture_plan = Rc::new(compiler.finish());
         let indirectly_parametrized = parameters
             .indirect_names()

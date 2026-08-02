@@ -1,3 +1,4 @@
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyString, PyTuple};
 
@@ -56,6 +57,11 @@ impl FixtureFunctionMarker {
         } else {
             function.getattr(py, "__name__")?.extract::<String>(py)?
         };
+        if func_name == "request" {
+            return Err(PyValueError::new_err(
+                "`request` is a reserved fixture name; use another name",
+            ));
+        }
 
         let fixture_def = FixtureFunctionDefinition {
             function,

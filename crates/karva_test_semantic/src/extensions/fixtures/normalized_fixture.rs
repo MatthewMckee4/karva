@@ -19,6 +19,10 @@ impl FixtureId {
     pub(crate) fn new(index: usize) -> Self {
         Self(index)
     }
+
+    pub(crate) fn index(self) -> usize {
+        self.0
+    }
 }
 
 /// Arena containing every fixture definition needed by one resolution context.
@@ -107,6 +111,9 @@ pub struct NormalizedFixture {
 
     /// Parameter values declared by the fixture decorator.
     pub(crate) parameters: Option<Vec<Parametrization>>,
+
+    /// Whether this fixture's cache identity depends on fixture parameters.
+    pub(crate) is_parameterized: bool,
 }
 
 impl NormalizedFixture {
@@ -135,6 +142,10 @@ impl NormalizedFixture {
 
     pub(crate) fn parameters(&self) -> Option<&[Parametrization]> {
         self.parameters.as_deref()
+    }
+
+    pub(crate) fn is_parameterized(&self) -> bool {
+        self.is_parameterized
     }
 
     pub(crate) fn requests_request(&self) -> bool {

@@ -16,6 +16,9 @@ def mode(request):
     assert request.fixturename == "mode"
     assert request.scope == "function"
     assert request.param_index in (0, 1)
+    assert request.node.name == f"test_mode[mode-{request.param}]"
+    assert request.node.originalname == "test_mode"
+    assert request.node.nodeid.endswith(f"test_request.py::test_mode[mode-{request.param}]")
     return request.param
 
 
@@ -82,6 +85,7 @@ def test_request(resource, request):
     assert request.node.nodeid.endswith("test_request.py::test_request")
     assert request.node.get_closest_marker("requested").name == "requested"
     assert request.node.get_closest_marker("initial").name == "initial"
+    assert next(request.node.iter_markers()).name == "initial"
     assert {marker.name for marker in request.node.iter_markers()} == {"initial", "requested"}
     assert "requested" in request.keywords
     assert "initial" in request.keywords

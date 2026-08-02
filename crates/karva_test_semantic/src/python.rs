@@ -1,4 +1,3 @@
-use pyo3::exceptions::PyImportError;
 use pyo3::prelude::*;
 use pyo3::wrap_pymodule;
 
@@ -54,14 +53,5 @@ pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         py.get_type::<SnapshotMismatchError>(),
     )?;
 
-    match py.import("pytest") {
-        Ok(pytest) => {
-            pytest
-                .getattr("FixtureRequest")?
-                .call_method1("register", (m.getattr("FixtureRequest")?,))?;
-        }
-        Err(error) if error.is_instance_of::<PyImportError>(py) => {}
-        Err(error) => return Err(error),
-    }
     Ok(())
 }

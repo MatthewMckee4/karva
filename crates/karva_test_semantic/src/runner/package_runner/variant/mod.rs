@@ -189,6 +189,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 auto_use_fixtures: &self.auto_use_fixtures,
                 params,
                 fixture_params: self.fixture_params.clone(),
+                parameter_id: self.id.as_deref(),
             },
         );
         PreparedTestAttempt {

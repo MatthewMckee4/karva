@@ -6,11 +6,17 @@ use pyo3::prelude::*;
 
 use crate::runner::scoped_storage::{ScopeKey, ScopedStorage};
 
-/// Fixture identity plus selected parameters that affect its value.
+/// Selected parameters that distinguish values of a parametrized fixture.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(super) struct FixtureCacheKey {
     pub(super) fixture: String,
     pub(super) parameters: Vec<(String, usize)>,
+}
+
+#[derive(Debug, Default)]
+struct FixtureValues {
+    unparameterized: HashMap<String, Py<PyAny>>,
+    parameterized: HashMap<FixtureCacheKey, Py<PyAny>>,
 }
 
 /// Caches fixture values at different scope levels.
@@ -20,7 +26,7 @@ pub(super) struct FixtureCacheKey {
 #[derive(Debug, Default)]
 pub(super) struct FixtureCache {
     /// Fixture values isolated by their declared lifetime scope.
-    storage: ScopedStorage<HashMap<FixtureCacheKey, Py<PyAny>>>,
+    storage: ScopedStorage<FixtureValues>,
 }
 
 impl FixtureCache {
@@ -28,20 +34,35 @@ impl FixtureCache {
     pub(super) fn get(
         &self,
         py: Python<'_>,
-        key: &FixtureCacheKey,
+        fixture: &str,
+        key: Option<&FixtureCacheKey>,
         scope: ScopeKey<'_>,
     ) -> Option<Py<PyAny>> {
         self.storage
             .with(scope, |values| {
-                values.get(key).map(|value| value.clone_ref(py))
+                key.map_or_else(
+                    || values.unparameterized.get(fixture),
+                    |key| values.parameterized.get(key),
+                )
+                .map(|value| value.clone_ref(py))
             })
             .flatten()
     }
 
     /// Caches a fixture value until its declared scope completes.
-    pub(super) fn insert(&mut self, key: FixtureCacheKey, value: Py<PyAny>, scope: ScopeKey<'_>) {
+    pub(super) fn insert(
+        &mut self,
+        fixture: String,
+        key: Option<FixtureCacheKey>,
+        value: Py<PyAny>,
+        scope: ScopeKey<'_>,
+    ) {
         self.storage.with_mut(scope, |values| {
-            values.insert(key, value);
+            if let Some(key) = key {
+                values.parameterized.insert(key, value);
+            } else {
+                values.unparameterized.insert(fixture, value);
+            }
         });
     }
 

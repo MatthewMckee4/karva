@@ -52,20 +52,34 @@ pub(super) struct RequestContext {
     fixture_names: RefCell<Vec<String>>,
     markers: RequestMarkers,
     test_name: String,
+    test_node_name: String,
     module_name: String,
     node_id: String,
+}
+
+pub(super) struct RequestMetadata<'a> {
+    pub(super) module_name: &'a str,
+    pub(super) path: &'a str,
+    pub(super) root_path: &'a str,
+    pub(super) test_name: &'a str,
+    pub(super) parameter_id: Option<&'a str>,
+    pub(super) fixture_names: Vec<String>,
 }
 
 impl RequestContext {
     pub(super) fn new(
         py: Python<'_>,
         function: Py<PyAny>,
-        module_name: &str,
-        path: &str,
-        root_path: &str,
-        test_name: String,
-        fixture_names: Vec<String>,
+        metadata: RequestMetadata<'_>,
     ) -> PyResult<Self> {
+        let RequestMetadata {
+            module_name,
+            path,
+            root_path,
+            test_name,
+            parameter_id,
+            fixture_names,
+        } = metadata;
         let module = py.import(module_name)?.into_any().unbind();
         let path_object = python_path(py, path)?;
         let root_path_object = python_path(py, root_path)?;
@@ -87,7 +101,11 @@ impl RequestContext {
                 items: PyList::empty(py).unbind(),
             },
         )?;
-        let node_id = format!("{path}::{test_name}");
+        let test_node_name = parameter_id.map_or_else(
+            || test_name.to_string(),
+            |parameter_id| format!("{test_name}[{parameter_id}]"),
+        );
+        let node_id = format!("{path}::{test_node_name}");
 
         Ok(Self {
             function,
@@ -99,7 +117,8 @@ impl RequestContext {
             keywords,
             fixture_names: RefCell::new(fixture_names),
             markers,
-            test_name,
+            test_name: test_name.to_string(),
+            test_node_name,
             module_name: module_name.to_string(),
             node_id,
         })
@@ -113,13 +132,15 @@ impl RequestContext {
     }
 
     fn node(&self, py: Python<'_>, scope: FixtureScope) -> PyResult<Py<RequestNode>> {
-        let (name, node_id, path) = match scope {
+        let (name, original_name, node_id, path) = match scope {
             FixtureScope::Function => (
+                self.test_node_name.clone(),
                 self.test_name.clone(),
                 self.node_id.clone(),
                 self.path.clone_ref(py),
             ),
             FixtureScope::Module => (
+                self.module_name.clone(),
                 self.module_name.clone(),
                 self.path.bind(py).to_string(),
                 self.path.clone_ref(py),
@@ -135,9 +156,15 @@ impl RequestContext {
                     .unwrap_or_default()
                     .to_string();
                 let node_id = package_path.to_string_lossy().into_owned();
-                (name, node_id.clone(), python_path(py, &node_id)?)
+                (
+                    name.clone(),
+                    name,
+                    node_id.clone(),
+                    python_path(py, &node_id)?,
+                )
             }
             FixtureScope::Session => (
+                String::new(),
                 String::new(),
                 String::new(),
                 self.config.borrow(py).rootpath.clone_ref(py),
@@ -147,6 +174,7 @@ impl RequestContext {
             py,
             RequestNode {
                 name,
+                original_name,
                 node_id,
                 path,
                 config: self.config.clone_ref(py),
@@ -265,6 +293,7 @@ impl RequestSession {
 #[pyclass(name = "Node", module = "karva", unsendable)]
 pub struct RequestNode {
     name: String,
+    original_name: String,
     node_id: String,
     path: Py<PyAny>,
     config: Py<RequestConfig>,
@@ -306,7 +335,7 @@ impl RequestNode {
 
     #[getter]
     fn originalname(&self) -> &str {
-        &self.name
+        &self.original_name
     }
 
     #[getter]
@@ -345,7 +374,7 @@ impl RequestNode {
             })
             .map(|marker| marker.clone_ref(py))
             .collect::<Vec<_>>();
-        Ok(PyList::new(py, markers)?.into_any().unbind())
+        Ok(PyList::new(py, markers)?.try_iter()?.into_any().unbind())
     }
 
     #[pyo3(signature = (name, default=None))]
@@ -413,6 +442,7 @@ impl FixtureRequest {
         param: Option<Py<PyAny>>,
         param_index: Option<usize>,
     ) -> PyResult<Self> {
+        register_with_pytest(py)?;
         let node = context.node(py, scope)?;
         Ok(Self {
             context,
@@ -425,6 +455,20 @@ impl FixtureRequest {
             fixture_stack: PyList::empty(py).unbind(),
         })
     }
+}
+
+fn register_with_pytest(py: Python<'_>) -> PyResult<()> {
+    let modules = py
+        .import("sys")?
+        .getattr("modules")?
+        .cast_into::<PyDict>()?;
+    let Some(pytest) = modules.get_item("pytest")? else {
+        return Ok(());
+    };
+    pytest
+        .getattr("FixtureRequest")?
+        .call_method1("register", (py.get_type::<FixtureRequest>(),))?;
+    Ok(())
 }
 
 #[pymethods]
