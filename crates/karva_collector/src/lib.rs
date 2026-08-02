@@ -54,7 +54,7 @@ pub fn collect_file(
     settings: &CollectionSettings,
     function_names: &[String],
 ) -> Result<Option<CollectedModule>, CollectionError> {
-    let Some(module_path) = ModulePath::new(path, &cwd.to_path_buf()) else {
+    let Some(module_path) = ModulePath::new(path, cwd) else {
         return Ok(None);
     };
 

@@ -230,7 +230,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             .extract::<String>()
             .ok()?;
         let utf8_file_name = Utf8Path::from_path(Path::new(&file_name))?;
-        let module_path = ModulePath::new(utf8_file_name, &self.context.cwd().to_path_buf())?;
+        let module_path = ModulePath::new(utf8_file_name, self.context.cwd())?;
 
         // Use the function's own __name__ to find its definition in the source, since the
         // conftest symbol name may differ when the fixture is imported under an alias.
