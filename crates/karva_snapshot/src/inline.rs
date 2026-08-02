@@ -1,5 +1,6 @@
 use std::io;
 
+use camino::Utf8Path;
 use fs_err as fs;
 
 /// Location of an inline snapshot string literal in source code.
@@ -388,7 +389,7 @@ pub fn rewrite_inline_snapshot(
     let new_literal = generate_inline_literal(new_value, location.indent);
     let new_source = apply_edit(&source, location.start, location.end, &new_literal);
 
-    fs::write(source_path, new_source)
+    crate::storage::write_file_atomically(Utf8Path::new(source_path), new_source.as_bytes())
 }
 
 #[cfg(test)]
