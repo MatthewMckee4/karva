@@ -212,7 +212,7 @@ fn extract_function_name(source: Option<&str>) -> Option<&str> {
 ///
 /// For inline snapshots (with `inline_source`/`inline_line` metadata),
 /// rewrites the source file in-place and deletes the `.snap.new` file.
-/// For file-based snapshots, renames `.snap.new` to `.snap`.
+/// For file-based snapshots, atomically promotes `.snap.new` to `.snap`.
 pub fn accept_pending(pending_path: &Utf8Path) -> io::Result<()> {
     if let Some(snapshot) = read_snapshot(pending_path)?
         && let Some(source_file) = &snapshot.metadata.inline_source
@@ -229,7 +229,9 @@ pub fn accept_pending(pending_path: &Utf8Path) -> io::Result<()> {
         .strip_suffix(".new")
         .map(Utf8PathBuf::from)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Not a .snap.new file"))?;
-    fs::rename(pending_path, snap_path)
+    let content = fs::read(pending_path)?;
+    write_file_atomically(&snap_path, &content)?;
+    fs::remove_file(pending_path)
 }
 
 /// Pending inline update normalized for bottom-to-top source rewriting.
@@ -308,7 +310,7 @@ fn process_inline_snapshots(
     Ok(())
 }
 
-/// Process file-based pending snapshots by renaming `.snap.new` to `.snap`.
+/// Process file-based pending snapshots by atomically promoting them to `.snap`.
 fn process_file_based_snapshots(file_based: &[&Utf8Path]) -> io::Result<()> {
     for path in file_based {
         accept_pending(path)?;
@@ -674,23 +676,31 @@ mod tests {
     }
 
     #[test]
-    fn accept_pending_renames_file() {
+    fn accept_pending_replaces_existing_file() {
         let dir = tempfile::tempdir().expect("temp dir");
         let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
         let snap_path = dir_path.join("test.snap");
         let pending = pending_path(&snap_path);
-        let snapshot = SnapshotFile {
+        let old_snapshot = SnapshotFile {
             metadata: crate::format::SnapshotMetadata::default(),
-            content: "content\n".to_string(),
+            content: "old\n".to_string(),
+        };
+        let new_snapshot = SnapshotFile {
+            metadata: crate::format::SnapshotMetadata::default(),
+            content: "new\n".to_string(),
         };
 
-        write_pending_snapshot(&snap_path, &snapshot).expect("write pending");
+        write_snapshot(&snap_path, &old_snapshot).expect("write existing snapshot");
+        write_pending_snapshot(&snap_path, &new_snapshot).expect("write pending");
         assert!(pending.exists());
-        assert!(!snap_path.exists());
+        assert!(snap_path.exists());
 
         accept_pending(&pending).expect("accept");
         assert!(!pending.exists());
-        assert!(snap_path.exists());
+        assert_eq!(
+            read_snapshot(&snap_path).expect("read snapshot"),
+            Some(new_snapshot)
+        );
     }
 
     #[test]
