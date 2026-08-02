@@ -8,7 +8,7 @@ expression: "serde_json::to_string_pretty(&artifact()).expect(\"serialize artifa
   "mode": "branch",
   "project_root": "/project",
   "source_roots": [
-    "/project/src"
+    "src"
   ],
   "run_context": "linux-py313",
   "files": {

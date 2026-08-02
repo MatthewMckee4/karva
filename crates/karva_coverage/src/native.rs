@@ -207,7 +207,7 @@ mod tests {
         NativeCoverage::new(
             CoverageMode::Branch,
             Utf8PathBuf::from("/project"),
-            BTreeSet::from([Utf8PathBuf::from("/project/src")]),
+            BTreeSet::from([Utf8PathBuf::from("src")]),
             Some("linux-py313".to_owned()),
             BTreeMap::from([(
                 Utf8PathBuf::from("src/package.py"),
