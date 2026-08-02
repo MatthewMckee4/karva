@@ -50,7 +50,7 @@ pub(super) struct TestVariant<'a> {
 impl TestVariant<'_> {
     /// Get the module path for diagnostics.
     pub(super) fn module_path(&self) -> &camino::Utf8PathBuf {
-        self.test.name.module_path().path()
+        self.test.name().module_path().path()
     }
 
     /// Get the resolved tags including those from fixture dependencies.

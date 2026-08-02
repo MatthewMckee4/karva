@@ -190,7 +190,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 
     /// Derives identity and execution policy after first fixture setup.
     fn settings(&self, function_arguments: &FixtureArguments) -> VariantSettings {
-        let name = &self.test.name;
+        let name = self.test.name();
         let fixture_names = self
             .fixture_dependencies
             .iter()
@@ -209,7 +209,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 self.py,
                 name.to_string(),
                 function_arguments,
-                &self.test.stmt_function_def.parameters,
+                &self.test.statement().parameters,
                 &framework_fixture_names,
             )
         };
@@ -264,20 +264,19 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .settings()
             .junit_flaky_fail_status_for(&evaluation_context);
         let expect_fail_tag = self.tags.expect_fail_tag();
-        let async_patch_result = if self.test.stmt_function_def.is_async {
+        let async_patch_result = if self.test.statement().is_async {
             crate::utils::patch_async_test_function(self.py, &self.test.py_function)
         } else {
             Ok(false)
         };
-        let is_async =
-            self.test.stmt_function_def.is_async && matches!(&async_patch_result, Ok(false));
+        let is_async = self.test.statement().is_async && matches!(&async_patch_result, Ok(false));
         let snapshot_context = SnapshotContext::new(
             self.module_path.to_string(),
             full_test_name(
                 self.py,
                 name.function_name().to_string(),
                 function_arguments,
-                &self.test.stmt_function_def.parameters,
+                &self.test.statement().parameters,
                 &fixture_names,
             ),
         );
@@ -375,7 +374,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let run_ignored = self.package_runner.context.settings().test().run_ignored;
 
         if !filter.is_empty() {
-            let qualified = QualifiedTestName::new(self.test.name.clone(), None);
+            let qualified = QualifiedTestName::new(self.test.name().clone(), None);
             let display_name = qualified.to_string();
             let custom_names = self.tags.custom_tag_names();
             let context = EvalContext {
@@ -403,7 +402,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let (true, reason) = skipped else {
             return None;
         };
-        let qualified = QualifiedTestName::new(self.test.name.clone(), None);
+        let qualified = QualifiedTestName::new(self.test.name().clone(), None);
         Some(self.package_runner.context.register_test_case_result(
             &qualified,
             TestExecutionOutcome::Skipped { reason },

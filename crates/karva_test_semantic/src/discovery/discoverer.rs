@@ -12,9 +12,10 @@ use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 
 use crate::Context;
 use crate::collection::TestFunctionCollector;
-use crate::diagnostic::report_collection_error;
 use crate::discovery::visitor::{discover, is_generator};
-use crate::discovery::{DiscoveredModule, DiscoveredPackage};
+use crate::discovery::{
+    DiscoveredModule, DiscoveredPackage, DiscoveryError, DiscoveryIssue, DiscoveryOutput,
+};
 use crate::extensions::fixtures::{DiscoveredFixture, RejectedFixture};
 use crate::utils::add_to_sys_path;
 
@@ -25,22 +26,31 @@ use crate::utils::add_to_sys_path;
 pub struct StandardDiscoverer<'ctx, 'a> {
     /// Reference to the test execution context.
     context: &'ctx Context<'a>,
+
+    /// Ordered issues produced across all modules in the package tree.
+    issues: Vec<DiscoveryIssue>,
 }
 
 impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
     pub fn new(context: &'ctx Context<'a>) -> Self {
-        Self { context }
+        Self {
+            context,
+            issues: Vec::new(),
+        }
     }
 
     pub(crate) fn discover_with_py(
-        self,
+        mut self,
         py: Python<'_>,
         test_paths: Vec<Result<TestPath, TestPathError>>,
-    ) -> DiscoveredPackage {
+    ) -> DiscoveryOutput {
         let cwd = self.context.cwd();
 
         if add_to_sys_path(py, cwd, 0).is_err() {
-            return DiscoveredPackage::new(cwd.to_path_buf());
+            return DiscoveryOutput {
+                package: DiscoveredPackage::new(cwd.to_path_buf()),
+                issues: self.issues,
+            };
         }
 
         let test_paths = test_paths
@@ -60,8 +70,12 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
         let collected_package = match collector.collect_all(test_paths) {
             Ok(package) => package,
             Err(error) => {
-                report_collection_error(self.context, &error);
-                return DiscoveredPackage::new(cwd.to_path_buf());
+                self.issues
+                    .push(DiscoveryIssue::Error(DiscoveryError::Collection(error)));
+                return DiscoveryOutput {
+                    package: DiscoveredPackage::new(cwd.to_path_buf()),
+                    issues: self.issues,
+                };
             }
         };
 
@@ -74,13 +88,16 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
             self.context.python_version(),
         ));
 
-        session_package
+        DiscoveryOutput {
+            package: session_package,
+            issues: self.issues,
+        }
     }
 
     /// Convert a collected package to a discovered package by importing Python modules
     /// and resolving test functions and fixtures.
     fn convert_package(
-        &self,
+        &mut self,
         py: Python,
         collected_package: CollectedPackage,
     ) -> DiscoveredPackage {
@@ -110,7 +127,11 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
         discovered_package
     }
 
-    fn convert_module(&self, py: Python, collected_module: CollectedModule) -> DiscoveredModule {
+    fn convert_module(
+        &mut self,
+        py: Python,
+        collected_module: CollectedModule,
+    ) -> DiscoveredModule {
         let CollectedModule {
             path,
             module_type: _,
@@ -121,13 +142,13 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
 
         let mut module = DiscoveredModule::new_with_source(path, source_text);
 
-        discover(
+        self.issues.extend(discover(
             self.context,
             py,
             &mut module,
             test_function_defs,
             fixture_function_defs,
-        );
+        ));
 
         module
     }
@@ -220,6 +241,7 @@ fn discover_framework_fixtures(
                     err.value(py).to_string(),
                     stmt_rc,
                     source_file,
+                    module_path.clone(),
                 ));
                 tracing::warn!(
                     "Failed to discover framework fixture `{fixture_name}` from `karva._builtins`: {err}"

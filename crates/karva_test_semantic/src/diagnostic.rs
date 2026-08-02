@@ -1,7 +1,6 @@
 //! Converts collection and execution failures into source-backed `ruff_db` diagnostics.
 //!
-//! `report_*` functions mutate run context during discovery. Other builders return a
-//! diagnostic for attachment to a specific test outcome.
+//! Discovery and execution failures are rendered here without mutating run state.
 
 use camino::Utf8Path;
 use karva_collector::CollectionError;
@@ -17,6 +16,7 @@ use ruff_source_file::SourceFile;
 
 mod metadata;
 
+use crate::declare_diagnostic_type;
 use crate::extensions::fixtures::RejectedFixture;
 use crate::extensions::tags::parametrize::InvalidParametrizeError;
 use crate::runner::{
@@ -24,7 +24,6 @@ use crate::runner::{
     FixtureResolutionError,
 };
 use crate::utils::truncate_string;
-use crate::{Context, declare_diagnostic_type};
 
 #[derive(Clone, Copy)]
 struct FailedFunctionCallOptions {
@@ -269,69 +268,60 @@ fn report_dependency_chain(
     }
 }
 
-pub fn report_collection_error(context: &Context, error: &CollectionError) {
-    context.add_run_diagnostic(
-        FAILED_TO_COLLECT_MODULE.diagnostic(format!("Failed to collect python module: {error}")),
-    );
+pub fn collection_error_diagnostic(error: &CollectionError) -> Diagnostic {
+    FAILED_TO_COLLECT_MODULE.diagnostic(format!("Failed to collect python module: {error}"))
 }
 
-pub fn report_failed_to_import_module(context: &Context, module_name: &str, error: &str) {
-    context.add_run_diagnostic(FAILED_TO_IMPORT_MODULE.diagnostic(format!(
+pub fn failed_to_import_module_diagnostic(module_name: &str, error: &str) -> Diagnostic {
+    FAILED_TO_IMPORT_MODULE.diagnostic(format!(
         "Failed to import python module `{module_name}`: {error}"
-    )));
+    ))
 }
 
-pub fn report_failed_to_discover_imported_fixture(
-    context: &Context,
+pub fn failed_to_discover_imported_fixture_diagnostic(
     fixture_name: &str,
     source_path: &Utf8Path,
     error: &std::io::Error,
-) {
-    let diagnostic = FAILED_TO_DISCOVER_IMPORTED_FIXTURE.diagnostic(format!(
+) -> Diagnostic {
+    FAILED_TO_DISCOVER_IMPORTED_FIXTURE.diagnostic(format!(
         "Failed to discover imported fixture `{fixture_name}` from `{source_path}`: {error}"
-    ));
-
-    context.add_run_diagnostic(diagnostic);
+    ))
 }
 
-pub fn report_duplicate_fixture(
-    context: &Context,
+pub fn duplicate_fixture_diagnostic(
     source_file: SourceFile,
     fixture_name: &str,
     first_definition: &StmtFunctionDef,
     duplicate_definition: &StmtFunctionDef,
-) {
+) -> Diagnostic {
     let mut diagnostic = DUPLICATE_FIXTURE.diagnostic(format!(
         "Fixture `{fixture_name}` is defined more than once"
     ));
 
     annotate_function_name(&mut diagnostic, source_file.clone(), duplicate_definition);
     annotate_first_definition(&mut diagnostic, source_file, fixture_name, first_definition);
-    context.add_run_diagnostic(diagnostic);
+    diagnostic
 }
 
-pub fn report_duplicate_test(
-    context: &Context,
+pub fn duplicate_test_diagnostic(
     source_file: SourceFile,
     test_name: &str,
     first_definition: &StmtFunctionDef,
     duplicate_definition: &StmtFunctionDef,
-) {
+) -> Diagnostic {
     let mut diagnostic =
         DUPLICATE_TEST.diagnostic(format!("Test `{test_name}` is defined more than once"));
 
     annotate_function_name(&mut diagnostic, source_file.clone(), duplicate_definition);
     annotate_first_definition(&mut diagnostic, source_file, test_name, first_definition);
-    context.add_run_diagnostic(diagnostic);
+    diagnostic
 }
 
-pub fn report_invalid_fixture(
-    context: &Context,
-    py: Python,
+pub fn invalid_fixture_diagnostic(
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
-    error: &PyErr,
-) {
+    reason: &str,
+) -> Diagnostic {
     let mut diagnostic = INVALID_FIXTURE.diagnostic(format!(
         "Discovered an invalid fixture `{}`",
         stmt_function_def.name
@@ -339,12 +329,10 @@ pub fn report_invalid_fixture(
 
     annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
 
-    let error_string = error.value(py).to_string();
-
-    if !error_string.is_empty() {
-        diagnostic.info(indent_continuation_lines(&error_string));
+    if !reason.is_empty() {
+        diagnostic.info(indent_continuation_lines(reason));
     }
-    context.add_run_diagnostic(diagnostic);
+    diagnostic
 }
 
 pub fn invalid_fixture_finalizer_diagnostic(
@@ -523,11 +511,12 @@ fn fixture_missing_fixtures_diagnostic(
             SubDiagnosticSeverity::Info,
             format!(
                 "Fixture `{}` was rejected during discovery: {}",
-                rejected_fixture.name, rejected_fixture.reason
+                rejected_fixture.name(),
+                rejected_fixture.reason()
             ),
         );
-        let span = Span::from(rejected_fixture.source_file.clone())
-            .with_range(rejected_fixture.stmt_function_def.name.range);
+        let span = Span::from(rejected_fixture.source_file().clone())
+            .with_range(rejected_fixture.statement().name.range);
         sub.annotate(Annotation::primary(span));
         diagnostic.sub(sub);
     }
@@ -610,11 +599,10 @@ pub fn test_failure_diagnostic(
     diagnostic
 }
 
-pub fn report_generator_test(
-    context: &Context,
+pub fn generator_test_diagnostic(
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
-) {
+) -> Diagnostic {
     let mut diagnostic = INVALID_TEST.diagnostic(format!(
         "Generator test `{}` is not supported",
         stmt_function_def.name
@@ -622,7 +610,7 @@ pub fn report_generator_test(
 
     annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
     diagnostic.info("Use `@karva.tags.parametrize` to define multiple test cases.");
-    context.add_run_diagnostic(diagnostic);
+    diagnostic
 }
 
 pub fn invalid_parametrize_diagnostic(

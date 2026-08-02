@@ -22,7 +22,7 @@ use karva_metadata::ProjectSettings;
 use karva_project::path::{TestPath, TestPathError};
 use ruff_python_ast::PythonVersion;
 
-use crate::discovery::StandardDiscoverer;
+use crate::discovery::{DiscoveryIssue, StandardDiscoverer};
 use crate::py_attach::attach_with_output;
 use crate::runner::PackageRunner;
 
@@ -49,9 +49,21 @@ pub fn run_tests(
             }
         });
 
-        let session = StandardDiscoverer::new(&context).discover_with_py(py, test_paths);
+        let discovery = StandardDiscoverer::new(&context).discover_with_py(py, test_paths);
 
-        PackageRunner::new(&context, cov_session.as_ref()).execute(py, &session);
+        for issue in discovery.issues {
+            match issue {
+                DiscoveryIssue::Error(error) => {
+                    context.add_run_diagnostic(error.into_diagnostic());
+                }
+                DiscoveryIssue::SkippedModule {
+                    module_path,
+                    reason,
+                } => context.register_module_skip(&module_path, reason),
+            }
+        }
+
+        PackageRunner::new(&context, cov_session.as_ref()).execute(py, &discovery.package);
 
         if let Some(cov_session) = cov_session
             && let Err(err) = cov_session.stop_and_save(py)

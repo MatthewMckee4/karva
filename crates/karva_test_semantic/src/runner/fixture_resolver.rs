@@ -231,7 +231,7 @@ impl<'a> RuntimeFixtureResolver<'a> {
         test: &DiscoveredTestFunction,
         parametrize_param_names: &HashSet<&str>,
     ) -> FixtureResolutionResult<Vec<Rc<NormalizedFixture>>> {
-        let fixture_names = test.stmt_function_def.required_fixtures(py);
+        let fixture_names = test.statement().required_fixtures(py);
         let regular_fixture_names: Vec<String> = fixture_names
             .iter()
             .filter(|name| !parametrize_param_names.contains(name.as_str()))
@@ -253,8 +253,8 @@ impl<'a> RuntimeFixtureResolver<'a> {
 
         if !missing_fixtures.is_empty() {
             return Err(FixtureResolutionError::MissingTestFixtures {
-                stmt_function_def: Rc::clone(&test.stmt_function_def),
-                source_file: test.source_file.clone(),
+                stmt_function_def: Rc::clone(test.definition().statement_rc()),
+                source_file: test.source_file().clone(),
                 missing_fixtures,
             });
         }

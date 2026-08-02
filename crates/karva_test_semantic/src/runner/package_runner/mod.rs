@@ -76,7 +76,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
     /// Registers a discovery or setup error against one test.
     fn register_error_test(&self, test: &DiscoveredTestFunction, error: TestError) {
         self.context.register_test_case_result(
-            &QualifiedTestName::new(test.name.clone(), None),
+            &QualifiedTestName::new(test.name().clone(), None),
             error.into_outcome(),
             std::time::Duration::ZERO,
             None,
@@ -119,10 +119,10 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
 
         for module in package.modules().values() {
             for test in module.test_functions() {
-                if let Err(error) = test.tags.validate_parametrize(&test.stmt_function_def) {
+                if let Err(error) = test.tags.validate_parametrize(test.statement()) {
                     let diagnostic = invalid_parametrize_diagnostic(
-                        test.source_file.clone(),
-                        &test.stmt_function_def,
+                        test.source_file().clone(),
+                        test.statement(),
                         &error,
                     );
                     self.register_error_test(test, TestError::new(diagnostic));

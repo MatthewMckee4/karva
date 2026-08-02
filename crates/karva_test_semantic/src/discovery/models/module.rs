@@ -70,7 +70,7 @@ impl DiscoveredModule {
     pub(crate) fn rejected_fixture(&self, name: &str) -> Option<&RejectedFixture> {
         self.rejected_fixtures
             .iter()
-            .find(|fixture| fixture.name == name)
+            .find(|fixture| fixture.name() == name)
     }
 
     pub(crate) fn add_rejected_fixture(&mut self, fixture: RejectedFixture) {
@@ -89,6 +89,6 @@ impl DiscoveredModule {
 
     pub(crate) fn shrink(&mut self) {
         self.test_functions
-            .sort_by_key(|function| function.stmt_function_def.range.start());
+            .sort_by_key(|function| function.statement().range.start());
     }
 }
