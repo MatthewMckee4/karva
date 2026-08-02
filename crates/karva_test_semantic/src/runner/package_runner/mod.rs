@@ -1,6 +1,8 @@
 //! Package-tree orchestration and run-wide execution state.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use karva_coverage::CoverageSession;
 use karva_python_semantic::QualifiedTestName;
@@ -37,9 +39,9 @@ pub struct PackageRunner<'context, 'settings> {
     /// Result accumulator exclusively owned by this runner during execution.
     state: &'context mut RunState,
     /// Fixture values retained until their declared scope completes.
-    fixture_cache: FixtureCache,
+    fixture_cache: Rc<RefCell<FixtureCache>>,
     /// Fixture finalizers retained until their declared scope completes.
-    finalizer_cache: FinalizerCache,
+    finalizer_cache: Rc<RefCell<FinalizerCache>>,
     /// Active coverage session for this worker, when coverage is enabled.
     coverage: Option<&'context CoverageSession>,
     /// Failed variants observed so far, used to enforce `max-fail`.
@@ -56,8 +58,8 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         Self {
             context,
             state,
-            fixture_cache: FixtureCache::default(),
-            finalizer_cache: FinalizerCache::default(),
+            fixture_cache: Rc::new(RefCell::new(FixtureCache::default())),
+            finalizer_cache: Rc::new(RefCell::new(FinalizerCache::default())),
             coverage,
             failed_count: 0,
         }

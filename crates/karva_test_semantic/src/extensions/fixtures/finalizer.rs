@@ -8,6 +8,7 @@ use thiserror::Error;
 use ruff_db::diagnostic::Diagnostic;
 
 use crate::diagnostic::invalid_fixture_finalizer_diagnostic;
+use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::FixtureScope;
 use crate::utils::run_coroutine;
 
@@ -37,11 +38,8 @@ enum FinalizerError {
 /// ```
 #[derive(Debug)]
 pub struct Finalizer {
-    /// The generator or async generator, positioned after yield, ready for teardown.
-    pub(crate) fixture_return: Py<PyAny>,
-
-    /// Whether this finalizer wraps an async generator (requires `asyncio.run()`).
-    pub(crate) is_async: bool,
+    /// Python teardown operation retained until its owning scope completes.
+    operation: FinalizerOperation,
 
     /// The scope determines when this finalizer runs.
     pub(crate) scope: FixtureScope,
@@ -53,13 +51,63 @@ pub struct Finalizer {
     pub(crate) definition: Rc<FunctionDefinition>,
 }
 
+#[derive(Debug)]
+enum FinalizerOperation {
+    Generator {
+        fixture_return: Py<PyAny>,
+        is_async: bool,
+    },
+    Callback(Py<PyAny>),
+}
+
 impl Finalizer {
+    pub(crate) fn generator(
+        fixture_return: Py<PyAny>,
+        is_async: bool,
+        scope: FixtureScope,
+        package_owner: Utf8PathBuf,
+        definition: Rc<FunctionDefinition>,
+    ) -> Self {
+        Self {
+            operation: FinalizerOperation::Generator {
+                fixture_return,
+                is_async,
+            },
+            scope,
+            package_owner,
+            definition,
+        }
+    }
+
+    pub(crate) fn callback(
+        callback: Py<PyAny>,
+        scope: FixtureScope,
+        package_owner: Utf8PathBuf,
+        definition: Rc<FunctionDefinition>,
+    ) -> Self {
+        Self {
+            operation: FinalizerOperation::Callback(callback),
+            scope,
+            package_owner,
+            definition,
+        }
+    }
+
     /// Resumes teardown once and reports invalid generator behavior.
     pub(crate) fn run(self, py: Python<'_>) -> Result<(), Diagnostic> {
-        let result = if self.is_async {
-            self.run_async_teardown(py)
-        } else {
-            self.run_sync_teardown(py)
+        let result = match &self.operation {
+            FinalizerOperation::Generator {
+                fixture_return,
+                is_async: true,
+            } => Self::run_async_teardown(py, fixture_return),
+            FinalizerOperation::Generator {
+                fixture_return,
+                is_async: false,
+            } => Self::run_sync_teardown(py, fixture_return),
+            FinalizerOperation::Callback(callback) => callback
+                .call0(py)
+                .map(|_| ())
+                .map_err(|error| FinalizerError::ResetFailed(error.value(py).to_string())),
         };
 
         result.map_err(|error| {
@@ -72,9 +120,8 @@ impl Finalizer {
     }
 
     /// Runs teardown for a sync generator fixture.
-    fn run_sync_teardown(&self, py: Python<'_>) -> Result<(), FinalizerError> {
-        let mut generator = self
-            .fixture_return
+    fn run_sync_teardown(py: Python<'_>, fixture_return: &Py<PyAny>) -> Result<(), FinalizerError> {
+        let mut generator = fixture_return
             .clone_ref(py)
             .into_bound(py)
             .cast_into::<PyIterator>()
@@ -87,9 +134,11 @@ impl Finalizer {
     }
 
     /// Runs teardown for an async generator fixture.
-    fn run_async_teardown(&self, py: Python<'_>) -> Result<(), FinalizerError> {
-        let coroutine = self
-            .fixture_return
+    fn run_async_teardown(
+        py: Python<'_>,
+        fixture_return: &Py<PyAny>,
+    ) -> Result<(), FinalizerError> {
+        let coroutine = fixture_return
             .bind(py)
             .call_method0("__anext__")
             .map_err(|error| FinalizerError::ResetFailed(error.value(py).to_string()))?;
@@ -105,4 +154,3 @@ impl Finalizer {
         }
     }
 }
-use crate::discovery::models::definition::FunctionDefinition;

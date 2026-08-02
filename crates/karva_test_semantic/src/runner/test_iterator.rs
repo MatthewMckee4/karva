@@ -8,7 +8,9 @@ use pyo3::prelude::*;
 
 use crate::discovery::DiscoveredTestFunction;
 use crate::extensions::fixtures::{FixtureId, FixturePlan};
-use crate::extensions::tags::parametrize::{ParameterPlan, ParameterPlanIterator};
+use crate::extensions::tags::parametrize::{
+    ParameterPlan, ParameterPlanIterator, ParametrizationArgs, make_unique_parametrize_ids,
+};
 use crate::extensions::tags::{CompiledTags, RuntimeTags};
 use crate::runner::fixture_resolver::{FixturePlanCompiler, FixtureResolutionResult};
 
@@ -32,6 +34,9 @@ pub(super) struct TestVariant<'a> {
     /// caller can unwrap without a Python refcount bump.
     pub(super) params: HashMap<String, Arc<Py<PyAny>>>,
 
+    /// Parameter values consumed by fixture `request.param` objects.
+    pub(super) fixture_params: HashMap<String, FixtureParameter>,
+
     pub id: Option<String>,
 
     /// Arena shared by all fixture root groups for this test.
@@ -48,6 +53,13 @@ pub(super) struct TestVariant<'a> {
 
     /// Combined tags from the test and its parameter set.
     pub(super) tags: RuntimeTags,
+}
+
+/// One selected fixture parameter for a concrete test variant.
+#[derive(Clone, Debug)]
+pub(super) struct FixtureParameter {
+    pub(super) value: Arc<Py<PyAny>>,
+    pub(super) index: usize,
 }
 
 impl TestVariant<'_> {
@@ -110,10 +122,35 @@ impl CompiledTestPlan {
 
         let use_fixture_dependencies =
             compiler.resolve_use_fixtures(py, tags.required_fixtures())?;
-        let (parameters, runtime_tags) = tags.into_runtime();
+        let (mut parameters, runtime_tags) = tags.into_runtime();
+
+        compiler.compile_dynamic_fixtures(py);
+        let fixture_plan = Rc::new(compiler.finish());
+        let indirectly_parametrized = parameters
+            .indirect_names()
+            .filter_map(|name| fixture_plan.dynamic_fixture(name))
+            .collect::<std::collections::HashSet<_>>();
+        for (fixture_id, fixture) in fixture_plan.variant_fixtures() {
+            if indirectly_parametrized.contains(&fixture_id) {
+                continue;
+            }
+            let Some(fixture_parameters) = fixture.parameters() else {
+                continue;
+            };
+            let name = fixture.name().to_string();
+            let mut dimension = fixture_parameters
+                .iter()
+                .enumerate()
+                .map(|(index, parameter)| {
+                    ParametrizationArgs::fixture(name.clone(), parameter, index)
+                })
+                .collect::<Vec<_>>();
+            make_unique_parametrize_ids(&mut dimension);
+            parameters.push_dimension(dimension);
+        }
 
         Ok(Self {
-            fixture_plan: Rc::new(compiler.finish()),
+            fixture_plan,
             fixture_dependencies: Rc::from(fixture_dependencies),
             use_fixture_dependencies: Rc::from(use_fixture_dependencies),
             auto_use_fixtures: Rc::from(auto_use_fixtures),
@@ -143,14 +180,39 @@ impl<'a> Iterator for TestVariantIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let param_args = self.param_args.next()?;
+        let id = param_args.id().map(str::to_string);
+
+        let mut params = param_args.values;
+        let mut fixture_params = HashMap::new();
+        for indirect_name in &param_args.indirect {
+            let fixture_name = self
+                .fixture_plan
+                .dynamic_fixture(indirect_name)
+                .map(|fixture_id| self.fixture_plan.fixture(fixture_id).name().to_string())
+                .unwrap_or_else(|| indirect_name.clone());
+            if let Some(value) = params.remove(indirect_name) {
+                fixture_params.insert(
+                    fixture_name,
+                    FixtureParameter {
+                        value,
+                        index: param_args
+                            .indices
+                            .get(indirect_name)
+                            .copied()
+                            .unwrap_or_default(),
+                    },
+                );
+            }
+        }
 
         let mut tags = self.runtime_tags.clone();
         tags.extend(&param_args.tags);
 
         Some(TestVariant {
             test: self.test,
-            id: param_args.id().map(str::to_string),
-            params: param_args.values,
+            id,
+            params,
+            fixture_params,
             fixture_plan: Rc::clone(&self.fixture_plan),
             fixture_dependencies: Rc::clone(&self.fixture_dependencies),
             use_fixture_dependencies: Rc::clone(&self.use_fixture_dependencies),

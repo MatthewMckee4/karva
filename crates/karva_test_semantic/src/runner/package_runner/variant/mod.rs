@@ -20,10 +20,12 @@ use crate::extensions::tags::fail_slow::FailSlowTag;
 use crate::extensions::tags::timeout::TimeoutTag;
 use crate::output_capture::PythonOutputCapture;
 use crate::runner::fixture_arguments::FixtureArguments;
+use crate::runner::test_iterator::FixtureParameter;
 use crate::runner::test_iterator::TestVariant;
 use crate::utils::{set_attempt_env, set_test_name_env, test_parameters};
 
 use super::PackageRunner;
+use super::fixture::TestFixtureInputs;
 
 mod attempt;
 
@@ -54,6 +56,8 @@ struct VariantRunner<'runner, 'context, 'settings, 'test, 'py> {
     test: &'test crate::discovery::DiscoveredTestFunction,
     /// Parameter values reused when a retry prepares fresh fixtures.
     params: HashMap<String, Arc<Py<PyAny>>>,
+    /// Parameter values selected for fixture request objects.
+    fixture_params: HashMap<String, FixtureParameter>,
     /// User-defined parameter ID used in the displayed test name.
     id: Option<String>,
     /// Compiled fixture arena for this test.
@@ -83,6 +87,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let TestVariant {
             test,
             params,
+            fixture_params,
             id,
             fixture_plan,
             fixture_dependencies,
@@ -96,6 +101,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             py,
             test,
             params,
+            fixture_params,
             id,
             fixture_plan,
             fixture_dependencies,
@@ -168,18 +174,22 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 
     /// Prepares fixture values and records setup duration for one attempt.
     fn prepare_attempt(
-        &mut self,
+        &self,
         params: HashMap<String, Arc<Py<PyAny>>>,
         output_capture: Option<PythonOutputCapture>,
     ) -> PreparedTestAttempt {
         let setup_start = Instant::now();
         let fixtures = self.package_runner.prepare_test_fixtures(
             self.py,
-            &self.fixture_plan,
-            &self.fixture_dependencies,
-            &self.use_fixture_dependencies,
-            &self.auto_use_fixtures,
-            params,
+            self.test,
+            TestFixtureInputs {
+                fixture_plan: &self.fixture_plan,
+                fixture_dependencies: &self.fixture_dependencies,
+                use_fixture_dependencies: &self.use_fixture_dependencies,
+                auto_use_fixtures: &self.auto_use_fixtures,
+                params,
+                fixture_params: self.fixture_params.clone(),
+            },
         );
         PreparedTestAttempt {
             fixtures,
@@ -190,7 +200,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 
     /// Prepares a retry under its setup coverage context.
     fn prepare_retry(
-        &mut self,
+        &self,
         params: HashMap<String, Arc<Py<PyAny>>>,
         settings: &VariantSettings,
     ) -> PreparedTestAttempt {
@@ -206,13 +216,14 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .iter()
             .map(|fixture_id| self.fixture_plan.fixture(*fixture_id).function_name())
             .collect::<Vec<_>>();
-        let framework_fixture_names = self
+        let mut framework_fixture_names = self
             .fixture_dependencies
             .iter()
             .map(|fixture_id| self.fixture_plan.fixture(*fixture_id))
             .filter(|fixture| fixture.name().module_path().module_name() == "karva._builtins")
             .map(NormalizedFixture::function_name)
             .collect::<Vec<_>>();
+        framework_fixture_names.push("request");
         let parameters = if let Some(id) = &self.id {
             Some(id.clone())
         } else {

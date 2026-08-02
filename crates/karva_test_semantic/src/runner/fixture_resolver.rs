@@ -33,6 +33,12 @@ pub(super) struct FixturePlanCompiler<'a> {
 
     /// Arena under construction.
     fixtures: Vec<NormalizedFixture>,
+
+    /// Runtime lookup table for `request.getfixturevalue(...)`.
+    dynamic_fixtures: HashMap<String, FixtureId>,
+
+    /// Arena prefix participating in static test variant expansion.
+    variant_fixture_count: Option<usize>,
 }
 
 /// Source-backed fixture metadata retained for resolution diagnostics.
@@ -167,6 +173,8 @@ impl<'a> FixturePlanCompiler<'a> {
             current_package,
             fixture_ids: HashMap::new(),
             fixtures: Vec::new(),
+            dynamic_fixtures: HashMap::new(),
+            variant_fixture_count: None,
         }
     }
 
@@ -193,7 +201,8 @@ impl<'a> FixturePlanCompiler<'a> {
 
     /// Finishes the immutable arena after all requested root groups are compiled.
     pub(super) fn finish(self) -> FixturePlan {
-        FixturePlan::new(self.fixtures)
+        let variant_fixture_count = self.variant_fixture_count.unwrap_or(self.fixtures.len());
+        FixturePlan::new(self.fixtures, self.dynamic_fixtures, variant_fixture_count)
     }
 
     /// Normalizes a fixture and its dependencies recursively.
@@ -224,6 +233,7 @@ impl<'a> FixturePlanCompiler<'a> {
             package_owner: self.package_owner(fixture).to_path_buf(),
             is_generator: fixture.is_generator(),
             py_function: fixture.function().clone_ref(py),
+            parameters: fixture.parameters().map(<[_]>::to_vec),
         };
 
         let fixture_id = FixtureId::new(self.fixtures.len());
@@ -258,7 +268,9 @@ impl<'a> FixturePlanCompiler<'a> {
         let fixture_names = test.statement().required_fixtures(py);
         let regular_fixture_names: Vec<String> = fixture_names
             .iter()
-            .filter(|name| !parametrize_param_names.contains(name.as_str()))
+            .filter(|name| {
+                name.as_str() != "request" && !parametrize_param_names.contains(name.as_str())
+            })
             .cloned()
             .collect();
 
@@ -309,6 +321,9 @@ impl<'a> FixturePlanCompiler<'a> {
         let mut rejected_fixtures = Vec::new();
 
         for dep_name in fixture_names {
+            if dep_name == "request" {
+                continue;
+            }
             if let Some(fixture) =
                 find_fixture(current_fixture, dep_name, self.parents, self.current)
             {
@@ -353,6 +368,36 @@ impl<'a> FixturePlanCompiler<'a> {
         }
 
         Ok(normalized_fixtures)
+    }
+
+    /// Compiles every visible fixture as a deferred dynamic lookup target.
+    ///
+    /// Invalid dynamic roots stay absent and fail only if Python requests them.
+    pub(super) fn compile_dynamic_fixtures(&mut self, py: Python<'_>) {
+        self.variant_fixture_count = Some(self.fixtures.len());
+
+        let mut names = Vec::new();
+        let mut seen = HashSet::new();
+        for name in self
+            .current
+            .fixture_names()
+            .into_iter()
+            .chain(self.parents.iter().flat_map(HasFixtures::fixture_names))
+        {
+            if seen.insert(name.to_string()) {
+                names.push(name.to_string());
+            }
+        }
+
+        for name in names {
+            let Some(fixture) = find_fixture(None, &name, self.parents, self.current) else {
+                continue;
+            };
+            let mut path = FixturePath::default();
+            if let Ok(fixture_id) = self.normalize_fixture(py, fixture, &mut path) {
+                self.dynamic_fixtures.insert(name, fixture_id);
+            }
+        }
     }
 }
 

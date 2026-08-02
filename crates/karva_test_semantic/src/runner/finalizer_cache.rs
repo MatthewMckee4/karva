@@ -1,8 +1,5 @@
 //! Scope-aware storage and execution for fixture teardown callbacks.
 
-use pyo3::prelude::*;
-use ruff_db::diagnostic::Diagnostic;
-
 use crate::extensions::fixtures::{Finalizer, FixtureScope};
 use crate::runner::scoped_storage::{ScopeKey, ScopedStorage};
 
@@ -31,17 +28,8 @@ impl FinalizerCache {
         });
     }
 
-    /// Drains one scope and returns diagnostics raised during teardown.
-    pub(super) fn run_and_clear_scope(
-        &mut self,
-        py: Python<'_>,
-        scope: ScopeKey<'_>,
-    ) -> Vec<Diagnostic> {
-        self.storage
-            .take(scope)
-            .into_iter()
-            .rev()
-            .filter_map(|finalizer| finalizer.run(py).err())
-            .collect()
+    /// Drains one scope so callbacks can run without holding a runtime borrow.
+    pub(super) fn take_scope(&mut self, scope: ScopeKey<'_>) -> Vec<Finalizer> {
+        self.storage.take(scope)
     }
 }

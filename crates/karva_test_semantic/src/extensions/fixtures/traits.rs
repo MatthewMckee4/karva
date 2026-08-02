@@ -21,6 +21,9 @@ pub trait HasFixtures<'a>: Debug {
     ///
     /// If this returns a non-empty list, it means that the module or package has a configuration module.
     fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a DiscoveredFixture>;
+
+    /// Names visible directly from this provider, in lookup precedence order.
+    fn fixture_names(&'a self) -> Vec<&'a str>;
 }
 
 impl<'a> HasFixtures<'a> for DiscoveredModule {
@@ -38,6 +41,13 @@ impl<'a> HasFixtures<'a> for DiscoveredModule {
         self.fixtures()
             .iter()
             .filter(|f| f.auto_use() && scopes.contains(&f.scope()))
+            .collect()
+    }
+
+    fn fixture_names(&'a self) -> Vec<&'a str> {
+        self.fixtures()
+            .iter()
+            .map(|fixture| fixture.name().function_name())
             .collect()
     }
 }
@@ -86,6 +96,26 @@ impl<'a> HasFixtures<'a> for DiscoveredPackage {
 
         fixtures
     }
+
+    fn fixture_names(&'a self) -> Vec<&'a str> {
+        let mut names = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        if let Some(module) = self.configuration_module_impl() {
+            for name in module.fixture_names() {
+                if seen.insert(name) {
+                    names.push(name);
+                }
+            }
+        }
+        if let Some(module) = self.framework_module_impl() {
+            for name in module.fixture_names() {
+                if seen.insert(name) {
+                    names.push(name);
+                }
+            }
+        }
+        names
+    }
 }
 
 impl<'a> HasFixtures<'a> for &'a DiscoveredPackage {
@@ -99,6 +129,10 @@ impl<'a> HasFixtures<'a> for &'a DiscoveredPackage {
 
     fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a DiscoveredFixture> {
         (*self).auto_use_fixtures(scopes)
+    }
+
+    fn fixture_names(&'a self) -> Vec<&'a str> {
+        (*self).fixture_names()
     }
 }
 

@@ -403,6 +403,12 @@ pub struct ParametrizationArgs {
     /// Mapping of parameter name to its value.
     pub(crate) values: HashMap<String, Arc<Py<PyAny>>>,
 
+    /// Parameter names whose values must be passed through a fixture request.
+    pub(crate) indirect: HashSet<String>,
+
+    /// Zero-based source index for each indirect parameter.
+    pub(crate) indices: HashMap<String, usize>,
+
     /// Combined tags from all parameter sets.
     pub(crate) tags: Tags,
 
@@ -411,8 +417,30 @@ pub struct ParametrizationArgs {
 }
 
 impl ParametrizationArgs {
+    pub(crate) fn fixture(name: String, parametrization: &Parametrization, index: usize) -> Self {
+        let values = parametrization
+            .values
+            .first()
+            .map(|value| (name.clone(), Arc::clone(value)))
+            .into_iter()
+            .collect();
+        Self {
+            values,
+            indirect: std::iter::once(name.clone()).collect(),
+            indices: std::iter::once((name, index)).collect(),
+            tags: parametrization.tags.clone(),
+            id: parametrization
+                .id
+                .clone()
+                .unwrap_or_else(|| parametrization.default_id.clone()),
+            has_explicit_id: true,
+        }
+    }
+
     pub(crate) fn extend(&mut self, other: Self) {
         self.values.extend(other.values);
+        self.indirect.extend(other.indirect);
+        self.indices.extend(other.indices);
         self.tags.extend(&other.tags);
         if !self.id.is_empty() && !other.id.is_empty() {
             self.id.push('-');
@@ -435,6 +463,17 @@ pub struct ParameterPlan {
 impl ParameterPlan {
     pub(crate) fn new(dimensions: Vec<Vec<ParametrizationArgs>>) -> Self {
         Self { dimensions }
+    }
+
+    pub(crate) fn push_dimension(&mut self, dimension: Vec<ParametrizationArgs>) {
+        self.dimensions.push(dimension);
+    }
+
+    pub(crate) fn indirect_names(&self) -> impl Iterator<Item = &str> {
+        self.dimensions
+            .iter()
+            .flatten()
+            .flat_map(|args| args.indirect.iter().map(String::as_str))
     }
 }
 
@@ -496,7 +535,7 @@ impl ParameterPlanIterator {
     }
 }
 
-fn make_unique_parametrize_ids(parametrizations: &mut [ParametrizationArgs]) {
+pub fn make_unique_parametrize_ids(parametrizations: &mut [ParametrizationArgs]) {
     let mut id_counts = HashMap::new();
     for parametrization in &*parametrizations {
         if !parametrization.id.is_empty() {
@@ -567,7 +606,7 @@ fn normalize_arg_names(arg_names: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
 /// - `(["arg1", "arg2"], [(1, 2), (3, 4)])` - list of arg names with tuple values
 /// - `(["arg1", "arg2"], [pytest.param(1, 2), ...])` - list of arg names with param values
 /// - `(["arg1"], [pytest.param(1), ...])` - single-element list with param values
-pub(super) fn parse_parametrize_args(
+pub fn parse_parametrize_args(
     arg_names: &Bound<'_, PyAny>,
     arg_values: &Bound<'_, PyAny>,
     globals: Option<&Bound<'_, PyDict>>,
@@ -589,8 +628,27 @@ pub(super) fn parse_parametrize_args(
     Ok((names, parametrizations))
 }
 
+/// Parses one value per fixture invocation from pytest-compatible fixture metadata.
+pub fn parse_fixture_params(
+    params: &Bound<'_, PyAny>,
+    ids: Option<&Bound<'_, PyAny>>,
+    globals: Option<&Bound<'_, PyDict>>,
+) -> PyResult<Vec<Parametrization>> {
+    let py = params.py();
+    let mut parametrizations = params
+        .try_iter()
+        .map_err(|_| PyValueError::new_err("fixture params must be an iterable"))?
+        .map(|value| value.map(Bound::unbind))
+        .map(|value| {
+            value.and_then(|value| handle_custom_parametrize_param(py, value, false, globals))
+        })
+        .collect::<PyResult<Vec<_>>>()?;
+    apply_parametrize_ids(ids, &mut parametrizations)?;
+    Ok(parametrizations)
+}
+
 /// Applies an ID sequence or callable without replacing IDs embedded in `param(...)` values.
-pub(super) fn apply_parametrize_ids(
+pub fn apply_parametrize_ids(
     ids: Option<&Bound<'_, PyAny>>,
     parametrizations: &mut [Parametrization],
 ) -> PyResult<()> {
@@ -650,6 +708,7 @@ pub struct ParametrizeTag {
     /// These are used as keyword argument names for the test function.
     names: Vec<String>,
     parametrizations: Vec<Parametrization>,
+    indirect: HashSet<String>,
 }
 
 /// Extract argnames and argvalues from a pytest parametrize mark.
@@ -662,6 +721,7 @@ pub struct ParametrizeTag {
 struct ExtractedParametrizeArgs<'py> {
     names: Bound<'py, PyAny>,
     values: Bound<'py, PyAny>,
+    indirect: Option<Bound<'py, PyAny>>,
     ids: Option<Bound<'py, PyAny>>,
 }
 
@@ -700,22 +760,40 @@ fn extract_parametrize_args<'py>(
         })
         .ok();
 
+    let indirect = py_mark
+        .getattr("args")
+        .and_then(|args| args.get_item(2))
+        .or_else(|_| {
+            py_mark
+                .getattr("kwargs")
+                .and_then(|kwargs| kwargs.get_item("indirect"))
+        })
+        .ok();
+
     Ok(ExtractedParametrizeArgs {
         names: arg_names,
         values: arg_values,
+        indirect,
         ids,
     })
 }
 
 impl ParametrizeTag {
-    pub(crate) fn names(&self) -> &[String] {
-        &self.names
+    pub(crate) fn direct_names(&self) -> impl Iterator<Item = &String> {
+        self.names
+            .iter()
+            .filter(|name| !self.indirect.contains(name.as_str()))
     }
 
-    pub(crate) fn new(names: Vec<String>, parametrizations: Vec<Parametrization>) -> Self {
+    pub(crate) fn new(
+        names: Vec<String>,
+        parametrizations: Vec<Parametrization>,
+        indirect: HashSet<String>,
+    ) -> Self {
         Self {
             names,
             parametrizations,
+            indirect,
         }
     }
 
@@ -738,6 +816,7 @@ impl ParametrizeTag {
                     },
                 )
                 .collect(),
+            HashSet::new(),
         )
     }
 
@@ -745,12 +824,48 @@ impl ParametrizeTag {
         py_mark: &Bound<'_, PyAny>,
         globals: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<Self>> {
-        let ExtractedParametrizeArgs { names, values, ids } = extract_parametrize_args(py_mark)?;
+        let ExtractedParametrizeArgs {
+            names,
+            values,
+            indirect,
+            ids,
+        } = extract_parametrize_args(py_mark)?;
 
         let (arg_names, mut parametrizations) = parse_parametrize_args(&names, &values, globals)?;
         apply_parametrize_ids(ids.as_ref(), &mut parametrizations)?;
 
-        Ok(Some(Self::new(arg_names, parametrizations)))
+        let indirect = match indirect {
+            None => HashSet::new(),
+            Some(indirect) => {
+                if let Ok(indirect) = indirect.extract::<bool>() {
+                    if indirect {
+                        arg_names.iter().cloned().collect()
+                    } else {
+                        HashSet::new()
+                    }
+                } else {
+                    indirect
+                        .extract::<Vec<String>>()
+                        .map_err(|_| {
+                            PyValueError::new_err(
+                                "indirect must be a boolean or a sequence of argument names",
+                            )
+                        })?
+                        .into_iter()
+                        .collect()
+                }
+            }
+        };
+        if let Some(name) = indirect
+            .iter()
+            .find(|name| !arg_names.iter().any(|arg_name| arg_name == *name))
+        {
+            return Err(PyValueError::new_err(format!(
+                "indirect fixture {name:?} doesn't exist"
+            )));
+        }
+
+        Ok(Some(Self::new(arg_names, parametrizations, indirect)))
     }
 
     pub(crate) fn validate<'a>(
@@ -813,6 +928,12 @@ impl ParametrizeTag {
             }
             let current_param_args = ParametrizationArgs {
                 values: current_parameratisation,
+                indirect: self.indirect.clone(),
+                indices: self
+                    .indirect
+                    .iter()
+                    .map(|name| (name.clone(), param_args.len()))
+                    .collect(),
                 tags: parametrization.tags().clone(),
                 id: parametrization
                     .id

@@ -1,3 +1,4 @@
+use pyo3::exceptions::PyImportError;
 use pyo3::prelude::*;
 use pyo3::wrap_pymodule;
 
@@ -13,6 +14,9 @@ use crate::extensions::functions::{
     SnapshotSettings, fail, param, skip,
 };
 use crate::extensions::tags::python::{PyTags, PyTestFunction, tags};
+use crate::runner::{
+    FixtureLookupError, FixtureRequest, RequestConfig, RequestNode, RequestSession,
+};
 
 /// Populates the native `karva` Python module with its functions, classes, and exceptions.
 pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -34,15 +38,30 @@ pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RaisesContext>()?;
     m.add_class::<SnapshotSettings>()?;
     m.add_class::<Command>()?;
+    m.add_class::<FixtureRequest>()?;
+    m.add_class::<RequestConfig>()?;
+    m.add_class::<RequestNode>()?;
+    m.add_class::<RequestSession>()?;
 
     m.add_wrapped(wrap_pymodule!(tags))?;
 
     m.add("SkipError", py.get_type::<SkipError>())?;
     m.add("FailError", py.get_type::<FailError>())?;
     m.add("InvalidFixtureError", py.get_type::<InvalidFixtureError>())?;
+    m.add("FixtureLookupError", py.get_type::<FixtureLookupError>())?;
     m.add(
         "SnapshotMismatchError",
         py.get_type::<SnapshotMismatchError>(),
     )?;
+
+    match py.import("pytest") {
+        Ok(pytest) => {
+            pytest
+                .getattr("FixtureRequest")?
+                .call_method1("register", (m.getattr("FixtureRequest")?,))?;
+        }
+        Err(error) if error.is_instance_of::<PyImportError>(py) => {}
+        Err(error) => return Err(error),
+    }
     Ok(())
 }

@@ -313,7 +313,7 @@ impl CompiledTags {
         for tag in &tags.inner {
             match tag {
                 Tag::Parametrize(parametrize) => {
-                    parameter_names.extend(parametrize.names().iter().cloned());
+                    parameter_names.extend(parametrize.direct_names().cloned());
                     dimensions.push(parametrize.each_arg_value());
                 }
                 Tag::UseFixtures(use_fixtures) => {

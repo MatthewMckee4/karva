@@ -1,6 +1,8 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyString, PyTuple};
 
+use crate::extensions::tags::parametrize::{Parametrization, parse_fixture_params};
+
 /// Marker object created when `@fixture(...)` is called with arguments.
 ///
 /// This is an intermediate object that captures the decorator arguments
@@ -18,6 +20,9 @@ pub struct FixtureFunctionMarker {
     /// Whether this fixture should be automatically used.
     #[pyo3(get)]
     pub auto_use: bool,
+
+    /// Parameter values that create distinct fixture invocations.
+    pub parameters: Option<Vec<Parametrization>>,
 }
 
 impl FixtureFunctionMarker {
@@ -26,6 +31,7 @@ impl FixtureFunctionMarker {
         scope: Option<Py<PyAny>>,
         name: Option<String>,
         auto_use: bool,
+        parameters: Option<Vec<Parametrization>>,
     ) -> Self {
         let scope = scope.unwrap_or_else(|| PyString::new(py, "function").into_any().unbind());
 
@@ -33,6 +39,7 @@ impl FixtureFunctionMarker {
             scope,
             name,
             auto_use,
+            parameters,
         }
     }
 }
@@ -55,6 +62,7 @@ impl FixtureFunctionMarker {
             name: func_name,
             scope: self.scope.clone_ref(py),
             auto_use: self.auto_use,
+            parameters: self.parameters.clone(),
         };
 
         Ok(fixture_def)
@@ -83,6 +91,9 @@ pub struct FixtureFunctionDefinition {
     /// The underlying Python function that produces the fixture value.
     #[pyo3(get)]
     pub function: Py<PyAny>,
+
+    /// Parameter values copied from the decorator marker.
+    pub parameters: Option<Vec<Parametrization>>,
 }
 
 #[pymethods]
@@ -99,16 +110,22 @@ impl FixtureFunctionDefinition {
 }
 
 #[pyfunction(name = "fixture")]
-#[pyo3(signature = (func=None, *, scope=None, name=None, auto_use=false))]
+#[pyo3(signature = (func=None, *, scope=None, params=None, auto_use=false, ids=None, name=None))]
 /// Supports both `@fixture` and configured `@fixture(...)` decorator forms.
 pub fn fixture_decorator(
     py: Python<'_>,
     func: Option<Py<PyAny>>,
     scope: Option<Py<PyAny>>,
-    name: Option<&str>,
+    params: Option<&Bound<'_, PyAny>>,
     auto_use: bool,
+    ids: Option<&Bound<'_, PyAny>>,
+    name: Option<&str>,
 ) -> PyResult<Py<PyAny>> {
-    let marker = FixtureFunctionMarker::new(py, scope, name.map(String::from), auto_use);
+    let parameters = params
+        .map(|params| parse_fixture_params(params, ids, None))
+        .transpose()?;
+    let marker =
+        FixtureFunctionMarker::new(py, scope, name.map(String::from), auto_use, parameters);
     if let Some(f) = func {
         let fixture_def = marker.__call__(py, f)?;
         Ok(Py::new(py, fixture_def)?.into_any())

@@ -7,6 +7,7 @@ use ruff_python_ast::StmtFunctionDef;
 
 use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::FixtureScope;
+use crate::extensions::tags::parametrize::Parametrization;
 use crate::runner::FixtureArguments;
 use crate::utils::run_coroutine;
 
@@ -24,15 +25,58 @@ impl FixtureId {
 #[derive(Debug)]
 pub struct FixturePlan {
     fixtures: Vec<NormalizedFixture>,
+    dynamic_fixtures: std::collections::HashMap<String, FixtureId>,
+    variant_fixture_count: usize,
 }
 
 impl FixturePlan {
-    pub(crate) fn new(fixtures: Vec<NormalizedFixture>) -> Self {
-        Self { fixtures }
+    pub(crate) fn new(
+        fixtures: Vec<NormalizedFixture>,
+        dynamic_fixtures: std::collections::HashMap<String, FixtureId>,
+        variant_fixture_count: usize,
+    ) -> Self {
+        Self {
+            fixtures,
+            dynamic_fixtures,
+            variant_fixture_count,
+        }
     }
 
     pub(crate) fn fixture(&self, id: FixtureId) -> &NormalizedFixture {
         &self.fixtures[id.0]
+    }
+
+    pub(crate) fn dynamic_fixture(&self, name: &str) -> Option<FixtureId> {
+        self.dynamic_fixtures.get(name).copied()
+    }
+
+    pub(crate) fn variant_fixtures(&self) -> impl Iterator<Item = (FixtureId, &NormalizedFixture)> {
+        self.fixtures[..self.variant_fixture_count]
+            .iter()
+            .enumerate()
+            .map(|(index, fixture)| (FixtureId::new(index), fixture))
+    }
+
+    pub(crate) fn fixture_names(&self) -> impl Iterator<Item = &str> {
+        self.fixtures[..self.variant_fixture_count]
+            .iter()
+            .map(NormalizedFixture::function_name)
+    }
+
+    pub(crate) fn uses_request(&self) -> bool {
+        self.fixtures[..self.variant_fixture_count]
+            .iter()
+            .any(NormalizedFixture::requests_request)
+    }
+
+    pub(crate) fn requires_variant_execution(&self, id: FixtureId) -> bool {
+        let fixture = self.fixture(id);
+        fixture.parameters().is_some()
+            || fixture.requests_request()
+            || fixture
+                .dependencies()
+                .iter()
+                .any(|dependency| self.requires_variant_execution(*dependency))
     }
 }
 
@@ -60,6 +104,9 @@ pub struct NormalizedFixture {
 
     /// Reference to the Python callable that produces the fixture value.
     pub(crate) py_function: Py<PyAny>,
+
+    /// Parameter values declared by the fixture decorator.
+    pub(crate) parameters: Option<Vec<Parametrization>>,
 }
 
 impl NormalizedFixture {
@@ -84,6 +131,17 @@ impl NormalizedFixture {
     /// Returns the fixture scope.
     pub(crate) fn scope(&self) -> FixtureScope {
         self.scope
+    }
+
+    pub(crate) fn parameters(&self) -> Option<&[Parametrization]> {
+        self.parameters.as_deref()
+    }
+
+    pub(crate) fn requests_request(&self) -> bool {
+        self.statement()
+            .parameters
+            .iter_non_variadic_params()
+            .any(|parameter| parameter.parameter.name.as_str() == "request")
     }
 
     /// Returns the package that owns this fixture's package-scoped state.
