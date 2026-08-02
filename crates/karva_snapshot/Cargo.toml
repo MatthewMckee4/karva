@@ -18,11 +18,11 @@ console = { workspace = true }
 fs-err = { workspace = true }
 regex = { workspace = true }
 similar = { workspace = true }
+tempfile = { workspace = true }
 terminal_size = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["filters"] }
-tempfile = { workspace = true }
 
 [lints]
 workspace = true
