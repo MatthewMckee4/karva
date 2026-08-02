@@ -1240,17 +1240,15 @@ def test_only_covered():
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <title>Coverage report</title>
-      <style>body{font-family:system-ui,sans-serif;margin:2rem;}table{border-collapse:collapse;width:100%;}th,td{padding:.5rem;border-bottom:1px solid #ddd;text-align:left;}td.num{text-align:right;font-variant-numeric:tabular-nums;}code{font-family:ui-monospace,SFMono-Regular,monospace;}thead{background:#f5f5f5;}h1{margin-top:0;}</style>
+      <style>body{font-family:system-ui,sans-serif;margin:2rem;color:#202124}table{border-collapse:collapse;width:100%}th,td{padding:.5rem;border-bottom:1px solid #ddd;text-align:left}td.num{text-align:right;font-variant-numeric:tabular-nums}code,.source{font-family:ui-monospace,SFMono-Regular,monospace}thead{background:#f5f5f5}h1{margin-top:0}a{color:#0969da}.source{display:block;overflow:auto;background:#f6f8fa;padding:1rem}.line{display:block;min-height:1.35em}.number{display:inline-block;width:3rem;text-align:right;color:#6e7781;text-decoration:none}.executed{background:#dafbe1}.missing{background:#ffebe9}.excluded{background:#f0f0f0;color:#6e7781}.partial{background:#fff8c5}.branches{color:#9a6700}.contexts{float:right;color:#57606a;font-size:.85em}</style>
     </head>
     <body>
       <h1>Coverage report</h1>
       <p>Total coverage: <strong>83%</strong> (5/6)</p>
       <table>
-        <thead>
-          <tr><th>Name</th><th>Stmts</th><th>Miss</th><th>Cover</th><th>Missing</th></tr>
-        </thead>
+        <thead><tr><th>Name</th><th>Stmts</th><th>Miss</th><th>Cover</th><th>Missing</th></tr></thead>
         <tbody>
-          <tr><td><code>test_partial.py</code></td><td class="num">6</td><td class="num">1</td><td class="num">83%</td><td><code>6</code></td></tr>
+          <tr><td><a href="source-746573745f7061727469616c2e7079.html"><code>test_partial.py</code></a></td><td class="num">6</td><td class="num">1</td><td class="num">83%</td><td><code>6</code></td></tr>
           <tr><td><strong>TOTAL</strong></td><td class="num"><strong>6</strong></td><td class="num"><strong>1</strong></td><td class="num"><strong>83%</strong></td><td></td></tr>
         </tbody>
       </table>

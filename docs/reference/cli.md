@@ -363,6 +363,7 @@ karva coverage [OPTIONS] <COMMAND>
 <h3 class="cli-reference">Commands</h3>
 
 <dl class="cli-reference"><dt><a href="#karva-coverage-report"><code>karva coverage report</code></a></dt><dd><p>Print the compact terminal coverage report</p></dd>
+<dt><a href="#karva-coverage-html"><code>karva coverage html</code></a></dt><dd><p>Generate a navigable annotated HTML coverage report</p></dd>
 <dt><a href="#karva-coverage-help"><code>karva coverage help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
 </dl>
 
@@ -417,6 +418,34 @@ karva coverage report [OPTIONS] [SELECTOR]...
 <li><code>partial-branches</code>:  Partial branch count</li>
 <li><code>coverage</code>:  Coverage percentage</li>
 </ul></dd></dl>
+
+### karva coverage html
+
+Generate a navigable annotated HTML coverage report
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva coverage html [OPTIONS]
+```
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-coverage-html--config-file"><a href="#karva-coverage-html--config-file"><code>--config-file</code></a> <i>path</i></dt><dd><p>The path to a <code>karva.toml</code> file to use for configuration</p>
+<p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-coverage-html--contexts"><a href="#karva-coverage-html--contexts"><code>--contexts</code></a> <i>regex</i></dt><dd><p>Include execution attributed to a matching context regular expression</p>
+</dd><dt id="karva-coverage-html--data-file"><a href="#karva-coverage-html--data-file"><code>--data-file</code></a> <i>path</i></dt><dd><p>Native coverage artifact path, relative to the project root</p>
+</dd><dt id="karva-coverage-html--directory"><a href="#karva-coverage-html--directory"><code>--directory</code></a> <i>path</i></dt><dd><p>Directory receiving the report files</p>
+<p>&#91;default: htmlcov&#93;</p></dd><dt id="karva-coverage-html--fail-under"><a href="#karva-coverage-html--fail-under"><code>--fail-under</code></a> <i>percent</i></dt><dd><p>Fail when total coverage is below this percentage</p>
+</dd><dt id="karva-coverage-html--help"><a href="#karva-coverage-html--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd><dt id="karva-coverage-html--include"><a href="#karva-coverage-html--include"><code>--include</code></a> <i>glob</i></dt><dd><p>Include only report paths matching this glob</p>
+</dd><dt id="karva-coverage-html--omit"><a href="#karva-coverage-html--omit"><code>--omit</code></a> <i>glob</i></dt><dd><p>Exclude report paths matching this glob after inclusion</p>
+</dd><dt id="karva-coverage-html--precision"><a href="#karva-coverage-html--precision"><code>--precision</code></a> <i>n</i></dt><dd><p>Decimal places shown in coverage percentages</p>
+</dd><dt id="karva-coverage-html--profile"><a href="#karva-coverage-html--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to resolve</p>
+<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd><dt id="karva-coverage-html--show-contexts"><a href="#karva-coverage-html--show-contexts"><code>--show-contexts</code></a></dt><dd><p>Show execution contexts beside annotated source lines</p>
+</dd><dt id="karva-coverage-html--skip-covered"><a href="#karva-coverage-html--skip-covered"><code>--skip-covered</code></a></dt><dd><p>Omit fully covered source pages from the index</p>
+</dd><dt id="karva-coverage-html--skip-empty"><a href="#karva-coverage-html--skip-empty"><code>--skip-empty</code></a></dt><dd><p>Omit sources with no statements or branches from the index</p>
+</dd><dt id="karva-coverage-html--title"><a href="#karva-coverage-html--title"><code>--title</code></a> <i>title</i></dt><dd><p>Report title shown in the browser</p>
+<p>&#91;default: Coverage report&#93;</p></dd></dl>
 
 ### karva coverage help
 

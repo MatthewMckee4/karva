@@ -99,6 +99,33 @@ impl CoverageCommand {
 pub enum CoverageAction {
     /// Print the compact terminal coverage report.
     Report(CoverageReportCommand),
+
+    /// Generate a navigable annotated HTML coverage report.
+    Html(CoverageHtmlCommand),
+}
+
+#[derive(Debug, Args)]
+/// Options specific to the annotated HTML coverage report.
+pub struct CoverageHtmlCommand {
+    /// Directory receiving the report files.
+    #[arg(long, value_name = "PATH", default_value = "htmlcov")]
+    pub directory: Utf8PathBuf,
+
+    /// Report title shown in the browser.
+    #[arg(long, default_value = "Coverage report")]
+    pub title: String,
+
+    /// Show execution contexts beside annotated source lines.
+    #[arg(long)]
+    pub show_contexts: bool,
+
+    /// Omit fully covered source pages from the index.
+    #[arg(long)]
+    pub skip_covered: bool,
+
+    /// Omit sources with no statements or branches from the index.
+    #[arg(long)]
+    pub skip_empty: bool,
 }
 
 #[derive(Debug, Args)]

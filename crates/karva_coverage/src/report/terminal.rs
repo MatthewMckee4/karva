@@ -6,7 +6,7 @@ use colored::Colorize;
 use fs_err as fs;
 
 use super::combined_rows;
-use super::html::build_html_report;
+use super::html::{HtmlReportOptions, build_html_report};
 use super::json::build_json_report;
 use super::shared::{FileRow, row_percent, total_percent, totals_row};
 use super::xml::build_cobertura_xml;
@@ -185,12 +185,40 @@ impl CoverageAnalysis {
 
     /// Writes a standalone HTML report and returns total coverage.
     pub fn write_html(&self, output_dir: &Utf8Path) -> Result<f64> {
+        self.write_html_with_options(output_dir, &HtmlReportOptions::default())
+    }
+
+    /// Writes an annotated standalone HTML report and returns total coverage.
+    pub fn write_html_with_options(
+        &self,
+        output_dir: &Utf8Path,
+        options: &HtmlReportOptions,
+    ) -> Result<f64> {
         fs::create_dir_all(output_dir.as_std_path())
             .with_context(|| format!("failed to create coverage html directory {output_dir}"))?;
-        let html = build_html_report(&self.rows);
+        let sources = self
+            .rows
+            .iter()
+            .map(|row| {
+                let path = Utf8Path::new(&row.absolute_name);
+                let path = if path.is_absolute() {
+                    path.to_path_buf()
+                } else {
+                    self.coverage_root.join(path)
+                };
+                fs::read_to_string(path.as_std_path())
+                    .with_context(|| format!("failed to read coverage source {path}"))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let report = build_html_report(&self.rows, &sources, options)?;
         let output_file = output_dir.join("index.html");
-        fs::write(output_file.as_std_path(), html)
+        fs::write(output_file.as_std_path(), report.index)
             .with_context(|| format!("failed to write coverage html {output_file}"))?;
+        for (filename, html) in report.sources {
+            let output_file = output_dir.join(filename);
+            fs::write(output_file.as_std_path(), html)
+                .with_context(|| format!("failed to write coverage html {output_file}"))?;
+        }
         Ok(self.total_percent())
     }
 }
