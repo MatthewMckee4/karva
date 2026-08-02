@@ -8,8 +8,8 @@ use pyo3::prelude::*;
 
 use crate::discovery::DiscoveredTestFunction;
 use crate::extensions::fixtures::{FixtureId, FixturePlan};
-use crate::extensions::tags::Tags;
-use crate::extensions::tags::parametrize::ParametrizationArgs;
+use crate::extensions::tags::parametrize::{ParameterPlan, ParameterPlanIterator};
+use crate::extensions::tags::{CompiledTags, RuntimeTags};
 use crate::runner::fixture_resolver::{FixturePlanCompiler, FixtureResolutionResult};
 
 /// A single variant of a test to be executed.
@@ -47,18 +47,13 @@ pub(super) struct TestVariant<'a> {
     pub(super) auto_use_fixtures: Rc<[FixtureId]>,
 
     /// Combined tags from the test and its parameter set.
-    pub(super) tags: Tags,
+    pub(super) tags: RuntimeTags,
 }
 
 impl TestVariant<'_> {
     /// Get the module path for diagnostics.
     pub(super) fn module_path(&self) -> &camino::Utf8PathBuf {
         self.test.name().module_path().path()
-    }
-
-    /// Get the resolved tags including those from fixture dependencies.
-    pub(super) fn resolved_tags(&self) -> Tags {
-        self.tags.clone()
     }
 }
 
@@ -73,7 +68,9 @@ pub(super) struct TestVariantIterator<'a> {
     test: &'a DiscoveredTestFunction,
     /// Consumed as we iterate, so `values` and `tags` on each
     /// `ParametrizationArgs` are moved into the emitted variant (not cloned).
-    param_args: std::vec::IntoIter<ParametrizationArgs>,
+    param_args: ParameterPlanIterator,
+    /// Runtime policy shared by every parameter variant.
+    runtime_tags: RuntimeTags,
     /// Resolved fixtures passed as test arguments.
     fixture_plan: Rc<FixturePlan>,
     fixture_dependencies: Rc<[FixtureId]>,
@@ -89,7 +86,8 @@ pub(super) struct CompiledTestPlan {
     fixture_dependencies: Rc<[FixtureId]>,
     use_fixture_dependencies: Rc<[FixtureId]>,
     auto_use_fixtures: Rc<[FixtureId]>,
-    param_args: Vec<ParametrizationArgs>,
+    parameters: ParameterPlan,
+    runtime_tags: RuntimeTags,
 }
 
 impl CompiledTestPlan {
@@ -99,7 +97,8 @@ impl CompiledTestPlan {
         test: &DiscoveredTestFunction,
         mut compiler: FixturePlanCompiler<'_>,
     ) -> FixtureResolutionResult<Self> {
-        let parametrize_param_names = test.tags.parametrize_names();
+        let tags = CompiledTags::new(&test.tags);
+        let parametrize_param_names = tags.parameter_names();
 
         let auto_use_fixtures = compiler.get_normalized_auto_use_fixtures(
             py,
@@ -109,22 +108,17 @@ impl CompiledTestPlan {
         let fixture_dependencies =
             compiler.resolve_test_fixtures(py, test, &parametrize_param_names)?;
 
-        let use_fixture_names = test.tags.required_fixtures_names();
-        let use_fixture_dependencies = compiler.resolve_use_fixtures(py, &use_fixture_names)?;
-
-        let test_params = test.tags.parametrize_args();
-        let param_args = if test_params.is_empty() {
-            vec![ParametrizationArgs::default()]
-        } else {
-            test_params
-        };
+        let use_fixture_dependencies =
+            compiler.resolve_use_fixtures(py, tags.required_fixtures())?;
+        let (parameters, runtime_tags) = tags.into_runtime();
 
         Ok(Self {
             fixture_plan: Rc::new(compiler.finish()),
             fixture_dependencies: Rc::from(fixture_dependencies),
             use_fixture_dependencies: Rc::from(use_fixture_dependencies),
             auto_use_fixtures: Rc::from(auto_use_fixtures),
-            param_args,
+            parameters,
+            runtime_tags,
         })
     }
 }
@@ -134,7 +128,8 @@ impl<'a> TestVariantIterator<'a> {
     pub(super) fn new(test: &'a DiscoveredTestFunction, plan: CompiledTestPlan) -> Self {
         Self {
             test,
-            param_args: plan.param_args.into_iter(),
+            param_args: plan.parameters.into_iter(),
+            runtime_tags: plan.runtime_tags,
             fixture_plan: plan.fixture_plan,
             fixture_dependencies: plan.fixture_dependencies,
             use_fixture_dependencies: plan.use_fixture_dependencies,
@@ -149,7 +144,7 @@ impl<'a> Iterator for TestVariantIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let param_args = self.param_args.next()?;
 
-        let mut tags = self.test.tags.clone();
+        let mut tags = self.runtime_tags.clone();
         tags.extend(&param_args.tags);
 
         Some(TestVariant {
@@ -168,5 +163,3 @@ impl<'a> Iterator for TestVariantIterator<'a> {
         self.param_args.size_hint()
     }
 }
-
-impl ExactSizeIterator for TestVariantIterator<'_> {}

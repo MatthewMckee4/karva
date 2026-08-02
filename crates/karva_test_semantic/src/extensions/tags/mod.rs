@@ -21,7 +21,7 @@ mod use_fixtures;
 use custom::CustomTag;
 use expect_fail::ExpectFailTag;
 use fail_slow::FailSlowTag;
-use parametrize::{InvalidParametrizeError, ParametrizationArgs, ParametrizeTag};
+use parametrize::{InvalidParametrizeError, ParameterPlan, ParametrizeTag};
 use skip::SkipTag;
 use timeout::TimeoutTag;
 use use_fixtures::UseFixturesTag;
@@ -229,6 +229,121 @@ pub struct Tags {
     inner: Vec<Tag>,
 }
 
+/// Runtime tag policy compiled from decorators and parameter-specific marks.
+#[derive(Clone, Debug, Default)]
+pub struct RuntimeTags {
+    skip: SkipPolicy,
+    expect_fail: Option<ExpectFailTag>,
+    timeout: Option<TimeoutTag>,
+    fail_slow: Option<FailSlowTag>,
+    custom_names: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+enum SkipPolicy {
+    #[default]
+    Run,
+    Skip(Option<String>),
+}
+
+impl RuntimeTags {
+    fn from_tags(tags: &Tags) -> Self {
+        let mut runtime = Self::default();
+        runtime.extend(tags);
+        runtime
+    }
+
+    pub(crate) fn extend(&mut self, tags: &Tags) {
+        for tag in &tags.inner {
+            match tag {
+                Tag::Skip(skip) if matches!(self.skip, SkipPolicy::Run) && skip.should_skip() => {
+                    self.skip = SkipPolicy::Skip(skip.reason());
+                }
+                Tag::ExpectFail(expect_fail) if self.expect_fail.is_none() => {
+                    self.expect_fail = Some(expect_fail.clone());
+                }
+                Tag::Timeout(timeout) if self.timeout.is_none() => self.timeout = Some(*timeout),
+                Tag::FailSlow(fail_slow) if self.fail_slow.is_none() => {
+                    self.fail_slow = Some(*fail_slow);
+                }
+                Tag::Custom(custom) => self.custom_names.push(custom.name().to_string()),
+                _ => {}
+            }
+        }
+    }
+
+    pub(crate) fn should_skip(&self) -> (bool, Option<String>) {
+        match &self.skip {
+            SkipPolicy::Run => (false, None),
+            SkipPolicy::Skip(reason) => (true, reason.clone()),
+        }
+    }
+
+    pub(crate) fn custom_tag_names(&self) -> Vec<&str> {
+        self.custom_names.iter().map(String::as_str).collect()
+    }
+
+    pub(crate) fn expect_fail_tag(&self) -> Option<ExpectFailTag> {
+        self.expect_fail.clone()
+    }
+
+    pub(crate) fn timeout_tag(&self) -> Option<TimeoutTag> {
+        self.timeout
+    }
+
+    pub(crate) fn fail_slow_tag(&self) -> Option<FailSlowTag> {
+        self.fail_slow
+    }
+}
+
+/// Static tag metadata and lazy parameter matrix compiled for one test.
+pub struct CompiledTags {
+    parameter_names: HashSet<String>,
+    required_fixtures: Vec<String>,
+    parameters: ParameterPlan,
+    runtime: RuntimeTags,
+}
+
+impl CompiledTags {
+    pub(crate) fn new(tags: &Tags) -> Self {
+        let mut parameter_names = HashSet::new();
+        let mut required_fixtures = Vec::new();
+        let mut dimensions = Vec::new();
+
+        for tag in &tags.inner {
+            match tag {
+                Tag::Parametrize(parametrize) => {
+                    parameter_names.extend(parametrize.names().iter().cloned());
+                    dimensions.push(parametrize.each_arg_value());
+                }
+                Tag::UseFixtures(use_fixtures) => {
+                    required_fixtures.extend(use_fixtures.fixture_names().iter().cloned());
+                }
+                _ => {}
+            }
+        }
+
+        Self {
+            parameter_names,
+            required_fixtures,
+            parameters: ParameterPlan::new(dimensions),
+            runtime: RuntimeTags::from_tags(tags),
+        }
+    }
+
+    pub(crate) fn parameter_names(&self) -> HashSet<&str> {
+        self.parameter_names.iter().map(String::as_str).collect()
+    }
+
+    pub(crate) fn required_fixtures(&self) -> &[String] {
+        &self.required_fixtures
+    }
+
+    pub(crate) fn into_runtime(self) -> (ParameterPlan, RuntimeTags) {
+        (self.parameters, self.runtime)
+    }
+}
+
 impl Tags {
     pub(crate) fn new(tags: Vec<Tag>) -> Self {
         Self { inner: tags }
@@ -303,44 +418,6 @@ impl Tags {
         Ok(Some(Self { inner: tags }))
     }
 
-    /// Return all parametrizations
-    ///
-    /// This function ensures that if we have multiple parametrize tags, we combine them together.
-    pub(crate) fn parametrize_args(&self) -> Vec<ParametrizationArgs> {
-        let mut param_args: Vec<ParametrizationArgs> = vec![ParametrizationArgs::default()];
-
-        for tag in &self.inner {
-            if let Tag::Parametrize(parametrize_tag) = tag {
-                let current_values = parametrize_tag.each_arg_value();
-
-                let mut new_param_args =
-                    Vec::with_capacity(param_args.len() * current_values.len());
-
-                for existing_params in &param_args {
-                    for new_params in &current_values {
-                        let mut combined_params = existing_params.clone();
-                        combined_params.extend(new_params.clone());
-                        new_param_args.push(combined_params);
-                    }
-                }
-                param_args = new_param_args;
-            }
-        }
-        param_args
-    }
-
-    pub(crate) fn parametrize_names(&self) -> HashSet<&str> {
-        self.inner
-            .iter()
-            .filter_map(|tag| match tag {
-                Tag::Parametrize(parametrize) => Some(parametrize.names()),
-                _ => None,
-            })
-            .flatten()
-            .map(String::as_str)
-            .collect()
-    }
-
     pub(crate) fn validate_parametrize(
         &self,
         function: &StmtFunctionDef,
@@ -358,83 +435,16 @@ impl Tags {
             }
         }
 
-        for params in self.parametrize_args() {
-            let Some(id) = params.id() else {
-                continue;
-            };
-            if id.is_empty() {
-                return Err(InvalidParametrizeError::EmptyId);
+        for tag in &self.inner {
+            if let Tag::Parametrize(parametrize) = tag {
+                for params in parametrize.each_arg_value() {
+                    if params.id().is_some_and(str::is_empty) {
+                        return Err(InvalidParametrizeError::EmptyId);
+                    }
+                }
             }
         }
 
         Ok(())
-    }
-
-    /// Get all required fixture names for the given test.
-    pub(crate) fn required_fixtures_names(&self) -> Vec<String> {
-        self.inner
-            .iter()
-            .filter_map(|tag| match tag {
-                Tag::UseFixtures(use_fixtures_tag) => Some(use_fixtures_tag.fixture_names()),
-                _ => None,
-            })
-            .flat_map(|names| names.iter().cloned())
-            .collect()
-    }
-
-    /// Returns true if any skip tag should be skipped.
-    pub(crate) fn should_skip(&self) -> (bool, Option<String>) {
-        for tag in &self.inner {
-            if let Tag::Skip(skip_tag) = tag {
-                if skip_tag.should_skip() {
-                    return (true, skip_tag.reason());
-                }
-            }
-        }
-        (false, None)
-    }
-
-    /// Return the names of all custom tags.
-    pub(crate) fn custom_tag_names(&self) -> Vec<&str> {
-        self.inner
-            .iter()
-            .filter_map(|tag| {
-                if let Tag::Custom(custom) = tag {
-                    Some(custom.name())
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    /// Return the `ExpectFailTag` if it exists.
-    pub(crate) fn expect_fail_tag(&self) -> Option<ExpectFailTag> {
-        for tag in &self.inner {
-            if let Tag::ExpectFail(expect_fail_tag) = tag {
-                return Some(expect_fail_tag.clone());
-            }
-        }
-        None
-    }
-
-    /// Return the `TimeoutTag` if it exists.
-    pub(crate) fn timeout_tag(&self) -> Option<TimeoutTag> {
-        for tag in &self.inner {
-            if let Tag::Timeout(timeout_tag) = tag {
-                return Some(*timeout_tag);
-            }
-        }
-        None
-    }
-
-    /// Return the `FailSlowTag` if it exists.
-    pub(crate) fn fail_slow_tag(&self) -> Option<FailSlowTag> {
-        for tag in &self.inner {
-            if let Tag::FailSlow(fail_slow_tag) = tag {
-                return Some(*fail_slow_tag);
-            }
-        }
-        None
     }
 }
