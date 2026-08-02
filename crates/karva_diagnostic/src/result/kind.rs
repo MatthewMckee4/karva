@@ -31,31 +31,6 @@ pub enum TestResultKind {
     Slow,
 }
 
-impl TestResultKind {
-    pub(super) fn as_str(self) -> &'static str {
-        match self {
-            Self::Passed => "passed",
-            Self::Failed => "failed",
-            Self::Error => "error",
-            Self::Skipped => "skipped",
-            Self::Flaky => "flaky",
-            Self::Slow => "slow",
-        }
-    }
-
-    pub(super) fn from_str(s: &str) -> Result<Self, &'static str> {
-        match s {
-            "passed" => Ok(Self::Passed),
-            "failed" => Ok(Self::Failed),
-            "error" => Ok(Self::Error),
-            "skipped" => Ok(Self::Skipped),
-            "flaky" => Ok(Self::Flaky),
-            "slow" => Ok(Self::Slow),
-            _ => Err("invalid TestResultKind"),
-        }
-    }
-}
-
 impl From<IndividualTestResultKind> for TestResultKind {
     fn from(val: IndividualTestResultKind) -> Self {
         match val {
