@@ -11,7 +11,7 @@ mod python;
 mod runner;
 pub mod utils;
 
-pub(crate) use context::Context;
+pub(crate) use context::{Context, RunState};
 pub use karva_coverage::CoverageConfig;
 pub use python::init_module;
 
@@ -39,6 +39,7 @@ pub fn run_tests(
     verbose: bool,
 ) -> TestRunResult {
     let context = Context::new(cwd, settings, python_version, reporter, verbose);
+    let mut state = RunState::default();
 
     attach_with_output(settings.terminal().show_python_output, |py| {
         let cov_session = coverage.and_then(|cfg| match CoverageSession::start(py, cwd, cfg) {
@@ -54,16 +55,17 @@ pub fn run_tests(
         for issue in discovery.issues {
             match issue {
                 DiscoveryIssue::Error(error) => {
-                    context.add_run_diagnostic(error.into_diagnostic());
+                    state.add_run_diagnostic(error.into_diagnostic());
                 }
                 DiscoveryIssue::SkippedModule {
                     module_path,
                     reason,
-                } => context.register_module_skip(&module_path, reason),
+                } => state.register_module_skip(&context, &module_path, reason),
             }
         }
 
-        PackageRunner::new(&context, cov_session.as_ref()).execute(py, &discovery.package);
+        PackageRunner::new(&context, &mut state, cov_session.as_ref())
+            .execute(py, &discovery.package);
 
         if let Some(cov_session) = cov_session
             && let Err(err) = cov_session.stop_and_save(py)
@@ -71,6 +73,6 @@ pub fn run_tests(
             tracing::error!("Failed to save coverage data: {err}");
         }
 
-        context.into_result()
+        state.into_result()
     })
 }

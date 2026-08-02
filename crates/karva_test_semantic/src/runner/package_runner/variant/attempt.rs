@@ -19,7 +19,7 @@ use crate::runner::package_runner::outcome::{
 impl VariantRunner<'_, '_, '_, '_, '_> {
     /// Runs one setup/call/teardown lifecycle and decides retry eligibility.
     pub(super) fn execute_attempt(
-        &self,
+        &mut self,
         settings: &VariantSettings,
         function: &Py<PyAny>,
         test_name_env_result: &PyResult<()>,

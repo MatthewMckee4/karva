@@ -27,14 +27,14 @@ impl FixtureCache {
     }
 
     /// Caches a fixture value until its declared scope completes.
-    pub(super) fn insert(&self, name: String, value: Py<PyAny>, scope: ScopeKey<'_>) {
+    pub(super) fn insert(&mut self, name: String, value: Py<PyAny>, scope: ScopeKey<'_>) {
         self.storage.with_mut(scope, |values| {
             values.insert(name, value);
         });
     }
 
     /// Drops every cached value owned by one completed scope.
-    pub(super) fn clear_scope(&self, scope: ScopeKey<'_>) {
+    pub(super) fn clear_scope(&mut self, scope: ScopeKey<'_>) {
         drop(self.storage.take(scope));
     }
 }

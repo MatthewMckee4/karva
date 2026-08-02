@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-
 use camino::Utf8Path;
 use karva_collector::CollectionSettings;
 use karva_diagnostic::{
@@ -11,10 +9,7 @@ use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName
 use ruff_db::diagnostic::Diagnostic;
 use ruff_python_ast::PythonVersion;
 
-/// Central context object that holds shared state for a test run.
-///
-/// Provides access to system operations, project settings, and test result
-/// accumulation throughout the test discovery and execution phases.
+/// Immutable configuration and reporting services shared by one test run.
 pub struct Context<'a> {
     /// Current working directory.
     cwd: &'a Utf8Path,
@@ -25,14 +20,17 @@ pub struct Context<'a> {
     /// The Python version being used for this test run.
     python_version: PythonVersion,
 
-    /// Accumulated test results, wrapped in `RefCell` for interior mutability.
-    result: RefCell<TestRunResult>,
-
     /// Reporter for outputting test progress and results.
     reporter: &'a dyn Reporter,
 
     /// Whether diagnostics should include the full Python call chain.
     verbose: bool,
+}
+
+/// Mutable result state owned by the active execution path.
+#[derive(Default)]
+pub struct RunState {
+    result: TestRunResult,
 }
 
 impl<'a> Context<'a> {
@@ -47,7 +45,6 @@ impl<'a> Context<'a> {
             cwd,
             settings,
             python_version,
-            result: RefCell::new(TestRunResult::default()),
             reporter,
             verbose,
         }
@@ -74,14 +71,6 @@ impl<'a> Context<'a> {
         }
     }
 
-    pub(crate) fn result(&self) -> std::cell::RefMut<'_, TestRunResult> {
-        self.result.borrow_mut()
-    }
-
-    pub(crate) fn into_result(self) -> TestRunResult {
-        self.result.into_inner().into_sorted()
-    }
-
     /// Record the start of a test execution. Forwarded to the reporter
     /// so cancellation logic can render per-test `SIGINT` lines naming
     /// the in-flight test.
@@ -95,11 +84,23 @@ impl<'a> Context<'a> {
         self.reporter.report_test_finished(test_case_name);
     }
 
+    /// Returns the parser target matching the embedded interpreter.
+    pub fn python_version(&self) -> PythonVersion {
+        self.python_version
+    }
+}
+
+impl RunState {
+    pub(crate) fn into_result(self) -> TestRunResult {
+        self.result.into_sorted()
+    }
+
     /// Stores and reports a final non-retried test outcome.
     ///
     /// Returns whether the outcome counts as successful for failure-budget accounting.
     pub fn register_test_case_result(
-        &self,
+        &mut self,
+        context: &Context<'_>,
         test_case_name: &QualifiedTestName,
         outcome: TestExecutionOutcome,
         duration: std::time::Duration,
@@ -107,23 +108,29 @@ impl<'a> Context<'a> {
     ) -> bool {
         let passed = !outcome.is_non_success();
 
-        self.result().register_test_case_result(
+        self.result.register_test_case_result(
             test_case_name,
             outcome,
             duration,
             captured_output,
-            Some(self.reporter),
+            Some(context.reporter),
         );
 
         passed
     }
 
-    pub(crate) fn register_module_skip(&self, module_path: &ModulePath, reason: Option<String>) {
+    pub(crate) fn register_module_skip(
+        &mut self,
+        context: &Context<'_>,
+        module_path: &ModulePath,
+        reason: Option<String>,
+    ) {
         let name = QualifiedTestName::new(
             QualifiedFunctionName::new("<module>".to_string(), module_path.clone()),
             None,
         );
         self.register_test_case_result(
+            context,
             &name,
             TestExecutionOutcome::Skipped { reason },
             std::time::Duration::ZERO,
@@ -136,17 +143,18 @@ impl<'a> Context<'a> {
     /// via [`Self::register_retried_result`].
     pub fn report_test_attempt(
         &self,
+        context: &Context<'_>,
         test_case_name: &QualifiedTestName,
         attempt: u32,
         result: IndividualTestResultKind,
         duration: std::time::Duration,
     ) {
-        self.result().report_test_attempt(
+        self.result.report_test_attempt(
             test_case_name,
             attempt,
             result,
             duration,
-            Some(self.reporter),
+            Some(context.reporter),
         );
     }
 
@@ -154,12 +162,13 @@ impl<'a> Context<'a> {
     /// `SLOW` reporter line. Called once per test variant whose total
     /// runtime exceeded the configured `slow-timeout`.
     pub fn register_slow_test(
-        &self,
+        &mut self,
+        context: &Context<'_>,
         test_case_name: &QualifiedTestName,
         duration: std::time::Duration,
     ) {
-        self.result()
-            .register_slow_test(test_case_name, duration, Some(self.reporter));
+        self.result
+            .register_slow_test(test_case_name, duration, Some(context.reporter));
     }
 
     /// Register the final outcome of a retried test. Updates summary stats
@@ -167,7 +176,7 @@ impl<'a> Context<'a> {
     /// emitting a duplicate result line — the per-attempt `TRY N STATUS`
     /// lines already showed every attempt.
     pub fn register_retried_result(
-        &self,
+        &mut self,
         test_case_name: &QualifiedTestName,
         outcome: TestExecutionOutcome,
         duration: std::time::Duration,
@@ -176,7 +185,7 @@ impl<'a> Context<'a> {
         attempts: Vec<TestExecutionAttempt>,
     ) -> bool {
         let passed = !outcome.is_non_success() && !retry.is_flaky_failure();
-        self.result().register_retried_result(
+        self.result.register_retried_result(
             test_case_name,
             outcome,
             duration,
@@ -187,12 +196,7 @@ impl<'a> Context<'a> {
         passed
     }
 
-    pub(crate) fn add_run_diagnostic(&self, diagnostic: Diagnostic) {
-        self.result().add_run_diagnostic(diagnostic);
-    }
-
-    /// Returns the parser target matching the embedded interpreter.
-    pub fn python_version(&self) -> PythonVersion {
-        self.python_version
+    pub(crate) fn add_run_diagnostic(&mut self, diagnostic: Diagnostic) {
+        self.result.add_run_diagnostic(diagnostic);
     }
 }
