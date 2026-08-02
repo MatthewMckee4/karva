@@ -186,7 +186,7 @@ sources = ["src"]
 
 ## `junit`
 
-Controls JUnit XML output, captured streams, and flaky-test representation.
+Controls `JUnit` XML output, captured streams, and flaky-test representation.
 
 ### `flaky-fail-status`
 

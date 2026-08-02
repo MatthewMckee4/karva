@@ -197,19 +197,19 @@
     "JunitFlakyFailStatus": {
       "oneOf": [
         {
-          "description": "Record failed attempts as JUnit failures.",
+          "description": "Record failed attempts as `JUnit` failures.",
           "type": "string",
           "const": "failure"
         },
         {
-          "description": "Represent eventually passing tests as successful in JUnit.",
+          "description": "Represent eventually passing tests as successful in `JUnit`.",
           "type": "string",
           "const": "success"
         }
       ]
     },
     "JunitOptions": {
-      "description": "Controls JUnit XML output, captured streams, and flaky-test representation.",
+      "description": "Controls `JUnit` XML output, captured streams, and flaky-test representation.",
       "type": "object",
       "properties": {
         "flaky-fail-status": {
@@ -303,7 +303,7 @@
           ]
         },
         "junit": {
-          "description": "JUnit report overrides.",
+          "description": "`JUnit` report overrides.",
           "anyOf": [
             {
               "$ref": "#/definitions/JunitOptions"
@@ -372,7 +372,7 @@
       ]
     },
     "OverrideJunitOptions": {
-      "description": "JUnit-specific values available inside one per-test override.",
+      "description": "`JUnit`-specific values available inside one per-test override.",
       "type": "object",
       "properties": {
         "flaky-fail-status": {
