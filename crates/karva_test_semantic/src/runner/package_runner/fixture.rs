@@ -156,28 +156,45 @@ impl PackageRunner<'_, '_> {
             request_context,
         ));
 
-        let mut fixture_call_errors =
-            run_fixtures(py, &executor, auto_use_fixtures, FixtureUsage::AutoUse);
-        fixture_call_errors.extend(run_fixtures(
-            py,
-            &executor,
-            use_fixture_dependencies,
-            FixtureUsage::UseFixtures,
-        ));
+        let mut fixture_call_errors = Vec::new();
         let mut function_arguments = FixtureArguments::default();
 
-        for fixture_id in fixture_dependencies {
-            let fixture = fixture_plan.fixture(*fixture_id);
-            match executor.run_fixture(py, *fixture_id) {
-                Ok(value) => {
-                    function_arguments
-                        .insert(fixture.function_name().to_string(), value.clone_ref(py));
+        for scope in [
+            FixtureScope::Session,
+            FixtureScope::Package,
+            FixtureScope::Module,
+            FixtureScope::Function,
+        ] {
+            fixture_call_errors.extend(run_fixtures_at_scope(
+                py,
+                &executor,
+                auto_use_fixtures,
+                scope,
+                FixtureUsage::AutoUse,
+            ));
+            fixture_call_errors.extend(run_fixtures_at_scope(
+                py,
+                &executor,
+                use_fixture_dependencies,
+                scope,
+                FixtureUsage::UseFixtures,
+            ));
+            for fixture_id in fixture_dependencies
+                .iter()
+                .filter(|fixture_id| fixture_plan.fixture(**fixture_id).scope() == scope)
+            {
+                let fixture = fixture_plan.fixture(*fixture_id);
+                match executor.run_fixture(py, *fixture_id) {
+                    Ok(value) => {
+                        function_arguments
+                            .insert(fixture.function_name().to_string(), value.clone_ref(py));
+                    }
+                    Err(error) => fixture_call_errors.push(PreparedFixtureFailure::new(
+                        fixture.function_name(),
+                        FixtureUsage::Required,
+                        error,
+                    )),
                 }
-                Err(error) => fixture_call_errors.push(PreparedFixtureFailure::new(
-                    fixture.function_name(),
-                    FixtureUsage::Required,
-                    error,
-                )),
             }
         }
 
@@ -499,10 +516,10 @@ fn request_fixture_names(
         .collect()
 }
 
-fn run_fixtures(
+fn run_fixtures<'a>(
     py: Python<'_>,
     executor: &Rc<FixtureExecutor>,
-    fixture_ids: &[FixtureId],
+    fixture_ids: impl IntoIterator<Item = &'a FixtureId>,
     usage: FixtureUsage,
 ) -> Vec<PreparedFixtureFailure> {
     let mut errors = Vec::new();
@@ -517,6 +534,23 @@ fn run_fixtures(
         }
     }
     errors
+}
+
+fn run_fixtures_at_scope(
+    py: Python<'_>,
+    executor: &Rc<FixtureExecutor>,
+    fixture_ids: &[FixtureId],
+    scope: FixtureScope,
+    usage: FixtureUsage,
+) -> Vec<PreparedFixtureFailure> {
+    run_fixtures(
+        py,
+        executor,
+        fixture_ids
+            .iter()
+            .filter(|fixture_id| executor.plan.fixture(**fixture_id).scope() == scope),
+        usage,
+    )
 }
 
 fn scope_key(scope: FixtureScope, package_owner: &Utf8Path) -> ScopeKey<'_> {

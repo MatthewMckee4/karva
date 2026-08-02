@@ -536,19 +536,19 @@ fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &st
 
                     @fixture(scope="module")
                     def module_fixture() -> int:
-                        assert arr == [1]
+                        assert arr == [1, 3]
                         arr.append(2)
                         return 2
 
                     @fixture(scope="package")
                     def package_fixture() -> int:
-                        assert arr == [1, 2]
+                        assert arr == [1]
                         arr.append(3)
                         return 3
 
                     @fixture
                     def function_fixture() -> int:
-                        assert arr == [1, 2, 3]
+                        assert arr == [1, 3, 2]
                         arr.append(4)
                         return 4
 
