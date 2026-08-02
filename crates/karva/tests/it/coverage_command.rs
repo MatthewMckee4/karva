@@ -22,7 +22,7 @@ fn write_coverage(context: &TestContext, path: &Utf8Path) {
                 executable: BTreeSet::from([1, 2]),
                 excluded: BTreeSet::new(),
                 executed: BTreeSet::from([1]),
-                line_contexts: BTreeMap::new(),
+                line_contexts: BTreeMap::from([(1, BTreeSet::from(["test_example".to_owned()]))]),
                 branches: None,
             },
         )]),
@@ -114,6 +114,73 @@ fn xml_writes_cobertura_report() {
         </package>
       </packages>
     </coverage>
+    "#);
+}
+
+#[test]
+fn json_exports_pretty_report_with_contexts() {
+    let context = TestContext::new();
+    write_coverage(&context, Utf8Path::new(".karva/coverage/data.json"));
+
+    assert_cmd_snapshot!(context.coverage("json"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    ");
+    assert!(!context.read_file("coverage.json").contains('\n'));
+
+    assert_cmd_snapshot!(
+        context
+            .coverage("json")
+            .args(["--pretty-print", "--show-contexts"]),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    "
+    );
+    insta::assert_snapshot!(context.read_file("coverage.json"), @r#"
+    {
+      "meta": {
+        "format": 2,
+        "version": "karva",
+        "show_contexts": true
+      },
+      "files": {
+        "src/app.py": {
+          "executed_lines": [
+            1
+          ],
+          "summary": {
+            "covered_lines": 1,
+            "num_statements": 2,
+            "percent_covered": 50.0,
+            "missing_lines": [
+              2
+            ],
+            "excluded_lines": []
+          },
+          "missing_lines": [
+            2
+          ],
+          "excluded_lines": [],
+          "contexts": {
+            "1": [
+              "test_example"
+            ]
+          }
+        }
+      },
+      "totals": {
+        "covered_lines": 1,
+        "num_statements": 2,
+        "percent_covered": 50.0
+      }
+    }
     "#);
 }
 

@@ -102,6 +102,16 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
             let output = absolute(&xml.output, project.cwd());
             analysis.write_cobertura_xml(&output)?
         }
+        CoverageAction::Json(json) => {
+            let output = absolute(&json.output, project.cwd());
+            analysis.write_json_with_options(
+                &output,
+                &karva_coverage::JsonReportOptions {
+                    pretty_print: json.pretty_print,
+                    show_contexts: json.show_contexts,
+                },
+            )?
+        }
     };
     if let Some(threshold) = settings.fail_under
         && total < threshold

@@ -116,6 +116,16 @@ Pass `--cov-context=test` with JSON reports to include a `contexts` map from exe
 karva test --cov=src --cov-context=test --cov-report=json
 ```
 
+Persisted native coverage data can be exported independently. Output is compact by default:
+
+```bash
+uv run karva coverage json
+uv run karva coverage json --output build/coverage.json --pretty-print
+uv run karva coverage json --show-contexts
+```
+
+Exported JSON is separate from Karva's native artifact. `meta.format` versions its documented schema; breaking field or semantic changes increment that number, while consumers must tolerate additive fields within a format version. Files contain executed, missing, and excluded lines, optional contexts, branch arcs when collected, and per-file summaries. `totals` contains aggregate line and branch metrics.
+
 `--cov-report=html[:DIR]` writes a simple browsable HTML report. If `DIR` is omitted, karva writes `htmlcov/` in the project root:
 
 ```bash

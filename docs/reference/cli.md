@@ -365,6 +365,7 @@ karva coverage [OPTIONS] <COMMAND>
 <dl class="cli-reference"><dt><a href="#karva-coverage-report"><code>karva coverage report</code></a></dt><dd><p>Print the compact terminal coverage report</p></dd>
 <dt><a href="#karva-coverage-html"><code>karva coverage html</code></a></dt><dd><p>Generate a navigable annotated HTML coverage report</p></dd>
 <dt><a href="#karva-coverage-xml"><code>karva coverage xml</code></a></dt><dd><p>Generate a Cobertura-compatible XML coverage report</p></dd>
+<dt><a href="#karva-coverage-json"><code>karva coverage json</code></a></dt><dd><p>Export documented JSON coverage data</p></dd>
 <dt><a href="#karva-coverage-help"><code>karva coverage help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
 </dl>
 
@@ -471,6 +472,32 @@ karva coverage xml [OPTIONS]
 <p>&#91;default: coverage.xml&#93;</p></dd><dt id="karva-coverage-xml--precision"><a href="#karva-coverage-xml--precision"><code>--precision</code></a> <i>n</i></dt><dd><p>Decimal places shown in coverage percentages</p>
 </dd><dt id="karva-coverage-xml--profile"><a href="#karva-coverage-xml--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to resolve</p>
 <p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd></dl>
+
+### karva coverage json
+
+Export documented JSON coverage data
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva coverage json [OPTIONS]
+```
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-coverage-json--config-file"><a href="#karva-coverage-json--config-file"><code>--config-file</code></a> <i>path</i></dt><dd><p>The path to a <code>karva.toml</code> file to use for configuration</p>
+<p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-coverage-json--contexts"><a href="#karva-coverage-json--contexts"><code>--contexts</code></a> <i>regex</i></dt><dd><p>Include execution attributed to a matching context regular expression</p>
+</dd><dt id="karva-coverage-json--data-file"><a href="#karva-coverage-json--data-file"><code>--data-file</code></a> <i>path</i></dt><dd><p>Native coverage artifact path, relative to the project root</p>
+</dd><dt id="karva-coverage-json--fail-under"><a href="#karva-coverage-json--fail-under"><code>--fail-under</code></a> <i>percent</i></dt><dd><p>Fail when total coverage is below this percentage</p>
+</dd><dt id="karva-coverage-json--help"><a href="#karva-coverage-json--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd><dt id="karva-coverage-json--include"><a href="#karva-coverage-json--include"><code>--include</code></a> <i>glob</i></dt><dd><p>Include only report paths matching this glob</p>
+</dd><dt id="karva-coverage-json--omit"><a href="#karva-coverage-json--omit"><code>--omit</code></a> <i>glob</i></dt><dd><p>Exclude report paths matching this glob after inclusion</p>
+</dd><dt id="karva-coverage-json--output"><a href="#karva-coverage-json--output"><code>--output</code></a> <i>path</i></dt><dd><p>Path receiving the JSON report</p>
+<p>&#91;default: coverage.json&#93;</p></dd><dt id="karva-coverage-json--precision"><a href="#karva-coverage-json--precision"><code>--precision</code></a> <i>n</i></dt><dd><p>Decimal places shown in coverage percentages</p>
+</dd><dt id="karva-coverage-json--pretty-print"><a href="#karva-coverage-json--pretty-print"><code>--pretty-print</code></a></dt><dd><p>Format output with indentation and line breaks</p>
+</dd><dt id="karva-coverage-json--profile"><a href="#karva-coverage-json--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to resolve</p>
+<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd><dt id="karva-coverage-json--show-contexts"><a href="#karva-coverage-json--show-contexts"><code>--show-contexts</code></a></dt><dd><p>Include per-line execution contexts</p>
+</dd></dl>
 
 ### karva coverage help
 
