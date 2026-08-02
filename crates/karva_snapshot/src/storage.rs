@@ -68,6 +68,12 @@ pub fn write_pending_snapshot(snap_path: &Utf8Path, snapshot: &SnapshotFile) -> 
 }
 
 fn write_snapshot_file(path: &Utf8Path, snapshot: &SnapshotFile) -> io::Result<()> {
+    let content = snapshot.serialize();
+    write_file_atomically(path, content.as_bytes())
+}
+
+/// Replaces a file only after its complete contents have been written beside it.
+pub(crate) fn write_file_atomically(path: &Utf8Path, content: &[u8]) -> io::Result<()> {
     let parent = path
         .parent()
         .filter(|parent| !parent.as_str().is_empty())
@@ -75,7 +81,7 @@ fn write_snapshot_file(path: &Utf8Path, snapshot: &SnapshotFile) -> io::Result<(
     fs::create_dir_all(parent)?;
 
     let mut temp = NamedTempFile::new_in(parent)?;
-    temp.write_all(snapshot.serialize().as_bytes())?;
+    temp.write_all(content)?;
     temp.flush()?;
     temp.persist(path.as_std_path()).map_err(|err| err.error)?;
     Ok(())
