@@ -191,7 +191,12 @@ impl<'a> Iterator for TestVariantIterator<'a> {
 
         let mut params = param_args.values;
         let mut fixture_params = HashMap::new();
-        for indirect_name in &param_args.indirect {
+        for indirect_name in param_args
+            .indirect
+            .as_deref()
+            .into_iter()
+            .flat_map(|indirect| &indirect.names)
+        {
             let fixture_name = self
                 .fixture_plan
                 .dynamic_fixture(indirect_name)
@@ -203,8 +208,9 @@ impl<'a> Iterator for TestVariantIterator<'a> {
                     FixtureParameter {
                         value,
                         index: param_args
-                            .indices
-                            .get(indirect_name)
+                            .indirect
+                            .as_deref()
+                            .and_then(|indirect| indirect.indices.get(indirect_name))
                             .copied()
                             .unwrap_or_default(),
                     },

@@ -61,7 +61,7 @@ impl PackageRunner<'_, '_> {
             Rc::clone(&fixture_plan),
             Rc::clone(&self.fixture_cache),
             Rc::clone(&self.finalizer_cache),
-            Rc::new(HashMap::new()),
+            None,
             None,
         ));
 
@@ -155,11 +155,12 @@ impl PackageRunner<'_, '_> {
         } else {
             None
         };
+        let fixture_params = (!fixture_params.is_empty()).then(|| Rc::new(fixture_params));
         let executor = Rc::new(FixtureExecutor::new(
             Rc::clone(fixture_plan),
             Rc::clone(&self.fixture_cache),
             Rc::clone(&self.finalizer_cache),
-            Rc::new(fixture_params),
+            fixture_params,
             request_context,
         ));
 
@@ -260,7 +261,7 @@ struct FixtureExecutor {
     plan: Rc<FixturePlan>,
     fixture_cache: Rc<RefCell<FixtureCache>>,
     finalizer_cache: Rc<RefCell<FinalizerCache>>,
-    fixture_params: Rc<HashMap<String, FixtureParameter>>,
+    fixture_params: Option<Rc<HashMap<String, FixtureParameter>>>,
     request_context: Option<Rc<RequestContext>>,
     running: RefCell<Vec<FixtureId>>,
 }
@@ -270,7 +271,7 @@ impl FixtureExecutor {
         plan: Rc<FixturePlan>,
         fixture_cache: Rc<RefCell<FixtureCache>>,
         finalizer_cache: Rc<RefCell<FinalizerCache>>,
-        fixture_params: Rc<HashMap<String, FixtureParameter>>,
+        fixture_params: Option<Rc<HashMap<String, FixtureParameter>>>,
         request_context: Option<Rc<RequestContext>>,
     ) -> Self {
         Self {
@@ -291,6 +292,10 @@ impl FixtureExecutor {
         (!parameters.is_empty()).then_some(FixtureCacheKey { parameters })
     }
 
+    fn fixture_parameter(&self, name: &str) -> Option<&FixtureParameter> {
+        self.fixture_params.as_deref()?.get(name)
+    }
+
     fn collect_parameters(
         &self,
         py: Python<'_>,
@@ -303,7 +308,7 @@ impl FixtureExecutor {
         }
         let fixture = self.plan.fixture(fixture_id);
         let name = fixture.name().to_string();
-        if let Some(parameter) = self.fixture_params.get(&name) {
+        if let Some(parameter) = self.fixture_parameter(&name) {
             parameters.push((name, parameter.value.clone_ref(py)));
         }
         for dependency in fixture.dependencies() {
@@ -476,7 +481,7 @@ impl FixtureExecutor {
             ));
         };
         let fixture = self.plan.fixture(fixture_id);
-        let parameter = self.fixture_params.get(&fixture.name().to_string());
+        let parameter = self.fixture_parameter(&fixture.name().to_string());
         let runtime = self.request_runtime(
             fixture.scope(),
             fixture.package_owner().to_path_buf(),
@@ -586,9 +591,9 @@ impl FixtureExecutor {
             )));
         }
         if fixture.parameters().is_some()
-            && !self
-                .fixture_params
-                .contains_key(&fixture.name().to_string())
+            && self
+                .fixture_parameter(&fixture.name().to_string())
+                .is_none()
         {
             return Err(RequestFixtureError::Lookup(format!(
                 "requested parametrized fixture {name:?} has no parameter for this test"

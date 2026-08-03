@@ -403,17 +403,24 @@ pub struct ParametrizationArgs {
     /// Mapping of parameter name to its value.
     pub(crate) values: HashMap<String, Arc<Py<PyAny>>>,
 
-    /// Parameter names whose values must be passed through a fixture request.
-    pub(crate) indirect: HashSet<String>,
-
-    /// Zero-based source index for each indirect parameter.
-    pub(crate) indices: HashMap<String, usize>,
+    /// Metadata allocated only when values must pass through fixture requests.
+    pub(crate) indirect: Option<Box<IndirectParameters>>,
 
     /// Combined tags from all parameter sets.
     pub(crate) tags: Tags,
 
     id: String,
     has_explicit_id: bool,
+}
+
+/// Names and source indices for one indirect parametrization case.
+#[derive(Debug, Clone, Default)]
+pub struct IndirectParameters {
+    /// Parameter names routed into fixture requests.
+    pub names: HashSet<String>,
+
+    /// Zero-based source case for each routed parameter.
+    pub indices: HashMap<String, usize>,
 }
 
 impl ParametrizationArgs {
@@ -426,8 +433,10 @@ impl ParametrizationArgs {
             .collect();
         Self {
             values,
-            indirect: std::iter::once(name.clone()).collect(),
-            indices: std::iter::once((name, index)).collect(),
+            indirect: Some(Box::new(IndirectParameters {
+                names: std::iter::once(name.clone()).collect(),
+                indices: std::iter::once((name, index)).collect(),
+            })),
             tags: parametrization.tags.clone(),
             id: parametrization
                 .id
@@ -439,8 +448,11 @@ impl ParametrizationArgs {
 
     pub(crate) fn extend(&mut self, other: Self) {
         self.values.extend(other.values);
-        self.indirect.extend(other.indirect);
-        self.indices.extend(other.indices);
+        if let Some(other_indirect) = other.indirect {
+            let indirect = self.indirect.get_or_insert_with(Default::default);
+            indirect.names.extend(other_indirect.names);
+            indirect.indices.extend(other_indirect.indices);
+        }
         self.tags.extend(&other.tags);
         if !self.id.is_empty() && !other.id.is_empty() {
             self.id.push('-');
@@ -473,7 +485,8 @@ impl ParameterPlan {
         self.dimensions
             .iter()
             .flatten()
-            .flat_map(|args| args.indirect.iter().map(String::as_str))
+            .filter_map(|args| args.indirect.as_deref())
+            .flat_map(|indirect| indirect.names.iter().map(String::as_str))
     }
 }
 
@@ -928,12 +941,16 @@ impl ParametrizeTag {
             }
             let current_param_args = ParametrizationArgs {
                 values: current_parameratisation,
-                indirect: self.indirect.clone(),
-                indices: self
-                    .indirect
-                    .iter()
-                    .map(|name| (name.clone(), param_args.len()))
-                    .collect(),
+                indirect: (!self.indirect.is_empty()).then(|| {
+                    Box::new(IndirectParameters {
+                        names: self.indirect.clone(),
+                        indices: self
+                            .indirect
+                            .iter()
+                            .map(|name| (name.clone(), param_args.len()))
+                            .collect(),
+                    })
+                }),
                 tags: parametrization.tags().clone(),
                 id: parametrization
                     .id

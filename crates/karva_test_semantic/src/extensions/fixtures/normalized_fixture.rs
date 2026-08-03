@@ -29,7 +29,13 @@ impl FixtureId {
 #[derive(Debug)]
 pub struct FixturePlan {
     fixtures: Vec<NormalizedFixture>,
-    dynamic_fixtures: std::collections::HashMap<String, Vec<FixtureId>>,
+    dynamic: Option<Box<DynamicFixturePlan>>,
+}
+
+/// Runtime-only fixture lookup data omitted from ordinary test plans.
+#[derive(Debug)]
+struct DynamicFixturePlan {
+    fixtures: std::collections::HashMap<String, Vec<FixtureId>>,
     variant_fixture_count: usize,
 }
 
@@ -39,11 +45,14 @@ impl FixturePlan {
         dynamic_fixtures: std::collections::HashMap<String, Vec<FixtureId>>,
         variant_fixture_count: usize,
     ) -> Self {
-        Self {
-            fixtures,
-            dynamic_fixtures,
-            variant_fixture_count,
-        }
+        let dynamic = (variant_fixture_count < fixtures.len() || !dynamic_fixtures.is_empty())
+            .then(|| {
+                Box::new(DynamicFixturePlan {
+                    fixtures: dynamic_fixtures,
+                    variant_fixture_count,
+                })
+            });
+        Self { fixtures, dynamic }
     }
 
     pub(crate) fn fixture(&self, id: FixtureId) -> &NormalizedFixture {
@@ -51,7 +60,7 @@ impl FixturePlan {
     }
 
     pub(crate) fn dynamic_fixture(&self, name: &str) -> Option<FixtureId> {
-        self.dynamic_fixtures.get(name)?.first().copied()
+        self.dynamic.as_ref()?.fixtures.get(name)?.first().copied()
     }
 
     /// Resolves a dynamic name, advancing through an overridden fixture chain.
@@ -60,7 +69,7 @@ impl FixturePlan {
         name: &str,
         requesting_fixture: Option<FixtureId>,
     ) -> Option<FixtureId> {
-        let fixtures = self.dynamic_fixtures.get(name)?;
+        let fixtures = self.dynamic.as_ref()?.fixtures.get(name)?;
         let Some(requesting_fixture) = requesting_fixture else {
             return fixtures.first().copied();
         };
@@ -74,21 +83,27 @@ impl FixturePlan {
         }
     }
 
+    fn variant_fixture_count(&self) -> usize {
+        self.dynamic
+            .as_ref()
+            .map_or(self.fixtures.len(), |dynamic| dynamic.variant_fixture_count)
+    }
+
     pub(crate) fn variant_fixtures(&self) -> impl Iterator<Item = (FixtureId, &NormalizedFixture)> {
-        self.fixtures[..self.variant_fixture_count]
+        self.fixtures[..self.variant_fixture_count()]
             .iter()
             .enumerate()
             .map(|(index, fixture)| (FixtureId::new(index), fixture))
     }
 
     pub(crate) fn fixture_names(&self) -> impl Iterator<Item = &str> {
-        self.fixtures[..self.variant_fixture_count]
+        self.fixtures[..self.variant_fixture_count()]
             .iter()
             .map(NormalizedFixture::function_name)
     }
 
     pub(crate) fn uses_request(&self) -> bool {
-        self.fixtures[..self.variant_fixture_count]
+        self.fixtures[..self.variant_fixture_count()]
             .iter()
             .any(NormalizedFixture::requests_request)
     }
@@ -130,7 +145,7 @@ pub struct NormalizedFixture {
     pub(crate) py_function: Py<PyAny>,
 
     /// Parameter values declared by the fixture decorator.
-    pub(crate) parameters: Option<Vec<Parametrization>>,
+    pub(crate) parameters: Option<Box<[Parametrization]>>,
 
     /// Whether this fixture's cache identity depends on fixture parameters.
     pub(crate) is_parameterized: bool,

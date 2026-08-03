@@ -231,7 +231,9 @@ impl<'a> FixturePlanCompiler<'a> {
             let required_fixtures: Vec<String> = fixture.required_fixtures(py);
             self.get_dependent_fixtures(py, Some(fixture), &required_fixtures, path)
         })?;
-        let parameters = fixture.parameters().map(<[_]>::to_vec);
+        let parameters = fixture
+            .parameters()
+            .map(|parameters| parameters.to_vec().into_boxed_slice());
         let is_parameterized = parameters.is_some()
             || dependent_fixtures
                 .iter()
