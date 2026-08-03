@@ -153,6 +153,20 @@ uv run karva coverage lcov --output build/coverage.lcov
 
 LCOV `SF`, `DA`, `LF`, `LH`, `BRDA`, `BRF`, and `BRH` records are a supported external contract. Source paths are portable project-relative paths after configured path aliases are applied.
 
+### CI integrations
+
+Prefer Cobertura XML unless an integration specifically expects LCOV. Both exports use repository-relative source paths; run upload and analysis tools from the repository root.
+
+| Integration | Karva export | Configuration |
+| --- | --- | --- |
+| [Codecov](https://docs.codecov.com/docs/supported-report-formats) | Cobertura XML | Upload `coverage.xml`; Codecov also accepts LCOV. |
+| [Coveralls](https://github.com/coverallsapp/coverage-reporter#supported-coverage-report-formats) | LCOV | Run `coveralls report coverage.lcov --format=lcov`. |
+| [GitLab coverage visualization](https://docs.gitlab.com/ci/testing/code_coverage/cobertura/) | Cobertura XML | Upload `coverage.xml` as a `cobertura` coverage report artifact. |
+| [SonarQube Python coverage](https://docs.sonarsource.com/sonarqube-server/analyzing-source-code/test-coverage/python-test-coverage) | Cobertura XML | Set `sonar.python.coverage.reportPaths=coverage.xml`. |
+| [diff-cover](https://github.com/Bachmann1234/diff-cover#readme) | Cobertura XML | Run `diff-cover coverage.xml` from repository root. |
+
+Cobertura `<source>` is `.` and each `<class filename>` is repository-relative. LCOV `SF` paths are also repository-relative. This keeps reports portable when CI generates and consumes artifacts in different checkout directories.
+
 Combine native artifacts from CI shards before reporting:
 
 ```bash

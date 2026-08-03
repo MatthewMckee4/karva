@@ -1212,6 +1212,7 @@ dependencies = [
  "fs-err",
  "globset",
  "insta",
+ "lcov",
  "pyo3",
  "regex",
  "ruff_python_ast",
@@ -1478,6 +1479,15 @@ name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+
+[[package]]
+name = "lcov"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dab4f1d99e0dd8008da0d3452bb71ce08e1645465c2accc124bcb599c6b3143"
+dependencies = [
+ "thiserror",
+]
 
 [[package]]
 name = "leb128fmt"

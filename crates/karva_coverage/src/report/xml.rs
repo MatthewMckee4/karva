@@ -40,8 +40,6 @@ pub(super) fn build_cobertura_xml(
         .duration_since(UNIX_EPOCH)
         .with_context(|| format!("coverage root modification time is before UNIX epoch: {cwd}"))?
         .as_secs();
-    let source_root = cwd_real.to_string_lossy().trim_end_matches('/').to_string();
-
     let mut xml = String::new();
     xml.push_str("<?xml version=\"1.0\" ?>\n");
     writeln!(
@@ -49,7 +47,7 @@ pub(super) fn build_cobertura_xml(
         "<coverage version=\"1.0\" timestamp=\"{timestamp}\" lines-valid=\"{total_stmts}\" lines-covered=\"{total_hit}\" line-rate=\"{line_rate:.4}\" branches-covered=\"{total_branch_hit}\" branches-valid=\"{total_branches}\" branch-rate=\"{branch_rate:.4}\" complexity=\"0.0\">"
     )?;
     xml.push_str("  <sources>\n");
-    writeln!(xml, "    <source>{}</source>", escape_xml(&source_root))?;
+    xml.push_str("    <source>.</source>\n");
     xml.push_str("  </sources>\n");
     xml.push_str("  <packages>\n");
     writeln!(
@@ -121,8 +119,11 @@ fn branch_lines(row: &FileRow) -> BTreeMap<u32, (u32, u32)> {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::path::Path;
 
     use camino::Utf8Path;
+    use pyo3::prelude::*;
+    use pyo3::types::PyAnyMethods;
 
     use super::{branch_lines, build_cobertura_xml};
     use crate::data::BranchArc;
@@ -171,5 +172,94 @@ mod tests {
         };
 
         assert_eq!(branch_lines(&row), BTreeMap::from([(1, (2, 2))]));
+    }
+
+    #[test]
+    fn standard_xml_parser_accepts_portable_branch_report() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let cwd = Utf8Path::from_path(directory.path()).expect("UTF-8 temporary path");
+        let taken = BranchArc { from: 2, to: 3 };
+        let missing = BranchArc { from: 2, to: 5 };
+        let row = FileRow {
+            name: "src/app.py".to_owned(),
+            absolute_name: "/workspace/src/app.py".to_owned(),
+            stmts: 3,
+            hit: 2,
+            miss: 1,
+            missing: "3".to_owned(),
+            executable: vec![1, 2, 3],
+            excluded: vec![4],
+            executed: vec![1, 2],
+            contexts: BTreeMap::new(),
+            branches_enabled: true,
+            branches: 2,
+            branch_hit: 1,
+            branch_miss: 1,
+            branch_partial: 1,
+            branch_possible: vec![taken, missing],
+            branch_executed: vec![taken],
+            branch_missing: vec![missing],
+            arc_contexts: BTreeMap::new(),
+        };
+        let uncovered = FileRow {
+            name: "src/uncovered.py".to_owned(),
+            absolute_name: "/workspace/src/uncovered.py".to_owned(),
+            stmts: 1,
+            hit: 0,
+            miss: 1,
+            missing: "1".to_owned(),
+            executable: vec![1],
+            excluded: Vec::new(),
+            executed: Vec::new(),
+            contexts: BTreeMap::new(),
+            branches_enabled: true,
+            branches: 0,
+            branch_hit: 0,
+            branch_miss: 0,
+            branch_partial: 0,
+            branch_possible: Vec::new(),
+            branch_executed: Vec::new(),
+            branch_missing: Vec::new(),
+            arc_contexts: BTreeMap::new(),
+        };
+        let report = build_cobertura_xml(cwd, Path::new("/workspace"), &[row, uncovered])
+            .expect("build Cobertura report");
+        Python::initialize();
+        Python::attach(|py| -> PyResult<()> {
+            let root = py
+                .import("xml.etree.ElementTree")?
+                .call_method1("fromstring", (&report,))?;
+            assert_eq!(root.getattr("tag")?.extract::<String>()?, "coverage");
+            assert_eq!(
+                root.call_method1("findtext", ("./sources/source",))?
+                    .extract::<String>()?,
+                "."
+            );
+            let mut filenames = Vec::new();
+            for class in root.call_method1("findall", (".//class",))?.try_iter()? {
+                filenames.push(
+                    class?
+                        .getattr("attrib")?
+                        .get_item("filename")?
+                        .extract::<String>()?,
+                );
+            }
+            assert_eq!(filenames, ["src/app.py", "src/uncovered.py"]);
+            let branch = root.call_method1("find", (".//line[@branch='true']",))?;
+            assert!(!branch.is_none());
+            assert_eq!(
+                branch
+                    .getattr("attrib")?
+                    .get_item("condition-coverage")?
+                    .extract::<String>()?,
+                "50% (1/2)"
+            );
+            assert!(
+                root.call_method1("find", (".//line[@number='4']",))?
+                    .is_none()
+            );
+            Ok(())
+        })
+        .expect("standard XML parser accepts report");
     }
 }

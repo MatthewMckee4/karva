@@ -979,7 +979,7 @@ def test_only_covered():
     <?xml version="1.0" ?>
     <coverage version="1.0" timestamp="[TIMESTAMP]" lines-valid="6" lines-covered="5" line-rate="0.8333" branches-covered="0" branches-valid="0" branch-rate="0.0000" complexity="0.0">
       <sources>
-        <source><temp_dir>/</source>
+        <source>.</source>
       </sources>
       <packages>
         <package name="." line-rate="0.8333" branch-rate="0.0000" complexity="0.0">
@@ -1049,7 +1049,7 @@ def test_only_covered():
     <?xml version="1.0" ?>
     <coverage version="1.0" timestamp="[TIMESTAMP]" lines-valid="6" lines-covered="5" line-rate="0.8333" branches-covered="0" branches-valid="0" branch-rate="0.0000" complexity="0.0">
       <sources>
-        <source><temp_dir>/</source>
+        <source>.</source>
       </sources>
       <packages>
         <package name="." line-rate="0.8333" branch-rate="0.0000" complexity="0.0">

@@ -75,7 +75,7 @@ mod tests {
             miss: 1,
             missing: "2".to_owned(),
             executable: vec![1, 2],
-            excluded: Vec::new(),
+            excluded: vec![3],
             executed: vec![1],
             contexts: BTreeMap::new(),
             branches_enabled: true,
@@ -88,8 +88,31 @@ mod tests {
             branch_missing: vec![missing],
             arc_contexts: BTreeMap::new(),
         };
+        let uncovered = FileRow {
+            name: "src/uncovered.py".to_owned(),
+            absolute_name: "/project/src/uncovered.py".to_owned(),
+            stmts: 1,
+            hit: 0,
+            miss: 1,
+            missing: "1".to_owned(),
+            executable: vec![1],
+            excluded: Vec::new(),
+            executed: Vec::new(),
+            contexts: BTreeMap::new(),
+            branches_enabled: true,
+            branches: 0,
+            branch_hit: 0,
+            branch_miss: 0,
+            branch_partial: 0,
+            branch_possible: Vec::new(),
+            branch_executed: Vec::new(),
+            branch_missing: Vec::new(),
+            arc_contexts: BTreeMap::new(),
+        };
 
-        insta::assert_snapshot!(build_lcov_report(&[row]).expect("build LCOV report"), @r"
+        let report = build_lcov_report(&[row, uncovered]).expect("build LCOV report");
+
+        insta::assert_snapshot!(report, @r"
         SF:src/app.py
         DA:1,1
         DA:2,0
@@ -100,7 +123,76 @@ mod tests {
         BRF:2
         BRH:1
         end_of_record
+        SF:src/uncovered.py
+        DA:1,0
+        LF:1
+        LH:0
+        end_of_record
         ");
+        let records = lcov::Reader::new(report.as_bytes())
+            .collect::<Result<Vec<_>, _>>()
+            .expect("standard LCOV parser accepts report");
+        insta::assert_debug_snapshot!(records, @r#"
+        [
+            SourceFile {
+                path: "src/app.py",
+            },
+            LineData {
+                line: 1,
+                count: 1,
+                checksum: None,
+            },
+            LineData {
+                line: 2,
+                count: 0,
+                checksum: None,
+            },
+            LinesFound {
+                found: 2,
+            },
+            LinesHit {
+                hit: 1,
+            },
+            BranchData {
+                line: 1,
+                block: 0,
+                branch: 0,
+                taken: Some(
+                    1,
+                ),
+            },
+            BranchData {
+                line: 1,
+                block: 0,
+                branch: 1,
+                taken: Some(
+                    0,
+                ),
+            },
+            BranchesFound {
+                found: 2,
+            },
+            BranchesHit {
+                hit: 1,
+            },
+            EndOfRecord,
+            SourceFile {
+                path: "src/uncovered.py",
+            },
+            LineData {
+                line: 1,
+                count: 0,
+                checksum: None,
+            },
+            LinesFound {
+                found: 1,
+            },
+            LinesHit {
+                hit: 0,
+            },
+            EndOfRecord,
+        ]
+        "#);
     }
 
     #[test]
