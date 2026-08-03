@@ -1,16 +1,11 @@
-use std::process::{Command, Output};
-use std::sync::LazyLock;
+use std::process::Output;
 
-use insta::assert_json_snapshot;
-use regex::Regex;
-use rstest::rstest;
-use serde_json::{Value, json};
+use insta::assert_snapshot;
+use serde_json::Value;
 
 use crate::common::TestContext;
 
 const SEED: u64 = 170_938;
-static DURATION: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\[\s*\d+\.\d+s\]").expect("valid duration regex"));
 const RECORDER: &str = r#"
 import os
 
@@ -26,7 +21,7 @@ struct ShuffledRun {
     orders: Vec<Vec<String>>,
 }
 
-fn snapshot(output: &Output, worker_orders: &[Vec<String>]) -> Value {
+fn snapshot(output: &Output, worker_orders: &[Vec<String>]) -> String {
     let stdout = String::from_utf8_lossy(&output.stdout)
         .lines()
         .map(|line| {
@@ -35,17 +30,30 @@ fn snapshot(output: &Output, worker_orders: &[Vec<String>]) -> Value {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    let stdout = DURATION.replace_all(&stdout, "[TIME]");
-    let mut snapshot = json!({
-        "success": output.status.success(),
-        "exit_code": output.status.code(),
-        "stdout": stdout,
-        "stderr": String::from_utf8_lossy(&output.stderr),
-    });
-    if !worker_orders.is_empty() {
-        snapshot["worker_orders"] = json!(worker_orders);
+    let output = format!(
+        "success: {}\nexit_code: {}\n----- stdout -----\n{stdout}\n----- stderr -----\n{}",
+        output.status.success(),
+        output.status.code().map_or(-1, |code| code),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let orders = worker_orders
+        .iter()
+        .enumerate()
+        .map(|(worker, orders)| format!("worker {worker}: {orders:?}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    if orders.is_empty() {
+        output
+    } else {
+        format!("{output}\n----- worker orders -----\n{orders}")
     }
-    snapshot
+}
+
+fn snapshots(runs: &[(&str, &Output, &[Vec<String>])]) -> String {
+    runs.iter()
+        .map(|(label, output, orders)| format!("{label}:\n{}", snapshot(output, orders)))
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 fn recording_tests(names: &[&str]) -> String {
@@ -57,35 +65,15 @@ fn recording_tests(names: &[&str]) -> String {
     format!("{RECORDER}\n{tests}\n")
 }
 
-fn clear_orders(context: &TestContext, workers: usize) {
-    for worker in 0..workers {
-        context.write_file(format!("order-{worker}.txt"), "");
-    }
-}
-
-fn read_orders(context: &TestContext, workers: usize) -> Vec<Vec<String>> {
-    (0..workers)
-        .map(|worker| {
-            context
-                .read_file(format!("order-{worker}.txt"))
-                .lines()
-                .map(str::to_string)
-                .collect()
-        })
-        .collect()
-}
-
-fn run(mut command: Command) -> Output {
-    command.output().expect("run Karva")
-}
-
 fn run_shuffled(
     context: &TestContext,
     workers: usize,
     seed: Option<u64>,
     args: &[&str],
 ) -> ShuffledRun {
-    clear_orders(context, workers);
+    for worker in 0..workers {
+        context.write_file(format!("order-{worker}.txt"), "");
+    }
     let mut command = if workers == 1 {
         context.command_no_parallel()
     } else {
@@ -99,7 +87,7 @@ fn run_shuffled(
     }
     command.args(args);
 
-    let output = run(command);
+    let output = command.output().expect("run shuffled tests");
     let actual_seed = String::from_utf8_lossy(&output.stdout)
         .lines()
         .find_map(|line| line.strip_prefix("Random seed: "))
@@ -110,10 +98,19 @@ fn run_shuffled(
         assert_eq!(actual_seed, seed);
     }
 
+    let orders = (0..workers)
+        .map(|worker| {
+            context
+                .read_file(format!("order-{worker}.txt"))
+                .lines()
+                .map(str::to_string)
+                .collect()
+        })
+        .collect();
     ShuffledRun {
         output,
         seed: actual_seed,
-        orders: read_orders(context, workers),
+        orders,
     }
 }
 
@@ -127,16 +124,32 @@ fn generated_seed_reproduces_single_worker_order() {
     let first = run_shuffled(&context, 1, None, &[]);
     let repeated = run_shuffled(&context, 1, Some(first.seed), &[]);
 
-    let first_output = snapshot(&first.output, &[]);
-    assert_eq!(first_output, snapshot(&repeated.output, &[]));
-    assert_json_snapshot!(first_output, @r#"
-    {
-      "exit_code": 0,
-      "stderr": "",
-      "stdout": "Random seed: [SEED]\n────────────\n     Summary [TIME] 6 tests run: 6 passed, 0 skipped",
-      "success": true
-    }
-    "#);
+    assert_snapshot!(
+        snapshots(&[
+            ("generated", &first.output, &[]),
+            ("replayed", &repeated.output, &[]),
+        ]),
+        @"
+    generated:
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Random seed: [SEED]
+    ────────────
+         Summary [TIME] 6 tests run: 6 passed, 0 skipped
+    ----- stderr -----
+
+
+    replayed:
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Random seed: [SEED]
+    ────────────
+         Summary [TIME] 6 tests run: 6 passed, 0 skipped
+    ----- stderr -----
+    "
+    );
     assert_eq!(first.orders, repeated.orders);
 }
 
@@ -150,32 +163,39 @@ fn parallel_worker_assignment_and_order_are_reproducible() {
     let first = run_shuffled(&context, 2, Some(SEED), &[]);
     let repeated = run_shuffled(&context, 2, Some(SEED), &[]);
 
-    let first_snapshot = snapshot(&first.output, &first.orders);
-    assert_eq!(first_snapshot, snapshot(&repeated.output, &repeated.orders));
-    assert_json_snapshot!(first_snapshot, @r#"
-    {
-      "exit_code": 0,
-      "stderr": "",
-      "stdout": "Random seed: [SEED]\n────────────\n     Summary [TIME] 10 tests run: 10 passed, 0 skipped",
-      "success": true,
-      "worker_orders": [
-        [
-          "d",
-          "e",
-          "h",
-          "i"
-        ],
-        [
-          "a",
-          "b",
-          "c",
-          "f",
-          "g",
-          "j"
-        ]
-      ]
-    }
-    "#);
+    assert_snapshot!(
+        snapshots(&[
+            ("first", &first.output, &first.orders),
+            ("replayed", &repeated.output, &repeated.orders),
+        ]),
+        @r#"
+    first:
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Random seed: [SEED]
+    ────────────
+         Summary [TIME] 10 tests run: 10 passed, 0 skipped
+    ----- stderr -----
+
+    ----- worker orders -----
+    worker 0: ["d", "e", "h", "i"]
+    worker 1: ["a", "b", "c", "f", "g", "j"]
+
+    replayed:
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Random seed: [SEED]
+    ────────────
+         Summary [TIME] 10 tests run: 10 passed, 0 skipped
+    ----- stderr -----
+
+    ----- worker orders -----
+    worker 0: ["d", "e", "h", "i"]
+    worker 1: ["a", "b", "c", "f", "g", "j"]
+    "#
+    );
 }
 
 #[test]
@@ -192,35 +212,35 @@ fn filtering_precedes_seeded_ordering() {
     );
     let selected = run_shuffled(&context, 1, Some(SEED), &[]);
 
-    assert_eq!(filtered.orders, selected.orders);
-    assert_json_snapshot!(
-        json!({
-            "filtered": snapshot(&filtered.output, &[]),
-            "selected": snapshot(&selected.output, &[]),
-            "worker_orders": filtered.orders,
-        }),
+    assert_snapshot!(
+        snapshots(&[
+            ("filtered", &filtered.output, &filtered.orders),
+            ("selected", &selected.output, &selected.orders),
+        ]),
         @r#"
-    {
-      "filtered": {
-        "exit_code": 0,
-        "stderr": "",
-        "stdout": "Random seed: [SEED]\n────────────\n     Summary [TIME] 6 tests run: 3 passed, 3 skipped",
-        "success": true
-      },
-      "selected": {
-        "exit_code": 0,
-        "stderr": "",
-        "stdout": "Random seed: [SEED]\n────────────\n     Summary [TIME] 3 tests run: 3 passed, 0 skipped",
-        "success": true
-      },
-      "worker_orders": [
-        [
-          "keep_a",
-          "keep_b",
-          "keep_c"
-        ]
-      ]
-    }
+    filtered:
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Random seed: [SEED]
+    ────────────
+         Summary [TIME] 6 tests run: 3 passed, 3 skipped
+    ----- stderr -----
+
+    ----- worker orders -----
+    worker 0: ["keep_a", "keep_b", "keep_c"]
+
+    selected:
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Random seed: [SEED]
+    ────────────
+         Summary [TIME] 3 tests run: 3 passed, 0 skipped
+    ----- stderr -----
+
+    ----- worker orders -----
+    worker 0: ["keep_a", "keep_b", "keep_c"]
     "#
     );
 }
@@ -234,20 +254,17 @@ fn partition_selection_precedes_seeded_ordering() {
 
     let run = run_shuffled(&context, 1, Some(170_939), &["--partition=slice:2/2"]);
 
-    assert_json_snapshot!(snapshot(&run.output, &run.orders), @r#"
-    {
-      "exit_code": 0,
-      "stderr": "",
-      "stdout": "Random seed: [SEED]\n────────────\n     Summary [TIME] 3 tests run: 3 passed, 0 skipped",
-      "success": true,
-      "worker_orders": [
-        [
-          "b",
-          "d",
-          "f"
-        ]
-      ]
-    }
+    assert_snapshot!(snapshot(&run.output, &run.orders), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Random seed: [SEED]
+    ────────────
+         Summary [TIME] 3 tests run: 3 passed, 0 skipped
+    ----- stderr -----
+
+    ----- worker orders -----
+    worker 0: ["b", "d", "f"]
     "#);
 }
 
@@ -272,26 +289,23 @@ def test_z(): _record("z")
 
     let run = run_shuffled(&context, 1, Some(SEED), &["--retry=1"]);
 
-    assert_json_snapshot!(snapshot(&run.output, &run.orders), @r#"
-    {
-      "exit_code": 0,
-      "stderr": "",
-      "stdout": "Random seed: [SEED]\n────────────\n     Summary [TIME] 3 tests run: 3 passed (1 flaky), 0 skipped\n   FLAKY 2/2 [TIME] test_order::test_flaky",
-      "success": true,
-      "worker_orders": [
-        [
-          "a",
-          "flaky:1",
-          "flaky:2",
-          "z"
-        ]
-      ]
-    }
+    assert_snapshot!(snapshot(&run.output, &run.orders), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Random seed: [SEED]
+    ────────────
+         Summary [TIME] 3 tests run: 3 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test_order::test_flaky
+    ----- stderr -----
+
+    ----- worker orders -----
+    worker 0: ["a", "flaky:1", "flaky:2", "z"]
     "#);
 }
 
-#[rstest]
-fn configuration_seed_is_written_to_report(#[values("json", "jsonl")] format: &str) {
+#[test]
+fn configuration_seed_is_written_to_json_and_jsonl_reports() {
     let context = TestContext::with_files([
         ("test_order.py", "def test_a(): pass"),
         (
@@ -307,43 +321,48 @@ status-level = "none"
         ),
     ]);
 
-    let result_path = format!("results.{format}");
-    let mut command = context.command_no_parallel();
-    command.arg(format!("--result-output={result_path}"));
-    if format == "jsonl" {
-        command.arg("--result-format=jsonl");
-    }
-    let output = run(command);
-    let report = context.read_file(result_path);
-    let random_seed = if format == "json" {
-        serde_json::from_str::<Value>(&report).expect("JSON report should parse")["random_seed"]
-            .clone()
-    } else {
-        report
-            .lines()
-            .map(|line| serde_json::from_str::<Value>(line).expect("JSONL record should parse"))
-            .find(|record| record["type"] == "run_finished")
-            .expect("run_finished record should exist")["random_seed"]
-            .clone()
-    };
+    let mut json_command = context.command_no_parallel();
+    json_command.arg("--result-output=results.json");
+    let json_output = json_command.output().expect("write JSON report");
+    let json: Value =
+        serde_json::from_str(&context.read_file("results.json")).expect("JSON report should parse");
 
-    insta::allow_duplicates! {
-        assert_json_snapshot!(
-            json!({
-                "output": snapshot(&output, &[]),
-                "random_seed": random_seed,
-            }),
-            @r#"
-        {
-          "output": {
-            "exit_code": 0,
-            "stderr": "",
-            "stdout": "Random seed: [SEED]\n────────────\n     Summary [TIME] 1 test run: 1 passed, 0 skipped",
-            "success": true
-          },
-          "random_seed": 170938
-        }
-        "#
-        );
-    }
+    let mut jsonl_command = context.command_no_parallel();
+    jsonl_command.args(["--result-output=results.jsonl", "--result-format=jsonl"]);
+    let jsonl_output = jsonl_command.output().expect("write JSONL report");
+    let finished: Value = context
+        .read_file("results.jsonl")
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("JSONL record should parse"))
+        .find(|record: &Value| record["type"] == "run_finished")
+        .expect("run_finished record should exist");
+
+    assert_snapshot!(
+        snapshots(&[
+            ("json", &json_output, &[]),
+            ("jsonl", &jsonl_output, &[]),
+        ]),
+        @"
+    json:
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Random seed: [SEED]
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+    ----- stderr -----
+
+
+    jsonl:
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Random seed: [SEED]
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+    ----- stderr -----
+    "
+    );
+    assert_eq!(json["random_seed"], SEED);
+    assert_eq!(finished["random_seed"], SEED);
 }

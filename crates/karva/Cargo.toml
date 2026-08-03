@@ -46,7 +46,7 @@ wild = { workspace = true }
 [dev-dependencies]
 directories = { workspace = true }
 dunce = { workspace = true }
-insta = { workspace = true, features = ["filters", "json"] }
+insta = { workspace = true, features = ["filters"] }
 insta-cmd = { workspace = true }
 regex = { workspace = true }
 rstest = { workspace = true }
