@@ -364,6 +364,7 @@ karva coverage [OPTIONS] <COMMAND>
 
 <dl class="cli-reference"><dt><a href="#karva-coverage-report"><code>karva coverage report</code></a></dt><dd><p>Print the compact terminal coverage report</p></dd>
 <dt><a href="#karva-coverage-html"><code>karva coverage html</code></a></dt><dd><p>Generate a navigable annotated HTML coverage report</p></dd>
+<dt><a href="#karva-coverage-xml"><code>karva coverage xml</code></a></dt><dd><p>Generate a Cobertura-compatible XML coverage report</p></dd>
 <dt><a href="#karva-coverage-help"><code>karva coverage help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
 </dl>
 
@@ -446,6 +447,30 @@ karva coverage html [OPTIONS]
 </dd><dt id="karva-coverage-html--skip-empty"><a href="#karva-coverage-html--skip-empty"><code>--skip-empty</code></a></dt><dd><p>Omit sources with no statements or branches from the index</p>
 </dd><dt id="karva-coverage-html--title"><a href="#karva-coverage-html--title"><code>--title</code></a> <i>title</i></dt><dd><p>Report title shown in the browser</p>
 <p>&#91;default: Coverage report&#93;</p></dd></dl>
+
+### karva coverage xml
+
+Generate a Cobertura-compatible XML coverage report
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva coverage xml [OPTIONS]
+```
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-coverage-xml--config-file"><a href="#karva-coverage-xml--config-file"><code>--config-file</code></a> <i>path</i></dt><dd><p>The path to a <code>karva.toml</code> file to use for configuration</p>
+<p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-coverage-xml--contexts"><a href="#karva-coverage-xml--contexts"><code>--contexts</code></a> <i>regex</i></dt><dd><p>Include execution attributed to a matching context regular expression</p>
+</dd><dt id="karva-coverage-xml--data-file"><a href="#karva-coverage-xml--data-file"><code>--data-file</code></a> <i>path</i></dt><dd><p>Native coverage artifact path, relative to the project root</p>
+</dd><dt id="karva-coverage-xml--fail-under"><a href="#karva-coverage-xml--fail-under"><code>--fail-under</code></a> <i>percent</i></dt><dd><p>Fail when total coverage is below this percentage</p>
+</dd><dt id="karva-coverage-xml--help"><a href="#karva-coverage-xml--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd><dt id="karva-coverage-xml--include"><a href="#karva-coverage-xml--include"><code>--include</code></a> <i>glob</i></dt><dd><p>Include only report paths matching this glob</p>
+</dd><dt id="karva-coverage-xml--omit"><a href="#karva-coverage-xml--omit"><code>--omit</code></a> <i>glob</i></dt><dd><p>Exclude report paths matching this glob after inclusion</p>
+</dd><dt id="karva-coverage-xml--output"><a href="#karva-coverage-xml--output"><code>--output</code></a> <i>path</i></dt><dd><p>Path receiving the XML report</p>
+<p>&#91;default: coverage.xml&#93;</p></dd><dt id="karva-coverage-xml--precision"><a href="#karva-coverage-xml--precision"><code>--precision</code></a> <i>n</i></dt><dd><p>Decimal places shown in coverage percentages</p>
+</dd><dt id="karva-coverage-xml--profile"><a href="#karva-coverage-xml--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to resolve</p>
+<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd></dl>
 
 ### karva coverage help
 

@@ -102,6 +102,17 @@ pub enum CoverageAction {
 
     /// Generate a navigable annotated HTML coverage report.
     Html(CoverageHtmlCommand),
+
+    /// Generate a Cobertura-compatible XML coverage report.
+    Xml(CoverageXmlCommand),
+}
+
+#[derive(Debug, Args)]
+/// Options specific to the Cobertura XML coverage report.
+pub struct CoverageXmlCommand {
+    /// Path receiving the XML report.
+    #[arg(long, value_name = "PATH", default_value = "coverage.xml")]
+    pub output: Utf8PathBuf,
 }
 
 #[derive(Debug, Args)]

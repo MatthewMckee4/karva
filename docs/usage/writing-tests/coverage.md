@@ -85,6 +85,15 @@ karva test --cov=src --cov-report=xml
 karva test --cov=src --cov-report=xml:build/coverage.xml
 ```
 
+Persisted native coverage data can produce the same report after the test run:
+
+```bash
+uv run karva coverage xml
+uv run karva coverage xml --output build/coverage.xml
+```
+
+Cobertura structure, line and branch totals, project-relative class filenames, and XML escaping are supported external contracts for CI consumers.
+
 Equivalent configuration:
 
 ```toml
