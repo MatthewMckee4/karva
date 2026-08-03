@@ -302,6 +302,40 @@ def test_fail():
 }
 
 #[test]
+fn test_no_cov_on_fail_skips_reports_but_saves_native_data() {
+    let context = TestContext::with_file(
+        "test_failing.py",
+        r"
+def helper():
+    return 1
+
+def test_fail():
+    assert helper() == 999
+",
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel()
+            .arg("--cov")
+            .arg("--cov-report=xml")
+            .arg("--no-cov-on-fail")
+            .arg("--status-level=none")
+            .arg("--final-status-level=none")
+            .arg("test_failing.py"),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    ----- stderr -----
+    "
+    );
+
+    assert!(context.root().join(".karva/coverage/data.json").is_file());
+    assert!(!context.root().join("coverage.xml").exists());
+}
+
+#[test]
 fn test_cov_multiple_sources() {
     let context = TestContext::with_files([
         ("pkg_a/__init__.py", ""),
@@ -459,6 +493,98 @@ def test_only_covered():
     ----- stderr -----
     "
     );
+}
+
+#[test]
+fn test_cov_renders_multiple_reports_from_one_run() {
+    let context = TestContext::with_file(
+        "test_partial.py",
+        r"
+def covered():
+    return 1
+
+def uncovered():
+    return 2
+
+def test_only_covered():
+    assert covered() == 1
+",
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel()
+            .arg("--cov")
+            .arg("--cov-report=term-missing")
+            .arg("--cov-report=html:build/htmlcov")
+            .arg("--cov-report=xml:build/coverage.xml")
+            .arg("--cov-report=json:build/coverage.json")
+            .arg("--cov-report=lcov:build/coverage.lcov")
+            .arg("--status-level=none")
+            .arg("test_partial.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    Name              Stmts   Miss   Cover   Missing
+    [LONG-LINE]
+    test_partial.py       6      1     83%   6
+    [LONG-LINE]
+    TOTAL                 6      1     83%
+
+    ----- stderr -----
+    "
+    );
+
+    assert!(context.root().join(".karva/coverage/data.json").is_file());
+    assert!(context.root().join("build/htmlcov/index.html").is_file());
+    assert!(
+        context
+            .read_file("build/coverage.xml")
+            .contains(r#"lines-valid="6" lines-covered="5""#)
+    );
+    assert!(
+        context
+            .read_file("build/coverage.json")
+            .contains(r#""covered_lines": 5"#)
+    );
+    assert!(
+        context
+            .read_file("build/coverage.lcov")
+            .contains("LF:6\nLH:5")
+    );
+}
+
+#[test]
+fn test_cov_report_failure_does_not_block_other_reports() {
+    let context = TestContext::with_files([
+        ("test_covered.py", "def test_pass():\n    assert True\n"),
+        ("blocked", "not a directory"),
+    ]);
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel()
+            .arg("--cov")
+            .arg("--cov-report=xml:blocked/coverage.xml")
+            .arg("--cov-report=json:build/coverage.json")
+            .arg("--status-level=none")
+            .arg("test_covered.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ERROR Coverage xml report failed: failed to create coverage output directory <temp_dir>/blocked: failed to create directory `<temp_dir>/blocked`: [FILE EXISTS]
+    "
+    );
+
+    assert!(context.root().join(".karva/coverage/data.json").is_file());
+    assert!(context.root().join("build/coverage.json").is_file());
 }
 
 #[test]

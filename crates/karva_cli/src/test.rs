@@ -268,15 +268,27 @@ pub struct SubTestCommand {
     /// `term` (default) prints a compact terminal table.
     /// `term-missing` extends it with a `Missing` column listing the
     /// uncovered line numbers per file.
-    /// `xml[:PATH]`, `json[:PATH]`, and `html[:DIR]` write reports to disk.
+    /// `xml[:PATH]`, `json[:PATH]`, `html[:DIR]`, and `lcov[:PATH]` write reports to disk.
+    /// May be passed multiple times to render several reports from one analysis.
     /// Pass an empty value (`--cov-report=`) to persist native data only.
     #[clap(
         long = "cov-report",
         value_name = "TYPE",
         value_parser = parse_cov_report,
+        action = clap::ArgAction::Append,
         help_heading = "Coverage options"
     )]
-    pub cov_report: Option<CovReport>,
+    pub cov_report: Vec<CovReport>,
+
+    /// Do not render coverage reports when tests fail.
+    ///
+    /// Native coverage data is still persisted.
+    #[clap(
+        long = "no-cov-on-fail",
+        action = clap::ArgAction::SetTrue,
+        help_heading = "Coverage options"
+    )]
+    pub no_cov_on_fail: Option<bool>,
 
     /// Fail the run if total coverage is below the given percentage.
     ///
@@ -461,10 +473,11 @@ impl SubTestCommand {
             (None, false) => None,
         };
 
-        let coverage_report_path = self.cov_report.as_ref().and_then(|report| match report {
-            CovReport::Xml { path } | CovReport::Json { path } | CovReport::Html { path } => {
-                path.as_ref().map(ToString::to_string)
-            }
+        let coverage_report_path = self.cov_report.first().and_then(|report| match report {
+            CovReport::Xml { path }
+            | CovReport::Json { path }
+            | CovReport::Html { path }
+            | CovReport::Lcov { path } => path.as_ref().map(ToString::to_string),
             CovReport::None | CovReport::Term | CovReport::TermMissing => None,
         });
 
@@ -506,7 +519,7 @@ impl SubTestCommand {
                 contexts: None,
                 precision: None,
                 append: self.cov_append,
-                report: self.cov_report.map(Into::into),
+                report: self.cov_report.first().cloned().map(Into::into),
                 report_path: coverage_report_path,
                 branch: self.cov_branch.then_some(true),
                 fail_under: self.cov_fail_under.map(CovFailUnder),
@@ -642,6 +655,39 @@ mod tests {
     #[test]
     fn parse_html_cov_report_without_path() {
         assert_eq!(parse_cov_report("html"), Ok(CovReport::Html { path: None }));
+    }
+
+    #[test]
+    fn parse_lcov_report_with_path() {
+        assert_eq!(
+            parse_cov_report("lcov:build/coverage.lcov"),
+            Ok(CovReport::Lcov {
+                path: Some(Utf8PathBuf::from("build/coverage.lcov")),
+            })
+        );
+    }
+
+    #[test]
+    fn repeated_cov_reports_preserve_order() {
+        let command = TestCommand::parse_from([
+            "karva-test",
+            "--cov-report=term-missing",
+            "--cov-report=xml:build/coverage.xml",
+            "--cov-report=lcov:build/coverage.lcov",
+        ]);
+
+        assert_eq!(
+            command.sub_command.cov_report,
+            vec![
+                CovReport::TermMissing,
+                CovReport::Xml {
+                    path: Some(Utf8PathBuf::from("build/coverage.xml")),
+                },
+                CovReport::Lcov {
+                    path: Some(Utf8PathBuf::from("build/coverage.lcov")),
+                },
+            ]
+        );
     }
 
     #[test]

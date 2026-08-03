@@ -64,6 +64,11 @@
           "description": "HTML written to disk for interactive browsing.",
           "type": "string",
           "const": "html"
+        },
+        {
+          "description": "LCOV tracefile written to disk for external tooling.",
+          "type": "string",
+          "const": "lcov"
         }
       ]
     },
@@ -166,7 +171,7 @@
           ]
         },
         "report-path": {
-          "description": "Optional output path for machine-readable coverage reports.\n\nWhen `report = \"xml\"` or `report = \"json\"`, this path controls where\nthe file is written. When `report = \"html\"`, it controls the output\ndirectory. If omitted, karva writes to `coverage.xml`,\n`coverage.json`, or `htmlcov/` in the project root.",
+          "description": "Optional output path for machine-readable coverage reports.\n\nFor XML, JSON, and LCOV reports, this controls the output file. For HTML,\nit controls the output directory. If omitted, karva writes to\n`coverage.xml`, `coverage.json`, `coverage.lcov`, or `htmlcov/` in the\nproject root.",
           "type": [
             "string",
             "null"

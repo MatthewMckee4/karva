@@ -79,6 +79,10 @@ impl TestContext {
         settings.add_filter(r"[-─]{30,}", "[LONG-LINE]");
         settings.add_filter(r"karva \d+\.\d+\.\d+[a-zA-Z0-9._-]*", "karva [VERSION]");
         settings.add_filter(r"karva\.exe", "karva");
+        settings.add_filter(
+            r"(?:File exists \(os error 17\)|Cannot create a file when that file already exists\. \(os error 183\))",
+            "[FILE EXISTS]",
+        );
 
         let settings_scope = settings.bind_to_scope();
 

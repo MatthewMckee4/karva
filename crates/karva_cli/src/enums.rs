@@ -29,6 +29,9 @@ pub enum CovReport {
 
     /// HTML coverage report written to disk, optionally to a custom directory.
     Html { path: Option<Utf8PathBuf> },
+
+    /// LCOV tracefile written to disk, optionally to a custom path.
+    Lcov { path: Option<Utf8PathBuf> },
 }
 
 impl FromStr for CovReport {
@@ -43,8 +46,9 @@ impl FromStr for CovReport {
                 "xml" => Ok(Self::Xml { path: None }),
                 "json" => Ok(Self::Json { path: None }),
                 "html" => Ok(Self::Html { path: None }),
+                "lcov" => Ok(Self::Lcov { path: None }),
                 _ => Err(format!(
-                    "invalid value `{raw}`; expected one of `term`, `term-missing`, `xml[:PATH]`, `json[:PATH]`, or `html[:PATH]`"
+                    "invalid value `{raw}`; expected one of `term`, `term-missing`, `xml[:PATH]`, `json[:PATH]`, `html[:DIR]`, or `lcov[:PATH]`"
                 )),
             },
             Some(("xml", path)) if !path.is_empty() => Ok(Self::Xml {
@@ -56,11 +60,15 @@ impl FromStr for CovReport {
             Some(("html", path)) if !path.is_empty() => Ok(Self::Html {
                 path: Some(Utf8PathBuf::from(path)),
             }),
+            Some(("lcov", path)) if !path.is_empty() => Ok(Self::Lcov {
+                path: Some(Utf8PathBuf::from(path)),
+            }),
             Some(("xml", _)) => Err("`xml` report path cannot be empty".to_string()),
             Some(("json", _)) => Err("`json` report path cannot be empty".to_string()),
             Some(("html", _)) => Err("`html` report path cannot be empty".to_string()),
+            Some(("lcov", _)) => Err("`lcov` report path cannot be empty".to_string()),
             Some((kind, _)) => Err(format!(
-                "report `{kind}` does not accept a path; expected `term`, `term-missing`, `xml[:PATH]`, `json[:PATH]`, or `html[:PATH]`"
+                "report `{kind}` does not accept a path; expected `term`, `term-missing`, `xml[:PATH]`, `json[:PATH]`, `html[:DIR]`, or `lcov[:PATH]`"
             )),
         }
     }
@@ -119,6 +127,7 @@ impl From<CovReport> for karva_metadata::CovReport {
             CovReport::Xml { .. } => Self::Xml,
             CovReport::Json { .. } => Self::Json,
             CovReport::Html { .. } => Self::Html,
+            CovReport::Lcov { .. } => Self::Lcov,
         }
     }
 }
