@@ -80,6 +80,7 @@ impl CoverageCommand {
         Options {
             coverage: Some(CoverageOptions {
                 data_file: self.data_file.as_ref().map(ToString::to_string),
+                path_aliases: None,
                 include: (!self.include.is_empty()).then(|| self.include.clone()),
                 omit: (!self.omit.is_empty()).then(|| self.omit.clone()),
                 contexts: (!self.contexts.is_empty()).then(|| self.contexts.clone()),

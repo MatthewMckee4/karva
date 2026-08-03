@@ -105,7 +105,7 @@ pub(super) fn combine_native(
     for path in &files[1..] {
         let path = path.as_ref();
         let artifact = NativeCoverage::read(path)?;
-        validate_identity(first_path, &first, path, &artifact)?;
+        validate_identity(first_path, &first, path, &artifact, filters)?;
         merge_native(&mut combined, path, &artifact, filters)?;
     }
 
@@ -117,6 +117,7 @@ fn validate_identity(
     expected: &NativeCoverage,
     path: &Utf8Path,
     artifact: &NativeCoverage,
+    filters: &CoverageFilters,
 ) -> Result<()> {
     if artifact.mode != expected.mode {
         anyhow::bail!(
@@ -125,7 +126,17 @@ fn validate_identity(
             artifact.mode
         );
     }
-    if artifact.source_roots != expected.source_roots {
+    let expected_roots: BTreeSet<String> = expected
+        .source_roots
+        .iter()
+        .map(|root| filters.map_path(root.as_str()))
+        .collect();
+    let artifact_roots: BTreeSet<String> = artifact
+        .source_roots
+        .iter()
+        .map(|root| filters.map_path(root.as_str()))
+        .collect();
+    if artifact_roots != expected_roots {
         anyhow::bail!(
             "incompatible native coverage artifact `{path}`: expected source-root identity from `{expected_path}`"
         );
@@ -144,14 +155,15 @@ fn merge_native(
         .as_deref()
         .is_some_and(|context| filters.matches_context(context));
     for (source_path, file) in &artifact.files {
-        let bucket = combined.entry(source_path.to_string()).or_default();
+        let mapped_path = filters.map_path(source_path.as_str());
+        let bucket = combined.entry(mapped_path.clone()).or_default();
         if let Some(expected) = &bucket.source_fingerprint
             && expected != &file.source_fingerprint
         {
             anyhow::bail!(
-                "incompatible native coverage artifact `{path}`: expected source fingerprint {} for `{source_path}`, found {}",
+                "coverage path collision in native artifact `{path}`: `{source_path}` maps to `{mapped_path}` with fingerprint {}, expected {}",
+                file.source_fingerprint.as_str(),
                 expected.as_str(),
-                file.source_fingerprint.as_str()
             );
         }
         bucket.source_fingerprint = Some(file.source_fingerprint.clone());

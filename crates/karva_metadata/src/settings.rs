@@ -613,6 +613,9 @@ pub struct CoverageSettings {
     /// Native coverage artifact path, relative to the project root when not absolute.
     pub data_file: String,
 
+    /// Ordered `FROM=TO` mappings applied to paths loaded from native artifacts.
+    pub path_aliases: Vec<String>,
+
     /// Source roots measured by worker tracers.
     pub sources: Vec<String>,
 

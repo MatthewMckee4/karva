@@ -29,6 +29,7 @@ fn show_config_default_profile() {
 
     [coverage]
     data-file = ".karva/coverage/data.json"
+    path-aliases = []
     sources = []
     include = []
     omit = []
@@ -84,6 +85,7 @@ output-format = "concise"
 
     [coverage]
     data-file = ".karva/coverage/data.json"
+    path-aliases = []
     sources = []
     include = []
     omit = []
@@ -140,6 +142,7 @@ output-format = "concise"
 
     [coverage]
     data-file = ".karva/coverage/data.json"
+    path-aliases = []
     sources = []
     include = []
     omit = []
@@ -202,6 +205,7 @@ fail-under = 90
 
     [coverage]
     data-file = ".karva/coverage/data.json"
+    path-aliases = []
     sources = ["src"]
     include = ["src/app/*"]
     omit = ["**/generated.py"]
@@ -259,6 +263,7 @@ slow-timeout = 0.5
 
     [coverage]
     data-file = ".karva/coverage/data.json"
+    path-aliases = []
     sources = []
     include = []
     omit = []

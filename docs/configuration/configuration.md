@@ -173,6 +173,26 @@ omit = ["**/migrations/*"]
 
 ---
 
+### `path-aliases`
+
+Ordered `FROM=TO` path mappings applied when native artifacts are read.
+
+Use aliases to relocate absolute sources collected outside the project
+or artifacts produced under a different CI checkout layout.
+
+**Default value**: `null`
+
+**Type**: `list[str]`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.coverage]
+path-aliases = ["/workspace=.", "C:/repo=."]
+```
+
+---
+
 ### `precision`
 
 Decimal places shown in coverage percentages.

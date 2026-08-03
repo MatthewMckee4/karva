@@ -499,6 +499,7 @@ impl SubTestCommand {
             }),
             coverage: Some(CoverageOptions {
                 data_file: None,
+                path_aliases: None,
                 sources: (!self.cov.is_empty()).then_some(self.cov),
                 include: (!self.cov_include.is_empty()).then_some(self.cov_include),
                 omit: (!self.cov_omit.is_empty()).then_some(self.cov_omit),
