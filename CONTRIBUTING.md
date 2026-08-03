@@ -44,3 +44,24 @@ Do not mix formatter churn with logic changes or add AI tools as authors.
 
 Use only the `internal` label when nothing changes for users and only `ci` for
 CI performance changes. Reserve `performance` for user-facing improvements.
+
+## Reviewing PR Benchmarks
+
+Open the `PR Benchmarks` workflow run to review the complete wall-time, memory,
+and diagnostic summary online. Changed test workloads are shown separately from
+comparable performance results because their raw totals measure different work.
+
+The `benchmark-reports` artifact contains rendered HTML and Markdown reports.
+Its diagnostic report includes the normalized baseline and candidate output for
+every project, including each passing, failing, errored, and skipped test. To
+inspect the artifact locally, set `RUN_ID` to the workflow run ID:
+
+```sh
+gh run download "$RUN_ID" \
+  --repo MatthewMckee4/karva \
+  --name benchmark-reports \
+  --dir benchmark-reports
+```
+
+Open `benchmark-reports/diagnostic-report.html` in a browser. The wall-time and
+memory reports are beside it.
